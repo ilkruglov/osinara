@@ -2,7 +2,8 @@
  * Telegram model-message delivery policy tests.
  *
  * Constructs covered:
- * - `completedTelegramMessage`: keeps concise model-authored progress before tool calls.
+ * - `completedTelegramMessage`: delivers only terminal user-visible assistant text.
+ * - Pre-tool assistant chunks remain hidden because Telegram cannot render them ephemerally.
  * - Empty model steps remain invisible to avoid technical Telegram noise.
  */
 import { describe, expect, it } from "vitest";
@@ -10,13 +11,13 @@ import { describe, expect, it } from "vitest";
 import { completedTelegramMessage } from "./telegram-progress.js";
 
 describe("completedTelegramMessage", () => {
-  it("delivers model-authored progress before a long tool step", () => {
+  it("does not deliver model-authored pre-tool text as a separate Telegram message", () => {
     expect(
       completedTelegramMessage({
         finishReason: "tool-calls",
         message: "Собрал информацию. Теперь формирую документ.",
       }),
-    ).toBe("Собрал информацию. Теперь формирую документ.");
+    ).toBeNull();
   });
 
   it("trims surrounding whitespace from a delivered message", () => {
