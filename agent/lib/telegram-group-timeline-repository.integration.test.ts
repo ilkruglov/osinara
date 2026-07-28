@@ -34,15 +34,15 @@ function message(id: string, replyToMessageId?: string): TelegramMessage {
   };
 }
 
-async function group(): Promise<string> {
+async function group(telegramChatId = "-1001"): Promise<string> {
   const family = await database().query<{ id: string }>(
     "INSERT INTO families (name) VALUES ('Timeline') RETURNING id",
   );
   const result = await database().query<{ id: string }>(
     `INSERT INTO telegram_groups
        (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode)
-     VALUES ($1, '-1001', 'Группа', 'family_private', '{}', 'all') RETURNING id`,
-    [family.rows[0]!.id],
+      VALUES ($1, $2, 'Группа', 'family_private', '{}', 'all') RETURNING id`,
+    [family.rows[0]!.id, telegramChatId],
   );
   return result.rows[0]!.id;
 }
@@ -88,5 +88,53 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     const result = await telegramGroupJournalRepository.record(groupId, message("1001"));
 
     expect(result.sequenceId).toBe("1001");
+  });
+
+  it("does not attach an agent response to an entry from another group", async () => {
+    const firstGroupId = await group("-1001");
+    const secondGroupId = await group("-1002");
+    const foreign = await telegramGroupJournalRepository.record(firstGroupId, message("10"));
+
+    await telegramGroupJournalRepository.recordAgentResponse({
+      contentText: "Ответ во второй группе",
+      deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
+      groupId: secondGroupId,
+      messageThreadId: null,
+      replyToEntryId: foreign.entryId,
+      telegramMessageIds: ["20"],
+    });
+
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: secondGroupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+    expect(entries[0]?.replyToSequenceId).toBeNull();
+  });
+
+  it("retains the stable reply sequence when retention deletes the target entry", async () => {
+    const groupId = await group();
+    const inbound = await telegramGroupJournalRepository.record(groupId, message("10"));
+    const agent = await telegramGroupJournalRepository.recordAgentResponse({
+      contentText: "Ответ",
+      deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: inbound.entryId,
+      telegramMessageIds: ["20"],
+    });
+
+    await database().query("DELETE FROM telegram_group_messages WHERE id = $1", [inbound.entryId]);
+    const retained = await database().query<{
+      reply_to_entry_id: string | null;
+      reply_to_sequence_id: string | null;
+    }>(
+      `SELECT reply_to_entry_id, reply_to_sequence_id::text
+       FROM telegram_group_messages WHERE id = $1`,
+      [agent.entryId],
+    );
+    expect(retained.rows[0]).toEqual({ reply_to_entry_id: null, reply_to_sequence_id: "1" });
   });
 });

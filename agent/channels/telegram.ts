@@ -64,24 +64,6 @@ export default telegramChannel({
       const currentAttributes = ctx.session.auth.current?.attributes;
       const groupId = scheduledDelivery?.groupId ??
         (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
-      if (groupId && data.finishReason === "stop") {
-        const replyToEntryId = typeof currentAttributes?.telegramTimelineEntryId === "string"
-          ? currentAttributes.telegramTimelineEntryId
-          : null;
-        const forumTopicId = scheduledDelivery?.forumTopicId ??
-          (typeof currentAttributes?.telegramForumTopicId === "string"
-            ? currentAttributes.telegramForumTopicId
-            : null);
-        // Persistence happens only after every Rich Message chunk has a confirmed Telegram ID.
-        await telegramGroupJournalRepository.recordAgentResponse({
-          contentText: message,
-          deliveredAt: new Date(),
-          groupId,
-          messageThreadId: forumTopicId,
-          replyToEntryId,
-          telegramMessageIds: sentMessages.map((sent) => sent.messageId),
-        });
-      }
       if (scheduledDelivery) {
         const firstMessage = sentMessages[0];
         if (!firstMessage) {
@@ -103,6 +85,24 @@ export default telegramChannel({
           telegramChatId: scheduledDelivery.telegramChatId,
           telegramMessageId: firstMessage.messageId,
           title: scheduledDelivery.title,
+        });
+      }
+      if (groupId && data.finishReason === "stop") {
+        const replyToEntryId = typeof currentAttributes?.telegramTimelineEntryId === "string"
+          ? currentAttributes.telegramTimelineEntryId
+          : null;
+        const forumTopicId = scheduledDelivery?.forumTopicId ??
+          (typeof currentAttributes?.telegramForumTopicId === "string"
+            ? currentAttributes.telegramForumTopicId
+            : null);
+        // The primary delivery receipt is durable before this secondary conversation projection.
+        await telegramGroupJournalRepository.recordAgentResponse({
+          contentText: message,
+          deliveredAt: new Date(),
+          groupId,
+          messageThreadId: forumTopicId,
+          replyToEntryId,
+          telegramMessageIds: sentMessages.map((sent) => sent.messageId),
         });
       }
       if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);

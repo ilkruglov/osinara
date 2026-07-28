@@ -123,8 +123,13 @@ describeWithDatabase("033 unified Telegram group timeline migration", () => {
       );
       expect(state.rows[0]).toEqual({ aliases: "2", counter: "2" });
     } finally {
-      await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
-      client.release();
+      // Pool connections must never retain a test schema after that schema is removed.
+      try {
+        await client.query("RESET search_path");
+        await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+      } finally {
+        client.release();
+      }
     }
   });
 });

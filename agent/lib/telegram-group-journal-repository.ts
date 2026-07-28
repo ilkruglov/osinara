@@ -148,7 +148,11 @@ function validateList(input: ListRecentInput, maxLimit: number): void {
 
 async function nextSequence(client: PoolClient, groupId: string): Promise<string> {
   const result = await client.query<{ sequence_id: string }>(
-    `UPDATE telegram_groups SET next_timeline_sequence = next_timeline_sequence + 1
+    `UPDATE telegram_groups
+     SET next_timeline_sequence = greatest(
+       next_timeline_sequence,
+       coalesce((SELECT max(sequence_id) FROM telegram_group_messages WHERE group_id = $1), 0)
+     ) + 1
      WHERE id = $1 RETURNING next_timeline_sequence::text AS sequence_id`,
     [groupId],
   );
@@ -282,8 +286,10 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
            (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
             message_thread_id, sender_display_name, sender_is_bot, message_kind,
             content_text, reply_to_entry_id, reply_to_sequence_id, sent_at)
-         VALUES ($1, $2, 'agent_self', $3, $4, $5, $6, true, 'text', $7, $8,
-                 (SELECT sequence_id FROM telegram_group_messages WHERE id = $8), $9)
+          VALUES ($1, $2, 'agent_self', $3, $4, $5, $6, true, 'text', $7,
+                  (SELECT id FROM telegram_group_messages WHERE id = $8 AND group_id = $1),
+                  (SELECT sequence_id FROM telegram_group_messages WHERE id = $8 AND group_id = $1),
+                  $9)
          RETURNING id`,
         [input.groupId, sequenceId, AGENT_ACTOR_ID, messageIds[0], input.messageThreadId,
           AGENT_DISPLAY_NAME, input.contentText, input.replyToEntryId, input.deliveredAt],

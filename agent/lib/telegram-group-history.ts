@@ -57,7 +57,15 @@ interface GroupHistoryToolInput {
 }
 
 function optionalDate(value: string | undefined): Date | null {
-  return value === undefined ? null : new Date(value);
+  if (value === undefined) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new AppError(
+      "AGENT_GROUP_HISTORY_DATE_INVALID",
+      "Дата для поиска по истории группы указана в неверном формате",
+    );
+  }
+  return parsed;
 }
 
 export async function searchTelegramGroupHistory(

@@ -52,20 +52,13 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
 
     // Sequential delivery bounds Telegram pressure and gives every lease an unambiguous marker order.
     for (const job of jobs) {
+      let completedAt: Date;
+      let receipt: ProactiveDeliveryReceipt;
       try {
         await dependencies.repository.markDispatchStarted(job.id, job.leaseToken);
-        const receipt = await dependencies.deliver(job);
-        const completedAt = new Date();
-        if (job.groupId) {
-          await dependencies.timeline.recordAgentResponse({
-            contentText: receipt.text,
-            deliveredAt: completedAt,
-            groupId: job.groupId,
-            messageThreadId: job.forumTopicId,
-            replyToEntryId: null,
-            telegramMessageIds: [receipt.messageId],
-          });
-        }
+        receipt = await dependencies.deliver(job);
+        completedAt = new Date();
+        // Completion atomically records the proactive receipt before any secondary projection.
         await dependencies.repository.complete(job, completedAt, receipt);
       } catch (error) {
         if (isAppError(error) && error.code === "AGENT_REMINDER_LEASE_STALE") {
@@ -80,6 +73,18 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
           ? error.code
           : "AGENT_REMINDER_TELEGRAM_DELIVERY_FAILED";
         await dependencies.repository.fail(job, errorCode);
+        continue;
+      }
+      if (job.groupId) {
+        // A timeline outage propagates for observability but cannot reclassify confirmed delivery.
+        await dependencies.timeline.recordAgentResponse({
+          contentText: receipt.text,
+          deliveredAt: completedAt,
+          groupId: job.groupId,
+          messageThreadId: job.forumTopicId,
+          replyToEntryId: null,
+          telegramMessageIds: [receipt.messageId],
+        });
       }
     }
     return jobs.length;

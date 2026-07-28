@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `requireTelegramGroupHistoryAuthorization`: derives group identity only from verified auth.
  * - `searchTelegramGroupHistory`: forwards bounded filters without accepting a model scope.
+ * - Date filters fail fast even when this boundary is called without the model schema.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -52,5 +53,17 @@ describe("Telegram group history", () => {
       messageThreadId: null,
       query: "ужин",
     }));
+  });
+
+  it("rejects an invalid date before querying the repository", async () => {
+    const repository = { search: vi.fn() };
+
+    await expect(searchTelegramGroupHistory(repository, { from: "not-a-date" }, context({
+      groupId: "group-1",
+      groupType: "external_private",
+    }))).rejects.toMatchObject({
+      code: "AGENT_GROUP_HISTORY_DATE_INVALID",
+    });
+    expect(repository.search).not.toHaveBeenCalled();
   });
 });

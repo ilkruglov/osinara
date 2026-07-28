@@ -369,11 +369,6 @@ describeWithDatabase("Telegram group journal repositories", () => {
        FROM generate_series(1, $2) AS value`,
       [group.groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
     );
-    await database().query(
-      "UPDATE telegram_groups SET next_timeline_sequence = $2 WHERE id = $1",
-      [group.groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
-    );
-
     await telegramGroupJournalRepository.record(
       group.groupId,
       message({ id: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1), text: "новая" }),
@@ -388,6 +383,12 @@ describeWithDatabase("Telegram group journal repositories", () => {
       count: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES),
       minimum: "2",
     });
+    const newest = await database().query<{ maximum: string }>(
+      `SELECT max(sequence_id)::text AS maximum
+       FROM telegram_group_messages WHERE group_id = $1`,
+      [group.groupId],
+    );
+    expect(newest.rows[0]?.maximum).toBe(String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1));
   });
 
   it("removes only a same-family group and cascades its journal and memory", async () => {
