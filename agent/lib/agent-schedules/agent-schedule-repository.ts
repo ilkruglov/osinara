@@ -144,9 +144,9 @@ export const agentScheduleRepository = {
            (family_id, owner_user_id, author_user_id, group_id, scope, title,
             user_request, scenario_prompt, timezone, recurrence_kind,
             recurrence_interval, recurrence_days_of_week, recurrence_anchor_local,
-            next_run_at, telegram_chat_id, telegram_chat_type, message_thread_id)
+             next_run_at, telegram_chat_id, telegram_chat_type, message_thread_id, forum_topic_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                 $13::timestamptz AT TIME ZONE $9, $13, $14, $15, $16::bigint)
+                  $13::timestamptz AT TIME ZONE $9, $13, $14, $15, $16::bigint, $17::bigint)
          RETURNING ${AGENT_SCHEDULE_COLUMNS}`,
         [
           auth.familyId,
@@ -165,6 +165,7 @@ export const agentScheduleRepository = {
           auth.telegramChatId,
           auth.telegramChatType,
           input.scope === "personal" ? null : auth.messageThreadId,
+          input.scope === "personal" ? null : auth.forumTopicId,
         ],
       );
       const schedule = inserted.rows[0]!;

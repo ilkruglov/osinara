@@ -20,6 +20,7 @@ export type AgentScheduleRecurrence =
 export interface AgentScheduleRow {
   created_at: Date;
   id: string;
+  forum_topic_id: string | null;
   last_error_code: string | null;
   message_thread_id: string | null;
   next_run_at: Date;

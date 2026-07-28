@@ -13,6 +13,7 @@ import { AppError } from "../app-error.js";
 
 export interface ScheduledDeliveryMetadata {
   familyId: string;
+  forumTopicId: string | null;
   groupId: string | null;
   messageThreadId: string | null;
   ownerUserId: string | null;
@@ -75,6 +76,9 @@ export function scheduledDeliveryMetadata(
   }
   return {
     familyId,
+    forumTopicId: typeof attributes?.telegramForumTopicId === "string"
+      ? attributes.telegramForumTopicId
+      : null,
     groupId,
     messageThreadId: typeof attributes?.telegramMessageThreadId === "string"
       ? attributes.telegramMessageThreadId

@@ -3,6 +3,7 @@
  *
  * Exports:
  * - Message field normalizers for trusted PostgreSQL writes.
+ * - `telegramForumTopicId`: verified forum topic isolation separate from reply routing.
  * - `lockTelegramGroupJournal` and `pruneTelegramGroupJournal` transaction helpers.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
@@ -30,6 +31,20 @@ export function telegramMessageThreadId(value: number | undefined): string | nul
     );
   }
   return String(value);
+}
+
+export function telegramForumTopicId(
+  message: Pick<TelegramMessage, "messageThreadId" | "raw">,
+): string | null {
+  // Telegram also assigns message_thread_id to ordinary reply branches. Only this explicit
+  // Bot API flag proves that the ID denotes a forum topic and therefore a separate data context.
+  if (message.raw.is_topic_message !== true) return null;
+  if (message.messageThreadId === undefined) {
+    throw new Error(
+      "AGENT_TELEGRAM_MESSAGE_INVALID: Telegram не передал идентификатор форумной темы",
+    );
+  }
+  return telegramMessageThreadId(message.messageThreadId);
 }
 
 export function telegramMessageSentAt(message: TelegramMessage): Date {
@@ -101,7 +116,7 @@ export async function pruneTelegramGroupJournal(
      WHERE id IN (
        SELECT id FROM telegram_group_messages
        WHERE group_id = $1
-       ORDER BY telegram_message_id DESC
+       ORDER BY sequence_id DESC
        OFFSET $2
      )`,
     [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],

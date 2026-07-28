@@ -105,14 +105,6 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         );
       }
 
-      // Disabling text collection preserves only authorized lazy family attachment references.
-      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [row.id]);
-      if (input.messageMode === "addressed_only") {
-        await client.query(
-          "DELETE FROM telegram_group_messages WHERE group_id = $1 AND attachment_file_id IS NULL",
-          [row.id],
-        );
-      }
       await client.query("COMMIT");
       return { groupId: row.id };
     } catch (error) {

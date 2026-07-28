@@ -12,6 +12,7 @@ import { deliverTelegramReminder } from "./telegram-reminder-delivery.js";
 
 const delayedJob: ClaimedReminder = {
   familyId: "00000000-0000-4000-8000-000000000010",
+  forumTopicId: "77",
   content: "Собрать документы",
   delayed: true,
   dueAt: "2026-07-13T06:00:00.000Z",

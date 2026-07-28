@@ -16,6 +16,10 @@ import {
   reminderDispatchRepository,
 } from "./reminder-dispatch-repository.js";
 import { deliverTelegramReminder } from "./telegram-reminder-delivery.js";
+import {
+  telegramGroupJournalRepository,
+  type TelegramGroupJournalRepository,
+} from "../telegram-group-journal-repository.js";
 
 interface ReminderDispatcherRepository {
   claimDue(options: {
@@ -35,6 +39,7 @@ interface ReminderDispatcherRepository {
 interface ReminderDispatcherDependencies {
   deliver(job: ClaimedReminder): Promise<ProactiveDeliveryReceipt>;
   repository: ReminderDispatcherRepository;
+  timeline: Pick<TelegramGroupJournalRepository, "recordAgentResponse">;
 }
 
 export function createReminderDispatcher(dependencies: ReminderDispatcherDependencies) {
@@ -47,10 +52,14 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
 
     // Sequential delivery bounds Telegram pressure and gives every lease an unambiguous marker order.
     for (const job of jobs) {
+      let completedAt: Date;
+      let receipt: ProactiveDeliveryReceipt;
       try {
         await dependencies.repository.markDispatchStarted(job.id, job.leaseToken);
-        const receipt = await dependencies.deliver(job);
-        await dependencies.repository.complete(job, new Date(), receipt);
+        receipt = await dependencies.deliver(job);
+        completedAt = new Date();
+        // Completion atomically records the proactive receipt before any secondary projection.
+        await dependencies.repository.complete(job, completedAt, receipt);
       } catch (error) {
         if (isAppError(error) && error.code === "AGENT_REMINDER_LEASE_STALE") {
           console.error(JSON.stringify({
@@ -64,6 +73,18 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
           ? error.code
           : "AGENT_REMINDER_TELEGRAM_DELIVERY_FAILED";
         await dependencies.repository.fail(job, errorCode);
+        continue;
+      }
+      if (job.groupId) {
+        // A timeline outage propagates for observability but cannot reclassify confirmed delivery.
+        await dependencies.timeline.recordAgentResponse({
+          contentText: receipt.text,
+          deliveredAt: completedAt,
+          groupId: job.groupId,
+          messageThreadId: job.forumTopicId,
+          replyToEntryId: null,
+          telegramMessageIds: [receipt.messageId],
+        });
       }
     }
     return jobs.length;
@@ -73,4 +94,5 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
 export const dispatchDueReminders = createReminderDispatcher({
   deliver: deliverTelegramReminder,
   repository: reminderDispatchRepository,
+  timeline: telegramGroupJournalRepository,
 });

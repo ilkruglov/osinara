@@ -11,6 +11,7 @@ import { AppError } from "../app-error.js";
 import { resolveSessionCaller } from "../session-auth.js";
 
 export interface AgentScheduleAuthorization {
+  forumTopicId: string | null;
   familyId: string;
   groupId: string | null;
   groupType: "family_private" | null;
@@ -55,6 +56,9 @@ export function requireAgentScheduleAuthorization(
 
   return {
     familyId: attributes.familyId,
+    forumTopicId: typeof attributes.telegramForumTopicId === "string"
+      ? attributes.telegramForumTopicId
+      : null,
     groupId: typeof attributes.groupId === "string" ? attributes.groupId : null,
     groupType: groupType === "family_private" ? groupType : null,
     messageThreadId: typeof attributes.telegramMessageThreadId === "string"

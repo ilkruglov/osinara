@@ -185,10 +185,10 @@ export const reminderRepository = {
       const inserted = await client.query<ReminderRow>(
         `INSERT INTO reminders
            (family_id, owner_user_id, author_user_id, group_id, scope, content, timezone,
-            telegram_chat_id, message_thread_id, recurrence_unit, recurrence_interval,
+             telegram_chat_id, message_thread_id, forum_topic_id, recurrence_unit, recurrence_interval,
             recurrence_anchor_local, due_at, available_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::bigint, $10, $11,
-                 $12::timestamptz AT TIME ZONE $7, $12, $12)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::bigint, $10::bigint, $11, $12,
+                  $13::timestamptz AT TIME ZONE $7, $13, $13)
          RETURNING ${REMINDER_COLUMNS}`,
         [
           auth.familyId,
@@ -200,6 +200,7 @@ export const reminderRepository = {
           timezone,
           auth.telegramChatId,
           personal ? null : auth.messageThreadId,
+          personal ? null : auth.forumTopicId,
           recurrence?.unit ?? null,
           recurrence?.interval ?? null,
           firstRunAt,

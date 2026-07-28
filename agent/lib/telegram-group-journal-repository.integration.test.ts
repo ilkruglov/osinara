@@ -54,6 +54,7 @@ async function createOwnedFamily(suffix: string): Promise<{ familyId: string; ow
 
 function message(input: {
   id: string;
+  isTopicMessage?: boolean;
   text?: string;
   threadId?: number;
   withPhoto?: boolean;
@@ -67,6 +68,9 @@ function message(input: {
     ...(input.threadId === undefined ? {} : { messageThreadId: input.threadId }),
     raw: {
       date: 1_700_000_000 + Number(input.id),
+      ...(input.isTopicMessage === undefined
+        ? {}
+        : { is_topic_message: input.isTopicMessage }),
       ...(input.withPhoto ? { photo: [{ file_id: "photo-file" }] } : {}),
     },
     text: input.text ?? "",
@@ -106,7 +110,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
   });
 
-  it("physically clears collected messages when a group switches to addressed-only mode", async () => {
+  it("preserves the unified timeline when the legacy invocation mode changes", async () => {
     const { familyId, ownerId } = await createOwnedFamily("mode-downgrade");
     const registration = {
       familyId,
@@ -129,7 +133,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       "SELECT count(*)::text AS count FROM telegram_group_messages WHERE group_id = $1",
       [group.groupId],
     );
-    expect(retained.rows[0]?.count).toBe("0");
+    expect(retained.rows[0]?.count).toBe("1");
   });
 
   it("replaces the group and purges journal data when its trust-zone type changes", async () => {
@@ -175,22 +179,29 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
 
     await expect(
-      telegramGroupJournalRepository.record(group.groupId, message({ id: "9", text: "девять", threadId: 7 })),
-    ).resolves.toBe("inserted");
+      telegramGroupJournalRepository.record(
+        group.groupId,
+        message({ id: "9", isTopicMessage: true, text: "девять", threadId: 7 }),
+      ),
+    ).resolves.toMatchObject({ status: "inserted" });
     await telegramGroupJournalRepository.record(
       group.groupId,
-      message({ id: "10", text: "десять", threadId: 7 }),
+      message({ id: "10", isTopicMessage: true, text: "десять", threadId: 7 }),
     );
     await telegramGroupJournalRepository.record(
       group.groupId,
-      message({ id: "11", text: "другая тема", threadId: 8 }),
+      message({ id: "11", isTopicMessage: true, text: "другая тема", threadId: 8 }),
     );
     await expect(
-      telegramGroupJournalRepository.record(group.groupId, message({ id: "10", text: "повтор", threadId: 7 })),
-    ).resolves.toBe("duplicate");
+      telegramGroupJournalRepository.record(
+        group.groupId,
+        message({ id: "10", isTopicMessage: true, text: "повтор", threadId: 7 }),
+      ),
+    ).resolves.toMatchObject({ status: "duplicate" });
 
-    const entries = await telegramGroupJournalRepository.listBefore({
-      beforeTelegramMessageId: "12",
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
       groupId: group.groupId,
       limit: 50,
       messageThreadId: "7",
@@ -199,6 +210,43 @@ describeWithDatabase("Telegram group journal repositories", () => {
       ["9", "девять"],
       ["10", "десять"],
     ]);
+  });
+
+  it("stores an ordinary supergroup reply thread in the shared main journal", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("reply-thread");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "all",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Группа",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "20", text: "ответ без форумной темы", threadId: 310 }),
+    );
+
+    await expect(telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: null,
+    })).resolves.toMatchObject([{
+      contentText: "ответ без форумной темы",
+      messageThreadId: null,
+      telegramMessageId: "20",
+    }]);
+    await expect(telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: "310",
+    })).resolves.toEqual([]);
   });
 
   it("stores media metadata without downloading or persisting Telegram raw payloads", async () => {
@@ -217,8 +265,9 @@ describeWithDatabase("Telegram group journal repositories", () => {
       group.groupId,
       message({ id: "1", withPhoto: true }),
     );
-    const entries = await telegramGroupJournalRepository.listBefore({
-      beforeTelegramMessageId: "2",
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
       groupId: group.groupId,
       limit: 50,
       messageThreadId: null,
@@ -256,6 +305,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       raw: { date: 1_700_000_042, document: { file_id: "telegram-file-secret" } },
     };
 
+    await telegramGroupJournalRepository.record(group.groupId, familyMessage);
     const reference = await telegramGroupAttachmentRepository.record(
       group.groupId,
       familyMessage,
@@ -276,8 +326,9 @@ describeWithDatabase("Telegram group journal repositories", () => {
       chatId: "-1001",
       messageId: "42",
     });
-    const entries = await telegramGroupJournalRepository.listBefore({
-      beforeTelegramMessageId: "43",
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
       groupId: group.groupId,
       limit: 50,
       messageThreadId: null,
@@ -312,13 +363,12 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
     await database().query(
       `INSERT INTO telegram_group_messages
-         (group_id, telegram_message_id, telegram_user_id, sender_display_name,
-          sender_is_bot, message_kind, content_text, sent_at)
-       SELECT $1, value, '101', 'Анна', false, 'text', 'seed', now()
+         (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       SELECT $1, value, 'user', 'telegram:101', value, '101', 'Анна', false, 'text', 'seed', now()
        FROM generate_series(1, $2) AS value`,
       [group.groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
     );
-
     await telegramGroupJournalRepository.record(
       group.groupId,
       message({ id: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1), text: "новая" }),
@@ -333,6 +383,12 @@ describeWithDatabase("Telegram group journal repositories", () => {
       count: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES),
       minimum: "2",
     });
+    const newest = await database().query<{ maximum: string }>(
+      `SELECT max(sequence_id)::text AS maximum
+       FROM telegram_group_messages WHERE group_id = $1`,
+      [group.groupId],
+    );
+    expect(newest.rows[0]?.maximum).toBe(String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1));
   });
 
   it("removes only a same-family group and cascades its journal and memory", async () => {

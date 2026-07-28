@@ -24,7 +24,8 @@ export interface MutableAgentScheduleRow extends AgentScheduleRow {
 
 export const AGENT_SCHEDULE_COLUMNS = `id, scope, title, user_request, scenario_prompt,
   timezone, recurrence_kind, recurrence_interval, recurrence_days_of_week,
-  next_run_at, status, message_thread_id::text, last_error_code, created_at, updated_at`;
+  next_run_at, status, message_thread_id::text, forum_topic_id::text,
+  last_error_code, created_at, updated_at`;
 
 export async function requireCurrentScheduleMembership(
   client: PoolClient,

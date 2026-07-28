@@ -8,6 +8,7 @@
  * - Validated attachment persistence with model-safe workspace references.
  * - One native thinking draft per turn and completed Rich Message delivery.
  * - Verified group replies anchored to the triggering member message.
+ * - Successfully delivered final group output persisted as one logical timeline entry.
  */
 import { telegramChannel } from "eve/channels/telegram";
 
@@ -36,6 +37,7 @@ import {
   scheduledDeliveryMetadata,
 } from "../lib/agent-schedules/scheduled-session.js";
 import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proactive-delivery-repository.js";
+import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -59,6 +61,9 @@ export default telegramChannel({
         isScheduledSession(ctx) ? undefined : telegramTurnReplyParameters(channel.state, ctx),
       );
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
+      const currentAttributes = ctx.session.auth.current?.attributes;
+      const groupId = scheduledDelivery?.groupId ??
+        (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
       if (scheduledDelivery) {
         const firstMessage = sentMessages[0];
         if (!firstMessage) {
@@ -80,6 +85,24 @@ export default telegramChannel({
           telegramChatId: scheduledDelivery.telegramChatId,
           telegramMessageId: firstMessage.messageId,
           title: scheduledDelivery.title,
+        });
+      }
+      if (groupId && data.finishReason === "stop") {
+        const replyToEntryId = typeof currentAttributes?.telegramTimelineEntryId === "string"
+          ? currentAttributes.telegramTimelineEntryId
+          : null;
+        const forumTopicId = scheduledDelivery?.forumTopicId ??
+          (typeof currentAttributes?.telegramForumTopicId === "string"
+            ? currentAttributes.telegramForumTopicId
+            : null);
+        // The primary delivery receipt is durable before this secondary conversation projection.
+        await telegramGroupJournalRepository.recordAgentResponse({
+          contentText: message,
+          deliveredAt: new Date(),
+          groupId,
+          messageThreadId: forumTopicId,
+          replyToEntryId,
+          telegramMessageIds: sentMessages.map((sent) => sent.messageId),
         });
       }
       if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);

@@ -10,6 +10,7 @@
 export const EXTERNAL_GROUP_TOOL_NAMES = [
   "inspect_workspace_image",
   "list_memories",
+  "list_group_history",
   "manage_memory.delete",
   "manage_memory.edit",
   "manage_memory.undo",
@@ -34,6 +35,7 @@ export const CONTROLLED_TOOL_NAMES = [
   "inspect_workspace_image",
   "list_agent_schedules",
   "list_memories",
+  "list_group_history",
   "list_pending_family_invitations",
   "list_proactive_deliveries",
   "list_reminders",

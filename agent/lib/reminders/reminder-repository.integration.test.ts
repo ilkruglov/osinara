@@ -55,6 +55,7 @@ function privateAuth(fixture: Fixture, user: "member" | "owner") {
   const owner = user === "owner";
   return {
     familyId: fixture.familyId,
+    forumTopicId: null,
     groupId: null,
     groupType: null,
     messageThreadId: null,
@@ -70,6 +71,7 @@ function familyAuth(fixture: Fixture, user: "member" | "owner") {
   return {
     ...base,
     groupId: fixture.groupId,
+    forumTopicId: "77",
     groupType: "family_private" as const,
     messageThreadId: "77",
     telegramChatId: "-100-reminders",

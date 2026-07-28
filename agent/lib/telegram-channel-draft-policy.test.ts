@@ -4,6 +4,7 @@
  * Constructs covered:
  * - The channel starts one native thinking draft at the turn boundary.
  * - Token deltas and tool-loop events never trigger additional draft API calls.
+ * - Scheduled Telegram delivery is durably confirmed before secondary group timeline persistence.
  */
 import { readFile } from "node:fs/promises";
 
@@ -19,5 +20,14 @@ describe("Telegram channel draft policy", () => {
     expect(source).not.toContain('"message.appended"');
     expect(source).not.toContain('"action.result"');
     expect(source).not.toContain('"actions.requested"');
+  });
+
+  it("records scheduled delivery confirmation before the group timeline", async () => {
+    const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+    const confirmation = source.indexOf("await proactiveDeliveryRepository.record(");
+    const timeline = source.indexOf("await telegramGroupJournalRepository.recordAgentResponse(");
+
+    expect(confirmation).toBeGreaterThan(-1);
+    expect(timeline).toBeGreaterThan(confirmation);
   });
 });

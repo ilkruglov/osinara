@@ -19,7 +19,8 @@ export interface MutableReminderRow extends ReminderRow {
 }
 
 export const REMINDER_COLUMNS = `id, scope, content, timezone, due_at, recurrence_unit,
-  recurrence_interval, status, message_thread_id::text, last_error_code, created_at, updated_at`;
+  recurrence_interval, status, message_thread_id::text, forum_topic_id::text,
+  last_error_code, created_at, updated_at`;
 
 export async function requireCurrentMembership(
   client: PoolClient,
