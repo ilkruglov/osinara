@@ -30,12 +30,14 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = [
 
 export const CONTROLLED_TOOL_NAMES = [
   "export_memory",
+  "import_telegram_attachment",
   "inspect_workspace_image",
   "list_agent_schedules",
   "list_memories",
   "list_pending_family_invitations",
   "list_proactive_deliveries",
   "list_reminders",
+  "list_telegram_attachments",
   "manage_behavior_preference",
   "manage_agent_schedule",
   "manage_family_invitation",

@@ -3,10 +3,12 @@
  *
  * Exports:
  * - `TelegramGroupJournalEntry`: normalized persisted message projection.
+ * - `TelegramGroupAttachmentSummary`: model-safe lazy attachment reference metadata.
  * - `formatTelegramGroupJournalContext`: bounded, untrusted JSON context serialization.
  */
 
 export interface TelegramGroupJournalEntry {
+  attachment?: TelegramGroupAttachmentSummary;
   contentText: string | null;
   messageKind: string;
   messageThreadId: string | null;
@@ -19,7 +21,16 @@ export interface TelegramGroupJournalEntry {
   telegramUserId: string | null;
 }
 
+export interface TelegramGroupAttachmentSummary {
+  attachmentId: string;
+  fileName?: string;
+  kind: "document" | "photo";
+  mediaType?: string;
+  size?: number;
+}
+
 interface ModelJournalMessage {
+  attachment?: TelegramGroupAttachmentSummary;
   content: string | null;
   kind: string;
   messageId: string;
@@ -59,6 +70,7 @@ export function formatTelegramGroupJournalContext(
 
   // Telegram IDs identify records in PostgreSQL but are unnecessary personal data for the model.
   const messages: ModelJournalMessage[] = entries.map((entry) => ({
+    ...(entry.attachment === undefined ? {} : { attachment: entry.attachment }),
     content: entry.contentText,
     kind: entry.messageKind,
     messageId: entry.telegramMessageId,
