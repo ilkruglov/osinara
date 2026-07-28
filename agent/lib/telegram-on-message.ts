@@ -46,6 +46,7 @@ import {
 } from "./telegram-message-policy.js";
 import { formatTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
+import { telegramForumTopicId } from "./telegram-group-message-storage.js";
 import {
   telegramGroupJournalRepository,
   type TelegramGroupJournalRepository,
@@ -74,7 +75,7 @@ interface TelegramMessageRepositories {
   };
   family: Pick<FamilyRepository, "claimInvitation">;
   hitl: Pick<TelegramHitlApprovalRepository, "authorizeReply">;
-  journal: Pick<TelegramGroupJournalRepository, "listBefore" | "record">;
+  journal: Pick<TelegramGroupJournalRepository, "listRecent" | "record">;
   proactiveDeliveries: Pick<typeof proactiveDeliveryRepository, "listPendingContext">;
   session: Pick<typeof sessionRepository, "hasRoute" | "prepareTurn">;
   telegram: TelegramRepository;
@@ -235,22 +236,22 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       message.chat.type === "private"
         ? null
         : await repositories.telegram.findGroup(message.chat.id);
-    let journalEnabled = group?.messageMode === "all";
+    const forumTopicId = group ? telegramForumTopicId(message) : null;
     let journalDuplicate = false;
+    let inboundTimeline: Awaited<ReturnType<TelegramGroupJournalRepository["record"]>> | null = null;
     const hasLazyFamilyAttachment =
       group?.type === "family_private" && message.attachments.length > 0;
     if (message.chat.type !== "private") {
       if (!group) return null;
-      // External spaces never journal or dispatch media metadata, so Eve cannot download its bytes.
+      // External spaces never dispatch media metadata, so Eve cannot download its bytes.
       if (group.type !== "family_private" && hasTelegramInboundMedia(message)) return null;
-      if (journalEnabled) {
-        const recordResult = await repositories.journal.record(group.groupId, message);
-        if (recordResult === "duplicate") {
-          journalDuplicate = true;
-          if (!hasLazyFamilyAttachment) return null;
-        }
-        if (recordResult === "mode_disabled") journalEnabled = false;
+      // Every registered group shares one timeline independently of whether this message starts a turn.
+      inboundTimeline = await repositories.journal.record(group.groupId, message);
+      if (inboundTimeline.status === "duplicate") {
+        journalDuplicate = true;
+        if (!hasLazyFamilyAttachment) return null;
       }
+      if (inboundTimeline.replyToAgent) addressed = true;
       if (message.replyToMessage) {
         // Telegram may omit the sender entirely from a compact Rich Message reply reference.
         // The exact persisted chat/topic/message route proves that the anchor belongs to Osinara.
@@ -401,13 +402,13 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     if (pendingDeliveries) context.push(pendingDeliveries.context);
 
     // Only an authorized addressed turn receives previous messages from its exact forum topic.
-    if (group && journalEnabled) {
-      const journalEntries = await repositories.journal.listBefore({
-        beforeTelegramMessageId: message.messageId,
+    if (group && inboundTimeline) {
+      const journalEntries = await repositories.journal.listRecent({
+        anchorEntryId: inboundTimeline.entryId,
+        beforeSequence: inboundTimeline.sequenceId,
         groupId: group.groupId,
         limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
-        messageThreadId:
-          message.messageThreadId === undefined ? null : String(message.messageThreadId),
+        messageThreadId: forumTopicId,
       });
       const journalContext = formatTelegramGroupJournalContext(
         journalEntries,
@@ -433,6 +434,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           ...(message.chat.type === "private"
             ? {}
             : { telegramReplyToMessageId: message.messageId }),
+          ...(inboundTimeline ? { telegramTimelineEntryId: inboundTimeline.entryId } : {}),
+          ...(forumTopicId === null ? {} : { telegramForumTopicId: forumTopicId }),
           ...(message.messageThreadId === undefined
             ? {}
             : { telegramMessageThreadId: String(message.messageThreadId) }),

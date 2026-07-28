@@ -13,13 +13,7 @@ import { database } from "../database.js";
 import type { TelegramGroupAttachmentSummary } from "../telegram-group-journal-context.js";
 import {
   lockTelegramGroupJournal,
-  pruneTelegramGroupJournal,
   requireTelegramPositiveBigint,
-  telegramMessageContent,
-  telegramMessageKind,
-  telegramMessageSentAt,
-  telegramMessageThreadId,
-  telegramSenderDisplayName,
 } from "../telegram-group-message-storage.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
 
@@ -177,49 +171,35 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
     try {
       await client.query("BEGIN");
       await lockTelegramGroupJournal(client, groupId);
+      // The unified timeline owns entry creation and sequence allocation. This repository enriches
+      // that exact human entry, so attachments cannot create a second persistence path.
       const result = await client.query<AttachmentRow>(
-        `INSERT INTO telegram_group_messages
-           (group_id, telegram_message_id, message_thread_id, telegram_user_id,
-            sender_username, sender_display_name, sender_is_bot, message_kind,
-            content_text, reply_to_message_id, sent_at, attachment_file_id,
-            attachment_file_unique_id, attachment_file_name, attachment_media_type,
-            attachment_size, attachment_kind)
-         SELECT telegram_group.id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                $12, $13, $14, $15, $16, $17
+        `UPDATE telegram_group_messages AS message
+         SET attachment_file_id = $3,
+             attachment_file_unique_id = $4,
+             attachment_file_name = $5,
+             attachment_media_type = $6,
+             attachment_size = $7,
+             attachment_kind = $8
          FROM telegram_groups telegram_group
-         WHERE telegram_group.id = $1 AND telegram_group.type = 'family_private'
-         ON CONFLICT (group_id, telegram_message_id) DO UPDATE SET
-           attachment_file_id = EXCLUDED.attachment_file_id,
-           attachment_file_unique_id = EXCLUDED.attachment_file_unique_id,
-           attachment_file_name = EXCLUDED.attachment_file_name,
-           attachment_media_type = EXCLUDED.attachment_media_type,
-           attachment_size = EXCLUDED.attachment_size,
-           attachment_kind = EXCLUDED.attachment_kind
-         WHERE telegram_group_messages.attachment_file_id IS NULL OR (
-           telegram_group_messages.attachment_file_id = EXCLUDED.attachment_file_id AND
-           telegram_group_messages.attachment_file_unique_id IS NOT DISTINCT FROM EXCLUDED.attachment_file_unique_id AND
-           telegram_group_messages.attachment_file_name IS NOT DISTINCT FROM EXCLUDED.attachment_file_name AND
-           telegram_group_messages.attachment_media_type IS NOT DISTINCT FROM EXCLUDED.attachment_media_type AND
-           telegram_group_messages.attachment_size IS NOT DISTINCT FROM EXCLUDED.attachment_size AND
-           telegram_group_messages.attachment_kind = EXCLUDED.attachment_kind
-         )
-         RETURNING id, telegram_message_id::text, attachment_file_id,
-                   attachment_file_unique_id, attachment_file_name, attachment_media_type,
-                   attachment_size::text, attachment_kind, ''::text AS telegram_chat_id`,
+         WHERE message.group_id = $1
+           AND message.telegram_message_id = $2
+           AND telegram_group.id = message.group_id
+           AND telegram_group.type = 'family_private'
+           AND (message.attachment_file_id IS NULL OR (
+             message.attachment_file_id = $3 AND
+             message.attachment_file_unique_id IS NOT DISTINCT FROM $4 AND
+             message.attachment_file_name IS NOT DISTINCT FROM $5 AND
+             message.attachment_media_type IS NOT DISTINCT FROM $6 AND
+             message.attachment_size IS NOT DISTINCT FROM $7 AND
+             message.attachment_kind = $8
+           ))
+         RETURNING message.id, message.telegram_message_id::text, message.attachment_file_id,
+                    attachment_file_unique_id, attachment_file_name, attachment_media_type,
+                    attachment_size::text, attachment_kind, ''::text AS telegram_chat_id`,
         [
           groupId,
           requireTelegramPositiveBigint(message.messageId, "message_id"),
-          telegramMessageThreadId(message.messageThreadId),
-          message.from?.id ?? null,
-          message.from?.username ?? null,
-          telegramSenderDisplayName(message),
-          message.from?.isBot ?? false,
-          telegramMessageKind(message),
-          telegramMessageContent(message),
-          message.replyToMessage
-            ? requireTelegramPositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
-            : null,
-          telegramMessageSentAt(message),
           attachment.fileId,
           attachment.fileUniqueId ?? null,
           attachment.fileName ?? null,
@@ -235,7 +215,6 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
           "Не удалось сохранить ссылку на вложение семейной группы",
         );
       }
-      await pruneTelegramGroupJournal(client, groupId);
       await client.query("COMMIT");
       return { ...attachmentSummary(row), telegramMessageId: row.telegram_message_id };
     } catch (error) {

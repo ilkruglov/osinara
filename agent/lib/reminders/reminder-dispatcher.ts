@@ -16,6 +16,10 @@ import {
   reminderDispatchRepository,
 } from "./reminder-dispatch-repository.js";
 import { deliverTelegramReminder } from "./telegram-reminder-delivery.js";
+import {
+  telegramGroupJournalRepository,
+  type TelegramGroupJournalRepository,
+} from "../telegram-group-journal-repository.js";
 
 interface ReminderDispatcherRepository {
   claimDue(options: {
@@ -35,6 +39,7 @@ interface ReminderDispatcherRepository {
 interface ReminderDispatcherDependencies {
   deliver(job: ClaimedReminder): Promise<ProactiveDeliveryReceipt>;
   repository: ReminderDispatcherRepository;
+  timeline: Pick<TelegramGroupJournalRepository, "recordAgentResponse">;
 }
 
 export function createReminderDispatcher(dependencies: ReminderDispatcherDependencies) {
@@ -50,7 +55,18 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
       try {
         await dependencies.repository.markDispatchStarted(job.id, job.leaseToken);
         const receipt = await dependencies.deliver(job);
-        await dependencies.repository.complete(job, new Date(), receipt);
+        const completedAt = new Date();
+        if (job.groupId) {
+          await dependencies.timeline.recordAgentResponse({
+            contentText: receipt.text,
+            deliveredAt: completedAt,
+            groupId: job.groupId,
+            messageThreadId: job.forumTopicId,
+            replyToEntryId: null,
+            telegramMessageIds: [receipt.messageId],
+          });
+        }
+        await dependencies.repository.complete(job, completedAt, receipt);
       } catch (error) {
         if (isAppError(error) && error.code === "AGENT_REMINDER_LEASE_STALE") {
           console.error(JSON.stringify({
@@ -73,4 +89,5 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
 export const dispatchDueReminders = createReminderDispatcher({
   deliver: deliverTelegramReminder,
   repository: reminderDispatchRepository,
+  timeline: telegramGroupJournalRepository,
 });

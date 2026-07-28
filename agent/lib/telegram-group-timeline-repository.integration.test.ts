@@ -1,0 +1,92 @@
+/**
+ * Unified Telegram group timeline PostgreSQL integration tests.
+ *
+ * Constructs covered:
+ * - Group-wide monotonic sequence allocation across user and agent entries.
+ * - Every delivered agent chunk resolves to one logical entry and trusted replies.
+ * - Retention never resets or reuses the durable group counter.
+ */
+import type { TelegramMessage } from "eve/channels/telegram";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+
+import { closeDatabase, database } from "./database.js";
+import { telegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+
+const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
+  ? describe
+  : describe.skip;
+
+function message(id: string, replyToMessageId?: string): TelegramMessage {
+  return {
+    attachments: [],
+    caption: "",
+    chat: { id: "-1001", title: "Группа", type: "supergroup" },
+    from: { firstName: "Анна", id: "101", isBot: false },
+    messageId: id,
+    raw: { date: 1_700_000_000 + Number(id) },
+    ...(replyToMessageId === undefined ? {} : {
+      replyToMessage: {
+        chat: { id: "-1001", title: "Группа", type: "supergroup" },
+        messageId: replyToMessageId,
+      },
+    }),
+    text: `message-${id}`,
+  };
+}
+
+async function group(): Promise<string> {
+  const family = await database().query<{ id: string }>(
+    "INSERT INTO families (name) VALUES ('Timeline') RETURNING id",
+  );
+  const result = await database().query<{ id: string }>(
+    `INSERT INTO telegram_groups
+       (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode)
+     VALUES ($1, '-1001', 'Группа', 'family_private', '{}', 'all') RETURNING id`,
+    [family.rows[0]!.id],
+  );
+  return result.rows[0]!.id;
+}
+
+describeWithDatabase("unified Telegram group timeline repository", () => {
+  beforeEach(async () => {
+    await database().query(
+      "TRUNCATE telegram_group_message_ids, telegram_group_messages, telegram_groups, families CASCADE",
+    );
+  });
+
+  afterAll(closeDatabase);
+
+  it("allocates one sequence and maps all agent chunks to its reply target", async () => {
+    const groupId = await group();
+    const inbound = await telegramGroupJournalRepository.record(groupId, message("10"));
+    expect(inbound).toMatchObject({ status: "inserted", sequenceId: "1" });
+
+    const agent = await telegramGroupJournalRepository.recordAgentResponse({
+      contentText: "Финальный ответ",
+      deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: inbound.entryId,
+      telegramMessageIds: ["20", "21"],
+    });
+    expect(agent.sequenceId).toBe("2");
+
+    const reply = await telegramGroupJournalRepository.record(groupId, message("30", "21"));
+    expect(reply.sequenceId).toBe("3");
+    expect(reply.replyToAgent).toBe(true);
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null, beforeSequence: null, groupId, limit: 50, messageThreadId: null,
+    });
+    expect(entries.map((entry) => [entry.sequenceId, entry.actorKind, entry.replyToSequenceId]))
+      .toEqual([["1", "user", null], ["2", "agent_self", "1"], ["3", "user", "2"]]);
+  });
+
+  it("does not reset the sequence after physical pruning", async () => {
+    const groupId = await group();
+    await database().query("UPDATE telegram_groups SET next_timeline_sequence = 1000 WHERE id = $1", [groupId]);
+
+    const result = await telegramGroupJournalRepository.record(groupId, message("1001"));
+
+    expect(result.sequenceId).toBe("1001");
+  });
+});

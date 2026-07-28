@@ -21,6 +21,7 @@ import { finishActiveAgentScheduleRun } from "./agent-schedule-run-completion.js
 export interface ClaimedAgentSchedule {
   authorUserId: string;
   familyId: string;
+  forumTopicId: string | null;
   groupId: string | null;
   id: string;
   leaseToken: string;
@@ -48,6 +49,7 @@ interface ClaimOptions {
 interface CandidateRow {
   author_user_id: string;
   family_id: string;
+  forum_topic_id: string | null;
   group_id: string | null;
   id: string;
   message_thread_id: string | null;
@@ -192,7 +194,8 @@ export const agentScheduleDispatchRepository = {
                 schedule.group_id, schedule.scope, schedule.title, schedule.user_request,
                 schedule.scenario_prompt, schedule.timezone, schedule.recurrence_kind,
                 schedule.next_run_at, schedule.telegram_chat_id, schedule.telegram_chat_type,
-                schedule.message_thread_id::text, membership.role, users.telegram_user_id
+                 schedule.message_thread_id::text, schedule.forum_topic_id::text,
+                 membership.role, users.telegram_user_id
            FROM agent_schedules AS schedule
            JOIN family_memberships AS membership
              ON membership.family_id = schedule.family_id AND membership.user_id = schedule.author_user_id
@@ -254,6 +257,7 @@ export const agentScheduleDispatchRepository = {
         claimed.push({
           authorUserId: candidate.author_user_id,
           familyId: candidate.family_id,
+          forumTopicId: candidate.forum_topic_id,
           groupId: candidate.group_id,
           id: candidate.id,
           leaseToken,

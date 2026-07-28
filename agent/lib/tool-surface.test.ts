@@ -18,6 +18,7 @@ const EXPECTED_TOOL_FILES = [
   "import_telegram_attachment.ts",
   "inspect_workspace_image.ts",
   "list_agent_schedules.ts",
+  "list_group_history.ts",
   "list_memories.ts",
   "list_pending_family_invitations.ts",
   "list_proactive_deliveries.ts",

@@ -35,6 +35,7 @@ export interface ReminderRow {
   content: string;
   created_at: Date;
   due_at: Date;
+  forum_topic_id: string | null;
   id: string;
   last_error_code: string | null;
   message_thread_id: string | null;

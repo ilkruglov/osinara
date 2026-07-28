@@ -12,6 +12,7 @@ import type { ClaimedAgentSchedule } from "./agent-schedule-dispatch-repository.
 const job: ClaimedAgentSchedule = {
   authorUserId: "user-1",
   familyId: "family-1",
+  forumTopicId: null,
   groupId: null,
   id: "schedule-1",
   leaseToken: "lease-1",

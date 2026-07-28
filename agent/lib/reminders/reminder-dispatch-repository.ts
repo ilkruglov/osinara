@@ -25,6 +25,7 @@ export interface ClaimedReminder {
   delayed: boolean;
   dueAt: string;
   familyId: string;
+  forumTopicId: string | null;
   groupId: string | null;
   id: string;
   leaseToken: string;
@@ -46,6 +47,7 @@ interface ClaimedRow {
   delayed: boolean;
   due_at: Date;
   family_id: string;
+  forum_topic_id: string | null;
   group_id: string | null;
   id: string;
   lease_token: string;
@@ -200,7 +202,8 @@ export const reminderDispatchRepository = {
          WHERE reminder.id = candidates.id
          RETURNING reminder.id, reminder.family_id, reminder.owner_user_id, reminder.group_id,
                    reminder.content, reminder.scope, reminder.timezone, reminder.telegram_chat_id,
-                   reminder.message_thread_id::text, reminder.due_at, reminder.lease_token::text,
+                    reminder.message_thread_id::text, reminder.forum_topic_id::text,
+                    reminder.due_at, reminder.lease_token::text,
                    (reminder.delayed_by_quiet_hours OR reminder.due_at < $1 - ($5::text || ' milliseconds')::interval) AS delayed`,
         [
           options.now,
@@ -216,6 +219,7 @@ export const reminderDispatchRepository = {
         delayed: row.delayed,
         dueAt: row.due_at.toISOString(),
         familyId: row.family_id,
+        forumTopicId: row.forum_topic_id,
         groupId: row.group_id,
         id: row.id,
         leaseToken: row.lease_token,

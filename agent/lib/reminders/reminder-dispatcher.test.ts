@@ -12,6 +12,7 @@ import { createReminderDispatcher } from "./reminder-dispatcher.js";
 
 const job: ClaimedReminder = {
   familyId: "00000000-0000-4000-8000-000000000010",
+  forumTopicId: null,
   content: "Позвонить врачу",
   delayed: false,
   dueAt: "2026-07-13T06:00:00.000Z",
@@ -28,22 +29,26 @@ const job: ClaimedReminder = {
 describe("reminder dispatcher", () => {
   it("marks dispatch before delivery and completes the exact lease", async () => {
     const order: string[] = [];
+    const groupJob = { ...job, groupId: "00000000-0000-4000-8000-000000000012" };
     const repository = {
-      claimDue: vi.fn().mockResolvedValue([job]),
+      claimDue: vi.fn().mockResolvedValue([groupJob]),
       complete: vi.fn().mockImplementation(async () => { order.push("complete"); }),
       fail: vi.fn(),
       markDispatchStarted: vi.fn().mockImplementation(async () => { order.push("mark"); }),
     };
     const receipt = { messageId: "55", text: "Напоминание:\n\nПозвонить врачу" };
+    const timeline = { recordAgentResponse: vi.fn().mockImplementation(async () => {
+      order.push("timeline");
+    }) };
     const deliver = vi.fn().mockImplementation(async () => {
       order.push("deliver");
       return receipt;
     });
-    const dispatch = createReminderDispatcher({ deliver, repository });
+    const dispatch = createReminderDispatcher({ deliver, repository, timeline });
 
     await expect(dispatch(new Date("2026-07-13T06:00:00.000Z"))).resolves.toBe(1);
-    expect(order).toEqual(["mark", "deliver", "complete"]);
-    expect(repository.complete).toHaveBeenCalledWith(job, expect.any(Date), receipt);
+    expect(order).toEqual(["mark", "deliver", "timeline", "complete"]);
+    expect(repository.complete).toHaveBeenCalledWith(groupJob, expect.any(Date), receipt);
     expect(repository.fail).not.toHaveBeenCalled();
   });
 
@@ -57,6 +62,7 @@ describe("reminder dispatcher", () => {
     const dispatch = createReminderDispatcher({
       deliver: vi.fn().mockRejectedValue(new Error("network unavailable")),
       repository,
+      timeline: { recordAgentResponse: vi.fn() },
     });
 
     await expect(dispatch(new Date("2026-07-13T06:00:00.000Z"))).resolves.toBe(1);

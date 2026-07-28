@@ -95,6 +95,7 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
       telegramChatId: job.telegramChatId,
       telegramChatType: job.telegramChatType,
       ...(job.messageThreadId === null ? {} : { telegramMessageThreadId: job.messageThreadId }),
+      ...(job.forumTopicId === null ? {} : { telegramForumTopicId: job.forumTopicId }),
       telegramUserId: job.telegramUserId,
       ...(job.groupId === null ? {} : { groupId: job.groupId, groupType: "family_private" }),
     },

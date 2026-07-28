@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import inspectWorkspaceImage from "../../tools/inspect_workspace_image.js";
 import listMemories from "../../tools/list_memories.js";
+import listGroupHistory from "../../tools/list_group_history.js";
 import manageMemory from "../../tools/manage_memory.js";
 import remember from "../../tools/remember.js";
 import searchMemories from "../../tools/search_memories.js";
@@ -34,6 +35,7 @@ type DirectExternalToolName = Exclude<ExternalGroupToolName, `manage_memory.${st
 
 const DIRECT_TOOL_DEFINITIONS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
+  list_group_history: listGroupHistory as unknown as AnyToolDefinition,
   list_memories: listMemories as unknown as AnyToolDefinition,
   remember: remember as unknown as AnyToolDefinition,
   remove_group_file: removeGroupFileTool as unknown as AnyToolDefinition,

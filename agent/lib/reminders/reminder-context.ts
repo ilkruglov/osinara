@@ -12,6 +12,7 @@ import { resolveSessionCaller } from "../session-auth.js";
 
 export interface ReminderAuthorization {
   familyId: string;
+  forumTopicId: string | null;
   groupId: string | null;
   groupType: "family_private" | null;
   messageThreadId: string | null;
@@ -45,6 +46,9 @@ export function requireReminderAuthorization(
   const groupId = attributes.groupId;
   return {
     familyId: attributes.familyId,
+    forumTopicId: typeof attributes.telegramForumTopicId === "string"
+      ? attributes.telegramForumTopicId
+      : null,
     groupId: typeof groupId === "string" ? groupId : null,
     groupType: groupType === "family_private" ? groupType : null,
     messageThreadId: typeof attributes.telegramMessageThreadId === "string"

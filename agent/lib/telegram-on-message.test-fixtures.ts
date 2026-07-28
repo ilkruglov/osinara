@@ -67,7 +67,13 @@ export function repositories() {
     },
     journal: {
       listBefore: vi.fn().mockResolvedValue([]),
-      record: vi.fn().mockResolvedValue("inserted"),
+      listRecent: vi.fn().mockResolvedValue([]),
+      record: vi.fn().mockResolvedValue({
+        entryId: "00000000-0000-4000-8000-000000000010",
+        replyToAgent: false,
+        sequenceId: "1",
+        status: "inserted",
+      }),
     },
     proactiveDeliveries: {
       listPendingContext: vi.fn().mockResolvedValue(null),

@@ -252,7 +252,7 @@ describe("createTelegramMessageHandler", () => {
 
       expect(repository.attachments.persist).not.toHaveBeenCalled();
       expect(repository.attachmentReferences.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
-      expect(repository.journal.record).not.toHaveBeenCalled();
+      expect(repository.journal.record).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
       expect(repository.session.prepareTurn).toHaveBeenCalledTimes(shouldPersist ? 1 : 0);
       expect(result === null).toBe(!shouldPersist);
     },
@@ -473,7 +473,7 @@ describe("createTelegramMessageHandler", () => {
     }));
   });
 
-  it("does not journal an ordinary message in addressed-only mode", async () => {
+  it("records an ordinary message in the unified timeline without starting a turn", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
       familyId: "family-1",
@@ -486,7 +486,7 @@ describe("createTelegramMessageHandler", () => {
     const handler = createTelegramMessageHandler(repository);
 
     await expect(handler(telegramContext().context, groupMessage("обычная реплика"))).resolves.toBeNull();
-    expect(repository.journal.record).not.toHaveBeenCalled();
+    expect(repository.journal.record).toHaveBeenCalledTimes(1);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
@@ -518,16 +518,20 @@ describe("createTelegramMessageHandler", () => {
       toolAllowlist: ["remember"],
       type: "external_private",
     });
-    repository.journal.listBefore.mockResolvedValue([
+    repository.journal.listRecent.mockResolvedValue([
       {
+        actorId: "telegram:101",
+        actorKind: "user",
         contentText: "предыдущая реплика",
         messageKind: "text",
         messageThreadId: "42",
         replyToMessageId: null,
+        replyToSequenceId: null,
         senderDisplayName: "Анна",
         senderIsBot: false,
         senderUsername: "anna",
         sentAt: "2026-07-12T10:00:00.000Z",
+        sequenceId: "40",
         telegramMessageId: "40",
         telegramUserId: "101",
       },
@@ -537,12 +541,14 @@ describe("createTelegramMessageHandler", () => {
       ...groupMessage(`@${BOT_USERNAME} подведи итог`),
       messageId: "41",
       messageThreadId: 42,
+      raw: { date: 1_700_000_000, is_topic_message: true },
     };
 
     const result = await handler(telegramContext().context, message);
 
-    expect(repository.journal.listBefore).toHaveBeenCalledWith({
-      beforeTelegramMessageId: "41",
+    expect(repository.journal.listRecent).toHaveBeenCalledWith({
+      anchorEntryId: "00000000-0000-4000-8000-000000000010",
+      beforeSequence: "1",
       groupId: "group-1",
       limit: 50,
       messageThreadId: "42",
@@ -561,39 +567,22 @@ describe("createTelegramMessageHandler", () => {
       toolAllowlist: ["remember"],
       type: "external_private",
     });
-    repository.journal.record.mockResolvedValue("duplicate");
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000010",
+      replyToAgent: false,
+      sequenceId: "1",
+      status: "duplicate",
+    });
     const handler = createTelegramMessageHandler(repository);
 
     await expect(
       handler(telegramContext().context, groupMessage(`@${BOT_USERNAME} ответь`)),
     ).resolves.toBeNull();
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
-    expect(repository.journal.listBefore).not.toHaveBeenCalled();
+    expect(repository.journal.listRecent).not.toHaveBeenCalled();
   });
 
-  it("continues an addressed turn without journal context when mode changed concurrently", async () => {
-    const repository = repositories();
-    repository.telegram.findGroup.mockResolvedValue({
-      familyId: "family-1",
-      groupId: "group-1",
-      messageMode: "all",
-      telegramChatId: "group-101",
-      toolAllowlist: ["remember"],
-      type: "external_private",
-    });
-    repository.journal.record.mockResolvedValue("mode_disabled");
-    const handler = createTelegramMessageHandler(repository);
-
-    const result = await handler(
-      telegramContext().context,
-      groupMessage(`@${BOT_USERNAME} ответь`),
-    );
-
-    expect(result?.auth).not.toBeNull();
-    expect(repository.journal.listBefore).not.toHaveBeenCalled();
-  });
-
-  it("journals an unauthorized family-group message but does not start a turn", async () => {
+  it("records an unauthorized family-group participant without granting agent access", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
       familyId: "family-1",
@@ -608,7 +597,8 @@ describe("createTelegramMessageHandler", () => {
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
-    expect(repository.journal.listBefore).not.toHaveBeenCalled();
+    expect(repository.journal.listRecent).not.toHaveBeenCalled();
+    expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });
 
   it("does not journal messages from an unknown group", async () => {
