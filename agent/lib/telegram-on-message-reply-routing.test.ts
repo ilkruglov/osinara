@@ -88,6 +88,43 @@ describe("createTelegramMessageHandler reply routing", () => {
     expect(result).not.toBeNull();
   });
 
+  it("continues a forum reply through a persisted pre-fix threadless route", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.session.hasRoute
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("как дела?"),
+      messageId: "280",
+      messageThreadId: 278,
+      replyToMessage: {
+        chat: { id: "group-101", type: "supergroup" },
+        from: {
+          firstName: "Osinara",
+          id: "bot-1",
+          isBot: true,
+          username: "osinara_bot",
+        },
+        messageId: "279",
+        messageThreadId: 278,
+      },
+    });
+
+    expect(repository.session.hasRoute).toHaveBeenNthCalledWith(1, "group-101:278:279");
+    expect(repository.session.hasRoute).toHaveBeenNthCalledWith(2, "group-101::279");
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "group-101::279",
+    }));
+    expect(result).not.toBeNull();
+  });
+
   it("ignores a username-less reply to an unknown bot message route", async () => {
     const repository = familyGroupRepository();
     repository.session.hasRoute.mockResolvedValue(false);
