@@ -190,6 +190,7 @@ describe("Telegram interface localization", () => {
     });
 
     expect(turnMessage).toContain("Не удалось выполнить запрос");
+    expect(turnMessage).toContain("Модель не смогла сформировать завершённый ответ");
     expect(turnMessage).toContain("Код: MODEL_CALL_FAILED");
     expect(turnMessage).toContain("Номер ошибки: 8c4eebf2-a386-4dcb-913d-4b5a28edee2f");
     expect(turnMessage).not.toContain("AGENT_MINIMAX");

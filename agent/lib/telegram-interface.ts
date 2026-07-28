@@ -163,6 +163,9 @@ function supportReference(details: FailureData["details"]): string | null {
 }
 
 function publicFailureExplanation(data: FailureData): string | null {
+  if (data.code === "MODEL_CALL_FAILED") {
+    return "Модель не смогла сформировать завершённый ответ.";
+  }
   // Validation errors are authored by application code and already contain safe Russian guidance.
   if (!data.code.endsWith("_INPUT_INVALID") || typeof data.message !== "string") return null;
   return data.message.replace(new RegExp(`^${data.code}:\\s*`, "u"), "");

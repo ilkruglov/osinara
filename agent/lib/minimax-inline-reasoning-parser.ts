@@ -8,6 +8,7 @@
  * - `consumeInlineReasoning`: consumes text chunks while keeping possible tag prefixes buffered.
  * - `finalizeInlineReasoning`: closes or rejects unfinished hidden reasoning by finish reason.
  * - `emptyVisibleAnswerError`: stable failure for hidden-only model output.
+ * - `assertMiniMaxFinishReasonComplete`: rejects incomplete or filtered provider output.
  */
 import type { LanguageModelV4FinishReason } from "@ai-sdk/provider";
 
@@ -16,6 +17,9 @@ import { AppError } from "./app-error.js";
 const MINI_MAX_REASONING_TAGS = ["think", "mm:think", "thinking"] as const;
 const MINI_MAX_REASONING_TRUNCATED_CODE = "AGENT_MINIMAX_REASONING_TRUNCATED";
 const MINI_MAX_EMPTY_VISIBLE_ANSWER_CODE = "AGENT_MINIMAX_EMPTY_VISIBLE_ANSWER";
+const MINI_MAX_OUTPUT_INCOMPLETE_CODE = "AGENT_MINIMAX_OUTPUT_INCOMPLETE";
+const MINI_MAX_OUTPUT_TRUNCATED_CODE = "AGENT_MINIMAX_OUTPUT_TRUNCATED";
+const MINI_MAX_OUTPUT_FILTERED_CODE = "AGENT_MINIMAX_OUTPUT_FILTERED";
 
 export type InlineReasoningEvent =
   | { readonly text: string; readonly type: "text" }
@@ -47,6 +51,28 @@ export function emptyVisibleAnswerError(): AppError {
   return new AppError(
     MINI_MAX_EMPTY_VISIBLE_ANSWER_CODE,
     "Модель не вернула готовый ответ. Попробуйте повторить запрос или переформулировать его",
+  );
+}
+
+export function assertMiniMaxFinishReasonComplete(
+  finishReason: LanguageModelV4FinishReason,
+): void {
+  if (finishReason.unified === "stop" || finishReason.unified === "tool-calls") return;
+  if (finishReason.unified === "length") {
+    throw new AppError(
+      MINI_MAX_OUTPUT_TRUNCATED_CODE,
+      "Модель оборвала ответ из-за ограничения длины. Сократите запрос или попросите ответить частями",
+    );
+  }
+  if (finishReason.unified === "content-filter") {
+    throw new AppError(
+      MINI_MAX_OUTPUT_FILTERED_CODE,
+      "Модель остановила ответ из-за ограничений безопасности. Переформулируйте запрос",
+    );
+  }
+  throw new AppError(
+    MINI_MAX_OUTPUT_INCOMPLETE_CODE,
+    "Модель не завершила ответ. Попробуйте повторить запрос или сформулировать его иначе",
   );
 }
 

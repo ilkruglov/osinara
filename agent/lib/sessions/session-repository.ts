@@ -193,8 +193,11 @@ export const sessionRepository = {
   async hasRoute(baseContinuationToken: string): Promise<boolean> {
     const result = await database().query(
       `SELECT 1
-         FROM conversation_session_routes
-        WHERE base_continuation_token = $1
+         FROM conversation_session_routes route
+         JOIN conversation_sessions session ON session.id = route.session_id
+        WHERE route.base_continuation_token = $1
+          AND session.retired_at IS NULL
+          AND session.eve_session_id IS NOT NULL
         LIMIT 1`,
       [baseContinuationToken],
     );

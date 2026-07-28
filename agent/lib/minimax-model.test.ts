@@ -407,6 +407,22 @@ describe("createMiniMaxCliProxyModel", () => {
     ).rejects.toThrow("AGENT_MINIMAX_EMPTY_VISIBLE_ANSWER");
   });
 
+  it("rejects visible generated text when MiniMax reports an abnormal finish reason", async () => {
+    const model = createMiniMaxCliProxyModel({
+      apiKey: "proxy-key",
+      baseURL: "http://cli-proxy-api:8317/v1",
+      fetch: async () => jsonResponse(completion({
+        content: "Оборванный видимый ответ",
+        role: "assistant",
+      }, "unexpected_provider_stop")),
+      modelId: "MiniMax-M3",
+    });
+
+    await expect(
+      model.doGenerate({ prompt: userPrompt() } as LanguageModelV4CallOptions),
+    ).rejects.toThrow("AGENT_MINIMAX_OUTPUT_INCOMPLETE");
+  });
+
   it("streams visible text when trailing reasoning is unterminated but complete", async () => {
     const eventStream = [
       `data: ${JSON.stringify({ choices: [{ delta: {
@@ -451,5 +467,29 @@ describe("createMiniMaxCliProxyModel", () => {
     await expect(
       streamText({ model, prompt: "Подготовь документ" }).text,
     ).rejects.toThrow("AGENT_MINIMAX_REASONING_TRUNCATED");
+  });
+
+  it("rejects streamed visible text when MiniMax reports an abnormal finish reason", async () => {
+    const eventStream = [
+      `data: ${JSON.stringify({ choices: [{
+        delta: { content: "Оборванный видимый ответ" },
+        finish_reason: "unexpected_provider_stop",
+        index: 0,
+      }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ].join("");
+    const model = createMiniMaxCliProxyModel({
+      apiKey: "proxy-key",
+      baseURL: "http://cli-proxy-api:8317/v1",
+      fetch: async () => new Response(eventStream, {
+        headers: { "content-type": "text/event-stream" },
+        status: 200,
+      }),
+      modelId: "MiniMax-M3",
+    });
+
+    await expect(
+      streamText({ model, prompt: "Подготовь документ" }).text,
+    ).rejects.toThrow("AGENT_MINIMAX_OUTPUT_INCOMPLETE");
   });
 });
