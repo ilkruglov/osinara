@@ -14,6 +14,7 @@ const toolCalls = vi.hoisted(() => ({
   deleteMemory: vi.fn(),
   deletePreference: vi.fn(),
   inspectImage: vi.fn(),
+  importAttachment: vi.fn(),
   registerGroup: vi.fn(),
   reminderCreate: vi.fn(),
   removeGroup: vi.fn(),
@@ -63,6 +64,9 @@ vi.mock("./reminders/reminder-repository.js", () => ({
   },
 }));
 vi.mock("./telegram-delivery.js", () => ({ deliverFamilyInvitation: vi.fn() }));
+vi.mock("./attachments/telegram-attachment-materializer.js", () => ({
+  materializeTelegramAttachment: toolCalls.importAttachment,
+}));
 vi.mock("./telegram-group-administration-repository.js", () => ({
   telegramGroupAdministrationRepository: {
     registerGroup: toolCalls.registerGroup,
@@ -77,6 +81,7 @@ vi.mock("./workspaces/workspace-image-inspection.js", () => ({
 }));
 
 import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
+import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import manageFamilyInvitation from "../tools/manage_family_invitation.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
 import manageMemory from "../tools/manage_memory.js";
@@ -113,6 +118,11 @@ describe("model-facing tool input hardening", () => {
       "manage_behavior_preference",
       manageBehaviorPreference,
       /AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID: Для manage_behavior_preference передайте action/,
+    ],
+    [
+      "import_telegram_attachment",
+      importTelegramAttachment,
+      /AGENT_TELEGRAM_ATTACHMENT_IMPORT_INPUT_INVALID: Поле attachmentId обязательно/,
     ],
     [
       "inspect_workspace_image",

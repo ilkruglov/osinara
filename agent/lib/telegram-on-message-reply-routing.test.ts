@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Username-less replies to prior Osinara bot messages continue via persisted session routes.
+ * - Sender-less Telegram reply references continue only when their exact persisted route exists.
  * - Replies to unknown bot messages stay ignored, so other bots cannot trigger Osinara turns.
  */
 import { describe, expect, it } from "vitest";
@@ -59,6 +60,32 @@ describe("createTelegramMessageHandler reply routing", () => {
         telegramReplyToMessageId: "89",
       },
     });
+  });
+
+  it("continues a sender-less reply to an exact known Osinara route", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.session.hasRoute.mockResolvedValue(true);
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("куку"),
+      messageId: "89",
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        messageId: "88",
+      },
+    });
+
+    expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::88");
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "group-101::88",
+    }));
+    expect(result).not.toBeNull();
   });
 
   it("ignores a username-less reply to an unknown bot message route", async () => {

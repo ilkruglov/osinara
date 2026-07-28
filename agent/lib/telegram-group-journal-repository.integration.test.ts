@@ -10,6 +10,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { closeDatabase, database } from "./database.js";
+import { telegramGroupAttachmentRepository } from "./attachments/telegram-group-attachment-repository.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
 import { telegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -229,6 +230,73 @@ describeWithDatabase("Telegram group journal repositories", () => {
        WHERE table_schema = current_schema() AND table_name = 'telegram_group_messages'`,
     );
     expect(columns.rows.map((row) => row.column_name)).not.toContain("raw");
+  });
+
+  it("retains and authorizes a lazy family attachment in addressed-only mode", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("lazy-family-media");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Семейная группа",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    const familyMessage: TelegramMessage = {
+      ...message({ id: "42", text: "договор" }),
+      attachments: [{
+        fileId: "telegram-file-secret",
+        fileName: "договор.pdf",
+        fileUniqueId: "stable-file-id",
+        kind: "document",
+        mediaType: "application/pdf",
+        size: 1_024,
+      }],
+      raw: { date: 1_700_000_042, document: { file_id: "telegram-file-secret" } },
+    };
+
+    const reference = await telegramGroupAttachmentRepository.record(
+      group.groupId,
+      familyMessage,
+    );
+    const auth = {
+      familyId,
+      groupId: group.groupId,
+      groupType: "family_private" as const,
+      role: "owner" as const,
+      telegramChatType: "supergroup" as const,
+      userId: ownerId,
+    };
+
+    await expect(
+      telegramGroupAttachmentRepository.find(auth, reference.attachmentId),
+    ).resolves.toEqual({
+      attachment: familyMessage.attachments[0],
+      chatId: "-1001",
+      messageId: "42",
+    });
+    const entries = await telegramGroupJournalRepository.listBefore({
+      beforeTelegramMessageId: "43",
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+    expect(entries[0]?.attachment).toEqual({
+      attachmentId: reference.attachmentId,
+      fileName: "договор.pdf",
+      kind: "document",
+      mediaType: "application/pdf",
+      size: 1_024,
+    });
+    await expect(
+      telegramGroupAttachmentRepository.list(auth, null),
+    ).resolves.toMatchObject([{
+      attachmentId: reference.attachmentId,
+      contentText: "договор",
+      fileName: "договор.pdf",
+      telegramMessageId: "42",
+    }]);
   });
 
   it("physically prunes messages beyond the configured per-group retention cap", async () => {

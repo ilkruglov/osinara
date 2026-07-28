@@ -76,4 +76,21 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(formatTelegramGroupJournalContext([], 12_000)).toBeNull();
     expect(formatTelegramGroupJournalContext([entry("1", "сообщение")], 10)).toBeNull();
   });
+
+  it("exposes safe lazy attachment metadata without Telegram file identifiers", () => {
+    const context = formatTelegramGroupJournalContext([{
+      ...entry("42", "проверь договор"),
+      attachment: {
+        attachmentId: "00000000-0000-4000-8000-000000000099",
+        fileName: "договор.pdf",
+        kind: "document",
+        mediaType: "application/pdf",
+        size: 1_024,
+      },
+    }], 10_000)!;
+
+    expect(context).toContain("00000000-0000-4000-8000-000000000099");
+    expect(context).toContain("договор.pdf");
+    expect(context).not.toContain("fileId");
+  });
 });

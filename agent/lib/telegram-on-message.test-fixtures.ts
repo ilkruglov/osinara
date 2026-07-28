@@ -46,6 +46,16 @@ export function telegramContext() {
 
 export function repositories() {
   return {
+    attachmentReferences: {
+      record: vi.fn().mockResolvedValue({
+        attachmentId: "00000000-0000-4000-8000-000000000099",
+        fileName: "семейный файл.pdf",
+        kind: "document",
+        mediaType: "application/pdf",
+        size: 1_024,
+        telegramMessageId: "1",
+      }),
+    },
     attachments: {
       persist: vi.fn().mockResolvedValue([]),
     },

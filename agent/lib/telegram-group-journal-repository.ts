@@ -6,17 +6,25 @@
  * - `telegramGroupJournalRepository`: normalized, deduplicated, retention-bounded journal.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
-import type { PoolClient } from "pg";
 
 import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
-  TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES,
 } from "../config.js";
 import { database } from "./database.js";
-import type { TelegramGroupJournalEntry } from "./telegram-group-journal-context.js";
-
-const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
-const MILLISECONDS_PER_SECOND = 1_000;
+import type {
+  TelegramGroupAttachmentSummary,
+  TelegramGroupJournalEntry,
+} from "./telegram-group-journal-context.js";
+import {
+  lockTelegramGroupJournal,
+  pruneTelegramGroupJournal,
+  requireTelegramPositiveBigint,
+  telegramMessageContent,
+  telegramMessageKind,
+  telegramMessageSentAt,
+  telegramMessageThreadId,
+  telegramSenderDisplayName,
+} from "./telegram-group-message-storage.js";
 
 interface ListJournalInput {
   beforeTelegramMessageId: string;
@@ -34,6 +42,12 @@ export interface TelegramGroupJournalRepository {
 }
 
 interface JournalRow {
+  attachment_file_id: string | null;
+  attachment_file_name: string | null;
+  attachment_file_unique_id: string | null;
+  attachment_kind: "document" | "photo" | null;
+  attachment_media_type: string | null;
+  attachment_size: string | null;
   content_text: string | null;
   message_kind: string;
   message_thread_id: string | null;
@@ -44,90 +58,28 @@ interface JournalRow {
   sent_at: Date;
   telegram_message_id: string;
   telegram_user_id: string | null;
+  id: string;
 }
 
-function requirePositiveBigint(value: string, field: string): string {
-  if (!/^[1-9]\d*$/u.test(value) || BigInt(value) > POSTGRES_BIGINT_MAX) {
-    throw new Error(
-      `AGENT_TELEGRAM_MESSAGE_INVALID: Telegram передал некорректное поле ${field}`,
-    );
-  }
-  return value;
-}
-
-function optionalThreadId(value: number | undefined): string | null {
-  if (value === undefined) return null;
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(
-      "AGENT_TELEGRAM_MESSAGE_INVALID: Telegram передал некорректный идентификатор темы",
-    );
-  }
-  return String(value);
-}
-
-function sentAt(message: TelegramMessage): Date {
-  const unixSeconds = message.raw.date;
-  if (!Number.isSafeInteger(unixSeconds) || Number(unixSeconds) < 0) {
-    throw new Error(
-      "AGENT_TELEGRAM_MESSAGE_INVALID: Telegram не передал корректное время сообщения",
-    );
-  }
-  const date = new Date(Number(unixSeconds) * MILLISECONDS_PER_SECOND);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error(
-      "AGENT_TELEGRAM_MESSAGE_INVALID: Telegram не передал корректное время сообщения",
-    );
-  }
-  return date;
-}
-
-function messageKind(message: TelegramMessage): string {
-  // Media keys survive Eve parsing in `raw`; only the compact kind is persisted.
-  for (const kind of [
-    "voice",
-    "audio",
-    "video",
-    "video_note",
-    "sticker",
-    "animation",
-    "contact",
-    "location",
-    "venue",
-    "poll",
-    "dice",
-    "game",
-  ]) {
-    if (message.raw[kind] !== undefined) return kind;
-  }
-  if (message.attachments.some((attachment) => attachment.kind === "photo")) return "photo";
-  if (message.attachments.some((attachment) => attachment.kind === "document")) return "document";
-  if (message.text || message.caption) return "text";
-  return "other";
-}
-
-function contentText(message: TelegramMessage): string | null {
-  const content = [message.text, message.caption].filter(Boolean).join("\n").trim();
-  return content || null;
-}
-
-function displayName(message: TelegramMessage): string | null {
-  const sender = message.from;
-  if (!sender) return null;
-  const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim();
-  return name || null;
-}
-
-async function lockGroup(client: PoolClient, groupId: string): Promise<void> {
-  // One transaction per group owns insertion and pruning, preventing concurrent cap overruns.
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [groupId]);
+function attachmentSummary(
+  row: Pick<JournalRow, "attachment_file_name" | "attachment_media_type" | "attachment_size" | "id">,
+  kind: "document" | "photo",
+): TelegramGroupAttachmentSummary {
+  return {
+    attachmentId: row.id,
+    ...(row.attachment_file_name === null ? {} : { fileName: row.attachment_file_name }),
+    kind,
+    ...(row.attachment_media_type === null ? {} : { mediaType: row.attachment_media_type }),
+    ...(row.attachment_size === null ? {} : { size: Number(row.attachment_size) }),
+  };
 }
 
 export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
   async record(groupId, message) {
-    const messageId = requirePositiveBigint(message.messageId, "message_id");
-    const threadId = optionalThreadId(message.messageThreadId);
+    const messageId = requireTelegramPositiveBigint(message.messageId, "message_id");
+    const threadId = telegramMessageThreadId(message.messageThreadId);
     const replyToMessageId = message.replyToMessage
-      ? requirePositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
+      ? requireTelegramPositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
       : null;
     const sender = message.from;
     if (!sender) {
@@ -138,7 +90,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await lockGroup(client, groupId);
+      await lockTelegramGroupJournal(client, groupId);
 
       // ON CONFLICT is the webhook idempotency boundary and never mutates the first delivery.
       const inserted = await client.query<{ id: string }>(
@@ -157,12 +109,12 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
           threadId,
           sender.id,
           sender.username ?? null,
-          displayName(message),
+          telegramSenderDisplayName(message),
           sender.isBot,
-          messageKind(message),
-          contentText(message),
+          telegramMessageKind(message),
+          telegramMessageContent(message),
           replyToMessageId,
-          sentAt(message),
+          telegramMessageSentAt(message),
         ],
       );
       if (!inserted.rowCount) {
@@ -175,17 +127,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       }
 
       // Retention is physical and group-wide; topic isolation applies only to model reads.
-      await client.query(
-        `DELETE FROM telegram_group_messages
-         WHERE id IN (
-           SELECT id
-           FROM telegram_group_messages
-           WHERE group_id = $1
-           ORDER BY telegram_message_id DESC
-           OFFSET $2
-         )`,
-        [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
-      );
+      await pruneTelegramGroupJournal(client, groupId);
       await client.query("COMMIT");
       return "inserted";
     } catch (error) {
@@ -197,7 +139,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
   },
 
   async listBefore(input) {
-    requirePositiveBigint(input.beforeTelegramMessageId, "message_id");
+    requireTelegramPositiveBigint(input.beforeTelegramMessageId, "message_id");
     if (
       !Number.isSafeInteger(input.limit) ||
       input.limit <= 0 ||
@@ -208,15 +150,17 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       );
     }
     if (input.messageThreadId !== null) {
-      requirePositiveBigint(input.messageThreadId, "message_thread_id");
+      requireTelegramPositiveBigint(input.messageThreadId, "message_thread_id");
     }
 
     // The inner query takes the newest numeric IDs; the outer query restores chronology.
     const result = await database().query<JournalRow>(
       `SELECT * FROM (
-         SELECT telegram_message_id::text, message_thread_id::text,
-                telegram_user_id, sender_username, sender_display_name, sender_is_bot,
-                message_kind, content_text, reply_to_message_id::text, sent_at
+         SELECT id, telegram_message_id::text, message_thread_id::text,
+                 telegram_user_id, sender_username, sender_display_name, sender_is_bot,
+                 message_kind, content_text, reply_to_message_id::text, sent_at,
+                 attachment_file_id, attachment_file_unique_id, attachment_file_name,
+                 attachment_media_type, attachment_size::text, attachment_kind
          FROM telegram_group_messages
          WHERE group_id = $1
            AND telegram_message_id < $2
@@ -233,6 +177,9 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       ],
     );
     return result.rows.map((row) => ({
+      ...(row.attachment_file_id === null || row.attachment_kind === null
+        ? {}
+        : { attachment: attachmentSummary(row, row.attachment_kind) }),
       contentText: row.content_text,
       messageKind: row.message_kind,
       messageThreadId: row.message_thread_id,
