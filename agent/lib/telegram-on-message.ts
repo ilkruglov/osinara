@@ -152,15 +152,21 @@ function baseContinuationToken(
   });
 }
 
-function replyContinuationToken(message: TelegramMessage): string | null {
+function replyContinuationTokens(message: TelegramMessage): string[] {
   const reply = message.replyToMessage;
-  if (!reply) return null;
+  if (!reply) return [];
   const messageThreadId = reply.messageThreadId ?? message.messageThreadId;
-  return telegramContinuationToken({
+  const exact = telegramContinuationToken({
     chatId: message.chat.id,
     conversationId: reply.messageId,
     ...(messageThreadId === undefined ? {} : { messageThreadId }),
   });
+  if (messageThreadId === undefined) return [exact];
+  // Releases before v0.2.17 could persist a group reply anchor without its verified forum topic.
+  return [exact, telegramContinuationToken({
+    chatId: message.chat.id,
+    conversationId: reply.messageId,
+  })];
 }
 
 function repliesToBotMessage(message: TelegramMessage): boolean {
@@ -245,13 +251,15 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         }
         if (recordResult === "mode_disabled") journalEnabled = false;
       }
-      if (!addressed && message.replyToMessage) {
+      if (message.replyToMessage) {
         // Telegram may omit the sender entirely from a compact Rich Message reply reference.
         // The exact persisted chat/topic/message route proves that the anchor belongs to Osinara.
-        const candidateRoute = replyContinuationToken(message);
-        if (candidateRoute && await repositories.session.hasRoute(candidateRoute)) {
-          addressed = true;
-          verifiedReplyRoute = candidateRoute;
+        for (const candidateRoute of replyContinuationTokens(message)) {
+          if (await repositories.session.hasRoute(candidateRoute)) {
+            addressed = true;
+            verifiedReplyRoute = candidateRoute;
+            break;
+          }
         }
       }
       // Authorized family attachment references are retained without waking the model.
