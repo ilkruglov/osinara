@@ -18,6 +18,7 @@ import type {
 import type { LanguageModelMiddleware } from "ai";
 
 import {
+  assertMiniMaxFinishReasonComplete,
   consumeInlineReasoning,
   createInlineReasoningState,
   emptyVisibleAnswerError,
@@ -96,6 +97,7 @@ function normalizeGeneratedContent(
     }
   }
   assertGeneratedOutputHasDeliverable(normalized);
+  assertMiniMaxFinishReasonComplete(finishReason);
   return normalized;
 }
 
@@ -256,6 +258,7 @@ export function createMiniMaxInlineReasoningMiddleware(): LanguageModelMiddlewar
                 }
                 states.clear();
                 if (!hasDeliverableOutput) throw emptyVisibleAnswerError();
+                assertMiniMaxFinishReasonComplete(part.finishReason);
               }
               hasDeliverableOutput = isStreamDeliverable(part) || hasDeliverableOutput;
               controller.enqueue(part);

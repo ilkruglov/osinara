@@ -69,6 +69,22 @@ describeWithDatabase("session repository", () => {
     await expect(sessionRepository.hasRoute("101:42:901")).resolves.toBe(false);
   });
 
+  it("does not treat an unbound route from a failed first turn as resumable", async () => {
+    const f = await fixture();
+    const current = await sessionRepository.prepareTurn({
+      baseContinuationToken: "101:42:900",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:00:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+
+    await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(false);
+    await sessionRepository.bindEveSession(current.id, "wrun_bound_after_start");
+    await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(true);
+  });
+
   it("defers a requested rotation until the pending operation completes", async () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
