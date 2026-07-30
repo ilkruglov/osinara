@@ -28,6 +28,7 @@ const externalBaseUrlSchema = z.url().superRefine((value, context) => {
 const anthropicMessagesTransportSchema = z.object({
   authentication: z.enum(["api-key", "bearer"]),
   baseUrl: externalBaseUrlSchema,
+  compatibility: z.literal("minimax-anthropic").optional(),
   protocol: z.literal("anthropic-messages"),
   thinking: z.object({ type: z.literal("adaptive") }).strict(),
 }).strict();

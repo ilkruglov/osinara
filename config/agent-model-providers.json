@@ -5,6 +5,7 @@
       "protocol": "anthropic-messages",
       "baseUrl": "https://api.minimax.io/anthropic/v1",
       "authentication": "bearer",
+      "compatibility": "minimax-anthropic",
       "thinking": {
         "type": "adaptive"
       }
