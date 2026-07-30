@@ -7,6 +7,7 @@
  * - JSON responses use the same narrow web-search result normalization.
  * - The configured AI SDK transport consumes MiniMax provider-managed search and final text.
  * - Malformed provider JSON fails with a stable boundary error.
+ * - Oversized non-streaming responses are rejected before body buffering.
  */
 import { anthropic } from "@ai-sdk/anthropic";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
@@ -147,6 +148,22 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
         type: "web_search_tool_result",
       }],
     });
+  });
+
+  it("rejects an oversized declared JSON response before buffering", async () => {
+    const fetch = createMiniMaxAnthropicCompatibilityFetch(vi.fn(async () =>
+      new Response("{}", {
+        headers: {
+          "content-length": "2000001",
+          "content-type": "application/json",
+        },
+        status: 200,
+      })) as FetchFunction);
+
+    await expect(fetch("https://api.minimax.io/anthropic/v1/messages", {
+      body: "{}",
+      method: "POST",
+    })).rejects.toThrow("AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED");
   });
 
   it("lets the AI SDK consume MiniMax web search followed by final text", async () => {

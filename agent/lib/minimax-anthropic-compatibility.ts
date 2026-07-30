@@ -16,6 +16,7 @@ import { AppError } from "./app-error.js";
 type WireDirection = "from-minimax" | "to-minimax";
 
 const ANTHROPIC_WEB_SEARCH_CONTENT_FIELD = "encrypted_content";
+const MAX_JSON_RESPONSE_BYTES = 2_000_000;
 const MAX_SSE_LINE_CHARACTERS = 2_000_000;
 const MINIMAX_WEB_SEARCH_CONTENT_FIELD = "content";
 const WEB_SEARCH_RESULT_TYPE = "web_search_result";
@@ -176,6 +177,38 @@ function rewrittenResponse(response: Response, body: BodyInit): Response {
   });
 }
 
+async function readBoundedJsonBody(response: Response): Promise<string> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null && /^\d+$/u.test(declaredLength)) {
+    if (Number(declaredLength) > MAX_JSON_RESPONSE_BYTES) {
+      throw new AppError(
+        "AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED",
+        "MiniMax передал слишком большой JSON-ответ",
+      );
+    }
+  }
+
+  // Count bytes while decoding so a missing or dishonest Content-Length cannot exhaust memory.
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let source = "";
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    bytesRead += chunk.value.byteLength;
+    if (bytesRead > MAX_JSON_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new AppError(
+        "AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED",
+        "MiniMax передал слишком большой JSON-ответ",
+      );
+    }
+    source += decoder.decode(chunk.value, { stream: true });
+  }
+  return source + decoder.decode();
+}
+
 async function rewriteResponse(response: Response): Promise<Response> {
   if (!response.ok || response.body === null) return response;
   const contentType = response.headers.get("content-type")?.toLowerCase();
@@ -183,7 +216,7 @@ async function rewriteResponse(response: Response): Promise<Response> {
     return rewrittenResponse(response, rewriteSseBody(response.body));
   }
   if (contentType?.includes("application/json")) {
-    const payload = rewriteIncomingPayload(parseWireJson(await response.text()));
+    const payload = rewriteIncomingPayload(parseWireJson(await readBoundedJsonBody(response)));
     return rewrittenResponse(response, JSON.stringify(payload));
   }
   return response;
