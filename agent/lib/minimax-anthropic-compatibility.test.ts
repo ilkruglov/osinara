@@ -2,17 +2,19 @@
  * MiniMax Anthropic wire-compatibility tests.
  *
  * Constructs covered:
- * - `createMiniMaxAnthropicCompatibilityFetch`: preserves web-search payload bytes bidirectionally.
+ * - `createMiniMaxAnthropicCompatibilityFetch`: preserves MiniMax web-search payload bytes.
  * - Chunked SSE records are normalized without changing unrelated provider events.
  * - JSON responses use the same narrow web-search result normalization.
- * - The configured AI SDK transport consumes MiniMax provider-managed search and final text.
+ * - Provider-managed search history is replayed through MiniMax-safe ordinary tool messages.
+ * - The configured AI SDK transport consumes MiniMax provider-managed search across model steps.
  * - Malformed provider JSON fails with a stable boundary error.
  * - Oversized non-streaming responses are rejected before body buffering.
  */
 import { anthropic } from "@ai-sdk/anthropic";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
-import { streamText } from "ai";
+import { generateText, stepCountIs, streamText, tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { createConfiguredLanguageModel } from "./model-transport.js";
 import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
@@ -84,7 +86,7 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
     );
   });
 
-  it("restores the exact MiniMax content field when replaying assistant history", async () => {
+  it("rewrites MiniMax web-search history as a replay-safe ordinary tool exchange", async () => {
     let body: unknown;
     const fetch = createMiniMaxAnthropicCompatibilityFetch(vi.fn(async (_input, init) => {
       body = JSON.parse(String(init?.body));
@@ -96,6 +98,92 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
 
     await fetch("https://api.minimax.io/anthropic/v1/messages", {
       body: JSON.stringify({
+        messages: [
+          { content: [{ text: "Ищу.", type: "text" }], role: "assistant" },
+          {
+            content: [
+              {
+                id: "call-search-1",
+                input: { query: "доставка еды" },
+                name: "web_search",
+                type: "server_tool_use",
+              },
+              {
+                content: [{
+                  encrypted_content: RESULT.content,
+                  title: RESULT.title,
+                  type: RESULT.type,
+                  url: RESULT.url,
+                }],
+                tool_use_id: "call-search-1",
+                type: "web_search_tool_result",
+              },
+              {
+                id: "call-fetch-1",
+                input: { url: RESULT.url },
+                name: "web_fetch",
+                type: "tool_use",
+              },
+            ],
+            role: "assistant",
+          },
+          {
+            content: [{ content: "Страница", tool_use_id: "call-fetch-1", type: "tool_result" }],
+            role: "user",
+          },
+        ],
+      }),
+      method: "POST",
+    });
+
+    expect(body).toEqual({
+      messages: [
+        { content: [{ text: "Ищу.", type: "text" }], role: "assistant" },
+        {
+          content: [{
+            id: "call-search-1",
+            input: { query: "доставка еды" },
+            name: "web_search",
+            type: "tool_use",
+          }],
+          role: "assistant",
+        },
+        {
+          content: [{
+            content: JSON.stringify([{
+              title: RESULT.title,
+              type: RESULT.type,
+              url: RESULT.url,
+              content: RESULT.content,
+            }]),
+            tool_use_id: "call-search-1",
+            type: "tool_result",
+          }],
+          role: "user",
+        },
+        {
+          content: [{
+            id: "call-fetch-1",
+            input: { url: RESULT.url },
+            name: "web_fetch",
+            type: "tool_use",
+          }],
+          role: "assistant",
+        },
+        {
+          content: [{ content: "Страница", tool_use_id: "call-fetch-1", type: "tool_result" }],
+          role: "user",
+        },
+      ],
+    });
+  });
+
+  it("rejects incomplete native web-search history before calling MiniMax", async () => {
+    const upstream = vi.fn();
+    const fetch = createMiniMaxAnthropicCompatibilityFetch(upstream as FetchFunction);
+
+    await expect(fetch("https://api.minimax.io/anthropic/v1/messages", {
+      body: JSON.stringify({
         messages: [{
           content: [{
             content: [{
@@ -104,23 +192,15 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
               type: RESULT.type,
               url: RESULT.url,
             }],
-            tool_use_id: "call-search-1",
+            tool_use_id: "call-search-without-call",
             type: "web_search_tool_result",
           }],
           role: "assistant",
         }],
       }),
       method: "POST",
-    });
-
-    expect(body).toMatchObject({
-      messages: [{
-        content: [{
-          content: [RESULT],
-          type: "web_search_tool_result",
-        }],
-      }],
-    });
+    })).rejects.toThrow("AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID");
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it("normalizes non-streaming MiniMax message content", async () => {
@@ -246,5 +326,104 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
     await expect(result.sources).resolves.toEqual([
       expect.objectContaining({ title: RESULT.title, url: RESULT.url }),
     ]);
+  });
+
+  it("lets the AI SDK continue after MiniMax search and a local tool result", async () => {
+    const requests: unknown[] = [];
+    const fetch = vi.fn(async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      const firstCall = requests.length === 1;
+      return new Response(JSON.stringify(firstCall
+        ? {
+            content: [
+              {
+                id: "call-search-1",
+                input: { query: "доставка еды" },
+                name: "web_search",
+                type: "server_tool_use",
+              },
+              {
+                content: [RESULT],
+                tool_use_id: "call-search-1",
+                type: "web_search_tool_result",
+              },
+              {
+                id: "call-fetch-1",
+                input: { url: RESULT.url },
+                name: "web_fetch",
+                type: "tool_use",
+              },
+            ],
+            id: "message-search-1",
+            model: "MiniMax-M3",
+            role: "assistant",
+            stop_reason: "tool_use",
+            stop_sequence: null,
+            type: "message",
+            usage: { input_tokens: 10, output_tokens: 8 },
+          }
+        : {
+            content: [{ text: "Проверка завершена.", type: "text" }],
+            id: "message-search-2",
+            model: "MiniMax-M3",
+            role: "assistant",
+            stop_reason: "end_turn",
+            stop_sequence: null,
+            type: "message",
+            usage: { input_tokens: 20, output_tokens: 6 },
+          }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    }) as FetchFunction;
+    const model = createConfiguredLanguageModel({
+      apiKey: "model-secret",
+      fetch,
+      maxOutputTokens: 128_000,
+      modelId: "MiniMax-M3",
+      transport: {
+        authentication: "bearer",
+        baseUrl: "https://api.minimax.io/anthropic/v1",
+        compatibility: "minimax-anthropic",
+        protocol: "anthropic-messages",
+        thinking: { type: "adaptive" },
+      },
+    });
+
+    const result = await generateText({
+      model,
+      prompt: "Найди и проверь доставку еды",
+      stopWhen: stepCountIs(2),
+      tools: {
+        web_fetch: tool({
+          execute: async () => ({ content: "Страница доставки" }),
+          inputSchema: z.object({ url: z.url() }),
+        }),
+        // The provider package and root AI SDK resolve separate branded tool schema instances.
+        web_search: anthropic.tools.webSearch_20250305() as never,
+      },
+    });
+
+    expect(result.text).toBe("Проверка завершена.");
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      messages: expect.arrayContaining([
+        {
+          content: [expect.objectContaining({
+            id: "call-search-1",
+            name: "web_search",
+            type: "tool_use",
+          })],
+          role: "assistant",
+        },
+        {
+          content: [expect.objectContaining({
+            tool_use_id: "call-search-1",
+            type: "tool_result",
+          })],
+          role: "user",
+        },
+      ]),
+    });
   });
 });
