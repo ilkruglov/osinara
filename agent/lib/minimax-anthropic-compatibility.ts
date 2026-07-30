@@ -3,10 +3,11 @@
  *
  * Export:
  * - `createMiniMaxAnthropicCompatibilityFetch`: preserves MiniMax web-search result content while
- *   translating its field name to and from the Anthropic schema expected by the AI SDK.
+ *   translating responses for the AI SDK and replaying results through ordinary tool messages.
  *
  * Key constructs:
  * - Exact block matching leaves ordinary model payloads untouched.
+ * - Provider search history is downgraded because MiniMax rejects its own native result blocks.
  * - Streaming normalization buffers split SSE lines without buffering the complete response.
  */
 import type { FetchFunction } from "@ai-sdk/provider-utils";
@@ -74,6 +75,107 @@ function rewriteToolResultBlock(value: unknown, direction: WireDirection): unkno
   };
 }
 
+function replayableWebSearchIds(content: readonly unknown[]): ReadonlySet<string> {
+  const callIds = new Set<string>();
+  const resultIds = new Set<string>();
+  for (const value of content) {
+    const block = record(value);
+    if (
+      block?.type === "server_tool_use" && block.name === "web_search" &&
+      typeof block.id === "string"
+    ) {
+      callIds.add(block.id);
+    }
+    if (block?.type === WEB_SEARCH_TOOL_RESULT_TYPE && typeof block.tool_use_id === "string") {
+      resultIds.add(block.tool_use_id);
+    }
+  }
+  return new Set([...callIds].filter((id) => resultIds.has(id)));
+}
+
+function serializeReplayToolResult(content: unknown): string {
+  // Ordinary tool output keeps the snippets model-visible without asking MiniMax to validate
+  // the native provider-owned result block that its Anthropic endpoint cannot replay.
+  const normalized = Array.isArray(content)
+    ? content.map((result) => rewriteSearchResult(result, "to-minimax"))
+    : content;
+  const serialized = JSON.stringify(normalized);
+  if (serialized !== undefined) return serialized;
+  throw new AppError(
+    "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
+    "История веб-поиска MiniMax содержит некорректный результат инструмента",
+  );
+}
+
+function rewriteAssistantSearchHistory(message: Record<string, unknown>): Record<string, unknown>[] {
+  if (message.role !== "assistant" || !Array.isArray(message.content)) return [message];
+  const replayIds = replayableWebSearchIds(message.content);
+  if (replayIds.size === 0) return [message];
+
+  const messages: Record<string, unknown>[] = [];
+  let assistantContent: unknown[] = [];
+  const flushAssistant = () => {
+    if (assistantContent.length === 0) return;
+    messages.push({ ...message, content: assistantContent });
+    assistantContent = [];
+  };
+
+  // Split at every native result so each converted tool call has the required following user
+  // result, while preserving later text and ordinary local tool calls in their original order.
+  for (const value of message.content) {
+    const block = record(value);
+    if (
+      block?.type === "server_tool_use" && block.name === "web_search" &&
+      typeof block.id === "string" && replayIds.has(block.id)
+    ) {
+      assistantContent.push({
+        ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
+        id: block.id,
+        input: block.input,
+        name: block.name,
+        type: "tool_use",
+      });
+      continue;
+    }
+    if (
+      block?.type === WEB_SEARCH_TOOL_RESULT_TYPE && typeof block.tool_use_id === "string" &&
+      replayIds.has(block.tool_use_id)
+    ) {
+      flushAssistant();
+      messages.push({
+        content: [{
+          ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
+          content: serializeReplayToolResult(block.content),
+          tool_use_id: block.tool_use_id,
+          type: "tool_result",
+        }],
+        role: "user",
+      });
+      continue;
+    }
+    assistantContent.push(value);
+  }
+  flushAssistant();
+  return messages;
+}
+
+function appendOutgoingMessage(
+  messages: Record<string, unknown>[],
+  message: Record<string, unknown>,
+): void {
+  const previous = messages.at(-1);
+  if (
+    previous?.role === "user" && message.role === "user" &&
+    Array.isArray(previous.content) && Array.isArray(message.content)
+  ) {
+    // A result at the end of an assistant turn and the next user prompt form one Anthropic user
+    // message, with tool_result first as required by the wire protocol.
+    previous.content = [...previous.content, ...message.content];
+    return;
+  }
+  messages.push(message);
+}
+
 function rewriteIncomingPayload(value: unknown): unknown {
   const payload = record(value);
   if (!payload) return value;
@@ -94,16 +196,22 @@ function rewriteIncomingPayload(value: unknown): unknown {
 function rewriteOutgoingPayload(value: unknown): unknown {
   const payload = record(value);
   if (!payload || !Array.isArray(payload.messages)) return value;
+  const messages: Record<string, unknown>[] = [];
+  for (const messageValue of payload.messages) {
+    const message = record(messageValue);
+    if (!message) {
+      throw new AppError(
+        "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
+        "История сообщений MiniMax содержит некорректную запись",
+      );
+    }
+    for (const rewritten of rewriteAssistantSearchHistory(message)) {
+      appendOutgoingMessage(messages, rewritten);
+    }
+  }
   return {
     ...payload,
-    messages: payload.messages.map((messageValue) => {
-      const message = record(messageValue);
-      if (!message || !Array.isArray(message.content)) return messageValue;
-      return {
-        ...message,
-        content: message.content.map((block) => rewriteToolResultBlock(block, "to-minimax")),
-      };
-    }),
+    messages,
   };
 }
 

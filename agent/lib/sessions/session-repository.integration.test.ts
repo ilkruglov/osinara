@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Generation-zero session creation and route re-keying.
  * - Monotonic Eve root rebinding after a terminal workflow replacement.
+ * - Terminal failure resolution through any durable Telegram route after re-keying.
  * - Rotation after thresholds while pending operations remain pinned.
  * - Stable sandbox identity across generations and replacement at a trust-zone boundary.
  * - Retention leasing for retired Eve sessions.
@@ -192,6 +193,34 @@ describeWithDatabase("session repository", () => {
           AND pending_operation = false
           AND rotation_requested_at IS NOT NULL`,
       [current.id, failedRoot],
+    )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
+  it("records a terminal failure through an earlier route after Telegram re-keying", async () => {
+    const f = await fixture();
+    const current = await sessionRepository.prepareTurn({
+      baseContinuationToken: "106::426",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:00:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+    const failedRoot = "wrun_01KXBRD0AY4NP50QXR7C5D6YEK";
+    await sessionRepository.bindEveSession(current.id, failedRoot);
+    await sessionRepository.registerRoute(current.id, "106::437");
+
+    await expect(sessionRepository.recordSessionFailedByContinuationToken(
+      "106::426",
+      failedRoot,
+    )).resolves.toBe("recorded");
+
+    await expect(database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1
+          AND pending_operation = false
+          AND rotation_requested_at IS NOT NULL`,
+      [current.id],
     )).resolves.toMatchObject({ rowCount: 1 });
   });
 

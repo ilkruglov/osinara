@@ -323,29 +323,36 @@ export const sessionRepository = {
     continuationToken: string,
     eveSessionId: string,
   ): Promise<SessionEventResult> {
-    const result = await database().query<{ id: string }>(
+    // A long Telegram turn can re-anchor several times before Eve emits session.failed. Resolve
+    // both the current token and every durable route retained for the same application session.
+    const sessions = await database().query<{ id: string }>(
+      `SELECT DISTINCT s.id
+         FROM conversation_sessions s
+         LEFT JOIN conversation_session_routes r ON r.session_id = s.id
+        WHERE s.retired_at IS NULL
+          AND (s.continuation_token = $1 OR r.base_continuation_token = $1)`,
+      [continuationToken],
+    );
+    if (sessions.rowCount !== 1) {
+      throw new AppError(
+        "AGENT_SESSION_FAILURE_RECORD_FAILED",
+        sessions.rowCount === 0
+          ? "Не удалось завершить повреждённый контекст"
+          : "Маршрут повреждённого контекста связан с несколькими сессиями",
+      );
+    }
+    const id = sessions.rows[0]!.id;
+
+    const result = await database().query(
       `UPDATE conversation_sessions
           SET pending_operation = false,
               rotation_requested_at = now(),
               eve_session_id = $2
-        WHERE continuation_token = $1
-          AND retired_at IS NULL
+        WHERE id = $1 AND retired_at IS NULL
           AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [continuationToken, eveSessionId],
+      [id, eveSessionId],
     );
     if (result.rowCount === 1) return "recorded";
-    const session = await database().query<{ id: string }>(
-      `SELECT id FROM conversation_sessions
-        WHERE continuation_token = $1 AND retired_at IS NULL`,
-      [continuationToken],
-    );
-    const id = session.rows[0]?.id;
-    if (!id) {
-      throw new AppError(
-        "AGENT_SESSION_FAILURE_RECORD_FAILED",
-        "Не удалось завершить повреждённый контекст",
-      );
-    }
     return await classifyMissedSessionEvent(
       id,
       eveSessionId,
