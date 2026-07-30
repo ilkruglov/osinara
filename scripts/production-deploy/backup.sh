@@ -4,6 +4,7 @@
 
 readonly BACKUP_RESERVE_BYTES=$((512 * 1024 * 1024))
 readonly RETAINED_DEPLOY_BACKUP_COUNT=5
+readonly PRE_DEPLOY_RETAINED_BACKUP_COUNT=$((RETAINED_DEPLOY_BACKUP_COUNT - 1))
 readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 readonly DURABLE_VOLUMES=(
   osinara-production-google-workspace-credentials
@@ -27,7 +28,8 @@ prune_old_deploy_backups() {
   done
   [[ "$nullglob_was_enabled" -eq 1 ]] || shopt -u nullglob
 
-  remove_count=$((${#deploy_backups[@]} - RETAINED_DEPLOY_BACKUP_COUNT))
+  # Reserve one slot before preflight so the newly validated snapshot restores the final count.
+  remove_count=$((${#deploy_backups[@]} - PRE_DEPLOY_RETAINED_BACKUP_COUNT))
   ((remove_count > 0)) || return 0
   for ((index = 0; index < remove_count; index += 1)); do
     name="${deploy_backups[index]##*/}"

@@ -32,7 +32,8 @@ release, Compose hash, fixed service/image/mount policy, and digest names. It pu
 backs up existing durable state, starts the released Compose graph without build, and checks
 `http://127.0.0.1:8082/eve/v1/health`.
 Before each non-initial deployment it also prunes older Osinara deployment backups, retaining the
-initial migration backup and the five newest timestamped deploy backups. After a successful health
+initial migration backup and four timestamped deploy backups so the pending snapshot has reserved
+space; after successful backup creation there are again five timestamped backups. After a successful health
 check and terminal success record it removes local first-party Osinara image references older than
 the current and previous release; this never prunes non-Osinara projects on the same server.
 
