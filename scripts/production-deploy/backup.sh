@@ -3,7 +3,7 @@
 # Dumps PostgreSQL while live, then snapshots only irreconstructible volumes while writers are stopped.
 
 readonly BACKUP_RESERVE_BYTES=$((512 * 1024 * 1024))
-readonly RETAINED_DEPLOY_BACKUP_COUNT=5
+readonly RETAINED_DEPLOY_BACKUP_COUNT=1
 readonly PRE_DEPLOY_RETAINED_BACKUP_COUNT=$((RETAINED_DEPLOY_BACKUP_COUNT - 1))
 readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 readonly DURABLE_VOLUMES=(

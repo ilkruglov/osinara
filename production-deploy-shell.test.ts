@@ -7,7 +7,7 @@
  * - `composeSha256` binds the exact released Compose bytes.
  * - PostgreSQL command tags cannot masquerade as returned proposal rows.
  * - Newly introduced durable volumes are bootstrapped only during the first compatible update.
- * - Backup retention reserves one timestamped slot before every deployment snapshot.
+ * - Backup retention keeps only the new previous-release snapshot after deployment.
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -136,7 +136,7 @@ describe("production deploy shell policies", () => {
     expect(owned.stderr).toContain("DEPLOY_BACKUP_VOLUME_MISSING");
   });
 
-  it("retains the initial backup and reserves one deploy-backup slot", () => {
+  it("retains the initial backup and clears the slot for one deploy backup", () => {
     const directory = mkdtempSync(join(tmpdir(), "osinara-backup-retention-"));
     temporaryDirectories.push(directory);
     for (const name of [
@@ -161,10 +161,6 @@ describe("production deploy shell policies", () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(readdirSync(directory).sort()).toEqual([
-      "20260714T080346Z-to-v0.2.1",
-      "20260714T083709Z-to-v0.2.2",
-      "20260714T090552Z-to-v0.2.3",
-      "20260714T113003Z-to-v0.2.4",
       "initial-migration-v0.1.1",
     ]);
   });
