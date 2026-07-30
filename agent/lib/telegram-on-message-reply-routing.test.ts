@@ -3,6 +3,8 @@
  *
  * Constructs covered:
  * - Username-less replies to prior Osinara bot messages continue via persisted session routes.
+ * - Timeline-proven replies without an Eve route start a fresh application continuation.
+ * - Real HITL replies and resumable routes retain Eve's native synthetic reply handling.
  * - Sender-less Telegram reply references continue only when their exact persisted route exists.
  * - Replies to unknown bot messages stay ignored, so other bots cannot trigger Osinara turns.
  */
@@ -29,12 +31,70 @@ function familyGroupRepository() {
 }
 
 describe("createTelegramMessageHandler reply routing", () => {
+  it("starts a fresh message continuation for a timeline-proven agent reply without a route", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000340",
+      replyToAgent: true,
+      sequenceId: "342",
+      status: "inserted",
+    });
+    repository.session.hasRoute.mockResolvedValue(false);
+    repository.hitl.authorizeReply.mockResolvedValue("not_applicable");
+    repository.session.prepareTurn.mockResolvedValue({
+      continuationToken: "group-101::340:osinara:2",
+      generation: 2,
+      id: "session-rotated",
+      rotated: true,
+      sandboxSessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("продолжи эту ветку"),
+      messageId: "342",
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { firstName: "Osinara", id: "bot-1", isBot: true },
+        messageId: "340",
+      },
+    });
+
+    expect(repository.session.hasRoute).toHaveBeenCalledWith("group-101::340");
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "group-101::340",
+      telegramMessageId: "340",
+    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "group-101::340",
+    }));
+    expect(result).toMatchObject({
+      continuationToken: "group-101::340:osinara:2",
+      replyHandling: "message",
+    });
+    expect(result?.auth?.attributes).toMatchObject({
+      telegramReplyToMessageId: "342",
+      telegramTimelineEntryId: "00000000-0000-4000-8000-000000000340",
+    });
+  });
+
   it("continues a username-less reply to a known bot message route", async () => {
     const repository = familyGroupRepository();
     repository.telegram.findIdentity.mockResolvedValue({
       familyId: "family-1",
       role: "member",
       userId: "user-1",
+    });
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000088",
+      replyToAgent: true,
+      sequenceId: "89",
+      status: "inserted",
     });
     repository.session.hasRoute.mockResolvedValue(true);
     const handler = createTelegramMessageHandler(repository);
@@ -60,6 +120,41 @@ describe("createTelegramMessageHandler reply routing", () => {
         telegramReplyToMessageId: "89",
       },
     });
+    expect(result).not.toHaveProperty("replyHandling");
+  });
+
+  it("preserves native reply handling for an authorized HITL response", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000341",
+      replyToAgent: true,
+      sequenceId: "343",
+      status: "inserted",
+    });
+    repository.session.hasRoute.mockResolvedValue(false);
+    repository.hitl.authorizeReply.mockResolvedValue("authorized");
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("да"),
+      messageId: "343",
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { firstName: "Osinara", id: "bot-1", isBot: true },
+        messageId: "341",
+      },
+    });
+
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "group-101::341",
+    }));
+    expect(result).not.toBeNull();
+    expect(result).not.toHaveProperty("replyHandling");
   });
 
   it("continues a sender-less reply to an exact known Osinara route", async () => {

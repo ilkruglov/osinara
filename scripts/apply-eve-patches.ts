@@ -4,9 +4,11 @@
  * Constructs:
  * - Adds a verified Telegram update hook around the native dispatcher.
  * - Makes the native dispatcher return its Eve session for FIFO coordination.
+ * - Lets timeline-proven replies bypass preliminary synthetic HITL classification.
  * - Lets the application version continuation tokens for rotation, including HITL callbacks.
  * - Lets the application authenticate the exact Telegram user resuming a HITL callback.
  * - Propagates `input.requested` adapter failures so unbound approvals never park fail-open.
+ * - Makes every Eve-authored model call exact-once with no hidden retry or degraded reissue.
  * - Supports a zero-depth subagent limit so the root agent can disable delegation completely.
  * - Routes local Workflow recovery through Eve's configured queue namespace.
  * - Fails installation when the pinned Eve artifact no longer matches the reviewed source.
@@ -42,6 +44,18 @@ const compiledManifestRuntimePath = resolve(
 const subagentDepthRuntimePath = resolve(
   "node_modules/eve/dist/src/harness/subagent-depth.js",
 );
+const toolLoopRuntimePath = resolve(
+  "node_modules/eve/dist/src/harness/tool-loop.js",
+);
+const compactionRuntimePath = resolve(
+  "node_modules/eve/dist/src/harness/compaction.js",
+);
+const autoevalRuntimePath = resolve(
+  "node_modules/eve/dist/src/evals/autoevals-client.js",
+);
+const codeModeRuntimePath = resolve(
+  "node_modules/eve/dist/src/compiled/experimental-ai-sdk-code-mode/index.js",
+);
 
 async function replaceOnce(
   path: string,
@@ -74,6 +88,53 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
     `AGENT_EVE_PATCH_VERSION_UNSUPPORTED: Ожидалась Eve ${EXPECTED_EVE_VERSION}, установлена ${String(evePackage.version)}`,
   );
 }
+
+// Paid model operations are exact-once: transport failures and malformed output bubble unchanged.
+await replaceOnce(
+  toolLoopRuntimePath,
+  "y=new ToolLoopAgent({headers:B,instructions:i,model:L",
+  "y=new ToolLoopAgent({headers:B,instructions:i,maxRetries:0,model:L",
+);
+const exactOnceModelCall = "async function runModelCallWithRetries(e,t,n){throwIfTurnAborted(n);try{return await e(1)}catch(e){throwIfTurnAborted(n);throw e}}";
+// Normalize the malformed marker emitted by the first local revision before canonical matching.
+await replaceAll(toolLoopRuntimePath, `async ${exactOnceModelCall}`, exactOnceModelCall);
+await replaceOnce(
+  toolLoopRuntimePath,
+  "async function runModelCallWithRetries(e,t,n){for(let r=1;;r++){throwIfTurnAborted(n);try{return await e(r)}catch(e){if(throwIfTurnAborted(n),r===3||classifyModelCallError(e)!==`retry`)throw e;let i=500*2**(r-1)+Math.floor(Math.random()*250);log.warn(`model call failed transiently — retrying`,{attempt:r,delayMs:i,sessionId:t.sessionId,turnId:t.turnId,error:e}),await new Promise(e=>setTimeout(e,i))}}}",
+  exactOnceModelCall,
+);
+await replaceOnce(
+  toolLoopRuntimePath,
+  "async function attemptEmptyResponseRecovery(e){if(!(e.error instanceof EmptyModelResponseError))return{outcome:`skipped`};log.warn(`empty model response; reissuing the model call once`,{sessionId:e.sessionId,turnId:e.turnId});try{return{outcome:`recovered`,result:await e.runOneModelCall({...e.retryCallOptions,retryReason:`empty-response`,suppressStepStartedEmission:!0,trailingUserNote:buildEmptyResponseNudge(e.emptyDeliveryEnabled)})}}catch(t){return{outcome:`failed`,error:t,retryCallOptions:e.retryCallOptions}}}",
+  "async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}",
+);
+await replaceOnce(
+  toolLoopRuntimePath,
+  "async function attemptUnsupportedProviderToolRecovery(e){let t=extractUnsupportedProviderToolTypes(e.error);if(t.length===0)return{outcome:`skipped`};let n=[];for(let e of t){let t=resolveFrameworkToolFromUpstreamType(e);t!==null&&!n.includes(t)&&n.push(t)}if(n.length===0)return{outcome:`skipped`};log.warn(`disabling unsupported provider tool(s); retrying step once`,{disabled:n,sessionId:e.sessionId,turnId:e.turnId,upstreamTypes:t});let r={disabledProviderTools:new Set(n),extraSystemNote:buildDisabledToolNote(n)};try{return{outcome:`recovered`,result:await e.runOneModelCall({...r,suppressStepStartedEmission:!0})}}catch(e){return{outcome:`failed`,error:e,retryCallOptions:r}}}",
+  "async function attemptUnsupportedProviderToolRecovery(e){return{outcome:`skipped`}}",
+);
+
+// Auxiliary Eve surfaces must not reissue compaction, eval, or code-mode model calls either.
+await replaceOnce(
+  compactionRuntimePath,
+  "generateText({abortSignal:c,headers:s,model:r",
+  "generateText({abortSignal:c,headers:s,maxRetries:0,model:r",
+);
+await replaceOnce(
+  compactionRuntimePath,
+  "if(estimateTokens(g)<=i.threshold||l===0)return g;--l",
+  "if(estimateTokens(g)<=i.threshold||l===0)return g;throw Error(`EVE_COMPACTION_OUTPUT_TOO_LARGE: Compaction result exceeds the configured threshold`)",
+);
+await replaceOnce(
+  autoevalRuntimePath,
+  "generateText({model:n.languageModel,messages:",
+  "generateText({maxRetries:0,model:n.languageModel,messages:",
+);
+await replaceOnce(
+  codeModeRuntimePath,
+  "function Jt(e,t={}){return Zt(await n(e),t)}function Yt(e,t={}){let n=i(e);",
+  "function Jt(e,t={}){return Zt(await n({...e,maxRetries:0}),t)}function Yt(e,t={}){let n=i({...e,maxRetries:0});",
+);
 
 // A failed durable approval binding must fail the turn instead of parking without authorization.
 await replaceOnce(
@@ -124,6 +185,12 @@ await replaceOnce(
   telegramRuntimePath,
   "try{await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e})}",
   "try{return await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:r.continuationToken??continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e});throw e}",
+);
+// The application may prove that a bot reply is an ordinary timeline branch rather than HITL.
+await replaceOnce(
+  telegramRuntimePath,
+  "u=e.message.replyToMessage?.from?.isBot===!0&&l.trim().length>0?[telegramReplyInputResponse({messageId:e.message.replyToMessage.messageId,text:l})]:void 0",
+  "u=r.replyHandling!==`message`&&e.message.replyToMessage?.from?.isBot===!0&&l.trim().length>0?[telegramReplyInputResponse({messageId:e.message.replyToMessage.messageId,text:l})]:void 0",
 );
 await replaceOnce(
   telegramRuntimePath,
@@ -188,6 +255,12 @@ await replaceOnce(
   telegramTypesPath,
   "    readonly context?: readonly string[];\n} | null;",
   "    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n} | null;",
+  ['readonly replyHandling?: "message";'],
+);
+await replaceOnce(
+  telegramTypesPath,
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n} | null;",
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly replyHandling?: \"message\";\n} | null;",
 );
 const oldVerifiedConfig = "    /** Runs after webhook verification and parsing, before native dispatch. */\n    readonly onVerifiedUpdate?: (context: TelegramVerifiedUpdateContext) => Response | Promise<Response>;\n";
 const oldDrainConfig = "    /** Optional internal endpoint that resumes persisted ingress after process restarts. */\n    readonly drainRoute?: string;\n    /** Drains persisted updates through the native dispatcher. */\n    readonly onDrain?: (context: TelegramDrainContext) => Response | Promise<Response>;\n";

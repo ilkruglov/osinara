@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "agent": {
+    "transport": {
+      "protocol": "anthropic-messages",
+      "baseUrl": "https://api.minimax.io/anthropic/v1",
+      "authentication": "bearer",
+      "thinking": {
+        "type": "adaptive"
+      }
+    },
+    "models": {
+      "primary": {
+        "id": "MiniMax-M3",
+        "contextWindowTokens": 1000000,
+        "maxOutputTokens": 128000
+      },
+      "vision": {
+        "id": "MiniMax-M3",
+        "maxOutputTokens": 128000
+      }
+    }
+  },
+  "voice": {
+    "transcriptionModelId": "whisper-large-v3-turbo"
+  }
+}

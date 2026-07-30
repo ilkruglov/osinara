@@ -7,6 +7,6 @@
 import { modelProviderConfig } from "../agent/lib/model-provider-config.js";
 
 // Import-time loading performs the validation; this assertion prevents dead-code elimination.
-if (modelProviderConfig.schemaVersion !== 1) {
+if (modelProviderConfig.schemaVersion !== 2) {
   throw new Error("AGENT_MODEL_PROVIDER_CONFIG_INVALID: Неподдерживаемая версия конфигурации");
 }

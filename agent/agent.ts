@@ -14,7 +14,8 @@ import {
 import { primaryModel } from "./lib/model-registry.js";
 import { modelProviderConfig } from "./lib/model-provider-config.js";
 
-const primaryModelContextWindowTokens = modelProviderConfig.agent.contextWindowTokens;
+const primaryModelContextWindowTokens =
+  modelProviderConfig.agent.models.primary.contextWindowTokens;
 
 export default defineAgent({
   compaction: {

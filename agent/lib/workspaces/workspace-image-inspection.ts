@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `createWorkspaceImageInspector`: validates and submits authorized image bytes.
- * - `inspectWorkspaceImage`: production server-configured CLIProxy vision inspector.
+ * - `inspectWorkspaceImage`: production server-configured protocol-native vision inspector.
  */
 import { generateText } from "ai";
 
@@ -71,7 +71,7 @@ export function createWorkspaceImageInspector(
     if (binary.bytes.byteLength > VISION_MAX_FILE_BYTES) {
       throw new AppError(
         "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE",
-        "Vision-модель принимает изображение размером не более 20 МБ",
+        "Vision-модель принимает изображение размером не более 10 МБ",
       );
     }
     const analysis = await dependencies.analyze({
@@ -101,6 +101,7 @@ export const inspectWorkspaceImage = createWorkspaceImageInspector({
         ],
         role: "user",
       }],
+      maxRetries: 0,
       model: visionModel,
     });
     return result.text;

@@ -40,8 +40,6 @@ services:
       context: .
       target: runtime
     depends_on:
-      cli-proxy-api:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       memory-embedding:
@@ -49,8 +47,6 @@ services:
       sandbox-runner:
         condition: service_healthy
     environment:
-      CLI_PROXY_API_KEY: ${CLI_PROXY_API_KEY:?CLI_PROXY_API_KEY is required}
-      CLI_PROXY_BASE_URL: http://cli-proxy-api:8317/v1
       DATABASE_URL: postgresql://osinara:${POSTGRES_PASSWORD}@postgres:5432/osinara
       GROQ_API_KEY: ${GROQ_API_KEY:?GROQ_API_KEY is required}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID-}
@@ -58,6 +54,7 @@ services:
       INTEGRATION_TOKEN_ENCRYPTION_KEY: ${INTEGRATION_TOKEN_ENCRYPTION_KEY-}
       INVITATION_SIGNING_SECRET: ${INVITATION_SIGNING_SECRET:?INVITATION_SIGNING_SECRET is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
+      MODEL_UPSTREAM_API_KEY: ${MODEL_UPSTREAM_API_KEY:?MODEL_UPSTREAM_API_KEY is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}

@@ -14,6 +14,7 @@ const AGENT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const EXPECTED_TOOL_FILES = [
   "export_memory.ts",
+  "get_current_time.ts",
   "group-tool-policy.ts",
   "import_telegram_attachment.ts",
   "inspect_workspace_image.ts",
