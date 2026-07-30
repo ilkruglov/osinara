@@ -4,6 +4,7 @@
  * Exports:
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
  * - `isMessageAddressedToBot`: preserves private, command, mention, and reply behavior.
+ * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: prevents direct file delivery to the text-only primary model.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
@@ -86,6 +87,17 @@ export function hasTelegramInboundMedia(
   );
 }
 
+export function isReplyToBot(
+  message: Pick<TelegramDispatchMessage, "replyToMessage">,
+  botUsername: string,
+): boolean {
+  // Telegram's verified update identifies this bot exactly; another bot must never inherit its route.
+  return Boolean(
+    message.replyToMessage?.from?.isBot &&
+      message.replyToMessage.from.username?.toLowerCase() === botUsername.toLowerCase(),
+  );
+}
+
 export function isMessageAddressedToBot(
   message: TelegramDispatchMessage,
   botUsername: string,
@@ -106,8 +118,5 @@ export function isMessageAddressedToBot(
     (match) => match.groups?.target?.toLowerCase() === botUsername.toLowerCase(),
   );
   if (addressedByMention) return true;
-  return Boolean(
-    message.replyToMessage?.from?.isBot &&
-      message.replyToMessage.from.username?.toLowerCase() === botUsername.toLowerCase(),
-  );
+  return isReplyToBot(message, botUsername);
 }

@@ -45,6 +45,7 @@ import {
 import {
   hasTelegramInboundMedia,
   isMessageAddressedToBot,
+  isReplyToBot,
 } from "./telegram-message-policy.js";
 import { formatTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
@@ -343,7 +344,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         return null;
       }
       // DB authorization, not a pre-rotation route snapshot, decides whether this is synthetic HITL.
-      const ordinaryAgentReply = trustedAgentReply || message.chat.type === "private";
+      // Tool-delivered photos/documents are not projected by the final text-delivery event. The
+      // verified Telegram sender still proves that this is an ordinary reply to Osinara, not HITL.
+      const ordinaryAgentReply = trustedAgentReply ||
+        message.chat.type === "private" ||
+        isReplyToBot(message, botUsername);
       if (replyAuthorization === "not_applicable" && ordinaryAgentReply) {
         if (!hasResumableReplyRoute) verifiedReplyRoute = exactReplyRoute;
         replyHandling = "message";
