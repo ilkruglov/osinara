@@ -28,10 +28,12 @@ server.listen(RUNNER_PORT, "0.0.0.0", () => {
   console.log("Sandbox runner ready", { port: RUNNER_PORT });
 });
 
-// Bound compute lifetime independently of agent shutdown, which may be interrupted by Docker.
+// Stop idle compute for reuse, then remove expired/excess entries under an explicit hard bound.
 const idleSweep = setInterval(() => {
-  void engine.removeIdleSessions(new Date()).then((removed) => {
-    if (removed > 0) console.log("Removed idle sandbox compute", { removed });
+  void engine.reconcileIdleSessions(new Date()).then(({ removed, stopped }) => {
+    if (removed > 0 || stopped > 0) {
+      console.log("Reconciled idle sandbox compute", { removed, stopped });
+    }
   }, (error: unknown) => {
     console.error("Sandbox idle reconciliation failed", { error });
   });

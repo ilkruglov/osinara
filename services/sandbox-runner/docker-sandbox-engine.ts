@@ -9,11 +9,10 @@
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
-import { PassThrough, Readable } from "node:stream";
+import { PassThrough } from "node:stream";
 import { posix } from "node:path";
 
 import Docker from "dockerode";
-import * as tar from "tar-stream";
 
 import {
   SANDBOX_RUNNER_MAX_OUTPUT_BYTES,
@@ -24,8 +23,12 @@ import {
   type SandboxRunnerRemovePathRequest,
   type SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
-import { WORKSPACE_MAX_FILE_BYTES } from "../../agent/config.js";
 import type { SandboxEngine } from "./sandbox-engine.js";
+import {
+  collectLimitedStream,
+  readSingleFileArchive,
+  writeSingleFileArchive,
+} from "./docker-sandbox-files.js";
 import {
   createSandboxActivityRegistry,
   SANDBOX_IDLE_TIMEOUT_MS,
@@ -33,6 +36,8 @@ import {
   sandboxContainerNeedsReplacement,
   sandboxRequestHash,
 } from "./docker-sandbox-lifecycle.js";
+import { reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
+import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
   buildSandboxContainerOptions,
   resolveTrustedToolMount,
@@ -91,21 +96,6 @@ async function requireDirectory(path: string, code: string): Promise<void> {
   if (!metadata.isDirectory()) throw new Error(`${code}: Required path is not a directory`);
 }
 
-async function collectStream(stream: NodeJS.ReadableStream, limit: number): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of stream) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += bytes.byteLength;
-    if (size > limit) {
-      stream.destroy(new Error("AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE: Process output exceeds limit"));
-      throw new Error("AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE: Process output exceeds limit");
-    }
-    chunks.push(bytes);
-  }
-  return Buffer.concat(chunks, size);
-}
-
 async function execute(
   docker: Docker,
   container: Docker.Container,
@@ -146,8 +136,8 @@ async function execute(
   let stderrBytes: Buffer;
   try {
     [stdoutBytes, stderrBytes] = await Promise.all([
-      collectStream(stdout, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
-      collectStream(stderr, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
+      collectLimitedStream(stdout, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
+      collectLimitedStream(stderr, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
     ]);
   } catch (error) {
     // Aborted or oversized commands must not keep running detached inside a durable session.
@@ -187,48 +177,6 @@ async function ensureToolDirectories(
   if (result.exitCode !== 0) {
     throw new Error(`AGENT_SANDBOX_RUNNER_TOOL_ENV_INIT_FAILED: ${result.stderr}`);
   }
-}
-
-async function readArchiveFile(stream: NodeJS.ReadableStream): Promise<Uint8Array> {
-  return await new Promise((resolve, reject) => {
-    const extract = tar.extract();
-    let content: Buffer | null = null;
-    let entries = 0;
-    extract.on("entry", (header, entry, next) => {
-      entries += 1;
-      if (entries > 1 || header.type !== "file") {
-        entry.resume();
-        reject(new Error("AGENT_SANDBOX_RUNNER_ARCHIVE_INVALID: Expected one regular file"));
-        return;
-      }
-      void collectStream(entry, WORKSPACE_MAX_FILE_BYTES).then((bytes) => {
-        content = bytes;
-        next();
-      }, reject);
-    });
-    extract.on("finish", () => {
-      if (content === null) reject(new Error("AGENT_SANDBOX_RUNNER_ARCHIVE_INVALID: File is absent"));
-      else resolve(content);
-    });
-    extract.on("error", reject);
-    stream.on("error", reject);
-    stream.pipe(extract);
-  });
-}
-
-async function writeArchiveFile(
-  container: Docker.Container,
-  path: string,
-  content: Uint8Array,
-): Promise<void> {
-  if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) {
-    throw new Error("AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: File exceeds the 50 MB limit");
-  }
-  const directory = posix.dirname(path);
-  const pack = tar.pack();
-  pack.entry({ mode: 0o600, name: posix.basename(path), type: "file" }, Buffer.from(content));
-  pack.finalize();
-  await container.putArchive(pack, { path: directory });
 }
 
 async function inspectContainer(
@@ -294,13 +242,19 @@ export function createDockerSandboxEngine(input: {
           requestHash: labels?.[SANDBOX_REQUEST_HASH_LABEL],
           sandboxSessionId: labels?.[SANDBOX_SESSION_LABEL],
         }, request)) {
+          if (request.seedFiles === undefined) {
+            return { created: false, seedRequired: true, sessionId };
+          }
           // Workspace and tools are named-volume subpaths, so stale compute is disposable.
           await existing.container.remove({ force: true, v: true });
           existing = null;
         }
         if (existing) {
           if (!existing.inspection.State.Running) await existing.container.start();
-          return { created: false, sessionId };
+          return { created: false, seedRequired: false, sessionId };
+        }
+        if (request.seedFiles === undefined) {
+          return { created: false, seedRequired: true, sessionId };
         }
 
         const options = buildSandboxContainerOptions(input.runtime, request);
@@ -313,11 +267,12 @@ export function createDockerSandboxEngine(input: {
         try {
           await container.start();
           await ensureToolDirectories(input.docker, container, request);
+          await writeSandboxSeedArchive(container, request.seedFiles);
         } catch (error) {
           await container.remove({ force: true, v: true }).catch(() => undefined);
           throw error;
         }
-        return { created: true, sessionId };
+        return { created: true, seedRequired: false, sessionId };
       }));
     },
     async runProcess(sessionId, request, signal) {
@@ -330,7 +285,7 @@ export function createDockerSandboxEngine(input: {
       return await activity.runActive(sessionId, async () => {
         const container = await requireRunningContainer(input.docker, sessionId);
         try {
-          return await readArchiveFile(await container.getArchive({ path: resolvePath(path) }));
+          return await readSingleFileArchive(await container.getArchive({ path: resolvePath(path) }));
         } catch (error) {
           if (dockerStatus(error) === 404) return null;
           throw error;
@@ -347,7 +302,7 @@ export function createDockerSandboxEngine(input: {
         if (directoryResult.exitCode !== 0) {
           throw new Error(`AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: ${directoryResult.stderr}`);
         }
-        await writeArchiveFile(container, resolved, content);
+        await writeSingleFileArchive(container, resolved, content);
       });
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
@@ -363,7 +318,7 @@ export function createDockerSandboxEngine(input: {
           Cmd: args,
           Tty: false,
         });
-        await collectStream(await exec.start({ Tty: false }), SANDBOX_RUNNER_MAX_OUTPUT_BYTES);
+        await collectLimitedStream(await exec.start({ Tty: false }), SANDBOX_RUNNER_MAX_OUTPUT_BYTES);
         const inspection = await exec.inspect();
         if (inspection.ExitCode !== 0) {
           throw new Error("AGENT_SANDBOX_RUNNER_REMOVE_FAILED: Could not remove sandbox path");
@@ -379,24 +334,15 @@ export function createDockerSandboxEngine(input: {
       }
       activity.forget(sessionId);
     },
-    async removeIdleSessions(now) {
+    async reconcileIdleSessions(now) {
       const cutoffMs = now.getTime() - SANDBOX_IDLE_TIMEOUT_MS;
-      const containers = await input.docker.listContainers({
-        all: true,
-        filters: {
-          label: [SANDBOX_SESSION_LABEL, `${SANDBOX_PROJECT_LABEL}=${input.runtime.project}`],
-        },
+      return await reconcileSandboxContainers({
+        activity,
+        docker: input.docker,
+        idleCutoffMs: cutoffMs,
+        nowMs: now.getTime(),
+        project: input.runtime.project,
       });
-      const removed = await Promise.all(containers.map(async (container) => {
-        const sessionId = container.Labels[SANDBOX_SESSION_LABEL];
-        if (typeof sessionId !== "string") return false;
-        return await activity.removeIfIdle(sessionId, cutoffMs, async () => {
-          await input.docker.getContainer(container.Id).remove({ force: true, v: true }).catch((error) => {
-            if (dockerStatus(error) !== 404) throw error;
-          });
-        });
-      }));
-      return removed.filter(Boolean).length;
     },
     async stopAllSessions() {
       const containers = await input.docker.listContainers({

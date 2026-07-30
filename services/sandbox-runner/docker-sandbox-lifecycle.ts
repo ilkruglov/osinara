@@ -8,7 +8,7 @@
  * - `sandboxContainerName`: deterministic physical name for a stable conversation thread.
  * - `sandboxContainerNeedsReplacement`: detects stale owner or policy identity.
  * - `sandboxRequestHash`: stable policy identity independent of transient Eve roots.
- * - Activity gates prevent idle removal from racing with newly arriving work.
+ * - Activity gates prevent idle stop/removal from racing with newly arriving work.
  */
 import { createHash } from "node:crypto";
 
@@ -50,6 +50,7 @@ export function sandboxRequestHash(request: SandboxRunnerCreateRequest): string 
     mounts,
     policyVersion: SANDBOX_CONTAINER_POLICY_VERSION,
     sandboxSessionId: request.sandboxSessionId,
+    seedDigest: request.seedDigest,
   })).digest("hex");
 }
 

@@ -73,7 +73,11 @@ export class SandboxRunnerClient {
       },
     ));
     const body = await response.json() as Partial<SandboxRunnerSessionResponse>;
-    if (typeof body.created !== "boolean" || body.sessionId !== request.sandboxSessionId) {
+    if (
+      typeof body.created !== "boolean" ||
+      typeof body.seedRequired !== "boolean" ||
+      body.sessionId !== request.sandboxSessionId
+    ) {
       throw new Error("AGENT_SANDBOX_RUNNER_RESPONSE_INVALID: Session response is malformed");
     }
     return body as SandboxRunnerSessionResponse;

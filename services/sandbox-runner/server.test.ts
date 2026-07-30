@@ -20,7 +20,11 @@ const servers: Array<ReturnType<typeof createSandboxRunnerServer>> = [];
 
 function fakeEngine(): SandboxEngine {
   return {
-    createSession: vi.fn(async () => ({ created: true, sessionId: SANDBOX_SESSION_ID })),
+    createSession: vi.fn(async () => ({
+      created: true,
+      seedRequired: false,
+      sessionId: SANDBOX_SESSION_ID,
+    })),
     deleteToolEnvironment: vi.fn(async () => undefined),
     health: vi.fn(async () => undefined),
     readFile: vi.fn(async () => null),
@@ -32,7 +36,7 @@ function fakeEngine(): SandboxEngine {
       stdout: "Linux\n",
     })),
     stopAllSessions: vi.fn(async () => undefined),
-    removeIdleSessions: vi.fn(async () => 0),
+    reconcileIdleSessions: vi.fn(async () => ({ removed: 0, stopped: 0 })),
     stopSession: vi.fn(async () => undefined),
     writeFile: vi.fn(async () => undefined),
   };
@@ -62,6 +66,7 @@ describe("sandbox runner HTTP server", () => {
         mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
         eveSessionId: SESSION_ID,
         sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -81,6 +86,7 @@ describe("sandbox runner HTTP server", () => {
       eveSessionId: SESSION_ID,
       mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     });
     expect(engine.runProcess).toHaveBeenCalledWith(
       SANDBOX_SESSION_ID,
@@ -98,6 +104,7 @@ describe("sandbox runner HTTP server", () => {
         eveSessionId: SESSION_ID,
         mounts: [{ mountPoint: "group", workspaceId: WORKSPACE_ID }],
         sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
