@@ -64,14 +64,26 @@ function rewriteSearchResult(value: unknown, direction: WireDirection): unknown 
   return rewritten;
 }
 
+function isCompleteAnthropicSearchResult(value: unknown): boolean {
+  const result = record(value);
+  return result?.type === WEB_SEARCH_RESULT_TYPE &&
+    typeof result.url === "string" &&
+    typeof result.title === "string" &&
+    typeof result[ANTHROPIC_WEB_SEARCH_CONTENT_FIELD] === "string";
+}
+
 function rewriteToolResultBlock(value: unknown, direction: WireDirection): unknown {
   const block = record(value);
   if (!block || block.type !== WEB_SEARCH_TOOL_RESULT_TYPE || !Array.isArray(block.content)) {
     return value;
   }
+  const rewritten = block.content.map((result) => rewriteSearchResult(result, direction));
   return {
     ...block,
-    content: block.content.map((result) => rewriteSearchResult(result, direction)),
+    // MiniMax sometimes emits URL-only entries, while Anthropic requires title, URL, and content.
+    content: direction === "from-minimax"
+      ? rewritten.filter(isCompleteAnthropicSearchResult)
+      : rewritten,
   };
 }
 

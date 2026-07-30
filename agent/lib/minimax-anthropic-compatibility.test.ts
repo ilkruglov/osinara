@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createMiniMaxAnthropicCompatibilityFetch`: preserves MiniMax web-search payload bytes.
  * - Chunked SSE records are normalized without changing unrelated provider events.
+ * - Incomplete MiniMax search entries are removed before Anthropic schema validation.
  * - JSON responses use the same narrow web-search result normalization.
  * - Provider-managed search history is replayed through MiniMax-safe ordinary tool messages.
  * - The configured AI SDK transport consumes MiniMax provider-managed search across model steps.
@@ -69,6 +70,35 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
     expect(normalized).toContain(`"encrypted_content":"${RESULT.content}"`);
     expect(normalized).not.toContain(`"content":"${RESULT.content}"`);
     expect(normalized).toContain('data: {"type":"ping"}');
+  });
+
+  it("drops a search result that has no provider content instead of failing the complete stream", async () => {
+    const incomplete = {
+      title: "Instagram result without a snippet",
+      type: "web_search_result",
+      url: "https://www.instagram.com/example/",
+    };
+    const source = event("content_block_start", {
+      content_block: {
+        content: [RESULT, incomplete],
+        tool_use_id: "call-search-1",
+        type: "web_search_tool_result",
+      },
+      index: 1,
+      type: "content_block_start",
+    });
+    const fetch = createMiniMaxAnthropicCompatibilityFetch(
+      vi.fn(async () => chunkedResponse(source, 53)) as FetchFunction,
+    );
+
+    const response = await fetch("https://api.minimax.io/anthropic/v1/messages", {
+      body: "{}",
+      method: "POST",
+    });
+    const normalized = await response.text();
+
+    expect(normalized).toContain(`"encrypted_content":"${RESULT.content}"`);
+    expect(normalized).not.toContain(incomplete.url);
   });
 
   it("rejects malformed MiniMax search SSE with a stable error", async () => {
