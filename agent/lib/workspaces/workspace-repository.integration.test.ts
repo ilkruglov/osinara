@@ -167,7 +167,7 @@ describeWithDatabase("workspace repository", () => {
     expect(familyInboxRead.file.path).toBe(familyPath);
   });
 
-  it("reserves one Telegram delivery and replays its completed result without resending", async () => {
+  it("replays a completed Telegram delivery with metadata needed to repair projections", async () => {
     const f = await fixture();
     const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));
     roots.push(root);
@@ -207,7 +207,12 @@ describeWithDatabase("workspace repository", () => {
       scope: "personal",
     });
 
-    expect(replay).toEqual({ status: "completed", telegramMessageId: "77" });
+    expect(replay).toMatchObject({
+      file: { path: "out/report.txt", scope: "personal" },
+      status: "completed",
+      telegramMessageId: "77",
+    });
+    expect(replay).toHaveProperty("bytes");
   });
 
   it("isolates an external group and deletes its physical file", async () => {

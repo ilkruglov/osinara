@@ -5,6 +5,7 @@
  * - Adds a verified Telegram update hook around the native dispatcher.
  * - Makes the native dispatcher return its Eve session for FIFO coordination.
  * - Lets timeline-proven replies bypass preliminary synthetic HITL classification.
+ * - Lets the application replace model-visible Telegram text with a durable context envelope.
  * - Lets the application version continuation tokens for rotation, including HITL callbacks.
  * - Lets the application authenticate the exact Telegram user resuming a HITL callback.
  * - Propagates `input.requested` adapter failures so unbound approvals never park fail-open.
@@ -181,10 +182,13 @@ await replaceOnce(
 );
 
 // Returning the session lets the application wait for `session.waiting` before releasing FIFO.
+const previousPatchedMessageDispatch = "try{return await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:r.continuationToken??continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e});throw e}";
+const patchedMessageDispatch = "try{return await e.send({inputResponses:u,message:r.message??a,context:[o,...s]},{auth:r.auth,continuationToken:r.continuationToken??continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e});throw e}";
+await replaceAll(telegramRuntimePath, previousPatchedMessageDispatch, patchedMessageDispatch);
 await replaceOnce(
   telegramRuntimePath,
   "try{await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e})}",
-  "try{return await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:r.continuationToken??continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e});throw e}",
+  patchedMessageDispatch,
 );
 // The application may prove that a bot reply is an ordinary timeline branch rather than HITL.
 await replaceOnce(
@@ -206,10 +210,13 @@ await replaceOnce(
   "{auth:r.auth,continuationToken:r.continuationToken??continuationTokenFromState(t),state:t}",
 );
 // HITL callbacks are resumed only after the application binds the exact verified Telegram user.
+const previousAuthenticatedHitlCallback = "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:i.auth,continuationToken:i.continuationToken??r,state:t})}";
+const authenticatedHitlCallback = "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:i.acknowledgementText??`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:i.auth,continuationToken:i.continuationToken??r,state:t})}";
+await replaceAll(telegramRuntimePath, previousAuthenticatedHitlCallback, authenticatedHitlCallback);
 await replaceOnce(
   telegramRuntimePath,
   "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}if(!e.query.message||!t.chatId)return;try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?continuationTokenFromState(t):await e.config.resolveContinuationToken(continuationTokenFromState(t)),state:t})}",
-  "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:i.auth,continuationToken:i.continuationToken??r,state:t})}",
+  authenticatedHitlCallback,
   [
     "let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery",
     "let r=e.config.resolveContinuationToken===void 0?continuationTokenFromState(t)",
@@ -219,7 +226,7 @@ await replaceOnce(
 await replaceOnce(
   telegramRuntimePath,
   "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=e.config.resolveContinuationToken===void 0?continuationTokenFromState(t):await e.config.resolveContinuationToken(continuationTokenFromState(t)),i=e.config.onHitlCallbackQuery===void 0?{auth:null}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:i.auth,continuationToken:i.continuationToken??r,state:t})}",
-  "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.send({inputResponses:[telegramCallbackInputResponse(e.query.data)]},{auth:i.auth,continuationToken:i.continuationToken??r,state:t})}",
+  authenticatedHitlCallback,
 );
 await replaceOnce(
   telegramRuntimePath,
@@ -242,9 +249,11 @@ await replaceOnce(
 // reviewed blocks before inserting the canonical declarations exactly once.
 const verifiedUpdateDeclaration = "/** Verified Telegram ingress hook context for durable application queues. */\nexport interface TelegramVerifiedUpdateContext {\n    readonly raw: JsonObject;\n    readonly update: TelegramUpdate;\n    readonly dispatch: (update: TelegramUpdate) => Promise<Session | null | undefined>;\n    readonly waitUntil: (task: Promise<unknown>) => void;\n}\n";
 const drainDeclaration = "/** Internal drain hook context using the same native Telegram dispatcher. */\nexport interface TelegramDrainContext {\n    readonly dispatch: (update: TelegramUpdate) => Promise<Session | null | undefined>;\n    readonly waitUntil: (task: Promise<unknown>) => void;\n}\n";
-const hitlCallbackDeclaration = "/** Application-authenticated result for a Telegram HITL callback. */\nexport type TelegramHitlCallbackResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly continuationToken?: string;\n} | null;\n";
+const previousHitlCallbackDeclaration = "/** Application-authenticated result for a Telegram HITL callback. */\nexport type TelegramHitlCallbackResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly continuationToken?: string;\n} | null;\n";
+const hitlCallbackDeclaration = "/** Application-authenticated result for a Telegram HITL callback. */\nexport type TelegramHitlCallbackResult = {\n    readonly acknowledgementText?: string;\n    readonly auth: SessionAuthContext | null;\n    readonly continuationToken?: string;\n} | null;\n";
 await replaceAll(telegramTypesPath, verifiedUpdateDeclaration, "");
 await replaceAll(telegramTypesPath, drainDeclaration, "");
+await replaceAll(telegramTypesPath, previousHitlCallbackDeclaration, "");
 await replaceAll(telegramTypesPath, hitlCallbackDeclaration, "");
 await replaceOnce(
   telegramTypesPath,
@@ -257,10 +266,13 @@ await replaceOnce(
   "    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n} | null;",
   ['readonly replyHandling?: "message";'],
 );
+const previousTelegramInboundResult = "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly replyHandling?: \"message\";\n} | null;";
+const patchedTelegramInboundResult = "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly message?: string;\n    readonly replyHandling?: \"message\";\n} | null;";
+await replaceAll(telegramTypesPath, previousTelegramInboundResult, patchedTelegramInboundResult);
 await replaceOnce(
   telegramTypesPath,
   "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n} | null;",
-  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly replyHandling?: \"message\";\n} | null;",
+  patchedTelegramInboundResult,
 );
 const oldVerifiedConfig = "    /** Runs after webhook verification and parsing, before native dispatch. */\n    readonly onVerifiedUpdate?: (context: TelegramVerifiedUpdateContext) => Response | Promise<Response>;\n";
 const oldDrainConfig = "    /** Optional internal endpoint that resumes persisted ingress after process restarts. */\n    readonly drainRoute?: string;\n    /** Drains persisted updates through the native dispatcher. */\n    readonly onDrain?: (context: TelegramDrainContext) => Response | Promise<Response>;\n";

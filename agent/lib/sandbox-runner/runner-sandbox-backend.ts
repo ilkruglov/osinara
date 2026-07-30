@@ -22,12 +22,14 @@ import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
 import type {
   SandboxAccess,
   SandboxRunnerCreateRequest,
+  SandboxRunnerSeedFile,
   WorkspaceSandboxMount,
   WorkspaceSandboxUseOptions,
 } from "./sandbox-runner-contract.js";
 import {
   parseCreateSandboxRequest,
   parseSandboxEveSessionId,
+  sandboxSeedDigest,
 } from "./sandbox-runner-contract.js";
 import { SandboxRunnerClient } from "./runner-client.js";
 
@@ -65,6 +67,7 @@ function parseBackendMetadata(
     eveSessionId,
     mounts: value.mounts,
     sandboxSessionId: value.sandboxSessionId,
+    seedDigest: sandboxSeedDigest([]),
   });
   return {
     access: request.access,
@@ -169,6 +172,18 @@ function resolveSeedPath(
     throw new Error("AGENT_SANDBOX_RUNNER_SEED_PATH_INVALID: HOME seed path is malformed");
   }
   return resolveSandboxPath(path);
+}
+
+function seedManifest(
+  template: StoredTemplate | null,
+  access: SandboxAccess,
+  mounts: readonly WorkspaceSandboxMount[],
+): { seedDigest: string; seedFiles: SandboxRunnerSeedFile[] } {
+  const seedFiles = (template?.files ?? []).map((file) => ({
+    contentBase64: file.contentBase64,
+    path: resolveSeedPath(file.path, access, mounts),
+  }));
+  return { seedDigest: sandboxSeedDigest(seedFiles), seedFiles };
 }
 
 function buildSession(input: {
@@ -300,12 +315,13 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
       const eveSessionId = parseSandboxEveSessionId(input.tags?.sessionId);
       const restored = parseBackendMetadata(input.existingMetadata, eveSessionId);
       let request: SandboxRunnerCreateRequest | null = restored
-        ? {
+        ? parseCreateSandboxRequest({
           access: restored.access,
           eveSessionId,
           mounts: restored.mounts,
           sandboxSessionId: restored.sandboxSessionId,
-        }
+          ...seedManifest(template, restored.access, restored.mounts),
+        })
         : null;
       const requireRequest = (): SandboxRunnerCreateRequest => {
         if (!request) {
@@ -320,20 +336,11 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
       };
       const ensureRunner = async (): Promise<string> => {
         const current = requireRequest();
-        const created = await client.create(current);
-        if (created.created) {
-          try {
-            for (const file of template?.files ?? []) {
-              await client.writeFile(
-                current.sandboxSessionId,
-                resolveSeedPath(file.path, current.access, current.mounts),
-                Buffer.from(file.contentBase64, "base64"),
-              );
-            }
-          } catch (error) {
-            // A partially seeded disposable container must not suppress seeding on recreation.
-            await client.stop(current.sandboxSessionId);
-            throw error;
+        const probe = await client.create({ ...current, seedFiles: undefined });
+        if (probe.seedRequired) {
+          const created = await client.create(current);
+          if (created.seedRequired) {
+            throw new Error("AGENT_SANDBOX_RUNNER_SEED_REQUIRED: Runner rejected the seed bundle");
           }
         }
         return current.sandboxSessionId;
@@ -355,16 +362,16 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
             ) {
               throw new Error("AGENT_SANDBOX_RUNNER_REMOUNT_DENIED: Session mounts are immutable");
             }
-            await ensureRunner();
             return session;
           }
+          const access = accessForMounts(useOptions.mounts);
           request = parseCreateSandboxRequest({
-            access: accessForMounts(useOptions.mounts),
+            access,
             eveSessionId,
             mounts: useOptions.mounts,
             sandboxSessionId: useOptions.sandboxSessionId,
+            ...seedManifest(template, access, useOptions.mounts),
           });
-          await ensureRunner();
           return session;
         },
         async captureState() {

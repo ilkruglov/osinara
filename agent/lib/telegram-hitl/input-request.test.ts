@@ -21,6 +21,7 @@ describe("createTelegramInputRequestHandler", () => {
     const handler = createTelegramInputRequestHandler({
       approvals: { register },
       markPendingOperation,
+      present: async (request) => request,
       rekey,
     });
     const channel = {
@@ -88,8 +89,13 @@ describe("createTelegramInputRequestHandler", () => {
     expect(register).toHaveBeenCalledWith(expect.objectContaining({
       applicationSessionId: "app-session-1",
       callbackData: ["eve:0", "eve:1"],
+      callbackOptions: [
+        { callbackData: "eve:0", label: "Yes", optionId: "approve" },
+        { callbackData: "eve:1", label: "No", optionId: "deny" },
+      ],
       eveSessionId: "wrun_hitl",
       requestId: "request-1",
+      promptText: "Approve tool call",
       telegramChatId: "-1001",
       telegramChatType: "supergroup",
       telegramMessageId: "88",
@@ -116,6 +122,7 @@ describe("createTelegramInputRequestHandler", () => {
     const handler = createTelegramInputRequestHandler({
       approvals: { register },
       markPendingOperation: vi.fn(),
+      present: async (request) => request,
       rekey: vi.fn(),
     });
     const channel = {

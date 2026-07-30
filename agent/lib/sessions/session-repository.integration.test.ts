@@ -8,11 +8,13 @@
  * - Rotation after thresholds while pending operations remain pinned.
  * - Stable sandbox identity across generations and replacement at a trust-zone boundary.
  * - Retention leasing for retired Eve sessions.
+ * - Monotonic per-session Telegram group timeline cursors.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { sessionRepository } from "./session-repository.js";
+import { groupTimelineCursorRepository } from "./group-timeline-cursor-repository.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const url = process.env.DATABASE_URL;
@@ -84,6 +86,32 @@ describeWithDatabase("session repository", () => {
     await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(false);
     await sessionRepository.bindEveSession(current.id, "wrun_bound_after_start");
     await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(true);
+  });
+
+  it("resumes the current Eve continuation through a tool-delivery route alias", async () => {
+    const f = await fixture();
+    const current = await sessionRepository.prepareTurn({
+      baseContinuationToken: "101::400",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:00:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+    await sessionRepository.bindEveSession(current.id, "wrun_tool_route");
+    await sessionRepository.registerRouteAlias(current.id, "101::401");
+
+    const resumed = await sessionRepository.prepareTurn({
+      baseContinuationToken: "101::401",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:01:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+
+    expect(resumed.id).toBe(current.id);
+    expect(resumed.continuationToken).toBe("101::400");
   });
 
   it("defers a requested rotation until the pending operation completes", async () => {
@@ -299,5 +327,34 @@ describeWithDatabase("session repository", () => {
     expect(replacement).toMatchObject({ generation: 1, rotated: true });
     expect(replacement.sandboxSessionId).not.toBe(old.sandboxSessionId);
     expect(replacement.continuationToken).not.toBe(baseToken);
+  });
+
+  it("advances a group timeline cursor monotonically for the current Eve root", async () => {
+    const f = await fixture();
+    const group = await database().query<{ id: string }>(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode)
+       VALUES ($1, '-100-session-cursor', 'Курсор', 'family_private', 'addressed_only')
+       RETURNING id`,
+      [f.familyId],
+    );
+    const session = await sessionRepository.prepareTurn({
+      baseContinuationToken: "-100-session-cursor::10",
+      familyId: f.familyId,
+      groupId: group.rows[0]!.id,
+      now: new Date("2026-07-30T12:00:00.000Z"),
+      scope: "family",
+      userId: null,
+    });
+    await sessionRepository.bindEveSession(session.id, "wrun_cursor");
+
+    await expect(
+      groupTimelineCursorRepository.currentGroupTimelineCursor(session.id),
+    ).resolves.toBeNull();
+    await groupTimelineCursorRepository.advance(session.id, "wrun_cursor", "10");
+    await groupTimelineCursorRepository.advance(session.id, "wrun_cursor", "8");
+    await expect(
+      groupTimelineCursorRepository.currentGroupTimelineCursor(session.id),
+    ).resolves.toBe("10");
   });
 });

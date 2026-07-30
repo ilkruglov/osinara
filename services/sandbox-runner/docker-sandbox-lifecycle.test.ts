@@ -5,7 +5,7 @@
  * - Policy identity ignores transient Eve roots but includes scope and mount changes.
  * - Existing compute is replaced when its owner or policy identity is stale.
  * - Idle detection never stops an operation that is still active.
- * - Idle removal and newly arriving work cannot race on the same container.
+ * - Idle stop/removal transitions cannot race newly arriving work on the same container.
  * - Per-sandbox-session creation is serialized.
  */
 import { describe, expect, it } from "vitest";
@@ -22,11 +22,13 @@ const EVE_SESSION_ID = "wrun_01JZ8K4R0W6G73VTHX9NF2QABC";
 const NEXT_EVE_SESSION_ID = "wrun_01JZ8K4R0W6G73VTHX9NF2QABD";
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_WORKSPACE_ID = "22222222-2222-4222-8222-222222222222";
+const EMPTY_SEED_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const BASE_REQUEST: SandboxRunnerCreateRequest = {
   access: "trusted",
   eveSessionId: EVE_SESSION_ID,
   mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
   sandboxSessionId: SANDBOX_SESSION_ID,
+  seedDigest: EMPTY_SEED_DIGEST,
 };
 
 describe("Docker sandbox lifecycle", () => {
@@ -37,6 +39,8 @@ describe("Docker sandbox lifecycle", () => {
       ...BASE_REQUEST,
       mounts: [{ mountPoint: "personal", workspaceId: OTHER_WORKSPACE_ID }],
     })).not.toBe(sandboxRequestHash(BASE_REQUEST));
+    expect(sandboxRequestHash({ ...BASE_REQUEST, seedDigest: "a".repeat(64) }))
+      .not.toBe(sandboxRequestHash(BASE_REQUEST));
   });
 
   it("replaces compute with stale policy or a different application owner", () => {

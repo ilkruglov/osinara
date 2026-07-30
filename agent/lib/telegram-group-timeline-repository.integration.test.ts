@@ -11,6 +11,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 import { telegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+import { sessionRepository } from "./sessions/session-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
   ? describe
@@ -62,6 +63,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     expect(inbound).toMatchObject({ status: "inserted", sequenceId: "1" });
 
     const agent = await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
       contentText: "Финальный ответ",
       deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
       groupId,
@@ -70,6 +72,16 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
       telegramMessageIds: ["20", "21"],
     });
     expect(agent.sequenceId).toBe("2");
+    const replay = await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
+      contentText: "Финальный ответ",
+      deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: inbound.entryId,
+      telegramMessageIds: ["20", "21"],
+    });
+    expect(replay).toEqual(agent);
 
     const reply = await telegramGroupJournalRepository.record(groupId, message("30", "21"));
     expect(reply.sequenceId).toBe("3");
@@ -96,6 +108,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     const foreign = await telegramGroupJournalRepository.record(firstGroupId, message("10"));
 
     await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
       contentText: "Ответ во второй группе",
       deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
       groupId: secondGroupId,
@@ -118,6 +131,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     const groupId = await group();
     const inbound = await telegramGroupJournalRepository.record(groupId, message("10"));
     const agent = await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
       contentText: "Ответ",
       deliveredAt: new Date("2026-07-28T10:01:00.000Z"),
       groupId,
@@ -136,5 +150,133 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
       [agent.entryId],
     );
     expect(retained.rows[0]).toEqual({ reply_to_entry_id: null, reply_to_sequence_id: "1" });
+  });
+
+  it("returns only unseen entries not owned by the current application session", async () => {
+    const groupId = await group();
+    const groupRow = await database().query<{ family_id: string }>(
+      "SELECT family_id FROM telegram_groups WHERE id = $1",
+      [groupId],
+    );
+    const session = await sessionRepository.prepareTurn({
+      baseContinuationToken: "-1001::10",
+      familyId: groupRow.rows[0]!.family_id,
+      groupId,
+      now: new Date("2026-07-30T12:00:00.000Z"),
+      scope: "family",
+      userId: null,
+    });
+    const first = await telegramGroupJournalRepository.record(groupId, message("10"));
+    await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: session.id,
+      contentText: "Собственный ответ",
+      deliveredAt: new Date("2026-07-30T12:01:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: first.entryId,
+      telegramMessageIds: ["11"],
+    });
+    await telegramGroupJournalRepository.record(groupId, message("12"));
+    await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
+      contentText: "Ответ другой ветки",
+      deliveredAt: new Date("2026-07-30T12:02:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: null,
+      telegramMessageIds: ["13"],
+    });
+    const current = await telegramGroupJournalRepository.record(groupId, message("14"));
+
+    const page = await telegramGroupJournalRepository.listIncremental({
+      afterSequence: first.sequenceId,
+      applicationSessionId: session.id,
+      beforeSequence: current.sequenceId,
+      groupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+
+    expect(page.omittedBeforeSequence).toBeNull();
+    expect(page.entries.map((entry) => [entry.telegramMessageId, entry.actorKind]))
+      .toEqual([["12", "user"], ["13", "agent_self"]]);
+  });
+
+  it("marks an incremental gap when unseen history exceeds the context limit", async () => {
+    const groupId = await group();
+    const groupRow = await database().query<{ family_id: string }>(
+      "SELECT family_id FROM telegram_groups WHERE id = $1",
+      [groupId],
+    );
+    const session = await sessionRepository.prepareTurn({
+      baseContinuationToken: "-1001::20",
+      familyId: groupRow.rows[0]!.family_id,
+      groupId,
+      now: new Date("2026-07-30T12:00:00.000Z"),
+      scope: "family",
+      userId: null,
+    });
+    const first = await telegramGroupJournalRepository.record(groupId, message("20"));
+    await telegramGroupJournalRepository.record(groupId, message("21"));
+    await telegramGroupJournalRepository.record(groupId, message("22"));
+    const current = await telegramGroupJournalRepository.record(groupId, message("23"));
+
+    const page = await telegramGroupJournalRepository.listIncremental({
+      afterSequence: first.sequenceId,
+      applicationSessionId: session.id,
+      beforeSequence: current.sequenceId,
+      groupId,
+      limit: 1,
+      messageThreadId: null,
+    });
+
+    expect(page.entries.map((entry) => entry.telegramMessageId)).toEqual(["22"]);
+    expect(page.omittedBeforeSequence).toBe(page.entries[0]?.sequenceId);
+  });
+
+  it("loads unseen reply ancestry without crossing a forum topic boundary", async () => {
+    const groupId = await group();
+    const groupRow = await database().query<{ family_id: string }>(
+      "SELECT family_id FROM telegram_groups WHERE id = $1",
+      [groupId],
+    );
+    const session = await sessionRepository.prepareTurn({
+      baseContinuationToken: "-1001:42:30",
+      familyId: groupRow.rows[0]!.family_id,
+      groupId,
+      now: new Date("2026-07-30T12:00:00.000Z"),
+      scope: "family",
+      userId: null,
+    });
+    const topicMessage = (id: string, threadId: number, replyId?: string): TelegramMessage => ({
+      ...message(id, replyId),
+      messageThreadId: threadId,
+      raw: { date: 1_700_000_000 + Number(id), is_topic_message: true },
+    });
+    const sameTopicParent = await telegramGroupJournalRepository.record(
+      groupId,
+      topicMessage("30", 42),
+    );
+    const cursor = await telegramGroupJournalRepository.record(groupId, topicMessage("31", 42));
+    await telegramGroupJournalRepository.record(groupId, topicMessage("32", 42, "30"));
+    const foreignParent = await telegramGroupJournalRepository.record(
+      groupId,
+      topicMessage("40", 84),
+    );
+    await telegramGroupJournalRepository.record(groupId, topicMessage("33", 42, "40"));
+    const current = await telegramGroupJournalRepository.record(groupId, topicMessage("34", 42));
+
+    const page = await telegramGroupJournalRepository.listIncremental({
+      afterSequence: cursor.sequenceId,
+      applicationSessionId: session.id,
+      beforeSequence: current.sequenceId,
+      groupId,
+      limit: 50,
+      messageThreadId: "42",
+    });
+
+    expect(page.entries.map((entry) => entry.telegramMessageId)).toEqual(["30", "32", "33"]);
+    expect(page.entries.map((entry) => entry.telegramMessageId)).not.toContain("40");
+    expect(sameTopicParent.sequenceId).not.toBe(foreignParent.sequenceId);
   });
 });

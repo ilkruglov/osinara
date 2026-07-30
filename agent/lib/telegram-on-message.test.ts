@@ -550,24 +550,10 @@ describe("createTelegramMessageHandler", () => {
       toolAllowlist: ["remember"],
       type: "external_private",
     });
-    repository.journal.listRecent.mockResolvedValue([
-      {
-        actorId: "telegram:101",
-        actorKind: "user",
-        contentText: "предыдущая реплика",
-        messageKind: "text",
-        messageThreadId: "42",
-        replyToMessageId: null,
-        replyToSequenceId: null,
-        senderDisplayName: "Анна",
-        senderIsBot: false,
-        senderUsername: "anna",
-        sentAt: "2026-07-12T10:00:00.000Z",
-        sequenceId: "40",
-        telegramMessageId: "40",
-        telegramUserId: "101",
-      },
-    ]);
+    repository.groupContext.prepare.mockResolvedValue({
+      cursorSequence: "1",
+      durableMessage: "предыдущая реплика\n\nподведи итог",
+    });
     const handler = createTelegramMessageHandler(repository);
     const message = {
       ...groupMessage(`@${BOT_USERNAME} подведи итог`),
@@ -578,15 +564,18 @@ describe("createTelegramMessageHandler", () => {
 
     const result = await handler(telegramContext().context, message);
 
-    expect(repository.journal.listRecent).toHaveBeenCalledWith({
-      anchorEntryId: "00000000-0000-4000-8000-000000000010",
-      beforeSequence: "1",
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith({
+      applicationSessionId: "session-1",
+      currentEntryId: "00000000-0000-4000-8000-000000000010",
+      currentSenderDisplayName: "Анна",
+      currentSenderUsername: "anna",
+      currentSequence: "1",
       groupId: "group-1",
-      limit: 50,
+      messageText: `@${BOT_USERNAME} подведи итог`,
       messageThreadId: "42",
     });
-    expect(result?.context?.join("\n")).toContain("предыдущая реплика");
-    expect(result?.context?.join("\n")).not.toContain("подведи итог");
+    expect(result?.message).toContain("предыдущая реплика");
+    expect(result?.context?.join("\n")).not.toContain("предыдущая реплика");
   });
 
   it("drops a duplicate all-mode delivery before authorization and model dispatch", async () => {
@@ -611,7 +600,7 @@ describe("createTelegramMessageHandler", () => {
       handler(telegramContext().context, groupMessage(`@${BOT_USERNAME} ответь`)),
     ).resolves.toBeNull();
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
-    expect(repository.journal.listRecent).not.toHaveBeenCalled();
+    expect(repository.groupContext.prepare).not.toHaveBeenCalled();
   });
 
   it("records an unauthorized family-group participant without granting agent access", async () => {
@@ -629,7 +618,7 @@ describe("createTelegramMessageHandler", () => {
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
-    expect(repository.journal.listRecent).not.toHaveBeenCalled();
+    expect(repository.groupContext.prepare).not.toHaveBeenCalled();
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });
 

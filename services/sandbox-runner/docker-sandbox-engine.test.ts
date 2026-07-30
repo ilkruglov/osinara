@@ -6,7 +6,7 @@
  * - Public-only proxy egress for trusted sessions.
  * - Network-less, tool-less external-group containers.
  * - Resource, capability, and privilege restrictions.
- * - Stale policy replacement and idle disposable-compute removal at the Docker boundary.
+ * - Stale policy replacement and bounded warm-cache reconciliation at the Docker boundary.
  * - Explicit session and runner shutdown remove compute instead of retaining exited containers.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -21,12 +21,14 @@ import {
   buildSandboxContainerOptions,
   createDockerSandboxEngine,
 } from "./docker-sandbox-engine.js";
+import { sandboxRequestHash } from "./docker-sandbox-lifecycle.js";
 
 const PERSONAL_WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const FAMILY_WORKSPACE_ID = "22222222-2222-4222-8222-222222222222";
 const GROUP_WORKSPACE_ID = "33333333-3333-4333-8333-333333333333";
 const EVE_SESSION_ID = "wrun_01JZ8K4R0W6G73VTHX9NF2QABC";
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const EMPTY_SEED_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const temporaryRoots: string[] = [];
 
 const runtime = {
@@ -54,6 +56,7 @@ describe("buildSandboxContainerOptions", () => {
         { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
       ],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
     });
 
     expect(options.HostConfig?.Mounts).toEqual([
@@ -113,6 +116,7 @@ describe("buildSandboxContainerOptions", () => {
       eveSessionId: EVE_SESSION_ID,
       mounts: [{ mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
     });
 
     expect(options.HostConfig?.Mounts).toEqual([
@@ -146,6 +150,7 @@ describe("buildSandboxContainerOptions", () => {
       eveSessionId: EVE_SESSION_ID,
       mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
     });
 
     expect(options.HostConfig?.NetworkMode).toBe("none");
@@ -179,6 +184,7 @@ describe("buildSandboxContainerOptions", () => {
       remove: vi.fn(async () => undefined),
     };
     const replacement = {
+      putArchive: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
       start: vi.fn(async () => undefined),
     };
@@ -201,29 +207,96 @@ describe("buildSandboxContainerOptions", () => {
       eveSessionId: EVE_SESSION_ID,
       mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
-    })).resolves.toEqual({ created: true, sessionId: SANDBOX_SESSION_ID });
+      seedDigest: "a".repeat(64),
+      seedFiles: [{ contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" }],
+    })).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
     expect(stale.remove).toHaveBeenCalledWith({ force: true, v: true });
     expect(docker.createContainer).toHaveBeenCalledOnce();
     expect(replacement.start).toHaveBeenCalledOnce();
+    expect(replacement.putArchive).toHaveBeenCalledOnce();
   });
 
-  it("removes running and stopped orphan compute during idle reconciliation", async () => {
-    const removeRunning = vi.fn(async () => undefined);
-    const removeStopped = vi.fn(async () => undefined);
-    const docker = {
-      getContainer: vi.fn((id: string) => ({
-        remove: id === "running-orphan" ? removeRunning : removeStopped,
+  it("restarts a matching warm container without requesting or writing seeds", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
+    temporaryRoots.push(root);
+    const request = {
+      access: "restricted" as const,
+      eveSessionId: EVE_SESSION_ID,
+      mounts: [{ mountPoint: "group" as const, workspaceId: GROUP_WORKSPACE_ID }],
+      sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
+    };
+    const start = vi.fn(async () => undefined);
+    const existing = {
+      inspect: vi.fn(async () => ({
+        Config: {
+          Labels: {
+            "dev.osinara.sandbox.request-hash": sandboxRequestHash(request),
+            "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
+          },
+        },
+        State: { Running: false },
       })),
+      start,
+    };
+    const docker = {
+      createContainer: vi.fn(),
+      getContainer: vi.fn(() => existing),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: {
+        googleWorkspaceCredentialsRoot: `${root}/google-workspace-credentials`,
+        toolsRoot: `${root}/tools`,
+        workspaceRoot: `${root}/workspaces`,
+      },
+      runtime,
+    });
+
+    await expect(engine.createSession(request)).resolves.toEqual({
+      created: false,
+      seedRequired: false,
+      sessionId: SANDBOX_SESSION_ID,
+    });
+    expect(start).toHaveBeenCalledOnce();
+    expect(docker.createContainer).not.toHaveBeenCalled();
+  });
+
+  it("stops idle compute, retains a recent warm container, and removes an expired one", async () => {
+    const now = new Date("2026-07-30T20:00:00.000Z");
+    const stopRunning = vi.fn(async () => undefined);
+    const removeRecent = vi.fn(async () => undefined);
+    const removeExpired = vi.fn(async () => undefined);
+    const containers = {
+      "running-idle": { stop: stopRunning },
+      "stopped-recent": {
+        inspect: vi.fn(async () => ({ State: { FinishedAt: "2026-07-30T19:00:00.000Z", Running: false } })),
+        remove: removeRecent,
+      },
+      "stopped-expired": {
+        inspect: vi.fn(async () => ({ State: { FinishedAt: "2026-07-29T18:00:00.000Z", Running: false } })),
+        remove: removeExpired,
+      },
+    } as const;
+    const docker = {
+      getContainer: vi.fn((id: keyof typeof containers) => containers[id]),
       listContainers: vi.fn(async () => [
         {
-          Id: "running-orphan",
+          Id: "running-idle",
           Labels: { "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID },
           State: "running",
         },
         {
-          Id: "stopped-orphan",
+          Id: "stopped-recent",
           Labels: {
             "dev.osinara.sandbox.session-id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          },
+          State: "exited",
+        },
+        {
+          Id: "stopped-expired",
+          Labels: {
+            "dev.osinara.sandbox.session-id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
           },
           State: "exited",
         },
@@ -239,9 +312,10 @@ describe("buildSandboxContainerOptions", () => {
       runtime,
     });
 
-    await expect(engine.removeIdleSessions(new Date())).resolves.toBe(2);
-    expect(removeRunning).toHaveBeenCalledWith({ force: true, v: true });
-    expect(removeStopped).toHaveBeenCalledWith({ force: true, v: true });
+    await expect(engine.reconcileIdleSessions(now)).resolves.toEqual({ removed: 1, stopped: 1 });
+    expect(stopRunning).toHaveBeenCalledOnce();
+    expect(removeRecent).not.toHaveBeenCalled();
+    expect(removeExpired).toHaveBeenCalledWith({ force: true, v: true });
   });
 
   it("restarts idle compute before a filesystem mutation", async () => {

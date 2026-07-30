@@ -26,9 +26,11 @@ function callbackQuery(): TelegramCallbackQuery {
 
 function telegramContext() {
   const answerCallbackQuery = vi.fn().mockResolvedValue({ body: {}, ok: true, status: 200 });
+  const request = vi.fn().mockResolvedValue({ body: {}, ok: true, status: 200 });
   return {
     answerCallbackQuery,
-    context: { telegram: { answerCallbackQuery } } as unknown as TelegramContext,
+    context: { telegram: { answerCallbackQuery, request } } as unknown as TelegramContext,
+    request,
   };
 }
 
@@ -44,14 +46,21 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
       claimCallback: vi.fn().mockResolvedValue({
         auth,
         continuationToken: "-1001:55:88:osinara:2",
+        promptText: "Возобновить расписание «Утренний дайджест ИИ»?",
+        selectedOptionId: "approve",
+        selectedOptionLabel: "Да, подтвердить",
         status: "authorized",
       }),
     };
     const authorize = createTelegramHitlCallbackAuthorizer(repository);
-    const { context, answerCallbackQuery } = telegramContext();
+    const { context, answerCallbackQuery, request } = telegramContext();
 
     await expect(authorize(context, callbackQuery(), "-1001:55:88"))
-      .resolves.toEqual({ auth, continuationToken: "-1001:55:88:osinara:2" });
+      .resolves.toEqual({
+        acknowledgementText: "Решение сохранено",
+        auth,
+        continuationToken: "-1001:55:88:osinara:2",
+      });
     expect(repository.claimCallback).toHaveBeenCalledWith({
       baseContinuationToken: "-1001:55:88",
       callbackData: "eve:0",
@@ -60,6 +69,12 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
       telegramUserId: "101",
     });
     expect(answerCallbackQuery).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledWith("editMessageText", {
+      chat_id: "-1001",
+      message_id: 88,
+      reply_markup: { inline_keyboard: [] },
+      text: expect.stringContaining("Подтверждено"),
+    });
   });
 
   it.each([
@@ -76,6 +91,33 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
       callbackQueryId: "callback-1",
       showAlert: true,
       text: expect.stringContaining(code),
+    }));
+  });
+
+  it("replaces a denied prompt with an explicit rejection and no buttons", async () => {
+    const auth = {
+      attributes: { applicationSessionId: "session-1", role: "member" },
+      authenticator: "telegram",
+      principalId: "user-1",
+      principalType: "user" as const,
+    };
+    const authorize = createTelegramHitlCallbackAuthorizer({
+      claimCallback: vi.fn().mockResolvedValue({
+        auth,
+        continuationToken: "-1001:55:88:osinara:2",
+        promptText: "Удалить расписание «Утренний дайджест ИИ»?",
+        selectedOptionId: "deny",
+        selectedOptionLabel: "Нет, отклонить",
+        status: "authorized",
+      }),
+    });
+    const { context, request } = telegramContext();
+
+    await authorize(context, callbackQuery(), "-1001:55:88");
+
+    expect(request).toHaveBeenCalledWith("editMessageText", expect.objectContaining({
+      reply_markup: { inline_keyboard: [] },
+      text: expect.stringContaining("Отклонено"),
     }));
   });
 });

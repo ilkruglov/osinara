@@ -11,6 +11,7 @@ import type {
   SandboxRunnerRemovePathRequest,
   SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
+import type { SandboxReconciliationResult } from "./docker-sandbox-reconciliation.js";
 
 export interface SandboxEngine {
   createSession(request: SandboxRunnerCreateRequest): Promise<SandboxRunnerSessionResponse>;
@@ -23,7 +24,7 @@ export interface SandboxEngine {
     request: SandboxRunnerProcessRequest,
     signal?: AbortSignal,
   ): Promise<SandboxRunnerProcessResponse>;
-  removeIdleSessions(now: Date): Promise<number>;
+  reconcileIdleSessions(now: Date): Promise<SandboxReconciliationResult>;
   stopAllSessions(): Promise<void>;
   stopSession(sessionId: string): Promise<void>;
   writeFile(sessionId: string, path: string, content: Uint8Array): Promise<void>;

@@ -2,7 +2,8 @@
  * Eve sandbox backend to runner integration tests.
  *
  * Constructs covered:
- * - Delayed session creation until trusted mounts are known.
+ * - Lazy session creation only when the first sandbox operation actually runs.
+ * - One atomic seed bundle instead of per-file runner mutations.
  * - Stable thread-scoped compute identity across changing Eve workflow roots.
  * - Reconnect metadata recreates disposable compute without rerunning `onSession`.
  * - Automatic trusted/restricted classification from workspace scopes.
@@ -30,7 +31,8 @@ const servers: Array<ReturnType<typeof createSandboxRunnerServer>> = [];
 function fakeEngine(): SandboxEngine {
   return {
     createSession: vi.fn(async (request) => ({
-      created: true,
+      created: request.seedFiles !== undefined,
+      seedRequired: request.seedFiles === undefined,
       sessionId: request.sandboxSessionId,
     })),
     deleteToolEnvironment: vi.fn(async () => undefined),
@@ -44,7 +46,7 @@ function fakeEngine(): SandboxEngine {
       stdout: "ok\n",
     })),
     stopAllSessions: vi.fn(async () => undefined),
-    removeIdleSessions: vi.fn(async () => 0),
+    reconcileIdleSessions: vi.fn(async () => ({ removed: 0, stopped: 0 })),
     stopSession: vi.fn(async () => undefined),
     writeFile: vi.fn(async () => undefined),
   };
@@ -89,10 +91,12 @@ describe("scopedWorkspaceRunner", () => {
       mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
     });
+    expect(engine.createSession).not.toHaveBeenCalled();
     await expect(handle.session.run({ command: "printf ok" })).resolves.toMatchObject({
       exitCode: 0,
       stdout: "ok\n",
     });
+    expect(engine.writeFile).not.toHaveBeenCalled();
     await handle.session.writeTextFile({ path: "note.txt", content: "hello" });
     await expect(handle.session.readTextFile({ path: "note.txt" })).resolves.toBe("content");
 
@@ -101,12 +105,12 @@ describe("scopedWorkspaceRunner", () => {
       eveSessionId: SESSION_ID,
       mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      seedFiles: [{
+        contentBase64: Buffer.from("skill").toString("base64"),
+        path: "/tools/personal/home/.agents/skills/example/SKILL.md",
+      }],
     });
-    expect(engine.writeFile).toHaveBeenCalledWith(
-      SANDBOX_SESSION_ID,
-      "/tools/personal/home/.agents/skills/example/SKILL.md",
-      expect.any(Uint8Array),
-    );
     expect(handle.session.id).toBe(SANDBOX_SESSION_ID);
     await handle.shutdown();
     expect(engine.stopSession).toHaveBeenCalledWith(SANDBOX_SESSION_ID);
@@ -128,6 +132,7 @@ describe("scopedWorkspaceRunner", () => {
       sandboxSessionId: SANDBOX_SESSION_ID,
     });
 
+    await handle.session.run({ command: "true" });
     expect(engine.createSession).toHaveBeenCalledWith(expect.objectContaining({ access: "restricted" }));
     await expect(handle.session.setNetworkPolicy("allow-all")).rejects.toThrowError(
       /AGENT_SANDBOX_RUNNER_NETWORK_POLICY_FORBIDDEN/,
@@ -167,6 +172,8 @@ describe("scopedWorkspaceRunner", () => {
       eveSessionId: SESSION_ID,
       mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      seedFiles: [],
     });
     expect(engine.runProcess).toHaveBeenLastCalledWith(
       SANDBOX_SESSION_ID,

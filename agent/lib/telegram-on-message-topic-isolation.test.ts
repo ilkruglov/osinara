@@ -80,7 +80,7 @@ describe("Telegram group journal topic isolation", () => {
 
     const result = await handler(telegramContext().context, addressedThreadMessage());
 
-    expect(repository.journal.listRecent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
       messageThreadId: null,
     }));
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });
@@ -92,7 +92,7 @@ describe("Telegram group journal topic isolation", () => {
 
     const result = await handler(telegramContext().context, addressedThreadMessage(true));
 
-    expect(repository.journal.listRecent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
       messageThreadId: "310",
     }));
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });

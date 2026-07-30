@@ -34,8 +34,8 @@ describe("Telegram interface localization", () => {
 
     expect(request.prompt).toBe("Подтвердите действие: подключить Telegram-группу.");
     expect(request.options).toEqual([
-      { id: "approve", label: "Да, выполнить", style: "primary" },
-      { id: "deny", label: "Нет, отменить", style: "default" },
+      { id: "approve", label: "Да, подтвердить", style: "primary" },
+      { id: "deny", label: "Нет, отклонить", style: "default" },
     ]);
   });
 

@@ -78,6 +78,7 @@ export function createReminderDispatcher(dependencies: ReminderDispatcherDepende
       if (job.groupId) {
         // A timeline outage propagates for observability but cannot reclassify confirmed delivery.
         await dependencies.timeline.recordAgentResponse({
+          applicationSessionId: null,
           contentText: receipt.text,
           deliveredAt: completedAt,
           groupId: job.groupId,

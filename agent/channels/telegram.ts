@@ -26,6 +26,7 @@ import {
   rekeyTelegramSession,
 } from "../lib/sessions/session-context.js";
 import { sessionRepository } from "../lib/sessions/session-repository.js";
+import { groupTimelineCursorRepository } from "../lib/sessions/group-timeline-cursor-repository.js";
 import { authorizeTelegramHitlCallback } from "../lib/telegram-hitl/callback-authorization.js";
 import { handleTelegramInputRequested } from "../lib/telegram-hitl/input-request.js";
 import { telegramHitlApprovalRepository } from "../lib/telegram-hitl/approval-repository.js";
@@ -97,6 +98,7 @@ export default telegramChannel({
             : null);
         // The primary delivery receipt is durable before this secondary conversation projection.
         await telegramGroupJournalRepository.recordAgentResponse({
+          applicationSessionId: isScheduledSession(ctx) ? null : sessionId,
           contentText: message,
           deliveredAt: new Date(),
           groupId,
@@ -105,7 +107,9 @@ export default telegramChannel({
           telegramMessageIds: sentMessages.map((sent) => sent.messageId),
         });
       }
-      if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);
+      if (!isScheduledSession(ctx)) {
+        await rekeyTelegramSession(channel, ctx, sentMessages.map((sent) => sent.messageId));
+      }
     },
     async "session.failed"(data, channel) {
       await handleTelegramSessionFailure(data, channel, sessionRepository);
@@ -135,6 +139,17 @@ export default telegramChannel({
     async "turn.started"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
+      // A started turn already owns a durable workflow input, so its embedded timeline delta can
+      // advance the application cursor without losing context across a subsequent process crash.
+      const groupTimelineSequence =
+        ctx.session.auth.current?.attributes.telegramGroupTimelineSequence;
+      if (typeof groupTimelineSequence === "string") {
+        await groupTimelineCursorRepository.advance(
+          sessionId,
+          ctx.session.id,
+          groupTimelineSequence,
+        );
+      }
       const proactiveDeliveryCursor = ctx.session.auth.current?.attributes.proactiveDeliveryCursor;
       if (typeof proactiveDeliveryCursor === "string") {
         await proactiveDeliveryRepository.advanceSessionCursor(

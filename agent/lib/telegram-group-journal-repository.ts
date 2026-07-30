@@ -7,10 +7,14 @@
  * - `telegramGroupJournalRepository`: monotonic timeline with chunk aliases and retention.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
-import type { PoolClient } from "pg";
 
 import { TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES } from "../config.js";
 import { database } from "./database.js";
+import {
+  nextTelegramGroupSequence,
+  recordTelegramAgentResponse,
+  type RecordTelegramAgentResponseInput,
+} from "./telegram-agent-timeline-repository.js";
 import type {
   TelegramGroupAttachmentSummary,
   TelegramGroupJournalEntry,
@@ -26,8 +30,6 @@ import {
   telegramSenderDisplayName,
 } from "./telegram-group-message-storage.js";
 
-const AGENT_ACTOR_ID = "agent:osinara";
-const AGENT_DISPLAY_NAME = "Осинара";
 const HISTORY_MAX_LIMIT = 100;
 
 interface ListRecentInput {
@@ -55,19 +57,18 @@ export interface TimelineRecordResult {
   status: "duplicate" | "inserted";
 }
 
-interface RecordAgentResponseInput {
-  contentText: string;
-  deliveredAt: Date;
-  groupId: string;
-  messageThreadId: string | null;
-  replyToEntryId: string | null;
-  telegramMessageIds: readonly string[];
-}
-
 export interface TelegramGroupJournalRepository {
+  listIncremental(input: {
+    afterSequence: string;
+    applicationSessionId: string;
+    beforeSequence: string;
+    groupId: string;
+    limit: number;
+    messageThreadId: string | null;
+  }): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }>;
   listRecent(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]>;
   record(groupId: string, message: TelegramMessage): Promise<TimelineRecordResult>;
-  recordAgentResponse(input: RecordAgentResponseInput): Promise<{ entryId: string; sequenceId: string }>;
+  recordAgentResponse(input: RecordTelegramAgentResponseInput): Promise<{ entryId: string; sequenceId: string }>;
   search(input: TelegramGroupHistorySearchInput): Promise<{
     entries: TelegramGroupJournalEntry[];
     nextBeforeSequence: string | null;
@@ -94,6 +95,9 @@ interface TimelineRow {
   sequence_id: string;
   telegram_message_id: string;
   telegram_user_id: string | null;
+  selected_boundary?: string;
+  selected_count?: string;
+  total_count?: string;
 }
 
 const TIMELINE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
@@ -146,21 +150,6 @@ function validateList(input: ListRecentInput, maxLimit: number): void {
   if (input.messageThreadId !== null) requireTelegramPositiveBigint(input.messageThreadId, "message_thread_id");
 }
 
-async function nextSequence(client: PoolClient, groupId: string): Promise<string> {
-  const result = await client.query<{ sequence_id: string }>(
-    `UPDATE telegram_groups
-     SET next_timeline_sequence = greatest(
-       next_timeline_sequence,
-       coalesce((SELECT max(sequence_id) FROM telegram_group_messages WHERE group_id = $1), 0)
-     ) + 1
-     WHERE id = $1 RETURNING next_timeline_sequence::text AS sequence_id`,
-    [groupId],
-  );
-  const sequence = result.rows[0]?.sequence_id;
-  if (!sequence) throw new Error("AGENT_TELEGRAM_GROUP_NOT_FOUND: Группа не зарегистрирована");
-  return sequence;
-}
-
 async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]> {
   validateList(input, TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES);
   // Recursive ancestors are bounded to two trusted reply edges and may cross the recent window.
@@ -179,9 +168,11 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
        UNION
        SELECT parent.id, ancestry.depth + 1
        FROM ancestry
-       JOIN telegram_group_messages child ON child.id = ancestry.id
-       JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
-       WHERE ancestry.depth < 2 AND parent.group_id = $1
+        JOIN telegram_group_messages child ON child.id = ancestry.id
+        JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
+        WHERE ancestry.depth < 2
+          AND parent.group_id = $1
+          AND parent.message_thread_id IS NOT DISTINCT FROM $2::bigint
      )
      SELECT ${TIMELINE_COLUMNS}
      FROM telegram_group_messages message
@@ -194,6 +185,62 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
 }
 
 export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
+  async listIncremental(input) {
+    validateList({
+      anchorEntryId: null,
+      beforeSequence: input.beforeSequence,
+      groupId: input.groupId,
+      limit: input.limit,
+      messageThreadId: input.messageThreadId,
+    }, TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES);
+    requireTelegramPositiveBigint(input.afterSequence, "after_sequence");
+    if (BigInt(input.afterSequence) >= BigInt(input.beforeSequence)) {
+      throw new Error(
+        "AGENT_TELEGRAM_TIMELINE_RANGE_INVALID: Начало диапазона истории должно предшествовать его окончанию",
+      );
+    }
+    const result = await database().query<TimelineRow>(
+      `WITH RECURSIVE eligible AS (
+         SELECT message.id, message.sequence_id, count(*) OVER () AS total_count
+           FROM telegram_group_messages message
+          WHERE message.group_id = $1
+            AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
+            AND message.sequence_id > $3::bigint
+            AND message.sequence_id < $4::bigint
+            AND message.application_session_id IS DISTINCT FROM $5::uuid
+          ORDER BY message.sequence_id DESC
+          LIMIT $6
+       ), ancestry(id, depth) AS (
+         SELECT id, 0 FROM eligible
+         UNION
+         SELECT parent.id, ancestry.depth + 1
+           FROM ancestry
+           JOIN telegram_group_messages child ON child.id = ancestry.id
+           JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
+          WHERE ancestry.depth < 2
+            AND parent.group_id = $1
+            AND parent.message_thread_id IS NOT DISTINCT FROM $2::bigint
+       )
+       SELECT ${TIMELINE_COLUMNS},
+              (SELECT max(total_count)::text FROM eligible) AS total_count,
+              (SELECT count(*)::text FROM eligible) AS selected_count,
+              (SELECT min(sequence_id)::text FROM eligible) AS selected_boundary
+         FROM telegram_group_messages message
+        WHERE message.id IN (SELECT id FROM ancestry)
+        ORDER BY message.sequence_id`,
+      [input.groupId, input.messageThreadId, input.afterSequence, input.beforeSequence,
+        input.applicationSessionId, input.limit],
+    );
+    const totalCount = Number(result.rows[0]?.total_count ?? 0);
+    const selectedCount = Number(result.rows[0]?.selected_count ?? 0);
+    return {
+      entries: result.rows.map(project),
+      omittedBeforeSequence: totalCount > selectedCount
+        ? result.rows[0]?.selected_boundary ?? input.beforeSequence
+        : null,
+    };
+  },
+
   async record(groupId, message) {
     const messageId = requireTelegramPositiveBigint(message.messageId, "message_id");
     const sender = message.from;
@@ -220,7 +267,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
           status: "duplicate",
         };
       }
-      const sequenceId = await nextSequence(client, groupId);
+      const sequenceId = await nextTelegramGroupSequence(client, groupId);
       const replyId = message.replyToMessage
         ? requireTelegramPositiveBigint(message.replyToMessage.messageId, "reply_to_message_id")
         : null;
@@ -271,45 +318,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
     }
   },
 
-  async recordAgentResponse(input) {
-    if (!input.contentText.trim() || input.telegramMessageIds.length === 0) {
-      throw new Error("AGENT_TELEGRAM_TIMELINE_DELIVERY_INVALID: Нет подтверждённого финального ответа для истории");
-    }
-    const messageIds = input.telegramMessageIds.map((id) => requireTelegramPositiveBigint(id, "message_id"));
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      await lockTelegramGroupJournal(client, input.groupId);
-      const sequenceId = await nextSequence(client, input.groupId);
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO telegram_group_messages
-           (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
-            message_thread_id, sender_display_name, sender_is_bot, message_kind,
-            content_text, reply_to_entry_id, reply_to_sequence_id, sent_at)
-          VALUES ($1, $2, 'agent_self', $3, $4, $5, $6, true, 'text', $7,
-                  (SELECT id FROM telegram_group_messages WHERE id = $8 AND group_id = $1),
-                  (SELECT sequence_id FROM telegram_group_messages WHERE id = $8 AND group_id = $1),
-                  $9)
-         RETURNING id`,
-        [input.groupId, sequenceId, AGENT_ACTOR_ID, messageIds[0], input.messageThreadId,
-          AGENT_DISPLAY_NAME, input.contentText, input.replyToEntryId, input.deliveredAt],
-      );
-      const entryId = inserted.rows[0]!.id;
-      await client.query(
-        `INSERT INTO telegram_group_message_ids (group_id, telegram_message_id, entry_id)
-         SELECT $1, unnest($2::bigint[]), $3`,
-        [input.groupId, messageIds, entryId],
-      );
-      await pruneTelegramGroupJournal(client, input.groupId);
-      await client.query("COMMIT");
-      return { entryId, sequenceId };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
+  recordAgentResponse: recordTelegramAgentResponse,
 
   listRecent: listRows,
 
