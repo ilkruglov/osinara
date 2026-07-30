@@ -342,9 +342,10 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         await ctx.telegram.sendMessage(error);
         return null;
       }
-      // Only a non-HITL timeline reply without a live Eve route may become a fresh message turn.
-      if (replyAuthorization === "not_applicable" && trustedAgentReply && !hasResumableReplyRoute) {
-        verifiedReplyRoute = exactReplyRoute;
+      // DB authorization, not a pre-rotation route snapshot, decides whether this is synthetic HITL.
+      const ordinaryAgentReply = trustedAgentReply || message.chat.type === "private";
+      if (replyAuthorization === "not_applicable" && ordinaryAgentReply) {
+        if (!hasResumableReplyRoute) verifiedReplyRoute = exactReplyRoute;
         replyHandling = "message";
       }
     }
