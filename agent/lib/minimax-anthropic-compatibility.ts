@@ -80,17 +80,33 @@ function replayableWebSearchIds(content: readonly unknown[]): ReadonlySet<string
   const resultIds = new Set<string>();
   for (const value of content) {
     const block = record(value);
-    if (
-      block?.type === "server_tool_use" && block.name === "web_search" &&
-      typeof block.id === "string"
-    ) {
+    if (block?.type === "server_tool_use" && block.name === "web_search") {
+      if (typeof block.id !== "string") {
+        throw new AppError(
+          "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
+          "История веб-поиска MiniMax содержит вызов без идентификатора",
+        );
+      }
       callIds.add(block.id);
     }
-    if (block?.type === WEB_SEARCH_TOOL_RESULT_TYPE && typeof block.tool_use_id === "string") {
+    if (block?.type === WEB_SEARCH_TOOL_RESULT_TYPE) {
+      if (typeof block.tool_use_id !== "string") {
+        throw new AppError(
+          "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
+          "История веб-поиска MiniMax содержит результат без идентификатора вызова",
+        );
+      }
       resultIds.add(block.tool_use_id);
     }
   }
-  return new Set([...callIds].filter((id) => resultIds.has(id)));
+  const replayIds = new Set([...callIds].filter((id) => resultIds.has(id)));
+  if (callIds.size !== replayIds.size || resultIds.size !== replayIds.size) {
+    throw new AppError(
+      "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
+      "История веб-поиска MiniMax содержит непарный вызов или результат",
+    );
+  }
+  return replayIds;
 }
 
 function serializeReplayToolResult(content: unknown): string {
@@ -170,7 +186,10 @@ function appendOutgoingMessage(
   ) {
     // A result at the end of an assistant turn and the next user prompt form one Anthropic user
     // message, with tool_result first as required by the wire protocol.
-    previous.content = [...previous.content, ...message.content];
+    messages[messages.length - 1] = {
+      ...previous,
+      content: [...previous.content, ...message.content],
+    };
     return;
   }
   messages.push(message);

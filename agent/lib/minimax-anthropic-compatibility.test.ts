@@ -178,6 +178,31 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
     });
   });
 
+  it("rejects incomplete native web-search history before calling MiniMax", async () => {
+    const upstream = vi.fn();
+    const fetch = createMiniMaxAnthropicCompatibilityFetch(upstream as FetchFunction);
+
+    await expect(fetch("https://api.minimax.io/anthropic/v1/messages", {
+      body: JSON.stringify({
+        messages: [{
+          content: [{
+            content: [{
+              encrypted_content: RESULT.content,
+              title: RESULT.title,
+              type: RESULT.type,
+              url: RESULT.url,
+            }],
+            tool_use_id: "call-search-without-call",
+            type: "web_search_tool_result",
+          }],
+          role: "assistant",
+        }],
+      }),
+      method: "POST",
+    })).rejects.toThrow("AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID");
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
   it("normalizes non-streaming MiniMax message content", async () => {
     const fetch = createMiniMaxAnthropicCompatibilityFetch(vi.fn(async () =>
       new Response(JSON.stringify({
