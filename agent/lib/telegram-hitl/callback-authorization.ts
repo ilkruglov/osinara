@@ -8,9 +8,10 @@
 import type {
   TelegramCallbackQuery,
   TelegramContext,
-  TelegramInboundResult,
+  TelegramHitlCallbackResult,
 } from "eve/channels/telegram";
 
+import { AppError } from "../app-error.js";
 import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
@@ -22,6 +23,24 @@ const CALLBACK_ERRORS = {
   forbidden:
     "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил.",
 } as const;
+const TELEGRAM_MESSAGE_MAX_CHARACTERS = 4_096;
+
+function resolvedApprovalText(result: {
+  promptText: string;
+  selectedOptionId: string;
+  selectedOptionLabel: string;
+}): string {
+  const resolution = result.selectedOptionId === "approve"
+    ? "Решение: Подтверждено.\nДействие передано на выполнение."
+    : result.selectedOptionId === "deny"
+    ? "Решение: Отклонено.\nДействие не будет выполнено."
+    : `Выбран ответ: ${result.selectedOptionLabel}`;
+  const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
+  const prompt = result.promptText.length <= promptLimit
+    ? result.promptText
+    : `${result.promptText.slice(0, promptLimit - 1).trimEnd()}…`;
+  return `${prompt}\n\n${resolution}`;
+}
 
 export function createTelegramHitlCallbackAuthorizer(
   repository: Pick<TelegramHitlApprovalRepository, "claimCallback">,
@@ -30,7 +49,7 @@ export function createTelegramHitlCallbackAuthorizer(
     ctx: TelegramContext,
     query: TelegramCallbackQuery,
     continuationToken: string,
-  ): Promise<TelegramInboundResult> {
+  ): Promise<TelegramHitlCallbackResult> {
     const message = query.message;
     const callbackData = query.data;
     if (!message || !callbackData) {
@@ -51,7 +70,24 @@ export function createTelegramHitlCallbackAuthorizer(
       telegramUserId: query.from.id,
     });
     if (result.status === "authorized") {
-      return { auth: result.auth, continuationToken: result.continuationToken };
+      // Replace the exact claimed prompt before Eve resumes; an empty keyboard removes stale buttons.
+      const edited = await ctx.telegram.request("editMessageText", {
+        chat_id: message.chat.id,
+        message_id: Number(message.messageId),
+        reply_markup: { inline_keyboard: [] },
+        text: resolvedApprovalText(result),
+      });
+      if (!edited.ok) {
+        throw new AppError(
+          "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
+          "Telegram не обновил сообщение с выбранным решением. Повторите действие",
+        );
+      }
+      return {
+        acknowledgementText: "Решение сохранено",
+        auth: result.auth,
+        continuationToken: result.continuationToken,
+      };
     }
 
     await ctx.telegram.answerCallbackQuery({

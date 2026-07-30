@@ -5,6 +5,7 @@
  * - `onVerifiedUpdate`: runs only after webhook verification and parsing.
  * - Patched native dispatch: returns the Eve session and accepts application continuation/auth.
  * - `replyHandling: "message"`: suppresses only preliminary Telegram HITL reply synthesis.
+ * - Application-authored durable message overrides replace only the model-visible inbound text.
  * - Patch installation remains safe when lifecycle scripts invoke it repeatedly.
  */
 import { execFile } from "node:child_process";
@@ -46,15 +47,63 @@ describe("Eve Telegram verified ingress patch", () => {
       "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
       "utf8",
     );
-    const valid: TelegramInboundResult = { auth: null, replyHandling: "message" };
+    const valid: TelegramInboundResult = {
+      auth: null,
+      message: "durable group context\n\ncurrent message",
+      replyHandling: "message",
+    };
+    const callbackResult = {
+      acknowledgementText: "Решение сохранено",
+      auth: null,
+      continuationToken: "101::",
+    } satisfies import("eve/channels/telegram").TelegramHitlCallbackResult;
     // @ts-expect-error The pinned seam deliberately permits no other handling modes.
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
     expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.22.5";');
     expect(runtime.match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
+    expect(runtime.match(/i\.acknowledgementText\?\?`Answer received\.`/g)).toHaveLength(1);
+    expect(runtime.match(/message:r\.message\?\?a/g)).toHaveLength(1);
+    expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
     expect(valid).toMatchObject({ replyHandling: "message" });
     expect(invalid).toBeDefined();
+    expect(callbackResult.acknowledgementText).toBe("Решение сохранено");
+  });
+
+  it("sends an application-authored durable message override", async () => {
+    const send = vi.fn().mockResolvedValue({ id: "session-context" });
+    const channel = telegramChannel({
+      credentials: { webhookSecretToken: "webhook-secret" },
+      onMessage: async () => ({ auth: null, message: "durable context\n\nПривет" }),
+    });
+    const route = channel.routes[0] as unknown as HttpRoute;
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
+      body: JSON.stringify({
+        message: {
+          chat: { id: 101, type: "private" },
+          date: 1_700_000_000,
+          from: { first_name: "Анна", id: 101, is_bot: false },
+          message_id: 78,
+          text: "Привет",
+        },
+        update_id: 1007,
+      }),
+      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+      method: "POST",
+    }), {
+      params: {},
+      requestIp: null,
+      send,
+      waitUntil(task: Promise<unknown>) {
+        backgroundTask = task;
+      },
+    });
+    await backgroundTask;
+
+    expect(send.mock.calls[0]?.[0]?.message).toBe("durable context\n\nПривет");
   });
 
   it("fails fast when the pinned Telegram runtime artifact does not match", async () => {
@@ -81,7 +130,7 @@ describe("Eve Telegram verified ingress patch", () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
-  });
+  }, 15_000);
 
   it("propagates input.requested handler failures instead of parking an unbound approval", async () => {
     const error = new Error("AGENT_APPROVAL_STORAGE_FAILED");

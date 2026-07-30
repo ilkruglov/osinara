@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `applicationSessionId`: reads the application-owned ID from persisted verified auth.
+ * - `registerTelegramMessageRoutes`: binds every delivered group message to one app session.
  * - `rekeyTelegramSession`: records the current Telegram anchor and re-keys Eve atomically.
  * - `sandboxSessionId`: reads the stable conversation-thread ID for disposable compute.
  */
@@ -56,6 +57,7 @@ function telegramMessageThreadId(
 export async function rekeyTelegramSession(
   channel: TelegramEventContext,
   ctx: Pick<SessionContext, "session">,
+  deliveredMessageIds: readonly string[] = [],
 ): Promise<void> {
   const state = channel.state;
   if (!state.chatId) {
@@ -64,14 +66,46 @@ export async function rekeyTelegramSession(
 
   // The Telegram adapter can change the group anchor after every outbound message.
   const messageThreadId = telegramMessageThreadId(state.messageThreadId, ctx);
-  const baseToken = telegramContinuationToken({
-    chatId: state.chatId,
-    ...(state.chatType === "private" || state.conversationId === null
-      ? {}
-      : { conversationId: state.conversationId }),
-    ...(messageThreadId === undefined ? {} : { messageThreadId }),
-  });
   const sessionId = applicationSessionId(ctx);
-  const token = await sessionRepository.registerRoute(sessionId, baseToken);
+  const conversationIds = state.chatType !== "private" && deliveredMessageIds.length > 0
+    ? deliveredMessageIds
+    : [state.conversationId];
+  let token: string | null = null;
+  for (const conversationId of conversationIds) {
+    const baseToken = telegramContinuationToken({
+      chatId: state.chatId,
+      ...(state.chatType === "private" || conversationId === null
+        ? {}
+        : { conversationId }),
+      ...(messageThreadId === undefined ? {} : { messageThreadId }),
+    });
+    token = await sessionRepository.registerRoute(sessionId, baseToken);
+  }
+  if (token === null) {
+    throw new AppError("AGENT_SESSION_ROUTE_INVALID", "Не удалось сохранить маршрут Telegram");
+  }
   channel.setContinuationToken(token);
+}
+
+export async function registerTelegramMessageRoutes(input: {
+  applicationSessionId: string;
+  chatId: string;
+  messageIds: readonly string[];
+  messageThreadId?: number;
+}): Promise<void> {
+  // Tool deliveries bypass channel state, so each confirmed Telegram ID receives an explicit alias.
+  for (const conversationId of input.messageIds) {
+    if (!/^[1-9][0-9]*$/u.test(conversationId)) {
+      throw new AppError(
+        "AGENT_SESSION_ROUTE_INVALID",
+        "Telegram вернул некорректный идентификатор доставленного сообщения",
+      );
+    }
+    const baseToken = telegramContinuationToken({
+      chatId: input.chatId,
+      conversationId,
+      ...(input.messageThreadId === undefined ? {} : { messageThreadId: input.messageThreadId }),
+    });
+    await sessionRepository.registerRouteAlias(input.applicationSessionId, baseToken);
+  }
 }

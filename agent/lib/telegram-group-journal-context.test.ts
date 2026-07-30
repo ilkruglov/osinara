@@ -64,8 +64,12 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(newestOnly).not.toBeNull();
     if (!newestOnly) throw new Error("Test expected journal context");
     const context = formatTelegramGroupJournalContext(
-      [entry("1", "старая-1"), entry("2", "старая-2"), entry("3", "новая")],
-      newestOnly.length + 1,
+      [
+        entry("1", "старая-1".repeat(100)),
+        entry("2", "старая-2".repeat(100)),
+        entry("3", "новая"),
+      ],
+      newestOnly.length + 150,
     );
     expect(context).not.toBeNull();
     if (!context) throw new Error("Test expected journal context");
@@ -73,7 +77,9 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(context).not.toContain("старая-1");
     expect(context).not.toContain("старая-2");
     expect(context).toContain("новая");
-    expect(context.length).toBeLessThanOrEqual(newestOnly.length + 1);
+    expect(context).toContain("пропущена");
+    expect(context).toContain("list_group_history");
+    expect(context.length).toBeLessThanOrEqual(newestOnly.length + 150);
   });
 
   it("returns null when there are no messages within the budget", () => {

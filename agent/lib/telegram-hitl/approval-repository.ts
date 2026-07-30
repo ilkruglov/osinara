@@ -10,17 +10,24 @@ import type { SessionAuthContext } from "eve/context";
 import type { PoolClient } from "pg";
 
 import { database } from "../database.js";
+import {
+  resolveCurrentApprovalAuth,
+  type ApprovalAuthRow,
+} from "./approval-auth.js";
 
 type TelegramChatType = "group" | "private" | "supergroup";
-type MemoryScope = "family" | "group" | "personal";
-type FamilyRole = "member" | "owner" | "recovery_owner";
-type GroupType = "external_private" | "external_public" | "family_private";
 
 export interface RegisterTelegramHitlApprovalInput {
   applicationSessionId: string;
   callbackData: readonly string[];
+  callbackOptions: readonly {
+    callbackData: string;
+    label: string;
+    optionId: string;
+  }[];
   eveSessionId: string;
   requestId: string;
+  promptText: string;
   telegramChatId: string;
   telegramChatType: TelegramChatType;
   telegramMessageId: string;
@@ -44,7 +51,14 @@ export interface AuthorizeTelegramHitlReplyInput {
 }
 
 export type TelegramHitlCallbackClaim =
-  | { auth: SessionAuthContext; continuationToken: string; status: "authorized" }
+  | {
+      auth: SessionAuthContext;
+      continuationToken: string;
+      promptText: string;
+      selectedOptionId: string;
+      selectedOptionLabel: string;
+      status: "authorized";
+    }
   | { status: "expired" | "forbidden" };
 export type TelegramHitlReplyAuthorization =
   "authorized" | "expired" | "forbidden" | "not_applicable";
@@ -57,38 +71,16 @@ export interface TelegramHitlApprovalRepository {
   register(input: RegisterTelegramHitlApprovalInput): Promise<void>;
 }
 
-interface ApprovalRow {
+interface ApprovalRow extends ApprovalAuthRow {
   id: string;
-  application_session_id: string;
   callback_data: string[];
+  callback_options: unknown;
   consumed_at: Date | null;
   continuation_token: string;
-  eve_session_id: string;
-  expected_telegram_user_id: string;
-  family_id: string;
-  group_id: string | null;
-  owner_user_id: string | null;
   pending_operation: boolean;
+  prompt_text: string | null;
   retired_at: Date | null;
   session_eve_session_id: string | null;
-  scope: MemoryScope;
-  telegram_chat_id: string;
-  telegram_chat_type: TelegramChatType;
-  telegram_message_id: string;
-  telegram_message_thread_id: string | null;
-}
-
-interface IdentityRow {
-  family_id: string;
-  role: FamilyRole;
-  user_id: string;
-}
-
-interface GroupRow {
-  family_id: string;
-  id: string;
-  tool_allowlist: string[];
-  type: GroupType;
 }
 
 async function lockApproval(
@@ -99,10 +91,12 @@ async function lockApproval(
   const result = await client.query<ApprovalRow>(
     `SELECT a.application_session_id,
             a.callback_data,
+            a.callback_options,
             a.consumed_at,
             a.eve_session_id,
             a.expected_telegram_user_id,
             a.id,
+            a.prompt_text,
             a.telegram_chat_id,
             a.telegram_chat_type,
             a.telegram_message_id::text,
@@ -132,91 +126,21 @@ function isPendingApproval(row: ApprovalRow): boolean {
     row.session_eve_session_id === row.eve_session_id;
 }
 
-async function findIdentity(
-  client: PoolClient,
-  telegramUserId: string,
-  familyId: string,
-): Promise<IdentityRow | null> {
-  const result = await client.query<IdentityRow>(
-    `SELECT fm.family_id, fm.role, fm.user_id
-       FROM users u
-       JOIN family_memberships fm ON fm.user_id = u.id
-      WHERE u.telegram_user_id = $1
-        AND fm.family_id = $2`,
-    [telegramUserId, familyId],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function currentCallbackAuth(
-  client: PoolClient,
+function selectedCallbackOption(
   row: ApprovalRow,
-): Promise<SessionAuthContext | null> {
-  const identity = await findIdentity(client, row.expected_telegram_user_id, row.family_id);
-  let group: GroupRow | null = null;
-  let memoryScopes: MemoryScope[];
-  let role: FamilyRole | "external";
-  let userId: string | null;
-
-  // Personal approvals remain bound to the active owner and family membership of the session.
-  if (row.scope === "personal") {
+  callbackData: string,
+): { label: string; optionId: string } | null {
+  if (!Array.isArray(row.callback_options)) return null;
+  for (const option of row.callback_options) {
+    if (!option || typeof option !== "object" || Array.isArray(option)) continue;
+    const value = option as Record<string, unknown>;
     if (
-      !identity ||
-      identity.user_id !== row.owner_user_id ||
-      identity.family_id !== row.family_id ||
-      row.telegram_chat_type !== "private"
-    ) return null;
-    memoryScopes = ["personal", "family"];
-    role = identity.role;
-    userId = identity.user_id;
-  } else {
-    const groupResult = await client.query<GroupRow>(
-      `SELECT id, family_id, type, tool_allowlist
-         FROM telegram_groups
-        WHERE id = $1 AND telegram_chat_id = $2`,
-      [row.group_id, row.telegram_chat_id],
-    );
-    group = groupResult.rows[0] ?? null;
-    if (!group || group.family_id !== row.family_id || row.telegram_chat_type === "private") return null;
-
-    // Family groups require current membership; external groups retain identity only for owners.
-    const familyIdentity = identity?.family_id === group.family_id ? identity : null;
-    if (group.type === "family_private") {
-      if (!familyIdentity || row.scope !== "family") return null;
-      memoryScopes = ["family"];
-      role = familyIdentity.role;
-      userId = familyIdentity.user_id;
-    } else {
-      if (row.scope !== "group") return null;
-      memoryScopes = ["group"];
-      role = familyIdentity?.role ?? "external";
-      userId = familyIdentity?.user_id ?? null;
-    }
+      value.callbackData === callbackData &&
+      typeof value.label === "string" && value.label &&
+      typeof value.optionId === "string" && value.optionId
+    ) return { label: value.label, optionId: value.optionId };
   }
-
-  // Only freshly read database policy enters the resumed Eve turn.
-  return {
-    attributes: {
-      applicationSessionId: row.application_session_id,
-      familyId: row.family_id,
-      memoryScopes,
-      role,
-      telegramChatId: row.telegram_chat_id,
-      telegramChatType: row.telegram_chat_type,
-      telegramMessageId: row.telegram_message_id,
-      ...(row.telegram_message_thread_id === null
-        ? {}
-        : { telegramMessageThreadId: row.telegram_message_thread_id }),
-      telegramUserId: row.expected_telegram_user_id,
-      ...(group ? { groupId: group.id, groupType: group.type } : {}),
-      ...(group && group.type !== "family_private"
-        ? { toolAllowlist: group.tool_allowlist }
-        : {}),
-    },
-    authenticator: "telegram",
-    principalId: userId ?? `telegram:${row.expected_telegram_user_id}`,
-    principalType: "user",
-  };
+  return null;
 }
 
 async function routeBelongsToSession(
@@ -259,17 +183,22 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
     await database().query(
       `INSERT INTO telegram_hitl_approvals
          (application_session_id, eve_session_id, request_id,
-          telegram_chat_id, telegram_chat_type, telegram_message_id,
-          telegram_message_thread_id, expected_telegram_user_id, callback_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           telegram_chat_id, telegram_chat_type, telegram_message_id,
+           telegram_message_thread_id, expected_telegram_user_id, callback_data,
+           prompt_text, callback_options)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (application_session_id, eve_session_id, request_id) DO UPDATE
          SET telegram_chat_id = EXCLUDED.telegram_chat_id,
              telegram_chat_type = EXCLUDED.telegram_chat_type,
              telegram_message_id = EXCLUDED.telegram_message_id,
              telegram_message_thread_id = EXCLUDED.telegram_message_thread_id,
-             expected_telegram_user_id = EXCLUDED.expected_telegram_user_id,
-             callback_data = EXCLUDED.callback_data,
-             consumed_at = NULL`,
+              expected_telegram_user_id = EXCLUDED.expected_telegram_user_id,
+              callback_data = EXCLUDED.callback_data,
+              prompt_text = EXCLUDED.prompt_text,
+              callback_options = EXCLUDED.callback_options,
+              selected_option_id = NULL,
+              selected_option_label = NULL,
+              consumed_at = NULL`,
       [
         input.applicationSessionId,
         input.eveSessionId,
@@ -280,6 +209,8 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         input.telegramMessageThreadId,
         input.telegramUserId,
         input.callbackData,
+        input.promptText,
+        JSON.stringify(input.callbackOptions),
       ],
     );
   },
@@ -289,10 +220,13 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
     try {
       await client.query("BEGIN");
       const row = await lockApproval(client, input.telegramChatId, input.telegramMessageId);
+      const selectedOption = row ? selectedCallbackOption(row, input.callbackData) : null;
       if (
         !row ||
         !isPendingApproval(row) ||
-        !row.callback_data.includes(input.callbackData)
+        !row.callback_data.includes(input.callbackData) ||
+        !selectedOption ||
+        !row.prompt_text
       ) {
         await client.query("ROLLBACK");
         return { status: "expired" };
@@ -309,23 +243,30 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }
-      const auth = await currentCallbackAuth(client, row);
+      const auth = await resolveCurrentApprovalAuth(client, row);
       if (!auth) {
         await client.query("ROLLBACK");
         return { status: "forbidden" };
       }
       const consumed = await client.query(
         `UPDATE telegram_hitl_approvals
-            SET consumed_at = now()
+            SET consumed_at = now(), selected_option_id = $2, selected_option_label = $3
           WHERE id = $1 AND consumed_at IS NULL`,
-        [row.id],
+        [row.id, selectedOption.optionId, selectedOption.label],
       );
       if (consumed.rowCount !== 1) {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }
       await client.query("COMMIT");
-      return { auth, continuationToken: row.continuation_token, status: "authorized" };
+      return {
+        auth,
+        continuationToken: row.continuation_token,
+        promptText: row.prompt_text,
+        selectedOptionId: selectedOption.optionId,
+        selectedOptionLabel: selectedOption.label,
+        status: "authorized",
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

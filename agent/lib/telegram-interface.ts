@@ -179,9 +179,9 @@ export function localizeTelegramInputRequest<T extends TelegramInputRequest>(req
     ...option,
     label:
       option.id === "approve"
-        ? "Да, выполнить"
+        ? "Да, подтвердить"
         : option.id === "deny"
-          ? "Нет, отменить"
+          ? "Нет, отклонить"
           : option.label,
   }));
   const actionLabel = approvalActionLabel(request.action.toolName, request.action.input);

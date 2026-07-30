@@ -56,8 +56,13 @@ async function fixture() {
   await telegramHitlApprovalRepository.register({
     applicationSessionId: session.id,
     callbackData: ["eve:0", "eve:1"],
+    callbackOptions: [
+      { callbackData: "eve:0", label: "Да, подтвердить", optionId: "approve" },
+      { callbackData: "eve:1", label: "Нет, отклонить", optionId: "deny" },
+    ],
     eveSessionId: "wrun_hitl",
     requestId: "approval-request-1",
+    promptText: "Подтвердите тестовое действие",
     telegramChatId: "-1001",
     telegramChatType: "supergroup",
     telegramMessageId: "88",
@@ -107,6 +112,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
         principalId: current.ownerId,
         principalType: "user",
       },
+      promptText: "Подтвердите тестовое действие",
+      selectedOptionId: "approve",
+      selectedOptionLabel: "Да, подтвердить",
       status: "authorized",
     });
   });
@@ -122,7 +130,11 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     };
 
     await expect(telegramHitlApprovalRepository.claimCallback(input))
-      .resolves.toMatchObject({ status: "authorized" });
+      .resolves.toMatchObject({
+        selectedOptionId: "deny",
+        selectedOptionLabel: "Нет, отклонить",
+        status: "authorized",
+      });
     await expect(telegramHitlApprovalRepository.claimCallback(input))
       .resolves.toEqual({ status: "expired" });
   });
@@ -158,8 +170,13 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     await telegramHitlApprovalRepository.register({
       applicationSessionId: current.sessionId,
       callbackData: ["eve:2", "eve:3"],
+      callbackOptions: [
+        { callbackData: "eve:2", label: "Да, подтвердить", optionId: "approve" },
+        { callbackData: "eve:3", label: "Нет, отклонить", optionId: "deny" },
+      ],
       eveSessionId: "wrun_hitl",
       requestId: "approval-request-2",
+      promptText: "Подтвердите второе действие",
       telegramChatId: "-1001",
       telegramChatType: "supergroup",
       telegramMessageId: "89",
@@ -188,8 +205,12 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     await telegramHitlApprovalRepository.register({
       applicationSessionId: current.sessionId,
       callbackData: ["eve:2"],
+      callbackOptions: [
+        { callbackData: "eve:2", label: "Да, подтвердить", optionId: "approve" },
+      ],
       eveSessionId: "wrun_hitl_new",
       requestId: "approval-request-new-root",
+      promptText: "Подтвердите действие нового запуска",
       telegramChatId: "-1001",
       telegramChatType: "supergroup",
       telegramMessageId: "90",

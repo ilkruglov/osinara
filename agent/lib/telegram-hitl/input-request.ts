@@ -13,7 +13,6 @@ import {
 import type { SessionContext } from "eve/context";
 
 import {
-  localizeTelegramInputRequest,
   localizeTelegramReplyMarkup,
   type TelegramInputRequest,
 } from "../telegram-interface.js";
@@ -26,6 +25,10 @@ import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
 } from "./approval-repository.js";
+import {
+  presentTelegramApproval,
+  type TelegramApprovalPresenter,
+} from "./approval-presentation.js";
 
 interface InputRequestedData {
   requests: readonly TelegramInputRequest[];
@@ -34,6 +37,7 @@ interface InputRequestedData {
 interface InputRequestDependencies {
   approvals: Pick<TelegramHitlApprovalRepository, "register">;
   markPendingOperation(id: string, pending: boolean): Promise<void>;
+  present: TelegramApprovalPresenter;
   rekey(channel: TelegramEventContext, ctx: Pick<SessionContext, "session">): Promise<void>;
 }
 
@@ -79,6 +83,24 @@ function callbackData(replyMarkup: Readonly<Record<string, unknown>> | undefined
   });
 }
 
+function callbackOptions(
+  request: TelegramInputRequest,
+  callbacks: readonly string[],
+): Array<{ callbackData: string; label: string; optionId: string }> {
+  const options = request.options ?? [];
+  if (callbacks.length !== options.length) {
+    throw new AppError(
+      "AGENT_APPROVAL_MARKUP_INVALID",
+      "Не удалось связать кнопки с вариантами подтверждения",
+    );
+  }
+  return options.map((option, index) => ({
+    callbackData: callbacks[index]!,
+    label: option.label,
+    optionId: option.id,
+  }));
+}
+
 export function createTelegramInputRequestHandler(dependencies: InputRequestDependencies) {
   return async function handleInputRequested(
     data: InputRequestedData,
@@ -104,10 +126,11 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
 
     await dependencies.markPendingOperation(appSessionId, true);
     for (const request of data.requests) {
-      const localizedRequest = localizeTelegramInputRequest(request);
+      const localizedRequest = await dependencies.present(request, ctx);
       const rendered = renderTelegramInputRequest(localizedRequest, channel.state);
       const replyMarkup = localizeTelegramReplyMarkup(rendered.replyMarkup);
       const callbacks = callbackData(replyMarkup);
+      const options = callbackOptions(localizedRequest, callbacks);
       const replyParameters = telegramTurnReplyParameters(channel.state, ctx);
 
       // The actionable prompt is revealed only after both the route and approver binding are durable.
@@ -126,8 +149,10 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       await dependencies.approvals.register({
         applicationSessionId: appSessionId,
         callbackData: callbacks,
+        callbackOptions: options,
         eveSessionId: ctx.session.id,
         requestId: localizedRequest.requestId,
+        promptText: rendered.text,
         telegramChatId: chatId,
         telegramChatType: chatType,
         telegramMessageId: sent.id,
@@ -164,5 +189,6 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
 export const handleTelegramInputRequested = createTelegramInputRequestHandler({
   approvals: telegramHitlApprovalRepository,
   markPendingOperation: (id, pending) => sessionRepository.markPendingOperation(id, pending),
+  present: presentTelegramApproval,
   rekey: rekeyTelegramSession,
 });

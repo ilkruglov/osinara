@@ -62,6 +62,12 @@ export function repositories() {
     family: {
       claimInvitation: vi.fn(),
     },
+    groupContext: {
+      prepare: vi.fn().mockResolvedValue({
+        cursorSequence: "1",
+        durableMessage: "<current_telegram_message>test</current_telegram_message>",
+      }),
+    },
     hitl: {
       authorizeReply: vi.fn().mockResolvedValue("not_applicable"),
     },

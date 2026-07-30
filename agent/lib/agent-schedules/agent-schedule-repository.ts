@@ -211,6 +211,28 @@ export const agentScheduleRepository = {
     return result.rows.map(rowToAgentSchedule);
   },
 
+  async findById(
+    auth: AgentScheduleAuthorization,
+    id: string,
+  ): Promise<AgentScheduleRecord | null> {
+    const result = await database().query<AgentScheduleRow>(
+      `SELECT ${AGENT_SCHEDULE_COLUMNS}
+         FROM agent_schedules AS schedule
+        WHERE schedule.id = $3
+          AND schedule.family_id = $1
+          AND EXISTS (
+            SELECT 1 FROM family_memberships
+             WHERE family_id = $1 AND user_id = $2
+          )
+          AND (
+            (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
+            schedule.scope = 'family'
+          )`,
+      [auth.familyId, auth.userId, id],
+    );
+    return result.rows[0] ? rowToAgentSchedule(result.rows[0]) : null;
+  },
+
   async update(
     auth: AgentScheduleAuthorization,
     id: string,

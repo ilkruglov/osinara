@@ -19,6 +19,10 @@ import {
   sessionNeedsRotation,
 } from "./session-policy.js";
 import {
+  sessionRouteRepository,
+  upsertSessionRoute,
+} from "./session-route-repository.js";
+import {
   classifyMissedSessionEvent,
   isCurrentEveSession,
   type SessionEventResult,
@@ -177,32 +181,9 @@ async function rotateSession(
   return result.rows[0]!;
 }
 
-async function upsertRoute(client: PoolClient, baseToken: string, sessionId: string): Promise<void> {
-  await client.query(
-    `INSERT INTO conversation_session_routes (base_continuation_token, session_id)
-     VALUES ($1, $2)
-     ON CONFLICT (base_continuation_token) DO UPDATE
-       SET session_id = EXCLUDED.session_id, updated_at = now()`,
-    [baseToken, sessionId],
-  );
-}
-
 export const sessionRepository = {
+  ...sessionRouteRepository,
   isCurrentEveSession,
-
-  async hasRoute(baseContinuationToken: string): Promise<boolean> {
-    const result = await database().query(
-      `SELECT 1
-         FROM conversation_session_routes route
-         JOIN conversation_sessions session ON session.id = route.session_id
-        WHERE route.base_continuation_token = $1
-          AND session.retired_at IS NULL
-          AND session.eve_session_id IS NOT NULL
-        LIMIT 1`,
-      [baseContinuationToken],
-    );
-    return Boolean(result.rowCount);
-  },
 
   async prepareTurn(input: PrepareSessionInput): Promise<PreparedSession> {
     const client = await database().connect();
@@ -235,7 +216,7 @@ export const sessionRepository = {
         rotationRequestedAt: current.rotation_requested_at,
       });
       if (rotate) current = await rotateSession(client, current, input);
-      await upsertRoute(client, input.baseContinuationToken, current.id);
+      await upsertSessionRoute(client, input.baseContinuationToken, current.id);
       await client.query("COMMIT");
       return {
         continuationToken: current.continuation_token,
@@ -275,6 +256,16 @@ export const sessionRepository = {
       [id, pending],
     );
     if (result.rowCount !== 1) {
+      const active = await database().query(
+        "SELECT 1 FROM conversation_sessions WHERE id = $1 AND retired_at IS NULL",
+        [id],
+      );
+      if (active.rowCount === 1) {
+        throw new AppError(
+          "AGENT_SESSION_ROUTE_CONFLICT",
+          "Сообщение Telegram уже связано с другим активным контекстом",
+        );
+      }
       throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
     }
   },
@@ -370,32 +361,6 @@ export const sessionRepository = {
     );
     if (result.rowCount !== 1) {
       throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
-    }
-  },
-
-  async registerRoute(id: string, baseToken: string): Promise<string> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const session = await client.query<Pick<SessionRow, "generation" | "id">>(
-        "SELECT id, generation FROM conversation_sessions WHERE id = $1 AND retired_at IS NULL FOR UPDATE",
-        [id],
-      );
-      const row = session.rows[0];
-      if (!row) throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
-      const token = continuationTokenForGeneration(baseToken, row.generation);
-      await client.query(
-        "UPDATE conversation_sessions SET continuation_token = $2 WHERE id = $1",
-        [id, token],
-      );
-      await upsertRoute(client, baseToken, id);
-      await client.query("COMMIT");
-      return token;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
     }
   },
 

@@ -36,7 +36,7 @@ interface DeliveryRow {
 }
 
 export type WorkspaceFileDeliveryReservation =
-  | { status: "completed"; telegramMessageId: string }
+  | ({ status: "completed"; telegramMessageId: string } & WorkspaceBinaryFile)
   | ({ status: "reserved" } & WorkspaceBinaryFile);
 
 function threadId(value: number | undefined): string | null {
@@ -110,7 +110,7 @@ export function createWorkspaceFileDeliveryRepository(binaryReader: BinaryReader
       if (!row) throw new Error("AGENT_WORKSPACE_FILE_DELIVERY_STATE_MISSING");
       assertReplayMatches(row, auth, binary, input);
       if (row.status === "completed" && row.telegram_message_id) {
-        return { status: "completed", telegramMessageId: row.telegram_message_id };
+        return { ...binary, status: "completed", telegramMessageId: row.telegram_message_id };
       }
       if (row.status === "started") {
         throw new AppError(

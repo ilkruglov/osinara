@@ -113,6 +113,10 @@ describeWithDatabase("agent schedule repositories", () => {
       title: "Новости ИИ",
     });
     await expect(agentScheduleRepository.list(auth)).resolves.toEqual([schedule]);
+    await expect(agentScheduleRepository.findById(auth, schedule.id)).resolves.toEqual(schedule);
+    await expect(
+      agentScheduleRepository.findById(privateAuth(fixture, "owner"), schedule.id),
+    ).resolves.toBeNull();
   });
 
   it("requires a verified family group destination for family schedules", async () => {
