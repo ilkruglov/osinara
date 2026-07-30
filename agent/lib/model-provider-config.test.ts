@@ -5,6 +5,7 @@
  * - `parseModelProviderConfig`: validates protocol-native agent transports and model IDs.
  * - Anthropic Messages and OpenAI Chat Completions remain provider-name independent.
  * - Required endpoint, authentication, thinking, and context metadata fail fast.
+ * - MiniMax Anthropic wire compatibility is explicit and rejects unknown modes.
  * - Active schema remains separate from the host-mounted deployment compatibility file.
  */
 import { readFile } from "node:fs/promises";
@@ -44,6 +45,28 @@ describe("parseModelProviderConfig", () => {
 
   it("accepts protocol-native primary, vision, and voice model selection", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
+  });
+
+  it("accepts only the explicit MiniMax Anthropic compatibility mode", () => {
+    const config = {
+      ...validConfig,
+      agent: {
+        ...validConfig.agent,
+        transport: {
+          ...validConfig.agent.transport,
+          compatibility: "minimax-anthropic",
+        },
+      },
+    } as const;
+
+    expect(parseModelProviderConfig(config)).toEqual(config);
+    expect(() => parseModelProviderConfig({
+      ...config,
+      agent: {
+        ...config.agent,
+        transport: { ...config.agent.transport, compatibility: "unknown" },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
   it("accepts a generic OpenAI-compatible transport without provider branching", () => {

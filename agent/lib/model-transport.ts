@@ -7,6 +7,7 @@
  *
  * Key constructs:
  * - Anthropic Messages adaptive thinking is enforced at the transport boundary.
+ * - Explicit MiniMax compatibility preserves provider web-search payloads across Anthropic parsing.
  * - OpenAI Chat Completions remains a generic provider-independent transport.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -20,6 +21,7 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 
 import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
+import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
 
 export interface ConfiguredLanguageModelOptions {
   readonly apiKey: string;
@@ -110,12 +112,15 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
   const { transport } = options;
   const guardedFetch = createCredentialGuardedFetch(options);
   if (transport.protocol === "anthropic-messages") {
+    const fetch = transport.compatibility === "minimax-anthropic"
+      ? createMiniMaxAnthropicCompatibilityFetch(guardedFetch)
+      : guardedFetch;
     const provider = createAnthropic({
       baseURL: transport.baseUrl,
       ...(transport.authentication === "bearer"
         ? { authToken: options.apiKey }
         : { apiKey: options.apiKey }),
-      fetch: guardedFetch,
+      fetch,
     });
     return wrapLanguageModel({
       middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, true),

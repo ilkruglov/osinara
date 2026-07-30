@@ -74,6 +74,10 @@ release can restart during recovery. Active model selection is immutable in each
 and vision model IDs, explicit output limits, and the primary context window. The current Anthropic
 Messages transport carries typed thinking blocks without text parsing. Changing active model
 selection therefore requires a reviewed release and rolls back atomically with that image.
+The MiniMax transport explicitly enables a narrow bidirectional web-search field adapter because
+MiniMax returns `content` where the Anthropic SDK requires `encrypted_content`; the exact value is
+preserved and restored on history replay rather than synthesized or discarded. Remove this adapter
+when MiniMax emits the Anthropic field or the AI SDK supports the MiniMax dialect natively.
 
 The `cli-proxy-api` service and sixth release image remain only because the installed production
 deployment controller validates manifest schema version 1 and its fixed six-image service graph.

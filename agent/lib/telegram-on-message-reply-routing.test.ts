@@ -4,7 +4,9 @@
  * Constructs covered:
  * - Username-less replies to prior Osinara bot messages continue via persisted session routes.
  * - Timeline-proven replies without an Eve route start a fresh application continuation.
- * - Real HITL replies and resumable routes retain Eve's native synthetic reply handling.
+ * - Ordinary replies remain messages when a previously live route rotates before Eve dispatch.
+ * - Only authorized HITL replies retain Eve's native synthetic reply handling.
+ * - Private non-HITL replies also bypass synthetic input-response delivery.
  * - Sender-less Telegram reply references continue only when their exact persisted route exists.
  * - Replies to unknown bot messages stay ignored, so other bots cannot trigger Osinara turns.
  */
@@ -12,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   groupMessage,
+  privateMessage,
   repositories,
   telegramContext,
 } from "./telegram-on-message.test-fixtures.js";
@@ -83,7 +86,7 @@ describe("createTelegramMessageHandler reply routing", () => {
     });
   });
 
-  it("continues a username-less reply to a known bot message route", async () => {
+  it("keeps a known-route reply as a message when session preparation rotates the route", async () => {
     const repository = familyGroupRepository();
     repository.telegram.findIdentity.mockResolvedValue({
       familyId: "family-1",
@@ -97,6 +100,14 @@ describe("createTelegramMessageHandler reply routing", () => {
       status: "inserted",
     });
     repository.session.hasRoute.mockResolvedValue(true);
+    repository.hitl.authorizeReply.mockResolvedValue("not_applicable");
+    repository.session.prepareTurn.mockResolvedValue({
+      continuationToken: "group-101::88:osinara:1",
+      generation: 1,
+      id: "session-rotated",
+      rotated: true,
+      sandboxSessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
     const handler = createTelegramMessageHandler(repository);
 
     const result = await handler(telegramContext().context, {
@@ -120,7 +131,37 @@ describe("createTelegramMessageHandler reply routing", () => {
         telegramReplyToMessageId: "89",
       },
     });
-    expect(result).not.toHaveProperty("replyHandling");
+    expect(result).toMatchObject({
+      continuationToken: "group-101::88:osinara:1",
+      replyHandling: "message",
+    });
+  });
+
+  it("dispatches a private non-HITL bot reply as an ordinary message", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.hitl.authorizeReply.mockResolvedValue("not_applicable");
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...privateMessage("продолжим"),
+      messageId: "89",
+      replyToMessage: {
+        chat: { id: "telegram-101", type: "private" },
+        from: { firstName: "Osinara", id: "bot-1", isBot: true },
+        messageId: "88",
+      },
+    });
+
+    expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "telegram-101::",
+      telegramMessageId: "88",
+    }));
+    expect(result).toMatchObject({ replyHandling: "message" });
   });
 
   it("preserves native reply handling for an authorized HITL response", async () => {
