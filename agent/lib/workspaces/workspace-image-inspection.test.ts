@@ -8,6 +8,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { VISION_MAX_FILE_BYTES } from "../../config.js";
 import { createWorkspaceImageInspector } from "./workspace-image-inspection.js";
 
 const auth = {
@@ -43,7 +44,7 @@ describe("createWorkspaceImageInspector", () => {
     }));
   });
 
-  it("rejects a document instead of sending unsupported content to Groq", async () => {
+  it("rejects a document instead of sending unsupported content to the vision model", async () => {
     const analyze = vi.fn();
     const inspect = createWorkspaceImageInspector({
       analyze,
@@ -60,6 +61,26 @@ describe("createWorkspaceImageInspector", () => {
       question: "Что внутри?",
       scope: "personal",
     })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it("rejects an image above the native provider limit before a paid call", async () => {
+    const analyze = vi.fn();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: new Uint8Array(VISION_MAX_FILE_BYTES + 1),
+        file: { mediaType: "image/png", path: "photos/oversized.png" },
+        workspaceId: "workspace-1",
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+
+    await expect(inspect(auth, {
+      path: "photos/oversized.png",
+      question: "Что изображено?",
+      scope: "personal",
+    })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_FILE_TOO_LARGE/);
     expect(analyze).not.toHaveBeenCalled();
   });
 

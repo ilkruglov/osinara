@@ -1,8 +1,9 @@
 /**
- * Runtime-selectable model provider configuration.
+ * Runtime-selectable model transport configuration.
  *
  * Exports:
- * - `ModelProviderConfig`: strict text, vision, and voice model contract.
+ * - `AgentModelTransport`: strict protocol-level transport union.
+ * - `ModelProviderConfig`: primary, vision, voice, and transport contract.
  * - `parseModelProviderConfig`: validates decoded server configuration.
  * - `modelProviderConfig`: validated configuration loaded from the canonical runtime path.
  */
@@ -13,53 +14,51 @@ import { z } from "zod";
 
 import { AppError } from "./app-error.js";
 
-const MODEL_PROVIDER_CONFIG_PATH = resolve(process.cwd(), "config/model-providers.json");
+const MODEL_PROVIDER_CONFIG_PATH = resolve(process.cwd(), "config/agent-model-providers.json");
 const modelIdSchema = z.string().trim().min(1).max(200);
-const modalitySchema = z.enum(["text", "image"]);
-const upstreamModelSchema = z.object({
-  alias: modelIdSchema,
-  inputModalities: z.array(modalitySchema).min(1),
-  name: modelIdSchema,
-  outputModalities: z.array(z.literal("text")).min(1),
+const externalBaseUrlSchema = z.url().superRefine((value, context) => {
+  const url = new URL(value);
+  if (url.protocol !== "https:") {
+    context.addIssue({ code: "custom", message: "HTTPS is required" });
+  }
+  if (url.search || url.hash || url.pathname.endsWith("/messages")) {
+    context.addIssue({ code: "custom", message: "base URL must not include request details" });
+  }
+});
+const anthropicMessagesTransportSchema = z.object({
+  authentication: z.enum(["api-key", "bearer"]),
+  baseUrl: externalBaseUrlSchema,
+  protocol: z.literal("anthropic-messages"),
+  thinking: z.object({ type: z.literal("adaptive") }).strict(),
+}).strict();
+const openAiChatCompletionsTransportSchema = z.object({
+  baseUrl: externalBaseUrlSchema,
+  protocol: z.literal("openai-chat-completions"),
+  providerName: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
 }).strict();
 const modelProviderConfigSchema = z.object({
   agent: z.object({
-    contextWindowTokens: z.number().int().positive(),
-    textModelId: modelIdSchema,
-    upstream: z.object({
-      baseUrl: z.url().refine((value) => value.startsWith("https://")),
-      models: z.array(upstreamModelSchema).min(1).max(100),
-      name: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+    models: z.object({
+      primary: z.object({
+        contextWindowTokens: z.number().int().positive(),
+        id: modelIdSchema,
+        maxOutputTokens: z.number().int().positive(),
+      }).strict(),
+      vision: z.object({
+        id: modelIdSchema,
+        maxOutputTokens: z.number().int().positive(),
+      }).strict(),
     }).strict(),
-    visionModelId: modelIdSchema,
+    transport: z.discriminatedUnion("protocol", [
+      anthropicMessagesTransportSchema,
+      openAiChatCompletionsTransportSchema,
+    ]),
   }).strict(),
-  schemaVersion: z.literal(1),
-  voice: z.object({
-    transcriptionModelId: modelIdSchema,
-  }).strict(),
-}).strict().superRefine((config, context) => {
-  const aliases = new Set<string>();
-  for (const model of config.agent.upstream.models) {
-    if (aliases.has(model.alias)) {
-      context.addIssue({ code: "custom", path: ["agent", "upstream", "models"], message: "duplicate alias" });
-    }
-    aliases.add(model.alias);
-  }
+  schemaVersion: z.literal(2),
+  voice: z.object({ transcriptionModelId: modelIdSchema }).strict(),
+}).strict();
 
-  const textModel = config.agent.upstream.models.find(
-    (model) => model.alias === config.agent.textModelId,
-  );
-  if (!textModel?.inputModalities.includes("text")) {
-    context.addIssue({ code: "custom", path: ["agent", "textModelId"], message: "unknown text alias" });
-  }
-  const visionModel = config.agent.upstream.models.find(
-    (model) => model.alias === config.agent.visionModelId,
-  );
-  if (!visionModel?.inputModalities.includes("image")) {
-    context.addIssue({ code: "custom", path: ["agent", "visionModelId"], message: "unknown vision alias" });
-  }
-});
-
+export type AgentModelTransport = z.infer<typeof modelProviderConfigSchema>["agent"]["transport"];
 export type ModelProviderConfig = z.infer<typeof modelProviderConfigSchema>;
 
 export function parseModelProviderConfig(value: unknown): ModelProviderConfig {

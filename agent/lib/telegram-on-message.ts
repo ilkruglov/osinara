@@ -7,13 +7,14 @@
  *
  * Key constructs:
  * - Group reply routing accepts username-less or sender-less references only for exact known routes.
+ * - Timeline-proven agent replies can start a fresh message turn after application session rotation.
+ * - One server-clock snapshot anchors all time-sensitive work and model context in an accepted turn.
  */
 import type {
   TelegramContext,
   TelegramInboundResult,
   TelegramMessage,
 } from "eve/channels/telegram";
-import { telegramContinuationToken } from "eve/channels/telegram";
 
 import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
@@ -29,6 +30,7 @@ import {
   type StoredTelegramAttachment,
 } from "./attachments/telegram-workspace-attachments.js";
 import { isAppError } from "./app-error.js";
+import { formatCurrentTimeContext } from "./current-time.js";
 import { evaluateConversationAccess } from "./family-access.js";
 import { familyRepository, type FamilyRepository } from "./family-repository.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
@@ -52,6 +54,10 @@ import {
   type TelegramGroupJournalRepository,
 } from "./telegram-group-journal-repository.js";
 import { telegramRepository, type TelegramRepository } from "./telegram-repository.js";
+import {
+  telegramBaseContinuationToken,
+  telegramReplyContinuationTokens,
+} from "./telegram-reply-routing.js";
 import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
@@ -131,49 +137,6 @@ function formatTelegramAttachmentReferences(
   ].join("\n");
 }
 
-function baseContinuationToken(
-  message: TelegramMessage,
-  verifiedReplyRoute?: string,
-): string {
-  if (verifiedReplyRoute !== undefined) return verifiedReplyRoute;
-  // A first reply in a forum can acquire a new thread ID; route by the referenced bot anchor.
-  const repliesToBot = message.replyToMessage?.from?.isBot === true;
-  const conversationId = message.chat.type === "private"
-    ? undefined
-    : repliesToBot
-    ? message.replyToMessage.messageId
-    : message.messageId;
-  const messageThreadId = repliesToBot
-    ? message.replyToMessage?.messageThreadId
-    : message.messageThreadId;
-  return telegramContinuationToken({
-    chatId: message.chat.id,
-    ...(conversationId === undefined ? {} : { conversationId }),
-    ...(messageThreadId === undefined ? {} : { messageThreadId }),
-  });
-}
-
-function replyContinuationTokens(message: TelegramMessage): string[] {
-  const reply = message.replyToMessage;
-  if (!reply) return [];
-  const messageThreadId = reply.messageThreadId ?? message.messageThreadId;
-  const exact = telegramContinuationToken({
-    chatId: message.chat.id,
-    conversationId: reply.messageId,
-    ...(messageThreadId === undefined ? {} : { messageThreadId }),
-  });
-  if (messageThreadId === undefined) return [exact];
-  // Releases before v0.2.17 could persist a group reply anchor without its verified forum topic.
-  return [exact, telegramContinuationToken({
-    chatId: message.chat.id,
-    conversationId: reply.messageId,
-  })];
-}
-
-function repliesToBotMessage(message: TelegramMessage): boolean {
-  return message.replyToMessage?.from?.isBot === true;
-}
-
 function sessionScope(access: ReturnType<typeof evaluateConversationAccess> & { allowed: true }) {
   const resolved = access.access;
   const input: Pick<PrepareSessionInput, "groupId" | "scope" | "userId"> =
@@ -224,6 +187,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
     let addressed = isMessageAddressedToBot({ ...message, text: dispatchText }, botUsername);
     let verifiedReplyRoute: string | undefined;
+    let exactReplyRoute: string | undefined;
+    let hasResumableReplyRoute = false;
 
     const invitationCode = parseInvitationStartCommand(message.text);
     if (invitationCode && message.chat.type !== "private") {
@@ -255,13 +220,21 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       if (message.replyToMessage) {
         // Telegram may omit the sender entirely from a compact Rich Message reply reference.
         // The exact persisted chat/topic/message route proves that the anchor belongs to Osinara.
-        for (const candidateRoute of replyContinuationTokens(message)) {
+        const candidateRoutes = telegramReplyContinuationTokens(message);
+        exactReplyRoute = candidateRoutes[0];
+        for (const candidateRoute of candidateRoutes) {
           if (await repositories.session.hasRoute(candidateRoute)) {
             addressed = true;
             verifiedReplyRoute = candidateRoute;
+            hasResumableReplyRoute = true;
             break;
           }
         }
+      }
+      if (inboundTimeline.replyToAgent && exactReplyRoute === undefined) {
+        throw new Error(
+          "AGENT_TELEGRAM_TIMELINE_REPLY_ROUTE_MISSING: Для подтверждённого ответа в истории отсутствует Telegram-маршрут",
+        );
       }
       // Authorized family attachment references are retained without waking the model.
       if (!addressed && !hasLazyFamilyAttachment) return null;
@@ -343,12 +316,23 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       : null;
     if (!addressed || journalDuplicate) return null;
 
-    // Replies can answer Eve approvals as plain text, so enforce the same initiator binding as buttons.
-    if (message.replyToMessage?.from?.isBot === true) {
+    let replyHandling: "message" | undefined;
+    // A persisted agent timeline anchor is trusted even when Telegram omits compact sender metadata.
+    const trustedAgentReply = inboundTimeline?.replyToAgent === true;
+    const replyTarget = message.replyToMessage;
+    if (replyTarget?.from?.isBot === true || trustedAgentReply) {
+      if (!replyTarget) {
+        throw new Error(
+          "AGENT_TELEGRAM_REPLY_TARGET_MISSING: Для проверки ответа отсутствует Telegram-сообщение назначения",
+        );
+      }
       const replyAuthorization = await repositories.hitl.authorizeReply({
-        baseContinuationToken: baseContinuationToken(message, verifiedReplyRoute),
+        baseContinuationToken: telegramBaseContinuationToken(
+          message,
+          verifiedReplyRoute ?? (trustedAgentReply ? exactReplyRoute : undefined),
+        ),
         telegramChatId: message.chat.id,
-        telegramMessageId: message.replyToMessage.messageId,
+        telegramMessageId: replyTarget.messageId,
         telegramUserId: sender.id,
       });
       if (replyAuthorization === "forbidden" || replyAuthorization === "expired") {
@@ -357,6 +341,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           : "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.";
         await ctx.telegram.sendMessage(error);
         return null;
+      }
+      // Only a non-HITL timeline reply without a live Eve route may become a fresh message turn.
+      if (replyAuthorization === "not_applicable" && trustedAgentReply && !hasResumableReplyRoute) {
+        verifiedReplyRoute = exactReplyRoute;
+        replyHandling = "message";
       }
     }
 
@@ -376,11 +365,13 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         throw error;
       }
     }
+    // One instant anchors session rotation, pending-delivery visibility, and model-visible time.
+    const turnStartedAt = new Date();
     const resolvedSessionScope = sessionScope(decision);
     const appSession = await repositories.session.prepareTurn({
-      baseContinuationToken: baseContinuationToken(message, verifiedReplyRoute),
+      baseContinuationToken: telegramBaseContinuationToken(message, verifiedReplyRoute),
       familyId: access.familyId,
-      now: new Date(),
+      now: turnStartedAt,
       ...resolvedSessionScope,
     });
     const deliveryAuthorization = proactiveDeliveryAuthorization(decision, message);
@@ -388,7 +379,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       ? await repositories.proactiveDeliveries.listPendingContext({
         ...deliveryAuthorization,
         applicationSessionId: appSession.id,
-        now: new Date(),
+        now: turnStartedAt,
       })
       : null;
     const principalId = access.userId ?? `telegram:${sender.id}`;
@@ -396,6 +387,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       `Verified conversation scope: ${access.memoryScopes.join(", ")}.`,
       `Verified role: ${access.role}.`,
       "Verified Telegram delivery: reply in concise Rich Markdown; the channel safely supports Markdown tables and approved text-rich structure.",
+      formatCurrentTimeContext(turnStartedAt),
     ];
     if (storedAttachments.length > 0) context.push(formatStoredAttachments(storedAttachments));
     if (lazyAttachment) context.push(formatTelegramAttachmentReferences([lazyAttachment]));
@@ -452,6 +444,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       },
       context,
       continuationToken: appSession.continuationToken,
+      ...(replyHandling === undefined ? {} : { replyHandling }),
     };
   };
 }

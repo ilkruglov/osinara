@@ -40,15 +40,14 @@ export const TELEGRAM_VOICE_MAX_BYTES = 20 * 1024 * 1024;
 export const WORKSPACE_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const WORKSPACE_DELETION_LEASE_MS = 15 * 60 * 1_000;
 export const WORKSPACE_TOOL_MAX_TEXT_BYTES = 1024 * 1024;
-export const VISION_MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const VISION_MAX_FILE_BYTES = 10_000_000;
 
 const runtimeEnvironmentSchema = z
   .object({
-    CLI_PROXY_API_KEY: z.string().min(1),
-    CLI_PROXY_BASE_URL: z.url(),
     DATABASE_URL: z.string().min(1),
     GROQ_API_KEY: z.string().min(1),
     INVITATION_SIGNING_SECRET: z.string().min(32),
+    MODEL_UPSTREAM_API_KEY: z.string().regex(/^\S+$/u),
     TELEGRAM_BOT_TOKEN: z.string().min(1),
     TELEGRAM_BOT_USERNAME: z.string().min(1),
     TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(1),

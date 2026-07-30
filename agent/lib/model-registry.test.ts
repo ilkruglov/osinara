@@ -2,10 +2,9 @@
  * LLM provider registry tests.
  *
  * Constructs covered:
- * - `primaryModel`: server-configured CLIProxy text route for the Eve agent loop.
- * - `visionModel`: independently configured CLIProxy route for workspace images.
+ * - `primaryModel`: server-configured protocol-native text route for the Eve agent loop.
+ * - `visionModel`: independently configured model on the same transport.
  * - `voiceTranscriptionModel`: explicit Groq Whisper transcription route.
- * - MiniMax chat models keep their CLIProxy identity after contract wrapping.
  */
 import { describe, expect, it } from "vitest";
 
@@ -17,15 +16,15 @@ import {
 } from "./model-registry.js";
 
 describe("model registry", () => {
-  it("selects the configured CLIProxy text model", () => {
-    expect(modelProviderConfig.agent.upstream.name).toBe("minimax");
-    expect(primaryModel.modelId).toBe(modelProviderConfig.agent.textModelId);
-    expect(primaryModel.provider).toBe("cli-proxy-api.chat");
+  it("selects the configured protocol-native text model", () => {
+    expect(modelProviderConfig.agent.transport.protocol).toBe("anthropic-messages");
+    expect(primaryModel.modelId).toBe(modelProviderConfig.agent.models.primary.id);
+    expect(primaryModel.provider).toBe("anthropic.messages");
   });
 
-  it("selects the independently configured CLIProxy vision model", () => {
-    expect(visionModel.modelId).toBe(modelProviderConfig.agent.visionModelId);
-    expect(visionModel.provider).toBe("cli-proxy-api.chat");
+  it("selects the independently configured vision model", () => {
+    expect(visionModel.modelId).toBe(modelProviderConfig.agent.models.vision.id);
+    expect(visionModel.provider).toBe("anthropic.messages");
   });
 
   it("selects the explicit Groq Whisper model for voice transcription", () => {

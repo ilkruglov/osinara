@@ -50,7 +50,7 @@ document intentionally does not provide a one-command installer. Prepare these r
 | Path | Mode | Purpose |
 | --- | --- | --- |
 | `/opt/osinara/.env` | `0600` | Production secrets and environment-specific URLs. |
-| `/opt/osinara/model-providers.json` | `0644` | Non-secret runtime provider, text, vision, context-window, and voice model settings. |
+| `/opt/osinara/model-providers.json` | `0644` | Schema-v1 deployment compatibility config retained for rollback. |
 | `/opt/osinara/bin/production-deploy.sh` | `0750` | Server deployment entrypoint. |
 | `/opt/osinara/bin/production-deploy/` | `0750` | Root-owned deployment module directory. |
 | `/opt/osinara/bin/production-deploy/*.sh` | `0640` | Fixed source modules checked before execution. |
@@ -68,12 +68,18 @@ Telegram secrets, and environment-specific integration
 settings. It must never contain or export any of the six `OSINARA_*_IMAGE` variables or
 `SANDBOX_RUNTIME_IMAGE`; those values exist only in a validated per-release `release.env`.
 
-`/opt/osinara/model-providers.json` must be exactly `root:root 0644` and follow the committed
-`config/model-providers.json` schema. The `agent` section configures the OpenAI-compatible upstream,
-selects independent text and vision model IDs behind the internal CLIProxyAPI service, and declares
-the text model context window. The `voice` section selects the Groq transcription model. After
-changing it, validate and restart the `cli-proxy-api` and `agent` containers; a source release is
-not required.
+`/opt/osinara/model-providers.json` remains a schema-v1 deployment compatibility file so an older
+release can restart during recovery. Active model selection is immutable in each app image at
+`config/agent-model-providers.json`: it selects a protocol-native transport, independent primary
+and vision model IDs, explicit output limits, and the primary context window. The current Anthropic
+Messages transport carries typed thinking blocks without text parsing. Changing active model
+selection therefore requires a reviewed release and rolls back atomically with that image.
+
+The `cli-proxy-api` service and sixth release image remain only because the installed production
+deployment controller validates manifest schema version 1 and its fixed six-image service graph.
+The agent does not call this service. Its isolated baked compatibility config is not part of active
+model selection. Removing that deployment slot requires a separately approved two-phase controller
+migration; it must not be coupled to a model-provider switch.
 
 The server host requires Docker Engine with Compose v2, systemd, `curl`, `jq`, `flock`, `stat`,
 `sha256sum`, `tar`, and standard GNU file utilities. Missing tools are deployment errors; the

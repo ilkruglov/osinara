@@ -1,5 +1,5 @@
 #!/bin/sh
-# Renders CLIProxyAPI's secret-bearing config into tmpfs, then starts the pinned upstream binary.
+# Renders the deployment-compatible CLIProxy config into tmpfs, then starts the pinned binary.
 set -eu
 
 if [ "$#" -lt 3 ]; then
@@ -11,11 +11,10 @@ source_config="$1"
 target_config="$2"
 shift 2
 
-# Both secrets are mandatory and must remain single-line visible values safe for HTTP headers.
+# This retained deployment service has independent mandatory credentials and no retries.
 validate_secret() {
   name="$1"
   value="$2"
-
   if [ -z "$value" ]; then
     printf '%s\n' "CLI_PROXY_REQUIRED_CONFIG_MISSING: Не задана обязательная настройка $name" >&2
     exit 1
@@ -36,23 +35,23 @@ if [ ! -r "$source_config" ]; then
   exit 1
 fi
 
-# Validate the non-secret boundary independently from the TypeScript agent process.
+# Validate the isolated compatibility config independently from the active agent transport.
 jq -e '
   .schemaVersion == 1 and
-  (.agent.upstream.name | test("^[a-z0-9][a-z0-9-]{0,63}$")) and
-  (.agent.upstream.baseUrl | test("^https://")) and
-  (.agent.upstream.models | type == "array" and length > 0) and
-  all(.agent.upstream.models[];
+  (.upstream.name | test("^[a-z0-9][a-z0-9-]{0,63}$")) and
+  (.upstream.baseUrl | test("^https://")) and
+  (.upstream.models | type == "array" and length > 0) and
+  all(.upstream.models[];
     (.name | type == "string" and length > 0) and
     (.alias | type == "string" and length > 0) and
     (.inputModalities | type == "array" and length > 0) and
     (.outputModalities | type == "array" and length > 0))
 ' "$source_config" >/dev/null || {
-  printf '%s\n' "CLI_PROXY_MODEL_CONFIG_INVALID: Некорректная конфигурация upstream-моделей" >&2
+  printf '%s\n' "CLI_PROXY_MODEL_CONFIG_INVALID: Некорректная compatibility-конфигурация" >&2
   exit 1
 }
 
-# Generate the only secret-bearing file atomically with no retries or management surface enabled.
+# Generate the only secret-bearing file atomically with management and retries disabled.
 target_directory="$(dirname "$target_config")"
 mkdir -p "$target_directory"
 temporary_config="${target_config}.tmp.$$"
@@ -62,7 +61,7 @@ jq -n \
   --arg client_key "$CLI_PROXY_API_KEY" \
   --arg upstream_key "$MODEL_UPSTREAM_API_KEY" \
   --slurpfile source "$source_config" '
-  ($source[0].agent.upstream) as $upstream |
+  ($source[0].upstream) as $upstream |
   {
     host: "0.0.0.0",
     port: 8317,

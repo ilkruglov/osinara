@@ -4,8 +4,8 @@
  * Exports:
  * - `completedTelegramMessage`: keeps meaningful terminal model text and hides pre-tool steps.
  *
- * MiniMax reasoning is separated by `minimax-model.ts`; Eve routes reasoning parts
- * to dedicated events that this delivery policy never receives.
+ * Provider adapters route typed reasoning parts to dedicated Eve events that this delivery
+ * policy never receives.
  */
 const TOOL_CALLS_FINISH_REASON = "tool-calls";
 

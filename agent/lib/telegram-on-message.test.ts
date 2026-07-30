@@ -13,6 +13,7 @@
  * - External groups drop all inbound media before persistence, journaling, or model dispatch.
  * - Foreign replies to pending HITL prompts stop before Eve dispatch.
  * - Forum replies inherit routing from the referenced bot message, not a newly assigned thread.
+ * - Each accepted turn receives one trusted UTC clock snapshot shared by repository reads.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
@@ -27,6 +28,37 @@ import {
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 
 describe("createTelegramMessageHandler", () => {
+  it("adds one trusted UTC snapshot and reuses it across turn preparation", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-30T15:24:18.000Z"));
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    try {
+      const result = await handler(telegramContext().context, privateMessage("Который час?"));
+
+      expect(result?.context).toContain([
+        "<current_time>",
+        "captured_at_utc: 2026-07-30T15:24:18.000Z",
+        "precision: turn_start",
+        "</current_time>",
+      ].join("\n"));
+      expect(repository.session.prepareTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ now: new Date("2026-07-30T15:24:18.000Z") }),
+      );
+      expect(repository.proactiveDeliveries.listPendingContext).toHaveBeenCalledWith(
+        expect.objectContaining({ now: new Date("2026-07-30T15:24:18.000Z") }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("adds unseen proactive deliveries and carries their cursor into trusted auth", async () => {
     const repository = repositories();
     repository.telegram.findIdentity.mockResolvedValue({

@@ -2,15 +2,14 @@
  * Runtime environment validation tests.
  *
  * Constructs covered:
- * - `requireRuntimeEnvironment`: requires independent Groq voice and CLIProxy agent credentials.
+ * - `requireRuntimeEnvironment`: requires independent agent-model and Groq voice credentials.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { requireRuntimeEnvironment } from "./config.js";
 
 function stubRequiredEnvironment(): void {
-  vi.stubEnv("CLI_PROXY_API_KEY", "cli-proxy-test-key");
-  vi.stubEnv("CLI_PROXY_BASE_URL", "http://model-proxy:8317/v1");
+  vi.stubEnv("MODEL_UPSTREAM_API_KEY", "agent-model-test-key");
   vi.stubEnv("DATABASE_URL", "postgresql://test:test@postgres:5432/osinara_test");
   vi.stubEnv("GROQ_API_KEY", "groq-test-key");
   vi.stubEnv("INVITATION_SIGNING_SECRET", "12345678901234567890123456789012");
@@ -28,8 +27,7 @@ describe("requireRuntimeEnvironment", () => {
     stubRequiredEnvironment();
 
     expect(requireRuntimeEnvironment()).toMatchObject({
-      CLI_PROXY_API_KEY: "cli-proxy-test-key",
-      CLI_PROXY_BASE_URL: "http://model-proxy:8317/v1",
+      MODEL_UPSTREAM_API_KEY: "agent-model-test-key",
       GROQ_API_KEY: "groq-test-key",
     });
   });
@@ -41,11 +39,10 @@ describe("requireRuntimeEnvironment", () => {
     expect(() => requireRuntimeEnvironment()).toThrowError(/GROQ_API_KEY/);
   });
 
-  it("rejects missing credentials for the active CLIProxy route", () => {
+  it("rejects missing credentials for the active agent model route", () => {
     stubRequiredEnvironment();
-    vi.stubEnv("CLI_PROXY_API_KEY", "");
-    vi.stubEnv("CLI_PROXY_BASE_URL", "http://model-proxy:8317/v1");
+    vi.stubEnv("MODEL_UPSTREAM_API_KEY", "");
 
-    expect(() => requireRuntimeEnvironment()).toThrowError(/CLI_PROXY_API_KEY/);
+    expect(() => requireRuntimeEnvironment()).toThrowError(/MODEL_UPSTREAM_API_KEY/);
   });
 });

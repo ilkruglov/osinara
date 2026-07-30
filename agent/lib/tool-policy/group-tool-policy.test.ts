@@ -82,8 +82,17 @@ describe("external group tool policy", () => {
     const overrides = createExternalGroupToolOverrides(new Set(["remember"]));
 
     expect(Object.keys(overrides)).toEqual(
-      expect.arrayContaining(["remember", "manage_reminder", "bash", "web_fetch"]),
+      expect.arrayContaining([
+        "remember",
+        "get_current_time",
+        "manage_reminder",
+        "bash",
+        "web_fetch",
+      ]),
     );
+    await expect(
+      overrides.get_current_time!.execute({}, {} as never),
+    ).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
     await expect(
       overrides.manage_reminder!.execute({}, {} as never),
     ).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
