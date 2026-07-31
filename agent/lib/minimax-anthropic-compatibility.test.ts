@@ -208,29 +208,54 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
     });
   });
 
-  it("rejects incomplete native web-search history before calling MiniMax", async () => {
-    const upstream = vi.fn();
+  it("removes unpaired native web-search history before calling MiniMax", async () => {
+    let body: unknown;
+    const upstream = vi.fn(async (_input, init) => {
+      body = JSON.parse(String(init?.body));
+      return new Response("{}", {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      });
+    });
     const fetch = createMiniMaxAnthropicCompatibilityFetch(upstream as FetchFunction);
 
-    await expect(fetch("https://api.minimax.io/anthropic/v1/messages", {
+    await fetch("https://api.minimax.io/anthropic/v1/messages", {
       body: JSON.stringify({
-        messages: [{
-          content: [{
-            content: [{
-              encrypted_content: RESULT.content,
-              title: RESULT.title,
-              type: RESULT.type,
-              url: RESULT.url,
-            }],
-            tool_use_id: "call-search-without-call",
-            type: "web_search_tool_result",
-          }],
-          role: "assistant",
-        }],
+        messages: [
+          {
+            content: [
+              { text: "Проверяю.", type: "text" },
+              {
+                id: "call-search-without-result",
+                input: { query: "доставка еды" },
+                name: "web_search",
+                type: "server_tool_use",
+              },
+              {
+                content: [{
+                  encrypted_content: RESULT.content,
+                  title: RESULT.title,
+                  type: RESULT.type,
+                  url: RESULT.url,
+                }],
+                tool_use_id: "call-search-without-call",
+                type: "web_search_tool_result",
+              },
+            ],
+            role: "assistant",
+          },
+          { content: [{ text: "Продолжай.", type: "text" }], role: "user" },
+        ],
       }),
       method: "POST",
-    })).rejects.toThrow("AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID");
-    expect(upstream).not.toHaveBeenCalled();
+    });
+
+    expect(body).toEqual({
+      messages: [
+        { content: [{ text: "Проверяю.", type: "text" }], role: "assistant" },
+        { content: [{ text: "Продолжай.", type: "text" }], role: "user" },
+      ],
+    });
   });
 
   it("normalizes non-streaming MiniMax message content", async () => {
