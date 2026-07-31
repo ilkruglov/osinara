@@ -15,7 +15,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { telegramChannel, type TelegramInboundResult } from "eve/channels/telegram";
+import {
+  parseTelegramUpdate,
+  telegramChannel,
+  type TelegramInboundResult,
+} from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
 import { callAdapterEventHandler } from "../../node_modules/eve/dist/src/channel/adapter.js";
@@ -395,11 +399,33 @@ describe("Eve Telegram verified ingress patch", () => {
     expect(onHitlCallbackQuery).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ id: "callback-1" }),
-      "-100:55:77",
+      "-100::77",
     );
     expect(send.mock.calls[0]?.[1]).toMatchObject({
       auth,
       continuationToken: "-100:55:77:osinara:3",
+    });
+  });
+
+  it("preserves an explicit forum topic ID on callback messages", () => {
+    const update = parseTelegramUpdate({
+      callback_query: {
+        data: "eve:0",
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        id: "callback-forum",
+        message: {
+          chat: { id: -100, type: "supergroup" },
+          is_topic_message: true,
+          message_id: 77,
+          message_thread_id: 55,
+        },
+      },
+      update_id: 1007,
+    });
+
+    expect(update).toMatchObject({
+      callbackQuery: { message: { messageThreadId: 55 } },
+      kind: "callback_query",
     });
   });
 

@@ -8,6 +8,7 @@
  * - Lets the application replace model-visible Telegram text with a durable context envelope.
  * - Lets the application version continuation tokens for rotation, including HITL callbacks.
  * - Lets the application authenticate the exact Telegram user resuming a HITL callback.
+ * - Ignores Telegram's reply-only pseudo thread IDs outside explicit forum topics.
  * - Propagates `input.requested` adapter failures so unbound approvals never park fail-open.
  * - Keeps callback-only channel context from separating an approval from its tool execution.
  * - Makes every Eve-authored model call exact-once with no hidden retry or degraded reissue.
@@ -21,6 +22,9 @@ import { resolve } from "node:path";
 const EXPECTED_EVE_VERSION = "0.22.5";
 const telegramRuntimePath = resolve(
   "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
+);
+const telegramInboundRuntimePath = resolve(
+  "node_modules/eve/dist/src/public/channels/telegram/inbound.js",
 );
 const channelAdapterRuntimePath = resolve(
   "node_modules/eve/dist/src/channel/adapter.js",
@@ -198,6 +202,13 @@ await replaceOnce(
   telegramRuntimePath,
   "try{await e.send({inputResponses:u,message:a,context:[o,...s]},{auth:r.auth,continuationToken:continuationTokenFromState(t),state:t})}catch(e){log.error(`message delivery failed`,{error:e})}",
   patchedMessageDispatch,
+);
+// Telegram may attach message_thread_id to a plain reply. It is a real topic boundary only when
+// the update explicitly marks the message as a forum-topic message.
+await replaceAll(
+  telegramInboundRuntimePath,
+  "messageThreadId:typeof e.message_thread_id==`number`?e.message_thread_id:void 0",
+  "messageThreadId:e.is_topic_message===!0&&typeof e.message_thread_id==`number`?e.message_thread_id:void 0",
 );
 // The application may prove that a bot reply is an ordinary timeline branch rather than HITL.
 await replaceOnce(
