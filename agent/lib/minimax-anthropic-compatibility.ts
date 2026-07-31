@@ -112,12 +112,6 @@ function replayableWebSearchIds(content: readonly unknown[]): ReadonlySet<string
     }
   }
   const replayIds = new Set([...callIds].filter((id) => resultIds.has(id)));
-  if (callIds.size !== replayIds.size || resultIds.size !== replayIds.size) {
-    throw new AppError(
-      "AGENT_MINIMAX_ANTHROPIC_HISTORY_INVALID",
-      "История веб-поиска MiniMax содержит непарный вызов или результат",
-    );
-  }
   return replayIds;
 }
 
@@ -138,7 +132,6 @@ function serializeReplayToolResult(content: unknown): string {
 function rewriteAssistantSearchHistory(message: Record<string, unknown>): Record<string, unknown>[] {
   if (message.role !== "assistant" || !Array.isArray(message.content)) return [message];
   const replayIds = replayableWebSearchIds(message.content);
-  if (replayIds.size === 0) return [message];
 
   const messages: Record<string, unknown>[] = [];
   let assistantContent: unknown[] = [];
@@ -152,33 +145,33 @@ function rewriteAssistantSearchHistory(message: Record<string, unknown>): Record
   // result, while preserving later text and ordinary local tool calls in their original order.
   for (const value of message.content) {
     const block = record(value);
-    if (
-      block?.type === "server_tool_use" && block.name === "web_search" &&
-      typeof block.id === "string" && replayIds.has(block.id)
-    ) {
-      assistantContent.push({
-        ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
-        id: block.id,
-        input: block.input,
-        name: block.name,
-        type: "tool_use",
-      });
+    if (block?.type === "server_tool_use" && block.name === "web_search") {
+      // A failed provider stream may persist only one half of the native search exchange.
+      // Omit that unusable trace; paired calls are replayed through ordinary tool messages.
+      if (typeof block.id === "string" && replayIds.has(block.id)) {
+        assistantContent.push({
+          ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
+          id: block.id,
+          input: block.input,
+          name: block.name,
+          type: "tool_use",
+        });
+      }
       continue;
     }
-    if (
-      block?.type === WEB_SEARCH_TOOL_RESULT_TYPE && typeof block.tool_use_id === "string" &&
-      replayIds.has(block.tool_use_id)
-    ) {
-      flushAssistant();
-      messages.push({
-        content: [{
-          ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
-          content: serializeReplayToolResult(block.content),
-          tool_use_id: block.tool_use_id,
-          type: "tool_result",
-        }],
-        role: "user",
-      });
+    if (block?.type === WEB_SEARCH_TOOL_RESULT_TYPE) {
+      if (typeof block.tool_use_id === "string" && replayIds.has(block.tool_use_id)) {
+        flushAssistant();
+        messages.push({
+          content: [{
+            ...(block.cache_control === undefined ? {} : { cache_control: block.cache_control }),
+            content: serializeReplayToolResult(block.content),
+            tool_use_id: block.tool_use_id,
+            type: "tool_result",
+          }],
+          role: "user",
+        });
+      }
       continue;
     }
     assistantContent.push(value);
