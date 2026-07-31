@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Group-wide monotonic sequence allocation across user and agent entries.
  * - Every delivered agent chunk resolves to one logical entry and trusted replies.
+ * - Tool-delivered agent attachments persist without an inbound Telegram file identifier.
  * - Retention never resets or reuses the durable group counter.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
@@ -91,6 +92,43 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     });
     expect(entries.map((entry) => [entry.sequenceId, entry.actorKind, entry.replyToSequenceId]))
       .toEqual([["1", "user", null], ["2", "agent_self", "1"], ["3", "user", "2"]]);
+  });
+
+  it("records an agent-delivered attachment without an inbound Telegram file ID", async () => {
+    const groupId = await group();
+
+    const result = await telegramGroupJournalRepository.recordAgentResponse({
+      applicationSessionId: null,
+      attachment: {
+        fileName: "report.pdf",
+        kind: "document",
+        mediaType: "application/pdf",
+        size: 1_024,
+      },
+      contentText: "Финансовый отчёт",
+      deliveredAt: new Date("2026-07-31T10:00:00.000Z"),
+      groupId,
+      messageThreadId: null,
+      replyToEntryId: null,
+      telegramMessageIds: ["40"],
+    });
+
+    const stored = await database().query<{
+      actor_kind: string;
+      attachment_file_id: string | null;
+      attachment_file_name: string | null;
+      attachment_kind: string | null;
+    }>(
+      `SELECT actor_kind, attachment_file_id, attachment_file_name, attachment_kind
+       FROM telegram_group_messages WHERE id = $1`,
+      [result.entryId],
+    );
+    expect(stored.rows[0]).toEqual({
+      actor_kind: "agent_self",
+      attachment_file_id: null,
+      attachment_file_name: "report.pdf",
+      attachment_kind: "document",
+    });
   });
 
   it("does not reset the sequence after physical pruning", async () => {

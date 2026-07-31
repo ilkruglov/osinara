@@ -9,6 +9,7 @@
  * - Lets the application version continuation tokens for rotation, including HITL callbacks.
  * - Lets the application authenticate the exact Telegram user resuming a HITL callback.
  * - Propagates `input.requested` adapter failures so unbound approvals never park fail-open.
+ * - Keeps callback-only channel context from separating an approval from its tool execution.
  * - Makes every Eve-authored model call exact-once with no hidden retry or degraded reissue.
  * - Supports a zero-depth subagent limit so the root agent can disable delegation completely.
  * - Routes local Workflow recovery through Eve's configured queue namespace.
@@ -113,6 +114,14 @@ await replaceOnce(
   toolLoopRuntimePath,
   "async function attemptUnsupportedProviderToolRecovery(e){let t=extractUnsupportedProviderToolTypes(e.error);if(t.length===0)return{outcome:`skipped`};let n=[];for(let e of t){let t=resolveFrameworkToolFromUpstreamType(e);t!==null&&!n.includes(t)&&n.push(t)}if(n.length===0)return{outcome:`skipped`};log.warn(`disabling unsupported provider tool(s); retrying step once`,{disabled:n,sessionId:e.sessionId,turnId:e.turnId,upstreamTypes:t});let r={disabledProviderTools:new Set(n),extraSystemNote:buildDisabledToolNote(n)};try{return{outcome:`recovered`,result:await e.runOneModelCall({...r,suppressStepStartedEmission:!0})}}catch(e){return{outcome:`failed`,error:e,retryCallOptions:r}}}",
   "async function attemptUnsupportedProviderToolRecovery(e){return{outcome:`skipped`}}",
+);
+
+// A pure HITL response must remain the final history item so AI SDK executes the approved tool
+// before any new channel context is presented to the model.
+await replaceOnce(
+  toolLoopRuntimePath,
+  "if(b=P.session,S.input?.context!==void 0)for(let e of S.input.context)N.push({content:e,role:`user`})",
+  "if(b=P.session,S.input?.context!==void 0&&(S.input?.inputResponses?.length??0)===0)for(let e of S.input.context)N.push({content:e,role:`user`})",
 );
 
 // Auxiliary Eve surfaces must not reissue compaction, eval, or code-mode model calls either.

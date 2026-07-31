@@ -6,6 +6,7 @@
  * - Patched native dispatch: returns the Eve session and accepts application continuation/auth.
  * - `replyHandling: "message"`: suppresses only preliminary Telegram HITL reply synthesis.
  * - Application-authored durable message overrides replace only the model-visible inbound text.
+ * - Pure HITL callbacks do not insert channel context between approval and tool execution.
  * - Patch installation remains safe when lifecycle scripts invoke it repeatedly.
  */
 import { execFile } from "node:child_process";
@@ -43,6 +44,10 @@ describe("Eve Telegram verified ingress patch", () => {
       "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
       "utf8",
     );
+    const toolLoopRuntime = await readFile(
+      "node_modules/eve/dist/src/harness/tool-loop.js",
+      "utf8",
+    );
     const types = await readFile(
       "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
       "utf8",
@@ -64,6 +69,9 @@ describe("Eve Telegram verified ingress patch", () => {
     expect(runtime.match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
     expect(runtime.match(/i\.acknowledgementText\?\?`Answer received\.`/g)).toHaveLength(1);
     expect(runtime.match(/message:r\.message\?\?a/g)).toHaveLength(1);
+    expect(
+      toolLoopRuntime.match(/\(S\.input\?\.inputResponses\?\.length\?\?0\)===0/g),
+    ).toHaveLength(1);
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
     expect(valid).toMatchObject({ replyHandling: "message" });
