@@ -118,8 +118,11 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
       attachment_file_id: string | null;
       attachment_file_name: string | null;
       attachment_kind: string | null;
+      attachment_media_type: string | null;
+      attachment_size: string | null;
     }>(
-      `SELECT actor_kind, attachment_file_id, attachment_file_name, attachment_kind
+      `SELECT actor_kind, attachment_file_id, attachment_file_name, attachment_kind,
+              attachment_media_type, attachment_size::text
        FROM telegram_group_messages WHERE id = $1`,
       [result.entryId],
     );
@@ -128,6 +131,8 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
       attachment_file_id: null,
       attachment_file_name: "report.pdf",
       attachment_kind: "document",
+      attachment_media_type: "application/pdf",
+      attachment_size: "1024",
     });
   });
 
