@@ -115,7 +115,11 @@ export class SandboxRunnerClient {
   async readFile(sessionId: string, path: string, signal?: AbortSignal): Promise<Uint8Array | null> {
     const url = `${this.#sessionUrl(sessionId, "/files")}?path=${encodeURIComponent(path)}`;
     const response = await fetch(url, { dispatcher: runnerDispatcher, signal });
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+      // Undici requires every body to be consumed or cancelled before its pooled connection is reusable.
+      await response.body?.cancel();
+      return null;
+    }
     await requireSuccess(response);
     return new Uint8Array(await response.arrayBuffer());
   }

@@ -31,6 +31,21 @@ async function removeOrphanedCompute(container: Docker.Container): Promise<void>
   }
 }
 
+async function removeAfterPrimaryFailure(
+  container: Docker.Container,
+  primaryError: unknown,
+): Promise<void> {
+  try {
+    await removeOrphanedCompute(container);
+  } catch (cleanupError) {
+    // Cleanup remains observable without replacing the actionable command or cancellation error.
+    console.error("Sandbox process cleanup failed after primary error", {
+      cleanupError,
+      primaryError,
+    });
+  }
+}
+
 export async function executeSandboxProcess(
   docker: Docker,
   container: Docker.Container,
@@ -64,7 +79,7 @@ export async function executeSandboxProcess(
   try {
     stream = await exec.start({ Tty: false, abortSignal: signal });
   } catch (error) {
-    await removeOrphanedCompute(container);
+    await removeAfterPrimaryFailure(container, error);
     throw error;
   }
 
@@ -97,7 +112,7 @@ export async function executeSandboxProcess(
     stdout.destroy();
     stderr.destroy();
     // Aborted or oversized commands must not keep running detached inside a durable session.
-    await removeOrphanedCompute(container);
+    await removeAfterPrimaryFailure(container, error);
     throw error;
   }
 

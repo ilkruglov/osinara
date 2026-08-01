@@ -28,8 +28,11 @@ const runtime = {
 function processHarness(
   inspection: { ExitCode: number | null; Running: boolean },
   outputBytes = 0,
+  removeError?: Error,
 ) {
-  const remove = vi.fn(async () => undefined);
+  const remove = vi.fn(async () => {
+    if (removeError) throw removeError;
+  });
   const source = new PassThrough();
   const exec = {
     inspect: vi.fn(async () => inspection),
@@ -93,5 +96,28 @@ describe("Docker sandbox process lifecycle", () => {
       .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
     expect(harness.source.destroyed).toBe(true);
     expect(harness.remove).toHaveBeenCalledWith({ force: true, v: true });
+  });
+
+  it("preserves the primary process error when orphan cleanup also fails", async () => {
+    const cleanupError = new Error("Docker remove failed");
+    const harness = processHarness(
+      { ExitCode: 0, Running: false },
+      SANDBOX_RUNNER_MAX_OUTPUT_BYTES + 1,
+      cleanupError,
+    );
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }))
+      .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
+    expect(log).toHaveBeenCalledWith("Sandbox process cleanup failed after primary error", {
+      cleanupError: expect.objectContaining({
+        cause: cleanupError,
+        message: expect.stringContaining("AGENT_SANDBOX_RUNNER_PROCESS_CLEANUP_FAILED"),
+      }),
+      primaryError: expect.objectContaining({
+        message: expect.stringContaining("AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE"),
+      }),
+    });
+    log.mockRestore();
   });
 });
