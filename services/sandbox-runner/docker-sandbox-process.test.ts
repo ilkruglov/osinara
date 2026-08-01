@@ -4,13 +4,15 @@
  * Constructs covered:
  * - Default command timeout and stable timeout diagnostics.
  * - Forced disposable-compute cleanup when Docker exec remains active.
+ * - Multiplexed source closure when either bounded output collector fails.
  */
-import { Readable } from "node:stream";
+import { PassThrough } from "node:stream";
 
 import type Docker from "dockerode";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
+import { SANDBOX_RUNNER_MAX_OUTPUT_BYTES } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -23,11 +25,15 @@ const runtime = {
   workspaceVolume: "osinara_workspace-data",
 };
 
-function processHarness(inspection: { ExitCode: number | null; Running: boolean }) {
+function processHarness(
+  inspection: { ExitCode: number | null; Running: boolean },
+  outputBytes = 0,
+) {
   const remove = vi.fn(async () => undefined);
+  const source = new PassThrough();
   const exec = {
     inspect: vi.fn(async () => inspection),
-    start: vi.fn(async () => Readable.from([])),
+    start: vi.fn(async () => source),
   };
   const container = {
     exec: vi.fn(async () => exec),
@@ -38,7 +44,7 @@ function processHarness(inspection: { ExitCode: number | null; Running: boolean 
     getContainer: vi.fn(() => container),
     modem: {
       demuxStream: vi.fn((_stream, stdout, stderr) => {
-        stdout.end();
+        stdout.end(Buffer.alloc(outputBytes));
         stderr.end();
       }),
     },
@@ -52,7 +58,7 @@ function processHarness(inspection: { ExitCode: number | null; Running: boolean 
     },
     runtime,
   });
-  return { container, engine, remove };
+  return { container, engine, remove, source };
 }
 
 describe("Docker sandbox process lifecycle", () => {
@@ -74,6 +80,18 @@ describe("Docker sandbox process lifecycle", () => {
 
     await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "stuck-command" }))
       .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_PROCESS_STATE_INVALID/);
+    expect(harness.remove).toHaveBeenCalledWith({ force: true, v: true });
+  });
+
+  it("closes the multiplexed exec stream when bounded output collection fails", async () => {
+    const harness = processHarness(
+      { ExitCode: 0, Running: false },
+      SANDBOX_RUNNER_MAX_OUTPUT_BYTES + 1,
+    );
+
+    await expect(harness.engine.runProcess(SANDBOX_SESSION_ID, { command: "noisy-command" }))
+      .rejects.toThrowError(/AGENT_SANDBOX_RUNNER_OUTPUT_TOO_LARGE/);
+    expect(harness.source.destroyed).toBe(true);
     expect(harness.remove).toHaveBeenCalledWith({ force: true, v: true });
   });
 });

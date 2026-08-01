@@ -71,6 +71,9 @@ export async function executeSandboxProcess(
   // Docker multiplexes both output streams over one exec connection.
   const stdout = new PassThrough();
   const stderr = new PassThrough();
+  // Collectors propagate the primary error; these listeners absorb only follow-up demux writes.
+  stdout.on("error", () => undefined);
+  stderr.on("error", () => undefined);
   docker.modem.demuxStream(stream, stdout, stderr);
   stream.once("end", () => {
     stdout.end();
@@ -89,6 +92,10 @@ export async function executeSandboxProcess(
       collectLimitedStream(stderr, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
     ]);
   } catch (error) {
+    // Close every side before cleanup so neither demux nor the remaining collector can stay active.
+    stream.destroy();
+    stdout.destroy();
+    stderr.destroy();
     // Aborted or oversized commands must not keep running detached inside a durable session.
     await removeOrphanedCompute(container);
     throw error;
