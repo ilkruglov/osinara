@@ -7,9 +7,7 @@
  * - `resolveSandboxRuntimeImage`: requires the exact sandbox runtime image identity.
  * - `resolveSandboxDockerRuntime`: discovers Compose-owned volumes/network fail-fast.
  */
-import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
-import { PassThrough } from "node:stream";
 import { posix } from "node:path";
 
 import Docker from "dockerode";
@@ -18,8 +16,6 @@ import {
   SANDBOX_RUNNER_MAX_OUTPUT_BYTES,
   SANDBOX_RUNNER_TIMEOUT_MAX_MS,
   type SandboxRunnerCreateRequest,
-  type SandboxRunnerProcessRequest,
-  type SandboxRunnerProcessResponse,
   type SandboxRunnerRemovePathRequest,
   type SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
@@ -29,6 +25,7 @@ import {
   readSingleFileArchive,
   writeSingleFileArchive,
 } from "./docker-sandbox-files.js";
+import { executeSandboxProcess } from "./docker-sandbox-process.js";
 import {
   createSandboxActivityRegistry,
   SANDBOX_IDLE_TIMEOUT_MS,
@@ -50,7 +47,6 @@ const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION = "/runner/google-workspace-credentials";
 const SANDBOX_NETWORK_LABEL = "sandbox-egress";
-const PROCESS_DEFAULT_TIMEOUT_MS = 10 * 60 * 1_000;
 const SANDBOX_SESSION_LABEL = "dev.osinara.sandbox.session-id";
 const SANDBOX_PROJECT_LABEL = "dev.osinara.sandbox.project";
 const SANDBOX_REQUEST_HASH_LABEL = "dev.osinara.sandbox.request-hash";
@@ -96,66 +92,6 @@ async function requireDirectory(path: string, code: string): Promise<void> {
   if (!metadata.isDirectory()) throw new Error(`${code}: Required path is not a directory`);
 }
 
-async function execute(
-  docker: Docker,
-  container: Docker.Container,
-  request: SandboxRunnerProcessRequest,
-  signal?: AbortSignal,
-): Promise<SandboxRunnerProcessResponse> {
-  const timeoutMs = request.timeoutMs ?? PROCESS_DEFAULT_TIMEOUT_MS;
-  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1_000));
-  const exec = await container.exec({
-    AttachStderr: true,
-    AttachStdout: true,
-    Cmd: ["timeout", "--signal=KILL", String(timeoutSeconds), "bash", "-c", request.command],
-    Env: request.environment
-      ? Object.entries(request.environment).map(([name, value]) => `${name}=${value}`)
-      : undefined,
-    Tty: false,
-    WorkingDir: request.workingDirectory ? resolvePath(request.workingDirectory) : "/workspace",
-  });
-  let stream: NodeJS.ReadWriteStream;
-  try {
-    stream = await exec.start({ Tty: false, abortSignal: signal });
-  } catch (error) {
-    await container.remove({ force: true, v: true }).catch(() => undefined);
-    throw error;
-  }
-  const stdout = new PassThrough();
-  const stderr = new PassThrough();
-  docker.modem.demuxStream(stream, stdout, stderr);
-  stream.once("end", () => {
-    stdout.end();
-    stderr.end();
-  });
-  stream.once("error", (error) => {
-    stdout.destroy(error);
-    stderr.destroy(error);
-  });
-  let stdoutBytes: Buffer;
-  let stderrBytes: Buffer;
-  try {
-    [stdoutBytes, stderrBytes] = await Promise.all([
-      collectLimitedStream(stdout, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
-      collectLimitedStream(stderr, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
-    ]);
-  } catch (error) {
-    // Aborted or oversized commands must not keep running detached inside a durable session.
-    await container.remove({ force: true, v: true }).catch(() => undefined);
-    throw error;
-  }
-  const inspection = await exec.inspect();
-  if (inspection.Running || inspection.ExitCode === null) {
-    throw new Error("AGENT_SANDBOX_RUNNER_PROCESS_STATE_INVALID: Process did not terminate");
-  }
-  return {
-    exitCode: inspection.ExitCode,
-    processId: randomUUID(),
-    stderr: stderrBytes.toString("utf8"),
-    stdout: stdoutBytes.toString("utf8"),
-  };
-}
-
 async function ensureToolDirectories(
   docker: Docker,
   container: Docker.Container,
@@ -170,7 +106,7 @@ async function ensureToolDirectories(
     `mkdir -p ${directories.map((path) => JSON.stringify(path)).join(" ")}`,
     `(test -x ${JSON.stringify(`${python}/bin/python`)} || python3 -m venv ${JSON.stringify(python)})`,
   ].join(" && ");
-  const result = await execute(docker, container, {
+  const result = await executeSandboxProcess(docker, container, {
     command,
     timeoutMs: SANDBOX_RUNNER_TIMEOUT_MAX_MS,
   });
@@ -278,7 +214,10 @@ export function createDockerSandboxEngine(input: {
     async runProcess(sessionId, request, signal) {
       return await activity.runActive(sessionId, async () => {
         const container = await requireRunningContainer(input.docker, sessionId);
-        return await execute(input.docker, container, request, signal);
+        const processRequest = request.workingDirectory
+          ? { ...request, workingDirectory: resolvePath(request.workingDirectory) }
+          : request;
+        return await executeSandboxProcess(input.docker, container, processRequest, signal);
       });
     },
     async readFile(sessionId, path) {
@@ -296,7 +235,7 @@ export function createDockerSandboxEngine(input: {
       await activity.runActive(sessionId, async () => {
         const container = await requireRunningContainer(input.docker, sessionId);
         const resolved = resolvePath(path);
-        const directoryResult = await execute(input.docker, container, {
+        const directoryResult = await executeSandboxProcess(input.docker, container, {
           command: `mkdir -p -- ${JSON.stringify(posix.dirname(resolved))}`,
         });
         if (directoryResult.exitCode !== 0) {

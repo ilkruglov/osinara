@@ -4,6 +4,8 @@
  * Export:
  * - `SandboxRunnerClient`: session lifecycle, command, and binary file operations.
  */
+import { Agent, fetch } from "undici";
+
 import type {
   SandboxRunnerCreateRequest,
   SandboxRunnerProcessRequest,
@@ -11,14 +13,25 @@ import type {
   SandboxRunnerRemovePathRequest,
   SandboxRunnerSessionResponse,
 } from "./sandbox-runner-contract.js";
-import { SANDBOX_RUNNER_API_PREFIX } from "./sandbox-runner-contract.js";
+import {
+  SANDBOX_RUNNER_API_PREFIX,
+  SANDBOX_RUNNER_HTTP_TIMEOUT_MS,
+} from "./sandbox-runner-contract.js";
+
+type RunnerResponse = Awaited<ReturnType<typeof fetch>>;
+
+// Process responses intentionally send no headers until execution completes.
+const runnerDispatcher = new Agent({
+  bodyTimeout: SANDBOX_RUNNER_HTTP_TIMEOUT_MS,
+  headersTimeout: SANDBOX_RUNNER_HTTP_TIMEOUT_MS,
+});
 
 interface RunnerErrorBody {
   code?: unknown;
   message?: unknown;
 }
 
-async function runnerError(response: Response): Promise<Error> {
+async function runnerError(response: RunnerResponse): Promise<Error> {
   let body: RunnerErrorBody = {};
   try {
     body = await response.json() as RunnerErrorBody;
@@ -30,7 +43,7 @@ async function runnerError(response: Response): Promise<Error> {
   return new Error(`${code}: ${message} (HTTP ${response.status})`);
 }
 
-async function requireSuccess(response: Response): Promise<Response> {
+async function requireSuccess(response: RunnerResponse): Promise<RunnerResponse> {
   if (response.ok) return response;
   throw await runnerError(response);
 }
@@ -68,6 +81,7 @@ export class SandboxRunnerClient {
       `${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/sessions`,
       {
         body: JSON.stringify(request),
+        dispatcher: runnerDispatcher,
         headers: { "content-type": "application/json" },
         method: "POST",
       },
@@ -90,6 +104,7 @@ export class SandboxRunnerClient {
   ): Promise<SandboxRunnerProcessResponse> {
     const response = await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/processes"), {
       body: JSON.stringify(request),
+      dispatcher: runnerDispatcher,
       headers: { "content-type": "application/json" },
       method: "POST",
       signal,
@@ -99,8 +114,12 @@ export class SandboxRunnerClient {
 
   async readFile(sessionId: string, path: string, signal?: AbortSignal): Promise<Uint8Array | null> {
     const url = `${this.#sessionUrl(sessionId, "/files")}?path=${encodeURIComponent(path)}`;
-    const response = await fetch(url, { signal });
-    if (response.status === 404) return null;
+    const response = await fetch(url, { dispatcher: runnerDispatcher, signal });
+    if (response.status === 404) {
+      // Undici requires every body to be consumed or cancelled before its pooled connection is reusable.
+      await response.body?.cancel();
+      return null;
+    }
     await requireSuccess(response);
     return new Uint8Array(await response.arrayBuffer());
   }
@@ -114,6 +133,7 @@ export class SandboxRunnerClient {
     const url = `${this.#sessionUrl(sessionId, "/files")}?path=${encodeURIComponent(path)}`;
     await requireSuccess(await fetch(url, {
       body: Buffer.from(content),
+      dispatcher: runnerDispatcher,
       headers: { "content-type": "application/octet-stream" },
       method: "PUT",
       signal,
@@ -129,17 +149,21 @@ export class SandboxRunnerClient {
     if (request.force !== undefined) search.set("force", String(request.force));
     if (request.recursive !== undefined) search.set("recursive", String(request.recursive));
     await requireSuccess(await fetch(`${this.#sessionUrl(sessionId, "/files")}?${search}`, {
+      dispatcher: runnerDispatcher,
       method: "DELETE",
       signal,
     }));
   }
 
   async stop(sessionId: string): Promise<void> {
-    await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/stop"), { method: "POST" }));
+    await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/stop"), {
+      dispatcher: runnerDispatcher,
+      method: "POST",
+    }));
   }
 
   async deleteToolEnvironment(workspaceId: string): Promise<void> {
     const url = `${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/tool-environments/${encodeURIComponent(workspaceId)}`;
-    await requireSuccess(await fetch(url, { method: "DELETE" }));
+    await requireSuccess(await fetch(url, { dispatcher: runnerDispatcher, method: "DELETE" }));
   }
 }
