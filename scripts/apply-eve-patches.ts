@@ -11,7 +11,7 @@
  * - Ignores Telegram's reply-only pseudo thread IDs outside explicit forum topics.
  * - Propagates `input.requested` adapter failures so unbound approvals never park fail-open.
  * - Keeps callback-only channel context from separating an approval from its tool execution.
- * - Makes every Eve-authored model call exact-once with no hidden retry or degraded reissue.
+ * - Allows two AI SDK transport retries while preventing Eve-level or degraded model reissues.
  * - Supports a zero-depth subagent limit so the root agent can disable delegation completely.
  * - Routes local Workflow recovery through Eve's configured queue namespace.
  * - Fails installation when the pinned Eve artifact no longer matches the reviewed source.
@@ -20,6 +20,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const EXPECTED_EVE_VERSION = "0.22.5";
+const AI_SDK_TRANSPORT_MAX_RETRIES = 2;
 const telegramRuntimePath = resolve(
   "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
 );
@@ -95,11 +96,18 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
   );
 }
 
-// Paid model operations are exact-once: transport failures and malformed output bubble unchanged.
+// AI SDK retries only provider-declared transport failures before returning a model result.
+const toolLoopTransportCall =
+  `y=new ToolLoopAgent({headers:B,instructions:i,maxRetries:${AI_SDK_TRANSPORT_MAX_RETRIES},model:L`;
+await replaceAll(
+  toolLoopRuntimePath,
+  "y=new ToolLoopAgent({headers:B,instructions:i,maxRetries:0,model:L",
+  toolLoopTransportCall,
+);
 await replaceOnce(
   toolLoopRuntimePath,
   "y=new ToolLoopAgent({headers:B,instructions:i,model:L",
-  "y=new ToolLoopAgent({headers:B,instructions:i,maxRetries:0,model:L",
+  toolLoopTransportCall,
 );
 const exactOnceModelCall = "async function runModelCallWithRetries(e,t,n){throwIfTurnAborted(n);try{return await e(1)}catch(e){throwIfTurnAborted(n);throw e}}";
 // Normalize the malformed marker emitted by the first local revision before canonical matching.
@@ -128,26 +136,47 @@ await replaceOnce(
   "if(b=P.session,S.input?.context!==void 0&&(S.input?.inputResponses?.length??0)===0)for(let e of S.input.context)N.push({content:e,role:`user`})",
 );
 
-// Auxiliary Eve surfaces must not reissue compaction, eval, or code-mode model calls either.
+// Auxiliary model surfaces use the same bounded transport policy without semantic reissues.
+const compactionTransportCall =
+  `generateText({abortSignal:c,headers:s,maxRetries:${AI_SDK_TRANSPORT_MAX_RETRIES},model:r`;
+await replaceAll(
+  compactionRuntimePath,
+  "generateText({abortSignal:c,headers:s,maxRetries:0,model:r",
+  compactionTransportCall,
+);
 await replaceOnce(
   compactionRuntimePath,
   "generateText({abortSignal:c,headers:s,model:r",
-  "generateText({abortSignal:c,headers:s,maxRetries:0,model:r",
+  compactionTransportCall,
 );
 await replaceOnce(
   compactionRuntimePath,
   "if(estimateTokens(g)<=i.threshold||l===0)return g;--l",
   "if(estimateTokens(g)<=i.threshold||l===0)return g;throw Error(`EVE_COMPACTION_OUTPUT_TOO_LARGE: Compaction result exceeds the configured threshold`)",
 );
+const autoevalTransportCall =
+  `generateText({maxRetries:${AI_SDK_TRANSPORT_MAX_RETRIES},model:n.languageModel,messages:`;
+await replaceAll(
+  autoevalRuntimePath,
+  "generateText({maxRetries:0,model:n.languageModel,messages:",
+  autoevalTransportCall,
+);
 await replaceOnce(
   autoevalRuntimePath,
   "generateText({model:n.languageModel,messages:",
-  "generateText({maxRetries:0,model:n.languageModel,messages:",
+  autoevalTransportCall,
+);
+const codeModeTransportCalls =
+  `function Jt(e,t={}){return Zt(await n({...e,maxRetries:${AI_SDK_TRANSPORT_MAX_RETRIES}}),t)}function Yt(e,t={}){let n=i({...e,maxRetries:${AI_SDK_TRANSPORT_MAX_RETRIES}});`;
+await replaceAll(
+  codeModeRuntimePath,
+  "function Jt(e,t={}){return Zt(await n({...e,maxRetries:0}),t)}function Yt(e,t={}){let n=i({...e,maxRetries:0});",
+  codeModeTransportCalls,
 );
 await replaceOnce(
   codeModeRuntimePath,
   "function Jt(e,t={}){return Zt(await n(e),t)}function Yt(e,t={}){let n=i(e);",
-  "function Jt(e,t={}){return Zt(await n({...e,maxRetries:0}),t)}function Yt(e,t={}){let n=i({...e,maxRetries:0});",
+  codeModeTransportCalls,
 );
 
 // A failed durable approval binding must fail the turn instead of parking without authorization.

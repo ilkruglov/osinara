@@ -8,6 +8,7 @@
  * Key constructs:
  * - Anthropic Messages adaptive thinking is enforced at the transport boundary.
  * - Explicit MiniMax compatibility preserves provider web-search payloads across Anthropic parsing.
+ * - Retryable physical provider responses are logged before AI SDK applies its bounded retry policy.
  * - OpenAI Chat Completions remains a generic provider-independent transport.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -31,6 +32,20 @@ export interface ConfiguredLanguageModelOptions {
   readonly transport: AgentModelTransport;
 }
 
+const RETRYABLE_MODEL_HTTP_STATUS_CODES = new Set([408, 409, 429]);
+
+function modelRequestUrl(input: Parameters<FetchFunction>[0]): string {
+  const url = new URL(
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url,
+  );
+  // Query parameters are irrelevant to retry diagnosis and may contain provider credentials.
+  return `${url.origin}${url.pathname}`;
+}
+
+function isRetryableModelResponse(response: Response): boolean {
+  return RETRYABLE_MODEL_HTTP_STATUS_CODES.has(response.status) || response.status >= 500;
+}
+
 function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): FetchFunction {
   return async (input, init) => {
     if (!options.apiKey || /\s/u.test(options.apiKey)) {
@@ -39,7 +54,16 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
         "Не задан корректный ключ доступа к основной модели",
       );
     }
-    return (options.fetch ?? globalThis.fetch)(input, init);
+    const response = await (options.fetch ?? globalThis.fetch)(input, init);
+    if (isRetryableModelResponse(response)) {
+      console.error(JSON.stringify({
+        code: "AGENT_MODEL_TRANSIENT_RESPONSE",
+        modelId: options.modelId,
+        statusCode: response.status,
+        url: modelRequestUrl(input),
+      }));
+    }
+    return response;
   };
 }
 

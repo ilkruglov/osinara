@@ -1,10 +1,11 @@
 /**
- * Eve model-call exact-once patch tests.
+ * Eve model-call retry policy patch tests.
  *
  * Constructs covered:
- * - ToolLoopAgent and Eve outer orchestration perform one transport attempt.
+ * - AI SDK performs two bounded transport retries for retryable provider failures.
+ * - Eve outer orchestration never reissues a completed or partially observed model step.
  * - Empty output and unsupported provider tools propagate without a second paid call.
- * - Compaction and auxiliary Eve model surfaces disable AI SDK default retries.
+ * - Compaction and auxiliary Eve model surfaces use the same bounded transport policy.
  */
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -19,12 +20,12 @@ const CODE_MODE_PATH =
   "node_modules/eve/dist/src/compiled/experimental-ai-sdk-code-mode/index.js";
 const execFileAsync = promisify(execFile);
 
-describe("Eve model exact-once patch", () => {
-  it("disables retries and recovery reissues in the root tool loop", async () => {
+describe("Eve model retry policy patch", () => {
+  it("allows transport retries but disables Eve-level reissues in the root tool loop", async () => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
 
     expect(runtime).toContain(
-      "new ToolLoopAgent({headers:B,instructions:i,maxRetries:0,model:L",
+      "new ToolLoopAgent({headers:B,instructions:i,maxRetries:2,model:L",
     );
     expect(runtime).toContain(
       "async function runModelCallWithRetries(e,t,n){throwIfTurnAborted(n);try{return await e(1)}catch(e){throwIfTurnAborted(n);throw e}}",
@@ -40,19 +41,19 @@ describe("Eve model exact-once patch", () => {
     expect(runtime).not.toContain("disabling unsupported provider tool(s); retrying step once");
   });
 
-  it("disables AI SDK retries on every auxiliary Eve model surface", async () => {
+  it("allows two transport retries on every auxiliary Eve model surface", async () => {
     const [compaction, autoeval, codeMode] = await Promise.all([
       readFile(COMPACTION_PATH, "utf8"),
       readFile(AUTOEVAL_PATH, "utf8"),
       readFile(CODE_MODE_PATH, "utf8"),
     ]);
 
-    expect(compaction).toContain("generateText({abortSignal:c,headers:s,maxRetries:0,model:r");
+    expect(compaction).toContain("generateText({abortSignal:c,headers:s,maxRetries:2,model:r");
     expect(compaction).toContain("EVE_COMPACTION_OUTPUT_TOO_LARGE");
     expect(compaction).not.toContain("return g;--l");
-    expect(autoeval).toContain("generateText({maxRetries:0,model:n.languageModel,messages:");
-    expect(codeMode).toContain("await n({...e,maxRetries:0})");
-    expect(codeMode).toContain("i({...e,maxRetries:0})");
+    expect(autoeval).toContain("generateText({maxRetries:2,model:n.languageModel,messages:");
+    expect(codeMode).toContain("await n({...e,maxRetries:2})");
+    expect(codeMode).toContain("i({...e,maxRetries:2})");
   });
 
   it("keeps every patched model runtime syntactically valid", async () => {
