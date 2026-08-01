@@ -61,7 +61,8 @@ describe("model transport retry policy", () => {
       modelId: "MiniMax-M3",
       transport: {
         authentication: "bearer",
-        baseUrl: "https://api.minimax.io/anthropic/v1",
+        // The mock accepts this deliberately malformed provider URL so the log must redact its query.
+        baseUrl: "https://api.minimax.io/anthropic/v1?api_key=provider-secret",
         protocol: "anthropic-messages",
         thinking: { type: "adaptive" },
       },
@@ -75,7 +76,7 @@ describe("model transport retry policy", () => {
       code: "AGENT_MODEL_TRANSIENT_RESPONSE",
       modelId: "MiniMax-M3",
       statusCode: 529,
-      url: "https://api.minimax.io/anthropic/v1/messages",
+      url: "https://api.minimax.io/anthropic/v1",
     });
     expect(log).toHaveBeenCalledTimes(2);
     expect(log).toHaveBeenNthCalledWith(1, transientLog);
