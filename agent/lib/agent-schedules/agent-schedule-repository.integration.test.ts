@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - Scoped CRUD and destination authorization.
- * - Durable leases, Eve handoff markers, completion, recurrence, and ambiguous recovery.
+ * - Handoff-only leases, atomic delivered completion, recurrence, and ambiguous recovery.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -84,7 +84,7 @@ function familyAuth(fixture: Fixture, user: "member" | "owner") {
 describeWithDatabase("agent schedule repositories", () => {
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE agent_schedule_operations, agent_schedule_runs, agent_schedules,
+      `TRUNCATE proactive_deliveries, agent_schedule_operations, agent_schedule_runs, agent_schedules,
        conversation_session_routes, conversation_sessions, telegram_groups,
        family_memberships, users, families CASCADE`,
     );
@@ -184,15 +184,52 @@ describeWithDatabase("agent schedule repositories", () => {
       applicationSessionId: prepared.id,
       eveSessionId: "eve-schedule-1",
     });
-    await agentScheduleDispatchRepository.completeRun(
-      prepared.id,
-      "eve-schedule-1",
-      new Date("2026-07-17T09:01:00.000Z"),
-    );
+    const delivery = {
+      applicationSessionId: prepared.id,
+      content: "Будничная сводка готова",
+      deliveredAt: new Date("2026-07-17T09:01:00.000Z"),
+      eveSessionId: "eve-schedule-1",
+      familyId: fixture.familyId,
+      groupId: null,
+      messageThreadId: null,
+      ownerUserId: fixture.memberId,
+      runId: claimed!.runId,
+      scheduledFor: new Date(claimed!.nextRunAt),
+      scope: "personal",
+      telegramChatId: claimed!.telegramChatId,
+      telegramMessageId: "501",
+      title: claimed!.title,
+    } as const;
+
+    // An unknown run cannot create an orphan receipt or finalize another schedule.
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun({
+      ...delivery,
+      runId: "00000000-0000-4000-8000-000000000999",
+    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
+    await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
+      rowCount: 0,
+    });
+
+    // Once Telegram delivery belongs to a durable run, retain the receipt despite identity conflict.
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun({
+      ...delivery,
+      eveSessionId: "eve-schedule-conflict",
+    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
+    await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
+      rowCount: 1,
+    });
+
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(true);
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(false);
 
     await expect(agentScheduleRepository.list(auth)).resolves.toEqual([
       expect.objectContaining({ nextRunAt: "2026-07-20T09:00:00.000Z", status: "active" }),
     ]);
+    await expect(database().query(
+      "SELECT source_id::text, telegram_message_id::text FROM proactive_deliveries",
+    )).resolves.toMatchObject({
+      rows: [{ source_id: claimed!.runId, telegram_message_id: "501" }],
+    });
   });
 
   it("reclaims an expired pre-handoff lease without duplicating the scheduled occurrence", async () => {
@@ -236,14 +273,67 @@ describeWithDatabase("agent schedule repositories", () => {
       applicationSessionId: prepared.id,
       eveSessionId: "eve-schedule-recovered",
     });
-    await agentScheduleDispatchRepository.completeRun(
-      prepared.id,
-      "eve-schedule-recovered",
-      new Date("2026-07-17T09:01:00.000Z"),
-    );
+    await agentScheduleDispatchRepository.completeDeliveredRun({
+      applicationSessionId: prepared.id,
+      content: "Одноразовый результат",
+      deliveredAt: new Date("2026-07-17T09:01:00.000Z"),
+      eveSessionId: "eve-schedule-recovered",
+      familyId: fixture.familyId,
+      groupId: null,
+      messageThreadId: null,
+      ownerUserId: fixture.memberId,
+      runId: reclaimed!.runId,
+      scheduledFor: new Date(reclaimed!.nextRunAt),
+      scope: "personal",
+      telegramChatId: reclaimed!.telegramChatId,
+      telegramMessageId: "502",
+      title: reclaimed!.title,
+    });
 
     await expect(agentScheduleRepository.list(auth)).resolves.toEqual([
       expect.objectContaining({ status: "completed" }),
+    ]);
+  });
+
+  it("does not expire a running scenario with its short handoff lease", async () => {
+    const fixture = await createFixture();
+    await agentScheduleRepository.create(privateAuth(fixture, "member"), {
+      firstRunAt: new Date("2026-07-17T09:00:00.000Z"),
+      operationKey: "long-running-created",
+      recurrence: { kind: "once" },
+      scenarioPrompt: "Подготовить подробную сводку.",
+      scope: "personal",
+      timezone: "UTC",
+      title: "Долгий запуск",
+      userRequest: "Подготовь подробную сводку",
+    });
+    const [claimed] = await agentScheduleDispatchRepository.claimDue({
+      leaseMilliseconds: 1_000,
+      limit: 1,
+      now: new Date("2026-07-17T09:00:00.000Z"),
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
+    const prepared = await sessionRepository.prepareTurn({
+      baseContinuationToken: "schedule-member::schedule:long-running",
+      familyId: fixture.familyId,
+      groupId: null,
+      now: new Date("2026-07-17T09:00:00.000Z"),
+      scope: "personal",
+      userId: fixture.memberId,
+    });
+
+    await agentScheduleDispatchRepository.markRunning(claimed!, {
+      applicationSessionId: prepared.id,
+      eveSessionId: "eve-schedule-long-running",
+    });
+
+    await expect(agentScheduleDispatchRepository.claimDue({
+      leaseMilliseconds: 1_000,
+      limit: 1,
+      now: new Date("2026-07-17T09:00:02.000Z"),
+    })).resolves.toEqual([]);
+    await expect(agentScheduleRepository.list(privateAuth(fixture, "member"))).resolves.toEqual([
+      expect.objectContaining({ lastErrorCode: null, status: "leased" }),
     ]);
   });
 

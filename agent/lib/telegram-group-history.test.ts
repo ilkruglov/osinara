@@ -5,14 +5,21 @@
  * - `requireTelegramGroupHistoryAuthorization`: derives group identity only from verified auth.
  * - `searchTelegramGroupHistory`: forwards bounded filters without accepting a model scope.
  * - Date filters fail fast even when this boundary is called without the model schema.
+ * - The tool schema and permanent prompt teach exact, sequential history retrieval.
  */
-import { describe, expect, it, vi } from "vitest";
+import { readFile } from "node:fs/promises";
 
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+
+import listGroupHistory from "../tools/list_group_history.js";
 import { AppError } from "./app-error.js";
 import {
   requireTelegramGroupHistoryAuthorization,
   searchTelegramGroupHistory,
 } from "./telegram-group-history.js";
+
+const INSTRUCTIONS_PATH = new URL("../instructions.md", import.meta.url);
 
 function context(attributes: Record<string, unknown>) {
   return { session: { auth: { current: {
@@ -24,6 +31,36 @@ function context(attributes: Record<string, unknown>) {
 }
 
 describe("Telegram group history", () => {
+  it("teaches exact filter and pagination semantics in the model-facing schema", () => {
+    const description = listGroupHistory.description;
+    const schema = z.toJSONSchema(
+      listGroupHistory.inputSchema as unknown as z.ZodType,
+    ) as {
+      properties?: Record<string, { description?: string }>;
+    };
+
+    expect(description).toContain("не семантический поиск");
+    expect(description).toContain("объединяются через AND");
+    expect(description).toContain("один вызов на model step");
+    expect(description).toContain('{"beforeSequence":"320","limit":3}');
+    expect(schema.properties?.query?.description).toContain("буквальная подстрока");
+    expect(schema.properties?.participant?.description).toContain("username участника");
+    expect(schema.properties?.beforeSequence?.description).toContain("строго меньше");
+    expect(schema.properties?.sequenceFrom?.description).toContain("включительно");
+    expect(schema.properties?.sequenceTo?.description).toContain("включительно");
+    expect(schema.properties?.from?.description).toContain("включительно");
+    expect(schema.properties?.to?.description).toContain("включительно");
+    expect(schema.properties?.limit?.description).toContain("после применения всех фильтров");
+  });
+
+  it("forbids parallel history calls in the permanent model instructions", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    expect(instructions).toContain("Не вызывай `list_group_history` параллельно");
+    expect(instructions).toContain("дождись результата текущего вызова");
+    expect(instructions).toContain("не приписывай результат другому набору фильтров");
+  });
+
   it("uses the whole current verified family group without exposing a model scope", () => {
     expect(requireTelegramGroupHistoryAuthorization(context({
       groupId: "group-1",

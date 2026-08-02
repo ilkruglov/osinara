@@ -16,7 +16,11 @@ import type {
   AgentScheduleRecurrenceKind,
   AgentScheduleScope,
 } from "./agent-schedule-record.js";
-import { finishActiveAgentScheduleRun } from "./agent-schedule-run-completion.js";
+import {
+  completeDeliveredAgentScheduleRun,
+  type CompleteDeliveredAgentScheduleRunInput,
+  finishActiveAgentScheduleRun,
+} from "./agent-schedule-run-completion.js";
 
 export interface ClaimedAgentSchedule {
   authorUserId: string;
@@ -108,12 +112,19 @@ export const agentScheduleDispatchRepository = {
     try {
       await client.query("BEGIN");
 
-      // Once handoff starts, an expired lease is ambiguous and must never auto-repeat.
+      // Only an unfinished Eve handoff expires; a confirmed running workflow owns its lifecycle.
       const ambiguous = await client.query<{ family_id: string; id: string; lease_token: string }>(
         `WITH expired AS (
-           SELECT id, family_id, lease_token::text AS lease_token
-             FROM agent_schedules
-            WHERE status = 'leased' AND lease_expires_at < $1 AND dispatch_started_at IS NOT NULL
+           SELECT schedule.id, schedule.family_id, schedule.lease_token::text AS lease_token
+             FROM agent_schedules AS schedule
+            WHERE schedule.status = 'leased' AND schedule.lease_expires_at < $1
+              AND schedule.dispatch_started_at IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM agent_schedule_runs AS run
+                 WHERE run.schedule_id = schedule.id
+                   AND run.lease_token = schedule.lease_token
+                   AND run.status = 'dispatching'
+              )
             FOR UPDATE
          ), updated AS (
            UPDATE agent_schedules AS schedule
@@ -331,6 +342,28 @@ export const agentScheduleDispatchRepository = {
     }
   },
 
+  async completeDeliveredRun(input: CompleteDeliveredAgentScheduleRunInput): Promise<boolean> {
+    const client = await database().connect();
+    let result: Awaited<ReturnType<typeof completeDeliveredAgentScheduleRun>>;
+    try {
+      await client.query("BEGIN");
+      result = await completeDeliveredAgentScheduleRun(client, input);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (result === "state_conflict") {
+      throw new AppError(
+        "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
+        "Доставленный результат расписания сохранён, но состояние запуска повреждено",
+      );
+    }
+    return result === "completed";
+  },
+
   async failClaim(job: ClaimedAgentSchedule, errorCode: string): Promise<void> {
     const client = await database().connect();
     try {
@@ -354,26 +387,6 @@ export const agentScheduleDispatchRepository = {
       );
       await recordFailures(client, [{ family_id: failed.rows[0].family_id, id: job.id }], errorCode);
       await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async completeRun(applicationSessionId: string, eveSessionId: string, completedAt: Date): Promise<boolean> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const completed = await finishActiveAgentScheduleRun(client, {
-        applicationSessionId,
-        completedAt,
-        errorCode: null,
-        eveSessionId,
-      });
-      await client.query("COMMIT");
-      return completed;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

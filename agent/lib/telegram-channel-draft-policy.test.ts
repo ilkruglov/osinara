@@ -24,10 +24,12 @@ describe("Telegram channel draft policy", () => {
 
   it("records scheduled delivery confirmation before the group timeline", async () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
-    const confirmation = source.indexOf("await proactiveDeliveryRepository.record(");
+    const confirmation = source.indexOf("await agentScheduleDispatchRepository.completeDeliveredRun(");
     const timeline = source.indexOf("await telegramGroupJournalRepository.recordAgentResponse(");
 
     expect(confirmation).toBeGreaterThan(-1);
     expect(timeline).toBeGreaterThan(confirmation);
+    expect(source).not.toContain("agentScheduleDispatchRepository.completeRun(");
+    expect(source).toContain("AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING");
   });
 });

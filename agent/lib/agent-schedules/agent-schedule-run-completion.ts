@@ -3,9 +3,12 @@
  *
  * Exports:
  * - `finishActiveAgentScheduleRun`: marks a running Eve handoff completed or failed and advances recurrence.
+ * - `completeDeliveredAgentScheduleRun`: atomically records Telegram delivery and successful completion.
  */
 import type { PoolClient } from "pg";
 
+import { AppError } from "../app-error.js";
+import { recordProactiveDelivery } from "../proactive-deliveries/proactive-delivery-repository.js";
 import type { AgentScheduleRecurrenceKind } from "./agent-schedule-record.js";
 
 interface ActiveRunRow {
@@ -18,6 +21,23 @@ interface ActiveRunRow {
 interface NextOccurrenceRow {
   next_index: number;
   next_run_at: Date;
+}
+
+export interface CompleteDeliveredAgentScheduleRunInput {
+  applicationSessionId: string;
+  content: string;
+  deliveredAt: Date;
+  eveSessionId: string;
+  familyId: string;
+  groupId: string | null;
+  messageThreadId: string | null;
+  ownerUserId: string | null;
+  runId: string;
+  scheduledFor: Date;
+  scope: "family" | "personal";
+  telegramChatId: string;
+  telegramMessageId: string;
+  title: string;
 }
 
 async function nextDailyOccurrence(
@@ -146,4 +166,68 @@ export async function finishActiveAgentScheduleRun(
     [row.schedule_id, next.next_index, next.next_run_at, input.errorCode, input.completedAt],
   );
   return true;
+}
+
+export async function completeDeliveredAgentScheduleRun(
+  client: PoolClient,
+  input: CompleteDeliveredAgentScheduleRunInput,
+): Promise<"completed" | "duplicate" | "state_conflict"> {
+  // The trusted run id anchors the receipt even if later lifecycle validation finds corruption.
+  const run = await client.query<{ identity_matches: boolean; status: string }>(
+    `SELECT status::text,
+            application_session_id = $2::uuid AND eve_session_id = $3 AS identity_matches
+       FROM agent_schedule_runs
+      WHERE id = $1`,
+    [input.runId, input.applicationSessionId, input.eveSessionId],
+  );
+  const durableRun = run.rows[0];
+  if (!durableRun) {
+    throw new AppError(
+      "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
+      "Доставленный результат расписания не связан с активным запуском",
+    );
+  }
+
+  // Telegram has already accepted the message, so its exact receipt must survive any state conflict.
+  await recordProactiveDelivery(client, {
+    content: input.content,
+    deliveredAt: input.deliveredAt,
+    familyId: input.familyId,
+    groupId: input.groupId,
+    messageThreadId: input.messageThreadId,
+    ownerUserId: input.ownerUserId,
+    scheduledFor: input.scheduledFor,
+    scope: input.scope,
+    sourceId: input.runId,
+    sourceKind: "agent_schedule",
+    telegramChatId: input.telegramChatId,
+    telegramMessageId: input.telegramMessageId,
+    title: input.title,
+  });
+  if (!durableRun.identity_matches || durableRun.status !== "running") {
+    return durableRun.identity_matches && durableRun.status === "completed"
+      ? "duplicate"
+      : "state_conflict";
+  }
+
+  // Normal state completion and the already-written receipt commit in the same transaction.
+  const completed = await finishActiveAgentScheduleRun(client, {
+    applicationSessionId: input.applicationSessionId,
+    completedAt: input.deliveredAt,
+    errorCode: null,
+    eveSessionId: input.eveSessionId,
+  });
+  if (completed) return "completed";
+
+  // A concurrent Eve replay may finish after the initial state read; accept its exact receipt.
+  const existing = await client.query(
+    `SELECT 1
+       FROM agent_schedule_runs run
+       JOIN proactive_deliveries delivery
+         ON delivery.source_kind = 'agent_schedule' AND delivery.source_id = run.id
+      WHERE run.id = $1 AND run.application_session_id = $2 AND run.eve_session_id = $3
+        AND run.status = 'completed' AND delivery.telegram_message_id = $4::bigint`,
+    [input.runId, input.applicationSessionId, input.eveSessionId, input.telegramMessageId],
+  );
+  return existing.rowCount === 1 ? "duplicate" : "state_conflict";
 }
