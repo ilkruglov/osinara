@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `createAgentScheduleDispatcher`: prepares isolated Telegram receive target and trusted auth.
+ * - A confirmed running scenario is detached from short handoff-expiry recovery.
  */
 import { describe, expect, it, vi } from "vitest";
 

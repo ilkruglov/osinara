@@ -3,9 +3,12 @@
  *
  * Exports:
  * - `finishActiveAgentScheduleRun`: marks a running Eve handoff completed or failed and advances recurrence.
+ * - `completeDeliveredAgentScheduleRun`: atomically records Telegram delivery and successful completion.
  */
 import type { PoolClient } from "pg";
 
+import { AppError } from "../app-error.js";
+import { recordProactiveDelivery } from "../proactive-deliveries/proactive-delivery-repository.js";
 import type { AgentScheduleRecurrenceKind } from "./agent-schedule-record.js";
 
 interface ActiveRunRow {
@@ -18,6 +21,23 @@ interface ActiveRunRow {
 interface NextOccurrenceRow {
   next_index: number;
   next_run_at: Date;
+}
+
+export interface CompleteDeliveredAgentScheduleRunInput {
+  applicationSessionId: string;
+  content: string;
+  deliveredAt: Date;
+  eveSessionId: string;
+  familyId: string;
+  groupId: string | null;
+  messageThreadId: string | null;
+  ownerUserId: string | null;
+  runId: string;
+  scheduledFor: Date;
+  scope: "family" | "personal";
+  telegramChatId: string;
+  telegramMessageId: string;
+  title: string;
 }
 
 async function nextDailyOccurrence(
@@ -146,4 +166,75 @@ export async function finishActiveAgentScheduleRun(
     [row.schedule_id, next.next_index, next.next_run_at, input.errorCode, input.completedAt],
   );
   return true;
+}
+
+export async function completeDeliveredAgentScheduleRun(
+  client: PoolClient,
+  input: CompleteDeliveredAgentScheduleRunInput,
+): Promise<boolean> {
+  // Trusted scheduled auth must still match the exact durable run before any state transition.
+  const run = await client.query<{ status: string }>(
+    `SELECT status::text
+       FROM agent_schedule_runs
+      WHERE id = $1 AND application_session_id = $2 AND eve_session_id = $3`,
+    [input.runId, input.applicationSessionId, input.eveSessionId],
+  );
+  const runStatus = run.rows[0]?.status;
+  if (runStatus === "completed") {
+    const existing = await client.query(
+      `SELECT 1 FROM proactive_deliveries
+        WHERE source_kind = 'agent_schedule' AND source_id = $1
+          AND telegram_message_id = $2::bigint`,
+      [input.runId, input.telegramMessageId],
+    );
+    if (existing.rowCount === 1) return false;
+  }
+  if (runStatus !== "running") {
+    throw new AppError(
+      "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
+      "Доставленный результат расписания не связан с активным запуском",
+    );
+  }
+
+  // State completion and the delivery journal share one transaction at the repository boundary.
+  const completed = await finishActiveAgentScheduleRun(client, {
+    applicationSessionId: input.applicationSessionId,
+    completedAt: input.deliveredAt,
+    errorCode: null,
+    eveSessionId: input.eveSessionId,
+  });
+  if (completed) {
+    await recordProactiveDelivery(client, {
+      content: input.content,
+      deliveredAt: input.deliveredAt,
+      familyId: input.familyId,
+      groupId: input.groupId,
+      messageThreadId: input.messageThreadId,
+      ownerUserId: input.ownerUserId,
+      scheduledFor: input.scheduledFor,
+      scope: input.scope,
+      sourceId: input.runId,
+      sourceKind: "agent_schedule",
+      telegramChatId: input.telegramChatId,
+      telegramMessageId: input.telegramMessageId,
+      title: input.title,
+    });
+    return true;
+  }
+
+  // A concurrent Eve replay may finish after the initial state read; accept its exact receipt.
+  const existing = await client.query(
+    `SELECT 1
+       FROM agent_schedule_runs run
+       JOIN proactive_deliveries delivery
+         ON delivery.source_kind = 'agent_schedule' AND delivery.source_id = run.id
+      WHERE run.id = $1 AND run.application_session_id = $2 AND run.eve_session_id = $3
+        AND run.status = 'completed' AND delivery.telegram_message_id = $4::bigint`,
+    [input.runId, input.applicationSessionId, input.eveSessionId, input.telegramMessageId],
+  );
+  if (existing.rowCount === 1) return false;
+  throw new AppError(
+    "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
+    "Доставленный результат расписания не связан с активным запуском",
+  );
 }

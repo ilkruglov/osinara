@@ -61,6 +61,7 @@ export default telegramChannel({
         channel.state,
         isScheduledSession(ctx) ? undefined : telegramTurnReplyParameters(channel.state, ctx),
       );
+      const deliveredAt = new Date();
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       const currentAttributes = ctx.session.auth.current?.attributes;
       const groupId = scheduledDelivery?.groupId ??
@@ -72,17 +73,18 @@ export default telegramChannel({
             "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING: Telegram не подтвердил доставку результата расписания",
           );
         }
-        await proactiveDeliveryRepository.record({
+        await agentScheduleDispatchRepository.completeDeliveredRun({
+          applicationSessionId: sessionId,
           content: message,
-          deliveredAt: new Date(),
+          deliveredAt,
+          eveSessionId: ctx.session.id,
           familyId: scheduledDelivery.familyId,
           groupId: scheduledDelivery.groupId,
           messageThreadId: scheduledDelivery.messageThreadId,
           ownerUserId: scheduledDelivery.ownerUserId,
+          runId: scheduledDelivery.runId,
           scheduledFor: new Date(scheduledDelivery.scheduledFor),
           scope: scheduledDelivery.scope,
-          sourceId: scheduledDelivery.runId,
-          sourceKind: "agent_schedule",
           telegramChatId: scheduledDelivery.telegramChatId,
           telegramMessageId: firstMessage.messageId,
           title: scheduledDelivery.title,
@@ -100,7 +102,7 @@ export default telegramChannel({
         await telegramGroupJournalRepository.recordAgentResponse({
           applicationSessionId: isScheduledSession(ctx) ? null : sessionId,
           contentText: message,
-          deliveredAt: new Date(),
+          deliveredAt,
           groupId,
           messageThreadId: forumTopicId,
           replyToEntryId,
@@ -166,7 +168,13 @@ export default telegramChannel({
         ctx.session.id,
       );
       if (isScheduledSession(ctx) && !awaitingApproval) {
-        await agentScheduleDispatchRepository.completeRun(sessionId, ctx.session.id, new Date());
+        // Successful scheduled runs are completed atomically with Telegram delivery above.
+        await agentScheduleDispatchRepository.failRun(
+          sessionId,
+          ctx.session.id,
+          "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING",
+          new Date(),
+        );
       }
       await sessionRepository.recordTurnCompleted(sessionId, ctx.session.id, awaitingApproval);
       if (!awaitingApproval) {
