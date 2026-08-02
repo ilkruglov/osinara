@@ -201,13 +201,22 @@ describeWithDatabase("agent schedule repositories", () => {
       title: claimed!.title,
     } as const;
 
-    // A mismatched trusted run id cannot finalize state or leave an orphan receipt.
+    // An unknown run cannot create an orphan receipt or finalize another schedule.
     await expect(agentScheduleDispatchRepository.completeDeliveredRun({
       ...delivery,
       runId: "00000000-0000-4000-8000-000000000999",
     })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
     await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
       rowCount: 0,
+    });
+
+    // Once Telegram delivery belongs to a durable run, retain the receipt despite identity conflict.
+    await expect(agentScheduleDispatchRepository.completeDeliveredRun({
+      ...delivery,
+      eveSessionId: "eve-schedule-conflict",
+    })).rejects.toMatchObject({ code: "AGENT_SCHEDULE_DELIVERY_STATE_INVALID" });
+    await expect(database().query("SELECT 1 FROM proactive_deliveries")).resolves.toMatchObject({
+      rowCount: 1,
     });
 
     await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(true);

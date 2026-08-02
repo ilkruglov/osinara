@@ -36,8 +36,13 @@ describeWithDatabase("037 delivered agent schedule repair migration", () => {
         CREATE TYPE agent_schedule_run_status AS ENUM
           ('claimed', 'dispatching', 'running', 'completed', 'failed', 'ambiguous');
         CREATE TYPE proactive_delivery_source_kind AS ENUM ('agent_schedule', 'reminder');
+        CREATE TABLE agent_schedules (
+          id uuid PRIMARY KEY,
+          status text NOT NULL
+        );
         CREATE TABLE agent_schedule_runs (
           id uuid PRIMARY KEY,
+          schedule_id uuid NOT NULL REFERENCES agent_schedules(id),
           status agent_schedule_run_status NOT NULL,
           completed_at timestamptz,
           error_code text,
@@ -49,12 +54,15 @@ describeWithDatabase("037 delivered agent schedule repair migration", () => {
           source_id uuid NOT NULL,
           delivered_at timestamptz NOT NULL
         );
-        INSERT INTO agent_schedule_runs (id, status, completed_at, error_code, updated_at)
+        INSERT INTO agent_schedules (id, status)
+        VALUES ('10000000-0000-4000-8000-000000000001', 'active');
+        INSERT INTO agent_schedule_runs
+          (id, schedule_id, status, completed_at, error_code, updated_at)
         VALUES
-          ('00000000-0000-4000-8000-000000000001', 'running', NULL, NULL, '2026-07-21T07:00:00Z'),
-          ('00000000-0000-4000-8000-000000000002', 'ambiguous', NULL, 'AGENT_SCHEDULE_DELIVERY_AMBIGUOUS', '2026-07-21T08:00:00Z'),
-          ('00000000-0000-4000-8000-000000000003', 'running', NULL, NULL, '2026-07-21T09:00:00Z'),
-          ('00000000-0000-4000-8000-000000000004', 'failed', '2026-07-21T10:00:00Z', 'MODEL_CALL_FAILED', '2026-07-21T10:00:00Z');
+          ('00000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'running', NULL, NULL, '2026-07-21T07:00:00Z'),
+          ('00000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'ambiguous', NULL, 'AGENT_SCHEDULE_DELIVERY_AMBIGUOUS', '2026-07-21T08:00:00Z'),
+          ('00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', 'running', NULL, NULL, '2026-07-21T09:00:00Z'),
+          ('00000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', 'failed', '2026-07-21T10:00:00Z', 'MODEL_CALL_FAILED', '2026-07-21T10:00:00Z');
         INSERT INTO proactive_deliveries (source_kind, source_id, delivered_at)
         VALUES
           ('agent_schedule', '00000000-0000-4000-8000-000000000001', '2026-07-21T07:27:00Z'),
@@ -96,7 +104,23 @@ describeWithDatabase("037 delivered agent schedule repair migration", () => {
           status: "failed",
         },
       ]);
+
+      // Unknown parent recurrence state must stop deployment instead of guessing a next run.
+      await client.query(
+        "UPDATE agent_schedules SET status = 'failed' WHERE id = '10000000-0000-4000-8000-000000000001'",
+      );
+      await client.query(
+        `INSERT INTO proactive_deliveries (source_kind, source_id, delivered_at)
+         VALUES ('agent_schedule', '00000000-0000-4000-8000-000000000003', '2026-07-21T09:27:00Z')`,
+      );
+      await expect(client.query(migration)).rejects.toThrowError(
+        /AGENT_SCHEDULE_DELIVERY_REPAIR_PARENT_INVALID/u,
+      );
+      await expect(client.query(
+        "SELECT status::text FROM agent_schedule_runs WHERE id = '00000000-0000-4000-8000-000000000003'",
+      )).resolves.toMatchObject({ rows: [{ status: "running" }] });
     } finally {
+      await client.query("SET search_path TO public");
       client.release();
     }
   });

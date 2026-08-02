@@ -344,17 +344,24 @@ export const agentScheduleDispatchRepository = {
 
   async completeDeliveredRun(input: CompleteDeliveredAgentScheduleRunInput): Promise<boolean> {
     const client = await database().connect();
+    let result: Awaited<ReturnType<typeof completeDeliveredAgentScheduleRun>>;
     try {
       await client.query("BEGIN");
-      const completed = await completeDeliveredAgentScheduleRun(client, input);
+      result = await completeDeliveredAgentScheduleRun(client, input);
       await client.query("COMMIT");
-      return completed;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
     }
+    if (result === "state_conflict") {
+      throw new AppError(
+        "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
+        "Доставленный результат расписания сохранён, но состояние запуска повреждено",
+      );
+    }
+    return result === "completed";
   },
 
   async failClaim(job: ClaimedAgentSchedule, errorCode: string): Promise<void> {

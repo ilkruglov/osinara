@@ -171,56 +171,53 @@ export async function finishActiveAgentScheduleRun(
 export async function completeDeliveredAgentScheduleRun(
   client: PoolClient,
   input: CompleteDeliveredAgentScheduleRunInput,
-): Promise<boolean> {
-  // Trusted scheduled auth must still match the exact durable run before any state transition.
-  const run = await client.query<{ status: string }>(
-    `SELECT status::text
+): Promise<"completed" | "duplicate" | "state_conflict"> {
+  // The trusted run id anchors the receipt even if later lifecycle validation finds corruption.
+  const run = await client.query<{ identity_matches: boolean; status: string }>(
+    `SELECT status::text,
+            application_session_id = $2::uuid AND eve_session_id = $3 AS identity_matches
        FROM agent_schedule_runs
-      WHERE id = $1 AND application_session_id = $2 AND eve_session_id = $3`,
+      WHERE id = $1`,
     [input.runId, input.applicationSessionId, input.eveSessionId],
   );
-  const runStatus = run.rows[0]?.status;
-  if (runStatus === "completed") {
-    const existing = await client.query(
-      `SELECT 1 FROM proactive_deliveries
-        WHERE source_kind = 'agent_schedule' AND source_id = $1
-          AND telegram_message_id = $2::bigint`,
-      [input.runId, input.telegramMessageId],
-    );
-    if (existing.rowCount === 1) return false;
-  }
-  if (runStatus !== "running") {
+  const durableRun = run.rows[0];
+  if (!durableRun) {
     throw new AppError(
       "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
       "Доставленный результат расписания не связан с активным запуском",
     );
   }
 
-  // State completion and the delivery journal share one transaction at the repository boundary.
+  // Telegram has already accepted the message, so its exact receipt must survive any state conflict.
+  await recordProactiveDelivery(client, {
+    content: input.content,
+    deliveredAt: input.deliveredAt,
+    familyId: input.familyId,
+    groupId: input.groupId,
+    messageThreadId: input.messageThreadId,
+    ownerUserId: input.ownerUserId,
+    scheduledFor: input.scheduledFor,
+    scope: input.scope,
+    sourceId: input.runId,
+    sourceKind: "agent_schedule",
+    telegramChatId: input.telegramChatId,
+    telegramMessageId: input.telegramMessageId,
+    title: input.title,
+  });
+  if (!durableRun.identity_matches || durableRun.status !== "running") {
+    return durableRun.identity_matches && durableRun.status === "completed"
+      ? "duplicate"
+      : "state_conflict";
+  }
+
+  // Normal state completion and the already-written receipt commit in the same transaction.
   const completed = await finishActiveAgentScheduleRun(client, {
     applicationSessionId: input.applicationSessionId,
     completedAt: input.deliveredAt,
     errorCode: null,
     eveSessionId: input.eveSessionId,
   });
-  if (completed) {
-    await recordProactiveDelivery(client, {
-      content: input.content,
-      deliveredAt: input.deliveredAt,
-      familyId: input.familyId,
-      groupId: input.groupId,
-      messageThreadId: input.messageThreadId,
-      ownerUserId: input.ownerUserId,
-      scheduledFor: input.scheduledFor,
-      scope: input.scope,
-      sourceId: input.runId,
-      sourceKind: "agent_schedule",
-      telegramChatId: input.telegramChatId,
-      telegramMessageId: input.telegramMessageId,
-      title: input.title,
-    });
-    return true;
-  }
+  if (completed) return "completed";
 
   // A concurrent Eve replay may finish after the initial state read; accept its exact receipt.
   const existing = await client.query(
@@ -232,9 +229,5 @@ export async function completeDeliveredAgentScheduleRun(
         AND run.status = 'completed' AND delivery.telegram_message_id = $4::bigint`,
     [input.runId, input.applicationSessionId, input.eveSessionId, input.telegramMessageId],
   );
-  if (existing.rowCount === 1) return false;
-  throw new AppError(
-    "AGENT_SCHEDULE_DELIVERY_STATE_INVALID",
-    "Доставленный результат расписания не связан с активным запуском",
-  );
+  return existing.rowCount === 1 ? "duplicate" : "state_conflict";
 }
