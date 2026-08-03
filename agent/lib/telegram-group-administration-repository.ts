@@ -4,6 +4,7 @@
  * Exports:
  * - `TelegramGroupRegistration`: complete persisted registration input.
  * - `TelegramGroupPolicyUpdate`: complete external-group policy replacement input.
+ * - `TelegramGroupStatus`: complete read-only registration and policy projection.
  * - `TelegramGroupAdministrationRepository`: injectable registration/removal/policy contract.
  * - `telegramGroupAdministrationRepository`: family-scoped group lifecycle operations.
  */
@@ -43,7 +44,19 @@ export interface TelegramGroupPolicyUpdate {
   toolAllowlist: string[];
 }
 
+export interface TelegramGroupStatus {
+  messageMode: TelegramGroupMessageMode;
+  telegramChatId: string;
+  title: string;
+  toolAllowlist: string[];
+  type: RegisteredGroupType;
+}
+
 export interface TelegramGroupAdministrationRepository {
+  listStatuses(input: {
+    familyId: string;
+    requestedBy: string;
+  }): Promise<TelegramGroupStatus[]>;
   registerGroup(input: TelegramGroupRegistration): Promise<{ groupId: string }>;
   removeRegistration(input: {
     familyId: string;
@@ -54,6 +67,54 @@ export interface TelegramGroupAdministrationRepository {
 }
 
 export const telegramGroupAdministrationRepository: TelegramGroupAdministrationRepository = {
+  async listStatuses(input) {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+
+      // Keep the current owner membership locked until the family-scoped policy read completes.
+      const owner = await client.query(
+        `SELECT 1
+           FROM family_memberships
+          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
+          FOR SHARE`,
+        [input.familyId, input.requestedBy],
+      );
+      if (!owner.rowCount) {
+        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
+      }
+
+      // Return the exact persisted configuration; effective external base tools are added by the
+      // model-facing tool from the same static catalog used by execution policy.
+      const result = await client.query<{
+        message_mode: TelegramGroupMessageMode;
+        telegram_chat_id: string;
+        title: string;
+        tool_allowlist: string[];
+        type: RegisteredGroupType;
+      }>(
+        `SELECT telegram_chat_id, title, type, message_mode, tool_allowlist
+           FROM telegram_groups
+          WHERE family_id = $1
+          ORDER BY lower(title), telegram_chat_id`,
+        [input.familyId],
+      );
+      await client.query("COMMIT");
+      return result.rows.map((row) => ({
+        messageMode: row.message_mode,
+        telegramChatId: row.telegram_chat_id,
+        title: row.title,
+        toolAllowlist: row.tool_allowlist,
+        type: row.type,
+      }));
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async registerGroup(input) {
     const client = await database().connect();
     try {

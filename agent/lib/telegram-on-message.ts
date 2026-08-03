@@ -66,6 +66,7 @@ import {
   telegramBaseContinuationToken,
   telegramReplyContinuationTokens,
 } from "./telegram-reply-routing.js";
+import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
 import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
@@ -77,7 +78,7 @@ import type {
 } from "./workspaces/workspace-repository.js";
 
 interface TelegramMessageRepositories {
-  attachmentReferences: Pick<TelegramGroupAttachmentRepository, "record">;
+  attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
   attachments: {
     persist(input: {
       attachments: readonly TelegramMessage["attachments"][number][];
@@ -145,23 +146,24 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const externalAllowlist = group?.type !== "family_private"
       ? parseExternalGroupToolAllowlist(group?.toolAllowlist)
       : null;
-    const externalNativePhotoAllowed = mediaKind === "native_photo" &&
+    const externalImageAllowed = (mediaKind === "native_photo" ||
+      mediaKind === "image_document_candidate") &&
       externalAllowlist?.has("inspect_workspace_image") === true;
     let journalDuplicate = false;
     let inboundTimeline: Awaited<ReturnType<TelegramGroupJournalRepository["record"]>> | null = null;
-    const hasLazyFamilyAttachment =
-      group?.type === "family_private" && message.attachments.length > 0;
+    const hasLazyGroupAttachment = group !== null && message.attachments.length > 0 &&
+      (group.type === "family_private" || externalImageAllowed);
     if (message.chat.type !== "private") {
       if (!group) return null;
       // External media is fail-closed except for a current, explicitly allowlisted native photo.
-      if (group.type !== "family_private" && mediaKind !== "none" && !externalNativePhotoAllowed) {
+      if (group.type !== "family_private" && mediaKind !== "none" && !externalImageAllowed) {
         return null;
       }
       // Every registered group shares one timeline independently of whether this message starts a turn.
       inboundTimeline = await repositories.journal.record(group.groupId, message);
       if (inboundTimeline.status === "duplicate") {
         journalDuplicate = true;
-        if (!hasLazyFamilyAttachment) return null;
+        if (!hasLazyGroupAttachment) return null;
       }
       if (inboundTimeline.replyToAgent) addressed = true;
       const routeEligibleReply = message.replyToMessage &&
@@ -186,7 +188,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         );
       }
       // Authorized family attachment references are retained without waking the model.
-      if (!addressed && !hasLazyFamilyAttachment) return null;
+      if (!addressed && !hasLazyGroupAttachment) return null;
     } else if (!addressed) {
       return null;
     }
@@ -277,9 +279,22 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const access = decision.access;
 
     // Family media stays remote until the model explicitly imports this safe opaque reference.
-    const lazyAttachment = hasLazyFamilyAttachment && group
+    const currentAttachment = hasLazyGroupAttachment && group
       ? await repositories.attachmentReferences.record(group.groupId, message)
       : null;
+    const replyInspectionAllowed = group?.type === "family_private" ||
+      externalAllowlist?.has("inspect_workspace_image") === true;
+    const replyAttachmentTarget = group && inboundTimeline && replyInspectionAllowed
+      ? telegramReplyAttachmentTarget(message, group)
+      : null;
+    const replyAttachment = replyAttachmentTarget && group && inboundTimeline
+      ? await repositories.attachmentReferences.captureReplyTarget(
+        group.groupId,
+        inboundTimeline.entryId,
+        replyAttachmentTarget,
+      )
+      : null;
+    const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) return null;
 
     let replyHandling: "message" | undefined;
@@ -324,7 +339,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     let storedAttachments: StoredTelegramAttachment[] = [];
     if (
       message.attachments.length > 0 &&
-      (message.chat.type === "private" || externalNativePhotoAllowed)
+      message.chat.type === "private"
     ) {
       try {
         storedAttachments = await repositories.attachments.persist({
@@ -373,6 +388,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           currentSenderUsername: sender.username ?? null,
           currentSequence: inboundTimeline.sequenceId,
           groupId: group.groupId,
+          includeAttachmentReferences: group.type === "family_private" ||
+            externalAllowlist?.has("inspect_workspace_image") === true,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
         })

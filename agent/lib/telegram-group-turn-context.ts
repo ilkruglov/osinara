@@ -24,6 +24,7 @@ interface PrepareTelegramGroupTurnContextInput {
   currentSenderUsername: string | null;
   currentSequence: string;
   groupId: string;
+  includeAttachmentReferences: boolean;
   messageText: string;
   messageThreadId: string | null;
 }
@@ -85,8 +86,12 @@ export function createTelegramGroupTurnContextPreparer(
           limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
           messageThreadId: input.messageThreadId,
         });
+    // External capability revocation hides even historical opaque references from new model turns.
+    const visibleEntries = input.includeAttachmentReferences
+      ? page.entries
+      : page.entries.map(({ attachment: _attachment, ...entry }) => entry);
     const timeline = formatTelegramGroupJournalContext(
-      page.entries,
+      visibleEntries,
       TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
       page.omittedBeforeSequence,
     );

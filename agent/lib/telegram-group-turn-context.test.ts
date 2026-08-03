@@ -49,6 +49,7 @@ const input = {
   currentSenderUsername: "nyxandro",
   currentSequence: "100",
   groupId: "group-1",
+  includeAttachmentReferences: true,
   messageText: "Что решили?",
   messageThreadId: null,
 };
@@ -112,6 +113,24 @@ describe("Telegram group turn context", () => {
     expect(result.cursorSequence).toBe("101");
     expect(result.durableMessage).toContain("<current_telegram_message>");
     expect(result.durableMessage).not.toContain("<untrusted_telegram_group_timeline>");
+  });
+
+  it("hides historical attachment references when live external policy revoked vision", async () => {
+    const deps = dependencies(null);
+    deps.journal.listRecent.mockResolvedValue([{
+      ...entry("99", "Фото"),
+      attachment: {
+        attachmentId: "00000000-0000-4000-8000-000000000099",
+        kind: "photo",
+        mediaType: "image/jpeg",
+      },
+    }]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({ ...input, includeAttachmentReferences: false });
+
+    expect(result.durableMessage).toContain("Фото");
+    expect(result.durableMessage).not.toContain("attachmentId");
   });
 
   it("marks a bounded incremental gap for explicit history retrieval", async () => {

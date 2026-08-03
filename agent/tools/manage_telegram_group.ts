@@ -2,14 +2,13 @@
  * Consolidated Telegram group administration tool.
  *
  * Export:
- * - `manage_telegram_group`: registers, removes, or updates policy for a trust zone registration.
+ * - `manage_telegram_group`: reads status, registers, removes, or updates group policy.
  *
  * Key constructs:
  * - Object-shaped model schema avoids root and nested JSON Schema unions.
  * - Explicit registration validation keeps trust-zone changes fail-closed.
  */
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import { requirePrivateTelegramOwner } from "../lib/family-context.js";
@@ -22,6 +21,7 @@ import {
   TOOL_ALLOWLIST_MAX_SIZE,
 } from "../lib/telegram-group-registration.js";
 import {
+  ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
   EXTERNAL_GROUP_TOOL_NAMES,
   isExternalGroupToolName,
 } from "../lib/tool-policy/group-tool-catalog.js";
@@ -36,7 +36,7 @@ import {
 } from "../lib/tool-input-validation.js";
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_GROUP_INPUT_INVALID";
-const TOOL_ACTIONS = ["register", "remove", "update_policy"] as const;
+const TOOL_ACTIONS = ["register", "remove", "status", "update_policy"] as const;
 const GROUP_TYPES = ["family_private", "external"] as const;
 const STANDARD_MESSAGE_MODES = ["addressed_only", "all"] as const;
 const EXTERNAL_MESSAGE_MODES = [...STANDARD_MESSAGE_MODES, "owner_only"] as const;
@@ -140,7 +140,8 @@ function requireRegistration(input: Record<string, unknown>) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Зарегистрировать Telegram-группу как trust zone, полностью заменить политику существующей внешней группы или удалить регистрацию и связанные групповые данные.",
+  "Показать статус всех Telegram-групп семьи, зарегистрировать группу как trust zone, полностью заменить политику существующей внешней группы или удалить регистрацию и связанные групповые данные.",
+  "При команде /status или просьбе показать настройки групп используй status: он не требует подтверждения и одним вызовом возвращает type, messageMode, полный toolAllowlist и базовые workspace tools: {\"action\":\"status\"}.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
   "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
   "Update_policy не отключает группу и сохраняет её ID, название, тип, историю, workspace, память и сессии.",
@@ -153,7 +154,8 @@ const TOOL_DESCRIPTION = [
 ].join(" ");
 
 export default defineTool({
-  approval: always(),
+  approval: ({ toolInput }) =>
+    toolInput?.action === "status" ? "not-applicable" : "user-approval",
   description: TOOL_DESCRIPTION,
   inputSchema: manageTelegramGroupSchema,
   async execute(input, ctx) {
@@ -161,6 +163,37 @@ export default defineTool({
     requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_telegram_group", INPUT_ERROR_CODE);
     const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
     const owner = requirePrivateTelegramOwner(ctx);
+    if (action === "status") {
+      requireOnlyFields(payload, ["action"], "action=status", INPUT_ERROR_CODE);
+      const groups = await telegramGroupAdministrationRepository.listStatuses({
+        familyId: owner.familyId,
+        requestedBy: owner.userId,
+      });
+      return {
+        groups: groups.map((group) => {
+          if (group.type === "family_private") {
+            return {
+              ...group,
+              builtInWorkspaceTools: [],
+              effectiveConfiguredTools: [],
+              policySummary:
+                "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
+              toolAccessMode: "family_policy" as const,
+            };
+          }
+          const builtInWorkspaceTools = [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES];
+          return {
+            ...group,
+            builtInWorkspaceTools,
+            effectiveConfiguredTools: [...builtInWorkspaceTools, ...group.toolAllowlist],
+            policySummary:
+              "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
+            toolAccessMode: "external_allowlist" as const,
+          };
+        }),
+        total: groups.length,
+      };
+    }
     if (action === "update_policy") {
       // Policy updates are complete replacements; omitted or extra registration fields are rejected.
       requireOnlyFields(

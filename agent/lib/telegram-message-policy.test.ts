@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `isMessageAddressedToBot`: preserves Eve's command semantics and strict mention/reply gating.
- * - `classifyTelegramInboundMedia`: recognizes only one well-formed native Telegram photo.
+ * - `classifyTelegramInboundMedia`: recognizes one native photo or static image-document candidate.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
  */
@@ -173,6 +173,36 @@ describe("classifyTelegramInboundMedia", () => {
     expect(classifyTelegramInboundMedia({
       attachments: [{ fileId: "image-document", kind: "document", mediaType: "image/jpeg" }],
       raw: { document: { file_id: "image-document", mime_type: "image/jpeg" } },
+    })).toBe("image_document_candidate");
+  });
+
+  it.each([
+    ["image/png", "scan.bin"],
+    ["application/octet-stream", "scan.webp"],
+  ])("accepts a single image document candidate declared as %s named %s", (mediaType, fileName) => {
+    const message = {
+      attachments: [{ fileId: "image-document", fileName, kind: "document" as const, mediaType }],
+      raw: {
+        document: {
+          file_id: "image-document",
+          file_name: fileName,
+          mime_type: mediaType,
+        },
+      },
+    };
+
+    expect(classifyTelegramInboundMedia(message)).toBe("image_document_candidate");
+  });
+
+  it("rejects a document without an image declaration or recognized static image extension", () => {
+    expect(classifyTelegramInboundMedia({
+      attachments: [{
+        fileId: "document",
+        fileName: "report.pdf",
+        kind: "document",
+        mediaType: "application/pdf",
+      }],
+      raw: { document: { file_id: "document", file_name: "report.pdf", mime_type: "application/pdf" } },
     })).toBe("unsupported_media");
   });
 

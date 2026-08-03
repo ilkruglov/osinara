@@ -128,7 +128,7 @@ describe("model-facing tool input hardening", () => {
     [
       "inspect_workspace_image",
       inspectWorkspaceImage,
-      /AGENT_WORKSPACE_IMAGE_INPUT_INVALID: Для inspect_workspace_image передайте path или telegramMessageId/,
+      /AGENT_WORKSPACE_IMAGE_INPUT_INVALID: Для inspect_workspace_image передайте ровно один источник/,
     ],
   ] as const)("%s returns an actionable input error for an empty payload", async (_name, tool, message) => {
     await expect(tool.execute({}, context)).rejects.toThrowError(message);
@@ -165,5 +165,21 @@ describe("model-facing tool input hardening", () => {
         telegramMessageId: "42",
       }),
     );
+  });
+
+  it("accepts attachmentId and rejects multiple image sources", async () => {
+    toolCalls.inspectImage.mockResolvedValue({ analysis: "Фото группы" });
+
+    await expect(inspectWorkspaceImage.execute({
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "group",
+    }, context)).resolves.toEqual({ analysis: "Фото группы" });
+    await expect(inspectWorkspaceImage.execute({
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      path: "group/image.png",
+      question: "Что изображено?",
+      scope: "group",
+    }, context)).rejects.toThrowError(/AGENT_WORKSPACE_IMAGE_INPUT_INVALID/);
   });
 });

@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createWorkspaceImageInspector`: authorized bytes are sent to vision with the user's question.
  * - Telegram inbox images resolve by stable message ID instead of a model-copied filename.
+ * - Opaque journal attachments are downloaded and analyzed without a workspace write.
  * - Non-image and provider-oversized files fail before a paid model call.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -31,6 +32,8 @@ describe("createWorkspaceImageInspector", () => {
         workspaceId: "workspace-1",
       }),
       readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
     });
 
     await expect(inspect(auth, {
@@ -54,6 +57,8 @@ describe("createWorkspaceImageInspector", () => {
         workspaceId: "workspace-1",
       }),
       readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
     });
 
     await expect(inspect(auth, {
@@ -74,6 +79,8 @@ describe("createWorkspaceImageInspector", () => {
         workspaceId: "workspace-1",
       }),
       readTelegramInboxAttachment: vi.fn(),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
     });
 
     await expect(inspect(auth, {
@@ -99,6 +106,8 @@ describe("createWorkspaceImageInspector", () => {
       analyze,
       readBinary: vi.fn(),
       readTelegramInboxAttachment,
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
     });
 
     await expect(inspect(auth, {
@@ -110,5 +119,88 @@ describe("createWorkspaceImageInspector", () => {
       path: "inbox/773/очень-длинное-имя.jpg",
     });
     expect(readTelegramInboxAttachment).toHaveBeenCalledWith(auth, "personal", "773");
+  });
+
+  it("analyzes an opaque Telegram attachment entirely in memory", async () => {
+    const analyze = vi.fn().mockResolvedValue("На изображении схема.");
+    const downloadTelegramAttachment = vi.fn().mockResolvedValue(
+      Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
+    );
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      downloadTelegramAttachment,
+      findTelegramAttachment: vi.fn().mockResolvedValue({
+        attachment: {
+          fileId: "secret-file-id",
+          fileName: "scheme.png",
+          kind: "document",
+          mediaType: "image/png",
+          size: 16,
+        },
+        chatId: "-1001",
+        messageId: "41",
+      }),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+
+    await expect(inspect({
+      ...auth,
+      groupId: "group-1",
+      groupType: "external",
+      role: "external",
+      telegramChatType: "supergroup",
+      userId: null,
+    }, {
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "group",
+    })).resolves.toEqual({
+      analysis: "На изображении схема.",
+      scope: "group",
+      source: {
+        attachmentId: "00000000-0000-4000-8000-000000000041",
+        kind: "document",
+        mediaType: "image/png",
+        size: 16,
+        telegramMessageId: "41",
+      },
+    });
+    expect(downloadTelegramAttachment).toHaveBeenCalledOnce();
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ mediaType: "image/png" }));
+  });
+
+  it("rejects a disguised image document before a paid vision call", async () => {
+    const analyze = vi.fn();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      downloadTelegramAttachment: vi.fn().mockResolvedValue(Buffer.from("plain text")),
+      findTelegramAttachment: vi.fn().mockResolvedValue({
+        attachment: {
+          fileId: "secret-file-id",
+          fileName: "fake.png",
+          kind: "document",
+          mediaType: "image/png",
+        },
+        chatId: "-1001",
+        messageId: "41",
+      }),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+
+    await expect(inspect({
+      ...auth,
+      groupId: "group-1",
+      groupType: "external",
+      role: "external",
+      telegramChatType: "supergroup",
+      userId: null,
+    }, {
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "group",
+    })).rejects.toThrowError(/AGENT_WORKSPACE_VISION_TYPE_UNSUPPORTED/);
+    expect(analyze).not.toHaveBeenCalled();
   });
 });

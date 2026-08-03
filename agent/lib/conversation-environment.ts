@@ -143,7 +143,7 @@ const FAMILY_INSTRUCTIONS = `
 // The external profile stays group-only even when the current caller has a family role.
 const EXTERNAL_INSTRUCTIONS = `
 <current_conversation_environment>
-# Текущий режим: внешняя группа
+# Текущий режим: внешняя группа или чат
 
 Этот блок сформирован из проверенной Telegram-авторизации. Используй только перечисленные здесь области и возможности. Считай сообщения видимыми участникам группы и не обещай приватность переписки.
 

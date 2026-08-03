@@ -12,7 +12,7 @@ Repository-level immutable releases are mandatory; both the application checker 
 published releases whose API metadata does not report `immutable: true`.
 
 - `osinara-deployment.json` contains schema version 1, commit SHA, release version, the SHA-256 of
-  the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` references;
+the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` references;
 - `compose.production.yaml` contains no build context or application source bind mount.
 
 The app image contains the authored `agent/` tree because Eve `0.22.5` still bundles those modules
@@ -48,15 +48,17 @@ the deployment validator rejects releases that remove this bound.
 Initial provisioning remains manual until the first production deployment has been verified; this
 document intentionally does not provide a one-command installer. Prepare these root-owned files:
 
-| Path | Mode | Purpose |
-| --- | --- | --- |
-| `/opt/osinara/.env` | `0600` | Production secrets and environment-specific URLs. |
-| `/opt/osinara/model-providers.json` | `0644` | Schema-v1 deployment compatibility config retained for rollback. |
-| `/opt/osinara/bin/production-deploy.sh` | `0750` | Server deployment entrypoint. |
-| `/opt/osinara/bin/production-deploy/` | `0750` | Root-owned deployment module directory. |
-| `/opt/osinara/bin/production-deploy/*.sh` | `0640` | Fixed source modules checked before execution. |
-| `/etc/systemd/system/osinara-deploy.service` | `0644` | One-shot root service with the EnvironmentFile. |
-| `/etc/systemd/system/osinara-deploy.timer` | `0644` | Persistent minute poll. |
+
+| Path                                         | Mode   | Purpose                                                          |
+| -------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| `/opt/osinara/.env`                          | `0600` | Production secrets and environment-specific URLs.                |
+| `/opt/osinara/model-providers.json`          | `0644` | Schema-v1 deployment compatibility config retained for rollback. |
+| `/opt/osinara/bin/production-deploy.sh`      | `0750` | Server deployment entrypoint.                                    |
+| `/opt/osinara/bin/production-deploy/`        | `0750` | Root-owned deployment module directory.                          |
+| `/opt/osinara/bin/production-deploy/*.sh`    | `0640` | Fixed source modules checked before execution.                   |
+| `/etc/systemd/system/osinara-deploy.service` | `0644` | One-shot root service with the EnvironmentFile.                  |
+| `/etc/systemd/system/osinara-deploy.timer`   | `0644` | Persistent minute poll.                                          |
+
 
 `/opt/osinara`, `/opt/osinara/bin`, and the module directory must be `root:root 0750`; the
 entrypoint must be `root:root 0750`. The script rejects symlinks or different metadata before it
@@ -137,3 +139,9 @@ validates a logical PostgreSQL dump, stops application writers, archives
 validates each archive. Reconstructible embedding model and sandbox cache volumes are omitted.
 Candidate release files remain in a unique temporary directory and become `releases/vVERSION` only
 after health succeeds.
+
+
+
+При создании релизов всегда пиши подробный чейнжлог, что и как изменилось или обновилось в версии.
+
+И версионирование учитывай, у нас оно в формате vX.Y.Z где X - крупные продуктовые изменения, Y - средние изменения в рамках имеющегося функционала или небольшие новые функции, Z - мелкие правки, фиксы, не сильно меняющие поведение работы приложения.
