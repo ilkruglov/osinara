@@ -28,8 +28,7 @@ export function requireTelegramGroupHistoryAuthorization(
   if (
     typeof groupId !== "string" ||
     (groupType !== "family_private" &&
-      groupType !== "external_private" &&
-      groupType !== "external_public")
+      groupType !== "external")
   ) {
     throw new AppError(
       "AGENT_GROUP_HISTORY_SCOPE_DENIED",

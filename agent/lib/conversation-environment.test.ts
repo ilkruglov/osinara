@@ -43,16 +43,13 @@ describe("resolveConversationEnvironment", () => {
     }))).toBe("family");
   });
 
-  it.each(["external_private", "external_public"])(
-    "selects the external profile for %s",
-    (groupType) => {
-      expect(resolveConversationEnvironment(auth({
-        groupType,
-        memoryScopes: ["group"],
-        telegramChatType: "group",
-      }))).toBe("external");
-    },
-  );
+  it("selects the external profile for the registered external group type", () => {
+    expect(resolveConversationEnvironment(auth({
+      groupType: "external",
+      memoryScopes: ["group"],
+      telegramChatType: "group",
+    }))).toBe("external");
+  });
 
   it("rejects contradictory chat type, group type, and memory scopes", () => {
     expect(() => resolveConversationEnvironment(auth({
@@ -74,26 +71,23 @@ describe("resolveConversationEnvironment", () => {
 });
 
 describe("conversationEnvironmentInstructions", () => {
-  it.each(["external_private", "external_public"])(
-    "integrates the external model policy for %s",
-    (groupType) => {
-      const environment = resolveConversationEnvironment(auth({
-        groupType,
-        memoryScopes: ["group"],
-        telegramChatType: "supergroup",
-      }));
+  it("integrates the external model policy for an external group", () => {
+    const environment = resolveConversationEnvironment(auth({
+      groupType: "external",
+      memoryScopes: ["group"],
+      telegramChatType: "supergroup",
+    }));
 
-      expect(conversationEnvironmentInstructions(environment)).toContain(
-        "<external_group_model_policy>",
-      );
-      expect(conversationEnvironmentInstructions(environment)).not.toMatch(
-        /Bash, сеть, tools volume/iu,
-      );
-      expect(conversationEnvironmentInstructions(environment)).not.toMatch(
-        /документы и медиа[^.]+не передаются и недоступны/iu,
-      );
-    },
-  );
+    expect(conversationEnvironmentInstructions(environment)).toContain(
+      "<external_group_model_policy>",
+    );
+    expect(conversationEnvironmentInstructions(environment)).not.toMatch(
+      /Bash, сеть, tools volume/iu,
+    );
+    expect(conversationEnvironmentInstructions(environment)).not.toMatch(
+      /документы и медиа[^.]+не передаются и недоступны/iu,
+    );
+  });
 
   it.each(["private", "family"] as const)(
     "does not integrate the external model policy into the %s profile",

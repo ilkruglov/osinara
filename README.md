@@ -75,6 +75,9 @@ flowchart LR
 
 Подробнее: [`docs/production-deployment.md`](docs/production-deployment.md).
 
+Архитектура canonical и task sessions для Telegram-групп:
+[`docs/group-session-architecture.md`](docs/group-session-architecture.md).
+
 ## Быстрый Старт
 
 ### Требования

@@ -59,7 +59,7 @@ export function resolveConversationEnvironment(auth: SessionAuth): ConversationE
   }
   if (
     GROUP_CHAT_TYPES.has(String(chatType)) &&
-    (groupType === "external_private" || groupType === "external_public")
+    groupType === "external"
   ) {
     if (scopesEqual(memoryScopes, ["group"])) return "external";
     throw environmentError();

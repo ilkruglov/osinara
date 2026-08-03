@@ -56,14 +56,7 @@ export const telegramGroupRegistrationInputSchema = z.discriminatedUnion("type",
     .extend({
       messageMode: externalMessageModeSchema,
       toolAllowlist: externalToolAllowlistSchema,
-      type: z.literal("external_private"),
-    })
-    .strict(),
-  commonRegistrationSchema
-    .extend({
-      messageMode: externalMessageModeSchema,
-      toolAllowlist: externalToolAllowlistSchema,
-      type: z.literal("external_public"),
+      type: z.literal("external"),
     })
     .strict(),
 ]);

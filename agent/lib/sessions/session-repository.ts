@@ -3,14 +3,13 @@
  *
  * Exports:
  * - `PreparedSession`: application session selected for an inbound turn.
- * - `SessionRetentionClaim`: exclusive lease for physical Eve storage deletion.
- * - `sessionRepository`: rotation, route lookup, event, and retention operations.
+ * - Session role and park input types used by channel lifecycle boundaries.
+ * - `sessionRepository`: canonical/task preparation, rotation, routes, events, and retention.
  */
 import type { PoolClient } from "pg";
 
 import {
   SESSION_RETENTION_DAYS,
-  SESSION_RETENTION_LEASE_MS,
 } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
@@ -23,21 +22,25 @@ import {
   upsertSessionRoute,
 } from "./session-route-repository.js";
 import {
-  classifyMissedSessionEvent,
   isCurrentEveSession,
-  type SessionEventResult,
 } from "./session-eve-event.js";
+import { sessionLifecycleEventRepository } from "./session-lifecycle-event-repository.js";
+import { sessionRetentionRepository } from "./session-retention-repository.js";
+import { sessionTaskCleanupRepository } from "./session-task-cleanup-repository.js";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
 
 export type ConversationSessionScope = "family" | "group" | "personal";
+export type ConversationSessionKind = "canonical" | "proactive" | "scheduled" | "task";
 
 export interface PrepareSessionInput {
   baseContinuationToken: string;
   familyId: string;
   groupId: string | null;
+  kind: Exclude<ConversationSessionKind, "proactive">;
   now: Date;
   scope: ConversationSessionScope;
+  telegramForumTopicId: number | null;
   userId: string | null;
 }
 
@@ -45,14 +48,16 @@ export interface PreparedSession {
   continuationToken: string;
   generation: number;
   id: string;
+  /** True when rotation, task promotion, or trust-zone recreation requires a fresh Eve generation. */
   rotated: boolean;
   sandboxSessionId: string;
 }
 
-export interface SessionRetentionClaim {
-  eveSessionId: string;
-  id: string;
-  leaseToken: string;
+export interface ParkSessionInput {
+  applicationSessionId: string;
+  pendingRequestId: string | null;
+  requesterTelegramUserId: string | null;
+  requesterUserId: string | null;
 }
 
 interface SessionRow {
@@ -63,12 +68,15 @@ interface SessionRow {
   generation: number;
   group_id: string | null;
   id: string;
+  kind: ConversationSessionKind;
   last_activity_at: Date;
   owner_user_id: string | null;
   pending_operation: boolean;
   rotation_requested_at: Date | null;
   retired_at: Date | null;
   scope: ConversationSessionScope;
+  task_state: "completed" | "failed" | "pending" | "running" | null;
+  telegram_forum_topic_id: string | null;
   thread_id: string;
 }
 
@@ -78,7 +86,11 @@ function assertSameScope(row: SessionRow, input: PrepareSessionInput): void {
     row.family_id !== input.familyId ||
     row.owner_user_id !== input.userId ||
     row.group_id !== input.groupId ||
-    row.scope !== input.scope
+    row.scope !== input.scope ||
+    row.kind !== input.kind ||
+    (input.kind === "canonical" && row.telegram_forum_topic_id !== (
+      input.telegramForumTopicId === null ? null : String(input.telegramForumTopicId)
+    ))
   ) {
     throw new AppError(
       "AGENT_SESSION_SCOPE_MISMATCH",
@@ -89,18 +101,32 @@ function assertSameScope(row: SessionRow, input: PrepareSessionInput): void {
 
 async function findSessionForUpdate(
   client: PoolClient,
-  baseToken: string,
+  input: PrepareSessionInput,
 ): Promise<SessionRow | null> {
+  if (input.kind === "task") {
+    const task = await client.query<SessionRow>(
+      `SELECT s.*
+         FROM conversation_sessions s
+         JOIN conversation_session_routes r ON r.session_id = s.id
+        WHERE r.base_continuation_token = $1
+          AND s.kind = 'task' AND s.task_state = 'pending' AND s.retired_at IS NULL
+        LIMIT 1
+        FOR UPDATE OF s`,
+      [input.baseContinuationToken],
+    );
+    return task.rows[0] ?? null;
+  }
   const result = await client.query<SessionRow>(
     `SELECT s.*
        FROM conversation_sessions s
        LEFT JOIN conversation_session_routes r ON r.session_id = s.id
-      WHERE r.base_continuation_token = $1
-         OR (s.conversation_key = $1 AND s.retired_at IS NULL)
+      WHERE s.kind = $2
+        AND (r.base_continuation_token = $1
+          OR (s.conversation_key = $1 AND s.retired_at IS NULL))
       ORDER BY (s.retired_at IS NULL) DESC, s.generation DESC
       LIMIT 1
       FOR UPDATE OF s`,
-    [baseToken],
+    [input.baseContinuationToken, input.kind],
   );
   return result.rows[0] ?? null;
 }
@@ -109,26 +135,50 @@ async function createInitialSession(
   client: PoolClient,
   input: PrepareSessionInput,
   generation = 0,
+  threadId: string = crypto.randomUUID(),
 ): Promise<SessionRow> {
   const continuationToken = continuationTokenForGeneration(input.baseContinuationToken, generation);
   const result = await client.query<SessionRow>(
     `INSERT INTO conversation_sessions
-       (thread_id, generation, family_id, owner_user_id, group_id, scope,
-        conversation_key, continuation_token, started_at, last_activity_at)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $8)
+       (thread_id, generation, family_id, owner_user_id, group_id, scope, kind, task_state,
+         telegram_forum_topic_id, conversation_key, continuation_token, started_at, last_activity_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
      RETURNING *`,
     [
+      threadId,
       generation,
       input.familyId,
       input.userId,
       input.groupId,
       input.scope,
+      input.kind,
+      input.kind === "canonical" ? null : "running",
+      input.telegramForumTopicId,
       input.baseContinuationToken,
       continuationToken,
       input.now,
     ],
   );
   return result.rows[0]!;
+}
+
+async function canonicalReplacementSeed(
+  client: PoolClient,
+  input: PrepareSessionInput,
+): Promise<{ generation: number; threadId: string } | null> {
+  if (input.kind !== "canonical" || input.groupId === null) return null;
+  const result = await client.query<{ generation: number; thread_id: string }>(
+    `SELECT generation, thread_id
+       FROM conversation_sessions
+      WHERE group_id = $1
+        AND telegram_forum_topic_id IS NOT DISTINCT FROM $2
+      ORDER BY (kind = 'task' AND retired_at IS NULL) DESC, generation DESC, started_at DESC
+      LIMIT 1
+      FOR UPDATE`,
+    [input.groupId, input.telegramForumTopicId],
+  );
+  const row = result.rows[0];
+  return row ? { generation: row.generation + 1, threadId: row.thread_id } : null;
 }
 
 async function initialGeneration(client: PoolClient, baseToken: string): Promise<number> {
@@ -157,9 +207,9 @@ async function rotateSession(
   const continuationToken = continuationTokenForGeneration(input.baseContinuationToken, generation);
   const result = await client.query<SessionRow>(
     `INSERT INTO conversation_sessions
-       (thread_id, generation, family_id, owner_user_id, group_id, scope,
-        conversation_key, continuation_token, started_at, last_activity_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+       (thread_id, generation, family_id, owner_user_id, group_id, scope, kind, task_state,
+         telegram_forum_topic_id, conversation_key, continuation_token, started_at, last_activity_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
      RETURNING *`,
     [
       current.thread_id,
@@ -168,6 +218,9 @@ async function rotateSession(
       current.owner_user_id,
       current.group_id,
       current.scope,
+      current.kind,
+      current.kind === "canonical" ? null : "running",
+      current.telegram_forum_topic_id,
       input.baseContinuationToken,
       continuationToken,
       input.now,
@@ -191,6 +244,9 @@ async function rotateSession(
 
 export const sessionRepository = {
   ...sessionRouteRepository,
+  ...sessionLifecycleEventRepository,
+  ...sessionRetentionRepository,
+  ...sessionTaskCleanupRepository,
   isCurrentEveSession,
 
   async prepareTurn(input: PrepareSessionInput): Promise<PreparedSession> {
@@ -202,15 +258,27 @@ export const sessionRepository = {
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         [input.baseContinuationToken],
       );
-      let current = await findSessionForUpdate(client, input.baseContinuationToken);
+      let current = await findSessionForUpdate(client, input);
       let trustZoneRecreated = false;
       if (!current) {
-        const generation = await initialGeneration(client, input.baseContinuationToken);
-        current = await createInitialSession(
-          client,
-          input,
-          generation,
-        );
+        if (input.kind === "task") {
+          throw new AppError(
+            "AGENT_TASK_ROUTE_NOT_PENDING",
+            "Запрошенное действие уже завершено или больше не ожидает ответа",
+          );
+        }
+        const replacement = await canonicalReplacementSeed(client, input);
+        const generation = replacement?.generation ??
+          await initialGeneration(client, input.baseContinuationToken);
+        current = await createInitialSession(client, input, generation, replacement?.threadId);
+        if (replacement) {
+          await client.query(
+            `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
+             VALUES ($1, 'session.canonical_replaced', $2,
+                     jsonb_build_object('generation', $3::integer))`,
+            [current.family_id, current.id, current.generation],
+          );
+        }
         // A non-zero ledger entry exists only after the previous Telegram trust zone was retired.
         trustZoneRecreated = generation > 0;
       }
@@ -245,185 +313,66 @@ export const sessionRepository = {
     }
   },
 
-  async bindEveSession(id: string, eveSessionId: string): Promise<SessionEventResult> {
-    const result = await database().query(
-      `UPDATE conversation_sessions
-           SET eve_session_id = $2
-         WHERE id = $1 AND retired_at IS NULL
-           AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId],
-    );
-    if (result.rowCount === 1) return "recorded";
-    return await classifyMissedSessionEvent(
-      id,
-      eveSessionId,
-      "AGENT_SESSION_BIND_FAILED",
-      "Не удалось связать текущий контекст с Eve",
-    );
-  },
-
-  async markPendingOperation(id: string, pending: boolean): Promise<void> {
-    const result = await database().query(
-      "UPDATE conversation_sessions SET pending_operation = $2 WHERE id = $1 AND retired_at IS NULL",
-      [id, pending],
-    );
-    if (result.rowCount !== 1) {
-      const active = await database().query(
-        "SELECT 1 FROM conversation_sessions WHERE id = $1 AND retired_at IS NULL",
-        [id],
+  async parkSession(input: ParkSessionInput): Promise<void> {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ group_id: string | null; kind: ConversationSessionKind }>(
+        `SELECT group_id, kind FROM conversation_sessions
+          WHERE id = $1 AND retired_at IS NULL
+          FOR UPDATE`,
+        [input.applicationSessionId],
       );
-      if (active.rowCount === 1) {
-        throw new AppError(
-          "AGENT_SESSION_ROUTE_CONFLICT",
-          "Сообщение Telegram уже связано с другим активным контекстом",
+      const session = result.rows[0];
+      if (!session) {
+        throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
+      }
+
+      // Only an observable park reclassifies a group canonical. Personal sessions retain their
+      // existing conversation lifecycle; scheduled/proactive sessions retain their explicit kind.
+      const promote = session.kind === "canonical" && session.group_id !== null;
+      await client.query(
+        `UPDATE conversation_sessions
+            SET kind = CASE WHEN $2 THEN 'task'::conversation_session_kind ELSE kind END,
+                task_state = CASE
+                  WHEN $2 OR kind <> 'canonical' THEN 'pending'::conversation_task_state
+                  ELSE task_state
+                END,
+                pending_operation = true,
+                requester_user_id = coalesce($3, requester_user_id),
+                requester_telegram_user_id = coalesce($4, requester_telegram_user_id),
+                pending_request_id = coalesce($5, pending_request_id),
+                originating_canonical_session_id = CASE WHEN $2 THEN id ELSE originating_canonical_session_id END
+          WHERE id = $1`,
+        [
+          input.applicationSessionId,
+          promote,
+          input.requesterUserId,
+          input.requesterTelegramUserId,
+          input.pendingRequestId,
+        ],
+      );
+      if (promote) {
+        // Ordinary delivery aliases must not make the parked workflow selectable. The exact prompt
+        // alias is registered only after Telegram returns its durable message ID.
+        await client.query("DELETE FROM conversation_session_routes WHERE session_id = $1", [
+          input.applicationSessionId,
+        ]);
+        await client.query(
+          `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
+           SELECT family_id, 'session.promoted_to_task', id,
+                  jsonb_build_object('pendingRequestId', $2::text)
+             FROM conversation_sessions WHERE id = $1`,
+          [input.applicationSessionId, input.pendingRequestId],
         );
       }
-      throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
   },
 
-  async recordTurnCompleted(
-    id: string,
-    eveSessionId: string,
-    pendingOperation: boolean,
-  ): Promise<SessionEventResult> {
-    const result = await database().query(
-      `UPDATE conversation_sessions
-          SET completed_turns = completed_turns + 1,
-              last_activity_at = now(), pending_operation = $3,
-              eve_session_id = $2
-        WHERE id = $1 AND retired_at IS NULL
-           AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId, pendingOperation],
-    );
-    if (result.rowCount === 1) return "recorded";
-    return await classifyMissedSessionEvent(
-      id,
-      eveSessionId,
-      "AGENT_SESSION_TURN_RECORD_FAILED",
-      "Не удалось сохранить завершённый ход",
-    );
-  },
-
-  async recordTurnFailed(id: string, eveSessionId: string): Promise<SessionEventResult> {
-    const result = await database().query(
-      `UPDATE conversation_sessions
-          SET pending_operation = false, eve_session_id = $2
-        WHERE id = $1 AND retired_at IS NULL
-           AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId],
-    );
-    if (result.rowCount === 1) return "recorded";
-    return await classifyMissedSessionEvent(
-      id,
-      eveSessionId,
-      "AGENT_SESSION_FAILURE_RECORD_FAILED",
-      "Не удалось сохранить состояние контекста",
-    );
-  },
-
-  async recordSessionFailedByContinuationToken(
-    continuationToken: string,
-    eveSessionId: string,
-  ): Promise<SessionEventResult> {
-    // A long Telegram turn can re-anchor several times before Eve emits session.failed. Resolve
-    // both the current token and every durable route retained for the same application session.
-    const sessions = await database().query<{ id: string }>(
-      `SELECT DISTINCT s.id
-         FROM conversation_sessions s
-         LEFT JOIN conversation_session_routes r ON r.session_id = s.id
-        WHERE s.retired_at IS NULL
-          AND (s.continuation_token = $1 OR r.base_continuation_token = $1)`,
-      [continuationToken],
-    );
-    if (sessions.rowCount !== 1) {
-      throw new AppError(
-        "AGENT_SESSION_FAILURE_RECORD_FAILED",
-        sessions.rowCount === 0
-          ? "Не удалось завершить повреждённый контекст"
-          : "Маршрут повреждённого контекста связан с несколькими сессиями",
-      );
-    }
-    const id = sessions.rows[0]!.id;
-
-    const result = await database().query(
-      `UPDATE conversation_sessions
-          SET pending_operation = false,
-              rotation_requested_at = now(),
-              eve_session_id = $2
-        WHERE id = $1 AND retired_at IS NULL
-          AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId],
-    );
-    if (result.rowCount === 1) return "recorded";
-    return await classifyMissedSessionEvent(
-      id,
-      eveSessionId,
-      "AGENT_SESSION_FAILURE_RECORD_FAILED",
-      "Не удалось сохранить состояние повреждённого контекста",
-    );
-  },
-
-  async requestRotation(id: string): Promise<void> {
-    const result = await database().query(
-      `UPDATE conversation_sessions
-          SET rotation_requested_at = now()
-        WHERE id = $1 AND retired_at IS NULL`,
-      [id],
-    );
-    if (result.rowCount !== 1) {
-      throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
-    }
-  },
-
-  async claimExpiredForDeletion(now: Date): Promise<SessionRetentionClaim | null> {
-    const leaseToken = crypto.randomUUID();
-    const leaseExpiresAt = new Date(now.getTime() + SESSION_RETENTION_LEASE_MS);
-    const result = await database().query<{
-      eve_session_id: string;
-      id: string;
-      retention_lease_token: string;
-    }>(
-      `UPDATE conversation_sessions
-          SET retention_lease_token = $2, retention_lease_expires_at = $3
-        WHERE id = (
-          SELECT id FROM conversation_sessions
-           WHERE retired_at IS NOT NULL AND delete_after <= $1
-             AND retention_hold = false AND eve_session_id IS NOT NULL
-             AND (retention_lease_expires_at IS NULL OR retention_lease_expires_at <= $1)
-           ORDER BY delete_after, id
-           LIMIT 1 FOR UPDATE SKIP LOCKED
-        )
-      RETURNING id, eve_session_id, retention_lease_token`,
-      [now, leaseToken, leaseExpiresAt],
-    );
-    const row = result.rows[0];
-    return row
-      ? { eveSessionId: row.eve_session_id, id: row.id, leaseToken: row.retention_lease_token }
-      : null;
-  },
-
-  async completeDeletion(id: string, leaseToken: string): Promise<void> {
-    const result = await database().query(
-      "DELETE FROM conversation_sessions WHERE id = $1 AND retention_lease_token = $2",
-      [id, leaseToken],
-    );
-    if (result.rowCount !== 1) {
-      throw new AppError("AGENT_SESSION_RETENTION_LEASE_LOST", "Не удалось подтвердить удаление контекста");
-    }
-  },
-
-  async failDeletion(id: string, leaseToken: string, errorCode: string): Promise<void> {
-    const result = await database().query(
-      `UPDATE conversation_sessions
-          SET cleanup_error_code = $3,
-              retention_lease_token = NULL,
-              retention_lease_expires_at = NULL
-        WHERE id = $1 AND retention_lease_token = $2`,
-      [id, leaseToken, errorCode],
-    );
-    if (result.rowCount !== 1) {
-      throw new AppError("AGENT_SESSION_RETENTION_LEASE_LOST", "Не удалось сохранить ошибку удаления контекста");
-    }
-  },
 };

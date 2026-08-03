@@ -164,7 +164,7 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     const groupAuth = {
       ...auth,
       groupId: "00000000-0000-4000-8000-000000000456",
-      groupType: "external_private" as const,
+      groupType: "external" as const,
       role: "external" as const,
       telegramChatType: "supergroup" as const,
       userId: null,

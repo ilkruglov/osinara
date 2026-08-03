@@ -181,7 +181,7 @@ describeWithDatabase("memoryRepository", () => {
     const family = await createFamily("group-rights");
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
-       VALUES ($1, '-100101', 'Рабочая группа', 'external_private', 'addressed_only')
+       VALUES ($1, '-100101', 'Рабочая группа', 'external', 'addressed_only')
        RETURNING id`,
       [family.familyId],
     );

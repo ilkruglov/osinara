@@ -47,14 +47,14 @@ async function fixture() {
     [family.rows[0]!.id, id("workspace-owner"), id("workspace-member")],
   );
   const groups = await database().query<{ id: string; type: string }>(
-    `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
-     VALUES ($1, '-100-family-workspace', 'Семья', 'family_private', 'addressed_only'),
-            ($1, '-100-external-workspace', 'Проект', 'external_private', 'addressed_only')
-     RETURNING id, type`,
+     `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
+      VALUES ($1, '-100-family-workspace', 'Семья', 'family_private', 'addressed_only'),
+            ($1, '-100-external-workspace', 'Проект', 'external', 'addressed_only')
+      RETURNING id, type`,
     [family.rows[0]!.id],
   );
   return {
-    externalGroupId: groups.rows.find((row) => row.type === "external_private")!.id,
+    externalGroupId: groups.rows.find((row) => row.type === "external")!.id,
     familyGroupId: groups.rows.find((row) => row.type === "family_private")!.id,
     familyId: family.rows[0]!.id,
     memberId: id("workspace-member"),
@@ -223,7 +223,7 @@ describeWithDatabase("workspace repository", () => {
     const external = {
       familyId: f.familyId,
       groupId: f.externalGroupId,
-      groupType: "external_private" as const,
+      groupType: "external" as const,
       role: "external" as const,
       telegramChatType: "supergroup" as const,
       userId: null,
@@ -242,7 +242,7 @@ describeWithDatabase("workspace repository", () => {
     const external = {
       familyId: f.familyId,
       groupId: f.externalGroupId,
-      groupType: "external_private" as const,
+      groupType: "external" as const,
       role: "owner" as const,
       telegramChatType: "supergroup" as const,
       userId: f.ownerId,

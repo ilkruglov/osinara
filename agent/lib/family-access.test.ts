@@ -72,7 +72,7 @@ describe("resolveConversationAccess", () => {
         messageMode: "all",
         telegramChatId: "-2001",
         toolAllowlist: ["remember"],
-        type: "external_public",
+        type: "external",
       },
     });
 

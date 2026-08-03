@@ -11,7 +11,7 @@ import type { PoolClient } from "pg";
 type TelegramChatType = "group" | "private" | "supergroup";
 type MemoryScope = "family" | "group" | "personal";
 type FamilyRole = "member" | "owner" | "recovery_owner";
-type GroupType = "external_private" | "external_public" | "family_private";
+type GroupType = "external" | "family_private";
 
 export interface ApprovalAuthRow {
   application_session_id: string;

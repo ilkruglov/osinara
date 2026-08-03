@@ -19,7 +19,7 @@ function externalAuth(toolAllowlist: readonly string[], role = "external"): Sess
       attributes: {
         familyId: "family-1",
         groupId: "group-1",
-        groupType: "external_private",
+        groupType: "external",
         role,
         toolAllowlist,
       },

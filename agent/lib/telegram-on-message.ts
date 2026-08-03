@@ -36,6 +36,7 @@ import {
 import {
   sessionRepository,
 } from "./sessions/session-repository.js";
+import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
   classifyTelegramInboundMedia,
   isMessageAddressedToBot,
@@ -126,6 +127,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     let verifiedReplyRoute: string | undefined;
     let exactReplyRoute: string | undefined;
     let hasResumableReplyRoute = false;
+    let resumesPendingTask = false;
 
     const invitationCode = parseInvitationStartCommand(message.text);
     if (invitationCode && message.chat.type !== "private") {
@@ -316,6 +318,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         if (!hasResumableReplyRoute) verifiedReplyRoute = exactReplyRoute;
         replyHandling = "message";
       }
+      if (replyAuthorization === "authorized") resumesPendingTask = true;
     }
 
     let storedAttachments: StoredTelegramAttachment[] = [];
@@ -340,10 +343,18 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // One instant anchors session rotation, pending-delivery visibility, and model-visible time.
     const turnStartedAt = new Date();
     const resolvedSessionScope = telegramSessionScope(decision);
+    const verifiedForumTopicId = forumTopicId === null ? null : Number(forumTopicId);
+    const baseContinuationToken = group
+      ? resumesPendingTask
+        ? telegramBaseContinuationToken(message, verifiedReplyRoute ?? exactReplyRoute)
+        : groupCanonicalContinuationToken(group.groupId, verifiedForumTopicId)
+      : telegramBaseContinuationToken(message, verifiedReplyRoute);
     const appSession = await repositories.session.prepareTurn({
-      baseContinuationToken: telegramBaseContinuationToken(message, verifiedReplyRoute),
+      baseContinuationToken,
       familyId: access.familyId,
+      kind: resumesPendingTask ? "task" : "canonical",
       now: turnStartedAt,
+      telegramForumTopicId: verifiedForumTopicId,
       ...resolvedSessionScope,
     });
     const deliveryAuthorization = telegramProactiveDeliveryAuthorization(decision, message);

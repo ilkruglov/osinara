@@ -31,8 +31,9 @@ export const sessionRouteRepository = {
          FROM conversation_session_routes route
          JOIN conversation_sessions session ON session.id = route.session_id
         WHERE route.base_continuation_token = $1
-          AND session.retired_at IS NULL
-          AND session.eve_session_id IS NOT NULL
+           AND session.retired_at IS NULL
+           AND session.eve_session_id IS NOT NULL
+           AND (session.kind <> 'task' OR session.task_state = 'pending')
         LIMIT 1`,
       [baseContinuationToken],
     );
@@ -40,17 +41,26 @@ export const sessionRouteRepository = {
   },
 
   async registerRouteAlias(id: string, baseToken: string): Promise<void> {
-    // Out-of-band Telegram deliveries can point at an Eve session but cannot re-key Eve itself.
+    // Only personal conversations and non-canonical tasks need Telegram message aliases. Ordinary
+    // group responses are ancestry in the shared timeline and must never become task selectors.
     const result = await database().query(
       `INSERT INTO conversation_session_routes (base_continuation_token, session_id)
        SELECT $2, id FROM conversation_sessions
         WHERE id = $1 AND retired_at IS NULL
+          AND (group_id IS NULL OR kind <> 'canonical')
        ON CONFLICT (base_continuation_token) DO UPDATE
          SET updated_at = now()
        WHERE conversation_session_routes.session_id = EXCLUDED.session_id`,
       [id, baseToken],
     );
     if (result.rowCount === 1) return;
+
+    const canonicalGroup = await database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1 AND retired_at IS NULL AND group_id IS NOT NULL AND kind = 'canonical'`,
+      [id],
+    );
+    if (canonicalGroup.rowCount === 1) return;
 
     // Distinguish a stale session from an alias collision for actionable diagnostics.
     const active = await database().query(

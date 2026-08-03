@@ -122,6 +122,10 @@ background workers, LLM-процессы и правила хранения за
 
 ### 1.8 Доступ модели к групповой ленте — гибрид
 
+Целевая маршрутизация canonical и parked task sessions для всех семейных и внешних Telegram-групп
+описана в [`group-session-architecture.md`](group-session-architecture.md). PostgreSQL timeline
+остаётся общей историей комнаты независимо от lifecycle конкретной Eve-сессии.
+
 Доступ к ленте построен по **гибридной durable-схеме**:
 
 - **Старт новой Eve-сессии** получает до 50 последних записей и 12 000 символов из текущей

@@ -51,6 +51,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "101::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -76,6 +78,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "101:42:900",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -92,6 +96,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "101::400",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -103,6 +109,8 @@ describeWithDatabase("session repository", () => {
 
     const resumed = await sessionRepository.prepareTurn({
       baseContinuationToken: "101::401",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:01:00.000Z"),
@@ -118,6 +126,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "102::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -129,6 +139,8 @@ describeWithDatabase("session repository", () => {
 
     const pinned = await sessionRepository.prepareTurn({
       baseContinuationToken: "102::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-08-20T12:00:00.000Z"),
@@ -140,6 +152,8 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.recordTurnCompleted(current.id, "wrun_old", false);
     const rotated = await sessionRepository.prepareTurn({
       baseContinuationToken: "102::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-08-20T12:01:00.000Z"),
@@ -157,6 +171,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "103::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -170,6 +186,8 @@ describeWithDatabase("session repository", () => {
 
     const rotated = await sessionRepository.prepareTurn({
       baseContinuationToken: "103::900",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:01:00.000Z"),
@@ -178,6 +196,8 @@ describeWithDatabase("session repository", () => {
     });
     const resumedThroughOtherAlias = await sessionRepository.prepareTurn({
       baseContinuationToken: "103::901",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:02:00.000Z"),
@@ -198,6 +218,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "104::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -239,6 +261,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "105::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -269,6 +293,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "106::426",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -297,6 +323,8 @@ describeWithDatabase("session repository", () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "103::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-01-01T00:00:00.000Z"),
@@ -307,6 +335,8 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.requestRotation(current.id);
     await sessionRepository.prepareTurn({
       baseContinuationToken: "103::",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: null,
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -334,13 +364,15 @@ describeWithDatabase("session repository", () => {
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode)
-       VALUES ($1, '-100-session-zone', 'Старая зона', 'external_private', 'addressed_only')
+       VALUES ($1, '-100-session-zone', 'Старая зона', 'external', 'addressed_only')
        RETURNING id`,
       [f.familyId],
     );
     const baseToken = "-100-session-zone::77";
     const old = await sessionRepository.prepareTurn({
       baseContinuationToken: baseToken,
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: group.rows[0]!.id,
       now: new Date("2026-07-12T12:00:00.000Z"),
@@ -354,6 +386,8 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.requestRotation(old.id);
     const active = await sessionRepository.prepareTurn({
       baseContinuationToken: baseToken,
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: group.rows[0]!.id,
       now: new Date("2026-07-12T12:00:30.000Z"),
@@ -363,6 +397,16 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.bindEveSession(active.id, "wrun_active_group_cursor");
     await groupTimelineCursorRepository.advance(active.id, "wrun_active_group_cursor", "20");
     await sessionRepository.registerRouteAlias(active.id, "-100-session-zone::900");
+    const scheduled = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, task_state,
+          conversation_key, continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'scheduled', 'running',
+               '-100-session-zone::schedule:retire', '-100-session-zone::schedule:retire',
+               now(), now())
+       RETURNING id`,
+      [f.familyId, group.rows[0]!.id],
+    );
     const retiredBeforeDeletion = await database().query<{ retired_at: Date }>(
       "SELECT retired_at FROM conversation_sessions WHERE id = $1",
       [old.id],
@@ -401,6 +445,11 @@ describeWithDatabase("session repository", () => {
         WHERE session_id = ANY($1::uuid[])`,
       [[old.id, active.id]],
     )).resolves.toMatchObject({ rowCount: 0 });
+    await expect(database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1 AND retired_at IS NOT NULL AND task_state = 'failed'`,
+      [scheduled.rows[0]!.id],
+    )).resolves.toMatchObject({ rowCount: 1 });
 
     const replacementGroup = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
@@ -412,6 +461,8 @@ describeWithDatabase("session repository", () => {
 
     const replacement = await sessionRepository.prepareTurn({
       baseContinuationToken: baseToken,
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: replacementGroup.rows[0]!.id,
       now: new Date("2026-07-12T12:01:00.000Z"),
@@ -436,6 +487,8 @@ describeWithDatabase("session repository", () => {
     );
     const session = await sessionRepository.prepareTurn({
       baseContinuationToken: "-100-session-cursor::10",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: f.familyId,
       groupId: group.rows[0]!.id,
       now: new Date("2026-07-30T12:00:00.000Z"),

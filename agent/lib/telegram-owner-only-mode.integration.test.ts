@@ -30,7 +30,7 @@ describeWithDatabase("Telegram owner-only message mode", () => {
     await expect(database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode)
-       VALUES ($1, '-100-owner-only-external', 'External', 'external_public', 'owner_only')`,
+       VALUES ($1, '-100-owner-only-external', 'External', 'external', 'owner_only')`,
       [family.rows[0]!.id],
     )).resolves.toMatchObject({ rowCount: 1 });
 

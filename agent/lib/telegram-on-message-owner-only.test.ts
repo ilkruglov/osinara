@@ -23,7 +23,7 @@ function ownerOnlyGroup() {
     messageMode: "owner_only" as const,
     telegramChatId: "group-101",
     toolAllowlist: ["list_group_history"],
-    type: "external_public" as const,
+    type: "external" as const,
   };
 }
 

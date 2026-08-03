@@ -122,7 +122,7 @@ export const telegramIngressRepository: TelegramIngressRepository = {
         return true;
       }
       if (
-         (policy?.type === "external_private" || policy?.type === "external_public") &&
+         policy?.type === "external" &&
          input.mediaKind === "native_photo" &&
          externalAllowlist?.has("inspect_workspace_image") === true
       ) {

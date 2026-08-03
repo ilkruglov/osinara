@@ -248,8 +248,7 @@ describe("createTelegramMessageHandler", () => {
   });
 
   it.each([
-    ["external_private", false],
-    ["external_public", false],
+    ["external", false],
     ["family_private", true],
   ] as const)(
     "%s group %s an addressed inbound document",
@@ -513,7 +512,7 @@ describe("createTelegramMessageHandler", () => {
       messageMode: "addressed_only",
       telegramChatId: "group-101",
       toolAllowlist: ["remember"],
-      type: "external_private",
+      type: "external",
     });
     const handler = createTelegramMessageHandler(repository);
 
@@ -530,7 +529,7 @@ describe("createTelegramMessageHandler", () => {
       messageMode: "all",
       telegramChatId: "group-101",
       toolAllowlist: ["remember"],
-      type: "external_private",
+      type: "external",
     });
     const handler = createTelegramMessageHandler(repository);
     const message = groupMessage("контекст для будущего обращения");
@@ -548,7 +547,7 @@ describe("createTelegramMessageHandler", () => {
       messageMode: "all",
       telegramChatId: "group-101",
       toolAllowlist: ["remember"],
-      type: "external_private",
+      type: "external",
     });
     repository.groupContext.prepare.mockResolvedValue({
       cursorSequence: "1",
@@ -586,7 +585,7 @@ describe("createTelegramMessageHandler", () => {
       messageMode: "all",
       telegramChatId: "group-101",
       toolAllowlist: ["remember"],
-      type: "external_private",
+      type: "external",
     });
     repository.journal.record.mockResolvedValue({
       entryId: "00000000-0000-4000-8000-000000000010",

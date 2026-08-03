@@ -83,6 +83,10 @@ describe("Telegram group journal topic isolation", () => {
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
       messageThreadId: null,
     }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "osinara:group:group-1:main",
+      telegramForumTopicId: null,
+    }));
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });
   });
 
@@ -94,6 +98,10 @@ describe("Telegram group journal topic isolation", () => {
 
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
       messageThreadId: "310",
+    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "osinara:group:group-1:topic:310",
+      telegramForumTopicId: 310,
     }));
     expect(result?.auth?.attributes).toMatchObject({ telegramMessageThreadId: "310" });
   });

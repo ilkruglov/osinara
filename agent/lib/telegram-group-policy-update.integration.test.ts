@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `updatePolicy`: atomically changes only message mode and the complete tool allowlist.
- * - Both external group types are supported, while an absent registration is never created.
+ * - The canonical external group type is supported, while an absent registration is never created.
  * - Existing group identity, metadata, timeline, workspace, memory, and sessions remain attached.
  * - Family trust zones and callers whose owner role was revoked are rejected transactionally.
  */
@@ -44,7 +44,7 @@ describeWithDatabase("Telegram group policy update repository", () => {
     const group = await database().query<{ created_at: Date; id: string }>(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist, next_timeline_sequence)
-       VALUES ($1, '-100-policy', 'Неизменное название', 'external_private', 'addressed_only',
+       VALUES ($1, '-100-policy', 'Неизменное название', 'external', 'addressed_only',
                ARRAY['remember'], 1)
        RETURNING id, created_at`,
       [fixture.familyId],
@@ -54,9 +54,9 @@ describeWithDatabase("Telegram group policy update repository", () => {
     // Seed every group-owned durable boundary that a delete/re-register implementation would damage.
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
-         (thread_id, generation, family_id, group_id, scope, conversation_key,
-          continuation_token, eve_session_id, started_at, last_activity_at, group_timeline_cursor)
-       VALUES (gen_random_uuid(), 0, $1, $2, 'group', '-100-policy::', '-100-policy::',
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+           continuation_token, eve_session_id, started_at, last_activity_at, group_timeline_cursor)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'group', 'canonical', '-100-policy::', '-100-policy::',
                'wrun_policy', now(), now(), 1)
        RETURNING id`,
       [fixture.familyId, groupId],
@@ -104,7 +104,7 @@ describeWithDatabase("Telegram group policy update repository", () => {
       message_mode: "owner_only",
       title: "Неизменное название",
       tool_allowlist: ["list_group_history", "search_memories"],
-      type: "external_private",
+      type: "external",
     });
 
     // Stable primary keys prove that no scoped row was deleted and recreated behind the update.
@@ -144,12 +144,12 @@ describeWithDatabase("Telegram group policy update repository", () => {
     });
   });
 
-  it("updates an existing external public group in place", async () => {
+  it("updates an existing external group in place", async () => {
     const fixture = await ownedFamily();
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-public-policy', 'Публичная', 'external_public', 'all', '{}')
+       VALUES ($1, '-100-public-policy', 'Внешняя', 'external', 'all', '{}')
        RETURNING id`,
       [fixture.familyId],
     );
@@ -189,7 +189,7 @@ describeWithDatabase("Telegram group policy update repository", () => {
     await database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-revoked-policy', 'Внешняя', 'external_public', 'all', '{}')`,
+       VALUES ($1, '-100-revoked-policy', 'Внешняя', 'external', 'all', '{}')`,
       [fixture.familyId],
     );
     await database().query(

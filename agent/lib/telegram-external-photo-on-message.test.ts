@@ -48,7 +48,7 @@ function allowExternalPhoto(repository: ReturnType<typeof repositories>): void {
     messageMode: "addressed_only",
     telegramChatId: "group-101",
     toolAllowlist: ["inspect_workspace_image"],
-    type: "external_private",
+    type: "external",
   });
 }
 
@@ -71,7 +71,7 @@ describe("external Telegram native photos", () => {
       auth: {
         familyId: "family-1",
         groupId: "group-1",
-        groupType: "external_private",
+        groupType: "external",
         role: "external",
         telegramChatType: "group",
         userId: null,
@@ -110,7 +110,7 @@ describe("external Telegram native photos", () => {
       messageMode: "owner_only",
       telegramChatId: "group-101",
       toolAllowlist: ["inspect_workspace_image"],
-      type: "external_private",
+      type: "external",
     });
     repository.telegram.findIdentity.mockResolvedValue({
       familyId: "family-1",
@@ -136,7 +136,7 @@ describe("external Telegram native photos", () => {
       messageMode: "addressed_only",
       telegramChatId: "group-101",
       toolAllowlist: [],
-      type: "external_private",
+      type: "external",
     });
 
     await expect(createTelegramMessageHandler(repository)(
@@ -157,7 +157,7 @@ describe("external Telegram native photos", () => {
       messageMode: "addressed_only",
       telegramChatId: "group-101",
       toolAllowlist: ["inspect_workspace_image", "unknown_tool"],
-      type: "external_private",
+      type: "external",
     });
 
     await expect(createTelegramMessageHandler(repository)(

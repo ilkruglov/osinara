@@ -43,9 +43,9 @@ describeWithDatabase("proactive delivery repository", () => {
     );
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
-         (thread_id, generation, family_id, owner_user_id, group_id, scope,
-          conversation_key, continuation_token, started_at, last_activity_at)
-       VALUES (gen_random_uuid(), 0, $1, $2, NULL, 'personal', 'delivery-owner::',
+         (thread_id, generation, family_id, owner_user_id, group_id, scope, kind, task_state,
+           conversation_key, continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, NULL, 'personal', 'proactive', 'running', 'delivery-owner::',
                'delivery-owner::', now(), now()) RETURNING id`,
       [family.rows[0]!.id, ownerId],
     );
