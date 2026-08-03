@@ -80,7 +80,7 @@ describe("Telegram group history", () => {
 
     await searchTelegramGroupHistory(repository, { query: "ужин", limit: 20 }, context({
       groupId: "group-1",
-      groupType: "external_private",
+      groupType: "external",
     }));
 
     expect(repository.search).toHaveBeenCalledWith(expect.objectContaining({
@@ -97,7 +97,7 @@ describe("Telegram group history", () => {
 
     await expect(searchTelegramGroupHistory(repository, { from: "not-a-date" }, context({
       groupId: "group-1",
-      groupType: "external_private",
+      groupType: "external",
     }))).rejects.toMatchObject({
       code: "AGENT_GROUP_HISTORY_DATE_INVALID",
     });

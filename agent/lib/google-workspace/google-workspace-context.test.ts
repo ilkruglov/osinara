@@ -12,7 +12,7 @@ import { requireGoogleWorkspaceConnectionActor } from "./google-workspace-contex
 function context(input: {
   chatType: "private" | "supergroup";
   current?: boolean;
-  groupType?: "external_private" | "family_private";
+  groupType?: "external" | "family_private";
   role?: "member" | "owner";
 }) {
   const caller = {
@@ -58,7 +58,7 @@ describe("Google Workspace authorization context", () => {
   it("rejects external groups and initiator-only contexts", () => {
     expect(() => requireGoogleWorkspaceConnectionActor(context({
       chatType: "supergroup",
-      groupType: "external_private",
+      groupType: "external",
       role: "owner",
     }))).toThrowError(/AGENT_GOOGLE_WORKSPACE_CONTEXT_INVALID/);
     expect(() => requireGoogleWorkspaceConnectionActor(context({

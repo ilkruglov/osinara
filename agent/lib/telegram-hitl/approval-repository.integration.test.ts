@@ -25,7 +25,7 @@ const OWNER_TELEGRAM_ID = "hitl-owner";
 async function fixture(options: {
   messageMode?: "addressed_only" | "owner_only";
   scope?: "family" | "group";
-  type?: "external_public" | "family_private";
+  type?: "external" | "family_private";
 } = {}) {
   const groupType = options.type ?? "family_private";
   const messageMode = options.messageMode ?? "addressed_only";
@@ -52,6 +52,8 @@ async function fixture(options: {
   );
   const session = await sessionRepository.prepareTurn({
     baseContinuationToken: "-1001:55:77",
+    kind: "canonical",
+    telegramForumTopicId: null,
     familyId: family.rows[0]!.id,
     groupId: group.rows[0]!.id,
     now: new Date("2026-07-13T12:00:00.000Z"),
@@ -59,7 +61,12 @@ async function fixture(options: {
     userId: null,
   });
   await sessionRepository.bindEveSession(session.id, "wrun_hitl");
-  await sessionRepository.markPendingOperation(session.id, true);
+  await sessionRepository.parkSession({
+    applicationSessionId: session.id,
+    pendingRequestId: "approval-request-1",
+    requesterTelegramUserId: OWNER_TELEGRAM_ID,
+    requesterUserId: owner.rows[0]!.id,
+  });
   await sessionRepository.registerRouteAlias(session.id, "-1001:55:88");
   await telegramHitlApprovalRepository.register({
     applicationSessionId: session.id,
@@ -248,7 +255,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
   });
 
   it("allows the current owner to resume an owner-only external approval", async () => {
-    await fixture({ messageMode: "owner_only", scope: "group", type: "external_public" });
+    await fixture({ messageMode: "owner_only", scope: "group", type: "external" });
 
     await expect(telegramHitlApprovalRepository.claimCallback({
       baseContinuationToken: "-1001:55:88",
@@ -263,7 +270,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     const current = await fixture({
       messageMode: "owner_only",
       scope: "group",
-      type: "external_public",
+      type: "external",
     });
     await database().query(
       "UPDATE family_memberships SET role = 'member' WHERE user_id = $1",
@@ -294,12 +301,13 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       telegramMessageId: "88",
       telegramUserId: OWNER_TELEGRAM_ID,
     })).resolves.toBe("authorized");
+    await expect(sessionRepository.hasRoute("-1001:55:88")).resolves.toBe(false);
     await expect(telegramHitlApprovalRepository.authorizeReply({
       baseContinuationToken: "-1001:55:88",
       telegramChatId: "-1001",
       telegramMessageId: "88",
       telegramUserId: OWNER_TELEGRAM_ID,
-    })).resolves.toBe("expired");
+    })).resolves.toBe("not_applicable");
     await expect(telegramHitlApprovalRepository.authorizeReply({
       baseContinuationToken: "-1001:55:999",
       telegramChatId: "-1001",
@@ -308,7 +316,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     })).resolves.toBe("not_applicable");
   });
 
-  it("expires a reply through another route alias while the session awaits approval", async () => {
+  it("treats a removed ordinary alias as canonical ancestry while a task awaits approval", async () => {
     await fixture();
 
     await expect(telegramHitlApprovalRepository.authorizeReply({
@@ -316,7 +324,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       telegramChatId: "-1001",
       telegramMessageId: "77",
       telegramUserId: "202",
-    })).resolves.toBe("expired");
+    })).resolves.toBe("not_applicable");
   });
 
   it("fails closed when the route is pending but approval registration is missing", async () => {
@@ -324,9 +332,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     await database().query("DELETE FROM telegram_hitl_approvals");
 
     await expect(telegramHitlApprovalRepository.authorizeReply({
-      baseContinuationToken: "-1001:55:77",
+      baseContinuationToken: "-1001:55:88",
       telegramChatId: "-1001",
-      telegramMessageId: "77",
+      telegramMessageId: "88",
       telegramUserId: "202",
     })).resolves.toBe("expired");
   });

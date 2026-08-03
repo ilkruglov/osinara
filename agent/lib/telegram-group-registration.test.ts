@@ -21,7 +21,7 @@ const externalInput = {
   ...baseInput,
   title: "Внешняя группа",
   toolAllowlist: ["remember", "list_memories"],
-  type: "external_private" as const,
+  type: "external" as const,
 };
 
 describe("telegramGroupRegistrationInputSchema", () => {
@@ -105,6 +105,17 @@ describe("telegramGroupRegistrationInputSchema", () => {
     ).toThrow();
   });
 
+  it.each(["external_private", "external_public"])(
+    "rejects the removed legacy group type %s",
+    (type) => {
+      expect(() => telegramGroupRegistrationInputSchema.parse({
+        ...externalInput,
+        telegramChatId: "-1001234567890",
+        type,
+      })).toThrow();
+    },
+  );
+
   it("accepts owner-only dispatch only for external groups", () => {
     expect(
       telegramGroupRegistrationInputSchema.parse({
@@ -112,7 +123,7 @@ describe("telegramGroupRegistrationInputSchema", () => {
         messageMode: "owner_only",
         telegramChatId: "-1001234567890",
       }),
-    ).toMatchObject({ messageMode: "owner_only", type: "external_private" });
+    ).toMatchObject({ messageMode: "owner_only", type: "external" });
 
     expect(() =>
       telegramGroupRegistrationInputSchema.parse({

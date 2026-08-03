@@ -41,6 +41,8 @@ import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proacti
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
   credentials: {
@@ -171,10 +173,7 @@ export default telegramChannel({
     },
     async "turn.completed"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
-      const awaitingApproval = await telegramHitlApprovalRepository.hasPendingForSession(
-        sessionId,
-        ctx.session.id,
-      );
+      const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
       if (isScheduledSession(ctx) && !awaitingApproval) {
         // Successful scheduled runs are completed atomically with Telegram delivery above.
         await agentScheduleDispatchRepository.failRun(
@@ -189,9 +188,19 @@ export default telegramChannel({
         await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
       }
     },
-    async "authorization.required"(_data, channel, ctx) {
+    async "authorization.required"(_data, _channel, ctx) {
       const sessionId = applicationSessionId(ctx);
-      await sessionRepository.markPendingOperation(sessionId, true);
+      const auth = ctx.session.auth.current;
+      const telegramUserId = auth?.attributes.telegramUserId;
+      await sessionRepository.parkSession({
+        applicationSessionId: sessionId,
+        pendingRequestId: null,
+        requesterTelegramUserId: typeof telegramUserId === "string" ? telegramUserId : null,
+        requesterUserId: auth && UUID_PATTERN.test(auth.principalId) ? auth.principalId : null,
+      });
+    },
+    async "authorization.completed"(_data, _channel, ctx) {
+      await sessionRepository.resumePendingSession(applicationSessionId(ctx), ctx.session.id);
     },
   },
   onDrain: handleTelegramDurableIngress.drain,

@@ -33,7 +33,7 @@ export function requireWorkspaceAuthorization(
   return {
     familyId: attributes.familyId,
     groupId: typeof attributes.groupId === "string" ? attributes.groupId : null,
-    groupType: ["external_private", "external_public", "family_private"].includes(
+    groupType: ["external", "family_private"].includes(
       String(attributes.groupType),
     )
       ? attributes.groupType as WorkspaceAuthorization["groupType"]

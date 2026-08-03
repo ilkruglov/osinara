@@ -174,6 +174,8 @@ describeWithDatabase("agent schedule repositories", () => {
     await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:test-run",
+      kind: "scheduled",
+      telegramForumTopicId: null,
       familyId: fixture.familyId,
       groupId: null,
       now: new Date("2026-07-17T09:00:01.000Z"),
@@ -263,6 +265,8 @@ describeWithDatabase("agent schedule repositories", () => {
     await agentScheduleDispatchRepository.markDispatchStarted(reclaimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:recoverable-run",
+      kind: "scheduled",
+      telegramForumTopicId: null,
       familyId: fixture.familyId,
       groupId: null,
       now: new Date("2026-07-17T09:00:02.000Z"),
@@ -315,6 +319,8 @@ describeWithDatabase("agent schedule repositories", () => {
     await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:long-running",
+      kind: "scheduled",
+      telegramForumTopicId: null,
       familyId: fixture.familyId,
       groupId: null,
       now: new Date("2026-07-17T09:00:00.000Z"),

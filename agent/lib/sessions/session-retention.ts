@@ -13,6 +13,8 @@ import { sessionRepository } from "./session-repository.js";
 const WORKFLOW_DATA_ROOT = resolve(".workflow-data");
 
 export async function deleteExpiredSessions(): Promise<number> {
+  // The existing minute lifecycle hook bounds abandoned task rows before physical Eve deletion.
+  await sessionRepository.retireAbandonedTasks(new Date());
   let deleted = 0;
   while (true) {
     const claim = await sessionRepository.claimExpiredForDeletion(new Date());

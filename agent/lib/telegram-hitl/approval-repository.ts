@@ -258,6 +258,35 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }
+      await client.query(
+        `UPDATE conversation_sessions session
+            SET pending_operation = EXISTS (
+                  SELECT 1 FROM telegram_hitl_approvals pending
+                   WHERE pending.application_session_id = session.id
+                     AND pending.eve_session_id = $2
+                     AND pending.consumed_at IS NULL
+                ),
+                pending_request_id = CASE
+                  WHEN EXISTS (
+                    SELECT 1 FROM telegram_hitl_approvals pending
+                     WHERE pending.application_session_id = session.id
+                       AND pending.eve_session_id = $2
+                       AND pending.consumed_at IS NULL
+                  ) THEN pending_request_id
+                  ELSE NULL
+                END,
+                task_state = CASE
+                  WHEN kind = 'task' AND NOT EXISTS (
+                    SELECT 1 FROM telegram_hitl_approvals pending
+                     WHERE pending.application_session_id = session.id
+                       AND pending.eve_session_id = $2
+                       AND pending.consumed_at IS NULL
+                  ) THEN 'running'::conversation_task_state
+                  ELSE task_state
+                END
+          WHERE session.id = $1`,
+        [row.application_session_id, row.eve_session_id],
+      );
       await client.query("COMMIT");
       return {
         auth,
@@ -290,7 +319,17 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         input.baseContinuationToken,
         row.application_session_id,
       );
-      if (!isPendingApproval(row) || !routeMatches) {
+      if (!isPendingApproval(row)) {
+        // A consumed or retired prompt is ordinary historical ancestry. Remove any stale alias in
+        // the same transaction so it cannot select old task model state during canonical prepare.
+        await client.query(
+          "DELETE FROM conversation_session_routes WHERE base_continuation_token = $1 AND session_id = $2",
+          [input.baseContinuationToken, row.application_session_id],
+        );
+        await client.query("COMMIT");
+        return "not_applicable";
+      }
+      if (!routeMatches) {
         await client.query("ROLLBACK");
         return "expired";
       }
@@ -308,6 +347,35 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         await client.query("ROLLBACK");
         return "expired";
       }
+      await client.query(
+        `UPDATE conversation_sessions session
+            SET pending_operation = EXISTS (
+                  SELECT 1 FROM telegram_hitl_approvals pending
+                   WHERE pending.application_session_id = session.id
+                     AND pending.eve_session_id = $2
+                     AND pending.consumed_at IS NULL
+                ),
+                pending_request_id = CASE
+                  WHEN EXISTS (
+                    SELECT 1 FROM telegram_hitl_approvals pending
+                     WHERE pending.application_session_id = session.id
+                       AND pending.eve_session_id = $2
+                       AND pending.consumed_at IS NULL
+                  ) THEN pending_request_id
+                  ELSE NULL
+                END,
+                task_state = CASE
+                  WHEN kind = 'task' AND NOT EXISTS (
+                    SELECT 1 FROM telegram_hitl_approvals pending
+                     WHERE pending.application_session_id = session.id
+                       AND pending.eve_session_id = $2
+                       AND pending.consumed_at IS NULL
+                  ) THEN 'running'::conversation_task_state
+                  ELSE task_state
+                END
+          WHERE session.id = $1`,
+        [row.application_session_id, row.eve_session_id],
+      );
       await client.query("COMMIT");
       return "authorized";
     } catch (error) {

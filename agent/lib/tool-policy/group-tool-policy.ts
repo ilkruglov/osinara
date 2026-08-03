@@ -54,7 +54,7 @@ const DENIED_TOOL_INPUT = z.record(z.string(), z.unknown());
 
 function isExternalPrincipal(principal: SessionAuth["current"]): boolean {
   const groupType = principal?.attributes.groupType;
-  return groupType === "external_private" || groupType === "external_public";
+  return groupType === "external";
 }
 
 function externalPolicyCaller(auth: SessionAuth): SessionAuth["current"] {

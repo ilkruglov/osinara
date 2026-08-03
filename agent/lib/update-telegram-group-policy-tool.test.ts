@@ -86,7 +86,7 @@ describe("manage_telegram_group.update_policy", () => {
     { action: "update_policy", telegramChatId: "-1003567628736", toolAllowlist: [] },
     { action: "update_policy", messageMode: "all", toolAllowlist: [] },
     { ...input, title: "Новое название" },
-    { ...input, type: "external_public" },
+    { ...input, type: "external" },
     { ...input, registration: {} },
     { ...input, telegramChatId: -1003567628736 },
   ])("rejects an incomplete or extended policy payload", async (invalidInput) => {

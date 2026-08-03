@@ -99,7 +99,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: ["remember"],
-      type: "external_private",
+      type: "external",
     });
 
     await expect(telegramRepository.findGroup("-1001")).resolves.toMatchObject({
@@ -119,7 +119,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: [],
-      type: "external_private" as const,
+      type: "external" as const,
     };
     const group = await telegramGroupAdministrationRepository.registerGroup(registration);
     await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", text: "данные" }));
@@ -156,7 +156,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Внешняя группа",
       toolAllowlist: ["remember"],
-      type: "external_public",
+      type: "external",
     });
 
     expect(replacement.groupId).not.toBe(initial.groupId);
@@ -164,6 +164,35 @@ describeWithDatabase("Telegram group journal repositories", () => {
       "SELECT count(*)::text AS count FROM telegram_group_messages",
     );
     expect(retained.rows[0]?.count).toBe("0");
+  });
+
+  it("also replaces an external trust zone when it becomes a family group", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("reverse-type-change");
+    const initial = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "all",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Внешняя группа",
+      toolAllowlist: ["remember"],
+      type: "external",
+    });
+    await telegramGroupJournalRepository.record(initial.groupId, message({ id: "1", text: "внешние данные" }));
+
+    const replacement = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Семейная группа",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+
+    expect(replacement.groupId).not.toBe(initial.groupId);
+    await expect(database().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM telegram_group_messages",
+    )).resolves.toMatchObject({ rows: [{ count: "0" }] });
   });
 
   it("deduplicates messages and reads numeric order only from the same forum topic", async () => {
@@ -175,7 +204,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: [],
-      type: "external_private",
+      type: "external",
     });
 
     await expect(
@@ -258,7 +287,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: [],
-      type: "external_private",
+      type: "external",
     });
 
     await telegramGroupJournalRepository.record(
@@ -359,7 +388,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: [],
-      type: "external_private",
+      type: "external",
     });
     await database().query(
       `INSERT INTO telegram_group_messages
@@ -402,7 +431,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       telegramChatId: "-1001",
       title: "Группа",
       toolAllowlist: [],
-      type: "external_private",
+      type: "external",
     });
     await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", text: "данные" }));
     await database().query(

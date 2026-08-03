@@ -39,7 +39,12 @@ interface InputRequestedData {
 
 interface InputRequestDependencies {
   approvals: Pick<TelegramHitlApprovalRepository, "register">;
-  markPendingOperation(id: string, pending: boolean): Promise<void>;
+  parkSession(input: {
+    applicationSessionId: string;
+    pendingRequestId: string | null;
+    requesterTelegramUserId: string;
+    requesterUserId: string | null;
+  }): Promise<void>;
   present: TelegramApprovalPresenter;
   registerMessageRoutes(
     channel: TelegramEventContext,
@@ -49,6 +54,7 @@ interface InputRequestDependencies {
 }
 
 const HITL_PREPARING_MESSAGE = "Подготавливаю безопасный запрос подтверждения.";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 type TelegramJsonValue =
   | boolean
@@ -131,7 +137,19 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       );
     }
 
-    await dependencies.markPendingOperation(appSessionId, true);
+    const firstRequest = data.requests[0];
+    if (!firstRequest) {
+      throw new AppError(
+        "AGENT_APPROVAL_REQUEST_MISSING",
+        "Eve не передал запрос, который нужно показать пользователю",
+      );
+    }
+    await dependencies.parkSession({
+      applicationSessionId: appSessionId,
+      pendingRequestId: firstRequest.requestId,
+      requesterTelegramUserId: telegramUserId,
+      requesterUserId: UUID_PATTERN.test(caller.principalId) ? caller.principalId : null,
+    });
     for (const request of data.requests) {
       const localizedRequest = await dependencies.present(request, ctx);
       const rendered = renderTelegramInputRequest(localizedRequest, channel.state);
@@ -190,7 +208,7 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
 
 export const handleTelegramInputRequested = createTelegramInputRequestHandler({
   approvals: telegramHitlApprovalRepository,
-  markPendingOperation: (id, pending) => sessionRepository.markPendingOperation(id, pending),
+  parkSession: (input) => sessionRepository.parkSession(input),
   present: presentTelegramApproval,
   registerMessageRoutes: registerTelegramDeliveredMessageRoutes,
 });

@@ -12,7 +12,7 @@
 import { AppError } from "./app-error.js";
 
 export type FamilyRole = "member" | "owner" | "recovery_owner";
-export type RegisteredGroupType = "external_private" | "external_public" | "family_private";
+export type RegisteredGroupType = "external" | "family_private";
 export type TelegramGroupMessageMode = "addressed_only" | "all" | "owner_only";
 export type StandardTelegramGroupMessageMode = Exclude<TelegramGroupMessageMode, "owner_only">;
 
@@ -36,7 +36,7 @@ export type RegisteredGroup = RegisteredGroupBase & (
   }
   | {
     messageMode: TelegramGroupMessageMode;
-    type: "external_private" | "external_public";
+    type: "external";
   }
 );
 

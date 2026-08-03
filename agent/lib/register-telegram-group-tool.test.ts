@@ -92,7 +92,7 @@ describe("manage_telegram_group.register", () => {
         registration: {
           ...input,
           toolAllowlist: ["remember"],
-          type: "external_private",
+          type: "external",
         },
       },
       context("supergroup"),
@@ -107,14 +107,14 @@ describe("manage_telegram_group.register", () => {
         ...input,
         messageMode: "owner_only",
         toolAllowlist: ["list_group_history"],
-        type: "external_public",
+        type: "external",
       },
     }, context("private"));
 
     expect(registerGroup).toHaveBeenCalledWith(expect.objectContaining({
       messageMode: "owner_only",
       toolAllowlist: ["list_group_history"],
-      type: "external_public",
+      type: "external",
     }));
   });
 

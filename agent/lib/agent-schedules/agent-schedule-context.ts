@@ -47,7 +47,7 @@ export function requireAgentScheduleAuthorization(
 
   // External groups deliberately have no scheduled-agent surface.
   const groupType = attributes.groupType;
-  if (groupType === "external_private" || groupType === "external_public") {
+  if (groupType === "external") {
     throw new AppError(
       "AGENT_SCHEDULE_SCOPE_DENIED",
       "Агентные расписания доступны только в личном чате и семейной группе",

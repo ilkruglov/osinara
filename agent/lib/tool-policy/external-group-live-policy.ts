@@ -19,7 +19,7 @@ export async function loadCurrentExternalGroupCapabilities(input: {
        FROM telegram_groups
       WHERE id = $1
         AND family_id = $2
-        AND type IN ('external_private', 'external_public')`,
+        AND type = 'external'`,
     [input.groupId, input.familyId],
   );
   const allowed = parseExternalGroupToolAllowlist(result.rows[0]?.tool_allowlist);

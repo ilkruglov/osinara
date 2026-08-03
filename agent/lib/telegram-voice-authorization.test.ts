@@ -61,26 +61,23 @@ describe("createTelegramVoiceAuthorizer", () => {
     ).resolves.toBe(false);
   });
 
-  it.each(["external_private", "external_public"] as const)(
-    "denies %s voice before identity lookup and Groq transcription",
-    async (groupType) => {
-      const telegram = {
-        findGroup: vi.fn().mockResolvedValue({
-          familyId: "family-1",
-          groupId: "group-1",
-          telegramChatId: "-1001",
-          toolAllowlist: [],
-          type: groupType,
-        }),
-        findIdentity: vi.fn(),
-      };
-      const authorize = createTelegramVoiceAuthorizer(telegram);
+  it("denies external voice before identity lookup and Groq transcription", async () => {
+    const telegram = {
+      findGroup: vi.fn().mockResolvedValue({
+        familyId: "family-1",
+        groupId: "group-1",
+        telegramChatId: "-1001",
+        toolAllowlist: [],
+        type: "external" as const,
+      }),
+      findIdentity: vi.fn(),
+    };
+    const authorize = createTelegramVoiceAuthorizer(telegram);
 
-      await expect(authorize({
-        chat: { id: "-1001", type: "supergroup" },
-        from: { id: "202", isBot: false },
-      })).resolves.toBe(false);
-      expect(telegram.findIdentity).not.toHaveBeenCalled();
-    },
-  );
+    await expect(authorize({
+      chat: { id: "-1001", type: "supergroup" },
+      from: { id: "202", isBot: false },
+    })).resolves.toBe(false);
+    expect(telegram.findIdentity).not.toHaveBeenCalled();
+  });
 });

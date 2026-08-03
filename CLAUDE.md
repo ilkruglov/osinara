@@ -78,7 +78,7 @@ Long-term memory является application concern, а не заменой Ev
 `private` требует подтверждённую семейную identity.
 Личный чат получает scopes `personal` и `family`.
 `family_private` принимает только активного участника той же семьи и получает `family`.
-`external_private` и `external_public` получают только собственный `group` scope.
+`external` получает только собственный `group` scope.
 Внешняя группа никогда не получает личную или семейную память и подключения.
 
 Owner-only операции разрешены только в личном Telegram-чате владельца.

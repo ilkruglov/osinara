@@ -203,6 +203,8 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     );
     const session = await sessionRepository.prepareTurn({
       baseContinuationToken: "-1001::10",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: groupRow.rows[0]!.family_id,
       groupId,
       now: new Date("2026-07-30T12:00:00.000Z"),
@@ -253,6 +255,8 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     );
     const session = await sessionRepository.prepareTurn({
       baseContinuationToken: "-1001::20",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: groupRow.rows[0]!.family_id,
       groupId,
       now: new Date("2026-07-30T12:00:00.000Z"),
@@ -285,6 +289,8 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
     );
     const session = await sessionRepository.prepareTurn({
       baseContinuationToken: "-1001:42:30",
+      kind: "canonical",
+      telegramForumTopicId: null,
       familyId: groupRow.rows[0]!.family_id,
       groupId,
       now: new Date("2026-07-30T12:00:00.000Z"),

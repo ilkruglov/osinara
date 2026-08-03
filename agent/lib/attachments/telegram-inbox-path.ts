@@ -21,7 +21,7 @@ export function telegramInboxDirectory(
   if (
     scope === "group" &&
     auth.groupId !== null &&
-    (auth.groupType === "external_private" || auth.groupType === "external_public")
+    auth.groupType === "external"
   ) return `inbox/${telegramMessageId}`;
 
   // A family can register multiple private groups. The trusted group UUID prevents equal chat-local

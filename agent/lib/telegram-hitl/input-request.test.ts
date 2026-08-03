@@ -13,7 +13,7 @@ import { createTelegramInputRequestHandler } from "./input-request.js";
 
 describe("createTelegramInputRequestHandler", () => {
   it("registers the expected approver and route before exposing callback buttons", async () => {
-    const markPendingOperation = vi.fn();
+    const parkSession = vi.fn();
     const register = vi.fn();
     const registerMessageRoutes = vi.fn();
     const request = vi.fn().mockImplementation(async (method: string) => method === "sendMessage"
@@ -21,7 +21,7 @@ describe("createTelegramInputRequestHandler", () => {
       : { body: {}, ok: true, status: 200 });
     const handler = createTelegramInputRequestHandler({
       approvals: { register },
-      markPendingOperation,
+      parkSession,
       present: async (request) => request,
       registerMessageRoutes,
     });
@@ -80,7 +80,12 @@ describe("createTelegramInputRequestHandler", () => {
       }],
     } as never, channel, ctx);
 
-    expect(markPendingOperation).toHaveBeenCalledWith("app-session-1", true);
+    expect(parkSession).toHaveBeenCalledWith({
+      applicationSessionId: "app-session-1",
+      pendingRequestId: "request-1",
+      requesterTelegramUserId: "101",
+      requesterUserId: null,
+    });
     expect(request).toHaveBeenCalledWith("sendMessage", expect.objectContaining({
       chat_id: "-1001",
       message_thread_id: 55,
@@ -127,7 +132,7 @@ describe("createTelegramInputRequestHandler", () => {
       : { body: {}, ok: true, status: 200 });
     const handler = createTelegramInputRequestHandler({
       approvals: { register },
-      markPendingOperation: vi.fn(),
+      parkSession: vi.fn(),
       present: async (request) => request,
       registerMessageRoutes: vi.fn(),
     });
@@ -192,7 +197,7 @@ describe("createTelegramInputRequestHandler", () => {
       : { body: {}, ok: true, status: 200 });
     const handler = createTelegramInputRequestHandler({
       approvals: { register: vi.fn() },
-      markPendingOperation: vi.fn(),
+      parkSession: vi.fn(),
       present: async (input) => input,
       registerMessageRoutes,
     });

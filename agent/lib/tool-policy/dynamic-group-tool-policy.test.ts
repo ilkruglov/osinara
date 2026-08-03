@@ -36,7 +36,7 @@ describe("dynamic group tool policy", () => {
         auth: {
           current: {
             attributes: {
-              groupType: "external_public",
+              groupType: "external",
               role: "external",
               toolAllowlist: [],
             },
@@ -63,7 +63,7 @@ describe("dynamic group tool policy", () => {
             attributes: {
               familyId: "family-1",
               groupId: "group-1",
-              groupType: "external_public",
+              groupType: "external",
               toolAllowlist: ["web_search"],
             },
             authenticator: "telegram",
@@ -94,7 +94,7 @@ describe("dynamic group tool policy", () => {
             attributes: {
               familyId: "family-1",
               groupId: "group-1",
-              groupType: "external_public",
+              groupType: "external",
               toolAllowlist: ["web_search"],
             },
             authenticator: "telegram",
@@ -122,7 +122,7 @@ describe("dynamic group tool policy", () => {
             attributes: {
               familyId: "family-1",
               groupId: "group-1",
-              groupType: "external_public",
+              groupType: "external",
               toolAllowlist: ["web_search"],
             },
             authenticator: "telegram",

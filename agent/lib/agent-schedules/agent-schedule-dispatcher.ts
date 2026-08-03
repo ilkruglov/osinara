@@ -162,8 +162,12 @@ export function dispatchDueAgentSchedules(receive: ReceiveFn, now = new Date()):
       baseContinuationToken: continuationToken,
       familyId: job.familyId,
       groupId: job.groupId,
+      kind: "scheduled",
       now: currentTime,
       scope: job.scope,
+      telegramForumTopicId: job.forumTopicId === null
+        ? null
+        : numericMessageThreadId(job.forumTopicId)!,
       userId: job.scope === "personal" ? job.authorUserId : null,
     }),
     receive,

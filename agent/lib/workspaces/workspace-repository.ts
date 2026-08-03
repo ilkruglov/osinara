@@ -29,7 +29,7 @@ export type {
 export interface WorkspaceAuthorization {
   familyId: string;
   groupId: string | null;
-  groupType: "external_private" | "external_public" | "family_private" | null;
+  groupType: "external" | "family_private" | null;
   role: "external" | "member" | "owner" | "recovery_owner";
   telegramChatType: "group" | "private" | "supergroup";
   userId: string | null;
@@ -69,7 +69,7 @@ async function assertCurrentAccess(
     }
     const group = await client.query(
       `SELECT 1 FROM telegram_groups
-        WHERE id = $1 AND family_id = $2 AND type IN ('external_private', 'external_public')`,
+        WHERE id = $1 AND family_id = $2 AND type = 'external'`,
       [auth.groupId, auth.familyId],
     );
     if (group.rowCount !== 1) {
@@ -142,7 +142,7 @@ export function createWorkspaceRepository(root: string) {
         ? ["personal", "family"]
         : auth.groupType === "family_private"
         ? ["family"]
-        : auth.groupType === "external_private" || auth.groupType === "external_public"
+        : auth.groupType === "external"
         ? ["group"]
         : [];
       if (scopes.length === 0) {

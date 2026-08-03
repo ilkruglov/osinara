@@ -91,7 +91,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-policy', 'Policy group', 'external_public', 'addressed_only', '{}')`,
+       VALUES ($1, '-100-policy', 'Policy group', 'external', 'addressed_only', '{}')`,
       [family.rows[0]!.id],
     );
     const update = updateInput("1002", "telegram:group:-100-policy", "повтор после смены зоны");
@@ -129,7 +129,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-photo', 'Photo group', 'external_private', 'addressed_only',
+       VALUES ($1, '-100-photo', 'Photo group', 'external', 'addressed_only',
          ARRAY['inspect_workspace_image'])`,
       [family.rows[0]!.id],
     );
@@ -160,7 +160,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-malformed-photo', 'Malformed photo policy', 'external_public',
+       VALUES ($1, '-100-malformed-photo', 'Malformed photo policy', 'external',
          'addressed_only', ARRAY['inspect_workspace_image', 'unknown_tool'])`,
       [family.rows[0]!.id],
     );
@@ -184,7 +184,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await database().query(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
-       VALUES ($1, '-100-revoked-photo', 'Revoked photo group', 'external_private',
+       VALUES ($1, '-100-revoked-photo', 'Revoked photo group', 'external',
          'addressed_only', ARRAY['inspect_workspace_image'])`,
       [family.rows[0]!.id],
     );

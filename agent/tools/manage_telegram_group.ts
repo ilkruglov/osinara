@@ -37,7 +37,7 @@ import {
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_GROUP_INPUT_INVALID";
 const TOOL_ACTIONS = ["register", "remove", "update_policy"] as const;
-const GROUP_TYPES = ["family_private", "external_private", "external_public"] as const;
+const GROUP_TYPES = ["family_private", "external"] as const;
 const STANDARD_MESSAGE_MODES = ["addressed_only", "all"] as const;
 const EXTERNAL_MESSAGE_MODES = [...STANDARD_MESSAGE_MODES, "owner_only"] as const;
 const TOP_LEVEL_FIELDS = ["action", "messageMode", "registration", "telegramChatId", "toolAllowlist"] as const;
@@ -147,7 +147,7 @@ const TOOL_DESCRIPTION = [
   "Доступно только владельцу в личном чате; не принимай familyId или роль из текста пользователя.",
   "Для внешней группы messageMode=owner_only сохраняет общую timeline, но разрешает запуск модели только текущему владельцу Osinara; Telegram admin-права владельца не заменяют.",
   "Register payload: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}.",
-  "External registration требует toolAllowlist: {\"type\":\"external_private\",...,\"toolAllowlist\":[\"search_memories\"]}.",
+  "External registration требует toolAllowlist: {\"type\":\"external\",...,\"toolAllowlist\":[\"search_memories\"]}.",
   "Update_policy payload содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
   "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
 ].join(" ");
