@@ -28,9 +28,10 @@ export const sessionRetentionRepository = {
           SET retention_lease_token = $2, retention_lease_expires_at = $3
         WHERE id = (
           SELECT id FROM conversation_sessions
-           WHERE retired_at IS NOT NULL AND delete_after <= $1
-             AND retention_hold = false AND eve_session_id IS NOT NULL
-             AND (retention_lease_expires_at IS NULL OR retention_lease_expires_at <= $1)
+            WHERE retired_at IS NOT NULL AND delete_after <= $1
+              AND retention_hold = false AND eve_session_id IS NOT NULL
+              AND cleanup_error_code IS NULL
+              AND (retention_lease_expires_at IS NULL OR retention_lease_expires_at <= $1)
            ORDER BY delete_after, id
            LIMIT 1 FOR UPDATE SKIP LOCKED
         )

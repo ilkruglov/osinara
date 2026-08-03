@@ -4,20 +4,85 @@
  * Export:
  * - `sessionLifecycleEventRepository`: Eve binding, completion/failure, and rotation requests.
  */
+import type { PoolClient } from "pg";
+
 import { SESSION_RETENTION_DAYS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { classifyMissedSessionEvent, type SessionEventResult } from "./session-eve-event.js";
 
-async function recordRetirementAudit(id: string): Promise<void> {
-  // Canonical sessions rotate separately; this audit covers terminal task/scheduled/proactive rows.
-  await database().query(
+async function finalizeRetirement(client: PoolClient, id: string): Promise<void> {
+  // Route removal and the audit record are part of the same commit as the terminal state change.
+  await client.query(
+    `DELETE FROM conversation_session_routes route
+      WHERE route.session_id = $1
+        AND EXISTS (
+          SELECT 1 FROM conversation_sessions session
+           WHERE session.id = route.session_id AND session.retired_at IS NOT NULL
+        )`,
+    [id],
+  );
+  await client.query(
     `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
      SELECT family_id, 'session.noncanonical_retired', id,
             jsonb_build_object('kind', kind::text, 'taskState', task_state::text)
        FROM conversation_sessions
       WHERE id = $1 AND retired_at IS NOT NULL AND kind <> 'canonical'`,
     [id],
+  );
+}
+
+async function applyTerminalMutation(input: {
+  id: string;
+  parameters: readonly unknown[];
+  sql: string;
+}): Promise<boolean> {
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(input.sql, [...input.parameters]);
+    if (result.rowCount !== 1) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await finalizeRetirement(client, input.id);
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function resolveFailureSessionForUpdate(
+  client: PoolClient,
+  continuationToken: string,
+): Promise<string> {
+  // Eve's exact current continuation is authoritative over a stale alias with the same text.
+  const exact = await client.query<{ id: string }>(
+    `SELECT id FROM conversation_sessions
+      WHERE retired_at IS NULL AND continuation_token = $1
+      FOR UPDATE`,
+    [continuationToken],
+  );
+  if (exact.rowCount === 1) return exact.rows[0]!.id;
+
+  const route = await client.query<{ id: string }>(
+    `SELECT session.id
+       FROM conversation_session_routes route
+       JOIN conversation_sessions session ON session.id = route.session_id
+      WHERE route.base_continuation_token = $1 AND session.retired_at IS NULL
+      FOR UPDATE OF session`,
+    [continuationToken],
+  );
+  if (route.rowCount === 1) return route.rows[0]!.id;
+  throw new AppError(
+    "AGENT_SESSION_FAILURE_RECORD_FAILED",
+    route.rowCount === 0
+      ? "Не удалось завершить повреждённый контекст"
+      : "Маршрут повреждённого контекста связан с несколькими сессиями",
   );
 }
 
@@ -85,7 +150,9 @@ export const sessionLifecycleEventRepository = {
     eveSessionId: string,
     pendingOperation: boolean,
   ): Promise<SessionEventResult> {
-    const result = await database().query(
+    const recorded = await applyTerminalMutation({
+      id,
+      sql:
       `UPDATE conversation_sessions
           SET completed_turns = completed_turns + 1,
               last_activity_at = now(), pending_operation = $3,
@@ -102,21 +169,9 @@ export const sessionLifecycleEventRepository = {
               END
         WHERE id = $1 AND retired_at IS NULL
            AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId, pendingOperation, SESSION_RETENTION_DAYS],
-    );
-    if (result.rowCount === 1) {
-      await database().query(
-        `DELETE FROM conversation_session_routes route
-          WHERE route.session_id = $1
-            AND EXISTS (
-              SELECT 1 FROM conversation_sessions session
-               WHERE session.id = route.session_id AND session.retired_at IS NOT NULL
-            )`,
-        [id],
-      );
-      await recordRetirementAudit(id);
-      return "recorded";
-    }
+      parameters: [id, eveSessionId, pendingOperation, SESSION_RETENTION_DAYS],
+    });
+    if (recorded) return "recorded";
     return await classifyMissedSessionEvent(
       id,
       eveSessionId,
@@ -126,7 +181,9 @@ export const sessionLifecycleEventRepository = {
   },
 
   async recordTurnFailed(id: string, eveSessionId: string): Promise<SessionEventResult> {
-    const result = await database().query(
+    const recorded = await applyTerminalMutation({
+      id,
+      sql:
       `UPDATE conversation_sessions
           SET pending_operation = false, eve_session_id = $2,
               task_state = CASE
@@ -140,21 +197,9 @@ export const sessionLifecycleEventRepository = {
               END
         WHERE id = $1 AND retired_at IS NULL
            AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId, SESSION_RETENTION_DAYS],
-    );
-    if (result.rowCount === 1) {
-      await database().query(
-        `DELETE FROM conversation_session_routes route
-          WHERE route.session_id = $1
-            AND EXISTS (
-              SELECT 1 FROM conversation_sessions session
-               WHERE session.id = route.session_id AND session.retired_at IS NOT NULL
-            )`,
-        [id],
-      );
-      await recordRetirementAudit(id);
-      return "recorded";
-    }
+      parameters: [id, eveSessionId, SESSION_RETENTION_DAYS],
+    });
+    if (recorded) return "recorded";
     return await classifyMissedSessionEvent(
       id,
       eveSessionId,
@@ -167,54 +212,43 @@ export const sessionLifecycleEventRepository = {
     continuationToken: string,
     eveSessionId: string,
   ): Promise<SessionEventResult> {
-    // Resolve both Eve's current token and the exact prompt route retained for a pending task.
-    const sessions = await database().query<{ id: string }>(
-      `SELECT DISTINCT s.id
-         FROM conversation_sessions s
-         LEFT JOIN conversation_session_routes r ON r.session_id = s.id
-        WHERE s.retired_at IS NULL
-          AND (s.continuation_token = $1 OR r.base_continuation_token = $1)`,
-      [continuationToken],
-    );
-    if (sessions.rowCount !== 1) {
-      throw new AppError(
-        "AGENT_SESSION_FAILURE_RECORD_FAILED",
-        sessions.rowCount === 0
-          ? "Не удалось завершить повреждённый контекст"
-          : "Маршрут повреждённого контекста связан с несколькими сессиями",
+    const client = await database().connect();
+    let id: string;
+    let recorded = false;
+    try {
+      await client.query("BEGIN");
+      id = await resolveFailureSessionForUpdate(client, continuationToken);
+      const result = await client.query(
+        `UPDATE conversation_sessions
+             SET pending_operation = false,
+                 rotation_requested_at = CASE WHEN kind = 'canonical' THEN now() ELSE rotation_requested_at END,
+                 eve_session_id = $2,
+                 task_state = CASE WHEN kind <> 'canonical' THEN 'failed'::conversation_task_state ELSE task_state END,
+                 retired_at = CASE WHEN kind <> 'canonical' THEN now() ELSE retired_at END,
+                 delete_after = CASE
+                   WHEN kind <> 'canonical' THEN now() + $3 * interval '1 day'
+                   ELSE delete_after
+                 END
+          WHERE id = $1 AND retired_at IS NULL
+            AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
+        [id, eveSessionId, SESSION_RETENTION_DAYS],
       );
+      if (result.rowCount === 1) {
+        await finalizeRetirement(client, id);
+        await client.query("COMMIT");
+        recorded = true;
+      } else {
+        await client.query("ROLLBACK");
+      }
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-    const id = sessions.rows[0]!.id;
-    const result = await database().query(
-      `UPDATE conversation_sessions
-           SET pending_operation = false,
-               rotation_requested_at = CASE WHEN kind = 'canonical' THEN now() ELSE rotation_requested_at END,
-               eve_session_id = $2,
-               task_state = CASE WHEN kind <> 'canonical' THEN 'failed'::conversation_task_state ELSE task_state END,
-               retired_at = CASE WHEN kind <> 'canonical' THEN now() ELSE retired_at END,
-               delete_after = CASE
-                 WHEN kind <> 'canonical' THEN now() + $3 * interval '1 day'
-                 ELSE delete_after
-               END
-        WHERE id = $1 AND retired_at IS NULL
-          AND (eve_session_id IS NULL OR eve_session_id <= $2)`,
-      [id, eveSessionId, SESSION_RETENTION_DAYS],
-    );
-    if (result.rowCount === 1) {
-      await database().query(
-        `DELETE FROM conversation_session_routes route
-          WHERE route.session_id = $1
-            AND EXISTS (
-              SELECT 1 FROM conversation_sessions session
-               WHERE session.id = route.session_id AND session.retired_at IS NOT NULL
-            )`,
-        [id],
-      );
-      await recordRetirementAudit(id);
-      return "recorded";
-    }
+    if (recorded) return "recorded";
     return await classifyMissedSessionEvent(
-      id,
+      id!,
       eveSessionId,
       "AGENT_SESSION_FAILURE_RECORD_FAILED",
       "Не удалось сохранить состояние повреждённого контекста",

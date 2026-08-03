@@ -6,6 +6,7 @@
  * - `claimCallback`: atomically rejects foreign, stale, and repeated callback attempts.
  * - Pending approvals survive the Eve turn that pauses for user input.
  * - `authorizeReply`: atomically protects and consumes accepted text replies.
+ * - Consumed prompts become ordinary ancestry for any later author without weakening pending binds.
  * - Owner-only external approvals recheck the current owner role before resuming Eve.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -306,7 +307,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       baseContinuationToken: "-1001:55:88",
       telegramChatId: "-1001",
       telegramMessageId: "88",
-      telegramUserId: OWNER_TELEGRAM_ID,
+      telegramUserId: "202",
     })).resolves.toBe("not_applicable");
     await expect(telegramHitlApprovalRepository.authorizeReply({
       baseContinuationToken: "-1001:55:999",

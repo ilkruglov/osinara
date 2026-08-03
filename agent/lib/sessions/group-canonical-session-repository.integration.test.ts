@@ -6,6 +6,8 @@
  * - Atomic canonical-to-task promotion and lazy canonical replacement.
  * - Exact task continuation without allowing ordinary aliases to select the task.
  * - Prompt task completion/failure retirement and retention eligibility.
+ * - Park identity preservation when a later boundary has no request metadata.
+ * - Atomic terminal lifecycle mutation, route cleanup, and audit persistence.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -134,6 +136,86 @@ describeWithDatabase("canonical group session repository", () => {
       [canonical.id],
     )).resolves.toMatchObject({ rowCount: 1 });
   });
+
+  it("preserves persisted requester identity when a later park has null metadata", async () => {
+    const f = await fixture();
+    const canonical = await sessionRepository.prepareTurn(canonicalInput(f, null));
+    await sessionRepository.parkSession({
+      applicationSessionId: canonical.id,
+      pendingRequestId: "request-before-oauth",
+      requesterTelegramUserId: "canonical-owner",
+      requesterUserId: f.userId,
+    });
+
+    // OAuth authorization.required has no Eve request id and may lack a mapped application user.
+    await sessionRepository.parkSession({
+      applicationSessionId: canonical.id,
+      pendingRequestId: null,
+      requesterTelegramUserId: null,
+      requesterUserId: null,
+    });
+
+    await expect(database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1 AND pending_request_id = 'request-before-oauth'
+          AND requester_user_id = $2 AND requester_telegram_user_id = 'canonical-owner'`,
+      [canonical.id, f.userId],
+    )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
+  it.each(["completed", "failed", "continuation"] as const)(
+    "rolls back %s terminal state and route deletion when retirement audit fails",
+    async (terminalPath) => {
+    const f = await fixture();
+    const canonical = await sessionRepository.prepareTurn(canonicalInput(f, null));
+    await sessionRepository.bindEveSession(canonical.id, "wrun_atomic_terminal");
+    await sessionRepository.parkSession({
+      applicationSessionId: canonical.id,
+      pendingRequestId: "request-atomic",
+      requesterTelegramUserId: "canonical-owner",
+      requesterUserId: f.userId,
+    });
+    await sessionRepository.registerRouteAlias(canonical.id, "-100-canonical::atomic");
+    await database().query(`
+      CREATE OR REPLACE FUNCTION reject_atomic_retirement_audit() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.subject_id = '${canonical.id}' AND NEW.event_type = 'session.noncanonical_retired' THEN
+          RAISE EXCEPTION 'forced retirement audit failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER reject_atomic_retirement_audit
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW EXECUTE FUNCTION reject_atomic_retirement_audit();
+    `);
+
+    try {
+      const terminal = terminalPath === "completed"
+        ? sessionRepository.recordTurnCompleted(canonical.id, "wrun_atomic_terminal", false)
+        : terminalPath === "failed"
+        ? sessionRepository.recordTurnFailed(canonical.id, "wrun_atomic_terminal")
+        : sessionRepository.recordSessionFailedByContinuationToken(
+          canonical.continuationToken,
+          "wrun_atomic_terminal",
+        );
+      await expect(terminal).rejects.toThrow("forced retirement audit failure");
+      await expect(database().query(
+        `SELECT 1 FROM conversation_sessions
+          WHERE id = $1 AND retired_at IS NULL AND task_state = 'pending'
+            AND pending_operation = true`,
+        [canonical.id],
+      )).resolves.toMatchObject({ rowCount: 1 });
+      await expect(sessionRepository.hasRoute("-100-canonical::atomic")).resolves.toBe(true);
+    } finally {
+      await database().query(`
+        DROP TRIGGER reject_atomic_retirement_audit ON audit_events;
+        DROP FUNCTION reject_atomic_retirement_audit();
+      `);
+    }
+    },
+  );
 
   it.each([
     ["completed", false],

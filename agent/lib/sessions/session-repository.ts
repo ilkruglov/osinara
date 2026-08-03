@@ -48,6 +48,7 @@ export interface PreparedSession {
   continuationToken: string;
   generation: number;
   id: string;
+  /** True when rotation, task promotion, or trust-zone recreation requires a fresh Eve generation. */
   rotated: boolean;
   sandboxSessionId: string;
 }
@@ -338,9 +339,9 @@ export const sessionRepository = {
                   ELSE task_state
                 END,
                 pending_operation = true,
-                requester_user_id = $3,
-                requester_telegram_user_id = $4,
-                pending_request_id = $5,
+                requester_user_id = coalesce($3, requester_user_id),
+                requester_telegram_user_id = coalesce($4, requester_telegram_user_id),
+                pending_request_id = coalesce($5, pending_request_id),
                 originating_canonical_session_id = CASE WHEN $2 THEN id ELSE originating_canonical_session_id END
           WHERE id = $1`,
         [

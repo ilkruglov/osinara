@@ -13,6 +13,28 @@ ALTER TABLE conversation_sessions
     REFERENCES conversation_sessions(id) ON DELETE SET NULL,
   ADD COLUMN pending_request_id text;
 
+-- Existing HITL constraints should already guarantee positive topics. Validate explicitly so a
+-- damaged legacy schema fails with an application diagnostic before any lifecycle row is changed.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM conversation_sessions session
+      JOIN telegram_hitl_approvals hitl ON hitl.application_session_id = session.id
+     WHERE session.group_id IS NOT NULL
+       AND session.pending_operation = true
+       AND session.retired_at IS NULL
+       AND hitl.consumed_at IS NULL
+       AND (
+         hitl.telegram_chat_id !~ '^-?[1-9][0-9]*$' OR
+         (hitl.telegram_message_thread_id IS NOT NULL AND hitl.telegram_message_thread_id <= 0)
+       )
+  ) THEN
+    RAISE EXCEPTION 'AGENT_MIGRATION_042_INVALID_TELEGRAM_ID: pending HITL route contains an invalid Telegram identifier';
+  END IF;
+END;
+$$;
+
 UPDATE conversation_sessions session
 SET kind = 'scheduled',
     task_state = CASE
@@ -69,6 +91,50 @@ WHERE session.group_id IS NOT NULL
   );
 
 -- Pending OAuth branches may not have a Telegram HITL row but still own parked Eve state.
+-- Validate the exact Eve `chat:thread:conversation` shape instead of silently treating malformed
+-- stored identifiers as the main topic or leaking PostgreSQL cast details.
+DO $$
+DECLARE
+  legacy record;
+  parsed_chat_id bigint;
+  parsed_conversation_id bigint;
+  parsed_topic_id bigint;
+BEGIN
+  FOR legacy IN
+    SELECT id, conversation_key,
+           split_part(conversation_key, ':', 1) AS chat_id,
+           split_part(conversation_key, ':', 2) AS topic_id,
+           split_part(conversation_key, ':', 3) AS conversation_id
+      FROM conversation_sessions
+     WHERE group_id IS NOT NULL
+       AND pending_operation = true
+       AND retired_at IS NULL
+       AND kind = 'canonical'
+  LOOP
+    IF char_length(legacy.conversation_key) - char_length(replace(legacy.conversation_key, ':', '')) <> 2 OR
+       legacy.chat_id !~ '^-?[1-9][0-9]*$' OR
+       legacy.conversation_id !~ '^[1-9][0-9]*$' THEN
+      RAISE EXCEPTION 'AGENT_MIGRATION_042_INVALID_TELEGRAM_ID: session % has malformed Telegram continuation token', legacy.id;
+    END IF;
+    BEGIN
+      parsed_chat_id := legacy.chat_id::bigint;
+      parsed_conversation_id := legacy.conversation_id::bigint;
+      IF parsed_chat_id = 0 OR parsed_conversation_id <= 0 THEN
+        RAISE numeric_value_out_of_range;
+      END IF;
+      IF legacy.topic_id <> '' THEN
+        parsed_topic_id := legacy.topic_id::bigint;
+        IF parsed_topic_id <= 0 THEN
+          RAISE numeric_value_out_of_range;
+        END IF;
+      END IF;
+    EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
+      RAISE EXCEPTION 'AGENT_MIGRATION_042_INVALID_TELEGRAM_ID: session % has an out-of-range Telegram identifier', legacy.id;
+    END;
+  END LOOP;
+END;
+$$;
+
 UPDATE conversation_sessions
 SET kind = 'task',
     task_state = 'pending',
