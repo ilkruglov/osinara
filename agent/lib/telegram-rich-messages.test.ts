@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - RichBlockThinking uses one stable draft per private chat/topic and Eve turn.
+ * - Private drafts reject a missing Eve turn identity before Telegram delivery.
  * - Completed output is persisted with sendRichMessage and anchors group conversations.
  * - The first chunk of a group response replies to the verified triggering message.
  * - Telegram rejection and ambiguous transport failures remain fail-fast without retries.
@@ -123,6 +124,18 @@ describe("Telegram rich drafts", () => {
       telegramTarget({ chatId: "-100123", chatType: "supergroup" }),
       "turn_1",
     );
+
+    expect(telegramFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a private draft without an Eve turn identity before delivery", async () => {
+    const telegramFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(telegramResponse(true));
+
+    await expect(
+      startTelegramRichThinkingDraft(telegramTarget(), ""),
+    ).rejects.toMatchObject({ code: "AGENT_TELEGRAM_RICH_TURN_ID_INVALID" });
 
     expect(telegramFetch).not.toHaveBeenCalled();
   });
