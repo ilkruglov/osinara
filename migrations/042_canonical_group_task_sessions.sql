@@ -178,7 +178,8 @@ BEGIN
          delete_after = now() + interval '90 days',
          pending_operation = false,
          task_state = CASE
-           WHEN kind = 'task' THEN 'failed'::conversation_task_state
+           WHEN kind <> 'canonical' AND task_state IN ('running', 'pending')
+             THEN 'failed'::conversation_task_state
            ELSE task_state
          END
    WHERE group_id = OLD.id

@@ -397,6 +397,16 @@ describeWithDatabase("session repository", () => {
     await sessionRepository.bindEveSession(active.id, "wrun_active_group_cursor");
     await groupTimelineCursorRepository.advance(active.id, "wrun_active_group_cursor", "20");
     await sessionRepository.registerRouteAlias(active.id, "-100-session-zone::900");
+    const scheduled = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, task_state,
+          conversation_key, continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'scheduled', 'running',
+               '-100-session-zone::schedule:retire', '-100-session-zone::schedule:retire',
+               now(), now())
+       RETURNING id`,
+      [f.familyId, group.rows[0]!.id],
+    );
     const retiredBeforeDeletion = await database().query<{ retired_at: Date }>(
       "SELECT retired_at FROM conversation_sessions WHERE id = $1",
       [old.id],
@@ -435,6 +445,11 @@ describeWithDatabase("session repository", () => {
         WHERE session_id = ANY($1::uuid[])`,
       [[old.id, active.id]],
     )).resolves.toMatchObject({ rowCount: 0 });
+    await expect(database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1 AND retired_at IS NOT NULL AND task_state = 'failed'`,
+      [scheduled.rows[0]!.id],
+    )).resolves.toMatchObject({ rowCount: 1 });
 
     const replacementGroup = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
