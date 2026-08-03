@@ -138,7 +138,7 @@ export default telegramChannel({
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
       if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);
     },
-    async "turn.started"(_data, channel, ctx) {
+    async "turn.started"(data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
       // A started turn already owns a durable workflow input, so its embedded timeline delta can
@@ -159,7 +159,9 @@ export default telegramChannel({
           proactiveDeliveryCursor,
         );
       }
-      if (!isScheduledSession(ctx)) await startTelegramRichThinkingDraft(channel.telegram);
+      if (!isScheduledSession(ctx)) {
+        await startTelegramRichThinkingDraft(channel.telegram, data.turnId);
+      }
     },
     async "turn.completed"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);

@@ -2,7 +2,7 @@
  * Native Telegram Rich Message delivery tests.
  *
  * Constructs covered:
- * - RichBlockThinking uses one stable draft per private chat/topic.
+ * - RichBlockThinking uses one stable draft per private chat/topic and Eve turn.
  * - Completed output is persisted with sendRichMessage and anchors group conversations.
  * - The first chunk of a group response replies to the verified triggering message.
  * - Telegram rejection and ambiguous transport failures remain fail-fast without retries.
@@ -56,6 +56,7 @@ describe("Telegram rich drafts", () => {
 
     await startTelegramRichThinkingDraft(
       telegramTarget({ messageThreadId: 42 }),
+      "turn_1",
     );
 
     expect(String(telegramFetch.mock.calls[0]![0])).toBe(
@@ -75,10 +76,38 @@ describe("Telegram rich drafts", () => {
 
     await startTelegramRichThinkingDraft(
       telegramTarget({ messageThreadId: 41 }),
+      "turn_1",
     );
     await startTelegramRichThinkingDraft(
       telegramTarget({ messageThreadId: 42 }),
+      "turn_1",
     );
+
+    expect(requestBody(telegramFetch, 0).draft_id).not.toBe(
+      requestBody(telegramFetch, 1).draft_id,
+    );
+  });
+
+  it("keeps repeated updates stable within the same Eve turn", async () => {
+    const telegramFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => telegramResponse(true));
+
+    await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
+    await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
+
+    expect(requestBody(telegramFetch, 0).draft_id).toBe(
+      requestBody(telegramFetch, 1).draft_id,
+    );
+  });
+
+  it("does not resume a pre-approval draft after HITL starts the next Eve turn", async () => {
+    const telegramFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => telegramResponse(true));
+
+    await startTelegramRichThinkingDraft(telegramTarget(), "turn_24");
+    await startTelegramRichThinkingDraft(telegramTarget(), "turn_25");
 
     expect(requestBody(telegramFetch, 0).draft_id).not.toBe(
       requestBody(telegramFetch, 1).draft_id,
@@ -92,6 +121,7 @@ describe("Telegram rich drafts", () => {
 
     await startTelegramRichThinkingDraft(
       telegramTarget({ chatId: "-100123", chatType: "supergroup" }),
+      "turn_1",
     );
 
     expect(telegramFetch).not.toHaveBeenCalled();
@@ -111,7 +141,7 @@ describe("Telegram rich drafts", () => {
       );
 
     await expect(
-      startTelegramRichThinkingDraft(telegramTarget()),
+      startTelegramRichThinkingDraft(telegramTarget(), "turn_1"),
     ).rejects.toThrow("AGENT_TELEGRAM_RICH_DRAFT_DELIVERY_FAILED");
 
     expect(telegramFetch).toHaveBeenCalledTimes(1);

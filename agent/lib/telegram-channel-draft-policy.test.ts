@@ -2,7 +2,7 @@
  * Telegram channel draft-rate regression contract.
  *
  * Constructs covered:
- * - The channel starts one native thinking draft at the turn boundary.
+ * - The channel starts one turn-scoped native thinking draft at the turn boundary.
  * - Token deltas and tool-loop events never trigger additional draft API calls.
  * - Scheduled Telegram delivery is durably confirmed before secondary group timeline persistence.
  */
@@ -17,6 +17,7 @@ describe("Telegram channel draft policy", () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
 
     expect(source).toContain('async "turn.started"');
+    expect(source).toContain("startTelegramRichThinkingDraft(channel.telegram, data.turnId)");
     expect(source).not.toContain('"message.appended"');
     expect(source).not.toContain('"action.result"');
     expect(source).not.toContain('"actions.requested"');
