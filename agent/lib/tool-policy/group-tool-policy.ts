@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `resolveExternalGroupToolPolicy`: reads a fail-closed policy from verified Eve auth.
+ * - `resolveExternalGroupPolicyIdentity`: reads the verified family/group policy key.
  * - `createExternalGroupToolOverrides`: creates step-scoped action-aware tool overrides.
  */
 import type { SessionAuth } from "eve/context";
@@ -18,9 +19,11 @@ import searchMemories from "../../tools/search_memories.js";
 import sendWorkspaceFile from "../../tools/send_workspace_file.js";
 import { AppError } from "../app-error.js";
 import { removeGroupFileTool } from "../workspaces/remove-group-file-tool.js";
+import { controlledWebFetchTool } from "./controlled-web-fetch.js";
 import {
   CONTROLLED_TOOL_NAMES,
   isExternalGroupToolName,
+  parseExternalGroupToolAllowlist,
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 
@@ -31,7 +34,10 @@ interface RestrictedGroupToolPolicy {
 
 type GroupToolPolicy = RestrictedGroupToolPolicy | { restricted: false };
 type AnyToolDefinition = ToolDefinition<any, any>;
-type DirectExternalToolName = Exclude<ExternalGroupToolName, `manage_memory.${string}`>;
+type DirectExternalToolName = Exclude<
+  ExternalGroupToolName,
+  `manage_memory.${string}` | "web_search"
+>;
 
 const DIRECT_TOOL_DEFINITIONS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
@@ -41,32 +47,54 @@ const DIRECT_TOOL_DEFINITIONS: Readonly<Record<DirectExternalToolName, AnyToolDe
   remove_group_file: removeGroupFileTool as unknown as AnyToolDefinition,
   search_memories: searchMemories as unknown as AnyToolDefinition,
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
+  web_fetch: controlledWebFetchTool as unknown as AnyToolDefinition,
 };
 
 const DENIED_TOOL_INPUT = z.record(z.string(), z.unknown());
 
-function externalAuth(auth: SessionAuth) {
-  // Group type, not family role, defines isolation; owners remain restricted inside external groups.
-  const isExternal = (groupType: unknown) =>
-    groupType === "external_private" || groupType === "external_public";
-  if (isExternal(auth.current?.attributes.groupType)) return auth.current;
-  if (!auth.current && isExternal(auth.initiator?.attributes.groupType)) return auth.initiator;
-  return null;
+function isExternalPrincipal(principal: SessionAuth["current"]): boolean {
+  const groupType = principal?.attributes.groupType;
+  return groupType === "external_private" || groupType === "external_public";
+}
+
+function externalPolicyCaller(auth: SessionAuth): SessionAuth["current"] {
+  const currentExternal = isExternalPrincipal(auth.current);
+  const initiatorExternal = isExternalPrincipal(auth.initiator);
+  if (!currentExternal && !initiatorExternal) return null;
+
+  // An external initiator permanently taints a resumed session. A present current principal may
+  // replace its policy only when it proves the same external trust zone; every conflict denies all.
+  if (initiatorExternal && auth.current) {
+    const sameGroup = auth.current.attributes.groupId === auth.initiator?.attributes.groupId;
+    return currentExternal && sameGroup ? auth.current : null;
+  }
+  if (!auth.current && initiatorExternal) return auth.initiator;
+  return auth.current;
+}
+
+export function resolveExternalGroupPolicyIdentity(auth: SessionAuth): {
+  familyId: string;
+  groupId: string;
+} | null {
+  const caller = externalPolicyCaller(auth);
+  const familyId = caller?.attributes.familyId;
+  const groupId = caller?.attributes.groupId;
+  return typeof familyId === "string" && typeof groupId === "string"
+    ? { familyId, groupId }
+    : null;
 }
 
 export function resolveExternalGroupToolPolicy(auth: SessionAuth): GroupToolPolicy {
-  const caller = externalAuth(auth);
-  if (!caller) return { restricted: false };
+  const currentExternal = isExternalPrincipal(auth.current);
+  const initiatorExternal = isExternalPrincipal(auth.initiator);
+  if (!currentExternal && !initiatorExternal) return { restricted: false };
 
-  const groupType = caller.attributes.groupType;
-  const rawAllowlist = caller.attributes.toolAllowlist;
-  const validGroupType = groupType === "external_private" || groupType === "external_public";
-  const validAllowlist =
-    Array.isArray(rawAllowlist) && rawAllowlist.every((name) => isExternalGroupToolName(name));
+  const caller = externalPolicyCaller(auth);
+  const allowed = caller ? parseExternalGroupToolAllowlist(caller.attributes.toolAllowlist) : null;
 
   // Corrupt or incomplete trusted policy must deny everything rather than expose static tools.
   return {
-    allowed: new Set(validGroupType && validAllowlist ? rawAllowlist : []),
+    allowed: allowed ?? new Set(),
     restricted: true,
   };
 }
@@ -131,23 +159,26 @@ function buildExternalGroupToolOverrides(
   allowed: ReadonlySet<ExternalGroupToolName>,
 ): Readonly<Record<string, AnyToolDefinition>> {
   // Every static app, network, shell, and orchestration capability is overridden fail-closed.
-  const overrides: Record<string, AnyToolDefinition> = Object.fromEntries(
-    CONTROLLED_TOOL_NAMES.map((toolName) => {
-      if (toolName === "manage_memory") {
-        const hasMemoryCapability = [...allowed].some((name) => name.startsWith("manage_memory."));
-        return [toolName, hasMemoryCapability ? allowedMemoryTool() : deniedTool(toolName)];
-      }
-      if (isExternalGroupToolName(toolName)) {
-        return [
-          toolName,
-          allowed.has(toolName)
-            ? allowedDirectTool(toolName, DIRECT_TOOL_DEFINITIONS[toolName])
-            : deniedTool(toolName),
-        ];
-      }
-      return [toolName, deniedTool(toolName)];
-    }),
-  );
+  const overrides: Record<string, AnyToolDefinition> = {};
+  for (const toolName of CONTROLLED_TOOL_NAMES) {
+    // An allowed provider-native search must remain absent from this dynamic override map.
+    if (toolName === "web_search") {
+      if (!allowed.has("web_search")) overrides.web_search = deniedTool(toolName);
+      continue;
+    }
+    if (toolName === "manage_memory") {
+      const hasMemoryCapability = [...allowed].some((name) => name.startsWith("manage_memory."));
+      overrides[toolName] = hasMemoryCapability ? allowedMemoryTool() : deniedTool(toolName);
+      continue;
+    }
+    if (isExternalGroupToolName(toolName)) {
+      overrides[toolName] = allowed.has(toolName)
+        ? allowedDirectTool(toolName, DIRECT_TOOL_DEFINITIONS[toolName])
+        : deniedTool(toolName);
+      continue;
+    }
+    overrides[toolName] = deniedTool(toolName);
+  }
 
   // This capability has no global static descriptor because trusted sandboxes already use Bash.
   if (allowed.has("remove_group_file")) {

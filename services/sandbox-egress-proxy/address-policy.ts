@@ -28,12 +28,22 @@ for (const [network, prefix] of [
   blocked.addSubnet(network, prefix, "ipv4");
 }
 
-// IPv6 ranges cover unspecified/loopback, unique-local, link-local, documentation, and multicast.
+// IPv6 ranges also reject transition mechanisms that can encode private IPv4 destinations. The
+// proxy permits direct global unicast only, avoiding resolver/routing-dependent SSRF interpretation.
 for (const [network, prefix] of [
+  ["::", 96],
   ["::", 127],
+  ["64:ff9b::", 96],
+  ["64:ff9b:1::", 48],
+  ["100::", 64],
+  ["2001::", 23],
   ["fc00::", 7],
+  ["fec0::", 10],
   ["fe80::", 10],
+  ["2002::", 16],
   ["2001:db8::", 32],
+  ["3ffe::", 16],
+  ["5f00::", 16],
   ["ff00::", 8],
 ] as const) {
   blocked.addSubnet(network, prefix, "ipv6");

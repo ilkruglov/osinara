@@ -123,16 +123,22 @@ export const telegramRepository: TelegramRepository = {
       [telegramChatId],
     );
     const row = result.rows[0];
-    return row
-      ? {
-          familyId: row.family_id,
-          groupId: row.id,
-          messageMode: row.message_mode,
-          telegramChatId: row.telegram_chat_id,
-          toolAllowlist: row.tool_allowlist,
-          type: row.type,
-        }
-      : null;
+    if (!row) return null;
+    const common = {
+      familyId: row.family_id,
+      groupId: row.id,
+      telegramChatId: row.telegram_chat_id,
+      toolAllowlist: row.tool_allowlist,
+    };
+    if (row.type === "family_private") {
+      if (row.message_mode === "owner_only") {
+        throw new Error(
+          "AGENT_TELEGRAM_GROUP_POLICY_INVALID: Семейная группа содержит внешний режим сообщений",
+        );
+      }
+      return { ...common, messageMode: row.message_mode, type: row.type };
+    }
+    return { ...common, messageMode: row.message_mode, type: row.type };
   },
 
   async findIdentity(telegramUserId) {

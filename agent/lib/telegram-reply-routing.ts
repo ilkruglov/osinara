@@ -16,10 +16,10 @@ export function telegramBaseContinuationToken(
 
   // A first reply in a forum can acquire a new thread ID; route by the referenced bot anchor.
   const repliesToBot = message.replyToMessage?.from?.isBot === true;
-  const conversationId = message.chat.type === "private"
-    ? undefined
-    : repliesToBot
+  const conversationId = repliesToBot
     ? message.replyToMessage.messageId
+    : message.chat.type === "private"
+    ? undefined
     : message.messageId;
   const messageThreadId = repliesToBot
     ? message.replyToMessage?.messageThreadId

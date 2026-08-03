@@ -23,7 +23,7 @@ import {
 } from "../lib/telegram-rich-messages.js";
 import {
   applicationSessionId,
-  rekeyTelegramSession,
+  registerTelegramDeliveredMessageRoutes,
 } from "../lib/sessions/session-context.js";
 import { sessionRepository } from "../lib/sessions/session-repository.js";
 import { groupTimelineCursorRepository } from "../lib/sessions/group-timeline-cursor-repository.js";
@@ -39,6 +39,7 @@ import {
 } from "../lib/agent-schedules/scheduled-session.js";
 import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proactive-delivery-repository.js";
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
+import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -110,7 +111,11 @@ export default telegramChannel({
         });
       }
       if (!isScheduledSession(ctx)) {
-        await rekeyTelegramSession(channel, ctx, sentMessages.map((sent) => sent.messageId));
+        await registerTelegramDeliveredMessageRoutes(
+          channel,
+          ctx,
+          sentMessages.map((sent) => sent.messageId),
+        );
       }
     },
     async "session.failed"(data, channel) {
@@ -126,17 +131,18 @@ export default telegramChannel({
           new Date(),
         );
       }
-      // Eve's Telegram post helper updates both state and the durable continuation token.
       const replyParameters = isScheduledSession(ctx)
         ? undefined
         : telegramTurnReplyParameters(channel.state, ctx);
-      await channel.telegram.post({
+      const failureMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
         ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
         text: formatTelegramTurnFailure(data),
       });
+      if (!isScheduledSession(ctx)) {
+        await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);
+      }
       await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
-      if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);
     },
     async "turn.started"(data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
@@ -182,7 +188,6 @@ export default telegramChannel({
       if (!awaitingApproval) {
         await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
       }
-      if (!isScheduledSession(ctx)) await rekeyTelegramSession(channel, ctx);
     },
     async "authorization.required"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);

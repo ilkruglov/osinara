@@ -6,7 +6,7 @@
  * - `handleTelegramMessage`: production handler using PostgreSQL repositories.
  *
  * Key constructs:
- * - Group reply routing accepts username-less or sender-less references only for exact known routes.
+ * - Group reply routing accepts bot or sender-less references only for exact known routes.
  * - Timeline-proven agent replies can start a fresh message turn after application session rotation.
  * - One server-clock snapshot anchors all time-sensitive work and model context in an accepted turn.
  */
@@ -27,7 +27,7 @@ import {
 } from "./attachments/telegram-workspace-attachments.js";
 import { isAppError } from "./app-error.js";
 import { formatCurrentTimeContext } from "./current-time.js";
-import { evaluateConversationAccess } from "./family-access.js";
+import { evaluateConversationAccess, type RegisteredGroup } from "./family-access.js";
 import { familyRepository, type FamilyRepository } from "./family-repository.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
 import {
@@ -37,10 +37,11 @@ import {
   sessionRepository,
 } from "./sessions/session-repository.js";
 import {
-  hasTelegramInboundMedia,
+  classifyTelegramInboundMedia,
   isMessageAddressedToBot,
   isReplyToBot,
 } from "./telegram-message-policy.js";
+import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
 import {
   telegramGroupTurnContextPreparer,
   type TelegramGroupTurnContextPreparer,
@@ -94,6 +95,19 @@ interface TelegramMessageRepositories {
   telegram: TelegramRepository;
 }
 
+function sameGroupPolicy(left: RegisteredGroup, right: RegisteredGroup | null): boolean {
+  if (!right) return false;
+  if (
+    left.familyId !== right.familyId ||
+    left.groupId !== right.groupId ||
+    left.messageMode !== right.messageMode ||
+    left.telegramChatId !== right.telegramChatId ||
+    left.type !== right.type ||
+    left.toolAllowlist.length !== right.toolAllowlist.length
+  ) return false;
+  return left.toolAllowlist.every((capability, index) => capability === right.toolAllowlist[index]);
+}
+
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
     ctx: TelegramContext,
@@ -125,14 +139,22 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         ? null
         : await repositories.telegram.findGroup(message.chat.id);
     const forumTopicId = group ? telegramForumTopicId(message) : null;
+    const mediaKind = classifyTelegramInboundMedia(message);
+    const externalAllowlist = group?.type !== "family_private"
+      ? parseExternalGroupToolAllowlist(group?.toolAllowlist)
+      : null;
+    const externalNativePhotoAllowed = mediaKind === "native_photo" &&
+      externalAllowlist?.has("inspect_workspace_image") === true;
     let journalDuplicate = false;
     let inboundTimeline: Awaited<ReturnType<TelegramGroupJournalRepository["record"]>> | null = null;
     const hasLazyFamilyAttachment =
       group?.type === "family_private" && message.attachments.length > 0;
     if (message.chat.type !== "private") {
       if (!group) return null;
-      // External spaces never dispatch media metadata, so Eve cannot download its bytes.
-      if (group.type !== "family_private" && hasTelegramInboundMedia(message)) return null;
+      // External media is fail-closed except for a current, explicitly allowlisted native photo.
+      if (group.type !== "family_private" && mediaKind !== "none" && !externalNativePhotoAllowed) {
+        return null;
+      }
       // Every registered group shares one timeline independently of whether this message starts a turn.
       inboundTimeline = await repositories.journal.record(group.groupId, message);
       if (inboundTimeline.status === "duplicate") {
@@ -140,9 +162,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         if (!hasLazyFamilyAttachment) return null;
       }
       if (inboundTimeline.replyToAgent) addressed = true;
-      if (message.replyToMessage) {
+      const routeEligibleReply = message.replyToMessage &&
+        (inboundTimeline.replyToAgent || message.replyToMessage.from?.isBot !== false);
+      if (routeEligibleReply) {
         // Telegram may omit the sender entirely from a compact Rich Message reply reference.
-        // The exact persisted chat/topic/message route proves that the anchor belongs to Osinara.
+        // A route proves a bot/sender-less anchor, but never overrides an explicit user sender.
         const candidateRoutes = telegramReplyContinuationTokens(message);
         exactReplyRoute = candidateRoutes[0];
         for (const candidateRoute of candidateRoutes) {
@@ -166,6 +190,23 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     }
 
     const identity = await repositories.telegram.findIdentity(sender.id);
+
+    // Group policy and identity are separate DB records. Re-reading the group establishes a
+    // fail-closed authorization boundary if owner-only mode, type, or capabilities changed while
+    // the incoming message was journaled and participant identity was resolved.
+    if (group && !sameGroupPolicy(group, await repositories.telegram.findGroup(message.chat.id))) {
+      return null;
+    }
+
+    // Owner-only external groups retain everyone's timeline but dispatch solely for the current
+    // persisted Osinara owner; Telegram administrator status never grants application authority.
+    if (
+      group?.messageMode === "owner_only" &&
+      (
+        identity?.familyId !== group.familyId ||
+        identity.role !== "owner"
+      )
+    ) return null;
 
     // Invitation secrets never become ordinary turns, including when opened by an existing member.
     if (identity && invitationCode) {
@@ -278,7 +319,10 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     }
 
     let storedAttachments: StoredTelegramAttachment[] = [];
-    if (message.chat.type === "private" && message.attachments.length > 0) {
+    if (
+      message.attachments.length > 0 &&
+      (message.chat.type === "private" || externalNativePhotoAllowed)
+    ) {
       try {
         storedAttachments = await repositories.attachments.persist({
           attachments: message.attachments,

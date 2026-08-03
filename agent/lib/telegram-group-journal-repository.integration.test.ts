@@ -414,13 +414,13 @@ describeWithDatabase("Telegram group journal repositories", () => {
       [familyId, group.groupId],
     );
     await expect(
-      telegramGroupAdministrationRepository.removeGroup({
+      telegramGroupAdministrationRepository.removeRegistration({
         familyId: otherFamilyId,
         requestedBy: otherOwnerId,
         telegramChatId: "-1001",
       }),
     ).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/);
-    await telegramGroupAdministrationRepository.removeGroup({
+    await telegramGroupAdministrationRepository.removeRegistration({
       familyId,
       requestedBy: ownerId,
       telegramChatId: "-1001",

@@ -76,6 +76,17 @@ describe("consolidated tool action schemas", () => {
     expect(schema.safeParse({ action: "toggle", id: ID }).success).toBe(true);
   });
 
+  it("publishes the complete external-group policy update fields in the model-facing schema", () => {
+    const schema = schemaOf(manageTelegramGroup);
+
+    expect(schema.safeParse({
+      action: "update_policy",
+      messageMode: "all",
+      telegramChatId: "-1001234567890",
+      toolAllowlist: ["search_memories"],
+    }).success).toBe(true);
+  });
+
   it("publishes an object-shaped agent schedule schema for model transports", () => {
     const schema = schemaOf(manageAgentSchedule);
     const jsonSchema = jsonSchemaOf(manageAgentSchedule);

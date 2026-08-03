@@ -9,6 +9,7 @@
  * - Only authorized HITL replies retain Eve's native synthetic reply handling.
  * - Private non-HITL replies also bypass synthetic input-response delivery.
  * - Sender-less Telegram reply references continue only when their exact persisted route exists.
+ * - Replies to user messages never wake the agent merely because their route is still live.
  * - Replies to unknown bot messages stay ignored, so other bots cannot trigger Osinara turns.
  */
 import { describe, expect, it } from "vitest";
@@ -206,8 +207,11 @@ describe("createTelegramMessageHandler reply routing", () => {
     });
 
     expect(repository.hitl.authorizeReply).toHaveBeenCalledWith(expect.objectContaining({
-      baseContinuationToken: "telegram-101::",
+      baseContinuationToken: "telegram-101::88",
       telegramMessageId: "88",
+    }));
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "telegram-101::88",
     }));
     expect(result).toMatchObject({ replyHandling: "message" });
   });
@@ -270,6 +274,34 @@ describe("createTelegramMessageHandler reply routing", () => {
       baseContinuationToken: "group-101::88",
     }));
     expect(result).not.toBeNull();
+  });
+
+  it("ignores a reply to a user message even when its exact session route is live", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.session.hasRoute.mockResolvedValue(true);
+    const handler = createTelegramMessageHandler(repository);
+
+    // Telegram's explicit non-bot sender is authoritative; route liveness cannot turn a user
+    // message into an Osinara anchor in an addressed-only group.
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("ответ участнику"),
+      messageId: "89",
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { firstName: "Борис", id: "telegram-202", isBot: false },
+        messageId: "88",
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(repository.session.hasRoute).not.toHaveBeenCalled();
+    expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
+    expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });
 
   it("continues a forum reply through a persisted pre-fix threadless route", async () => {

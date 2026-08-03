@@ -21,8 +21,9 @@ import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
 import { type TelegramIngressRepository } from "./telegram-ingress-contract.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
 import {
-  hasTelegramInboundMedia,
+  classifyTelegramInboundMedia,
   isMessageAddressedToBot,
+  type TelegramInboundMediaKind,
 } from "./telegram-message-policy.js";
 import { createTelegramVoiceAuthorizer } from "./telegram-voice-authorization.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -48,7 +49,11 @@ interface EveSessionResult {
 }
 
 interface DurableIngressDependencies {
-  acceptMedia(message: Pick<TelegramMessage, "chat">, updateId: string): Promise<boolean>;
+  acceptMedia(
+    message: Pick<TelegramMessage, "chat">,
+    updateId: string,
+    mediaKind: Exclude<TelegramInboundMediaKind, "none">,
+  ): Promise<boolean>;
   authorizeVoice(message: Pick<TelegramMessage, "chat" | "from">): Promise<boolean>;
   botUsername: string;
   handleSoftwareUpdateCallback(
@@ -325,11 +330,14 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     context: TelegramVerifiedUpdateContext,
   ): Promise<Response> {
     const incomingUpdateId = updateId(context.raw);
+    const mediaKind = context.update.kind === "message"
+      ? classifyTelegramInboundMedia(context.update.message)
+      : "none";
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
     if (
       context.update.kind === "message" &&
-      hasTelegramInboundMedia(context.update.message) &&
-      !await dependencies.acceptMedia(context.update.message, incomingUpdateId)
+      mediaKind !== "none" &&
+      !await dependencies.acceptMedia(context.update.message, incomingUpdateId, mediaKind)
     ) {
       return new Response("ok");
     }
@@ -355,10 +363,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
 const authorizeTelegramVoice = createTelegramVoiceAuthorizer(telegramRepository);
 
 export const handleTelegramDurableIngress = createTelegramDurableIngress({
-  acceptMedia(message, incomingUpdateId) {
+  acceptMedia(message, incomingUpdateId, mediaKind) {
     return telegramIngressRepository.acceptMedia({
       chatId: message.chat.id,
       chatType: message.chat.type,
+      mediaKind,
       updateId: incomingUpdateId,
     });
   },

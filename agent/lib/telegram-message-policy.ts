@@ -2,6 +2,8 @@
  * Telegram inbound dispatch policy.
  *
  * Exports:
+ * - `TelegramInboundMediaKind`: strict none/native-photo/unsupported-media decision.
+ * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
  * - `isMessageAddressedToBot`: preserves private, command, mention, and reply behavior.
  * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
@@ -57,6 +59,8 @@ const TELEGRAM_CONDITIONAL_MEDIA_FIELDS = [
   "users_shared",
 ] as const;
 
+export type TelegramInboundMediaKind = "native_photo" | "none" | "unsupported_media";
+
 function containsTelegramFileReference(value: unknown): boolean {
   // Conditional structures can be text-only, so search only their own subtree for actual files.
   const pending = [value];
@@ -76,15 +80,46 @@ function containsTelegramFileReference(value: unknown): boolean {
   return false;
 }
 
+export function classifyTelegramInboundMedia(
+  message: Pick<TelegramMessage, "attachments" | "raw">,
+): TelegramInboundMediaKind {
+  const hasRawMedia = TELEGRAM_INBOUND_MEDIA_FIELDS.some(
+    (field) => Object.hasOwn(message.raw, field),
+  ) || TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some(
+    (field) => Object.hasOwn(message.raw, field) && containsTelegramFileReference(message.raw[field]),
+  );
+  if (message.attachments.length === 0 && !hasRawMedia) return "none";
+
+  // A native photo is the sole supported external media shape. Both Telegram's raw update and
+  // Eve's normalized attachment must agree; any extra, absent, or malformed media fails closed.
+  const rawPhoto = message.raw.photo;
+  const hasOtherRawMedia = TELEGRAM_INBOUND_MEDIA_FIELDS.some(
+    (field) => field !== "photo" && Object.hasOwn(message.raw, field),
+  ) || TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some(
+    (field) => Object.hasOwn(message.raw, field) && containsTelegramFileReference(message.raw[field]),
+  );
+  if (
+    hasOtherRawMedia ||
+    !Array.isArray(rawPhoto) ||
+    rawPhoto.length === 0 ||
+    message.attachments.length !== 1 ||
+    message.attachments[0]?.kind !== "photo"
+  ) return "unsupported_media";
+
+  const rawFileIds = new Set<string>();
+  for (const size of rawPhoto) {
+    if (!size || typeof size !== "object" || Array.isArray(size)) return "unsupported_media";
+    const fileId = (size as Record<string, unknown>).file_id;
+    if (typeof fileId !== "string" || fileId.length === 0) return "unsupported_media";
+    rawFileIds.add(fileId);
+  }
+  return rawFileIds.has(message.attachments[0].fileId) ? "native_photo" : "unsupported_media";
+}
+
 export function hasTelegramInboundMedia(
   message: Pick<TelegramMessage, "attachments" | "raw">,
 ): boolean {
-  // Raw fields cover media kinds Eve does not expose as attachments, notably voice and video.
-  if (message.attachments.length > 0) return true;
-  if (TELEGRAM_INBOUND_MEDIA_FIELDS.some((field) => Object.hasOwn(message.raw, field))) return true;
-  return TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some(
-    (field) => Object.hasOwn(message.raw, field) && containsTelegramFileReference(message.raw[field]),
-  );
+  return classifyTelegramInboundMedia(message) !== "none";
 }
 
 export function isReplyToBot(

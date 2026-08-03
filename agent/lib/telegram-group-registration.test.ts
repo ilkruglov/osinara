@@ -5,6 +5,7 @@
  * - `telegramGroupRegistrationInputSchema`: accepts Telegram group IDs from model JSON.
  * - Numeric IDs are normalized to lossless strings before repository access.
  * - Message collection mode is explicit and has no implicit default.
+ * - Owner-only dispatch is valid only for isolated external groups.
  */
 import { describe, expect, it } from "vitest";
 
@@ -24,13 +25,11 @@ const externalInput = {
 };
 
 describe("telegramGroupRegistrationInputSchema", () => {
-  it("normalizes a numeric Telegram group ID to a string", () => {
-    expect(
-      telegramGroupRegistrationInputSchema.parse({
-        ...baseInput,
-        telegramChatId: -1001234567890,
-      }),
-    ).toEqual({ ...baseInput, telegramChatId: "-1001234567890" });
+  it("rejects numeric Telegram group IDs to prevent JSON precision loss", () => {
+    expect(() => telegramGroupRegistrationInputSchema.parse({
+      ...baseInput,
+      telegramChatId: -1001234567890,
+    })).toThrow();
   });
 
   it("keeps a canonical string Telegram group ID", () => {
@@ -42,7 +41,7 @@ describe("telegramGroupRegistrationInputSchema", () => {
     ).toEqual({ ...baseInput, telegramChatId: "-1001234567890" });
   });
 
-  it("rejects private, fractional, and unsafe numeric IDs", () => {
+  it("rejects private and every numeric ID representation", () => {
     expect(() =>
       telegramGroupRegistrationInputSchema.parse({ ...baseInput, telegramChatId: 123456789 }),
     ).toThrow();
@@ -103,6 +102,24 @@ describe("telegramGroupRegistrationInputSchema", () => {
         telegramChatId: "-1001234567890",
         toolAllowlist: ["remember", "remember"],
       }),
+    ).toThrow();
+  });
+
+  it("accepts owner-only dispatch only for external groups", () => {
+    expect(
+      telegramGroupRegistrationInputSchema.parse({
+        ...externalInput,
+        messageMode: "owner_only",
+        telegramChatId: "-1001234567890",
+      }),
+    ).toMatchObject({ messageMode: "owner_only", type: "external_private" });
+
+    expect(() =>
+      telegramGroupRegistrationInputSchema.parse({
+        ...baseInput,
+        messageMode: "owner_only",
+        telegramChatId: "-1001234567890",
+      })
     ).toThrow();
   });
 

@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `createTelegramWorkspaceAttachmentImporter`: validated persistence before model dispatch.
- * - Deterministic inbox references, arbitrary binary persistence, and count limits.
+ * - Deterministic personal/family/group inbox references, binary persistence, and count limits.
  */
 import type { TelegramAttachment } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
@@ -156,6 +156,48 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     expect(writeBinary).toHaveBeenCalledWith(familyAuth, expect.objectContaining({
       path: "inbox/groups/00000000-0000-4000-8000-000000000123/44/archive.custom",
       scope: "family",
+    }));
+  });
+
+  it("isolates an external native photo in its group workspace inbox", async () => {
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00]);
+    const groupAuth = {
+      ...auth,
+      groupId: "00000000-0000-4000-8000-000000000456",
+      groupType: "external_private" as const,
+      role: "external" as const,
+      telegramChatType: "supergroup" as const,
+      userId: null,
+    };
+    const writeBinary = vi.fn().mockResolvedValue({
+      byteSize: bytes.byteLength,
+      contentSha256: "d".repeat(64),
+      mediaType: "image/jpeg",
+      path: "inbox/45/photo-photo-id.jpg",
+      scope: "group",
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    });
+    const importer = createTelegramWorkspaceAttachmentImporter({
+      download: vi.fn().mockResolvedValue(bytes),
+      writeBinary,
+    });
+
+    await importer.persist({
+      attachments: [{
+        fileId: "photo-file",
+        fileUniqueId: "photo-id",
+        kind: "photo",
+        mediaType: "image/jpeg",
+      }],
+      auth: groupAuth,
+      chatId: "-100456",
+      messageId: "45",
+      scope: "group",
+    });
+
+    expect(writeBinary).toHaveBeenCalledWith(groupAuth, expect.objectContaining({
+      path: "inbox/45/photo-photo-id.jpg",
+      scope: "group",
     }));
   });
 });

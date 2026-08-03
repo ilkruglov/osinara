@@ -8,10 +8,10 @@
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { removeGroup } = vi.hoisted(() => ({ removeGroup: vi.fn() }));
+const { removeRegistration } = vi.hoisted(() => ({ removeRegistration: vi.fn() }));
 
 vi.mock("./telegram-group-administration-repository.js", () => ({
-  telegramGroupAdministrationRepository: { registerGroup: vi.fn(), removeGroup },
+  telegramGroupAdministrationRepository: { registerGroup: vi.fn(), removeRegistration },
 }));
 
 import manageTelegramGroup from "../tools/manage_telegram_group.js";
@@ -43,8 +43,8 @@ function context(chatType: "private" | "supergroup"): ToolContext {
 
 describe("manage_telegram_group.remove", () => {
   beforeEach(() => {
-    removeGroup.mockReset();
-    removeGroup.mockResolvedValue({ groupId: "group-1" });
+    removeRegistration.mockReset();
+    removeRegistration.mockResolvedValue({ groupId: "group-1" });
   });
 
   it("removes a same-family group after private owner approval", async () => {
@@ -53,8 +53,12 @@ describe("manage_telegram_group.remove", () => {
         { action: "remove", telegramChatId: "-1003567628736" },
         context("private"),
       ),
-    ).resolves.toEqual({ deleted: true, telegramChatId: "-1003567628736" });
-    expect(removeGroup).toHaveBeenCalledWith({
+    ).resolves.toEqual({
+      botMembership: "unchanged",
+      registrationRemoved: true,
+      telegramChatId: "-1003567628736",
+    });
+    expect(removeRegistration).toHaveBeenCalledWith({
       familyId: "family-1",
       requestedBy: "owner-1",
       telegramChatId: "-1003567628736",
@@ -68,6 +72,16 @@ describe("manage_telegram_group.remove", () => {
         context("supergroup"),
       ),
     ).rejects.toThrowError(/AGENT_ACCESS_DENIED|AGENT_PRIVATE_CHAT_REQUIRED/);
-    expect(removeGroup).not.toHaveBeenCalled();
+    expect(removeRegistration).not.toHaveBeenCalled();
+  });
+
+  it("does not support an independent Telegram leave action", async () => {
+    await expect(
+      manageTelegramGroup.execute(
+        { action: "leave", telegramChatId: "-1003567628736" },
+        context("private"),
+      ),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);
+    expect(removeRegistration).not.toHaveBeenCalled();
   });
 });

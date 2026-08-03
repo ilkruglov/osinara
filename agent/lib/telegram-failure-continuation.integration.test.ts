@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - Installed Eve `channel.telegram.post`: re-anchors group state after an outbound failure reply.
- * - `handleTelegramSessionFailure`: records the pre-post continuation route before the anchor changes.
+ * - `handleTelegramSessionFailure`: normalizes Eve's channel namespace before recording a failure.
+ * - Hook ownership conflicts do not mutate or notify the healthy session owner.
  */
 import {
   telegramChannel,
@@ -72,15 +73,18 @@ describe("Eve Telegram failure continuation", () => {
     expect(setContinuationToken).toHaveBeenCalledWith("-1001::172");
   });
 
-  it("records the route that existed before the failure reply changed the group anchor", async () => {
+  it("records the raw Telegram route from Eve's namespaced channel token", async () => {
     const recordSessionFailedByContinuationToken = vi.fn();
+    const request = vi.fn().mockResolvedValue({
+      body: { ok: true, result: { message_id: 172 } },
+      ok: true,
+      status: 200,
+    });
     const channel = {
-      continuationToken: "-1001::166",
+      continuationToken: "telegram:-1001::166",
+      state: { chatId: "-1001", messageThreadId: null },
       telegram: {
-        post: vi.fn().mockImplementation(async () => {
-          channel.continuationToken = "-1001::172";
-          return { id: "172", raw: null };
-        }),
+        request,
       },
     };
 
@@ -95,17 +99,22 @@ describe("Eve Telegram failure continuation", () => {
       "wrun_failed",
     );
     expect(recordSessionFailedByContinuationToken.mock.invocationCallOrder[0]).toBeLessThan(
-      channel.telegram.post.mock.invocationCallOrder[0]!,
+      request.mock.invocationCallOrder[0]!,
     );
+    expect(channel.continuationToken).toBe("telegram:-1001::166");
   });
 
   it("does not notify or rotate when the terminal event belongs to a stale Eve root", async () => {
     const recordSessionFailedByContinuationToken = vi.fn().mockResolvedValue("stale");
-    const post = vi.fn();
+    const request = vi.fn();
 
     await handleTelegramSessionFailure(
       { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_old" },
-      { continuationToken: "-1001::166", telegram: { post } } as never,
+      {
+        continuationToken: "telegram:-1001::166",
+        state: { chatId: "-1001", messageThreadId: null },
+        telegram: { request },
+      } as never,
       { recordSessionFailedByContinuationToken },
     );
 
@@ -113,6 +122,47 @@ describe("Eve Telegram failure continuation", () => {
       "-1001::166",
       "wrun_old",
     );
-    expect(post).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("ignores a HookConflictError owned by the healthy session", async () => {
+    const recordSessionFailedByContinuationToken = vi.fn();
+    const request = vi.fn();
+
+    await handleTelegramSessionFailure(
+      {
+        code: "SESSION_FAILED",
+        details: { name: "HookConflictError", token: "telegram:-1001::166" },
+        message: "HookConflictError: Hook token is already in use",
+        sessionId: "wrun_competing",
+      },
+      {
+        continuationToken: "telegram:-1001::166",
+        state: { chatId: "-1001", messageThreadId: null },
+        telegram: { request },
+      } as never,
+      { recordSessionFailedByContinuationToken },
+    );
+
+    expect(recordSessionFailedByContinuationToken).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("rejects a continuation token outside the Telegram channel namespace", async () => {
+    const recordSessionFailedByContinuationToken = vi.fn();
+    const request = vi.fn();
+
+    await expect(handleTelegramSessionFailure(
+      { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_failed" },
+      {
+        continuationToken: "-1001::166",
+        state: { chatId: "-1001", messageThreadId: null },
+        telegram: { request },
+      } as never,
+      { recordSessionFailedByContinuationToken },
+    )).rejects.toMatchObject({ code: "AGENT_SESSION_CONTINUATION_INVALID" });
+
+    expect(recordSessionFailedByContinuationToken).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 });

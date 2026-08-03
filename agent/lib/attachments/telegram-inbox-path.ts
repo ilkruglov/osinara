@@ -15,8 +15,14 @@ export function telegramInboxDirectory(
   scope: WorkspaceScope,
   telegramMessageId: string,
 ): string {
-  // A personal workspace belongs to one Telegram identity, so its chat-local message ID is unique.
+  // Personal and external-group workspaces each belong to one Telegram chat, so the message ID is
+  // unique inside the resolved workspace. Family storage needs the additional group namespace.
   if (scope === "personal") return `inbox/${telegramMessageId}`;
+  if (
+    scope === "group" &&
+    auth.groupId !== null &&
+    (auth.groupType === "external_private" || auth.groupType === "external_public")
+  ) return `inbox/${telegramMessageId}`;
 
   // A family can register multiple private groups. The trusted group UUID prevents equal chat-local
   // message IDs from resolving or overwriting another group's attachment in the shared workspace.
@@ -26,6 +32,6 @@ export function telegramInboxDirectory(
 
   throw new AppError(
     "AGENT_TELEGRAM_ATTACHMENT_SCOPE_FORBIDDEN",
-    "Вложения Telegram можно сохранять только в личном или зарегистрированном семейном чате",
+    "Вложения Telegram нельзя сохранять в workspace этого чата",
   );
 }

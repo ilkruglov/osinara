@@ -69,6 +69,22 @@ describe("external group tool policy", () => {
     });
   });
 
+  it("fails closed when an external initiator resumes with conflicting current auth", () => {
+    const initial = externalAuth(["web_fetch"]);
+    const current = {
+      ...initial.current!,
+      attributes: {
+        familyId: "family-1",
+        role: "owner",
+      },
+    };
+
+    expect(resolveExternalGroupToolPolicy({ current, initiator: initial.current })).toEqual({
+      allowed: new Set(),
+      restricted: true,
+    });
+  });
+
   it("keeps a family owner restricted by the external group allowlist", () => {
     const ownerInExternalGroup = externalAuth(["remember"], "owner");
 
@@ -99,6 +115,24 @@ describe("external group tool policy", () => {
     await expect(overrides.bash!.execute({}, {} as never)).rejects.toThrowError(
       /AGENT_GROUP_TOOL_FORBIDDEN/,
     );
+  });
+
+  it("leaves allowed web_search native but denies it when absent", async () => {
+    const allowedOverrides = createExternalGroupToolOverrides(new Set(["web_search"]));
+    const deniedOverrides = createExternalGroupToolOverrides(new Set());
+
+    expect(allowedOverrides).not.toHaveProperty("web_search");
+    await expect(deniedOverrides.web_search!.execute({}, {} as never)).rejects.toThrowError(
+      /AGENT_GROUP_TOOL_FORBIDDEN/,
+    );
+  });
+
+  it("uses the controlled custom web_fetch only when explicitly allowed", () => {
+    const allowedOverrides = createExternalGroupToolOverrides(new Set(["web_fetch"]));
+    const deniedOverrides = createExternalGroupToolOverrides(new Set());
+
+    expect(allowedOverrides.web_fetch?.execute).toBeTypeOf("function");
+    expect(allowedOverrides.web_fetch).not.toBe(deniedOverrides.web_fetch);
   });
 
   it("enforces action-level capabilities inside manage_memory", async () => {

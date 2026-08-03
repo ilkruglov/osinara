@@ -17,10 +17,13 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 import { AppError } from "../app-error.js";
-import { applicationSessionId, rekeyTelegramSession } from "../sessions/session-context.js";
+import {
+  applicationSessionId,
+  registerTelegramDeliveredMessageRoutes,
+} from "../sessions/session-context.js";
 import { sessionRepository } from "../sessions/session-repository.js";
 import { telegramTurnReplyParameters } from "../telegram-reply.js";
-import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
+import { postTelegramMessageWithoutContinuationChange } from "../telegram-stable-delivery.js";
 import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
@@ -38,7 +41,11 @@ interface InputRequestDependencies {
   approvals: Pick<TelegramHitlApprovalRepository, "register">;
   markPendingOperation(id: string, pending: boolean): Promise<void>;
   present: TelegramApprovalPresenter;
-  rekey(channel: TelegramEventContext, ctx: Pick<SessionContext, "session">): Promise<void>;
+  registerMessageRoutes(
+    channel: TelegramEventContext,
+    ctx: Pick<SessionContext, "session">,
+    messageIds: readonly string[],
+  ): Promise<void>;
 }
 
 const HITL_PREPARING_MESSAGE = "Подготавливаю безопасный запрос подтверждения.";
@@ -134,18 +141,13 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       const replyParameters = telegramTurnReplyParameters(channel.state, ctx);
 
       // The actionable prompt is revealed only after both the route and approver binding are durable.
-      const sent = await channel.telegram.post({
+      const sentMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
         ...(callbacks.length === 0 ? { reply_markup: replyMarkup } : {}),
         ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
         text: HITL_PREPARING_MESSAGE,
       });
-      if (!sent.id) {
-        throw new AppError(
-          "AGENT_APPROVAL_MESSAGE_INVALID",
-          "Telegram не вернул идентификатор запроса подтверждения",
-        );
-      }
-      if (!isScheduledSession(ctx)) await dependencies.rekey(channel, ctx);
+      // Exact prompt ownership is required for both interactive and scheduled callback/reply claims.
+      await dependencies.registerMessageRoutes(channel, ctx, [sentMessageId]);
       await dependencies.approvals.register({
         applicationSessionId: appSessionId,
         callbackData: callbacks,
@@ -155,7 +157,7 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
         promptText: rendered.text,
         telegramChatId: chatId,
         telegramChatType: chatType,
-        telegramMessageId: sent.id,
+        telegramMessageId: sentMessageId,
         telegramMessageThreadId: channel.state.messageThreadId === null
           ? null
           : String(channel.state.messageThreadId),
@@ -163,13 +165,13 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       });
       if (rendered.freeformRequestId) {
         registerTelegramFreeformPrompt(channel.state, {
-          messageId: sent.id,
+          messageId: sentMessageId,
           requestId: rendered.freeformRequestId,
         });
       }
       const edited = await channel.telegram.request("editMessageText", {
         chat_id: chatId,
-        message_id: Number(sent.id),
+        message_id: Number(sentMessageId),
         ...(channel.state.messageThreadId === null
           ? {}
           : { message_thread_id: channel.state.messageThreadId }),
@@ -190,5 +192,5 @@ export const handleTelegramInputRequested = createTelegramInputRequestHandler({
   approvals: telegramHitlApprovalRepository,
   markPendingOperation: (id, pending) => sessionRepository.markPendingOperation(id, pending),
   present: presentTelegramApproval,
-  rekey: rekeyTelegramSession,
+  registerMessageRoutes: registerTelegramDeliveredMessageRoutes,
 });

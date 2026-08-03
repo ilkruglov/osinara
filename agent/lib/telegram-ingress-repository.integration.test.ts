@@ -4,15 +4,25 @@
  * Constructs covered:
  * - `telegramIngressRepository.enqueue`: idempotent update ingestion with conflict detection.
  * - `telegramIngressRepository.acceptMedia`: trust-zone decisions and tombstones are update-id atomic.
+ * - Receipt/drain policy revocation: live external policy prevents a previously accepted download.
  * - `telegramIngressRepository.claimNext`: per-continuation FIFO with independent queue progress.
  * - Lease ownership: expired work can be reclaimed while stale workers are rejected.
  * - Continuation aliases: Telegram group re-keying keeps one logical FIFO.
  * - Voice transcript persistence: paid provider results survive delivery retries.
  */
+import type { TelegramMessage } from "eve/channels/telegram";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
+import {
+  BOT_USERNAME,
+  groupMessage,
+  repositories,
+  telegramContext,
+} from "./telegram-on-message.test-fixtures.js";
+import { createTelegramMessageHandler } from "./telegram-on-message.js";
+import { telegramRepository } from "./telegram-repository.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const integrationDatabaseUrl = process.env.DATABASE_URL;
@@ -89,6 +99,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(telegramIngressRepository.acceptMedia({
       chatId: "-100-policy",
       chatType: "supergroup",
+      mediaKind: "native_photo",
       updateId: update.updateId,
     })).resolves.toBe(false);
     await database().query(
@@ -97,6 +108,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(telegramIngressRepository.acceptMedia({
       chatId: "-100-policy",
       chatType: "supergroup",
+      mediaKind: "native_photo",
       updateId: update.updateId,
     })).resolves.toBe(false);
     await expect(telegramIngressRepository.enqueue(update)).resolves.toBe("duplicate");
@@ -108,6 +120,103 @@ describeWithDatabase("telegramIngressRepository", () => {
     );
     expect(retained.rows[0]).toEqual({ ignored: "1", queued: "0" });
     await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toBeNull();
+  });
+
+  it("accepts only allowlisted native photos and tombstones unsupported external media", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('External photo family') RETURNING id",
+    );
+    await database().query(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
+       VALUES ($1, '-100-photo', 'Photo group', 'external_private', 'addressed_only',
+         ARRAY['inspect_workspace_image'])`,
+      [family.rows[0]!.id],
+    );
+
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-photo",
+      chatType: "supergroup",
+      mediaKind: "native_photo",
+      updateId: "1010",
+    })).resolves.toBe(true);
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-photo",
+      chatType: "supergroup",
+      mediaKind: "unsupported_media",
+      updateId: "1011",
+    })).resolves.toBe(false);
+
+    const ignored = await database().query<{ update_id: string }>(
+      "SELECT update_id::text FROM telegram_ingress_ignored_updates ORDER BY update_id",
+    );
+    expect(ignored.rows).toEqual([{ update_id: "1011" }]);
+  });
+
+  it("tombstones a photo when any persisted external capability is malformed", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Malformed photo policy family') RETURNING id",
+    );
+    await database().query(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
+       VALUES ($1, '-100-malformed-photo', 'Malformed photo policy', 'external_public',
+         'addressed_only', ARRAY['inspect_workspace_image', 'unknown_tool'])`,
+      [family.rows[0]!.id],
+    );
+
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-malformed-photo",
+      chatType: "supergroup",
+      mediaKind: "native_photo",
+      updateId: "1013",
+    })).resolves.toBe(false);
+    await expect(database().query(
+      "SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1013",
+    )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
+  it("rechecks revoked external photo policy between receipt and drain", async () => {
+    await database().query("DELETE FROM families WHERE name = 'Revoked photo family'");
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Revoked photo family') RETURNING id",
+    );
+    await database().query(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
+       VALUES ($1, '-100-revoked-photo', 'Revoked photo group', 'external_private',
+         'addressed_only', ARRAY['inspect_workspace_image'])`,
+      [family.rows[0]!.id],
+    );
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-revoked-photo",
+      chatType: "supergroup",
+      mediaKind: "native_photo",
+      updateId: "1012",
+    })).resolves.toBe(true);
+
+    // Revocation after receipt must win at the live onMessage boundary before any remote download.
+    await database().query(
+      "UPDATE telegram_groups SET tool_allowlist = '{}' WHERE telegram_chat_id = '-100-revoked-photo'",
+    );
+    const repository = repositories();
+    repository.telegram.findGroup.mockImplementation(telegramRepository.findGroup);
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} что изображено?`),
+      attachments: [{ fileId: "photo-file", fileUniqueId: "photo-id", kind: "photo" }],
+      chat: { id: "-100-revoked-photo", title: "Revoked photo group", type: "supergroup" },
+      raw: {
+        date: 1_700_000_000,
+        photo: [{ file_id: "photo-file", height: 640, width: 640 }],
+      },
+    };
+
+    await expect(
+      createTelegramMessageHandler(repository)(telegramContext().context, message),
+    ).resolves.toBeNull();
+    expect(repository.journal.record).not.toHaveBeenCalled();
+    expect(repository.attachments.persist).not.toHaveBeenCalled();
+    expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });
 
   it("claims only the oldest update per queue while another queue progresses", async () => {

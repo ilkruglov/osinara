@@ -17,7 +17,7 @@ const toolCalls = vi.hoisted(() => ({
   importAttachment: vi.fn(),
   registerGroup: vi.fn(),
   reminderCreate: vi.fn(),
-  removeGroup: vi.fn(),
+  removeRegistration: vi.fn(),
   updateMemory: vi.fn(),
 }));
 
@@ -70,7 +70,8 @@ vi.mock("./attachments/telegram-attachment-materializer.js", () => ({
 vi.mock("./telegram-group-administration-repository.js", () => ({
   telegramGroupAdministrationRepository: {
     registerGroup: toolCalls.registerGroup,
-    removeGroup: toolCalls.removeGroup,
+    removeRegistration: toolCalls.removeRegistration,
+    updatePolicy: vi.fn(),
   },
 }));
 vi.mock("./workspaces/workspace-context.js", () => ({
@@ -145,5 +146,24 @@ describe("model-facing tool input hardening", () => {
       /AGENT_REMINDER_INPUT_INVALID: Для recurrence передайте null или объект \{"unit":"weekly","interval":1\}/,
     );
     expect(toolCalls.reminderCreate).not.toHaveBeenCalled();
+  });
+
+  it("accepts a group-scoped Telegram message ID for workspace image inspection", async () => {
+    toolCalls.inspectImage.mockResolvedValue({ analysis: "Фото группы" });
+
+    await expect(inspectWorkspaceImage.execute({
+      question: "Что изображено?",
+      scope: "group",
+      telegramMessageId: "42",
+    }, context)).resolves.toEqual({ analysis: "Фото группы" });
+
+    expect(toolCalls.inspectImage).toHaveBeenCalledWith(
+      { familyId: "family-1", userId: "user-1" },
+      expect.objectContaining({
+        question: "Что изображено?",
+        scope: "group",
+        telegramMessageId: "42",
+      }),
+    );
   });
 });

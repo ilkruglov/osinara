@@ -3,7 +3,8 @@
  *
  * Exports:
  * - `TelegramGroupRegistration`: complete persisted registration input.
- * - `TelegramGroupAdministrationRepository`: injectable registration/removal contract.
+ * - `TelegramGroupPolicyUpdate`: complete external-group policy replacement input.
+ * - `TelegramGroupAdministrationRepository`: injectable registration/removal/policy contract.
  * - `telegramGroupAdministrationRepository`: family-scoped group lifecycle operations.
  */
 import { TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED } from "../config.js";
@@ -11,26 +12,45 @@ import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import type {
   RegisteredGroupType,
+  StandardTelegramGroupMessageMode,
   TelegramGroupMessageMode,
 } from "./family-access.js";
 
-export interface TelegramGroupRegistration {
+interface TelegramGroupRegistrationBase {
   familyId: string;
-  messageMode: TelegramGroupMessageMode;
   requestedBy: string;
   telegramChatId: string;
   title: string;
   toolAllowlist: string[];
-  type: RegisteredGroupType;
+}
+
+export type TelegramGroupRegistration = TelegramGroupRegistrationBase & (
+  | {
+    messageMode: StandardTelegramGroupMessageMode;
+    type: "family_private";
+  }
+  | {
+    messageMode: TelegramGroupMessageMode;
+    type: Exclude<RegisteredGroupType, "family_private">;
+  }
+);
+
+export interface TelegramGroupPolicyUpdate {
+  familyId: string;
+  messageMode: TelegramGroupMessageMode;
+  requestedBy: string;
+  telegramChatId: string;
+  toolAllowlist: string[];
 }
 
 export interface TelegramGroupAdministrationRepository {
   registerGroup(input: TelegramGroupRegistration): Promise<{ groupId: string }>;
-  removeGroup(input: {
+  removeRegistration(input: {
     familyId: string;
     requestedBy: string;
     telegramChatId: string;
   }): Promise<{ groupId: string }>;
+  updatePolicy(input: TelegramGroupPolicyUpdate): Promise<{ groupId: string }>;
 }
 
 export const telegramGroupAdministrationRepository: TelegramGroupAdministrationRepository = {
@@ -115,7 +135,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
     }
   },
 
-  async removeGroup(input) {
+  async removeRegistration(input) {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -152,6 +172,77 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
           "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
         );
       }
+      await client.query("COMMIT");
+      return { groupId: row.id };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async updatePolicy(input) {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+
+      // Recheck current ownership under a shared row lock after HITL and before any side effect.
+      const owner = await client.query(
+        `SELECT 1
+         FROM family_memberships
+         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
+         FOR SHARE`,
+        [input.familyId, input.requestedBy],
+      );
+      if (!owner.rowCount) {
+        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
+      }
+
+      // Serialize against registration, removal, and receipt-time trust decisions for this chat.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
+      );
+
+      // Lock the existing identity in place; policy updates never replace a trust-zone row.
+      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType }>(
+        `SELECT id, family_id, type
+         FROM telegram_groups
+         WHERE telegram_chat_id = $1
+         FOR UPDATE`,
+        [input.telegramChatId],
+      );
+      const group = existing.rows[0];
+      if (!group || group.family_id !== input.familyId) {
+        throw new AppError(
+          "AGENT_GROUP_NOT_FOUND",
+          "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
+        );
+      }
+      if (group.type === "family_private") {
+        throw new AppError(
+          "AGENT_GROUP_POLICY_UPDATE_UNSUPPORTED",
+          "Политику инструментов можно изменить только у существующей внешней группы",
+        );
+      }
+
+      // One statement replaces both policy fields atomically without firing deletion cascades.
+      const result = await client.query<{ id: string }>(
+        `UPDATE telegram_groups
+         SET message_mode = $1, tool_allowlist = $2
+         WHERE id = $3
+         RETURNING id`,
+        [input.messageMode, input.toolAllowlist, group.id],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        throw new AppError(
+          "AGENT_GROUP_POLICY_UPDATE_FAILED",
+          "Не удалось обновить политику группы. Повторите попытку",
+        );
+      }
+
       await client.query("COMMIT");
       return { groupId: row.id };
     } catch (error) {
