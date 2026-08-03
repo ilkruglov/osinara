@@ -7,7 +7,7 @@
  * - `SentTelegramMessage`: confirmed Telegram identity for each delivered rich chunk.
  *
  * Key constructs:
- * - One stable non-zero draft ID per private chat/topic across turns and model steps.
+ * - One stable non-zero draft ID per private chat/topic and Eve turn.
  * - Telegram Bot API 10.1 `sendRichMessageDraft` and `sendRichMessage` validation.
  * - Final-delivery ambiguity diagnostics without automatic retries.
  * - First-chunk group replies anchored to a verified inbound message.
@@ -55,13 +55,15 @@ export interface SentTelegramMessage {
   readonly messageId: string;
 }
 
-function draftId(target: TelegramRichTarget): number {
+function draftId(target: TelegramRichTarget, turnId: string): number {
   const thread =
     target.messageThreadId === undefined ? "" : String(target.messageThreadId);
   const digest = createHash("sha256")
     .update(target.chatId)
     .update(":")
     .update(thread)
+    .update(":")
+    .update(turnId)
     .digest();
   return (digest.readUInt32BE(0) % TELEGRAM_DRAFT_ID_MODULUS) + 1;
 }
@@ -246,11 +248,18 @@ function richBody(
 
 export async function startTelegramRichThinkingDraft(
   target: TelegramRichTarget,
+  turnId: string,
 ): Promise<void> {
   if (target.chatType !== "private") return;
+  if (!turnId) {
+    throw new AppError(
+      "AGENT_TELEGRAM_RICH_TURN_ID_INVALID",
+      "Не удалось связать потоковый ответ с текущим запросом",
+    );
+  }
   const response = await requestTelegramRichApi("sendRichMessageDraft", {
     ...richBody(target, { html: TELEGRAM_THINKING_HTML }, true),
-    draft_id: draftId(target),
+    draft_id: draftId(target, turnId),
   });
   requireDraftSuccess(response);
 }
