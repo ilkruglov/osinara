@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `isMessageAddressedToBot`: preserves Eve's command semantics and strict mention/reply gating.
+ * - `classifyTelegramInboundMedia`: recognizes only one well-formed native Telegram photo.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
  */
@@ -13,6 +14,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyTelegramInboundMedia,
   hasTelegramInboundMedia,
   isMessageAddressedToBot,
   TELEGRAM_EVE_UPLOAD_POLICY,
@@ -145,6 +147,47 @@ describe("hasTelegramInboundMedia", () => {
       })).toBe(false);
     },
   );
+});
+
+describe("classifyTelegramInboundMedia", () => {
+  const nativePhoto = {
+    attachments: [{
+      fileId: "telegram-photo-1",
+      fileUniqueId: "telegram-photo-unique-1",
+      kind: "photo" as const,
+      mediaType: "image/jpeg",
+    }],
+    raw: {
+      photo: [{
+        file_id: "telegram-photo-1",
+        file_unique_id: "telegram-photo-unique-1",
+        height: 640,
+        width: 640,
+      }],
+    },
+  };
+
+  it("classifies text, one native photo, and unsupported media explicitly", () => {
+    expect(classifyTelegramInboundMedia({ attachments: [], raw: { text: "текст" } })).toBe("none");
+    expect(classifyTelegramInboundMedia(nativePhoto)).toBe("native_photo");
+    expect(classifyTelegramInboundMedia({
+      attachments: [{ fileId: "image-document", kind: "document", mediaType: "image/jpeg" }],
+      raw: { document: { file_id: "image-document", mime_type: "image/jpeg" } },
+    })).toBe("unsupported_media");
+  });
+
+  it.each([
+    { ...nativePhoto, attachments: [] },
+    { ...nativePhoto, raw: { photo: [] } },
+    { ...nativePhoto, raw: { photo: "malformed" } },
+    { ...nativePhoto, raw: { document: { file_id: "mixed" }, ...nativePhoto.raw } },
+    {
+      ...nativePhoto,
+      attachments: [...nativePhoto.attachments, { fileId: "second", kind: "photo" as const }],
+    },
+  ])("fails closed for mixed or malformed native-photo metadata", (message) => {
+    expect(classifyTelegramInboundMedia(message)).toBe("unsupported_media");
+  });
 });
 
 describe("TELEGRAM_EVE_UPLOAD_POLICY", () => {

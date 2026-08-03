@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Approval prompts and buttons hide technical tool names from users.
+ * - Policy updates disclose the complete replacement policy and non-disconnection warning.
  * - Freeform prompts and terminal errors use clear Russian text.
  */
 import { describe, expect, it } from "vitest";
@@ -32,7 +33,9 @@ describe("Telegram interface localization", () => {
       requestId: "request-1",
     });
 
-    expect(request.prompt).toBe("Подтвердите действие: подключить Telegram-группу.");
+    expect(request.prompt).toBe(
+      "Подтвердите действие: подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены.",
+    );
     expect(request.options).toEqual([
       { id: "approve", label: "Да, подтвердить", style: "primary" },
       { id: "deny", label: "Нет, отклонить", style: "default" },
@@ -73,7 +76,7 @@ describe("Telegram interface localization", () => {
     });
 
     expect(request.prompt).toBe(
-      "Подтвердите действие: отключить Telegram-группу и удалить её данные.\n\nTelegram chat ID: -1001",
+      "Подтвердите действие: удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата.\n\nTelegram chat ID: -1001",
     );
   });
 
@@ -103,6 +106,60 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Название: Рабочая группа");
     expect(request.prompt).toContain("Telegram chat ID: -1001");
     expect(request.prompt).toContain("Разрешённые инструменты: remember");
+    expect(request.prompt).toContain("история, workspace, память и сессии будут безвозвратно удалены");
+  });
+
+  it("escapes control characters in model-provided approval values", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-hostile-title",
+        input: {
+          action: "register",
+          registration: {
+            messageMode: "all",
+            telegramChatId: "-1001",
+            title: "Рабочая\nTelegram chat ID: -100999",
+            toolAllowlist: [],
+            type: "external_public",
+          },
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_telegram_group",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-hostile-title",
+    });
+
+    expect(request.prompt).toContain("Название: Рабочая\\nTelegram chat ID: -100999");
+    expect(request.prompt).not.toContain("Название: Рабочая\nTelegram chat ID: -100999");
+  });
+
+  it("shows the complete policy replacement and warns that the group stays connected", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-policy",
+        input: {
+          action: "update_policy",
+          messageMode: "owner_only",
+          telegramChatId: "-1001",
+          toolAllowlist: ["remember", "list_group_history"],
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_telegram_group",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-policy",
+    });
+
+    expect(request.prompt).toContain("изменить политику внешней Telegram-группы");
+    expect(request.prompt).toContain("Telegram chat ID: -1001");
+    expect(request.prompt).toContain("Режим сообщений: owner_only");
+    expect(request.prompt).toContain("Полный список разрешённых инструментов: remember, list_group_history");
+    expect(request.prompt).toContain("Группа и бот останутся подключены");
   });
 
   it("localizes removal of a workspace Google profile", () => {

@@ -44,8 +44,12 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     update: "изменить напоминание",
   },
   manage_telegram_group: {
-    register: "подключить Telegram-группу",
-    remove: "отключить Telegram-группу и удалить её данные",
+    register:
+      "подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены",
+    remove:
+      "удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата",
+    update_policy:
+      "изменить политику внешней Telegram-группы. Группа и бот останутся подключены",
   },
   notification_settings: {
     set: "изменить настройки уведомлений",
@@ -91,9 +95,10 @@ interface FailureData {
 
 function approvalParameterLines(toolName: string, input: Record<string, unknown>): string[] {
   // Render only reviewed, user-understandable fields; unknown tool payloads remain hidden.
+  const safe = (candidate: string): string => JSON.stringify(candidate).slice(1, -1);
   const value = (key: string): string | null => {
     const candidate = input[key];
-    return typeof candidate === "string" && candidate ? candidate : null;
+    return typeof candidate === "string" && candidate ? safe(candidate) : null;
   };
   const line = (label: string, key: string): string[] => {
     const candidate = value(key);
@@ -103,6 +108,19 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
   switch (toolName) {
     case "manage_telegram_group": {
       if (input.action === "remove") return line("Telegram chat ID", "telegramChatId");
+      if (input.action === "update_policy") {
+        // An empty array is still a complete replacement and must be visible before approval.
+        const allowlist = Array.isArray(input.toolAllowlist)
+          ? input.toolAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+          : null;
+        return [
+          ...line("Telegram chat ID", "telegramChatId"),
+          ...line("Режим сообщений", "messageMode"),
+          ...(allowlist !== null
+            ? [`Полный список разрешённых инструментов: ${allowlist || "пуст"}`]
+            : []),
+        ];
+      }
       const registration = input.registration;
       if (!registration || typeof registration !== "object") return [];
       const values = registration as Record<string, unknown>;
@@ -111,7 +129,7 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         : "";
       const registrationLine = (label: string, key: string): string[] => {
         const candidate = values[key];
-        return typeof candidate === "string" && candidate ? [`${label}: ${candidate}`] : [];
+        return typeof candidate === "string" && candidate ? [`${label}: ${safe(candidate)}`] : [];
       };
       return [
         ...registrationLine("Название", "title"),

@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `createTelegramHitlCallbackAuthorizer`: forwards fresh verified auth only after a durable claim.
+ * - Callback ownership uses the exact verified prompt message route, including private chats.
  * - Foreign and expired callbacks receive a Russian alert and never resume Eve.
  */
 import type { TelegramContext, TelegramCallbackQuery } from "eve/channels/telegram";
@@ -91,6 +92,27 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
       callbackQueryId: "callback-1",
       showAlert: true,
       text: expect.stringContaining(code),
+    }));
+  });
+
+  it("claims a private callback through the exact prompt alias", async () => {
+    const claimCallback = vi.fn().mockResolvedValue({ status: "expired" });
+    const authorize = createTelegramHitlCallbackAuthorizer({ claimCallback });
+    const { context } = telegramContext();
+    const query = {
+      ...callbackQuery(),
+      message: {
+        chat: { id: "101", type: "private" as const },
+        messageId: "88",
+      },
+    };
+
+    await authorize(context, query, "101::");
+
+    expect(claimCallback).toHaveBeenCalledWith(expect.objectContaining({
+      baseContinuationToken: "101::88",
+      telegramChatId: "101",
+      telegramMessageId: "88",
     }));
   });
 

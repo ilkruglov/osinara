@@ -3,13 +3,12 @@
  *
  * Exports:
  * - `upsertSessionRoute`: transaction-scoped route update used during turn preparation.
- * - `sessionRouteRepository`: resumable lookup, Eve re-key, and out-of-band alias registration.
+ * - `sessionRouteRepository`: resumable lookup and stable out-of-band alias registration.
  */
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import { continuationTokenForGeneration } from "./session-policy.js";
 
 export async function upsertSessionRoute(
   client: PoolClient,
@@ -38,32 +37,6 @@ export const sessionRouteRepository = {
       [baseContinuationToken],
     );
     return Boolean(result.rowCount);
-  },
-
-  async registerRoute(id: string, baseToken: string): Promise<string> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const session = await client.query<{ generation: number; id: string }>(
-        "SELECT id, generation FROM conversation_sessions WHERE id = $1 AND retired_at IS NULL FOR UPDATE",
-        [id],
-      );
-      const row = session.rows[0];
-      if (!row) throw new AppError("AGENT_SESSION_NOT_ACTIVE", "Текущий контекст уже завершён");
-      const token = continuationTokenForGeneration(baseToken, row.generation);
-      await client.query(
-        "UPDATE conversation_sessions SET continuation_token = $2 WHERE id = $1",
-        [id, token],
-      );
-      await upsertSessionRoute(client, baseToken, id);
-      await client.query("COMMIT");
-      return token;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
   },
 
   async registerRouteAlias(id: string, baseToken: string): Promise<void> {

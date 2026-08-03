@@ -8,6 +8,7 @@ import type { PoolClient } from "pg";
 
 import { TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED } from "../config.js";
 import { AppError } from "./app-error.js";
+import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
 import { database } from "./database.js";
 import {
   type ClaimRow,
@@ -107,11 +108,24 @@ export const telegramIngressRepository: TelegramIngressRepository = {
         "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
         [input.chatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
       );
-      const group = await client.query<{ type: string }>(
-        "SELECT type::text FROM telegram_groups WHERE telegram_chat_id = $1 FOR SHARE",
+      const group = await client.query<{ tool_allowlist: string[]; type: string }>(
+        `SELECT type::text, tool_allowlist
+         FROM telegram_groups
+         WHERE telegram_chat_id = $1
+         FOR SHARE`,
         [input.chatId],
       );
-      if (group.rows[0]?.type === "family_private") {
+      const policy = group.rows[0];
+      const externalAllowlist = parseExternalGroupToolAllowlist(policy?.tool_allowlist);
+      if (policy?.type === "family_private") {
+        await client.query("COMMIT");
+        return true;
+      }
+      if (
+         (policy?.type === "external_private" || policy?.type === "external_public") &&
+         input.mediaKind === "native_photo" &&
+         externalAllowlist?.has("inspect_workspace_image") === true
+      ) {
         await client.query("COMMIT");
         return true;
       }

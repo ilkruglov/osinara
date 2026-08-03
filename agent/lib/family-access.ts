@@ -13,7 +13,8 @@ import { AppError } from "./app-error.js";
 
 export type FamilyRole = "member" | "owner" | "recovery_owner";
 export type RegisteredGroupType = "external_private" | "external_public" | "family_private";
-export type TelegramGroupMessageMode = "addressed_only" | "all";
+export type TelegramGroupMessageMode = "addressed_only" | "all" | "owner_only";
+export type StandardTelegramGroupMessageMode = Exclude<TelegramGroupMessageMode, "owner_only">;
 
 export interface FamilyIdentity {
   familyId: string;
@@ -21,14 +22,23 @@ export interface FamilyIdentity {
   userId: string;
 }
 
-export interface RegisteredGroup {
+interface RegisteredGroupBase {
   familyId: string;
   groupId: string;
-  messageMode: TelegramGroupMessageMode;
   telegramChatId: string;
   toolAllowlist: string[];
-  type: RegisteredGroupType;
 }
+
+export type RegisteredGroup = RegisteredGroupBase & (
+  | {
+    messageMode: StandardTelegramGroupMessageMode;
+    type: "family_private";
+  }
+  | {
+    messageMode: TelegramGroupMessageMode;
+    type: "external_private" | "external_public";
+  }
+);
 
 export interface ConversationAccess {
   familyId: string;

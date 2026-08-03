@@ -2,7 +2,7 @@
  * Durable session lifecycle PostgreSQL tests.
  *
  * Constructs covered:
- * - Generation-zero session creation and route re-keying.
+ * - Generation-zero session creation and stable route aliases.
  * - Monotonic Eve root rebinding after a terminal workflow replacement.
  * - Terminal failure resolution through any durable Telegram route after re-keying.
  * - Rotation after thresholds while pending operations remain pinned.
@@ -42,12 +42,12 @@ async function fixture() {
 describeWithDatabase("session repository", () => {
   beforeEach(async () => {
     await database().query(
-      "TRUNCATE conversation_session_routes, conversation_sessions, family_memberships, users, families CASCADE",
+      "TRUNCATE conversation_session_routes, conversation_sessions, conversation_route_generations, family_memberships, users, families CASCADE",
     );
   });
   afterAll(async () => closeDatabase());
 
-  it("continues generation zero and follows Telegram anchor re-keying", async () => {
+  it("continues generation zero while delivered Telegram anchors remain aliases", async () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "101::",
@@ -60,14 +60,14 @@ describeWithDatabase("session repository", () => {
 
     expect(current).toMatchObject({ continuationToken: "101::", generation: 0, rotated: false });
     await sessionRepository.bindEveSession(current.id, "wrun_generation_zero");
-    await sessionRepository.registerRoute(current.id, "101:42:900");
+    await sessionRepository.registerRouteAlias(current.id, "101:42:900");
     await expect(database().query<{ continuation_token: string }>(
       `SELECT s.continuation_token
          FROM conversation_session_routes r
          JOIN conversation_sessions s ON s.id = r.session_id
         WHERE r.base_continuation_token = $1`,
       ["101:42:900"],
-    )).resolves.toMatchObject({ rows: [{ continuation_token: "101:42:900" }] });
+    )).resolves.toMatchObject({ rows: [{ continuation_token: "101::" }] });
     await expect(sessionRepository.hasRoute("101:42:900")).resolves.toBe(true);
     await expect(sessionRepository.hasRoute("101:42:901")).resolves.toBe(false);
   });
@@ -153,6 +153,47 @@ describeWithDatabase("session repository", () => {
     await expect(sessionRepository.isCurrentEveSession(rotated.id, "wrun_new")).resolves.toBe(true);
   });
 
+  it("moves every delivered Telegram alias to the new generation during rotation", async () => {
+    const f = await fixture();
+    const current = await sessionRepository.prepareTurn({
+      baseContinuationToken: "103::",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:00:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+    await sessionRepository.bindEveSession(current.id, "wrun_before_alias_rotation");
+    await sessionRepository.registerRouteAlias(current.id, "103::900");
+    await sessionRepository.registerRouteAlias(current.id, "103::901");
+    await sessionRepository.requestRotation(current.id);
+
+    const rotated = await sessionRepository.prepareTurn({
+      baseContinuationToken: "103::900",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:01:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+    const resumedThroughOtherAlias = await sessionRepository.prepareTurn({
+      baseContinuationToken: "103::901",
+      familyId: f.familyId,
+      groupId: null,
+      now: new Date("2026-07-12T12:02:00.000Z"),
+      scope: "personal",
+      userId: f.userId,
+    });
+
+    expect(rotated).toMatchObject({ generation: 1, rotated: true });
+    expect(resumedThroughOtherAlias).toMatchObject({
+      continuationToken: rotated.continuationToken,
+      generation: 1,
+      id: rotated.id,
+      rotated: false,
+    });
+  });
+
   it("accepts a newer Eve root and ignores delayed events from the replaced root", async () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
@@ -236,7 +277,7 @@ describeWithDatabase("session repository", () => {
     });
     const failedRoot = "wrun_01KXBRD0AY4NP50QXR7C5D6YEK";
     await sessionRepository.bindEveSession(current.id, failedRoot);
-    await sessionRepository.registerRoute(current.id, "106::437");
+    await sessionRepository.registerRouteAlias(current.id, "106::437");
 
     await expect(sessionRepository.recordSessionFailedByContinuationToken(
       "106::426",
@@ -288,7 +329,7 @@ describeWithDatabase("session repository", () => {
     )).resolves.toMatchObject({ rowCount: 0 });
   });
 
-  it("starts a new generation when a Telegram group trust zone is recreated", async () => {
+  it("clears active and retired group cursors when a Telegram trust zone is recreated", async () => {
     const f = await fixture();
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
@@ -306,7 +347,61 @@ describeWithDatabase("session repository", () => {
       scope: "group",
       userId: null,
     });
+    await sessionRepository.bindEveSession(old.id, "wrun_old_group_cursor");
+    await groupTimelineCursorRepository.advance(old.id, "wrun_old_group_cursor", "10");
+
+    // Keep both lifecycle states attached to the old trust zone with durable cursors.
+    await sessionRepository.requestRotation(old.id);
+    const active = await sessionRepository.prepareTurn({
+      baseContinuationToken: baseToken,
+      familyId: f.familyId,
+      groupId: group.rows[0]!.id,
+      now: new Date("2026-07-12T12:00:30.000Z"),
+      scope: "group",
+      userId: null,
+    });
+    await sessionRepository.bindEveSession(active.id, "wrun_active_group_cursor");
+    await groupTimelineCursorRepository.advance(active.id, "wrun_active_group_cursor", "20");
+    await sessionRepository.registerRouteAlias(active.id, "-100-session-zone::900");
+    const retiredBeforeDeletion = await database().query<{ retired_at: Date }>(
+      "SELECT retired_at FROM conversation_sessions WHERE id = $1",
+      [old.id],
+    );
+
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [group.rows[0]!.id]);
+    const detached = await database().query<{
+      generation: number;
+      group_id: string | null;
+      group_timeline_cursor: string | null;
+      retired_at: Date | null;
+    }>(
+      `SELECT generation, group_id, group_timeline_cursor::text, retired_at
+         FROM conversation_sessions
+        WHERE id = ANY($1::uuid[])
+        ORDER BY generation`,
+      [[old.id, active.id]],
+    );
+
+    expect(detached.rows).toEqual([
+      {
+        generation: 0,
+        group_id: null,
+        group_timeline_cursor: null,
+        retired_at: retiredBeforeDeletion.rows[0]!.retired_at,
+      },
+      {
+        generation: 1,
+        group_id: null,
+        group_timeline_cursor: null,
+        retired_at: expect.any(Date),
+      },
+    ]);
+    await expect(database().query(
+      `SELECT 1 FROM conversation_session_routes
+        WHERE session_id = ANY($1::uuid[])`,
+      [[old.id, active.id]],
+    )).resolves.toMatchObject({ rowCount: 0 });
+
     const replacementGroup = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
          (family_id, telegram_chat_id, title, type, message_mode)
@@ -324,8 +419,9 @@ describeWithDatabase("session repository", () => {
       userId: null,
     });
     expect(old.generation).toBe(0);
-    expect(replacement).toMatchObject({ generation: 1, rotated: true });
-    expect(replacement.sandboxSessionId).not.toBe(old.sandboxSessionId);
+    expect(active.generation).toBe(1);
+    expect(replacement).toMatchObject({ generation: 2, rotated: true });
+    expect(replacement.sandboxSessionId).not.toBe(active.sandboxSessionId);
     expect(replacement.continuationToken).not.toBe(baseToken);
   });
 

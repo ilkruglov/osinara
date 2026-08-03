@@ -173,12 +173,20 @@ async function rotateSession(
       input.now,
     ],
   );
+  const replacement = result.rows[0]!;
+
+  // Every delivered Telegram anchor follows the logical conversation across generations. Moving
+  // aliases in the same transaction prevents replies from selecting an already retired row.
+  await client.query(
+    "UPDATE conversation_session_routes SET session_id = $2, updated_at = now() WHERE session_id = $1",
+    [current.id, replacement.id],
+  );
   await client.query(
     `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
      VALUES ($1, 'session.rotated', $2, jsonb_build_object('generation', $3::integer))`,
     [current.family_id, current.id, generation],
   );
-  return result.rows[0]!;
+  return replacement;
 }
 
 export const sessionRepository = {
@@ -195,15 +203,19 @@ export const sessionRepository = {
         [input.baseContinuationToken],
       );
       let current = await findSessionForUpdate(client, input.baseContinuationToken);
+      let trustZoneRecreated = false;
       if (!current) {
+        const generation = await initialGeneration(client, input.baseContinuationToken);
         current = await createInitialSession(
           client,
           input,
-          await initialGeneration(client, input.baseContinuationToken),
+          generation,
         );
+        // A non-zero ledger entry exists only after the previous Telegram trust zone was retired.
+        trustZoneRecreated = generation > 0;
       }
-      const trustZoneRecreated = current.retired_at !== null;
-      if (trustZoneRecreated) {
+      if (current.retired_at !== null) {
+        trustZoneRecreated = true;
         current = await createInitialSession(client, input, current.generation + 1);
       }
       assertSameScope(current, input);

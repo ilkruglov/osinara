@@ -173,7 +173,7 @@ describe("createTelegramDurableIngress", () => {
     const response = await handle({ dispatch, raw, update, waitUntil } as TelegramVerifiedUpdateContext);
 
     expect(response.status).toBe(200);
-    expect(acceptMedia).toHaveBeenCalledWith(update.message, "1001");
+    expect(acceptMedia).toHaveBeenCalledWith(update.message, "1001", "unsupported_media");
     expect(storage.value.enqueue).not.toHaveBeenCalled();
     expect(transcribeVoice).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();

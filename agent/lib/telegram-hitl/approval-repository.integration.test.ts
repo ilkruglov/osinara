@@ -6,6 +6,7 @@
  * - `claimCallback`: atomically rejects foreign, stale, and repeated callback attempts.
  * - Pending approvals survive the Eve turn that pauses for user input.
  * - `authorizeReply`: atomically protects and consumes accepted text replies.
+ * - Owner-only external approvals recheck the current owner role before resuming Eve.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -21,7 +22,14 @@ if (enabled && (!url || !new URL(url).pathname.endsWith("_test"))) {
 const describeWithDatabase = enabled ? describe : describe.skip;
 const OWNER_TELEGRAM_ID = "hitl-owner";
 
-async function fixture() {
+async function fixture(options: {
+  messageMode?: "addressed_only" | "owner_only";
+  scope?: "family" | "group";
+  type?: "external_public" | "family_private";
+} = {}) {
+  const groupType = options.type ?? "family_private";
+  const messageMode = options.messageMode ?? "addressed_only";
+  const scope = options.scope ?? "family";
   const family = await database().query<{ id: string }>(
     "INSERT INTO families (name) VALUES ('HITL') RETURNING id",
   );
@@ -38,21 +46,21 @@ async function fixture() {
   const group = await database().query<{ id: string }>(
     `INSERT INTO telegram_groups
        (family_id, telegram_chat_id, title, type, message_mode)
-     VALUES ($1, '-1001', 'Семья', 'family_private', 'addressed_only')
-     RETURNING id`,
-    [family.rows[0]!.id],
+     VALUES ($1, '-1001', 'Семья', $2, $3)
+      RETURNING id`,
+    [family.rows[0]!.id, groupType, messageMode],
   );
   const session = await sessionRepository.prepareTurn({
     baseContinuationToken: "-1001:55:77",
     familyId: family.rows[0]!.id,
     groupId: group.rows[0]!.id,
     now: new Date("2026-07-13T12:00:00.000Z"),
-    scope: "family",
+    scope,
     userId: null,
   });
   await sessionRepository.bindEveSession(session.id, "wrun_hitl");
   await sessionRepository.markPendingOperation(session.id, true);
-  await sessionRepository.registerRoute(session.id, "-1001:55:88");
+  await sessionRepository.registerRouteAlias(session.id, "-1001:55:88");
   await telegramHitlApprovalRepository.register({
     applicationSessionId: session.id,
     callbackData: ["eve:0", "eve:1"],
@@ -166,7 +174,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
 
   it("keeps other simultaneously rendered requests pending", async () => {
     const current = await fixture();
-    await sessionRepository.registerRoute(current.sessionId, "-1001:55:89");
+    await sessionRepository.registerRouteAlias(current.sessionId, "-1001:55:89");
     await telegramHitlApprovalRepository.register({
       applicationSessionId: current.sessionId,
       callbackData: ["eve:2", "eve:3"],
@@ -229,6 +237,38 @@ describeWithDatabase("Telegram HITL approval repository", () => {
   it("rechecks active family membership before resuming Eve", async () => {
     const current = await fixture();
     await database().query("DELETE FROM family_memberships WHERE user_id = $1", [current.ownerId]);
+
+    await expect(telegramHitlApprovalRepository.claimCallback({
+      baseContinuationToken: "-1001:55:88",
+      callbackData: "eve:0",
+      telegramChatId: "-1001",
+      telegramMessageId: "88",
+      telegramUserId: OWNER_TELEGRAM_ID,
+    })).resolves.toEqual({ status: "forbidden" });
+  });
+
+  it("allows the current owner to resume an owner-only external approval", async () => {
+    await fixture({ messageMode: "owner_only", scope: "group", type: "external_public" });
+
+    await expect(telegramHitlApprovalRepository.claimCallback({
+      baseContinuationToken: "-1001:55:88",
+      callbackData: "eve:0",
+      telegramChatId: "-1001",
+      telegramMessageId: "88",
+      telegramUserId: OWNER_TELEGRAM_ID,
+    })).resolves.toMatchObject({ status: "authorized" });
+  });
+
+  it("rejects an owner-only external approval after owner-role revocation", async () => {
+    const current = await fixture({
+      messageMode: "owner_only",
+      scope: "group",
+      type: "external_public",
+    });
+    await database().query(
+      "UPDATE family_memberships SET role = 'member' WHERE user_id = $1",
+      [current.ownerId],
+    );
 
     await expect(telegramHitlApprovalRepository.claimCallback({
       baseContinuationToken: "-1001:55:88",

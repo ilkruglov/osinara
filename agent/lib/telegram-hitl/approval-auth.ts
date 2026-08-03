@@ -36,6 +36,7 @@ interface IdentityRow {
 interface GroupRow {
   family_id: string;
   id: string;
+  message_mode: "addressed_only" | "all" | "owner_only";
   tool_allowlist: string[];
   type: GroupType;
 }
@@ -79,7 +80,7 @@ export async function resolveCurrentApprovalAuth(
     userId = identity.user_id;
   } else {
     const groupResult = await client.query<GroupRow>(
-      `SELECT id, family_id, type, tool_allowlist
+      `SELECT id, family_id, type, message_mode, tool_allowlist
          FROM telegram_groups
         WHERE id = $1 AND telegram_chat_id = $2`,
       [row.group_id, row.telegram_chat_id],
@@ -96,6 +97,8 @@ export async function resolveCurrentApprovalAuth(
       userId = familyIdentity.user_id;
     } else {
       if (row.scope !== "group") return null;
+      // A parked approval cannot outlive owner-role revocation in an owner-only external group.
+      if (group.message_mode === "owner_only" && familyIdentity?.role !== "owner") return null;
       memoryScopes = ["group"];
       role = familyIdentity?.role ?? "external";
       userId = familyIdentity?.user_id ?? null;

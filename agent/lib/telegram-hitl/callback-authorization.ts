@@ -5,10 +5,11 @@
  * - `createTelegramHitlCallbackAuthorizer`: builds an independently testable callback guard.
  * - `authorizeTelegramHitlCallback`: production guard backed by durable PostgreSQL claims.
  */
-import type {
-  TelegramCallbackQuery,
-  TelegramContext,
-  TelegramHitlCallbackResult,
+import {
+  telegramContinuationToken,
+  type TelegramCallbackQuery,
+  type TelegramContext,
+  type TelegramHitlCallbackResult,
 } from "eve/channels/telegram";
 
 import { AppError } from "../app-error.js";
@@ -48,7 +49,7 @@ export function createTelegramHitlCallbackAuthorizer(
   return async function authorizeHitlCallback(
     ctx: TelegramContext,
     query: TelegramCallbackQuery,
-    continuationToken: string,
+    _continuationToken: string,
   ): Promise<TelegramHitlCallbackResult> {
     const message = query.message;
     const callbackData = query.data;
@@ -61,9 +62,15 @@ export function createTelegramHitlCallbackAuthorizer(
       return null;
     }
 
+    // Callback message identity is the exact durable prompt alias; private channel tokens omit it.
+    const promptRoute = telegramContinuationToken({
+      chatId: message.chat.id,
+      conversationId: message.messageId,
+      ...(message.messageThreadId === undefined ? {} : { messageThreadId: message.messageThreadId }),
+    });
     // The repository atomically binds the exact button, active Eve request, and current DB role.
     const result = await repository.claimCallback({
-      baseContinuationToken: continuationToken,
+      baseContinuationToken: promptRoute,
       callbackData,
       telegramChatId: message.chat.id,
       telegramMessageId: message.messageId,
