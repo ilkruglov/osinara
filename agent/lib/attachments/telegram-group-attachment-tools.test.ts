@@ -24,7 +24,7 @@ vi.mock("../workspaces/workspace-context.js", () => ({
   })),
 }));
 
-import listTelegramAttachments from "../../tools/list_telegram_attachments.js";
+import listTelegramAttachments from "../tools/list_telegram_attachments.js";
 
 describe("family Telegram attachment tools", () => {
   it("lists references only from the verified current topic", async () => {

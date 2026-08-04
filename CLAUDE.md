@@ -85,16 +85,23 @@ Owner-only операции разрешены только в личном Tele
 После HITL side-effect executor должен повторно проверить текущую owner-role в БД.
 Изменение типа группы пересоздаёт trust zone и удаляет данные старой области.
 
-External group application, integration, shell, network и orchestration tools контролируются через step-scoped Eve `defineDynamic`.
-Отсутствующий в allowlist инструмент блокируется, а не заменяется default-набором; исключение — нативные `glob`, `grep`, `read_file` и `write_file`, замкнутые внутри отдельного group workspace.
-Eve `0.22.5` не умеет скрывать static descriptors динамически, но execution fail-closed.
+Весь прикладной tool surface выдаётся per-mode через step-scoped Eve `defineDynamic` в `agent/tools/capabilities.ts`.
+Статических дескрипторов у приложения нет: инструмент, недоступный текущему режиму, не имеет дескриптора вообще, а не заменяется заглушкой.
+Реализации инструментов лежат в `agent/lib/tools/`; в `agent/tools/` остаётся только резолвер, иначе дескриптор станет виден во всех режимах.
+Матрица режимов и внешний allowlist собираются в `agent/lib/tool-policy/mode-tool-surface.ts`; сбой резолвера или недоказанный режим означает отсутствие прикладных инструментов.
+Нативные `glob`, `grep`, `read_file` и `write_file` остаются доступны и замкнуты внутри отдельного group workspace.
+Eve `0.22.5` не умеет скрывать собственные built-ins, поэтому `bash`, `todo`, `ask_question`, `load_skill` и невыданные `web_fetch`/`web_search` во внешней группе перекрываются явным отказом.
+Eve `0.22.5` также всегда перечисляет все authored skills в system prompt и не позволяет фильтровать их по сессии; при обновлении Eve проверить, появился ли механизм, и убрать эту оговорку.
 
 ## Структура проекта
 
 `agent/agent.ts` — модель, compaction и реальные framework limits.
-`agent/instructions.md` — постоянные инструкции модели, не authorization layer.
+`agent/instructions.md` — постоянное mode-agnostic ядро промта, не authorization layer.
+`agent/instructions/` — три turn-scoped dynamic блока; порядок задан именами файлов: режим, стиль, память.
 `agent/channels/telegram.ts` — Telegram channel, events и durable ingress hooks.
-`agent/tools/` — model-facing typed tools; имя берётся из имени файла.
+`agent/tools/capabilities.ts` — единственный discovered tool: dynamic surface текущего режима.
+`agent/lib/tools/` — реализации model-facing typed tools; имя берётся из имени файла.
+`agent/lib/prompt/` — фрагменты промта и композиция блоков по режимам.
 `agent/skills/` — активные нативные Eve skills.
 `agent/lib/` — application logic, repositories, policies и colocated tests.
 `agent/sandbox.ts` — явный backend `just-bash` без настроенных network commands.

@@ -14,7 +14,7 @@ vi.mock("./telegram-group-administration-repository.js", () => ({
   telegramGroupAdministrationRepository: { registerGroup: vi.fn(), removeRegistration },
 }));
 
-import manageTelegramGroup from "../tools/manage_telegram_group.js";
+import manageTelegramGroup from "./tools/manage_telegram_group.js";
 
 function context(chatType: "private" | "supergroup"): ToolContext {
   const caller = {

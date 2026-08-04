@@ -8,14 +8,14 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
-import manageAgentSchedule from "../tools/manage_agent_schedule.js";
-import manageFamilyInvitation from "../tools/manage_family_invitation.js";
-import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
-import manageMemory from "../tools/manage_memory.js";
-import manageReminder from "../tools/manage_reminder.js";
-import manageTelegramGroup from "../tools/manage_telegram_group.js";
-import notificationSettings from "../tools/notification_settings.js";
+import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
+import manageAgentSchedule from "./tools/manage_agent_schedule.js";
+import manageFamilyInvitation from "./tools/manage_family_invitation.js";
+import inspectWorkspaceImage from "./tools/inspect_workspace_image.js";
+import manageMemory from "./tools/manage_memory.js";
+import manageReminder from "./tools/manage_reminder.js";
+import manageTelegramGroup from "./tools/manage_telegram_group.js";
+import notificationSettings from "./tools/notification_settings.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
 

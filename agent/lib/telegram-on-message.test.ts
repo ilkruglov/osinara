@@ -570,6 +570,7 @@ describe("createTelegramMessageHandler", () => {
       currentSenderUsername: "anna",
       currentSequence: "1",
       groupId: "group-1",
+      includeAttachmentReferences: false,
       messageText: `@${BOT_USERNAME} подведи итог`,
       messageThreadId: "42",
     });

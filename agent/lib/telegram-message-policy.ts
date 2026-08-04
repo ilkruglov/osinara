@@ -11,6 +11,8 @@
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
+import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
+
 interface TelegramDispatchMessage {
   chat: {
     id?: string;
@@ -59,7 +61,11 @@ const TELEGRAM_CONDITIONAL_MEDIA_FIELDS = [
   "users_shared",
 ] as const;
 
-export type TelegramInboundMediaKind = "native_photo" | "none" | "unsupported_media";
+export type TelegramInboundMediaKind =
+  | "image_document_candidate"
+  | "native_photo"
+  | "none"
+  | "unsupported_media";
 
 function containsTelegramFileReference(value: unknown): boolean {
   // Conditional structures can be text-only, so search only their own subtree for actual files.
@@ -90,30 +96,46 @@ export function classifyTelegramInboundMedia(
   );
   if (message.attachments.length === 0 && !hasRawMedia) return "none";
 
-  // A native photo is the sole supported external media shape. Both Telegram's raw update and
-  // Eve's normalized attachment must agree; any extra, absent, or malformed media fails closed.
+  // The normalized attachment and raw Telegram shape must agree exactly. Documents remain only
+  // candidates until downloaded magic bytes establish their authoritative image MIME.
   const rawPhoto = message.raw.photo;
   const hasOtherRawMedia = TELEGRAM_INBOUND_MEDIA_FIELDS.some(
-    (field) => field !== "photo" && Object.hasOwn(message.raw, field),
+    (field) => field !== "photo" && field !== "document" && Object.hasOwn(message.raw, field),
   ) || TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some(
     (field) => Object.hasOwn(message.raw, field) && containsTelegramFileReference(message.raw[field]),
   );
-  if (
-    hasOtherRawMedia ||
-    !Array.isArray(rawPhoto) ||
-    rawPhoto.length === 0 ||
-    message.attachments.length !== 1 ||
-    message.attachments[0]?.kind !== "photo"
-  ) return "unsupported_media";
-
-  const rawFileIds = new Set<string>();
-  for (const size of rawPhoto) {
-    if (!size || typeof size !== "object" || Array.isArray(size)) return "unsupported_media";
-    const fileId = (size as Record<string, unknown>).file_id;
-    if (typeof fileId !== "string" || fileId.length === 0) return "unsupported_media";
-    rawFileIds.add(fileId);
+  if (!hasOtherRawMedia && !Object.hasOwn(message.raw, "document") &&
+    Array.isArray(rawPhoto) && rawPhoto.length > 0 &&
+    message.attachments.length === 1 && message.attachments[0]?.kind === "photo") {
+    const rawFileIds = new Set<string>();
+    for (const size of rawPhoto) {
+      if (!size || typeof size !== "object" || Array.isArray(size)) return "unsupported_media";
+      const fileId = (size as Record<string, unknown>).file_id;
+      if (typeof fileId !== "string" || fileId.length === 0) return "unsupported_media";
+      rawFileIds.add(fileId);
+    }
+    return rawFileIds.has(message.attachments[0].fileId) ? "native_photo" : "unsupported_media";
   }
-  return rawFileIds.has(message.attachments[0].fileId) ? "native_photo" : "unsupported_media";
+
+  const rawDocument = message.raw.document;
+  const attachment = message.attachments[0];
+  if (!hasOtherRawMedia && !Object.hasOwn(message.raw, "photo") &&
+    rawDocument && typeof rawDocument === "object" && !Array.isArray(rawDocument) &&
+    message.attachments.length === 1 && attachment?.kind === "document") {
+    const raw = rawDocument as Record<string, unknown>;
+    const exactFile = raw.file_id === attachment.fileId;
+    const exactMime = raw.mime_type === undefined || raw.mime_type === attachment.mediaType;
+    const exactName = raw.file_name === undefined || raw.file_name === attachment.fileName;
+    const rawCandidate = isTelegramImageDocumentCandidate({
+      ...attachment,
+      ...(typeof raw.file_name === "string" ? { fileName: raw.file_name } : { fileName: undefined }),
+      ...(typeof raw.mime_type === "string" ? { mediaType: raw.mime_type } : { mediaType: undefined }),
+    });
+    return exactFile && exactMime && exactName && rawCandidate
+      ? "image_document_candidate"
+      : "unsupported_media";
+  }
+  return "unsupported_media";
 }
 
 export function hasTelegramInboundMedia(

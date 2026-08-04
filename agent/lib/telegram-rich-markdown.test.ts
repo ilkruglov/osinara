@@ -112,4 +112,23 @@ describe("Telegram rich presentation instructions", () => {
     expect(instructions).toContain("Не создавай media-блоки");
     expect(instructions).toContain("`<tg-thinking>` добавляет только Telegram adapter");
   });
+
+  it("keeps the documented HTML allowlist identical to the sanitizer allowlist", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    // Every tag the sanitizer accepts must be named, and the prompt must not invent others.
+    expect(instructions).toContain(
+      "`<details>`, `<summary>`, `<u>`, `<ins>`, `<sub>` и `<sup>`",
+    );
+    expect(instructions).toContain("`$...$` или `$$...$$`");
+    expect(instructions).not.toContain("orca-details");
+  });
+
+  it("overrides the framework transport hint that forbids rich structure", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    // Eve always prepends <telegram_context> with response_instructions demanding plain text.
+    expect(instructions).toContain("<telegram_context>");
+    expect(instructions).toMatch(/response_instructions[^.]*не отменяет|игнорируй/iu);
+  });
 });

@@ -5,7 +5,7 @@
  * - `EXTERNAL_GROUP_CAPABILITY_CATALOG`: persisted capabilities with model usage metadata.
  * - `SANDBOX_FILE_CAPABILITY_CATALOG`: native capabilities available in every group workspace.
  * - Derived capability-name tuples used by validation and execution policy.
- * - `CONTROLLED_TOOL_NAMES`: static descriptors overridden fail-closed for external groups.
+ * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: Eve built-ins overridden fail-closed externally.
  * - `ExternalGroupToolName`: validated persisted allowlist value.
  * - `parseExternalGroupToolAllowlist`: validates the complete persisted policy atomically.
  */
@@ -85,36 +85,16 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
   SANDBOX_FILE_CAPABILITY_CATALOG,
 );
 
-export const CONTROLLED_TOOL_NAMES = [
-  "export_memory",
-  "get_current_time",
-  "import_telegram_attachment",
-  "inspect_workspace_image",
-  "list_agent_schedules",
-  "list_memories",
-  "list_group_history",
-  "list_pending_family_invitations",
-  "list_proactive_deliveries",
-  "list_reminders",
-  "list_telegram_attachments",
-  "manage_behavior_preference",
-  "manage_agent_schedule",
-  "manage_family_invitation",
-  "manage_google_workspace_connection",
-  "manage_memory",
-  "manage_reminder",
-  "manage_telegram_group",
-  "notification_settings",
-  "remember",
-  "search_memories",
-  "send_workspace_file",
-  "start_new_context",
+// Application tools are emitted per mode, so an external group never sees a descriptor it cannot
+// use. Eve 0.22.5 cannot hide its own built-ins, so only those still need an explicit denial.
+// `web_fetch` and `web_search` are listed because they are grantable: the denial is conditional.
+export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
   "ask_question",
   "bash",
+  "load_skill",
   "todo",
   "web_fetch",
   "web_search",
-  "load_skill",
 ] as const;
 
 export function isExternalGroupToolName(value: string): value is ExternalGroupToolName {

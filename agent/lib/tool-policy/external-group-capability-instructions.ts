@@ -27,6 +27,11 @@ export function externalGroupCapabilityInstructions(
     .map(({ name, usage: description }) => `- ${modelInvocation(name)}: ${description}.`)
     .join("\n");
   const effectiveAllowlist = effectiveCapabilities.map(({ name }) => `\`${name}\``).join(", ");
+  // Naming an action-level tool that was never granted would reintroduce the capability the
+  // surrounding prompt deliberately omits, so this clarification is itself conditional.
+  const memoryActions = [...allowed].some((name) => name.startsWith("manage_memory."))
+    ? " Для `manage_memory` разрешены только явно перечисленные выше actions; наличие одного action не разрешает остальные."
+    : "";
 
   return `
 <external_group_capabilities>
@@ -37,7 +42,7 @@ Effective allowlist: ${effectiveAllowlist}.
 
 ${usage}
 
-Используй capabilities только для указанного usage. Даже если в tool schema видны другие инструменты, не вызывай, не предлагай и не утверждай, что можешь использовать другие видимые static descriptors. Для \`manage_memory\` разрешены только явно перечисленные выше actions; наличие одного action не разрешает остальные.
+Используй capabilities только для указанного usage. Даже если в tool schema видны другие инструменты, не вызывай, не предлагай и не утверждай, что можешь использовать другие видимые static descriptors.${memoryActions}
 </external_group_capabilities>
 `.trim();
 }

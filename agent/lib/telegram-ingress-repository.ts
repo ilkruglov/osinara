@@ -123,7 +123,7 @@ export const telegramIngressRepository: TelegramIngressRepository = {
       }
       if (
          policy?.type === "external" &&
-         input.mediaKind === "native_photo" &&
+          (input.mediaKind === "native_photo" || input.mediaKind === "image_document_candidate") &&
          externalAllowlist?.has("inspect_workspace_image") === true
       ) {
         await client.query("COMMIT");

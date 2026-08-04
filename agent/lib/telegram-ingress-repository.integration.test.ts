@@ -122,7 +122,7 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toBeNull();
   });
 
-  it("accepts only allowlisted native photos and tombstones unsupported external media", async () => {
+  it("accepts allowlisted static-image candidates and tombstones unsupported external media", async () => {
     const family = await database().query<{ id: string }>(
       "INSERT INTO families (name) VALUES ('External photo family') RETURNING id",
     );
@@ -143,14 +143,20 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(telegramIngressRepository.acceptMedia({
       chatId: "-100-photo",
       chatType: "supergroup",
-      mediaKind: "unsupported_media",
+      mediaKind: "image_document_candidate",
       updateId: "1011",
+    })).resolves.toBe(true);
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-photo",
+      chatType: "supergroup",
+      mediaKind: "unsupported_media",
+      updateId: "1014",
     })).resolves.toBe(false);
 
     const ignored = await database().query<{ update_id: string }>(
       "SELECT update_id::text FROM telegram_ingress_ignored_updates ORDER BY update_id",
     );
-    expect(ignored.rows).toEqual([{ update_id: "1011" }]);
+    expect(ignored.rows).toEqual([{ update_id: "1014" }]);
   });
 
   it("tombstones a photo when any persisted external capability is malformed", async () => {

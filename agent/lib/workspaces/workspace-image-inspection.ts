@@ -1,5 +1,5 @@
 /**
- * Persistent workspace vision boundary.
+ * Authorized workspace and ephemeral Telegram vision boundary.
  *
  * Exports:
  * - `createWorkspaceImageInspector`: validates and submits authorized image bytes.
@@ -10,6 +10,9 @@ import { generateText } from "ai";
 import { VISION_MAX_FILE_BYTES } from "../../config.js";
 import { visionModel } from "../model-registry.js";
 import { AppError } from "../app-error.js";
+import { downloadTelegramAttachment } from "../attachments/telegram-attachment-download.js";
+import { telegramGroupAttachmentRepository } from "../attachments/telegram-group-attachment-repository.js";
+import { validateVisionImageBytes } from "../attachments/telegram-vision-attachment.js";
 import {
   type WorkspaceBinaryFile,
   workspaceBinaryRepository,
@@ -28,6 +31,8 @@ interface ImageAnalysisInput {
 
 interface WorkspaceImageInspectorDependencies {
   analyze(input: ImageAnalysisInput): Promise<string>;
+  downloadTelegramAttachment: typeof downloadTelegramAttachment;
+  findTelegramAttachment: typeof telegramGroupAttachmentRepository.find;
   readBinary(
     auth: WorkspaceAuthorization,
     scope: WorkspaceScope,
@@ -41,8 +46,20 @@ interface WorkspaceImageInspectorDependencies {
 }
 
 type WorkspaceImageLocation =
+  | { attachmentId: string }
   | { path: string }
   | { telegramMessageId: string };
+
+function assertAttachmentScope(auth: WorkspaceAuthorization, scope: WorkspaceScope): void {
+  const allowed = auth.groupType === "family_private" && scope === "family" ||
+    auth.groupType === "external" && scope === "group";
+  if (!allowed) {
+    throw new AppError(
+      "AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED",
+      "Вложение недоступно в текущей группе и области файлов",
+    );
+  }
+}
 
 export function createWorkspaceImageInspector(
   dependencies: WorkspaceImageInspectorDependencies,
@@ -55,6 +72,49 @@ export function createWorkspaceImageInspector(
       scope: WorkspaceScope;
     } & WorkspaceImageLocation,
   ) => {
+    if ("attachmentId" in input) {
+      assertAttachmentScope(auth, input.scope);
+      const reference = await dependencies.findTelegramAttachment(auth, input.attachmentId);
+      if (reference.attachment.size !== undefined &&
+        reference.attachment.size > VISION_MAX_FILE_BYTES) {
+        throw new AppError(
+          "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE",
+          "Vision-модель принимает изображение размером не более 10 МБ",
+        );
+      }
+      const bytes = await dependencies.downloadTelegramAttachment(reference.attachment);
+      if (bytes.byteLength > VISION_MAX_FILE_BYTES) {
+        throw new AppError(
+          "AGENT_WORKSPACE_VISION_FILE_TOO_LARGE",
+          "Vision-модель принимает изображение размером не более 10 МБ",
+        );
+      }
+      const mediaType = await validateVisionImageBytes(bytes);
+      const analysis = await dependencies.analyze({
+        ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+        bytes,
+        mediaType,
+        question: input.question,
+      });
+      if (!analysis.trim()) {
+        throw new AppError(
+          "AGENT_WORKSPACE_VISION_RESPONSE_EMPTY",
+          "Vision-модель не смогла описать изображение. Уточните вопрос и попробуйте снова",
+        );
+      }
+      return {
+        analysis,
+        scope: input.scope,
+        source: {
+          attachmentId: input.attachmentId,
+          kind: reference.attachment.kind,
+          mediaType,
+          size: bytes.byteLength,
+          telegramMessageId: reference.messageId,
+        },
+      };
+    }
+
     const binary = "telegramMessageId" in input
       ? await dependencies.readTelegramInboxAttachment(
         auth,
@@ -106,6 +166,8 @@ export const inspectWorkspaceImage = createWorkspaceImageInspector({
     });
     return result.text;
   },
+  downloadTelegramAttachment,
+  findTelegramAttachment: telegramGroupAttachmentRepository.find,
   readBinary: workspaceBinaryRepository.readBinary,
   readTelegramInboxAttachment: workspaceBinaryRepository.readTelegramInboxAttachment,
 });

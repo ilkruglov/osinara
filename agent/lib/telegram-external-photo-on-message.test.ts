@@ -3,9 +3,9 @@
  *
  * Constructs covered:
  * - Live `inspect_workspace_image` policy gates external native photos at `onMessage`.
- * - Addressed authorized photos persist directly into the isolated group inbox.
- * - Nonaddressed photos may enter the journal but never trigger a download.
- * - Revoked, mixed, malformed, and document-carried images fail closed before persistence.
+ * - Authorized native photos and image documents become lazy journal references.
+ * - Addressed images never pollute the isolated group workspace.
+ * - Revoked, mixed, malformed, and non-image documents fail closed.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -53,39 +53,132 @@ function allowExternalPhoto(repository: ReturnType<typeof repositories>): void {
 }
 
 describe("external Telegram native photos", () => {
-  it("persists an addressed photo in group scope and exposes its Telegram message ID", async () => {
+  it("captures an unobserved reply image as one exact-group attachment reference", async () => {
     const repository = repositories();
     allowExternalPhoto(repository);
-    repository.attachments.persist.mockResolvedValue([{
+    repository.attachmentReferences.captureReplyTarget.mockResolvedValue({
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      kind: "photo",
       mediaType: "image/jpeg",
-      path: "inbox/42/photo-telegram-photo-unique-1.jpg",
-      scope: "group",
+      telegramMessageId: "41",
+    });
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} что на фото?`),
+      messageId: "42",
+      raw: {
+        date: 1_700_000_001,
+        reply_to_message: {
+          chat: { id: "group-101", type: "group" },
+          date: 1_700_000_000,
+          from: { id: "telegram-202", is_bot: false },
+          message_id: 41,
+          photo: [{ file_id: "reply-photo", file_unique_id: "reply-photo-unique", height: 10, width: 10 }],
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { id: "telegram-202", isBot: false },
+        messageId: "41",
+      },
+    };
+
+    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+
+    expect(repository.attachmentReferences.captureReplyTarget).toHaveBeenCalledWith(
+      "group-1",
+      "00000000-0000-4000-8000-000000000010",
+      expect.objectContaining({ messageId: "41" }),
+    );
+    expect(result?.context?.join("\n")).toContain("00000000-0000-4000-8000-000000000041");
+    expect(repository.attachments.persist).not.toHaveBeenCalled();
+  });
+
+  it("does not capture a raw reply target bound to another chat", async () => {
+    const repository = repositories();
+    allowExternalPhoto(repository);
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} что на фото?`),
+      raw: {
+        date: 1_700_000_001,
+        reply_to_message: {
+          chat: { id: "other-group", type: "group" },
+          date: 1_700_000_000,
+          from: { id: "telegram-202", is_bot: false },
+          message_id: 41,
+          photo: [{ file_id: "reply-photo", height: 10, width: 10 }],
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { id: "telegram-202", isBot: false },
+        messageId: "41",
+      },
+    };
+
+    await createTelegramMessageHandler(repository)(telegramContext().context, message);
+
+    expect(repository.attachmentReferences.captureReplyTarget).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a reply attachment after external vision capability revocation", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} что на фото?`),
+      raw: {
+        date: 1_700_000_001,
+        reply_to_message: {
+          chat: { id: "group-101", type: "group" },
+          date: 1_700_000_000,
+          from: { id: "telegram-202", is_bot: false },
+          message_id: 41,
+          photo: [{ file_id: "reply-photo", height: 10, width: 10 }],
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { id: "telegram-202", isBot: false },
+        messageId: "41",
+      },
+    };
+
+    await createTelegramMessageHandler(repository)(telegramContext().context, message);
+
+    expect(repository.attachmentReferences.captureReplyTarget).not.toHaveBeenCalled();
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
+      includeAttachmentReferences: false,
+    }));
+  });
+
+  it("records an addressed photo as a lazy reference without workspace persistence", async () => {
+    const repository = repositories();
+    allowExternalPhoto(repository);
+    repository.attachmentReferences.record.mockResolvedValue({
+      attachmentId: "00000000-0000-4000-8000-000000000042",
+      kind: "photo",
+      mediaType: "image/jpeg",
+      size: 1_024,
       telegramMessageId: "42",
-    }]);
+    });
     const message = externalPhoto(`@${BOT_USERNAME} что изображено?`);
 
     const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
 
-    expect(repository.attachments.persist).toHaveBeenCalledWith({
-      attachments: message.attachments,
-      auth: {
-        familyId: "family-1",
-        groupId: "group-1",
-        groupType: "external",
-        role: "external",
-        telegramChatType: "group",
-        userId: null,
-      },
-      chatId: "group-101",
-      messageId: "42",
-      scope: "group",
-    });
+    expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.attachments.persist).not.toHaveBeenCalled();
     expect(result?.auth?.attributes).toMatchObject({
       groupId: "group-1",
       toolAllowlist: ["inspect_workspace_image"],
     });
     expect(result?.context?.join("\n")).toContain('"telegramMessageId":"42"');
-    expect(result?.context?.join("\n")).toContain('"scope":"group"');
+    expect(result?.context?.join("\n")).toContain("<telegram_attachment_refs>");
   });
 
   it("journals a nonaddressed photo without downloading it", async () => {
@@ -99,7 +192,7 @@ describe("external Telegram native photos", () => {
 
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
     expect(repository.attachments.persist).not.toHaveBeenCalled();
-    expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
+    expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
   });
 
   it("does not download an addressed photo from an unauthorized owner-only sender", async () => {
@@ -169,7 +262,7 @@ describe("external Telegram native photos", () => {
     expect(repository.attachments.persist).not.toHaveBeenCalled();
   });
 
-  it("rejects image documents and mixed media even when vision is allowlisted", async () => {
+  it("accepts an image document candidate and rejects mixed media", async () => {
     const repository = repositories();
     allowExternalPhoto(repository);
     const imageDocument: TelegramMessage = {
@@ -191,10 +284,10 @@ describe("external Telegram native photos", () => {
     };
 
     const handler = createTelegramMessageHandler(repository);
-    await expect(handler(telegramContext().context, imageDocument)).resolves.toBeNull();
+    await expect(handler(telegramContext().context, imageDocument)).resolves.not.toBeNull();
     await expect(handler(telegramContext().context, mixed)).resolves.toBeNull();
 
-    expect(repository.journal.record).not.toHaveBeenCalled();
+    expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", imageDocument);
     expect(repository.attachments.persist).not.toHaveBeenCalled();
   });
 });

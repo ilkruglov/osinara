@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `telegramGroupJournalRepository`: normalized insertion, deduplication, topic isolation, ordering, and retention.
+ * - `telegramGroupAttachmentRepository`: exact family/group/type authorization for lazy references.
  * - `telegramGroupAdministrationRepository`: explicit mode persistence and family-scoped cascading removal.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
@@ -377,6 +378,171 @@ describeWithDatabase("Telegram group journal repositories", () => {
       fileName: "договор.pdf",
       telegramMessageId: "42",
     }]);
+  });
+
+  it("authorizes an external image reference only inside its exact registered group", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("external-image-reference");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Внешняя группа",
+      toolAllowlist: ["inspect_workspace_image"],
+      type: "external",
+    });
+    const photoMessage: TelegramMessage = {
+      ...message({ id: "43", withPhoto: true }),
+      attachments: [{
+        fileId: "external-photo-secret",
+        fileUniqueId: "external-photo-unique",
+        kind: "photo",
+        mediaType: "image/jpeg",
+        size: 2_048,
+      }],
+    };
+    await telegramGroupJournalRepository.record(group.groupId, photoMessage);
+    const reference = await telegramGroupAttachmentRepository.record(group.groupId, photoMessage);
+    const externalAuth = {
+      familyId,
+      groupId: group.groupId,
+      groupType: "external" as const,
+      role: "external" as const,
+      telegramChatType: "supergroup" as const,
+      userId: null,
+    };
+
+    await expect(telegramGroupAttachmentRepository.find(
+      externalAuth,
+      reference.attachmentId,
+    )).resolves.toMatchObject({ messageId: "43" });
+    await expect(telegramGroupAttachmentRepository.find(
+      { ...externalAuth, groupId: "00000000-0000-4000-8000-000000000001" },
+      reference.attachmentId,
+    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(telegramGroupAttachmentRepository.find(
+      { ...externalAuth, groupType: "family_private" },
+      reference.attachmentId,
+    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    await expect(telegramGroupAttachmentRepository.list(
+      { ...externalAuth, groupType: "family_private" },
+      null,
+    )).resolves.toEqual([]);
+  });
+
+  it("projects an observed replied-to image attachment through durable ancestry", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("reply-image-ancestry");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Семейная группа",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    const target = message({ id: "51", withPhoto: true });
+    await telegramGroupJournalRepository.record(group.groupId, target);
+    const reference = await telegramGroupAttachmentRepository.record(group.groupId, target);
+    const reply: TelegramMessage = {
+      ...message({ id: "52", text: "Что на фото?" }),
+      replyToMessage: {
+        chat: target.chat,
+        from: target.from,
+        messageId: target.messageId,
+      },
+    };
+    const current = await telegramGroupJournalRepository.record(group.groupId, reply);
+
+    const ancestry = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: current.entryId,
+      beforeSequence: current.sequenceId,
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+
+    expect(ancestry).toMatchObject([{
+      attachment: { attachmentId: reference.attachmentId, kind: "photo" },
+      telegramMessageId: "51",
+    }]);
+  });
+
+  it("captures an unobserved raw reply attachment without a second timeline entry", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("raw-reply-image");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Семейная группа",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    const currentMessage = message({ id: "62", text: "Что на фото?" });
+    const current = await telegramGroupJournalRepository.record(group.groupId, currentMessage);
+    const rawTarget = message({ id: "61", withPhoto: true });
+
+    const reference = await telegramGroupAttachmentRepository.captureReplyTarget(
+      group.groupId,
+      current.entryId,
+      rawTarget,
+    );
+    const count = await database().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM telegram_group_messages WHERE group_id = $1",
+      [group.groupId],
+    );
+
+    expect(reference).toMatchObject({ kind: "photo", telegramMessageId: "61" });
+    expect(count.rows[0]?.count).toBe("1");
+    await expect(telegramGroupAttachmentRepository.find({
+      familyId,
+      groupId: group.groupId,
+      groupType: "family_private",
+      role: "owner",
+      telegramChatType: "supergroup",
+      userId: ownerId,
+    }, reference!.attachmentId)).resolves.toMatchObject({ messageId: "61" });
+    await expect(telegramGroupAttachmentRepository.list({
+      familyId,
+      groupId: group.groupId,
+      groupType: "family_private",
+      role: "owner",
+      telegramChatType: "supergroup",
+      userId: ownerId,
+    }, null)).resolves.toMatchObject([{ telegramMessageId: "61" }]);
+  });
+
+  it("enriches an observed reply target whose attachment reference is missing", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("observed-reply-image");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Внешняя группа",
+      toolAllowlist: ["inspect_workspace_image"],
+      type: "external",
+    });
+    const target = message({ id: "71", withPhoto: true });
+    const targetEntry = await telegramGroupJournalRepository.record(group.groupId, target);
+    const reply = message({ id: "72", text: "Что на фото?" });
+    const current = await telegramGroupJournalRepository.record(group.groupId, {
+      ...reply,
+      replyToMessage: { chat: target.chat, from: target.from, messageId: target.messageId },
+    });
+
+    const reference = await telegramGroupAttachmentRepository.captureReplyTarget(
+      group.groupId,
+      current.entryId,
+      target,
+    );
+    const stored = await database().query<{ id: string }>(
+      "SELECT id FROM telegram_group_messages WHERE attachment_file_id IS NOT NULL",
+    );
+
+    expect(reference).toMatchObject({ kind: "photo", telegramMessageId: "71" });
+    expect(stored.rows).toEqual([{ id: targetEntry.entryId }]);
   });
 
   it("physically prunes messages beyond the configured per-group retention cap", async () => {

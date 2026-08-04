@@ -1,5 +1,5 @@
 /**
- * Lazy family Telegram attachment reference repository.
+ * Lazy registered-group Telegram attachment reference repository.
  *
  * Exports:
  * - `TelegramGroupAttachmentRepository`: authorized record, list, and materialization lookup contract.
@@ -36,6 +36,11 @@ interface AttachmentListRow extends AttachmentRow {
 }
 
 export interface TelegramGroupAttachmentRepository {
+  captureReplyTarget(
+    groupId: string,
+    currentEntryId: string,
+    target: TelegramMessage,
+  ): Promise<(TelegramGroupAttachmentSummary & { telegramMessageId: string }) | null>;
   find(
     auth: WorkspaceAuthorization,
     attachmentId: string,
@@ -72,28 +77,95 @@ function attachmentSummary(row: Pick<
   };
 }
 
-function assertFamilyAttachmentAccess(auth: WorkspaceAuthorization): asserts auth is WorkspaceAuthorization & {
+function assertRegisteredGroupAttachmentAccess(auth: WorkspaceAuthorization): asserts auth is WorkspaceAuthorization & {
   groupId: string;
-  groupType: "family_private";
+  groupType: "external" | "family_private";
   telegramChatType: "group" | "supergroup";
 } {
   if (
-    auth.groupType !== "family_private" ||
+    (auth.groupType !== "family_private" && auth.groupType !== "external") ||
     auth.groupId === null ||
     (auth.telegramChatType !== "group" && auth.telegramChatType !== "supergroup")
   ) {
     throw new AppError(
       "AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED",
-      "Вложения доступны только в исходной семейной группе",
+      "Вложения доступны только в исходной зарегистрированной группе",
     );
   }
 }
 
 export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepository = {
+  async captureReplyTarget(groupId, currentEntryId, target) {
+    if (target.attachments.length !== 1) {
+      throw new AppError(
+        "AGENT_TELEGRAM_ATTACHMENT_REFERENCE_INVALID",
+        "Ответ Telegram должен содержать ровно одно поддерживаемое вложение",
+      );
+    }
+    const attachment = target.attachments[0]!;
+    const sourceMessageId = requireTelegramPositiveBigint(target.messageId, "attachment_source_message_id");
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      await lockTelegramGroupJournal(client, groupId);
+      // Enrich the observed target when its timeline entry exists. If Telegram supplied only a
+      // nested reply snapshot, bind the opaque reference to the current entry without inventing
+      // a second historical timeline message.
+      const result = await client.query<AttachmentRow>(
+        `WITH destination AS (
+           SELECT COALESCE(
+             (SELECT alias.entry_id
+              FROM telegram_group_message_ids alias
+              WHERE alias.group_id = $1 AND alias.telegram_message_id = $9),
+             $2::uuid
+           ) AS entry_id
+         )
+         UPDATE telegram_group_messages AS message
+         SET attachment_file_id = $3,
+             attachment_file_unique_id = $4,
+             attachment_file_name = $5,
+             attachment_media_type = $6,
+             attachment_size = $7,
+             attachment_kind = $8,
+             attachment_source_message_id = $9
+         FROM telegram_groups telegram_group, destination
+         WHERE message.id = destination.entry_id AND message.group_id = $1
+            AND telegram_group.id = message.group_id
+            AND telegram_group.type IN ('family_private', 'external')
+            AND (message.attachment_file_id IS NULL OR (
+              message.attachment_file_id = $3 AND
+              message.attachment_file_unique_id IS NOT DISTINCT FROM $4 AND
+              message.attachment_file_name IS NOT DISTINCT FROM $5 AND
+              message.attachment_media_type IS NOT DISTINCT FROM $6 AND
+              message.attachment_size IS NOT DISTINCT FROM $7 AND
+              message.attachment_kind = $8 AND
+              message.attachment_source_message_id = $9
+            ))
+         RETURNING message.id, $9::text AS telegram_message_id,
+                   message.attachment_file_id, message.attachment_file_unique_id,
+                   message.attachment_file_name, message.attachment_media_type,
+                   message.attachment_size::text, message.attachment_kind,
+                   ''::text AS telegram_chat_id`,
+        [groupId, currentEntryId, attachment.fileId, attachment.fileUniqueId ?? null,
+          attachment.fileName ?? null, attachment.mediaType ?? null, attachment.size ?? null,
+          attachment.kind, sourceMessageId],
+      );
+      await client.query("COMMIT");
+      const row = result.rows[0];
+      return row ? { ...attachmentSummary(row), telegramMessageId: row.telegram_message_id } : null;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async find(auth, attachmentId) {
-    assertFamilyAttachmentAccess(auth);
+    assertRegisteredGroupAttachmentAccess(auth);
     const result = await database().query<AttachmentRow>(
-      `SELECT message.id, message.telegram_message_id::text,
+      `SELECT message.id, COALESCE(message.attachment_source_message_id,
+                message.telegram_message_id)::text AS telegram_message_id,
               message.attachment_file_id, message.attachment_file_unique_id,
               message.attachment_file_name, message.attachment_media_type,
               message.attachment_size::text, message.attachment_kind,
@@ -101,15 +173,15 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
        FROM telegram_group_messages message
        JOIN telegram_groups telegram_group ON telegram_group.id = message.group_id
        WHERE message.id = $1 AND message.group_id = $2
-         AND telegram_group.family_id = $3 AND telegram_group.type = 'family_private'
+          AND telegram_group.family_id = $3 AND telegram_group.type = $4
          AND message.attachment_file_id IS NOT NULL`,
-      [attachmentId, auth.groupId, auth.familyId],
+      [attachmentId, auth.groupId, auth.familyId, auth.groupType],
     );
     const row = result.rows[0];
     if (!row) {
       throw new AppError(
         "AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND",
-        "Вложение не найдено в текущей семейной группе",
+        "Вложение не найдено в текущей зарегистрированной группе",
       );
     }
     return {
@@ -129,12 +201,18 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
   },
 
   async list(auth, messageThreadId) {
-    assertFamilyAttachmentAccess(auth);
+    if (auth.groupType !== "family_private") {
+      throw new AppError(
+        "AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED",
+        "Список вложений доступен только в исходной семейной группе",
+      );
+    }
     if (messageThreadId !== null) {
       requireTelegramPositiveBigint(messageThreadId, "message_thread_id");
     }
     const result = await database().query<AttachmentListRow>(
-      `SELECT message.id, message.telegram_message_id::text,
+      `SELECT message.id, COALESCE(message.attachment_source_message_id,
+                message.telegram_message_id)::text AS telegram_message_id,
               message.attachment_file_id, message.attachment_file_unique_id,
               message.attachment_file_name, message.attachment_media_type,
               message.attachment_size::text, message.attachment_kind,
@@ -143,12 +221,13 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
        FROM telegram_group_messages message
        JOIN telegram_groups telegram_group ON telegram_group.id = message.group_id
        WHERE message.group_id = $1 AND telegram_group.family_id = $2
-         AND telegram_group.type = 'family_private'
-         AND message.message_thread_id IS NOT DISTINCT FROM $3::bigint
-         AND message.attachment_file_id IS NOT NULL
+          AND telegram_group.type = $4
+          AND message.message_thread_id IS NOT DISTINCT FROM $3::bigint
+          AND message.attachment_file_id IS NOT NULL
        ORDER BY message.telegram_message_id DESC
-       LIMIT $4`,
-      [auth.groupId, auth.familyId, messageThreadId, TELEGRAM_ATTACHMENT_REFERENCE_LIST_LIMIT],
+       LIMIT $5`,
+      [auth.groupId, auth.familyId, messageThreadId, auth.groupType,
+        TELEGRAM_ATTACHMENT_REFERENCE_LIST_LIMIT],
     );
     return result.rows.map((row) => ({
       ...attachmentSummary(row),
@@ -179,13 +258,14 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
              attachment_file_unique_id = $4,
              attachment_file_name = $5,
              attachment_media_type = $6,
-             attachment_size = $7,
-             attachment_kind = $8
+              attachment_size = $7,
+              attachment_kind = $8,
+              attachment_source_message_id = $2
          FROM telegram_groups telegram_group
          WHERE message.group_id = $1
            AND message.telegram_message_id = $2
            AND telegram_group.id = message.group_id
-           AND telegram_group.type = 'family_private'
+            AND telegram_group.type IN ('family_private', 'external')
            AND (message.attachment_file_id IS NULL OR (
              message.attachment_file_id = $3 AND
              message.attachment_file_unique_id IS NOT DISTINCT FROM $4 AND
@@ -212,7 +292,7 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
       if (!row) {
         throw new AppError(
           "AGENT_TELEGRAM_ATTACHMENT_REFERENCE_CONFLICT",
-          "Не удалось сохранить ссылку на вложение семейной группы",
+          "Не удалось сохранить ссылку на вложение зарегистрированной группы",
         );
       }
       await client.query("COMMIT");

@@ -2,20 +2,21 @@
  * Agent capability surface regression tests.
  *
  * Constructs:
- * - Exact authored tool-file allowlist after CRUD consolidation.
+ * - `agent/tools` holds only the dynamic capability resolver; implementations live in lib.
+ * - Exact application tool-module allowlist after CRUD consolidation.
  * - Exact native skill package directories, with no TypeScript pseudo-skills.
+ * - Opt-in tone skills advertise explicit-request activation only.
  */
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 const AGENT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-const EXPECTED_TOOL_FILES = [
+const EXPECTED_TOOL_MODULES = [
   "export_memory.ts",
   "get_current_time.ts",
-  "group-tool-policy.ts",
   "import_telegram_attachment.ts",
   "inspect_workspace_image.ts",
   "list_agent_schedules.ts",
@@ -39,12 +40,13 @@ const EXPECTED_TOOL_FILES = [
   "start_new_context.ts",
 ] as const;
 
+const EXPECTED_DISCOVERED_TOOL_FILES = ["capabilities.ts"] as const;
+
 const EXPECTED_SKILL_DIRECTORIES = [
   "agent-browser",
   "behavior-preferences",
   "docx",
   "find-docs",
-  "find-skills",
   "gws-calendar",
   "gws-calendar-agenda",
   "gws-calendar-insert",
@@ -66,20 +68,31 @@ const EXPECTED_SKILL_DIRECTORIES = [
   "gws-sheets-append",
   "gws-sheets-read",
   "pdf",
-  "skill-creator",
+  "pohuy",
   "t-invest",
   "xlsx",
 ] as const;
 
 describe("agent capability surface", () => {
-  it("exposes only the consolidated authored tool files", async () => {
+  it("discovers only the dynamic capability resolver as an authored tool", async () => {
     const entries = await readdir(`${AGENT_ROOT}/tools`, { withFileTypes: true });
     const toolFiles = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
 
-    expect(toolFiles).toEqual([...EXPECTED_TOOL_FILES]);
+    // A static descriptor would be visible in every mode, so no implementation may live here.
+    expect(toolFiles).toEqual([...EXPECTED_DISCOVERED_TOOL_FILES]);
+  });
+
+  it("keeps every application tool implementation outside Eve discovery", async () => {
+    const entries = await readdir(`${AGENT_ROOT}/lib/tools`, { withFileTypes: true });
+    const toolModules = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+      .map((entry) => entry.name)
+      .sort();
+
+    expect(toolModules).toEqual([...EXPECTED_TOOL_MODULES]);
   });
 
   it("keeps skills as native Eve packages only", async () => {
@@ -95,6 +108,25 @@ describe("agent capability surface", () => {
       .map((entry) => entry.name)
       .sort();
     expect(skillFiles).toEqual([]);
+  });
+
+  it("advertises the opt-in profanity skill as explicit-request only", async () => {
+    const skill = await readFile(`${AGENT_ROOT}/skills/pohuy/SKILL.md`, "utf8");
+    const description = /^---\n([\s\S]*?)\n---/u.exec(skill)?.[1] ?? "";
+
+    // The description sits in every system prompt, so it must not self-activate on a user simply
+    // swearing or being annoyed: only an explicit request may load this skill.
+    expect(description).toContain("только по явной просьбе пользователя");
+    expect(description).toContain("Не загружай, если пользователь просто раздражён");
+    expect(description).not.toContain("та мне похуй");
+    expect(description).not.toContain("заебал");
+
+    // The activation step reads sibling references, so they must ship with the package.
+    const references = await readdir(`${AGENT_ROOT}/skills/pohuy/references`);
+    expect(references.sort()).toEqual(["ontologia.md", "sceny.md", "slovar.md"]);
+
+    // The vendored copy must not try to reach the upstream repository from the sandbox.
+    expect(skill).not.toContain("raw.githubusercontent.com");
   });
 
   it("requires every native skill package to declare SKILL.md", async () => {

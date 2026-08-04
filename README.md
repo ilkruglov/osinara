@@ -159,7 +159,10 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 | --- | --- |
 | `agent/agent.ts` | Root Eve agent: model, compaction, delegation limits. |
 | `agent/channels/telegram.ts` | Telegram channel, durable ingress, HITL, rich delivery. |
-| `agent/tools/` | Model-facing typed tools. Не класть сюда tests. |
+| `agent/tools/capabilities.ts` | Единственный discovered tool: dynamic surface текущего режима. |
+| `agent/lib/tools/` | Реализации model-facing typed tools. Не класть сюда tests. |
+| `agent/instructions/` | Turn-scoped dynamic блоки промта: режим, стиль, память. |
+| `agent/lib/prompt/` | Фрагменты промта и композиция блоков по режимам. |
 | `agent/skills/` | Native Eve skills, включая Google Workspace, docs, PDF, XLSX и browser. |
 | `agent/lib/` | Application logic, repositories, policies и colocated tests. |
 | `agent/schedules/` | Nitro/Eve schedules: reminders, agent schedules, software update checks. |
@@ -191,8 +194,9 @@ Highlighted skill groups:
 | --- | --- |
 | Google Workspace | `gws-gmail`, `gws-calendar`, `gws-drive`, `gws-docs`, `gws-sheets`, `gws-people`. |
 | Documents | `pdf`, `docx`, `xlsx`. |
-| Browser and research | `agent-browser`, `find-docs`, `find-skills`. |
+| Browser and research | `agent-browser`, `find-docs`. |
 | Personalization | `behavior-preferences`. |
+| Tone, opt-in | `pohuy` — режим ответов с матом, грузится только по явной просьбе. |
 
 ## Release Badges
 
