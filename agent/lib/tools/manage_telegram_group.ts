@@ -44,24 +44,47 @@ const TOP_LEVEL_FIELDS = ["action", "messageMode", "registration", "telegramChat
 const REGISTRATION_FIELDS = ["messageMode", "telegramChatId", "title", "toolAllowlist", "type"] as const;
 
 const registrationSchema = z.object({
-  messageMode: z.string().optional(),
-  telegramChatId: z.string().optional(),
-  title: z.string().optional(),
-  toolAllowlist: z.array(z.string()).optional(),
-  type: z.string().optional(),
+  messageMode: z.string().optional().describe("Обязательно внутри registration: addressed_only, all или owner_only для external."),
+  telegramChatId: z.string().optional().describe("Обязательный точный отрицательный Telegram chat ID регистрируемой группы."),
+  title: z.string().optional().describe("Обязательное отображаемое название регистрируемой группы."),
+  toolAllowlist: z.array(z.string()).optional().describe("Только для registration.type=external; для family_private поле не передавайте."),
+  type: z.string().optional().describe("Обязательный тип trust zone: family_private или external."),
 }).passthrough();
 
 const manageTelegramGroupSchema = z.object({
-  action: z.string().optional(),
-  messageMode: z.string().optional(),
-  registration: registrationSchema.optional(),
-  telegramChatId: z.string().optional(),
-  toolAllowlist: z.array(z.string()).optional(),
+  action: z.string().optional().describe(
+    "Сначала выберите ровно один action: status, start_new_context, register, update_policy или remove.",
+  ),
+  messageMode: z.string().optional().describe(
+    "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
+  ),
+  registration: registrationSchema.optional().describe(
+    "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
+  ),
+  telegramChatId: z.string().optional().describe(
+    "Точный отрицательный ID обязателен для start_new_context, update_policy и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
+  ),
+  toolAllowlist: z.array(z.string()).optional().describe(
+    "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
+  ),
 }).passthrough();
 
 function requireTelegramGroupId(raw: unknown, label: string): string {
   if (typeof raw !== "string" || !TELEGRAM_GROUP_ID_PATTERN.test(raw)) {
     toolInputError(INPUT_ERROR_CODE, `${label} должен быть строкой отрицательного Telegram chat ID группы, например -1001234567890`);
+  }
+  return raw;
+}
+
+function requireContextRotationGroupId(raw: unknown): string {
+  if (typeof raw !== "string" || !TELEGRAM_GROUP_ID_PATTERN.test(raw)) {
+    toolInputError(
+      INPUT_ERROR_CODE,
+      "Для action=start_new_context обязателен точный отрицательный telegramChatId. " +
+        "Не угадывайте ID: сначала вызовите ровно {\"action\":\"status\"}, выберите нужную группу " +
+        "и скопируйте её startNewContextInput вида " +
+        "{\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}",
+    );
   }
   return raw;
 }
@@ -141,7 +164,8 @@ function requireRegistration(input: Record<string, unknown>) {
 
 const TOOL_DESCRIPTION = [
   "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить политику внешней группы или удалить регистрацию и связанные данные.",
-  "При команде /status или просьбе показать настройки групп используй status: он не требует подтверждения и одним вызовом возвращает type, messageMode, полный toolAllowlist и базовые workspace tools: {\"action\":\"status\"}.",
+  "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полный toolAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
+  "Некоторые model transports материализуют остальные известные optional-поля общей schema. Для read-only status и недеструктивного start_new_context tool безопасно игнорирует такие поля; всё равно не заполняй их и никогда не угадывай telegramChatId.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
   "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
   "Update_policy не отключает группу и сохраняет её ID, название, тип, историю, workspace, память и сессии.",
@@ -168,7 +192,6 @@ export default defineTool({
     const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
     const owner = requirePrivateTelegramOwner(ctx);
     if (action === "status") {
-      requireOnlyFields(payload, ["action"], "action=status", INPUT_ERROR_CODE);
       const groups = await telegramGroupAdministrationRepository.listStatuses({
         familyId: owner.familyId,
         requestedBy: owner.userId,
@@ -183,6 +206,10 @@ export default defineTool({
               policySummary:
                 "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
               toolAccessMode: "family_policy" as const,
+              startNewContextInput: {
+                action: "start_new_context" as const,
+                telegramChatId: group.telegramChatId,
+              },
             };
           }
           const builtInWorkspaceTools = [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES];
@@ -192,6 +219,10 @@ export default defineTool({
             effectiveConfiguredTools: [...builtInWorkspaceTools, ...group.toolAllowlist],
             policySummary:
               "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
+            startNewContextInput: {
+              action: "start_new_context" as const,
+              telegramChatId: group.telegramChatId,
+            },
             toolAccessMode: "external_allowlist" as const,
           };
         }),
@@ -199,13 +230,7 @@ export default defineTool({
       };
     }
     if (action === "start_new_context") {
-      requireOnlyFields(
-        payload,
-        ["action", "telegramChatId"],
-        "action=start_new_context",
-        INPUT_ERROR_CODE,
-      );
-      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
+      const telegramChatId = requireContextRotationGroupId(payload.telegramChatId);
       const result = await telegramGroupAdministrationRepository.requestGroupSessionRotation({
         familyId: owner.familyId,
         requestedBy: owner.userId,

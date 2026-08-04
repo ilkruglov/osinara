@@ -83,17 +83,52 @@ describe("manage_telegram_group.status", () => {
           policySummary: "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
           toolAccessMode: "external_allowlist",
           toolAllowlist: ["search_memories"],
+          startNewContextInput: {
+            action: "start_new_context",
+            telegramChatId: "-1002",
+          },
         }),
         expect.objectContaining({
           builtInWorkspaceTools: [],
           policySummary: "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
           toolAccessMode: "family_policy",
           toolAllowlist: [],
+          startNewContextInput: {
+            action: "start_new_context",
+            telegramChatId: "-1001",
+          },
         }),
       ],
       total: 2,
     });
     expect(listStatuses).toHaveBeenCalledWith({ familyId: "family-1", requestedBy: "owner-1" });
+  });
+
+  it("ignores known fields that MiniMax materializes for another action", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "status",
+      messageMode: "all",
+      registration: {
+        messageMode: "addressed_only",
+        telegramChatId: "-1009999999999",
+        title: "Не используется",
+        toolAllowlist: [],
+        type: "external",
+      },
+      telegramChatId: "-1009999999999",
+      toolAllowlist: ["search_memories"],
+    }, context())).resolves.toMatchObject({ total: 2 });
+    expect(listStatuses).toHaveBeenCalledTimes(1);
+  });
+
+  it("still rejects fields outside the published shared schema", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "status",
+      telegramChat: "-1001",
+    }, context())).rejects.toThrowError(
+      /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat.*telegramChatId/u,
+    );
+    expect(listStatuses).not.toHaveBeenCalled();
   });
 
   it("skips HITL only for read-only status and non-destructive context rotation", () => {
