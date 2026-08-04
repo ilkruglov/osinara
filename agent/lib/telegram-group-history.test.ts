@@ -5,21 +5,18 @@
  * - `requireTelegramGroupHistoryAuthorization`: derives group identity only from verified auth.
  * - `searchTelegramGroupHistory`: forwards bounded filters without accepting a model scope.
  * - Date filters fail fast even when this boundary is called without the model schema.
- * - The tool schema and permanent prompt teach exact, sequential history retrieval.
+ * - The tool schema and every group mode teach exact, sequential history retrieval.
  */
-import { readFile } from "node:fs/promises";
-
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import listGroupHistory from "../tools/list_group_history.js";
+import listGroupHistory from "./tools/list_group_history.js";
 import { AppError } from "./app-error.js";
+import { modeInstructions } from "./prompt/mode-instructions.js";
 import {
   requireTelegramGroupHistoryAuthorization,
   searchTelegramGroupHistory,
 } from "./telegram-group-history.js";
-
-const INSTRUCTIONS_PATH = new URL("../instructions.md", import.meta.url);
 
 function context(attributes: Record<string, unknown>) {
   return { session: { auth: { current: {
@@ -53,9 +50,13 @@ describe("Telegram group history", () => {
     expect(schema.properties?.limit?.description).toContain("после применения всех фильтров");
   });
 
-  it("forbids parallel history calls in the permanent model instructions", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
+  it.each([
+    ["family", modeInstructions({ environment: "family" })],
+    [
+      "external with granted history",
+      modeInstructions({ capabilities: new Set(["list_group_history"]), environment: "external" }),
+    ],
+  ] as const)("forbids parallel history calls in the %s mode instructions", (_mode, instructions) => {
     expect(instructions).toContain("Не вызывай `list_group_history` параллельно");
     expect(instructions).toContain("дождись результата текущего вызова");
     expect(instructions).toContain("не приписывай результат другому набору фильтров");

@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import manageGoogleWorkspaceConnection, {
   googleWorkspaceConnectionStatus,
-} from "../../tools/manage_google_workspace_connection.js";
+} from "../tools/manage_google_workspace_connection.js";
 import { GOOGLE_WORKSPACE_SCOPES } from "./google-workspace-config.js";
 
 function approvalFor(input: Record<string, unknown>) {

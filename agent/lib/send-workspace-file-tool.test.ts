@@ -35,7 +35,7 @@ vi.mock("./sessions/session-context.js", () => ({
   registerTelegramMessageRoutes: mocks.registerTelegramMessageRoutes,
 }));
 
-import sendWorkspaceFile from "../tools/send_workspace_file.js";
+import sendWorkspaceFile from "./tools/send_workspace_file.js";
 
 function context(): ToolContext {
   const caller = {

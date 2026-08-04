@@ -2,31 +2,30 @@
  * External group tool catalog completeness tests.
  *
  * Constructs covered:
- * - `CONTROLLED_TOOL_NAMES`: covers every static authored tool so new tools cannot bypass policy.
+ * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: covers the Eve built-ins that cannot be hidden.
  * - Capability metadata: provides generated model usage for every effective external capability.
  */
-import { readdir } from "node:fs/promises";
-
 import { describe, expect, it } from "vitest";
 
 import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
-  CONTROLLED_TOOL_NAMES,
   EXTERNAL_GROUP_CAPABILITY_CATALOG,
   EXTERNAL_GROUP_TOOL_NAMES,
+  FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
   SANDBOX_FILE_CAPABILITY_CATALOG,
 } from "./group-tool-catalog.js";
 
 describe("external group tool catalog", () => {
-  it("covers every static authored tool", async () => {
-    const entries = await readdir(new URL("../../tools", import.meta.url));
-    const staticToolNames = entries
-      .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
-      .map((name) => name.slice(0, -3))
-      .filter((name) => name !== "group-tool-policy")
-      .sort();
-
-    expect(CONTROLLED_TOOL_NAMES).toEqual(expect.arrayContaining(staticToolNames));
+  it("denies every framework built-in an external group must not reach", () => {
+    // Application tools are emitted per mode, so only framework descriptors need an override.
+    expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
+      "ask_question",
+      "bash",
+      "load_skill",
+      "todo",
+      "web_fetch",
+      "web_search",
+    ]);
   });
 
   it("does not override native file tools in isolated external workspaces", () => {
@@ -37,13 +36,12 @@ describe("external group tool catalog", () => {
       "write_file",
     ]);
     for (const toolName of ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES) {
-      expect(CONTROLLED_TOOL_NAMES).not.toContain(toolName);
+      expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain(toolName);
     }
   });
 
   it("does not expose the removed PDF parser capability", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("inspect_workspace_pdf");
-    expect(CONTROLLED_TOOL_NAMES).not.toContain("inspect_workspace_pdf");
   });
 
   it("defines non-empty model usage for every persisted and always-available capability", () => {

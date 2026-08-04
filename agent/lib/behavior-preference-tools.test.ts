@@ -13,7 +13,7 @@ vi.mock("./behavior-preference-repository.js", () => ({
   behaviorPreferenceRepository: { delete: deletePreference },
 }));
 
-import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
+import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
 
 function createContext(role: "member" | "owner"): ToolContext {
   return {

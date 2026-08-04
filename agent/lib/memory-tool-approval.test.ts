@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import manageMemory from "../tools/manage_memory.js";
-import remember from "../tools/remember.js";
+import manageMemory from "./tools/manage_memory.js";
+import remember from "./tools/remember.js";
 
 function approvalFor(tool: unknown, input: Record<string, unknown>, chatType: string) {
   const approval = (tool as { approval: (context: unknown) => unknown }).approval;

@@ -5,11 +5,14 @@
  * - `TelegramGroupTurnContextPreparer`: injectable bootstrap/incremental context contract.
  * - `createTelegramGroupTurnContextPreparer`: composes timeline and session cursor repositories.
  * - `telegramGroupTurnContextPreparer`: production context preparer.
+ * - `currentTelegramMessageText`: reads the addressed message back out of the durable envelope.
  */
 import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
 } from "../config.js";
+import { AppError } from "./app-error.js";
+import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 import { groupTimelineCursorRepository } from "./sessions/group-timeline-cursor-repository.js";
 import { formatTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
 import {
@@ -43,6 +46,23 @@ export type TelegramGroupTurnContextPreparer = (
   input: PrepareTelegramGroupTurnContextInput,
 ) => Promise<PreparedTelegramGroupTurnContext>;
 
+const CURRENT_MESSAGE_OPEN_TAG = "<current_telegram_message>";
+const CURRENT_MESSAGE_CLOSE_TAG = "</current_telegram_message>";
+const TURN_MESSAGE_ERROR_CODE = "AGENT_TELEGRAM_TURN_MESSAGE_INVALID";
+
+function turnMessageError(reason: string, detail?: string): AppError {
+  // The exact failure stays in logs; the caller only needs the stable contract error.
+  console.error(JSON.stringify({
+    code: TURN_MESSAGE_ERROR_CODE,
+    reason,
+    ...(detail === undefined ? {} : { detail }),
+  }));
+  return new AppError(
+    TURN_MESSAGE_ERROR_CODE,
+    "Не удалось прочитать текущее сообщение группы. Отправьте сообщение ещё раз",
+  );
+}
+
 function durableTurnMessage(
   timeline: string | null,
   input: Pick<
@@ -52,12 +72,38 @@ function durableTurnMessage(
 ): string {
   // The durable envelope retains speaker attribution without exposing Telegram identifiers.
   const timelinePrefix = timeline === null ? "" : `${timeline}\n\n`;
-  const currentMessage = JSON.stringify({
+  const currentMessage = escapeUntrustedContextJson({
     senderDisplayName: input.currentSenderDisplayName,
     senderUsername: input.currentSenderUsername,
     text: input.messageText,
-  }).replaceAll("&", "\\u0026").replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
-  return `${timelinePrefix}<current_telegram_message>\n${currentMessage}\n</current_telegram_message>`;
+  });
+  return `${timelinePrefix}${CURRENT_MESSAGE_OPEN_TAG}\n${currentMessage}\n${CURRENT_MESSAGE_CLOSE_TAG}`;
+}
+
+/**
+ * Reads the addressed message text back out of an envelope this module produced. Participant text
+ * inside the envelope has its markup escaped, so the delimiters are unambiguous and a malformed
+ * payload means the durable turn input is corrupt rather than merely unusual.
+ */
+export function currentTelegramMessageText(durableMessage: string): string {
+  const opening = durableMessage.lastIndexOf(CURRENT_MESSAGE_OPEN_TAG);
+  const closing = durableMessage.lastIndexOf(CURRENT_MESSAGE_CLOSE_TAG);
+  if (opening < 0 || closing <= opening) throw turnMessageError("envelope_missing");
+
+  const payload = durableMessage.slice(opening + CURRENT_MESSAGE_OPEN_TAG.length, closing).trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch (error) {
+    throw turnMessageError(
+      "envelope_unparsable",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  const text = (parsed as { text?: unknown } | null)?.text;
+  if (typeof text !== "string") throw turnMessageError("text_missing");
+  return text;
 }
 
 export function createTelegramGroupTurnContextPreparer(

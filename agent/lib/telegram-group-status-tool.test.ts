@@ -5,9 +5,8 @@
  * - `manage_telegram_group.status` reads every family registration without HITL.
  * - Mutating actions retain user approval.
  * - External status distinguishes configured grants from always-available workspace tools.
- * - Permanent guidance requires reading status before an uncertain policy replacement.
+ * - Private-mode guidance requires reading status before an uncertain policy replacement.
  */
-import { readFile } from "node:fs/promises";
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,9 +21,8 @@ vi.mock("./telegram-group-administration-repository.js", () => ({
   },
 }));
 
-import manageTelegramGroup from "../tools/manage_telegram_group.js";
-
-const INSTRUCTIONS_PATH = new URL("../instructions.md", import.meta.url);
+import manageTelegramGroup from "./tools/manage_telegram_group.js";
+import { modeInstructions } from "./prompt/mode-instructions.js";
 
 function context(): ToolContext {
   const caller = {
@@ -105,10 +103,10 @@ describe("manage_telegram_group.status", () => {
     expect(approvalFor({ action: "register" })).toBe("user-approval");
   });
 
-  it("requires status before replacing an unknown current policy", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+  it("requires status before replacing an unknown current policy", () => {
+    const instructions = modeInstructions({ environment: "private" });
 
-    expect(instructions).toContain("Перед `update_policy` сначала вызови `manage_telegram_group`");
+    expect(instructions).toContain("Перед `update_policy` сначала вызови");
     expect(instructions).toContain("`{\"action\":\"status\"}`");
     expect(instructions).toContain("команду `/status`");
     expect(instructions).toContain("одним сообщением");

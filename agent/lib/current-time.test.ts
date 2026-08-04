@@ -24,7 +24,7 @@ vi.mock("./reminders/reminder-context.js", () => ({
   requireReminderAuthorization: dependencies.requireReminderAuthorization,
 }));
 
-import getCurrentTime from "../tools/get_current_time.js";
+import getCurrentTime from "./tools/get_current_time.js";
 import { formatCurrentTimeContext } from "./current-time.js";
 
 const context = { callId: "call-1" } as ToolContext;

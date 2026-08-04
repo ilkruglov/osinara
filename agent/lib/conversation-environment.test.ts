@@ -2,17 +2,15 @@
  * Conversation environment resolution tests.
  *
  * Constructs covered:
- * - `resolveConversationEnvironment`: selects a trust-zone profile from current verified auth.
- * - `conversationEnvironmentInstructions`: adds model policy only to external trust zones.
+ * - `resolveConversationEnvironment`: selects a trust zone from current verified auth only.
  * - Contradictory scopes and durable initiator metadata fail closed.
+ *
+ * Prompt composition for each trust zone is covered by `prompt/mode-instructions.test.ts`.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
 import { describe, expect, it } from "vitest";
 
-import {
-  conversationEnvironmentInstructions,
-  resolveConversationEnvironment,
-} from "./conversation-environment.js";
+import { resolveConversationEnvironment } from "./conversation-environment.js";
 
 function caller(attributes: SessionAuthContext["attributes"]): SessionAuthContext {
   return {
@@ -68,33 +66,4 @@ describe("resolveConversationEnvironment", () => {
     expect(() => resolveConversationEnvironment({ current: null, initiator }))
       .toThrowError(/AGENT_CONVERSATION_ENVIRONMENT_INVALID/);
   });
-});
-
-describe("conversationEnvironmentInstructions", () => {
-  it("integrates the external model policy for an external group", () => {
-    const environment = resolveConversationEnvironment(auth({
-      groupType: "external",
-      memoryScopes: ["group"],
-      telegramChatType: "supergroup",
-    }));
-
-    expect(conversationEnvironmentInstructions(environment)).toContain(
-      "<external_group_model_policy>",
-    );
-    expect(conversationEnvironmentInstructions(environment)).not.toMatch(
-      /Bash, сеть, tools volume/iu,
-    );
-    expect(conversationEnvironmentInstructions(environment)).not.toMatch(
-      /документы и медиа[^.]+не передаются и недоступны/iu,
-    );
-  });
-
-  it.each(["private", "family"] as const)(
-    "does not integrate the external model policy into the %s profile",
-    (environment) => {
-      expect(conversationEnvironmentInstructions(environment)).not.toContain(
-        "<external_group_model_policy>",
-      );
-    },
-  );
 });

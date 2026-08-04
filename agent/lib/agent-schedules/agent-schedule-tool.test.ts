@@ -32,7 +32,7 @@ vi.mock("./agent-schedule-repository.js", () => ({
   },
 }));
 
-import manageAgentSchedule from "../../tools/manage_agent_schedule.js";
+import manageAgentSchedule from "../tools/manage_agent_schedule.js";
 
 const context = { callId: "call-1" } as ToolContext;
 const validDailyCreatePayload = {

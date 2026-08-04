@@ -20,7 +20,7 @@ vi.mock("./memory-repository.js", () => ({
   memoryRepository: { delete: deleteMemory, update: updateMemory },
 }));
 
-import manageMemory from "../tools/manage_memory.js";
+import manageMemory from "./tools/manage_memory.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const context = { callId: "call-1" } as ToolContext;
