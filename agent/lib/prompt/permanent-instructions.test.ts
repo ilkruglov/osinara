@@ -67,6 +67,10 @@ describe("permanent instructions", () => {
     expect(instructions).toContain("# Rich Telegram presentation");
     expect(instructions).toContain("<telegram-reaction>");
     expect(instructions).toContain("не добавляй никакого текста");
+    expect(instructions).toContain("`❤`");
+    expect(instructions).toContain("`🤣`");
+    expect(instructions).toContain("`🖕`");
+    expect(instructions).toContain("Не используй `🖕` для критики");
   });
 
   it("stays materially smaller than the mode-agnostic plus mode-specific whole", async () => {

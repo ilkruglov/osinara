@@ -26,17 +26,21 @@ describe("completedTelegramOutput", () => {
     ).toEqual({ kind: "message", message: "Готовый ответ" });
   });
 
-  it.each(["👍", "👎", "👌"])("parses the allowlisted %s reaction without visible text", (emoji) => {
-    expect(
-      completedTelegramOutput({
-        finishReason: "stop",
-        message: `\n<telegram-reaction>${emoji}</telegram-reaction>\n`,
-      }),
-    ).toEqual({ emoji, kind: "reaction" });
-  });
+  it.each(["👍", "👎", "👌", "❤", "🤣", "🎉", "😢", "👀", "🖕"])(
+    "parses the allowlisted %s reaction without visible text",
+    (emoji) => {
+      expect(
+        completedTelegramOutput({
+          finishReason: "stop",
+          message: `\n<telegram-reaction>${emoji}</telegram-reaction>\n`,
+        }),
+      ).toEqual({ emoji, kind: "reaction" });
+    },
+  );
 
   it.each([
     "<telegram-reaction>🔥</telegram-reaction>",
+    "<telegram-reaction>❤️</telegram-reaction>",
     "Хорошо <telegram-reaction>👌</telegram-reaction>",
     "<telegram-reaction>👍</telegram-reaction> Молчу",
     "<telegram-reaction></telegram-reaction>",

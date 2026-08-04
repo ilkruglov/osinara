@@ -11,7 +11,17 @@ import type { TelegramHandle } from "eve/channels/telegram";
 
 import { AppError } from "./app-error.js";
 
-const TELEGRAM_MESSAGE_REACTION_EMOJIS = ["👍", "👎", "👌"] as const;
+const TELEGRAM_MESSAGE_REACTION_EMOJIS = [
+  "👍",
+  "👎",
+  "👌",
+  "❤",
+  "🤣",
+  "🎉",
+  "😢",
+  "👀",
+  "🖕",
+] as const;
 const TELEGRAM_MESSAGE_ID_PATTERN = /^[1-9]\d*$/u;
 const TELEGRAM_REACTION_DECLINED_STATUSES = new Set([400, 403]);
 

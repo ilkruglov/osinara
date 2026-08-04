@@ -75,7 +75,7 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      ["remember", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      ["load_skill", "remember", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
     );
     expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
       familyId: "family-1",
@@ -110,7 +110,7 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      [...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      ["load_skill", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining("AGENT_GROUP_TOOL_POLICY_LOOKUP_FAILED"),
@@ -124,7 +124,7 @@ describe("dynamic capability resolver", () => {
     const surface = await resolve(null);
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      [...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      ["load_skill", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining("AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID"),

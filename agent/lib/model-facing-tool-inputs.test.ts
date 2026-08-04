@@ -72,6 +72,7 @@ vi.mock("./telegram-group-administration-repository.js", () => ({
     registerGroup: toolCalls.registerGroup,
     removeRegistration: toolCalls.removeRegistration,
     updatePolicy: vi.fn(),
+    updateSkills: vi.fn(),
   },
 }));
 vi.mock("./workspaces/workspace-context.js", () => ({

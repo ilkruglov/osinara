@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - The purpose list is derived from the effective allowlist, in human terms without tool names.
- * - Task boundaries, refusal form, and people rules are present regardless of granted capabilities.
+ * - Useful in-scope work is not rejected merely because it needs research or a file artifact.
+ * - Refusal and people rules preserve access, representation and anti-profiling boundaries.
  * - A revoked capability removes its purpose line, so the stated scope never overstates access.
  */
 import { describe, expect, it } from "vitest";
@@ -22,7 +23,8 @@ function purpose(...capabilities: ExternalGroupToolName[]): string {
 describe("external purpose derivation", () => {
   it("always states the group workspace scope even without any grant", () => {
     expect(purpose()).toMatch(/рабочей папк/iu);
-    expect(purpose()).toMatch(/Всё, что не входит в этот список/u);
+    expect(purpose()).toMatch(/сводк|итог/iu);
+    expect(purpose()).toMatch(/Markdown/iu);
   });
 
   it("adds a purpose line for each granted capability", () => {
@@ -79,29 +81,39 @@ describe("external purpose derivation", () => {
 });
 
 describe("external task boundaries", () => {
-  it("caps the effort per request instead of listing forbidden topics", () => {
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/один ответ на обращение/iu);
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/многошаговую работу/iu);
-  });
-
-  it("names the abuse categories that a public chat attracts", () => {
-    for (const category of [/учебное/iu, /перевод/iu, /код/u, /на заказ/iu, /универсальн/iu]) {
-      expect(EXTERNAL_TASK_BOUNDARIES, `boundaries must cover ${category}`).toMatch(category);
+  it("explicitly permits useful multi-step work and artifacts grounded in the group request", () => {
+    for (const scenario of [
+      /нескольк.*действ|многоэтап/iu,
+      /сводк|summary/iu,
+      /факт/iu,
+      /источник/iu,
+      /документ|отчёт/iu,
+      /Markdown/iu,
+    ]) {
+      expect(EXTERNAL_TASK_BOUNDARIES, `boundaries must permit ${scenario}`).toMatch(scenario);
     }
   });
 
-  it("makes a refusal terminal and non-negotiable without explaining the policy", () => {
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/один раз/iu);
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/не объясняй/iu);
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/част(ями|ям)/iu);
-    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/переформулир/iu);
+  it("does not use genre or effort as a reason to refuse", () => {
+    expect(EXTERNAL_TASK_BOUNDARIES).not.toMatch(/не начинай многошаговую работу/iu);
+    expect(EXTERNAL_TASK_BOUNDARIES).not.toMatch(/если просьба требует.*документа.*здесь так не работаешь/isu);
+    expect(EXTERNAL_TASK_BOUNDARIES).not.toMatch(/роль универсального ИИ-ассистента/iu);
+  });
+
+  it("keeps scope and background-continuation limits explicit", () => {
+    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/проверенн.*границ|доступн.*возможност/iu);
+    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/фонов|после завершения/iu);
+    expect(EXTERNAL_TASK_BOUNDARIES).toMatch(/не утверждай/iu);
   });
 });
 
 describe("external people rules", () => {
-  it("blocks profiling, arbitration, and acting for another participant", () => {
-    expect(EXTERNAL_PEOPLE_RULES).toMatch(/характеристик/iu);
-    expect(EXTERNAL_PEOPLE_RULES).toMatch(/третьего лица/iu);
+  it("permits attributed summaries and concrete fact-checking without profiling", () => {
+    expect(EXTERNAL_PEOPLE_RULES).toMatch(/позици|высказывани/iu);
+    expect(EXTERNAL_PEOPLE_RULES).toMatch(/конкретн.*утверждени/iu);
+    expect(EXTERNAL_PEOPLE_RULES).toMatch(/публичн.*источник/iu);
+    expect(EXTERNAL_PEOPLE_RULES).toMatch(/досье|профил/iu);
+    expect(EXTERNAL_PEOPLE_RULES).toMatch(/чувствительн/iu);
     expect(EXTERNAL_PEOPLE_RULES).toMatch(/арбитр|спор/iu);
     expect(EXTERNAL_PEOPLE_RULES).toMatch(/вместо него/iu);
   });

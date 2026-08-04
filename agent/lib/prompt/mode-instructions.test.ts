@@ -156,21 +156,23 @@ describe("mode instruction anchors", () => {
     expect(markdown).toContain("не угадывай");
   });
 
-  it("gives the external mode an explicit scope, effort ceiling, and people policy", () => {
-    const markdown = external("web_search");
+  it("gives the external mode a useful-work scope and people policy", () => {
+    const markdown = external("list_group_history", "send_workspace_file", "web_search");
 
     expect(markdown).toContain("## Назначение в этом чате");
     expect(markdown).toContain("## Границы задач");
     expect(markdown).toContain("## Участники");
+    expect(markdown).toMatch(/сводк|summary/iu);
+    expect(markdown).toMatch(/факт/iu);
+    expect(markdown).toContain("Markdown");
+    expect(markdown).toContain("send_workspace_file");
   });
 
-  it("keeps the public-chat effort ceiling out of trusted modes", () => {
-    // Trusted zones exist for exactly the long multi-step work the public ceiling forbids, so
-    // leaking it there would contradict the progress-update and document rules.
+  it("keeps external-group task boundaries out of trusted modes", () => {
+    // Group-specific scope guidance must not leak into trusted modes.
     for (const markdown of [privateMode, familyMode]) {
       expect(markdown).not.toContain("## Границы задач");
-      expect(markdown).not.toContain("Один ответ на обращение");
-      expect(markdown).not.toContain("роль универсального ИИ-ассистента");
+      expect(markdown).not.toContain("Релевантность определяется текущей явной просьбой");
     }
   });
 
