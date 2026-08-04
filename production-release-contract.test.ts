@@ -120,6 +120,7 @@ describe("production container contract", () => {
     expect(migrate).toContain("restart: \"no\"");
     expect(migrate).toContain(".runtime/scripts/migrate.js");
     expect(agent).toContain("healthcheck:");
+    expect(agent).toContain("retries: 72");
     expect(edge).toContain("healthcheck:");
     expect(edge).toContain('"127.0.0.1:8082:80"');
 
@@ -228,6 +229,7 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("compose.production.yaml");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("--draft");
+    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--generate-notes/);
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
     expect(workflow).toContain("--clobber");
