@@ -245,7 +245,10 @@ export function createDockerSandboxEngine(input: {
             JSON.stringify(FILE_UPLOAD_STAGING_DIRECTORY),
         });
         if (directoryResult.exitCode !== 0) {
-          throw new Error(`AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: ${directoryResult.stderr}`);
+          throw new Error(
+            "AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: " +
+            `Не удалось создать каталог для файла. ${directoryResult.stderr}`,
+          );
         }
 
         // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME`. Upload to
@@ -254,20 +257,28 @@ export function createDockerSandboxEngine(input: {
         try {
           await writeSingleFileArchive(container, stagingPath, content);
           const moveResult = await executeSandboxProcess(input.docker, container, {
-            command: `mv -- ${JSON.stringify(stagingPath)} ${JSON.stringify(resolved)}`,
+            command: `mv -T -- ${JSON.stringify(stagingPath)} ${JSON.stringify(resolved)}`,
           });
           if (moveResult.exitCode !== 0) {
             throw new Error(
-              `AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: ${moveResult.stderr}`,
+              "AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: " +
+              `Не удалось записать файл в sandbox. ${moveResult.stderr}`,
             );
           }
           committed = true;
         } finally {
           if (!committed) {
             try {
-              await executeSandboxProcess(input.docker, container, {
+              const cleanupResult = await executeSandboxProcess(input.docker, container, {
                 command: `rm -f -- ${JSON.stringify(stagingPath)}`,
               });
+              if (cleanupResult.exitCode !== 0) {
+                console.error("Sandbox staged file cleanup failed", {
+                  exitCode: cleanupResult.exitCode,
+                  stagingPath,
+                  stderr: cleanupResult.stderr,
+                });
+              }
             } catch (cleanupError) {
               console.error("Sandbox staged file cleanup failed", { cleanupError, stagingPath });
             }
