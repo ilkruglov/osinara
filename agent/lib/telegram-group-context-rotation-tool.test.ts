@@ -86,11 +86,45 @@ describe("manage_telegram_group.start_new_context", () => {
     expect(approvalFor({ action: "start_new_context" })).toBe("not-applicable");
   });
 
+  it("ignores known fields that MiniMax materializes beside the exact rotation target", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "start_new_context",
+      messageMode: "owner_only",
+      registration: {
+        messageMode: "all",
+        telegramChatId: "-1009999999999",
+        title: "Не используется",
+        toolAllowlist: [],
+        type: "external",
+      },
+      telegramChatId: "-1001234567890",
+      toolAllowlist: ["search_memories"],
+    }, context())).resolves.toMatchObject({
+      newContextStartsWithNextMessage: true,
+      telegramChatId: "-1001234567890",
+    });
+    expect(requestGroupSessionRotation).toHaveBeenCalledWith(expect.objectContaining({
+      telegramChatId: "-1001234567890",
+    }));
+  });
+
+  it("returns a corrective status-first instruction instead of inviting a chat ID guess", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "start_new_context",
+      telegramChatId: "Остриков пилит агентов",
+    }, context())).rejects.toThrowError(
+      /Не угадывайте ID.*\{"action":"status"\}.*\{"action":"start_new_context","telegramChatId":"-100/u,
+    );
+    expect(requestGroupSessionRotation).not.toHaveBeenCalled();
+  });
+
   it("instructs the model to resolve the registered chat before rotating it", () => {
     const instructions = modeInstructions({ environment: "private" });
 
-    expect(instructions).toContain('`{"action":"start_new_context","telegramChatId":"-100..."}`');
+    expect(instructions).toContain('`{"action":"status"}`');
     expect(instructions).toContain("сначала вызови `status`");
+    expect(instructions).toContain("скопируй `startNewContextInput`");
+    expect(instructions).toContain("не заполняй optional-поля других actions");
     expect(instructions).toContain("всех forum-тем");
     expect(instructions).toContain("Если запрос указывает другую группу, не вызывай `start_new_context`");
   });

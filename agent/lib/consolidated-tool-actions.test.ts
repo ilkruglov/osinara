@@ -78,6 +78,7 @@ describe("consolidated tool action schemas", () => {
 
   it("publishes the complete external-group policy update fields in the model-facing schema", () => {
     const schema = schemaOf(manageTelegramGroup);
+    const jsonSchema = jsonSchemaOf(manageTelegramGroup);
 
     expect(schema.safeParse({
       action: "update_policy",
@@ -85,6 +86,11 @@ describe("consolidated tool action schemas", () => {
       telegramChatId: "-1001234567890",
       toolAllowlist: ["search_memories"],
     }).success).toBe(true);
+    const properties = jsonSchema.properties as Record<string, { description?: string }>;
+    expect(properties.action?.description).toContain("Сначала выберите ровно один action");
+    expect(properties.registration?.description).toContain("только при action=register");
+    expect(properties.telegramChatId?.description).toContain("status не передавайте");
+    expect(properties.toolAllowlist?.description).toContain("только при action=update_policy");
   });
 
   it("publishes an object-shaped agent schedule schema for model transports", () => {

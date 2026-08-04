@@ -244,7 +244,9 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       if (!group) {
         throw new AppError(
           "AGENT_GROUP_NOT_FOUND",
-          "Группа не найдена в вашей семье. Сначала проверьте список зарегистрированных групп",
+          "Группа с таким telegramChatId не зарегистрирована в вашей семье. " +
+            "Вызовите manage_telegram_group ровно с {\"action\":\"status\"}, " +
+            "выберите нужную группу и повторите готовый startNewContextInput из результата",
         );
       }
 
