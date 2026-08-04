@@ -21,7 +21,6 @@ describe("external group tool catalog", () => {
     expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
       "ask_question",
       "bash",
-      "load_skill",
       "todo",
       "web_fetch",
       "web_search",

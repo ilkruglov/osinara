@@ -93,7 +93,7 @@ describe("trusted mode tool surfaces", () => {
 describe("external group tool surface", () => {
   it("emits nothing but framework denials without a grant", () => {
     expect(names({ capabilities: new Set(), environment: "external" })).toEqual(
-      [...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      [...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill"].sort(),
     );
   });
 
@@ -140,7 +140,7 @@ describe("external group tool surface", () => {
   it("denies every framework built-in an external group must not reach", async () => {
     const surface = buildModeToolSurface({ capabilities: new Set(), environment: "external" });
 
-    for (const toolName of ["ask_question", "bash", "load_skill", "todo", "web_fetch"]) {
+    for (const toolName of ["ask_question", "bash", "todo", "web_fetch"]) {
       await expect(
         surface[toolName]!.execute({}, {} as never),
         `${toolName} must be denied`,
@@ -177,6 +177,6 @@ describe("external group tool surface", () => {
     expect(names({
       capabilities: new Set(["unknown_tool"] as unknown as ExternalGroupToolName[]),
       environment: "external",
-    })).toEqual([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort());
+    })).toEqual([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill"].sort());
   });
 });

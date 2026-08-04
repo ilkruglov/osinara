@@ -4,10 +4,11 @@
  * Constructs:
  * - `agent/tools` holds only the dynamic capability resolver; implementations live in lib.
  * - Exact application tool-module allowlist after CRUD consolidation.
- * - Exact native skill package directories, with no TypeScript pseudo-skills.
- * - Opt-in tone skills advertise explicit-request activation only.
+ * - Exact static package directories plus the single dynamic policy resolver.
+ * - The opt-in tone skill lives outside static Eve discovery.
  */
 import { readFile, readdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -68,7 +69,6 @@ const EXPECTED_SKILL_DIRECTORIES = [
   "gws-sheets-append",
   "gws-sheets-read",
   "pdf",
-  "pohuy",
   "t-invest",
   "xlsx",
 ] as const;
@@ -95,7 +95,7 @@ describe("agent capability surface", () => {
     expect(toolModules).toEqual([...EXPECTED_TOOL_MODULES]);
   });
 
-  it("keeps skills as native Eve packages only", async () => {
+  it("keeps static packages separate from the dynamic policy resolver", async () => {
     const entries = await readdir(`${AGENT_ROOT}/skills`, { withFileTypes: true });
     const skillDirectories = entries
       .filter((entry) => entry.isDirectory())
@@ -107,22 +107,22 @@ describe("agent capability surface", () => {
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
-    expect(skillFiles).toEqual([]);
+    expect(skillFiles).toEqual(["scoped.ts"]);
   });
 
-  it("advertises the opt-in profanity skill as explicit-request only", async () => {
-    const skill = await readFile(`${AGENT_ROOT}/skills/pohuy/SKILL.md`, "utf8");
-    const description = /^---\n([\s\S]*?)\n---/u.exec(skill)?.[1] ?? "";
+  it("keeps the opt-in profanity package outside static discovery", async () => {
+    const packageRoot = resolve(AGENT_ROOT, "../config/group-skills/pohuy");
+    const skill = await readFile(`${packageRoot}/instructions.md`, "utf8");
+    const definitions = await readFile(
+      `${AGENT_ROOT}/lib/group-skills/group-skill-definitions.ts`,
+      "utf8",
+    );
 
-    // The description sits in every system prompt, so it must not self-activate on a user simply
-    // swearing or being annoyed: only an explicit request may load this skill.
-    expect(description).toContain("только по явной просьбе пользователя");
-    expect(description).toContain("Не загружай, если пользователь просто раздражён");
-    expect(description).not.toContain("та мне похуй");
-    expect(description).not.toContain("заебал");
+    // Activation guidance is emitted only when policy grants this dynamic skill.
+    expect(definitions).toContain("Загружай только по явной просьбе");
 
-    // The activation step reads sibling references, so they must ship with the package.
-    const references = await readdir(`${AGENT_ROOT}/skills/pohuy/references`);
+    // The dynamic definition ships all sibling references with the sandbox package.
+    const references = await readdir(`${packageRoot}/references`);
     expect(references.sort()).toEqual(["ontologia.md", "sceny.md", "slovar.md"]);
 
     // The vendored copy must not try to reach the upstream repository from the sandbox.

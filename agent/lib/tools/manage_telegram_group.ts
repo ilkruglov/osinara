@@ -2,7 +2,7 @@
  * Consolidated Telegram group administration tool.
  *
  * Export:
- * - `manage_telegram_group`: reads status, rotates context, registers, removes, or updates policy.
+ * - `manage_telegram_group`: reads status and manages registration, context and policies.
  *
  * Key constructs:
  * - Object-shaped model schema avoids root and nested JSON Schema unions.
@@ -13,6 +13,10 @@ import { z } from "zod";
 
 import { requirePrivateTelegramOwner } from "../family-context.js";
 import type { RegisteredGroupType } from "../family-access.js";
+import {
+  GROUP_SAFE_SKILL_NAMES,
+  isGroupSafeSkillName,
+} from "../group-skills/group-skill-catalog.js";
 import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
 import {
   GROUP_TITLE_MAX_LENGTH,
@@ -36,11 +40,25 @@ import {
 } from "../tool-input-validation.js";
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_GROUP_INPUT_INVALID";
-const TOOL_ACTIONS = ["register", "remove", "start_new_context", "status", "update_policy"] as const;
+const TOOL_ACTIONS = [
+  "register",
+  "remove",
+  "start_new_context",
+  "status",
+  "update_policy",
+  "update_skills",
+] as const;
 const GROUP_TYPES = ["family_private", "external"] as const;
 const STANDARD_MESSAGE_MODES = ["addressed_only", "all"] as const;
 const EXTERNAL_MESSAGE_MODES = [...STANDARD_MESSAGE_MODES, "owner_only"] as const;
-const TOP_LEVEL_FIELDS = ["action", "messageMode", "registration", "telegramChatId", "toolAllowlist"] as const;
+const TOP_LEVEL_FIELDS = [
+  "action",
+  "messageMode",
+  "registration",
+  "skillAllowlist",
+  "telegramChatId",
+  "toolAllowlist",
+] as const;
 const REGISTRATION_FIELDS = ["messageMode", "telegramChatId", "title", "toolAllowlist", "type"] as const;
 
 const registrationSchema = z.object({
@@ -53,7 +71,7 @@ const registrationSchema = z.object({
 
 const manageTelegramGroupSchema = z.object({
   action: z.string().optional().describe(
-    "Сначала выберите ровно один action: status, start_new_context, register, update_policy или remove.",
+    "Сначала выберите ровно один action: status, start_new_context, register, update_policy, update_skills или remove.",
   ),
   messageMode: z.string().optional().describe(
     "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
@@ -61,8 +79,11 @@ const manageTelegramGroupSchema = z.object({
   registration: registrationSchema.optional().describe(
     "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
   ),
+  skillAllowlist: z.array(z.string()).optional().describe(
+    `Передавайте только при action=update_skills. Полный список: ${GROUP_SAFE_SKILL_NAMES.join(", ")}; пустой массив отзывает все skills.`,
+  ),
   telegramChatId: z.string().optional().describe(
-    "Точный отрицательный ID обязателен для start_new_context, update_policy и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
+    "Точный отрицательный ID обязателен для start_new_context, update_policy, update_skills и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
   ),
   toolAllowlist: z.array(z.string()).optional().describe(
     "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
@@ -128,6 +149,28 @@ function requireToolAllowlist(raw: unknown, groupType: RegisteredGroupType): str
   return requireExternalToolAllowlist(raw, groupType);
 }
 
+function requireSkillAllowlist(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    toolInputError(
+      INPUT_ERROR_CODE,
+      `Для action=update_skills передайте skillAllowlist массивом. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}`,
+    );
+  }
+  const names = raw.map((name) => {
+    if (typeof name !== "string" || !isGroupSafeSkillName(name)) {
+      toolInputError(
+        INPUT_ERROR_CODE,
+        `Недопустимый skillAllowlist item. Используйте только: ${GROUP_SAFE_SKILL_NAMES.join(", ")}`,
+      );
+    }
+    return name;
+  });
+  if (new Set(names).size !== names.length) {
+    toolInputError(INPUT_ERROR_CODE, "skillAllowlist не должен содержать повторы");
+  }
+  return names;
+}
+
 function requireRegistration(input: Record<string, unknown>) {
   const registration = requiredObjectField(
     input,
@@ -163,8 +206,8 @@ function requireRegistration(input: Record<string, unknown>) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить политику внешней группы или удалить регистрацию и связанные данные.",
-  "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полный toolAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
+  "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить tool/skill policy или удалить регистрацию и связанные данные.",
+  "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полные toolAllowlist и skillAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
   "Некоторые model transports материализуют остальные известные optional-поля общей schema. Для read-only status и недеструктивного start_new_context tool безопасно игнорирует такие поля; всё равно не заполняй их и никогда не угадывай telegramChatId.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
   "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
@@ -175,6 +218,7 @@ const TOOL_DESCRIPTION = [
   "Register payload: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}.",
   "External registration требует toolAllowlist: {\"type\":\"external\",...,\"toolAllowlist\":[\"search_memories\"]}.",
   "Update_policy payload содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
+  `Update_skills заменяет полный allowlist безопасных skills и применяется со следующей реплики группы без сброса контекста. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}. Для отзыва передай пустой массив.`,
   "Start_new_context payload: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}.",
   "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
 ].join(" ");
@@ -197,6 +241,7 @@ export default defineTool({
         requestedBy: owner.userId,
       });
       return {
+        availableSafeSkills: [...GROUP_SAFE_SKILL_NAMES],
         groups: groups.map((group) => {
           if (group.type === "family_private") {
             return {
@@ -270,6 +315,29 @@ export default defineTool({
         policyUpdated: true,
         telegramChatId,
         toolAllowlist,
+      };
+    }
+    if (action === "update_skills") {
+      requireOnlyFields(
+        payload,
+        ["action", "telegramChatId", "skillAllowlist"],
+        "action=update_skills",
+        INPUT_ERROR_CODE,
+      );
+      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
+      const skillAllowlist = requireSkillAllowlist(payload.skillAllowlist);
+      const result = await telegramGroupAdministrationRepository.updateSkills({
+        familyId: owner.familyId,
+        requestedBy: owner.userId,
+        skillAllowlist,
+        telegramChatId,
+      });
+      return {
+        groupId: result.groupId,
+        skillAllowlist,
+        skillsUpdated: true,
+        takesEffect: "next_group_turn" as const,
+        telegramChatId,
       };
     }
     if (action === "remove") {

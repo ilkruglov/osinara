@@ -36,6 +36,20 @@ describe("setTelegramMessageReaction", () => {
     });
   });
 
+  it("delivers an expressive allowlisted reaction without changing the transport shape", async () => {
+    const target = telegramHandle({ ok: true, result: true });
+
+    await expect(
+      setTelegramMessageReaction(target.telegram, "43", "🤣"),
+    ).resolves.toBe("applied");
+    expect(target.request).toHaveBeenCalledWith("setMessageReaction", {
+      chat_id: "-100123",
+      is_big: false,
+      message_id: 43,
+      reaction: [{ emoji: "🤣", type: "emoji" }],
+    });
+  });
+
   it("rejects an invalid inbound message id before calling Telegram", async () => {
     const target = telegramHandle({ ok: true, result: true });
 

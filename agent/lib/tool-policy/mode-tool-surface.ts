@@ -16,6 +16,7 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
 import exportMemory from "../tools/export_memory.js";
 import getCurrentTime from "../tools/get_current_time.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
@@ -170,7 +171,11 @@ function allowedMemoryTool(): AnyToolDefinition {
 }
 
 function buildExternalToolSurface(allowed: ReadonlySet<ExternalGroupToolName>): ToolMap {
-  const surface: Record<string, AnyToolDefinition> = {};
+  const surface: Record<string, AnyToolDefinition> = {
+    // Eve decides whether to advertise this built-in from the turn's dynamic skill set. The wrapper
+    // independently enforces the live database grant at execution time.
+    load_skill: externalGroupLoadSkillTool,
+  };
 
   // Granted application capabilities are re-checked at execution against the live policy.
   for (const capability of allowed) {
