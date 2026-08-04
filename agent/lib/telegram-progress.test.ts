@@ -2,18 +2,18 @@
  * Telegram model-message delivery policy tests.
  *
  * Constructs covered:
- * - `completedTelegramMessage`: delivers only terminal user-visible assistant text.
+ * - `completedTelegramOutput`: separates visible text from terminal reaction directives.
  * - Pre-tool assistant chunks remain hidden because Telegram cannot render them ephemerally.
  * - Empty model steps remain invisible to avoid technical Telegram noise.
  */
 import { describe, expect, it } from "vitest";
 
-import { completedTelegramMessage } from "./telegram-progress.js";
+import { completedTelegramOutput } from "./telegram-progress.js";
 
-describe("completedTelegramMessage", () => {
+describe("completedTelegramOutput", () => {
   it("does not deliver model-authored pre-tool text as a separate Telegram message", () => {
     expect(
-      completedTelegramMessage({
+      completedTelegramOutput({
         finishReason: "tool-calls",
         message: "Собрал информацию. Теперь формирую документ.",
       }),
@@ -22,8 +22,27 @@ describe("completedTelegramMessage", () => {
 
   it("trims surrounding whitespace from a delivered message", () => {
     expect(
-      completedTelegramMessage({ finishReason: "stop", message: "\n\nГотовый ответ  " }),
-    ).toBe("Готовый ответ");
+      completedTelegramOutput({ finishReason: "stop", message: "\n\nГотовый ответ  " }),
+    ).toEqual({ kind: "message", message: "Готовый ответ" });
+  });
+
+  it.each(["👍", "👎", "👌"])("parses the allowlisted %s reaction without visible text", (emoji) => {
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: `\n<telegram-reaction>${emoji}</telegram-reaction>\n`,
+      }),
+    ).toEqual({ emoji, kind: "reaction" });
+  });
+
+  it.each([
+    "<telegram-reaction>🔥</telegram-reaction>",
+    "Хорошо <telegram-reaction>👌</telegram-reaction>",
+    "<telegram-reaction>👍</telegram-reaction> Молчу",
+    "<telegram-reaction></telegram-reaction>",
+  ])("rejects malformed or mixed reaction output: %s", (message) => {
+    expect(() => completedTelegramOutput({ finishReason: "stop", message }))
+      .toThrowError(/AGENT_TELEGRAM_REACTION_DIRECTIVE_INVALID/u);
   });
 
   it.each([
@@ -32,6 +51,6 @@ describe("completedTelegramMessage", () => {
     { finishReason: "stop", message: null },
     { finishReason: "stop" },
   ])("does not expose an empty technical step %#", (data) => {
-    expect(completedTelegramMessage(data)).toBeNull();
+    expect(completedTelegramOutput(data)).toBeNull();
   });
 });

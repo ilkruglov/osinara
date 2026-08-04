@@ -392,6 +392,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
             externalAllowlist?.has("inspect_workspace_image") === true,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
+          replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
+          replyToSequenceId: inboundTimeline.replyToSequenceId,
         })
       : null;
     const principalId = access.userId ?? `telegram:${sender.id}`;

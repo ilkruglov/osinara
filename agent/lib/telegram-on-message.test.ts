@@ -573,9 +573,50 @@ describe("createTelegramMessageHandler", () => {
       includeAttachmentReferences: false,
       messageText: `@${BOT_USERNAME} подведи итог`,
       messageThreadId: "42",
+      replyTargetUnavailable: false,
+      replyToSequenceId: null,
     });
     expect(result?.message).toContain("предыдущая реплика");
     expect(result?.context?.join("\n")).not.toContain("предыдущая реплика");
+  });
+
+  it("passes the exact current reply relationship into the durable group envelope", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000013",
+      replyToAgent: false,
+      replyTargetUnavailable: false,
+      replyToSequenceId: "8",
+      sequenceId: "13",
+      status: "inserted",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage(`@${BOT_USERNAME} ты видишь, на что я ответил?`),
+      messageId: "13",
+      replyToMessage: {
+        chat: { id: "group-101", title: "Группа", type: "group" as const },
+        from: { firstName: "Сергей", id: "telegram-202", isBot: false },
+        messageId: "8",
+      },
+    };
+
+    await handler(telegramContext().context, message);
+
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
+      currentEntryId: "00000000-0000-4000-8000-000000000013",
+      currentSequence: "13",
+      replyTargetUnavailable: false,
+      replyToSequenceId: "8",
+    }));
   });
 
   it("drops a duplicate all-mode delivery before authorization and model dispatch", async () => {

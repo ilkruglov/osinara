@@ -30,6 +30,8 @@ interface PrepareTelegramGroupTurnContextInput {
   includeAttachmentReferences: boolean;
   messageText: string;
   messageThreadId: string | null;
+  replyTargetUnavailable: boolean;
+  replyToSequenceId: string | null;
 }
 
 interface TelegramGroupTurnContextDependencies {
@@ -67,14 +69,23 @@ function durableTurnMessage(
   timeline: string | null,
   input: Pick<
     PrepareTelegramGroupTurnContextInput,
-    "currentSenderDisplayName" | "currentSenderUsername" | "messageText"
+    | "currentSenderDisplayName"
+    | "currentSenderUsername"
+    | "messageText"
+    | "replyTargetUnavailable"
+    | "replyToSequenceId"
   >,
 ): string {
+  if (input.replyTargetUnavailable && input.replyToSequenceId !== null) {
+    throw turnMessageError("reply_metadata_conflict");
+  }
   // The durable envelope retains speaker attribution without exposing Telegram identifiers.
   const timelinePrefix = timeline === null ? "" : `${timeline}\n\n`;
   const currentMessage = escapeUntrustedContextJson({
     senderDisplayName: input.currentSenderDisplayName,
     senderUsername: input.currentSenderUsername,
+    ...(input.replyTargetUnavailable ? { replyTargetUnavailable: true } : {}),
+    ...(input.replyToSequenceId === null ? {} : { replyToSequenceId: input.replyToSequenceId }),
     text: input.messageText,
   });
   return `${timelinePrefix}${CURRENT_MESSAGE_OPEN_TAG}\n${currentMessage}\n${CURRENT_MESSAGE_CLOSE_TAG}`;
@@ -126,6 +137,7 @@ export function createTelegramGroupTurnContextPreparer(
         }
       : await dependencies.journal.listIncremental({
           afterSequence: cursor,
+          anchorEntryId: input.currentEntryId,
           applicationSessionId: input.applicationSessionId,
           beforeSequence: input.currentSequence,
           groupId: input.groupId,
@@ -140,10 +152,20 @@ export function createTelegramGroupTurnContextPreparer(
       visibleEntries,
       TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
       page.omittedBeforeSequence,
+      input.replyToSequenceId,
     );
+    // A DB-resolved reply is usable only when its protected target survived model-context bounds.
+    const replyTargetIncluded = input.replyToSequenceId === null ||
+      timeline?.includes(`\n#${input.replyToSequenceId} [`) === true;
+    const replyToSequenceId = replyTargetIncluded ? input.replyToSequenceId : null;
+    const replyTargetUnavailable = input.replyTargetUnavailable || !replyTargetIncluded;
     return {
       cursorSequence: input.currentSequence,
-      durableMessage: durableTurnMessage(timeline, input),
+      durableMessage: durableTurnMessage(timeline, {
+        ...input,
+        replyTargetUnavailable,
+        replyToSequenceId,
+      }),
     };
   };
 }

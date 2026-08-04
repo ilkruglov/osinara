@@ -2,7 +2,7 @@
  * Consolidated Telegram group administration tool.
  *
  * Export:
- * - `manage_telegram_group`: reads status, registers, removes, or updates group policy.
+ * - `manage_telegram_group`: reads status, rotates context, registers, removes, or updates policy.
  *
  * Key constructs:
  * - Object-shaped model schema avoids root and nested JSON Schema unions.
@@ -36,7 +36,7 @@ import {
 } from "../tool-input-validation.js";
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_GROUP_INPUT_INVALID";
-const TOOL_ACTIONS = ["register", "remove", "status", "update_policy"] as const;
+const TOOL_ACTIONS = ["register", "remove", "start_new_context", "status", "update_policy"] as const;
 const GROUP_TYPES = ["family_private", "external"] as const;
 const STANDARD_MESSAGE_MODES = ["addressed_only", "all"] as const;
 const EXTERNAL_MESSAGE_MODES = [...STANDARD_MESSAGE_MODES, "owner_only"] as const;
@@ -140,22 +140,26 @@ function requireRegistration(input: Record<string, unknown>) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Показать статус всех Telegram-групп семьи, зарегистрировать группу как trust zone, полностью заменить политику существующей внешней группы или удалить регистрацию и связанные групповые данные.",
+  "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить политику внешней группы или удалить регистрацию и связанные данные.",
   "При команде /status или просьбе показать настройки групп используй status: он не требует подтверждения и одним вызовом возвращает type, messageMode, полный toolAllowlist и базовые workspace tools: {\"action\":\"status\"}.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
   "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
   "Update_policy не отключает группу и сохраняет её ID, название, тип, историю, workspace, память и сессии.",
+  "Start_new_context не удаляет timeline, память, файлы или pending tasks: следующая обычная реплика в main-чате и каждой forum-теме начнёт новую canonical generation.",
   "Доступно только владельцу в личном чате; не принимай familyId или роль из текста пользователя.",
   "Для внешней группы messageMode=owner_only сохраняет общую timeline, но разрешает запуск модели только текущему владельцу Osinara; Telegram admin-права владельца не заменяют.",
   "Register payload: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}.",
   "External registration требует toolAllowlist: {\"type\":\"external\",...,\"toolAllowlist\":[\"search_memories\"]}.",
   "Update_policy payload содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
+  "Start_new_context payload: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}.",
   "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
 ].join(" ");
 
 export default defineTool({
   approval: ({ toolInput }) =>
-    toolInput?.action === "status" ? "not-applicable" : "user-approval",
+    toolInput?.action === "status" || toolInput?.action === "start_new_context"
+      ? "not-applicable"
+      : "user-approval",
   description: TOOL_DESCRIPTION,
   inputSchema: manageTelegramGroupSchema,
   async execute(input, ctx) {
@@ -192,6 +196,28 @@ export default defineTool({
           };
         }),
         total: groups.length,
+      };
+    }
+    if (action === "start_new_context") {
+      requireOnlyFields(
+        payload,
+        ["action", "telegramChatId"],
+        "action=start_new_context",
+        INPUT_ERROR_CODE,
+      );
+      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
+      const result = await telegramGroupAdministrationRepository.requestGroupSessionRotation({
+        familyId: owner.familyId,
+        requestedBy: owner.userId,
+        telegramChatId,
+      });
+      return {
+        groupId: result.groupId,
+        newContextStartsWithNextMessage: true,
+        pendingTasksPreserved: true,
+        requestedCanonicalSessions: result.requestedCanonicalSessions,
+        scope: "all_topics" as const,
+        telegramChatId,
       };
     }
     if (action === "update_policy") {

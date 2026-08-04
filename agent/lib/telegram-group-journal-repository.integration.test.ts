@@ -468,6 +468,52 @@ describeWithDatabase("Telegram group journal repositories", () => {
     }]);
   });
 
+  it("includes the current reply target even when it predates an existing session cursor", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("current-reply-ancestry");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "addressed_only",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Внешняя группа",
+      toolAllowlist: [],
+      type: "external",
+    });
+    const target = message({ id: "81", text: "Почему используется эта модель?" });
+    await telegramGroupJournalRepository.record(group.groupId, target);
+    await telegramGroupJournalRepository.record(
+      group.groupId,
+      message({ id: "82", text: "уже обработано" }),
+    );
+    const current = await telegramGroupJournalRepository.record(group.groupId, {
+      ...message({ id: "83", text: "Ты видишь, на что я ответил?" }),
+      replyToMessage: {
+        chat: target.chat,
+        from: target.from,
+        messageId: target.messageId,
+      },
+    });
+
+    const incremental = await telegramGroupJournalRepository.listIncremental({
+      afterSequence: "2",
+      anchorEntryId: current.entryId,
+      applicationSessionId: "00000000-0000-4000-8000-000000000099",
+      beforeSequence: current.sequenceId,
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+
+    expect(current).toMatchObject({
+      replyTargetUnavailable: false,
+      replyToSequenceId: "1",
+    });
+    expect(incremental.entries).toMatchObject([{
+      contentText: "Почему используется эта модель?",
+      sequenceId: "1",
+    }]);
+  });
+
   it("captures an unobserved raw reply attachment without a second timeline entry", async () => {
     const { familyId, ownerId } = await createOwnedFamily("raw-reply-image");
     const group = await telegramGroupAdministrationRepository.registerGroup({
@@ -564,10 +610,25 @@ describeWithDatabase("Telegram group journal repositories", () => {
        FROM generate_series(1, $2) AS value`,
       [group.groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
     );
-    await telegramGroupJournalRepository.record(
-      group.groupId,
-      message({ id: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1), text: "новая" }),
+    await database().query(
+      `INSERT INTO telegram_group_message_ids (group_id, telegram_message_id, entry_id)
+       SELECT group_id, telegram_message_id, id
+       FROM telegram_group_messages
+       WHERE group_id = $1 AND sequence_id = 1`,
+      [group.groupId],
     );
+    const currentMessage = message({
+      id: String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1),
+      text: "новая",
+    });
+    const current = await telegramGroupJournalRepository.record(group.groupId, {
+      ...currentMessage,
+      replyToMessage: {
+        chat: currentMessage.chat,
+        from: currentMessage.from,
+        messageId: "1",
+      },
+    });
 
     const retained = await database().query<{ count: string; minimum: string }>(
       `SELECT count(*)::text AS count, min(telegram_message_id)::text AS minimum
@@ -584,6 +645,10 @@ describeWithDatabase("Telegram group journal repositories", () => {
       [group.groupId],
     );
     expect(newest.rows[0]?.maximum).toBe(String(TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES + 1));
+    expect(current).toMatchObject({
+      replyTargetUnavailable: true,
+      replyToSequenceId: null,
+    });
   });
 
   it("removes only a same-family group and cascades its journal and memory", async () => {

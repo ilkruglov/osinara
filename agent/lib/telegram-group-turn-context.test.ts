@@ -56,6 +56,8 @@ const input = {
   includeAttachmentReferences: true,
   messageText: "Что решили?",
   messageThreadId: null,
+  replyTargetUnavailable: false,
+  replyToSequenceId: null,
 };
 
 describe("Telegram group turn context", () => {
@@ -95,6 +97,7 @@ describe("Telegram group turn context", () => {
 
     expect(deps.journal.listIncremental).toHaveBeenCalledWith({
       afterSequence: "100",
+      anchorEntryId: "entry-105",
       applicationSessionId: "session-1",
       beforeSequence: "105",
       groupId: "group-1",
@@ -106,6 +109,85 @@ describe("Telegram group turn context", () => {
     if (!result.durableMessage) throw new Error("Test expected a durable group message");
     expect(result.durableMessage).toContain("Новое сообщение участника");
     expect(result.durableMessage.match(/Что решили\?/gu)).toHaveLength(1);
+  });
+
+  it("exposes the exact current reply and requests its ancestry for an existing session", async () => {
+    const deps = dependencies("100");
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [{ ...entry("8", "Почему используется эта модель?"), senderDisplayName: "Сергей" }],
+      omittedBeforeSequence: null,
+    });
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      currentEntryId: "00000000-0000-4000-8000-000000000013",
+      currentSequence: "13",
+      messageText: "Ты видишь, на что я ответил?",
+      replyToSequenceId: "8",
+    });
+
+    expect(deps.journal.listIncremental).toHaveBeenCalledWith(expect.objectContaining({
+      anchorEntryId: "00000000-0000-4000-8000-000000000013",
+    }));
+    expect(result.durableMessage).toContain('#8 [user] "Сергей"');
+    expect(result.durableMessage).toContain('"replyToSequenceId":"8"');
+  });
+
+  it("marks an unavailable current reply target instead of inviting a guess", async () => {
+    const deps = dependencies("100");
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      currentSequence: "101",
+      replyTargetUnavailable: true,
+    });
+
+    expect(result.durableMessage).toContain('"replyTargetUnavailable":true');
+    expect(result.durableMessage).not.toContain("replyToSequenceId");
+  });
+
+  it("retains the current reply target when unrelated recent context exceeds the character budget", async () => {
+    const deps = dependencies("7");
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [
+        entry("6", "Начало ветки"),
+        { ...entry("7", "Продолжение ветки"), replyToSequenceId: "6" },
+        { ...entry("8", "Точный target текущего ответа"), replyToSequenceId: "7" },
+        entry("9", "а".repeat(6_000)),
+        entry("10", "б".repeat(6_000)),
+        entry("11", "в".repeat(6_000)),
+      ],
+      omittedBeforeSequence: null,
+    });
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      currentSequence: "12",
+      replyToSequenceId: "8",
+    });
+
+    expect(result.durableMessage).toContain("#6 [user]");
+    expect(result.durableMessage).toContain("#7 [user]");
+    expect(result.durableMessage).toContain("#8 [user]");
+    expect(result.durableMessage).toContain('"replyToSequenceId":"8"');
+  });
+
+  it("marks a resolved database reply unavailable if its target cannot enter model context", async () => {
+    const deps = dependencies("7");
+    deps.journal.listIncremental.mockResolvedValue({ entries: [], omittedBeforeSequence: null });
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      currentSequence: "12",
+      replyToSequenceId: "8",
+    });
+
+    expect(result.durableMessage).toContain('"replyTargetUnavailable":true');
+    expect(result.durableMessage).not.toContain("replyToSequenceId");
   });
 
   it("keeps speaker attribution durable when there are no unseen group messages", async () => {

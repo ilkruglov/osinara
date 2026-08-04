@@ -235,6 +235,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
 
     const page = await telegramGroupJournalRepository.listIncremental({
       afterSequence: first.sequenceId,
+      anchorEntryId: current.entryId,
       applicationSessionId: session.id,
       beforeSequence: current.sequenceId,
       groupId,
@@ -270,6 +271,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
 
     const page = await telegramGroupJournalRepository.listIncremental({
       afterSequence: first.sequenceId,
+      anchorEntryId: current.entryId,
       applicationSessionId: session.id,
       beforeSequence: current.sequenceId,
       groupId,
@@ -317,6 +319,7 @@ describeWithDatabase("unified Telegram group timeline repository", () => {
 
     const page = await telegramGroupJournalRepository.listIncremental({
       afterSequence: cursor.sequenceId,
+      anchorEntryId: current.entryId,
       applicationSessionId: session.id,
       beforeSequence: current.sequenceId,
       groupId,

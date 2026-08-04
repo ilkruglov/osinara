@@ -9,6 +9,7 @@
 import type { PoolClient } from "pg";
 
 import {
+  SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
   SESSION_RETENTION_DAYS,
 } from "../../config.js";
 import { AppError } from "../app-error.js";
@@ -253,6 +254,14 @@ export const sessionRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      // Group-wide rotation and per-topic preparation share this short transaction lock, so an
+      // owner request cannot miss a canonical generation concurrently replacing another one.
+      if (input.groupId !== null) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+          [input.groupId, SESSION_GROUP_ROTATION_LOCK_HASH_SEED],
+        );
+      }
       // Route-level advisory locking covers the first insert before a row lock exists.
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",

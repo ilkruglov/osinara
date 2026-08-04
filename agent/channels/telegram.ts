@@ -6,7 +6,7 @@
  * - Application-owned family/group authorization in `onMessage`.
  * - Durable identity-bound HITL callbacks and replies.
  * - Validated attachment persistence with model-safe workspace references.
- * - One native thinking draft per turn and completed Rich Message delivery.
+ * - Completed Rich Message or silent reaction delivery without speculative chat drafts.
  * - Verified group replies anchored to the triggering member message.
  * - Successfully delivered final group output persisted as one logical timeline entry.
  */
@@ -16,11 +16,8 @@ import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js
 import { formatTelegramTurnFailure } from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
-import { completedTelegramMessage } from "../lib/telegram-progress.js";
-import {
-  postTelegramRichMessage,
-  startTelegramRichThinkingDraft,
-} from "../lib/telegram-rich-messages.js";
+import { completedTelegramOutput } from "../lib/telegram-progress.js";
+import { postTelegramRichMessage } from "../lib/telegram-rich-messages.js";
 import {
   applicationSessionId,
   registerTelegramDeliveredMessageRoutes,
@@ -40,6 +37,8 @@ import {
 import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proactive-delivery-repository.js";
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
+import { AppError } from "../lib/app-error.js";
+import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -54,10 +53,23 @@ export default telegramChannel({
     async "message.completed"(data, channel, ctx) {
       // Model-authored pre-tool text is a user-visible progress update, not technical tool noise.
       if (isScheduledSession(ctx) && data.finishReason !== "stop") return;
-      const message = completedTelegramMessage(data);
-      if (!message) return;
+      const output = completedTelegramOutput(data);
+      if (!output) return;
       const sessionId = applicationSessionId(ctx);
       if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
+      const currentAttributes = ctx.session.auth.current?.attributes;
+      if (output.kind === "reaction") {
+        const telegramMessageId = currentAttributes?.telegramMessageId;
+        if (isScheduledSession(ctx) || typeof telegramMessageId !== "string") {
+          throw new AppError(
+            "AGENT_TELEGRAM_REACTION_TARGET_MISSING",
+            "Не удалось определить сообщение для реакции. Отправьте обращение ещё раз",
+          );
+        }
+        await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        return;
+      }
+      const message = output.message;
       const sentMessages = await postTelegramRichMessage(
         message,
         channel.telegram,
@@ -66,7 +78,6 @@ export default telegramChannel({
       );
       const deliveredAt = new Date();
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
-      const currentAttributes = ctx.session.auth.current?.attributes;
       const groupId = scheduledDelivery?.groupId ??
         (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
       if (scheduledDelivery) {
@@ -146,7 +157,7 @@ export default telegramChannel({
       await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
     },
-    async "turn.started"(data, channel, ctx) {
+    async "turn.started"(_data, _channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
       // A started turn already owns a durable workflow input, so its embedded timeline delta can
@@ -166,9 +177,6 @@ export default telegramChannel({
           sessionId,
           proactiveDeliveryCursor,
         );
-      }
-      if (!isScheduledSession(ctx)) {
-        await startTelegramRichThinkingDraft(channel.telegram, data.turnId);
       }
     },
     async "turn.completed"(_data, channel, ctx) {

@@ -53,6 +53,8 @@ export interface TelegramGroupHistorySearchInput extends ListRecentInput {
 export interface TimelineRecordResult {
   entryId: string;
   replyToAgent: boolean;
+  replyTargetUnavailable: boolean;
+  replyToSequenceId: string | null;
   sequenceId: string;
   status: "duplicate" | "inserted";
 }
@@ -60,6 +62,7 @@ export interface TimelineRecordResult {
 export interface TelegramGroupJournalRepository {
   listIncremental(input: {
     afterSequence: string;
+    anchorEntryId: string;
     applicationSessionId: string;
     beforeSequence: string;
     groupId: string;
@@ -210,10 +213,13 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
             AND message.application_session_id IS DISTINCT FROM $5::uuid
           ORDER BY message.sequence_id DESC
           LIMIT $6
-       ), ancestry(id, depth) AS (
-         SELECT id, 0 FROM eligible
-         UNION
-         SELECT parent.id, ancestry.depth + 1
+        ), ancestry(id, depth) AS (
+          SELECT id, 0 FROM eligible
+          UNION
+          SELECT id, 0 FROM telegram_group_messages
+           WHERE id = $7::uuid AND group_id = $1
+          UNION
+          SELECT parent.id, ancestry.depth + 1
            FROM ancestry
            JOIN telegram_group_messages child ON child.id = ancestry.id
            JOIN telegram_group_messages parent ON parent.id = child.reply_to_entry_id
@@ -226,10 +232,11 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
               (SELECT count(*)::text FROM eligible) AS selected_count,
               (SELECT min(sequence_id)::text FROM eligible) AS selected_boundary
          FROM telegram_group_messages message
-        WHERE message.id IN (SELECT id FROM ancestry)
-        ORDER BY message.sequence_id`,
+         WHERE message.id IN (SELECT id FROM ancestry)
+           AND message.id <> $7::uuid
+         ORDER BY message.sequence_id`,
       [input.groupId, input.messageThreadId, input.afterSequence, input.beforeSequence,
-        input.applicationSessionId, input.limit],
+        input.applicationSessionId, input.limit, input.anchorEntryId],
     );
     const totalCount = Number(result.rows[0]?.total_count ?? 0);
     const selectedCount = Number(result.rows[0]?.selected_count ?? 0);
@@ -251,8 +258,16 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
     try {
       await client.query("BEGIN");
       await lockTelegramGroupJournal(client, groupId);
-      const duplicate = await client.query<{ entry_id: string; sequence_id: string }>(
-        `SELECT alias.entry_id, message.sequence_id::text
+      const duplicate = await client.query<{
+        entry_id: string;
+        reply_to_entry_id: string | null;
+        reply_to_message_id: string | null;
+        reply_to_sequence_id: string | null;
+        sequence_id: string;
+      }>(
+        `SELECT alias.entry_id, message.sequence_id::text,
+                message.reply_to_entry_id::text, message.reply_to_message_id::text,
+                message.reply_to_sequence_id::text
          FROM telegram_group_message_ids alias
          JOIN telegram_group_messages message ON message.id = alias.entry_id
          WHERE alias.group_id = $1 AND alias.telegram_message_id = $2`,
@@ -263,6 +278,11 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         return {
           entryId: duplicate.rows[0].entry_id,
           replyToAgent: false,
+          replyTargetUnavailable: duplicate.rows[0].reply_to_message_id !== null &&
+            duplicate.rows[0].reply_to_entry_id === null,
+          replyToSequenceId: duplicate.rows[0].reply_to_entry_id === null
+            ? null
+            : duplicate.rows[0].reply_to_sequence_id,
           sequenceId: duplicate.rows[0].sequence_id,
           status: "duplicate",
         };
@@ -303,10 +323,19 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         [groupId, messageId, entryId],
       );
       await pruneTelegramGroupJournal(client, groupId);
+      // Pruning can remove an old target in this transaction; only retained targets are model-visible.
+      const retainedReplyTarget = replyTarget === null
+        ? null
+        : (await client.query<{ id: string }>(
+            "SELECT id FROM telegram_group_messages WHERE id = $1 AND group_id = $2",
+            [replyTarget.entry_id, groupId],
+          )).rows[0] ?? null;
       await client.query("COMMIT");
       return {
         entryId,
         replyToAgent: replyTarget?.actor_kind === "agent_self",
+        replyTargetUnavailable: replyId !== null && retainedReplyTarget === null,
+        replyToSequenceId: retainedReplyTarget === null ? null : replyTarget?.sequence_id ?? null,
         sequenceId,
         status: "inserted",
       };

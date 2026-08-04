@@ -78,6 +78,8 @@ export function repositories() {
       record: vi.fn().mockResolvedValue({
         entryId: "00000000-0000-4000-8000-000000000010",
         replyToAgent: false,
+        replyTargetUnavailable: false,
+        replyToSequenceId: null,
         sequenceId: "1",
         status: "inserted",
       }),
