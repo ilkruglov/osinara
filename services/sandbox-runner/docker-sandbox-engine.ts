@@ -46,6 +46,7 @@ import {
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
 const FILE_UPLOAD_STAGING_DIRECTORY = "/.osinara-sandbox-uploads";
+const FILE_MISSING_EXIT_CODE = 44;
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION = "/runner/google-workspace-credentials";
@@ -226,11 +227,47 @@ export function createDockerSandboxEngine(input: {
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
         const container = await requireRunningContainer(input.docker, sessionId);
+        const resolved = resolvePath(path);
+        const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
+        const copyResult = await executeSandboxProcess(input.docker, container, {
+          command:
+            `mkdir -p -- ${JSON.stringify(FILE_UPLOAD_STAGING_DIRECTORY)} && ` +
+            `if [ ! -f ${JSON.stringify(resolved)} ]; then exit ${FILE_MISSING_EXIT_CODE}; fi && ` +
+            `cp -T -- ${JSON.stringify(resolved)} ${JSON.stringify(stagingPath)}`,
+        });
+        if (copyResult.exitCode === FILE_MISSING_EXIT_CODE) return null;
+        if (copyResult.exitCode !== 0) {
+          throw new Error(
+            "AGENT_SANDBOX_RUNNER_FILE_STAGE_FAILED: " +
+            `Не удалось подготовить файл sandbox для чтения. ${copyResult.stderr}`,
+          );
+        }
+
+        // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
+        // preserves binary archive reads while keeping the sandbox mount private and ephemeral.
+        let readFailed = false;
         try {
-          return await readSingleFileArchive(await container.getArchive({ path: resolvePath(path) }));
+          return await readSingleFileArchive(await container.getArchive({ path: stagingPath }));
         } catch (error) {
-          if (dockerStatus(error) === 404) return null;
+          readFailed = true;
           throw error;
+        } finally {
+          const cleanupResult = await executeSandboxProcess(input.docker, container, {
+            command: `rm -f -- ${JSON.stringify(stagingPath)}`,
+          });
+          if (cleanupResult.exitCode !== 0) {
+            console.error("Sandbox staged file cleanup failed", {
+              exitCode: cleanupResult.exitCode,
+              stagingPath,
+              stderr: cleanupResult.stderr,
+            });
+            if (!readFailed) {
+              throw new Error(
+                "AGENT_SANDBOX_RUNNER_FILE_CLEANUP_FAILED: " +
+                "Не удалось удалить временную копию прочитанного файла sandbox",
+              );
+            }
+          }
         }
       });
     },
