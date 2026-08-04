@@ -81,13 +81,24 @@ describe("manage_telegram_group.update_policy", () => {
     expect(manageTelegramGroup.description).toContain("сохраняет её ID, название, тип, историю, workspace, память и сессии");
   });
 
+  it("ignores known sibling fields materialized beside the complete policy", async () => {
+    await expect(manageTelegramGroup.execute({
+      ...input,
+      registration: {},
+      skillAllowlist: ["pohuy"],
+    }, context("private"))).resolves.toMatchObject({ policyUpdated: true });
+    expect(updatePolicy).toHaveBeenCalledWith(expect.objectContaining({
+      messageMode: "owner_only",
+      toolAllowlist: ["remember", "list_group_history"],
+    }));
+  });
+
   it.each([
     { action: "update_policy", messageMode: "all", telegramChatId: "-1003567628736" },
     { action: "update_policy", telegramChatId: "-1003567628736", toolAllowlist: [] },
     { action: "update_policy", messageMode: "all", toolAllowlist: [] },
     { ...input, title: "Новое название" },
     { ...input, type: "external" },
-    { ...input, registration: {} },
     { ...input, telegramChatId: -1003567628736 },
   ])("rejects an incomplete or extended policy payload", async (invalidInput) => {
     await expect(manageTelegramGroup.execute(invalidInput as never, context("private"))).rejects.toThrowError(

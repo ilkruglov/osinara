@@ -65,6 +65,20 @@ describe("manage_telegram_group.remove", () => {
     });
   });
 
+  it("ignores known sibling fields materialized beside the removal target", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "remove",
+      messageMode: "all",
+      registration: {},
+      skillAllowlist: ["pohuy"],
+      telegramChatId: "-1003567628736",
+      toolAllowlist: ["remember"],
+    }, context("private"))).resolves.toMatchObject({ registrationRemoved: true });
+    expect(removeRegistration).toHaveBeenCalledWith(expect.objectContaining({
+      telegramChatId: "-1003567628736",
+    }));
+  });
+
   it("rejects removal from a group chat", async () => {
     await expect(
       manageTelegramGroup.execute(

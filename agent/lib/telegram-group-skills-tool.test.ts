@@ -71,6 +71,30 @@ describe("manage_telegram_group.update_skills", () => {
     });
   });
 
+  it("ignores known sibling fields materialized by the model transport", async () => {
+    await expect(manageTelegramGroup.execute({
+      action: "update_skills",
+      messageMode: "all",
+      registration: {
+        messageMode: "all",
+        telegramChatId: "-1009999999999",
+        title: "Не используется",
+        toolAllowlist: [],
+        type: "external",
+      },
+      skillAllowlist: ["pohuy"],
+      telegramChatId: "-1001234567890",
+      toolAllowlist: ["remember"],
+    }, context())).resolves.toMatchObject({
+      skillAllowlist: ["pohuy"],
+      skillsUpdated: true,
+    });
+    expect(updateSkills).toHaveBeenCalledWith(expect.objectContaining({
+      skillAllowlist: ["pohuy"],
+      telegramChatId: "-1001234567890",
+    }));
+  });
+
   it("rejects unreviewed and duplicate skills before persistence", async () => {
     await expect(manageTelegramGroup.execute({
       action: "update_skills",

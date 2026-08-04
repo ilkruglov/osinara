@@ -208,7 +208,7 @@ function requireRegistration(input: Record<string, unknown>) {
 const TOOL_DESCRIPTION = [
   "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить tool/skill policy или удалить регистрацию и связанные данные.",
   "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полные toolAllowlist и skillAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
-  "Некоторые model transports материализуют остальные известные optional-поля общей schema. Для read-only status и недеструктивного start_new_context tool безопасно игнорирует такие поля; всё равно не заполняй их и никогда не угадывай telegramChatId.",
+  "Некоторые model transports материализуют остальные известные optional-поля общей schema. Tool безопасно игнорирует поля других actions и читает только payload выбранного action; всё равно не заполняй лишние поля и никогда не угадывай telegramChatId.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
   "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
   "Update_policy не отключает группу и сохраняет её ID, название, тип, историю, workspace, память и сессии.",
@@ -235,6 +235,9 @@ export default defineTool({
     requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_telegram_group", INPUT_ERROR_CODE);
     const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
     const owner = requirePrivateTelegramOwner(ctx);
+
+    // Shared-schema transports may materialize sibling optional fields. The global guard above
+    // still rejects unpublished fields; each action below validates and consumes only its contract.
     if (action === "status") {
       const groups = await telegramGroupAdministrationRepository.listStatuses({
         familyId: owner.familyId,
@@ -291,13 +294,7 @@ export default defineTool({
       };
     }
     if (action === "update_policy") {
-      // Policy updates are complete replacements; omitted or extra registration fields are rejected.
-      requireOnlyFields(
-        payload,
-        ["action", "telegramChatId", "messageMode", "toolAllowlist"],
-        "action=update_policy",
-        INPUT_ERROR_CODE,
-      );
+      // Policy updates are complete replacements; every required policy value remains mandatory.
       const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
       const messageMode = requiredEnum(payload, "messageMode", EXTERNAL_MESSAGE_MODES, INPUT_ERROR_CODE);
       const toolAllowlist = requireExternalToolAllowlist(payload.toolAllowlist, "action=update_policy");
@@ -318,12 +315,6 @@ export default defineTool({
       };
     }
     if (action === "update_skills") {
-      requireOnlyFields(
-        payload,
-        ["action", "telegramChatId", "skillAllowlist"],
-        "action=update_skills",
-        INPUT_ERROR_CODE,
-      );
       const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
       const skillAllowlist = requireSkillAllowlist(payload.skillAllowlist);
       const result = await telegramGroupAdministrationRepository.updateSkills({
@@ -341,7 +332,6 @@ export default defineTool({
       };
     }
     if (action === "remove") {
-      requireOnlyFields(payload, ["action", "telegramChatId"], "action=remove", INPUT_ERROR_CODE);
       const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
       await telegramGroupAdministrationRepository.removeRegistration({
         familyId: owner.familyId,
@@ -355,7 +345,6 @@ export default defineTool({
       };
     }
 
-    requireOnlyFields(payload, ["action", "registration"], "action=register", INPUT_ERROR_CODE);
     const registration = requireRegistration(payload);
     const result = await telegramGroupAdministrationRepository.registerGroup({
       ...registration,
