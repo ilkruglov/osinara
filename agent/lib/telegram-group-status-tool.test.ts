@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `manage_telegram_group.status` reads every family registration without HITL.
- * - Mutating actions retain user approval.
+ * - Destructive/policy actions retain approval while context rotation remains non-destructive.
  * - External status distinguishes configured grants from always-available workspace tools.
  * - Private-mode guidance requires reading status before an uncertain policy replacement.
  */
@@ -96,8 +96,9 @@ describe("manage_telegram_group.status", () => {
     expect(listStatuses).toHaveBeenCalledWith({ familyId: "family-1", requestedBy: "owner-1" });
   });
 
-  it("skips HITL only for status", () => {
+  it("skips HITL only for read-only status and non-destructive context rotation", () => {
     expect(approvalFor({ action: "status" })).toBe("not-applicable");
+    expect(approvalFor({ action: "start_new_context" })).toBe("not-applicable");
     expect(approvalFor({ action: "update_policy" })).toBe("user-approval");
     expect(approvalFor({ action: "remove" })).toBe("user-approval");
     expect(approvalFor({ action: "register" })).toBe("user-approval");

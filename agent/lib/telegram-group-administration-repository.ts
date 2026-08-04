@@ -5,10 +5,14 @@
  * - `TelegramGroupRegistration`: complete persisted registration input.
  * - `TelegramGroupPolicyUpdate`: complete external-group policy replacement input.
  * - `TelegramGroupStatus`: complete read-only registration and policy projection.
+ * - `TelegramGroupSessionRotation`: owner-requested canonical rotation for every group topic.
  * - `TelegramGroupAdministrationRepository`: injectable registration/removal/policy contract.
  * - `telegramGroupAdministrationRepository`: family-scoped group lifecycle operations.
  */
-import { TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED } from "../config.js";
+import {
+  SESSION_GROUP_ROTATION_LOCK_HASH_SEED,
+  TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED,
+} from "../config.js";
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import type {
@@ -52,6 +56,12 @@ export interface TelegramGroupStatus {
   type: RegisteredGroupType;
 }
 
+export interface TelegramGroupSessionRotation {
+  familyId: string;
+  requestedBy: string;
+  telegramChatId: string;
+}
+
 export interface TelegramGroupAdministrationRepository {
   listStatuses(input: {
     familyId: string;
@@ -63,6 +73,10 @@ export interface TelegramGroupAdministrationRepository {
     requestedBy: string;
     telegramChatId: string;
   }): Promise<{ groupId: string }>;
+  requestGroupSessionRotation(input: TelegramGroupSessionRotation): Promise<{
+    groupId: string;
+    requestedCanonicalSessions: number;
+  }>;
   updatePolicy(input: TelegramGroupPolicyUpdate): Promise<{ groupId: string }>;
 }
 
@@ -188,6 +202,76 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
 
       await client.query("COMMIT");
       return { groupId: row.id };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async requestGroupSessionRotation(input) {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+
+      // Authorization is current at mutation time, not inherited from the private session snapshot.
+      const owner = await client.query(
+        `SELECT 1
+           FROM family_memberships
+          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
+          FOR SHARE`,
+        [input.familyId, input.requestedBy],
+      );
+      if (!owner.rowCount) {
+        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
+      }
+
+      // Serialize exact-chat administration so registration replacement or removal cannot race
+      // selection of the trust zone whose canonical sessions are being rotated.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
+      );
+      const registered = await client.query<{ id: string }>(
+        `SELECT id
+           FROM telegram_groups
+          WHERE family_id = $1 AND telegram_chat_id = $2
+          FOR SHARE`,
+        [input.familyId, input.telegramChatId],
+      );
+      const group = registered.rows[0];
+      if (!group) {
+        throw new AppError(
+          "AGENT_GROUP_NOT_FOUND",
+          "Группа не найдена в вашей семье. Сначала проверьте список зарегистрированных групп",
+        );
+      }
+
+      // Session preparation takes the same group-wide lock before its route lock. Once acquired,
+      // the following statement sees every canonical generation committed before this request.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+        [group.id, SESSION_GROUP_ROTATION_LOCK_HASH_SEED],
+      );
+
+      // Canonical rows represent main chat and forum topics. Parked task sessions retain the exact
+      // Eve state and requester binding needed to finish or deny their pending operation safely.
+      const rotated = await client.query<{ id: string }>(
+        `UPDATE conversation_sessions
+            SET rotation_requested_at = now()
+          WHERE family_id = $1
+            AND group_id = $2
+            AND kind = 'canonical'
+            AND retired_at IS NULL
+          RETURNING id`,
+        [input.familyId, group.id],
+      );
+      await client.query("COMMIT");
+      return {
+        groupId: group.id,
+        requestedCanonicalSessions: rotated.rowCount ?? 0,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

@@ -65,6 +65,8 @@ describe("permanent instructions", () => {
     expect(instructions).toContain("Отказ в HITL — терминальное решение");
     expect(instructions).toContain("<current_time>");
     expect(instructions).toContain("# Rich Telegram presentation");
+    expect(instructions).toContain("<telegram-reaction>");
+    expect(instructions).toContain("не добавляй никакого текста");
   });
 
   it("stays materially smaller than the mode-agnostic plus mode-specific whole", async () => {
