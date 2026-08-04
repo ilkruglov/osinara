@@ -71,7 +71,7 @@ const registrationSchema = z.object({
 
 const manageTelegramGroupSchema = z.object({
   action: z.string().optional().describe(
-    "Сначала выберите ровно один action: status, start_new_context, register, update_policy или remove.",
+    "Сначала выберите ровно один action: status, start_new_context, register, update_policy, update_skills или remove.",
   ),
   messageMode: z.string().optional().describe(
     "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
