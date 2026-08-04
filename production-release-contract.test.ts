@@ -120,6 +120,7 @@ describe("production container contract", () => {
     expect(migrate).toContain("restart: \"no\"");
     expect(migrate).toContain(".runtime/scripts/migrate.js");
     expect(agent).toContain("healthcheck:");
+    expect(agent).toContain("retries: 72");
     expect(edge).toContain("healthcheck:");
     expect(edge).toContain('"127.0.0.1:8082:80"');
 
