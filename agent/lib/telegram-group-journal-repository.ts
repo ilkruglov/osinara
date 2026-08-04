@@ -166,7 +166,7 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
      ), ancestry(id, depth) AS (
        SELECT id, 0 FROM recent
        UNION
-       SELECT id, 0 FROM telegram_group_messages
+       SELECT id, -1 FROM telegram_group_messages
        WHERE id = $5::uuid AND group_id = $1
        UNION
        SELECT parent.id, ancestry.depth + 1
@@ -216,7 +216,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         ), ancestry(id, depth) AS (
           SELECT id, 0 FROM eligible
           UNION
-          SELECT id, 0 FROM telegram_group_messages
+          SELECT id, -1 FROM telegram_group_messages
            WHERE id = $7::uuid AND group_id = $1
           UNION
           SELECT parent.id, ancestry.depth + 1

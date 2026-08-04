@@ -468,7 +468,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
     }]);
   });
 
-  it("includes the current reply target even when it predates an existing session cursor", async () => {
+  it("includes the current reply target and two ancestors before an existing session cursor", async () => {
     const { familyId, ownerId } = await createOwnedFamily("current-reply-ancestry");
     const group = await telegramGroupAdministrationRepository.registerGroup({
       familyId,
@@ -479,14 +479,29 @@ describeWithDatabase("Telegram group journal repositories", () => {
       toolAllowlist: [],
       type: "external",
     });
-    const target = message({ id: "81", text: "Почему используется эта модель?" });
-    await telegramGroupJournalRepository.record(group.groupId, target);
-    await telegramGroupJournalRepository.record(
-      group.groupId,
-      message({ id: "82", text: "уже обработано" }),
-    );
+    const grandparent = message({ id: "81", text: "Начало ветки" });
+    await telegramGroupJournalRepository.record(group.groupId, grandparent);
+    const parent = message({ id: "82", text: "Продолжение ветки" });
+    await telegramGroupJournalRepository.record(group.groupId, {
+      ...parent,
+      replyToMessage: {
+        chat: grandparent.chat,
+        from: grandparent.from,
+        messageId: grandparent.messageId,
+      },
+    });
+    const target = message({ id: "83", text: "Почему используется эта модель?" });
+    await telegramGroupJournalRepository.record(group.groupId, {
+      ...target,
+      replyToMessage: {
+        chat: parent.chat,
+        from: parent.from,
+        messageId: parent.messageId,
+      },
+    });
+    await telegramGroupJournalRepository.record(group.groupId, message({ id: "84", text: "cursor" }));
     const current = await telegramGroupJournalRepository.record(group.groupId, {
-      ...message({ id: "83", text: "Ты видишь, на что я ответил?" }),
+      ...message({ id: "85", text: "Ты видишь, на что я ответил?" }),
       replyToMessage: {
         chat: target.chat,
         from: target.from,
@@ -495,7 +510,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
     });
 
     const incremental = await telegramGroupJournalRepository.listIncremental({
-      afterSequence: "2",
+      afterSequence: "4",
       anchorEntryId: current.entryId,
       applicationSessionId: "00000000-0000-4000-8000-000000000099",
       beforeSequence: current.sequenceId,
@@ -506,12 +521,13 @@ describeWithDatabase("Telegram group journal repositories", () => {
 
     expect(current).toMatchObject({
       replyTargetUnavailable: false,
-      replyToSequenceId: "1",
+      replyToSequenceId: "3",
     });
-    expect(incremental.entries).toMatchObject([{
-      contentText: "Почему используется эта модель?",
-      sequenceId: "1",
-    }]);
+    expect(incremental.entries).toMatchObject([
+      { contentText: "Начало ветки", sequenceId: "1" },
+      { contentText: "Продолжение ветки", replyToSequenceId: "1", sequenceId: "2" },
+      { contentText: "Почему используется эта модель?", replyToSequenceId: "2", sequenceId: "3" },
+    ]);
   });
 
   it("captures an unobserved raw reply attachment without a second timeline entry", async () => {
