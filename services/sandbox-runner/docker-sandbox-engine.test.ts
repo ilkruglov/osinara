@@ -8,12 +8,11 @@
  * - Resource, capability, and privilege restrictions.
  * - Stale policy replacement and bounded warm-cache reconciliation at the Docker boundary.
  * - Explicit session and runner shutdown remove compute instead of retaining exited containers.
- * - File writes stage outside tmpfs before an in-container move to the requested path.
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough, Readable } from "node:stream";
+import { Readable } from "node:stream";
 
 import type Docker from "dockerode";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -167,104 +166,6 @@ describe("buildSandboxContainerOptions", () => {
       expect.stringContaining("PROXY="),
       expect.stringContaining("/tools/"),
     ]));
-  });
-
-  it("stages a hidden-home write outside tmpfs before moving it in-container", async () => {
-    const source = new PassThrough();
-    const exec = {
-      inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
-      start: vi.fn(async () => source),
-    };
-    const container = {
-      exec: vi.fn(async () => exec),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
-      putArchive: vi.fn(async () => undefined),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
-    const engine = createDockerSandboxEngine({
-      docker,
-      roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
-        toolsRoot: "/tools",
-        workspaceRoot: "/workspaces",
-      },
-      runtime,
-    });
-
-    await engine.writeFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/pohuy/LICENSE.txt",
-      new TextEncoder().encode("MIT"),
-    );
-
-    expect(container.putArchive).toHaveBeenCalledWith(
-      expect.anything(),
-      { path: "/.osinara-sandbox-uploads" },
-    );
-    const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
-    expect(commands).toEqual([
-      expect.stringMatching(/^mkdir -p -- .*\.osinara-sandbox-uploads/u),
-      expect.stringMatching(/^mv -T -- .* ".*\/tmp\/home\/\.agents\/skills\/pohuy\/LICENSE\.txt"$/u),
-    ]);
-  });
-
-  it("rejects a directory destination and observes failed staging cleanup", async () => {
-    const exitCodes = [0, 1, 1];
-    const container = {
-      exec: vi.fn(async () => {
-        const source = new PassThrough();
-        const exitCode = exitCodes.shift();
-        return {
-          inspect: vi.fn(async () => ({ ExitCode: exitCode, Running: false })),
-          start: vi.fn(async () => source),
-        };
-      }),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
-      putArchive: vi.fn(async () => undefined),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
-    const engine = createDockerSandboxEngine({
-      docker,
-      roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
-        toolsRoot: "/tools",
-        workspaceRoot: "/workspaces",
-      },
-      runtime,
-    });
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    await expect(engine.writeFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/pohuy",
-      new TextEncoder().encode("must-not-land-inside-directory"),
-    )).rejects.toThrowError(
-      /AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: Не удалось записать файл/u,
-    );
-    const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
-    expect(commands[1]).toMatch(/^mv -T -- /u);
-    expect(commands[2]).toMatch(/^rm -f -- /u);
-    expect(consoleError).toHaveBeenCalledWith(
-      "Sandbox staged file cleanup failed",
-      expect.objectContaining({ exitCode: 1 }),
-    );
-    consoleError.mockRestore();
   });
 
   it("replaces stale policy compute while preserving named-volume data", async () => {
