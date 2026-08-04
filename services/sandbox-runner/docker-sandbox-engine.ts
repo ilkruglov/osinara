@@ -7,6 +7,7 @@
  * - `resolveSandboxRuntimeImage`: requires the exact sandbox runtime image identity.
  * - `resolveSandboxDockerRuntime`: discovers Compose-owned volumes/network fail-fast.
  */
+import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { posix } from "node:path";
 
@@ -33,6 +34,7 @@ import {
   sandboxContainerNeedsReplacement,
   sandboxRequestHash,
 } from "./docker-sandbox-lifecycle.js";
+
 import { reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
 import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
@@ -43,6 +45,7 @@ import {
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
+const FILE_UPLOAD_STAGING_DIRECTORY = "/.osinara-sandbox-uploads";
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION = "/runner/google-workspace-credentials";
@@ -235,13 +238,41 @@ export function createDockerSandboxEngine(input: {
       await activity.runActive(sessionId, async () => {
         const container = await requireRunningContainer(input.docker, sessionId);
         const resolved = resolvePath(path);
+        const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         const directoryResult = await executeSandboxProcess(input.docker, container, {
-          command: `mkdir -p -- ${JSON.stringify(posix.dirname(resolved))}`,
+          command:
+            `mkdir -p -- ${JSON.stringify(posix.dirname(resolved))} ` +
+            JSON.stringify(FILE_UPLOAD_STAGING_DIRECTORY),
         });
         if (directoryResult.exitCode !== 0) {
           throw new Error(`AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: ${directoryResult.stderr}`);
         }
-        await writeSingleFileArchive(container, resolved, content);
+
+        // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME`. Upload to
+        // writable container rootfs first, then let an in-container process cross the mount boundary.
+        let committed = false;
+        try {
+          await writeSingleFileArchive(container, stagingPath, content);
+          const moveResult = await executeSandboxProcess(input.docker, container, {
+            command: `mv -- ${JSON.stringify(stagingPath)} ${JSON.stringify(resolved)}`,
+          });
+          if (moveResult.exitCode !== 0) {
+            throw new Error(
+              `AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: ${moveResult.stderr}`,
+            );
+          }
+          committed = true;
+        } finally {
+          if (!committed) {
+            try {
+              await executeSandboxProcess(input.docker, container, {
+                command: `rm -f -- ${JSON.stringify(stagingPath)}`,
+              });
+            } catch (cleanupError) {
+              console.error("Sandbox staged file cleanup failed", { cleanupError, stagingPath });
+            }
+          }
+        }
       });
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {

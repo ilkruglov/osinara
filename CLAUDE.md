@@ -92,6 +92,7 @@ Owner-only операции разрешены только в личном Tele
 Нативные `glob`, `grep`, `read_file` и `write_file` остаются доступны и замкнуты внутри отдельного group workspace.
 Eve `0.22.5` не умеет скрывать собственные built-ins, поэтому `bash`, `todo`, `ask_question` и невыданные `web_fetch`/`web_search` во внешней группе перекрываются явным отказом. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
 Eve `0.22.5` всегда перечисляет статические authored skills в system prompt и не позволяет фильтровать их по сессии. Grantable `pohuy` поэтому вынесен из static discovery и выдаётся turn-scoped dynamic resolver только разрешённым группам; при обновлении Eve проверить, появился ли нативный механизм фильтрации.
+Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 
 ## Структура проекта
 
