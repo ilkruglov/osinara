@@ -282,6 +282,7 @@ jobs:
           if [[ "$RESUME_DRAFT" == "false" ]]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
               --title "Osinara ${TAG}" \
+              --generate-notes \
               --notes "Immutable production images for commit ${GITHUB_SHA}."
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \

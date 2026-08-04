@@ -14,6 +14,7 @@
  * - Allows two AI SDK transport retries while preventing Eve-level or degraded model reissues.
  * - Supports a zero-depth subagent limit so the root agent can disable delegation completely.
  * - Routes local Workflow recovery through Eve's configured queue namespace.
+ * - Extends the bounded production startup health wait for first-run sandbox preparation.
  * - Fails installation when the pinned Eve artifact no longer matches the reviewed source.
  */
 import { readFile, writeFile } from "node:fs/promises";
@@ -21,6 +22,7 @@ import { resolve } from "node:path";
 
 const EXPECTED_EVE_VERSION = "0.22.5";
 const AI_SDK_TRANSPORT_MAX_RETRIES = 2;
+const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
 const telegramRuntimePath = resolve(
   "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
 );
@@ -63,6 +65,9 @@ const autoevalRuntimePath = resolve(
 const codeModeRuntimePath = resolve(
   "node_modules/eve/dist/src/compiled/experimental-ai-sdk-code-mode/index.js",
 );
+const startProductionServerRuntimePath = resolve(
+  "node_modules/eve/dist/src/internal/nitro/host/start-production-server.js",
+);
 
 async function replaceOnce(
   path: string,
@@ -95,6 +100,14 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
     `AGENT_EVE_PATCH_VERSION_UNSUPPORTED: Ожидалась Eve ${EXPECTED_EVE_VERSION}, установлена ${String(evePackage.version)}`,
   );
 }
+
+// A cold production start may need to prepare the sandbox template and recover durable runs.
+// Keep the wait bounded while allowing the same process to reach its health endpoint.
+await replaceOnce(
+  startProductionServerRuntimePath,
+  "const HEALTH_TIMEOUT_MS=6e4",
+  `const HEALTH_TIMEOUT_MS=${EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS.toExponential().replace("+", "")}`,
+);
 
 // AI SDK retries only provider-declared transport failures before returning a model result.
 const toolLoopTransportCall =

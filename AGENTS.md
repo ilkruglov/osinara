@@ -114,8 +114,10 @@ Eve discovery воспримет такой файл как production tool ил
 
 ## Локальный патч Eve
 
-Eve `0.22.5` не предоставляет seam для durable Telegram ingress и не допускает zero-depth delegation limit.
-`scripts/apply-eve-patches.ts` добавляет verified-update/drain hooks, возврат Session и `maxSubagentDepth: 0`.
+Eve `0.22.5` не предоставляет seam для durable Telegram ingress, не допускает zero-depth delegation limit
+и ограничивает ожидание первого production startup 60 секундами.
+`scripts/apply-eve-patches.ts` добавляет verified-update/drain hooks, возврат Session,
+`maxSubagentDepth: 0` и пятиминутное ограниченное ожидание health при холодном старте.
 Патч применяется автоматически через `postinstall` после каждого `npm ci`.
 Он идемпотентен, проверяет точную версию и ожидаемые artifacts; несовпадение должно останавливать сборку.
 

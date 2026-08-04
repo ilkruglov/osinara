@@ -228,6 +228,7 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("compose.production.yaml");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("--draft");
+    expect(workflow).toContain("--generate-notes");
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
     expect(workflow).toContain("--clobber");
