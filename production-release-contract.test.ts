@@ -203,6 +203,7 @@ describe("release workflow contract", () => {
   it("tests PR, develop, and main with the exact Compose suite", () => {
     const workflow = readProjectFile(".github/workflows/ci-release.yaml");
 
+    expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("develop");
     expect(workflow).toContain("main");
@@ -210,6 +211,9 @@ describe("release workflow contract", () => {
       "docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests",
     );
     expect(workflow).toContain("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}");
+    expect(workflow).toContain(
+      "github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+    );
   });
 
   it("publishes fixed GHCR names with immutable action revisions and attestations", () => {
