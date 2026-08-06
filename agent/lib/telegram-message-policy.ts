@@ -5,6 +5,7 @@
  * - `TelegramInboundMediaKind`: strict none/native-photo/unsupported-media decision.
  * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
+ * - `isAgentNameMentioned`: recognizes established agent-name stems at Unicode word boundaries.
  * - `isMessageAddressedToBot`: preserves private, command, mention, and reply behavior.
  * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: prevents direct file delivery to the text-only primary model.
@@ -31,6 +32,8 @@ interface TelegramDispatchMessage {
 const TELEGRAM_COMMAND_PATTERN =
   /^\/(?<command>[A-Za-z0-9_]+)(?:@(?<target>[A-Za-z0-9_]+))?(?:\s|$)/u;
 const TELEGRAM_MENTION_PATTERN = /(?:^|[^A-Za-z0-9_])@(?<target>[A-Za-z0-9_]+)/gu;
+const AGENT_NAME_PATTERN =
+  /(?:^|[^\p{L}\p{N}_])(?:(?:осинар|асинар|азинар|озинар|синаар)(?:а|ы|е|у|ой|ою)?|(?:osinar|asinar)a?)(?=$|[^\p{L}\p{N}_])/iu;
 
 // The application persists authorized files and exposes trusted workspace paths. Eve must not
 // forward a second copy to the text-only primary model; vision runs through the dedicated tool.
@@ -155,6 +158,10 @@ export function isReplyToBot(
   );
 }
 
+export function isAgentNameMentioned(text: string): boolean {
+  return AGENT_NAME_PATTERN.test(text);
+}
+
 export function isMessageAddressedToBot(
   message: TelegramDispatchMessage,
   botUsername: string,
@@ -175,5 +182,5 @@ export function isMessageAddressedToBot(
     (match) => match.groups?.target?.toLowerCase() === botUsername.toLowerCase(),
   );
   if (addressedByMention) return true;
-  return isReplyToBot(message, botUsername);
+  return isReplyToBot(message, botUsername) || isAgentNameMentioned(message.text);
 }

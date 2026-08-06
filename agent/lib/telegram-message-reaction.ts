@@ -2,38 +2,30 @@
  * Telegram current-message reaction delivery.
  *
  * Exports:
- * - `TelegramMessageReactionEmoji`: globally permitted model-selected reactions.
+ * - `TelegramMessageReactionEmoji`: one model-selected emoji grapheme.
  * - `TelegramMessageReactionResult`: applied or provider-restricted delivery outcome.
- * - `isTelegramMessageReactionEmoji`: strict reaction directive allowlist guard.
+ * - `isTelegramMessageReactionEmoji`: strict single-emoji reaction directive guard.
  * - `setTelegramMessageReaction`: confirmed Bot API reaction on a verified inbound message.
  */
 import type { TelegramHandle } from "eve/channels/telegram";
 
 import { AppError } from "./app-error.js";
 
-const TELEGRAM_MESSAGE_REACTION_EMOJIS = [
-  "👍",
-  "👎",
-  "👌",
-  "❤",
-  "🤣",
-  "🎉",
-  "😢",
-  "👀",
-  "🖕",
-] as const;
+const EMOJI_GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const EMOJI_CHARACTER_PATTERN = /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u;
 const TELEGRAM_MESSAGE_ID_PATTERN = /^[1-9]\d*$/u;
 const TELEGRAM_REACTION_DECLINED_STATUSES = new Set([400, 403]);
 
 export type TelegramMessageReactionResult = "applied" | "unavailable";
 
-export type TelegramMessageReactionEmoji =
-  (typeof TELEGRAM_MESSAGE_REACTION_EMOJIS)[number];
+export type TelegramMessageReactionEmoji = string;
 
 export function isTelegramMessageReactionEmoji(
   value: string,
 ): value is TelegramMessageReactionEmoji {
-  return (TELEGRAM_MESSAGE_REACTION_EMOJIS as readonly string[]).includes(value);
+  const graphemes = Array.from(EMOJI_GRAPHEME_SEGMENTER.segment(value));
+  return graphemes.length === 1 && graphemes[0]?.segment === value &&
+    EMOJI_CHARACTER_PATTERN.test(value);
 }
 
 export async function setTelegramMessageReaction(

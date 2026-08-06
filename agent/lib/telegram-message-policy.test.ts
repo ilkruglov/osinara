@@ -2,7 +2,7 @@
  * Telegram dispatch policy tests.
  *
  * Constructs covered:
- * - `isMessageAddressedToBot`: preserves Eve's command semantics and strict mention/reply gating.
+ * - `isMessageAddressedToBot`: preserves command semantics and accepts configured name stems.
  * - `classifyTelegramInboundMedia`: recognizes one native photo or static image-document candidate.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
@@ -39,6 +39,25 @@ describe("isMessageAddressedToBot", () => {
   it("ignores ordinary group conversation", () => {
     expect(isMessageAddressedToBot(groupMessage, "family_agent")).toBe(false);
   });
+
+  it.each([
+    "Осинар, посмотри сюда",
+    "Асинара молодец",
+    "АЗИНАРЕ это понравится",
+    "Озинарой удобно пользоваться",
+    "Osinar help us",
+    "Asinara is useful",
+    "Синаара, ответь",
+  ])("accepts the agent name variant in ordinary group text: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
+  });
+
+  it.each(["семинар начался", "osinary is a package", "квазиосинара"])(
+    "does not match a name stem inside another word: %s",
+    (text) => {
+      expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
+    },
+  );
 
   it("accepts commands, mentions, and replies to this bot", () => {
     expect(isMessageAddressedToBot({ ...groupMessage, text: "/ask помоги" }, "family_agent")).toBe(

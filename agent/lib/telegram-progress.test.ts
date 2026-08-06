@@ -26,8 +26,8 @@ describe("completedTelegramOutput", () => {
     ).toEqual({ kind: "message", message: "Готовый ответ" });
   });
 
-  it.each(["👍", "👎", "👌", "❤", "🤣", "🎉", "😢", "👀", "🖕"])(
-    "parses the allowlisted %s reaction without visible text",
+  it.each(["👍", "❤", "❤️", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕"])(
+    "parses one %s emoji reaction without visible text",
     (emoji) => {
       expect(
         completedTelegramOutput({
@@ -39,8 +39,8 @@ describe("completedTelegramOutput", () => {
   );
 
   it.each([
-    "<telegram-reaction>🔥</telegram-reaction>",
-    "<telegram-reaction>❤️</telegram-reaction>",
+    "<telegram-reaction>не emoji</telegram-reaction>",
+    "<telegram-reaction>🔥🔥</telegram-reaction>",
     "Хорошо <telegram-reaction>👌</telegram-reaction>",
     "<telegram-reaction>👍</telegram-reaction> Молчу",
     "<telegram-reaction></telegram-reaction>",
