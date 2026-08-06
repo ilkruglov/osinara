@@ -110,6 +110,7 @@ npm ci
 ```dotenv
 POSTGRES_PASSWORD=
 CLI_PROXY_API_KEY=
+DEEPSEEK_API_KEY=
 MODEL_UPSTREAM_API_KEY=
 GROQ_API_KEY=
 INVITATION_SIGNING_SECRET=
@@ -117,6 +118,10 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
 TELEGRAM_WEBHOOK_SECRET_TOKEN=
 ```
+
+`DEEPSEEK_API_KEY` используется активным `deepseek-v4-flash` transport. Отдельный
+`MODEL_UPSTREAM_API_KEY` пока требуется только сохранённому MiniMax CLI proxy compatibility
+service и не используется agent loop.
 
 Для Google Workspace OAuth дополнительно нужны:
 

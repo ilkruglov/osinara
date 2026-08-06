@@ -4,7 +4,7 @@
  * Constructs covered:
  * - `parseModelProviderConfig`: validates protocol-native agent transports and model IDs.
  * - Anthropic Messages and OpenAI Chat Completions remain provider-name independent.
- * - Required endpoint, authentication, thinking, and context metadata fail fast.
+ * - Required endpoint, authentication, thinking, capability, and context metadata fail fast.
  * - MiniMax Anthropic wire compatibility is explicit and rejects unknown modes.
  * - Active schema remains separate from the host-mounted deployment compatibility file.
  */
@@ -18,7 +18,7 @@ const validConfig = {
   agent: {
     models: {
       primary: { contextWindowTokens: 1_000_000, id: "MiniMax-M3", maxOutputTokens: 128_000 },
-      vision: { id: "MiniMax-M3", maxOutputTokens: 128_000 },
+      vision: { id: "MiniMax-M3", maxOutputTokens: 128_000, supportsImageInput: true },
     },
     transport: {
       authentication: "bearer",
@@ -27,7 +27,7 @@ const validConfig = {
       thinking: { type: "adaptive" },
     },
   },
-  schemaVersion: 2,
+  schemaVersion: 3,
   voice: { transcriptionModelId: "whisper-large-v3-turbo" },
 } as const;
 
@@ -85,8 +85,32 @@ describe("parseModelProviderConfig", () => {
     expect(parseModelProviderConfig(config)).toEqual(config);
   });
 
+  it("accepts explicit DeepSeek thinking and an unavailable vision capability", () => {
+    const config = {
+      ...validConfig,
+      agent: {
+        models: {
+          primary: {
+            contextWindowTokens: 1_000_000,
+            id: "deepseek-v4-flash",
+            maxOutputTokens: 128_000,
+          },
+          vision: { supportsImageInput: false },
+        },
+        transport: {
+          baseUrl: "https://api.deepseek.com",
+          protocol: "openai-chat-completions",
+          providerName: "deepseek",
+          thinking: { effort: "high", type: "enabled" },
+        },
+      },
+    } as const;
+
+    expect(parseModelProviderConfig(config)).toEqual(config);
+  });
+
   it.each([
-    { ...validConfig, schemaVersion: 1 },
+    { ...validConfig, schemaVersion: 2 },
     {
       ...validConfig,
       agent: {
@@ -99,7 +123,13 @@ describe("parseModelProviderConfig", () => {
     },
     {
       ...validConfig,
-      agent: { ...validConfig.agent, models: { ...validConfig.agent.models, vision: { id: "" } } },
+      agent: {
+        ...validConfig.agent,
+        models: {
+          ...validConfig.agent.models,
+          vision: { id: "", maxOutputTokens: 128_000, supportsImageInput: true },
+        },
+      },
     },
     {
       ...validConfig,
@@ -123,6 +153,17 @@ describe("parseModelProviderConfig", () => {
       agent: {
         ...validConfig.agent,
         transport: { ...validConfig.agent.transport, protocol: "unknown" },
+      },
+    },
+    {
+      ...validConfig,
+      agent: {
+        ...validConfig.agent,
+        transport: {
+          baseUrl: "https://api.deepseek.com",
+          protocol: "openai-chat-completions",
+          providerName: "deepseek",
+        },
       },
     },
     { ...validConfig, agent: { ...validConfig.agent, unexpected: true } },

@@ -7,7 +7,8 @@
  *
  * Key constructs:
  * - A narrow HTML allowlist for details and inline text formatting.
- * - Inert rendering of malformed allowed tags without losing the model's answer.
+ * - Canonical rewriting of tolerated tag spellings so one stray space never escapes a block.
+ * - Recovery of a truncated collapsible block; other malformed allowed tags render inert.
  * - Explicit rejection of over-wide tables, excessive nesting, and indivisible long blocks.
  */
 import { AppError } from "./app-error.js";
@@ -18,9 +19,14 @@ const TELEGRAM_RICH_MESSAGE_MAX_NESTING = 16;
 const PLACEHOLDER_START = 0xE000;
 const PLACEHOLDER_END = 0xF8FF;
 const ALLOWED_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
-const ALLOWED_HTML_TAG_PATTERN =
-  /^<(?:details(?: open)?|summary|u|ins|sub|sup)>$|^<\/(?:details|summary|u|ins|sub|sup)>$/u;
-const MARKDOWN_LINK_PATTERN = /\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\n]*\))+)\)/gu;
+const ALLOWED_HTML_TAG_NAMES = new Set(["details", "summary", "u", "ins", "sub", "sup"]);
+const DETAILS_TAG_NAME = "details";
+// The tag name stays attached to the bracket so ordinary text like `< details>` is never revived
+// as markup; only the attribute area and the closing bracket tolerate stray whitespace.
+const HTML_OPEN_TAG_PATTERN = /^<([a-z]+)((?:\s[^<>]*)?)>$/iu;
+const HTML_CLOSE_TAG_PATTERN = /^<\/([a-z]+)\s*>$/iu;
+// Telegram documents exactly one attribute for a rich collapsible block: `open`.
+const DETAILS_OPEN_ATTRIBUTE_PATTERN = /^open(?:\s*=\s*"(?:|open|true)")?$/iu;
 
 function placeholderMarker(value: string): string {
   for (let codePoint = PLACEHOLDER_START; codePoint <= PLACEHOLDER_END; codePoint += 1) {
@@ -44,7 +50,37 @@ function htmlTagName(tag: string): { closing: boolean; name: string } {
   return { closing: match[1] === "/", name: match[2]! };
 }
 
-function validateAllowedTags(tags: readonly string[]): void {
+/**
+ * Model output varies in spelling (`<details open="true">`, `<summary >`, `</DETAILS>`), while the
+ * chunker and Telegram both expect one canonical form. Recognized tags are rewritten; anything with
+ * an unexpected attribute stays raw text and is escaped like any other model-authored HTML.
+ */
+function canonicalAllowedTag(tag: string): string | null {
+  const closing = HTML_CLOSE_TAG_PATTERN.exec(tag);
+  if (closing) {
+    const name = closing[1]!.toLowerCase();
+    return ALLOWED_HTML_TAG_NAMES.has(name) ? `</${name}>` : null;
+  }
+
+  const opening = HTML_OPEN_TAG_PATTERN.exec(tag);
+  if (!opening) return null;
+  const name = opening[1]!.toLowerCase();
+  if (!ALLOWED_HTML_TAG_NAMES.has(name)) return null;
+
+  const attributes = opening[2]!.trim();
+  if (attributes.length === 0) return `<${name}>`;
+  if (name === DETAILS_TAG_NAME && DETAILS_OPEN_ATTRIBUTE_PATTERN.test(attributes)) {
+    return `<${DETAILS_TAG_NAME} open>`;
+  }
+  return null;
+}
+
+/**
+ * Returns the closing tags a truncated answer still needs. A collapsible block is the one container
+ * the prompt asks for on every long answer, so an unclosed `<details>` is completed instead of
+ * degrading the whole message to escaped text. Any other imbalance stays a hard error.
+ */
+function validateAllowedTags(tags: readonly string[]): string[] {
   const stack: string[] = [];
   let detailsDepth = 0;
 
@@ -53,7 +89,7 @@ function validateAllowedTags(tags: readonly string[]): void {
     const { closing, name } = htmlTagName(tag);
     if (!closing) {
       stack.push(name);
-      if (name === "details") detailsDepth += 1;
+      if (name === DETAILS_TAG_NAME) detailsDepth += 1;
       if (detailsDepth > TELEGRAM_RICH_MESSAGE_MAX_NESTING) {
         throw new AppError(
           "AGENT_TELEGRAM_RICH_NESTING_TOO_DEEP",
@@ -69,15 +105,17 @@ function validateAllowedTags(tags: readonly string[]): void {
         "Ответ содержит несбалансированную разрешённую разметку",
       );
     }
-    if (name === "details") detailsDepth -= 1;
+    if (name === DETAILS_TAG_NAME) detailsDepth -= 1;
   }
 
-  if (stack.length !== 0) {
+  // Closing a dangling inline tag would silently restyle the tail; only blocks are recoverable.
+  if (stack.some((name) => name !== DETAILS_TAG_NAME)) {
     throw new AppError(
       "AGENT_TELEGRAM_RICH_HTML_INVALID",
       "Ответ содержит незакрытую разрешённую разметку",
     );
   }
+  return stack.map(() => `</${DETAILS_TAG_NAME}>`);
 }
 
 function safeMarkdownLink(rawUrl: string): boolean {
@@ -87,11 +125,71 @@ function safeMarkdownLink(rawUrl: string): boolean {
 }
 
 function neutralizeUnsafeLinks(markdown: string): string {
-  return markdown.replace(
-    MARKDOWN_LINK_PATTERN,
-    (match, label: string, rawUrl: string) =>
-      safeMarkdownLink(rawUrl) ? match : `${label} (${rawUrl})`,
-  );
+  let result = "";
+  let offset = 0;
+  while (offset < markdown.length) {
+    const labelStart = markdown.indexOf("[", offset);
+    if (labelStart === -1) return result + markdown.slice(offset);
+    const labelEnd = markdown.indexOf("](", labelStart + 1);
+    if (labelEnd === -1 || markdown.slice(labelStart + 1, labelEnd).includes("\n")) {
+      result += markdown.slice(offset, labelStart + 1);
+      offset = labelStart + 1;
+      continue;
+    }
+
+    // Markdown destinations may contain balanced nested parentheses; regex-only matching leaves
+    // deeper unsafe URLs untouched, so scan the destination structurally.
+    let depth = 1;
+    let cursor = labelEnd + 2;
+    for (; cursor < markdown.length && depth > 0; cursor += 1) {
+      const character = markdown[cursor]!;
+      if (character === "\\") {
+        cursor += 1;
+        continue;
+      }
+      if (character === "\n" || /\s/u.test(character)) break;
+      if (character === "(") depth += 1;
+      if (character === ")") depth -= 1;
+    }
+    if (depth !== 0) {
+      result += markdown.slice(offset, labelStart + 1);
+      offset = labelStart + 1;
+      continue;
+    }
+
+    const matchEnd = cursor;
+    const label = markdown.slice(labelStart + 1, labelEnd);
+    const rawUrl = markdown.slice(labelEnd + 2, matchEnd - 1);
+    const match = markdown.slice(labelStart, matchEnd);
+    result += markdown.slice(offset, labelStart);
+    result += safeMarkdownLink(rawUrl) ? match : `${label} (${rawUrl})`;
+    offset = matchEnd;
+  }
+  return result;
+}
+
+function protectMarkdownCode(markdown: string): {
+  protectedMarkdown: string;
+  restore(value: string): string;
+} {
+  const marker = placeholderMarker(markdown);
+  const code: string[] = [];
+  // Complete inline spans and fenced blocks are inert Markdown content; an unfinished fence is
+  // protected to the end because model truncation must not turn code examples into active HTML.
+  const protectedMarkdown = markdown.replace(/```[\s\S]*?(?:```|$)|`[^`\n]*`/gu, (value) => {
+    const index = code.push(value) - 1;
+    return `${marker}${index}${marker}`;
+  });
+  return {
+    protectedMarkdown,
+    restore(value) {
+      let restored = value;
+      for (const [index, codeBlock] of code.entries()) {
+        restored = restored.replaceAll(`${marker}${index}${marker}`, codeBlock);
+      }
+      return restored;
+    },
+  };
 }
 
 function validateTableWidths(markdown: string): void {
@@ -161,17 +259,20 @@ function sanitizeTelegramRichMarkdownInternal(
   markdown: string,
   preserveAllowedHtml: boolean,
 ): string {
-  validateTableWidths(markdown);
+  const protectedCode = protectMarkdownCode(markdown);
+  validateTableWidths(protectedCode.protectedMarkdown);
 
   // Rich Markdown accepts arbitrary HTML and remote media, so reserve only reviewed text tags.
-  const marker = placeholderMarker(markdown);
+  const marker = placeholderMarker(protectedCode.protectedMarkdown);
   const allowedTags: string[] = [];
-  let sanitized = markdown.replace(/<[^>\n]*>/gu, (tag) => {
-    if (!preserveAllowedHtml || !ALLOWED_HTML_TAG_PATTERN.test(tag)) return tag;
-    const index = allowedTags.push(tag) - 1;
+  let sanitized = protectedCode.protectedMarkdown.replace(/<[^>\n]*>/gu, (tag) => {
+    if (!preserveAllowedHtml) return tag;
+    const canonical = canonicalAllowedTag(tag);
+    if (canonical === null) return tag;
+    const index = allowedTags.push(canonical) - 1;
     return `${marker}${index}${marker}`;
   });
-  validateAllowedTags(allowedTags);
+  const missingClosingTags = validateAllowedTags(allowedTags);
 
   // Model-authored media and unsafe links stay visible as inert text instead of triggering fetches.
   sanitized = sanitized.replace(/!\[/gu, "\\![");
@@ -181,7 +282,12 @@ function sanitizeTelegramRichMarkdownInternal(
   for (const [index, tag] of allowedTags.entries()) {
     sanitized = sanitized.replaceAll(`${marker}${index}${marker}`, tag);
   }
-  return sanitized;
+
+  // A recovered closing tag belongs on its own block line so chunking still sees complete blocks.
+  if (missingClosingTags.length > 0) {
+    sanitized = `${sanitized.trimEnd()}\n\n${missingClosingTags.join("\n\n")}`;
+  }
+  return protectedCode.restore(sanitized);
 }
 
 export function sanitizeTelegramRichMarkdown(markdown: string): string {
@@ -200,13 +306,65 @@ export function sanitizeTelegramRichMarkdown(markdown: string): string {
   }
 }
 
+function hardSplit(value: string, maxCharacters: number): string[] {
+  const characters = Array.from(value);
+  const chunks: string[] = [];
+  for (let offset = 0; offset < characters.length; offset += maxCharacters) {
+    chunks.push(characters.slice(offset, offset + maxCharacters).join(""));
+  }
+  return chunks;
+}
+
+function splitBodyBlock(block: string, maxCharacters: number): string[] {
+  if (characterLength(block) <= maxCharacters) return [block];
+  const fenced = /^```([^\n]*)\n([\s\S]*)\n```$/u.exec(block);
+  if (!fenced) return hardSplit(block, maxCharacters);
+
+  // Reopen a very large code fence in each message so every rich payload remains valid Markdown.
+  const opening = `\`\`\`${fenced[1]}`;
+  const overhead = characterLength(`${opening}\n\n\`\`\``);
+  const contentLimit = maxCharacters - overhead;
+  if (contentLimit < 1) return [];
+  return hardSplit(fenced[2]!, contentLimit).map((part) => `${opening}\n${part}\n\`\`\``);
+}
+
+function splitOversizedDetailsBlock(block: string): string[] | null {
+  const match = /^(<details(?: open)?><summary>[^\n]*<\/summary>)\n+([\s\S]*)\n+<\/details>$/u.exec(block);
+  if (!match) return null;
+  const opening = match[1]!;
+  const body = match[2]!;
+  if (body.includes("<details") || body.includes("</details>")) return null;
+
+  const overhead = characterLength(`${opening}\n\n\n\n</details>`);
+  const bodyLimit = TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS - overhead;
+  const bodyBlocks = completeMarkdownBlocks(body).flatMap((item) => splitBodyBlock(item, bodyLimit));
+  if (bodyBlocks.length === 0) return null;
+
+  const bodyChunks: string[] = [];
+  let current = "";
+  for (const bodyBlock of bodyBlocks) {
+    const candidate = current ? `${current}\n\n${bodyBlock}` : bodyBlock;
+    if (characterLength(candidate) <= bodyLimit) {
+      current = candidate;
+      continue;
+    }
+    if (current) bodyChunks.push(current);
+    current = bodyBlock;
+  }
+  if (current) bodyChunks.push(current);
+  return bodyChunks.map((part) => `${opening}\n\n${part}\n\n</details>`);
+}
+
 export function formatTelegramRichMessages(markdown: string): string[] {
   const sanitized = sanitizeTelegramRichMarkdown(markdown).trim();
   if (!sanitized) return [];
   if (characterLength(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) return [sanitized];
 
   // Split only between complete Markdown blocks so every independently parsed message stays valid.
-  const blocks = completeMarkdownBlocks(sanitized);
+  const blocks = completeMarkdownBlocks(sanitized).flatMap((block) => {
+    if (characterLength(block) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) return [block];
+    return splitOversizedDetailsBlock(block) ?? [block];
+  });
   const chunks: string[] = [];
   let chunk = "";
   for (const block of blocks) {

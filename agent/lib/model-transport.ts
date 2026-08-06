@@ -9,13 +9,14 @@
  * - Anthropic Messages adaptive thinking is enforced at the transport boundary.
  * - Explicit MiniMax compatibility preserves provider web-search payloads across Anthropic parsing.
  * - Retryable physical provider responses are logged before AI SDK applies its bounded retry policy.
- * - OpenAI Chat Completions remains a generic provider-independent transport.
+ * - OpenAI Chat Completions carries explicit provider-native thinking controls when configured.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
   LanguageModelV4FinishReason,
   LanguageModelV4StreamPart,
+  SharedV4ProviderOptions,
 } from "@ai-sdk/provider";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
@@ -67,9 +68,33 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
   };
 }
 
+function configuredProviderOptions(
+  existing: SharedV4ProviderOptions | undefined,
+  transport: AgentModelTransport,
+): SharedV4ProviderOptions {
+  if (transport.protocol === "anthropic-messages") {
+    return {
+      anthropic: {
+        ...existing?.anthropic,
+        thinking: { type: "adaptive" },
+      },
+    };
+  }
+  if (transport.thinking === undefined) return {};
+  return {
+    [transport.providerName]: {
+      ...existing?.[transport.providerName],
+      ...(transport.thinking.type === "enabled"
+        ? { reasoningEffort: transport.thinking.effort }
+        : {}),
+      thinking: { type: transport.thinking.type },
+    },
+  };
+}
+
 function createTransportDefaultsMiddleware(
   maxOutputTokens: number,
-  adaptiveThinking: boolean,
+  transport: AgentModelTransport,
 ): LanguageModelMiddleware {
   return {
     specificationVersion: "v4",
@@ -79,14 +104,7 @@ function createTransportDefaultsMiddleware(
         maxOutputTokens: params.maxOutputTokens ?? maxOutputTokens,
         providerOptions: {
           ...params.providerOptions,
-          ...(adaptiveThinking
-            ? {
-                anthropic: {
-                  ...params.providerOptions?.anthropic,
-                  thinking: { type: "adaptive" },
-                },
-              }
-            : {}),
+          ...configuredProviderOptions(params.providerOptions, transport),
         },
       };
     },
@@ -147,7 +165,7 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
       fetch,
     });
     return wrapLanguageModel({
-      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, true),
+      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
       model: provider(options.modelId),
     });
   }
@@ -159,7 +177,7 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
     name: transport.providerName,
   });
   return wrapLanguageModel({
-    middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, false),
+    middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
     model: provider.chatModel(options.modelId),
   });
 }

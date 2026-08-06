@@ -3,10 +3,12 @@
  *
  * Constructs covered:
  * - Supported text-rich Markdown and a narrow inline HTML allowlist survive sanitization.
- * - Malformed allowed HTML is rendered inert instead of blocking final delivery.
+ * - Tolerated spellings of the collapsible block are canonicalized instead of escaped.
+ * - A truncated collapsible block is closed; other malformed allowed HTML is rendered inert.
  * - Model-authored media, Telegram service tags, and unsafe links are rendered inert.
  * - Final rich messages split only between complete blocks at Telegram's length limit.
  * - The permanent prompt teaches semantic rich formatting without exposing transport control.
+ * - The permanent prompt requires long answers to collapse their bulk behind `<details>`.
  */
 import { readFile } from "node:fs/promises";
 
@@ -56,6 +58,32 @@ describe("sanitizeTelegramRichMarkdown", () => {
     expect(sanitized).not.toContain("<tg-thinking>");
   });
 
+  it("neutralizes unsafe links with nested parentheses", () => {
+    const sanitized = sanitizeTelegramRichMarkdown([
+      "[javascript](javascript:alert((1)))",
+      "[telegram](tg://resolve?domain=a(b(c)))",
+      "[safe](https://example.com/a(b(c)))",
+    ].join("\n"));
+
+    expect(sanitized).toContain("javascript (javascript:alert((1)))");
+    expect(sanitized).toContain("telegram (tg://resolve?domain=a(b(c)))");
+    expect(sanitized).toContain("[safe](https://example.com/a(b(c)))");
+    expect(sanitized).not.toContain("[javascript](javascript:");
+    expect(sanitized).not.toContain("[telegram](tg:");
+  });
+
+  it("ignores allowed-looking HTML inside inline and fenced code", () => {
+    const markdown = [
+      "`<details>` остаётся примером.",
+      "",
+      "```html",
+      "<details><summary>Пример</summary>",
+      "```",
+    ].join("\n");
+
+    expect(sanitizeTelegramRichMarkdown(markdown)).toBe(markdown);
+  });
+
   it("rejects tables wider than Telegram Rich Message supports", () => {
     const row = `| ${Array.from({ length: 21 }, (_, index) => `C${index}`).join(" | ")} |`;
 
@@ -64,13 +92,40 @@ describe("sanitizeTelegramRichMarkdown", () => {
     );
   });
 
-  it("neutralizes unclosed allowed HTML instead of blocking final delivery", () => {
+  it("canonicalizes tolerated spellings of the collapsible block", () => {
+    const sanitized = sanitizeTelegramRichMarkdown(
+      ['<details open="true"><summary >Итог</summary>', "", "Текст", "", "</DETAILS>"].join("\n"),
+    );
+
+    expect(sanitized).toBe(
+      ["<details open><summary>Итог</summary>", "", "Текст", "", "</details>"].join("\n"),
+    );
+  });
+
+  it("renders a collapsible block with an unsupported attribute inert", () => {
+    const sanitized = sanitizeTelegramRichMarkdown(
+      '<details class="wide"><summary>Итог</summary>Текст</details>',
+    );
+
+    expect(sanitized).toContain('&lt;details class="wide"&gt;');
+    expect(sanitized).toContain("&lt;/details&gt;");
+  });
+
+  it("closes a truncated collapsible block instead of escaping the whole answer", () => {
     expect(
       formatTelegramRichMessages(
         "<details><summary>Результат</summary>\n\nОтвет без закрывающего details",
       ),
     ).toEqual([
-      "&lt;details&gt;&lt;summary&gt;Результат&lt;/summary&gt;\n\nОтвет без закрывающего details",
+      "<details><summary>Результат</summary>\n\nОтвет без закрывающего details\n\n</details>",
+    ]);
+  });
+
+  it("neutralizes other unclosed allowed HTML instead of blocking final delivery", () => {
+    expect(
+      formatTelegramRichMessages("<details><summary>Результат\n\nОтвет без закрытия summary"),
+    ).toEqual([
+      "&lt;details&gt;&lt;summary&gt;Результат\n\nОтвет без закрытия summary",
     ]);
   });
 });
@@ -100,6 +155,20 @@ describe("formatTelegramRichMessages", () => {
       "AGENT_TELEGRAM_RICH_BLOCK_TOO_LONG",
     );
   });
+
+  it("splits an oversized details block into independently balanced messages", () => {
+    const tail = "КОНЕЦ_ДЛИННОГО_ОТВЕТА";
+    const body = `${"Большой раздел данных. ".repeat(3_500)}${tail}`;
+    const chunks = formatTelegramRichMessages(
+      `<details><summary>Подробный разбор</summary>\n\n${body}\n\n</details>`,
+    );
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => Array.from(chunk).length <= 32_768)).toBe(true);
+    expect(chunks.every((chunk) => chunk.startsWith("<details><summary>"))).toBe(true);
+    expect(chunks.every((chunk) => chunk.endsWith("</details>"))).toBe(true);
+    expect(chunks.at(-1)).toContain(tail);
+  });
 });
 
 describe("Telegram rich presentation instructions", () => {
@@ -122,6 +191,45 @@ describe("Telegram rich presentation instructions", () => {
     );
     expect(instructions).toContain("`$...$` или `$$...$$`");
     expect(instructions).not.toContain("orca-details");
+  });
+
+  it("makes plain conversational text the default and rich structure the exception", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    expect(instructions).toContain("По умолчанию отвечай обычным текстом");
+    expect(instructions).toContain("Если сомневаешься, пиши обычным текстом");
+    // The default must be stated before the syntax reference, not buried after it.
+    const defaultRule = instructions.indexOf("По умолчанию отвечай обычным текстом");
+    expect(defaultRule).toBeGreaterThan(-1);
+    expect(defaultRule).toBeLessThan(instructions.indexOf("## Разметка"));
+    expect(defaultRule).toBeLessThan(instructions.indexOf("## Длинные ответы"));
+    // Rich structure is tied to the kind of content, not to a general "look nice" instruction.
+    expect(instructions).toContain("разбор, обзор, статья");
+  });
+
+  it("documents the actual Telegram rich markdown syntax the renderer expects", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    // Telegram Rich Markdown follows GFM, so legacy Telegram Markdown habits render incorrectly.
+    expect(instructions).toContain("Одна звёздочка — курсив, две — жирный");
+    expect(instructions).toContain("Не экранируй разметку вручную");
+    for (const syntax of ["`**жирный**`", "`~~зачёркнутый~~`", "`==выделенный==`", "`||спойлер||`"]) {
+      expect(instructions, `rich syntax ${syntax} must be documented`).toContain(syntax);
+    }
+    expect(instructions).toContain("`- [ ]`");
+    expect(instructions).toContain("Сноски");
+  });
+
+  it("requires long answers to collapse their bulk behind a details block", async () => {
+    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
+
+    expect(instructions).toContain("## Длинные ответы прячь под раскрытие");
+    expect(instructions).toContain("`</details>`");
+    expect(instructions).toContain("`<details open>`");
+    // The lead must stay outside the accordion, and short answers must not be hidden at all.
+    expect(instructions).toMatch(/одна–три строки|одну–три строки/u);
+    expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
+    expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
   });
 
   it("overrides the framework transport hint that forbids rich structure", async () => {
