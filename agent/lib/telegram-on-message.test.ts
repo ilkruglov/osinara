@@ -521,6 +521,27 @@ describe("createTelegramMessageHandler", () => {
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
+  it("starts the existing group turn when the message contains an agent name", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(
+      telegramContext().context,
+      groupMessage("Осинара сегодня хорошо сработала"),
+    );
+
+    expect(result?.auth).toMatchObject({ attributes: { groupId: "group-1" } });
+    expect(repository.session.prepareTurn).toHaveBeenCalledTimes(1);
+  });
+
   it("journals an ordinary message in all mode without starting a model turn", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({

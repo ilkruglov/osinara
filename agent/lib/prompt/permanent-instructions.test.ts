@@ -70,6 +70,8 @@ describe("permanent instructions", () => {
     expect(instructions).toContain("`❤`");
     expect(instructions).toContain("`🤣`");
     expect(instructions).toContain("`🖕`");
+    expect(instructions).toContain("не ограничиваясь примерами");
+    expect(instructions).toContain("упомянули твоё имя");
     expect(instructions).toContain("Не используй `🖕` для критики");
   });
 
