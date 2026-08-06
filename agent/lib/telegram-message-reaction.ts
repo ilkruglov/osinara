@@ -12,7 +12,9 @@ import type { TelegramHandle } from "eve/channels/telegram";
 import { AppError } from "./app-error.js";
 
 const EMOJI_GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-const EMOJI_CHARACTER_PATTERN = /[\p{Extended_Pictographic}\p{Regional_Indicator}]/u;
+const EXTENDED_PICTOGRAPHIC_PATTERN = /\p{Extended_Pictographic}/u;
+const KEYCAP_EMOJI_PATTERN = /^[#*0-9]\uFE0F?\u20E3$/u;
+const REGIONAL_FLAG_PATTERN = /^\p{Regional_Indicator}{2}$/u;
 const TELEGRAM_MESSAGE_ID_PATTERN = /^[1-9]\d*$/u;
 const TELEGRAM_REACTION_DECLINED_STATUSES = new Set([400, 403]);
 
@@ -25,7 +27,8 @@ export function isTelegramMessageReactionEmoji(
 ): value is TelegramMessageReactionEmoji {
   const graphemes = Array.from(EMOJI_GRAPHEME_SEGMENTER.segment(value));
   return graphemes.length === 1 && graphemes[0]?.segment === value &&
-    EMOJI_CHARACTER_PATTERN.test(value);
+    (EXTENDED_PICTOGRAPHIC_PATTERN.test(value) || KEYCAP_EMOJI_PATTERN.test(value) ||
+      REGIONAL_FLAG_PATTERN.test(value));
 }
 
 export async function setTelegramMessageReaction(
