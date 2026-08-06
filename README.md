@@ -37,7 +37,7 @@ Osinara — приватный семейный Telegram-агент на TypeScr
 | Workspaces | Изолированные personal, family и group файловые области, attachment persistence, безопасная отправка файлов. |
 | Google Workspace | Native `gws` skills для Gmail, Calendar, Drive, Docs, Sheets и People через workspace-bound OAuth credentials. |
 | Sandbox | Долгоживущие Docker sandbox sessions с scoped mounts, isolated tools volume, egress proxy и fail-closed policy. |
-| Оркестрация | Trusted root-agent делегирует большие research/document задачи declared fresh-context worker в отдельном networkless/tool-less sandbox; mutations и доставка остаются у parent. |
+| Оркестрация | Trusted root-agent делегирует большие задачи анализа, преобразования и подготовки документов универсальному `task_worker` в отдельном networkless/tool-less sandbox; mutations и доставка остаются у parent. |
 | Production | Immutable GitHub releases, GHCR digest images, Telegram approval перед deploy, systemd timer на сервере. |
 
 ## Архитектура

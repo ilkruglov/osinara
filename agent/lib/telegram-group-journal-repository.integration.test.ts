@@ -427,7 +427,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
     await expect(telegramGroupAttachmentRepository.list(
       { ...externalAuth, groupType: "family_private" },
       { limit: 50, messageThreadId: null },
-    )).resolves.toEqual({ items: [], nextCursor: null });
+    )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED/);
   });
 
   it("projects an observed replied-to image attachment through durable ancestry", async () => {

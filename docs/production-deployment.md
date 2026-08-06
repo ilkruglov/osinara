@@ -8,6 +8,9 @@ builds six container-only images, publishes immutable tags to GHCR, records arti
 and prepares `vVERSION` as a draft. CI uploads and byte-verifies every asset before publishing the
 draft as the latest release. A failed rerun may resume only a draft whose tag still resolves to the
 same commit; a published release or unrelated tag requires a package version bump.
+Every version must also provide a detailed user-facing changelog at `docs/releases/vVERSION.md`;
+the release job fails before image publication when that file is absent or empty and uses it as the
+exact GitHub Release description instead of an opaque generated commit list.
 Repository-level immutable releases are mandatory; both the application checker and server reject
 published releases whose API metadata does not report `immutable: true`.
 

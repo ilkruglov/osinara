@@ -188,12 +188,14 @@ describe("createWorkspaceImageInspector", () => {
     const downloadTelegramAttachment = vi.fn();
     const inspect = createWorkspaceImageInspector({
       analyze,
+      authorizeScope,
       downloadTelegramAttachment,
       findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
         "AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED: Доступ к вложению был отозван",
       )),
       readBinary: vi.fn(),
       readTelegramInboxAttachment: vi.fn(),
+      supportsImageInput: true,
     });
 
     await expect(inspect({
@@ -215,12 +217,14 @@ describe("createWorkspaceImageInspector", () => {
     const downloadTelegramAttachment = vi.fn();
     const inspect = createWorkspaceImageInspector({
       analyze,
+      authorizeScope,
       downloadTelegramAttachment,
       findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
         "AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND: Trust zone группы больше не существует",
       )),
       readBinary: vi.fn(),
       readTelegramInboxAttachment: vi.fn(),
+      supportsImageInput: true,
     });
 
     await expect(inspect({
