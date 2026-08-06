@@ -9,6 +9,7 @@ import { generateText } from "ai";
 
 import { VISION_MAX_FILE_BYTES } from "../../config.js";
 import { visionModel } from "../model-registry.js";
+import { modelProviderConfig } from "../model-provider-config.js";
 import { AppError } from "../app-error.js";
 import { downloadTelegramAttachment } from "../attachments/telegram-attachment-download.js";
 import { telegramGroupAttachmentRepository } from "../attachments/telegram-group-attachment-repository.js";
@@ -31,6 +32,7 @@ interface ImageAnalysisInput {
 
 interface WorkspaceImageInspectorDependencies {
   analyze(input: ImageAnalysisInput): Promise<string>;
+  authorizeScope(auth: WorkspaceAuthorization, scope: WorkspaceScope): Promise<void>;
   downloadTelegramAttachment: typeof downloadTelegramAttachment;
   findTelegramAttachment: typeof telegramGroupAttachmentRepository.find;
   readBinary(
@@ -43,6 +45,7 @@ interface WorkspaceImageInspectorDependencies {
     scope: WorkspaceScope,
     telegramMessageId: string,
   ): Promise<WorkspaceBinaryFile>;
+  supportsImageInput: boolean;
 }
 
 type WorkspaceImageLocation =
@@ -72,6 +75,17 @@ export function createWorkspaceImageInspector(
       scope: WorkspaceScope;
     } & WorkspaceImageLocation,
   ) => {
+    // Capability changes must not bypass the same live scope authorization used by file reads.
+    await dependencies.authorizeScope(auth, input.scope);
+    if (!dependencies.supportsImageInput) {
+      return {
+        code: "AGENT_MODEL_IMAGE_INPUT_UNSUPPORTED",
+        message:
+          "Подключённая модель не поддерживает анализ изображений. Опишите содержимое изображения текстом",
+        supported: false as const,
+      };
+    }
+
     if ("attachmentId" in input) {
       assertAttachmentScope(auth, input.scope);
       const reference = await dependencies.findTelegramAttachment(auth, input.attachmentId);
@@ -152,6 +166,12 @@ export function createWorkspaceImageInspector(
 
 export const inspectWorkspaceImage = createWorkspaceImageInspector({
   async analyze(input) {
+    if (visionModel === null) {
+      throw new AppError(
+        "AGENT_MODEL_VISION_CONFIG_INCONSISTENT",
+        "Конфигурация vision-модели не соответствует заявленной поддержке изображений",
+      );
+    }
     const result = await generateText({
       ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
       messages: [{
@@ -166,8 +186,10 @@ export const inspectWorkspaceImage = createWorkspaceImageInspector({
     });
     return result.text;
   },
+  authorizeScope: workspaceBinaryRepository.authorizeScope,
   downloadTelegramAttachment,
   findTelegramAttachment: telegramGroupAttachmentRepository.find,
   readBinary: workspaceBinaryRepository.readBinary,
   readTelegramInboxAttachment: workspaceBinaryRepository.readTelegramInboxAttachment,
+  supportsImageInput: modelProviderConfig.agent.models.vision.supportsImageInput,
 });

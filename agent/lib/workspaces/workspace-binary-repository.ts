@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `WorkspaceBinaryFile`: current metadata plus an immutable byte snapshot.
- * - `createWorkspaceBinaryRepository`: direct binary read/write over an authorized resolver.
+ * - `createWorkspaceBinaryRepository`: scope authorization and binary I/O over a trusted resolver.
  * - `workspaceBinaryRepository`: production repository rooted at `/app/workspaces`.
  */
 import { createHash } from "node:crypto";
@@ -90,6 +90,13 @@ async function readCurrentBinary(
 
 export function createWorkspaceBinaryRepository(root: string, resolver: WorkspaceResolver) {
   return {
+    async authorizeScope(
+      auth: WorkspaceAuthorization,
+      scope: WorkspaceScope,
+    ): Promise<void> {
+      await resolveWorkspaceId(resolver, auth, scope);
+    },
+
     async readBinary(
       auth: WorkspaceAuthorization,
       scope: WorkspaceScope,

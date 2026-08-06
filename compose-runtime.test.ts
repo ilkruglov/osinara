@@ -10,6 +10,7 @@
  * - Native skill package assets are shipped in the production agent image.
  * - Production agent runtime includes system CA roots for native integration binaries.
  * - Node application services explicitly select the production runtime image stage.
+ * - Agent containers map the active DeepSeek secret into the provider-neutral runtime boundary.
  * - Nginx re-resolves the agent service after Docker replaces its container IP.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -33,6 +34,23 @@ const REMOVED_ANTIVIRUS_PATHS = [
 ] as const;
 
 describe("Docker Compose runtime wiring", () => {
+  it("requires the DeepSeek key for the active agent without changing CLI proxy compatibility", () => {
+    const localCompose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
+    const productionCompose = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
+    for (const compose of [localCompose, productionCompose]) {
+      const agent = compose.slice(
+        compose.indexOf("\n  agent:\n"),
+        compose.indexOf("\n  sandbox-runtime-image:\n"),
+      );
+      expect(agent).toContain(
+        "      MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}\n",
+      );
+    }
+    expect(localCompose).toContain(
+      "      MODEL_UPSTREAM_API_KEY: ${MODEL_UPSTREAM_API_KEY:?MODEL_UPSTREAM_API_KEY is required}\n",
+    );
+  });
+
   it("provides Eve's derived queue namespace before workflow recovery starts", () => {
     // Eve derives the queue namespace from the package name after loading the agent bundle.
     // Compose must provide the same value earlier so local-world recovery targets registered queues.

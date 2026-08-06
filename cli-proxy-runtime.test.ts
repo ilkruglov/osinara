@@ -44,7 +44,7 @@ describe("CLIProxy deployment compatibility runtime", () => {
           models: [{ alias: "MiniMax-M3", name: "MiniMax-M3" }],
         }],
       });
-      expect(activeAgentConfig.agent?.transport?.protocol).toBe("anthropic-messages");
+      expect(activeAgentConfig.agent?.transport?.protocol).toBe("openai-chat-completions");
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
