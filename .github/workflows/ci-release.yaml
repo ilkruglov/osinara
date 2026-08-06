@@ -1,6 +1,7 @@
 name: CI and release
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [develop, main]
   push:
@@ -27,7 +28,7 @@ jobs:
 
   release:
     name: Publish immutable production release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 60

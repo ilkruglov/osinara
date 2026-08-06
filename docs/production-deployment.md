@@ -34,6 +34,12 @@ claims one approved PostgreSQL proposal after rechecking the current owner, veri
 release, Compose hash, fixed service/image/mount policy, and digest names. It pulls before stopping,
 backs up existing durable state, starts the released Compose graph without build, and checks
 `http://127.0.0.1:8082/eve/v1/health`.
+
+If GitHub loses the canonical `main` push event during an Actions outage, an operator may dispatch
+the same `CI and release` workflow manually with `gh workflow run "CI and release" --ref main`.
+The manual path still runs the production-equivalent test job first and publishes only from the
+current canonical `main` ref; it does not permit a branch build or bypass release validation.
+
 Before each non-initial deployment it also prunes older Osinara deployment backups, retaining the
 initial migration backup while clearing the timestamped slot for the pending snapshot; after
 successful backup creation exactly one previous-release backup remains. After a successful health
