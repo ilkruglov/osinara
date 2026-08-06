@@ -177,13 +177,18 @@ describe("buildSandboxContainerOptions", () => {
         VolumeOptions: { Subpath: GROUP_WORKSPACE_ID },
       }),
     ]);
-    expect(options.Env).not.toEqual(expect.arrayContaining([
-      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
-      expect.stringContaining("NODE_EXTRA_CA_CERTS="),
-      expect.stringContaining("NODE_USE_ENV_PROXY="),
-      expect.stringContaining("PROXY="),
-      expect.stringContaining("/tools/"),
-    ]));
+    // Each fragment is an independent trust-boundary violation; a combined subset check is weaker.
+    for (const forbiddenEnvironmentFragment of [
+      "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+      "NODE_EXTRA_CA_CERTS=",
+      "NODE_USE_ENV_PROXY=",
+      "PROXY=",
+      "/tools/",
+    ]) {
+      expect(options.Env).not.toEqual(expect.arrayContaining([
+        expect.stringContaining(forbiddenEnvironmentFragment),
+      ]));
+    }
   });
 
   it("replaces stale policy compute while preserving named-volume data", async () => {
