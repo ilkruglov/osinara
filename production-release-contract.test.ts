@@ -8,6 +8,7 @@
  * - Server-only deployment locking, validation, backup, status, and notification flow.
  * - Root-owned systemd polling units and required production environment documentation.
  */
+import { X509Certificate } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
@@ -82,6 +83,25 @@ describe("production container contract", () => {
     const dockerfile = readProjectFile("Dockerfile");
 
     expect(dockerfile.match(/COPY scripts\/apply-eve-patches\.ts/g)).toHaveLength(2);
+  });
+
+  it("pins the official Russian root CA inside the sandbox runtime", () => {
+    const dockerfile = readProjectFile("Dockerfile");
+    const certificate = new X509Certificate(
+      readProjectFile("infra/certificates/russian-trusted-root-ca.crt"),
+    );
+
+    expect(certificate.subject).toContain("CN=Russian Trusted Root CA");
+    expect(certificate.issuer).toBe(certificate.subject);
+    expect(certificate.ca).toBe(true);
+    expect(certificate.verify(certificate.publicKey)).toBe(true);
+    expect(certificate.fingerprint256).toBe(
+      "D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31",
+    );
+    expect(dockerfile).toContain(
+      "COPY infra/certificates/russian-trusted-root-ca.crt /usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
+    );
+    expect(dockerfile).toContain("update-ca-certificates");
   });
 
   it("uses only required digest references and one shared app image", () => {

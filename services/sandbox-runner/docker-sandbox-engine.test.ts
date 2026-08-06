@@ -90,7 +90,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "8",
+      "dev.osinara.sandbox.policy-version": "9",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -100,6 +100,8 @@ describe("buildSandboxContainerOptions", () => {
       "AGENT_BROWSER_SESSION=osinara",
       "HOME=/tools/personal/home",
       "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
+      "NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
+      "NODE_USE_ENV_PROXY=1",
       "NPM_CONFIG_PREFIX=/tools/personal/npm",
     ]));
     expect(options.Env).not.toEqual(expect.arrayContaining([
@@ -175,11 +177,18 @@ describe("buildSandboxContainerOptions", () => {
         VolumeOptions: { Subpath: GROUP_WORKSPACE_ID },
       }),
     ]);
-    expect(options.Env).not.toEqual(expect.arrayContaining([
-      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
-      expect.stringContaining("PROXY="),
-      expect.stringContaining("/tools/"),
-    ]));
+    // Each fragment is an independent trust-boundary violation; a combined subset check is weaker.
+    for (const forbiddenEnvironmentFragment of [
+      "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+      "NODE_EXTRA_CA_CERTS=",
+      "NODE_USE_ENV_PROXY=",
+      "PROXY=",
+      "/tools/",
+    ]) {
+      expect(options.Env).not.toEqual(expect.arrayContaining([
+        expect.stringContaining(forbiddenEnvironmentFragment),
+      ]));
+    }
   });
 
   it("replaces stale policy compute while preserving named-volume data", async () => {
