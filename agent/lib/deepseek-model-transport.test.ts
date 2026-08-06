@@ -5,6 +5,7 @@
  * - Explicit thinking controls are sent on every DeepSeek model request.
  * - `reasoning_content` remains separate from visible output.
  * - Tool-call reasoning is replayed exactly as required by DeepSeek multi-round context.
+ * - Approval-only tool calls are removed unless a real tool result completes the pair.
  */
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
 import { generateText, stepCountIs, streamText, tool } from "ai";
@@ -138,6 +139,128 @@ describe("DeepSeek model transport", () => {
       reasoning_effort: "high",
       thinking: { type: "enabled" },
     });
+  });
+
+  it("removes approval-only tool calls while preserving completed tool pairs", async () => {
+    let body: Record<string, unknown> | undefined;
+    const model = deepSeekModel(async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return completion({
+        content: "История обработана.",
+        reasoning_content: "Продолжаю после подтверждения.",
+        role: "assistant",
+      }, "stop");
+    });
+
+    // Eve can resume with an approved call that has no execution result yet. DeepSeek only accepts
+    // assistant tool calls that have a corresponding tool message in the serialized history.
+    await model.doGenerate({
+      prompt: [
+        { content: [{ text: "Подготовь операции", type: "text" }], role: "user" },
+        {
+          content: [
+            { text: "Нужно выполнить операции.", type: "reasoning" },
+            {
+              input: { id: "done" },
+              toolCallId: "call_completed",
+              toolName: "mutate",
+              type: "tool-call",
+            },
+            {
+              input: { id: "approved" },
+              toolCallId: "call_approval_only",
+              toolName: "mutate",
+              type: "tool-call",
+            },
+          ],
+          role: "assistant",
+        },
+        {
+          content: [{
+            output: { type: "json", value: { ok: true } },
+            toolCallId: "call_completed",
+            toolName: "mutate",
+            type: "tool-result",
+          }],
+          role: "tool",
+        },
+        { content: [{ text: "Продолжай", type: "text" }], role: "user" },
+      ],
+    } as LanguageModelV4CallOptions);
+
+    const serialized = JSON.stringify(body?.messages);
+    expect(serialized).toContain("call_completed");
+    expect(serialized).not.toContain("call_approval_only");
+    expect(body?.messages).toEqual([
+      { content: "Подготовь операции", role: "user" },
+      expect.objectContaining({
+        reasoning_content: "Нужно выполнить операции.",
+        role: "assistant",
+        tool_calls: [expect.objectContaining({ id: "call_completed" })],
+      }),
+      expect.objectContaining({ role: "tool", tool_call_id: "call_completed" }),
+      { content: "Продолжай", role: "user" },
+    ]);
+  });
+
+  it("removes misordered tool results instead of pairing them across a user message", async () => {
+    let body: Record<string, unknown> | undefined;
+    const model = deepSeekModel(async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return completion({ content: "Готово.", role: "assistant" }, "stop");
+    });
+
+    await model.doGenerate({
+      prompt: [
+        {
+          content: [{
+            input: {},
+            toolCallId: "call_misordered",
+            toolName: "probe",
+            type: "tool-call",
+          }],
+          role: "assistant",
+        },
+        { content: [{ text: "Новый запрос", type: "text" }], role: "user" },
+        {
+          content: [{
+            output: { type: "json", value: { ok: true } },
+            toolCallId: "call_misordered",
+            toolName: "probe",
+            type: "tool-result",
+          }],
+          role: "tool",
+        },
+      ],
+    } as LanguageModelV4CallOptions);
+
+    expect(body?.messages).toEqual([{ content: "Новый запрос", role: "user" }]);
+  });
+
+  it("removes provider-executed calls that the compatible wire cannot represent as completed", async () => {
+    let body: Record<string, unknown> | undefined;
+    const model = deepSeekModel(async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return completion({ content: "Готово.", role: "assistant" }, "stop");
+    });
+
+    await model.doGenerate({
+      prompt: [
+        {
+          content: [{
+            input: { query: "пример" },
+            providerExecuted: true,
+            toolCallId: "call_provider",
+            toolName: "provider_search",
+            type: "tool-call",
+          }],
+          role: "assistant",
+        },
+        { content: [{ text: "Продолжай", type: "text" }], role: "user" },
+      ],
+    } as LanguageModelV4CallOptions);
+
+    expect(body?.messages).toEqual([{ content: "Продолжай", role: "user" }]);
   });
 
   it("streams reasoning separately and exposes only final content as text", async () => {
