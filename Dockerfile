@@ -63,6 +63,7 @@ ENTRYPOINT ["osinara-cli-proxy-entrypoint", "/config/cli-proxy-compatibility.jso
 CMD ["/CLIProxyAPI/CLIProxyAPI", "-config", "/run/cli-proxy-api/config.json"]
 
 FROM first-party-node AS sandbox-runtime
+COPY infra/certificates/russian-trusted-root-ca.crt /usr/local/share/ca-certificates/russian-trusted-root-ca.crt
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
       build-essential \
@@ -99,6 +100,7 @@ RUN apt-get update \
       unzip \
       xdg-utils \
       zip \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=production-dependencies \
   /app/node_modules/@googleworkspace/cli/bin/gws \

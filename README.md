@@ -189,6 +189,7 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 - Telegram identity, family, group type, roles and scopes never come from model text.
 - Missing required config fails fast with stable errors.
 - External groups cannot access personal/family memory, credentials, Bash, network or trusted tools.
+- Trusted Node CLI traffic uses the internal egress proxy; T-Invest TLS trusts the pinned official Russian root CA without disabling certificate verification.
 - Native child наследует только capability surface вызывающего turn и не может расширить его trust zone.
 - Production images are built only by GitHub Actions from canonical `main` state.
 - Production deployment requires Telegram owner approval and exact release manifest validation.

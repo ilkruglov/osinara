@@ -24,13 +24,15 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "8";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "9";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
 const PROXY_URL = "http://sandbox-egress-proxy:3128";
 const BASE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const GOOGLE_WORKSPACE_BINARY = "/opt/osinara/gws";
+const RUSSIAN_TRUSTED_ROOT_CA_PATH =
+  "/usr/local/share/ca-certificates/russian-trusted-root-ca.crt";
 const SANDBOX_CPU_NANOSECONDS = 1_000_000_000;
 const SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
 const SANDBOX_PIDS_LIMIT = 256;
@@ -87,6 +89,8 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
     `HOME=${root}/home`,
     `PATH=${[...executablePaths, BASE_PATH].join(":")}`,
     `NPM_CONFIG_PREFIX=${root}/npm`,
+    `NODE_EXTRA_CA_CERTS=${RUSSIAN_TRUSTED_ROOT_CA_PATH}`,
+    "NODE_USE_ENV_PROXY=1",
     `PIP_CACHE_DIR=${root}/cache/pip`,
     `PLAYWRIGHT_BROWSERS_PATH=${root}/cache/ms-playwright`,
     `XDG_CACHE_HOME=${root}/cache`,
