@@ -6,7 +6,6 @@
  * - Native Bash never receives the Google credential profile or gws execution boundary.
  * - Public-only proxy egress for trusted sessions.
  * - Network-less, tool-less external-group containers.
- * - Network-less, tool-less delegated workers with trusted workspace mounts.
  * - Resource, capability, and privilege restrictions.
  * - Stale policy replacement and bounded warm-cache reconciliation at the Docker boundary.
  * - Explicit session and runner shutdown remove compute instead of retaining exited containers.
@@ -178,30 +177,6 @@ describe("buildSandboxContainerOptions", () => {
     ]);
     expect(options.Env).not.toEqual(expect.arrayContaining([
       expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
-      expect.stringContaining("PROXY="),
-      expect.stringContaining("/tools/"),
-    ]));
-  });
-
-  it("gives a delegated worker trusted workspace files without tools or network", () => {
-    const options = buildSandboxContainerOptions(runtime, {
-      access: "worker",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [
-        { mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID },
-        { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
-      ],
-      sandboxSessionId: EVE_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    });
-
-    expect(options.HostConfig?.NetworkMode).toBe("none");
-    expect(options.HostConfig?.Mounts).toEqual([
-      expect.objectContaining({ Target: "/workspace/personal" }),
-      expect.objectContaining({ Target: "/workspace/family" }),
-    ]);
-    expect(options.Env).toEqual(["HOME=/tmp/home", expect.stringMatching(/^PATH=/u), "LANG=C.UTF-8"]);
-    expect(options.Env).not.toEqual(expect.arrayContaining([
       expect.stringContaining("PROXY="),
       expect.stringContaining("/tools/"),
     ]));

@@ -3,7 +3,6 @@
  *
  * Exports:
  * - `scopedWorkspaceRunner`: real-Bash backend with trusted scoped tools persistence.
- * - `taskWorkerRunner`: isolated delegated compute without network or persistent tools.
  * - `deleteRunnerToolEnvironment`: removes persistent tools when their workspace is deleted.
  */
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -38,7 +37,6 @@ import {
   type BackendProfile,
   ROOT_RUNNER_PROFILE,
   sandboxHome,
-  TASK_WORKER_RUNNER_PROFILE,
 } from "./runner-sandbox-profile.js";
 
 const TEMPLATE_SCHEMA_VERSION = 1;
@@ -75,12 +73,6 @@ function parseBackendMetadata(
     sandboxSessionId: value.sandboxSessionId,
     seedDigest: sandboxSeedDigest([]),
   });
-  if (profile.access === "worker" && request.access !== "worker") {
-    throw new Error("AGENT_SANDBOX_RUNNER_STATE_INVALID: Worker reconnect access mismatch");
-  }
-  if (profile.access === "automatic" && request.access === "worker") {
-    throw new Error("AGENT_SANDBOX_RUNNER_STATE_INVALID: Root reconnect access mismatch");
-  }
   return {
     access: request.access,
     mounts: request.mounts,
@@ -369,7 +361,7 @@ function workspaceRunner(
             }
             return session;
           }
-          const access = accessForMounts(useOptions.mounts, profile);
+          const access = accessForMounts(useOptions.mounts);
           request = parseCreateSandboxRequest({
             access,
             eveSessionId,
@@ -405,13 +397,6 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
   WorkspaceSandboxUseOptions
 > {
   return workspaceRunner(ROOT_RUNNER_PROFILE, options);
-}
-
-export function taskWorkerRunner(options: BackendOptions = {}): SandboxBackend<
-  Record<string, never>,
-  WorkspaceSandboxUseOptions
-> {
-  return workspaceRunner(TASK_WORKER_RUNNER_PROFILE, options);
 }
 
 export async function deleteRunnerToolEnvironment(

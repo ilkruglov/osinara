@@ -90,7 +90,6 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
 export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
   "ask_question",
   "bash",
-  "task_worker",
   "todo",
   "web_fetch",
   "web_search",

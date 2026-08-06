@@ -49,7 +49,7 @@ export function sandboxSeedDigest(
 }
 
 const createSandboxRequestSchema = z.strictObject({
-  access: z.enum(["restricted", "trusted", "worker"]),
+  access: z.enum(["restricted", "trusted"]),
   eveSessionId: eveSessionIdSchema,
   mounts: z.array(workspaceMountSchema).min(1).max(2),
   sandboxSessionId: sessionIdSchema,
@@ -94,21 +94,6 @@ const createSandboxRequestSchema = z.strictObject({
     return;
   }
 
-  // Workers may inspect trusted workspaces but never receive a group trust zone or persistent tools.
-  if (request.access === "worker") {
-    if (points.includes("group")) {
-      context.addIssue({ code: "custom", message: "Worker scope mismatch", path: ["mounts"] });
-    }
-    if (request.sandboxSessionId !== request.eveSessionId) {
-      context.addIssue({
-        code: "custom",
-        message: "Worker compute identity must match its Eve session",
-        path: ["sandboxSessionId"],
-      });
-    }
-    return;
-  }
-
   // Trusted sessions must never smuggle an external group volume into a network-enabled sandbox.
   if (points.includes("group")) {
     context.addIssue({ code: "custom", message: "Trusted scope mismatch", path: ["mounts"] });
@@ -144,7 +129,7 @@ const removePathRequestSchema = z.strictObject({
   recursive: z.boolean().optional(),
 });
 
-export type SandboxAccess = "restricted" | "trusted" | "worker";
+export type SandboxAccess = "restricted" | "trusted";
 export type GoogleWorkspaceExecutionRequest = z.infer<typeof googleWorkspaceExecutionRequestSchema>;
 export type SandboxMountPoint = z.infer<typeof mountPointSchema>;
 export type SandboxRunnerCreateRequest = z.infer<typeof createSandboxRequestSchema>;

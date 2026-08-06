@@ -37,7 +37,7 @@ Osinara — приватный семейный Telegram-агент на TypeScr
 | Workspaces | Изолированные personal, family и group файловые области, attachment persistence, безопасная отправка файлов. |
 | Google Workspace | Native `gws` skills для Gmail, Calendar, Drive, Docs, Sheets и People через workspace-bound OAuth credentials. |
 | Sandbox | Долгоживущие Docker sandbox sessions с scoped mounts, isolated tools volume, egress proxy и fail-closed policy. |
-| Оркестрация | Trusted root-agent делегирует большие задачи анализа, преобразования и подготовки документов универсальному `task_worker` в отдельном networkless/tool-less sandbox; mutations и доставка остаются у parent. |
+| Оркестрация | Root-agent делегирует большие задачи нативному Eve `agent` со свежим контекстом и теми же разрешёнными tools, skills, connections, sandbox и workspace. |
 | Production | Immutable GitHub releases, GHCR digest images, Telegram approval перед deploy, systemd timer на сервере. |
 
 ## Архитектура
@@ -51,8 +51,8 @@ flowchart LR
   Agent --> Runner[Sandbox runner]
   Agent --> Memory[Embedding worker]
   Agent --> CLIProxy[CLIProxyAPI]
-  Agent --> Worker[Declared Eve task worker]
-  Worker --> Runner
+  Agent --> Child[Native Eve child]
+  Child --> Runner
   Runner --> Docker[Docker Engine]
   Docker --> Sandbox[Scoped sandbox containers]
   Sandbox --> Egress[Sandbox egress proxy]
@@ -66,7 +66,7 @@ flowchart LR
 | Личный чат | `personal` и `family` | `/workspace/personal`, `/workspace/family` | Полный trusted sandbox, personal tools environment. |
 | Семейная группа | Только `family` | `/workspace/family` | Trusted sandbox, family tools environment. |
 | Внешняя группа | Только `group` | `/workspace/group` | Без Bash, сети и persistent credentials; только безопасные file tools. |
-| Task worker | Унаследованный trusted auth без application tools | Те же authorized `personal`/`family` mounts с live recheck | Универсальные большие задачи в отдельном container без Bash, сети, web tools, skills, connections и tools volume. |
+| Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же capability surface текущего trust zone; отдельные history и state. |
 
 ## Production Flow
 
@@ -168,8 +168,7 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 | --- | --- |
 | `agent/agent.ts` | Root Eve agent: model, compaction, delegation limits. |
 | `agent/channels/telegram.ts` | Telegram channel, durable ingress, HITL, rich delivery. |
-| `agent/tools/` | Dynamic capability surface и authored denial replacement для generic Eve `agent`. |
-| `agent/subagents/task_worker/` | Универсальный declared isolated worker для больших задач, анализа и source artifacts. |
+| `agent/tools/` | Единственный discovered application tool: dynamic capability surface текущего режима. |
 | `agent/lib/tools/` | Реализации model-facing typed tools. Не класть сюда tests. |
 | `agent/instructions/` | Turn-scoped dynamic блоки промта: режим, стиль, память. |
 | `agent/lib/prompt/` | Фрагменты промта и композиция блоков по режимам. |
@@ -190,7 +189,7 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 - Telegram identity, family, group type, roles and scopes never come from model text.
 - Missing required config fails fast with stable errors.
 - External groups cannot access personal/family memory, credentials, Bash, network or trusted tools.
-- Delegated research cannot inherit the root sandbox, persistent credentials, skills or connections.
+- Native child наследует только capability surface вызывающего turn и не может расширить его trust zone.
 - Production images are built only by GitHub Actions from canonical `main` state.
 - Production deployment requires Telegram owner approval and exact release manifest validation.
 - Sandbox credentials are mounted by workspace scope and kept outside model-visible text.

@@ -229,6 +229,7 @@ describe("Telegram rich presentation instructions", () => {
     // The lead must stay outside the accordion, and short answers must not be hidden at all.
     expect(instructions).toMatch(/одна–три строки|одну–три строки/u);
     expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
+    expect(instructions).toContain("до семи строк отправляй его как есть");
     expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
   });
 
