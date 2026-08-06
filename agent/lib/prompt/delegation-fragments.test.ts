@@ -1,17 +1,14 @@
 /**
- * Trusted subagent orchestration prompt tests.
+ * Native child-agent orchestration prompt tests.
  *
  * Constructs covered:
  * - Root sessions receive bounded delegation criteria and a self-contained task-envelope contract.
- * - Child sessions receive worker-only rules that forbid recursive delegation and final delivery.
+ * - Child copies receive no root-only orchestration guidance.
  */
 import { describe, expect, it } from "vitest";
 
 import delegationInstructions from "../../instructions/delegation.js";
-import {
-  ORCHESTRATOR_DELEGATION_RULES,
-  SUBAGENT_WORKER_RULES,
-} from "./delegation-fragments.js";
+import { ORCHESTRATOR_DELEGATION_RULES } from "./delegation-fragments.js";
 
 function resolveDelegation(
   channelKind: "subagent" | "telegram",
@@ -35,24 +32,20 @@ function resolveDelegation(
   } as never);
 }
 
-describe("trusted delegation prompt", () => {
+describe("native delegation prompt", () => {
   it("requires a complete task envelope and bounded fan-out", () => {
-    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("`task_worker`");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("`agent`");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("не более трёх");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("роль");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("критерии готовности");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("outputSchema");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("не видит историю");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("те же доступы");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("короткую отбивку");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("не обещай срок");
   });
 
-  it("keeps user-visible and mutating completion at the parent", () => {
-    expect(SUBAGENT_WORKER_RULES).toMatch(/не запускай других сабагентов/iu);
-    expect(SUBAGENT_WORKER_RULES).toMatch(/не отправляй файлы в Telegram/iu);
-    expect(SUBAGENT_WORKER_RULES).toMatch(/не изменяй память/iu);
-    expect(SUBAGENT_WORKER_RULES).toContain("верни оркестратору");
-  });
-
-  it("selects root and worker roles only inside trusted modes", async () => {
+  it("gives every root trust zone guidance but prevents recursive child delegation", () => {
     const trusted = { memoryScopes: ["personal", "family"], telegramChatType: "private" };
     const external = {
       groupType: "external",
@@ -64,6 +57,8 @@ describe("trusted delegation prompt", () => {
       markdown: ORCHESTRATOR_DELEGATION_RULES,
     });
     expect(resolveDelegation("subagent", trusted)).toBeNull();
-    expect(resolveDelegation("telegram", external)).toBeNull();
+    expect(resolveDelegation("telegram", external)).toMatchObject({
+      markdown: ORCHESTRATOR_DELEGATION_RULES,
+    });
   });
 });

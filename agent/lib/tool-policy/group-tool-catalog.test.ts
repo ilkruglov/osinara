@@ -21,7 +21,6 @@ describe("external group tool catalog", () => {
     expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
       "ask_question",
       "bash",
-      "task_worker",
       "todo",
       "web_fetch",
       "web_search",
@@ -63,6 +62,6 @@ describe("external group tool catalog", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
-    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("task_worker");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
   });
 });

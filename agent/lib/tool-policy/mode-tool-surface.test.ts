@@ -190,7 +190,7 @@ describe("external group tool surface", () => {
   it("denies every framework built-in an external group must not reach", async () => {
     const surface = buildModeToolSurface({ capabilities: new Set(), environment: "external", skills: {} });
 
-    for (const toolName of ["ask_question", "bash", "task_worker", "todo", "web_fetch"]) {
+    for (const toolName of ["ask_question", "bash", "todo", "web_fetch"]) {
       await expect(
         surface[toolName]!.execute({}, {} as never),
         `${toolName} must be denied`,

@@ -4,7 +4,6 @@
  * Constructs covered:
  * - Trusted personal/family mount validation.
  * - Restricted external-group mount validation.
- * - Tool-less worker access to personal/family workspaces with an isolated Eve session identity.
  * - Duplicate, mixed-scope, and unsafe seed-path rejection.
  */
 import { describe, expect, it } from "vitest";
@@ -54,22 +53,6 @@ describe("parseCreateSandboxRequest", () => {
     })).toMatchObject({ access: "restricted" });
   });
 
-  it("accepts personal and family mounts for a tool-less worker session", () => {
-    expect(parseCreateSandboxRequest({
-      access: "worker",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [
-        { mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID },
-        { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
-      ],
-      sandboxSessionId: EVE_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    })).toMatchObject({
-      access: "worker",
-      sandboxSessionId: EVE_SESSION_ID,
-    });
-  });
-
   it.each([
     {
       access: "trusted",
@@ -92,20 +75,6 @@ describe("parseCreateSandboxRequest", () => {
         { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
         { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
       ],
-      sandboxSessionId: SANDBOX_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    },
-    {
-      access: "worker",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "group", workspaceId: GROUP_WORKSPACE_ID }],
-      sandboxSessionId: EVE_SESSION_ID,
-      seedDigest: EMPTY_SEED_DIGEST,
-    },
-    {
-      access: "worker",
-      eveSessionId: EVE_SESSION_ID,
-      mounts: [{ mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID }],
       sandboxSessionId: SANDBOX_SESSION_ID,
       seedDigest: EMPTY_SEED_DIGEST,
     },
