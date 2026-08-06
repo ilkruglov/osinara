@@ -2,11 +2,12 @@
  * Typed HTTP client for the internal sandbox runner.
  *
  * Export:
- * - `SandboxRunnerClient`: session lifecycle, command, and binary file operations.
+ * - `SandboxRunnerClient`: session, file, process, and isolated GWS operations.
  */
 import { Agent, fetch } from "undici";
 
 import type {
+  GoogleWorkspaceExecutionRequest,
   SandboxRunnerCreateRequest,
   SandboxRunnerProcessRequest,
   SandboxRunnerProcessResponse,
@@ -109,6 +110,23 @@ export class SandboxRunnerClient {
       method: "POST",
       signal,
     }));
+    return validateProcessResponse(await response.json());
+  }
+
+  async runGoogleWorkspace(
+    request: GoogleWorkspaceExecutionRequest,
+    signal?: AbortSignal,
+  ): Promise<SandboxRunnerProcessResponse> {
+    const response = await requireSuccess(await fetch(
+      `${this.#baseUrl}${SANDBOX_RUNNER_API_PREFIX}/google-workspace/executions`,
+      {
+        body: JSON.stringify(request),
+        dispatcher: runnerDispatcher,
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        signal,
+      },
+    ));
     return validateProcessResponse(await response.json());
   }
 

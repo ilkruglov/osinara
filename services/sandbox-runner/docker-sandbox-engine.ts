@@ -42,6 +42,7 @@ import {
   resolveTrustedToolMount,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
+import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
@@ -49,11 +50,11 @@ const FILE_UPLOAD_STAGING_DIRECTORY = "/.osinara-sandbox-uploads";
 const FILE_MISSING_EXIT_CODE = 44;
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
-const MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION = "/runner/google-workspace-credentials";
 const SANDBOX_NETWORK_LABEL = "sandbox-egress";
 const SANDBOX_SESSION_LABEL = "dev.osinara.sandbox.session-id";
 const SANDBOX_PROJECT_LABEL = "dev.osinara.sandbox.project";
 const SANDBOX_REQUEST_HASH_LABEL = "dev.osinara.sandbox.request-hash";
+const GOOGLE_WORKSPACE_EXECUTION_LABEL = "dev.osinara.google-workspace-execution";
 
 interface RunnerMount {
   Destination?: string;
@@ -61,7 +62,6 @@ interface RunnerMount {
 }
 
 interface RuntimeRoots {
-  googleWorkspaceCredentialsRoot: string;
   toolsRoot: string;
   workspaceRoot: string;
 }
@@ -165,15 +165,8 @@ export function createDockerSandboxEngine(input: {
           // Exactly one verified scope owns HOME and the read-only Google profile mount.
           const toolMount = resolveTrustedToolMount(request.mounts);
           const toolsPath = `${input.roots.toolsRoot}/${toolMount.workspaceId}`;
-          const googleCredentialsPath =
-            `${input.roots.googleWorkspaceCredentialsRoot}/${toolMount.workspaceId}`;
           await mkdir(toolsPath, { recursive: true });
-          await mkdir(googleCredentialsPath, { recursive: true });
           await requireDirectory(toolsPath, "AGENT_SANDBOX_RUNNER_TOOLS_MISSING");
-          await requireDirectory(
-            googleCredentialsPath,
-            "AGENT_SANDBOX_RUNNER_GOOGLE_CREDENTIALS_MISSING",
-          );
         }
 
         let existing = await inspectContainer(input.docker, sessionId);
@@ -222,6 +215,14 @@ export function createDockerSandboxEngine(input: {
           ? { ...request, workingDirectory: resolvePath(request.workingDirectory) }
           : request;
         return await executeSandboxProcess(input.docker, container, processRequest, signal);
+      });
+    },
+    async runGoogleWorkspace(request, signal) {
+      return await executeGoogleWorkspaceContainer({
+        docker: input.docker,
+        request,
+        runtime: input.runtime,
+        signal,
       });
     },
     async readFile(sessionId, path) {
@@ -366,10 +367,14 @@ export function createDockerSandboxEngine(input: {
       const containers = await input.docker.listContainers({
         all: true,
         filters: {
-          label: [SANDBOX_SESSION_LABEL, `${SANDBOX_PROJECT_LABEL}=${input.runtime.project}`],
+          label: [`${SANDBOX_PROJECT_LABEL}=${input.runtime.project}`],
         },
       });
-      await Promise.all(containers.map(async (item) => {
+      const owned = containers.filter((item) =>
+        item.Labels[SANDBOX_SESSION_LABEL] !== undefined ||
+        item.Labels[GOOGLE_WORKSPACE_EXECUTION_LABEL] === "true"
+      );
+      await Promise.all(owned.map(async (item) => {
         await input.docker.getContainer(item.Id).remove({ force: true, v: true }).catch((error) => {
           if (dockerStatus(error) !== 404) throw error;
         });
@@ -394,10 +399,7 @@ export async function resolveSandboxDockerRuntime(docker: Docker): Promise<{
   const mounts = inspection.Mounts as RunnerMount[];
   const workspaceVolume = mounts.find((mount) => mount.Destination === MOUNT_WORKSPACES_DESTINATION)?.Name;
   const toolsVolume = mounts.find((mount) => mount.Destination === MOUNT_TOOLS_DESTINATION)?.Name;
-  const googleWorkspaceCredentialsVolume = mounts.find((mount) =>
-    mount.Destination === MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION
-  )?.Name;
-  if (!workspaceVolume || !toolsVolume || !googleWorkspaceCredentialsVolume) {
+  if (!workspaceVolume || !toolsVolume) {
     throw new Error("AGENT_SANDBOX_RUNNER_VOLUME_MISSING: Compose volumes are not mounted");
   }
 
@@ -420,13 +422,11 @@ export async function resolveSandboxDockerRuntime(docker: Docker): Promise<{
 
   return {
     roots: {
-      googleWorkspaceCredentialsRoot: MOUNT_GOOGLE_WORKSPACE_CREDENTIALS_DESTINATION,
       toolsRoot: MOUNT_TOOLS_DESTINATION,
       workspaceRoot: MOUNT_WORKSPACES_DESTINATION,
     },
     runtime: {
       egressNetwork,
-      googleWorkspaceCredentialsVolume,
       image,
       project: composeProject,
       toolsVolume,

@@ -3,9 +3,13 @@
  *
  * Export:
  * - `manage_agent_schedule` routes create, update, pause, resume, run-now, and delete actions.
+ *
+ * Key constructs:
+ * - Object-shaped model schema publishes machine-visible actions without a root JSON Schema union.
+ * - Exact nested recurrence variants describe once, daily, and weekly schedules.
+ * - One semantic parser validates both approval and execution before trusted boundaries run.
  */
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import {
@@ -24,6 +28,7 @@ const RECURRENCE_KINDS = ["once", "daily", "weekly"] as const;
 const SCOPES = ["personal", "family"] as const;
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH = 100;
 
 type ToolAction = (typeof TOOL_ACTIONS)[number];
 type ScheduleScope = (typeof SCOPES)[number];
@@ -41,22 +46,32 @@ const TOP_LEVEL_FIELDS = [
   "userRequest",
 ] as const;
 
+// The recurrence union is nested under an object property, keeping the tool root transport-safe.
+const recurrenceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("once") }).strict(),
+  z.object({
+    interval: z.number().int().min(1).max(AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX),
+    kind: z.literal("daily"),
+  }).strict(),
+  z.object({
+    daysOfWeek: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+    interval: z.number().int().min(1).max(AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX),
+    kind: z.literal("weekly"),
+  }).strict(),
+]);
+
 const manageAgentScheduleSchema = z.object({
-  action: z.string().optional(),
+  action: z.enum(TOOL_ACTIONS),
   firstRunAt: z.string().optional(),
   id: z.string().optional(),
   nextRunAt: z.string().optional(),
-  recurrence: z.object({
-    daysOfWeek: z.array(z.number()).optional(),
-    interval: z.number().optional(),
-    kind: z.string().optional(),
-  }).passthrough().optional(),
-  scenarioPrompt: z.string().optional(),
-  scope: z.string().optional(),
-  timezone: z.string().optional(),
-  title: z.string().optional(),
-  userRequest: z.string().optional(),
-}).passthrough();
+  recurrence: recurrenceSchema.optional(),
+  scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
+  scope: z.enum(SCOPES).optional(),
+  timezone: z.string().max(AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH).optional(),
+  title: z.string().max(AGENT_SCHEDULE_TITLE_MAX_LENGTH).optional(),
+  userRequest: z.string().max(AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH).optional(),
+}).strict();
 
 function inputError(message: string): never {
   throw new AppError("AGENT_SCHEDULE_INPUT_INVALID", message);
@@ -77,17 +92,30 @@ function requireOnlyFields(
   }
 }
 
-function requiredString(input: Record<string, unknown>, key: string, example: string): string {
+function requiredString(
+  input: Record<string, unknown>,
+  key: string,
+  example: string,
+  maxLength?: number,
+): string {
   const value = input[key];
   if (typeof value !== "string" || value.trim() === "") {
     inputError(`Поле ${key} обязательно и должно быть строкой. Пример: ${example}`);
   }
+  if (maxLength !== undefined && value.length > maxLength) {
+    inputError(`Поле ${key} должно быть не длиннее ${maxLength} символов. Пример: ${example}`);
+  }
   return value;
 }
 
-function optionalString(input: Record<string, unknown>, key: string, example: string): string | undefined {
+function optionalString(
+  input: Record<string, unknown>,
+  key: string,
+  example: string,
+  maxLength: number,
+): string | undefined {
   if (input[key] === undefined) return undefined;
-  return requiredString(input, key, example);
+  return requiredString(input, key, example, maxLength);
 }
 
 function requireAction(input: Record<string, unknown>): ToolAction {
@@ -225,29 +253,68 @@ function requireCreateInput(input: Record<string, unknown>) {
   return {
     firstRunAt: requiredDate(input, "firstRunAt"),
     recurrence: requiredRecurrence(input.recurrence),
-    scenarioPrompt: requiredString(input, "scenarioPrompt", "Собери краткую сводку..."),
+    scenarioPrompt: requiredString(
+      input,
+      "scenarioPrompt",
+      "Собери краткую сводку...",
+      AGENT_SCHEDULE_PROMPT_MAX_LENGTH,
+    ),
     scope: requiredScope(input),
-    timezone: requiredString(input, "timezone", "Europe/Moscow"),
-    title: requiredString(input, "title", "Дайджест: новые модели ИИ"),
-    userRequest: requiredString(input, "userRequest", "ежедневно в 23:33 получать сводку"),
+    timezone: requiredString(
+      input,
+      "timezone",
+      "Europe/Moscow",
+      AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH,
+    ),
+    title: requiredString(
+      input,
+      "title",
+      "Дайджест: новые модели ИИ",
+      AGENT_SCHEDULE_TITLE_MAX_LENGTH,
+    ),
+    userRequest: requiredString(
+      input,
+      "userRequest",
+      "ежедневно в 23:33 получать сводку",
+      AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH,
+    ),
   };
 }
 
 function requireUpdateInput(input: Record<string, unknown>) {
   requireOnlyFields(input, [
     "action",
+    // MiniMax may materialize these known create-only siblings from the shared root schema.
+    "firstRunAt",
     "id",
     "nextRunAt",
     "recurrence",
     "scenarioPrompt",
+    "scope",
+    "timezone",
     "title",
     "userRequest",
   ], "action=update");
   const nextRunAt = optionalDate(input, "nextRunAt");
   const recurrence = optionalRecurrence(input.recurrence);
-  const scenarioPrompt = optionalString(input, "scenarioPrompt", "Собери краткую сводку...");
-  const title = optionalString(input, "title", "Дайджест: новые модели ИИ");
-  const userRequest = optionalString(input, "userRequest", "ежедневно в 23:33 получать сводку");
+  const scenarioPrompt = optionalString(
+    input,
+    "scenarioPrompt",
+    "Собери краткую сводку...",
+    AGENT_SCHEDULE_PROMPT_MAX_LENGTH,
+  );
+  const title = optionalString(
+    input,
+    "title",
+    "Дайджест: новые модели ИИ",
+    AGENT_SCHEDULE_TITLE_MAX_LENGTH,
+  );
+  const userRequest = optionalString(
+    input,
+    "userRequest",
+    "ежедневно в 23:33 получать сводку",
+    AGENT_SCHEDULE_USER_REQUEST_MAX_LENGTH,
+  );
   if (
     nextRunAt === undefined &&
     recurrence === undefined &&
@@ -260,51 +327,71 @@ function requireUpdateInput(input: Record<string, unknown>) {
   return { id: requiredUuid(input), nextRunAt, recurrence, scenarioPrompt, title, userRequest };
 }
 
+function requireIdOnlyInput(input: Record<string, unknown>, action: ToolAction): string {
+  requireOnlyFields(input, ["action", "id"], `action=${action}`);
+  return requiredUuid(input);
+}
+
+function requireManageAgentScheduleInput(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    inputError("Для manage_agent_schedule передайте JSON-объект с обязательным полем action");
+  }
+  const payload = input as Record<string, unknown>;
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_agent_schedule");
+  const action = requireAction(payload);
+
+  // Approval and execution consume the same parsed contract, preventing malformed HITL requests.
+  if (action === "create") return { action, values: requireCreateInput(payload) } as const;
+  if (action === "update") return { action, values: requireUpdateInput(payload) } as const;
+  return { action, id: requireIdOnlyInput(payload, action) } as const;
+}
+
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить, запустить сейчас или удалить агентное расписание.",
   "Это не напоминание: schedule запускает агента по сценарию и отправляет итог. Существующее расписание сначала найди через list_agent_schedules.",
   "Create payload: {\"action\":\"create\",\"title\":\"Дайджест: новые модели ИИ\",\"firstRunAt\":\"2026-07-15T23:33:00+03:00\",\"timezone\":\"Europe/Moscow\",\"recurrence\":{\"kind\":\"daily\",\"interval\":1},\"scope\":\"personal\",\"scenarioPrompt\":\"Что собрать, источники, фильтры, формат итогового сообщения и когда не присылать пустой отчет\",\"userRequest\":\"ежедневно в 23:33 МСК получать сводку\"}.",
+  "Update payload: {\"action\":\"update\",\"id\":\"<id из list_agent_schedules>\",\"nextRunAt\":\"2026-07-16T23:33:00+03:00\",\"recurrence\":{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]},\"title\":\"Новый заголовок\",\"scenarioPrompt\":\"Новый сценарий\",\"userRequest\":\"Обновленная просьба пользователя\"}; передавай id и только реально изменяемые поля из этого примера. firstRunAt, timezone и scope в update не передавай.",
+  "Pause payload: {\"action\":\"pause\",\"id\":\"<id из list_agent_schedules>\"}. Resume payload: {\"action\":\"resume\",\"id\":\"<id из list_agent_schedules>\"}. Run_now payload: {\"action\":\"run_now\",\"id\":\"<id из list_agent_schedules>\"}. Delete payload: {\"action\":\"delete\",\"id\":\"<id из list_agent_schedules>\"}. Для этих действий не передавай другие поля.",
+  "Не удаляй и не пересоздавай расписание для изменения времени, повторения, заголовка, сценария или исходной просьбы: используй update, сохраняя существующий id.",
   "Recurrence: once = {\"kind\":\"once\"}; daily = {\"kind\":\"daily\",\"interval\":1}; weekly = {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник ... 7=воскресенье.",
   "firstRunAt и nextRunAt всегда ISO datetime с UTC offset. timezone всегда IANA, например Europe/Moscow. scope: personal только в личном чате, family только в зарегистрированной семейной группе.",
 ].join(" ");
 
 export default defineTool({
-  approval: always(),
+  approval: ({ toolInput }) => {
+    requireManageAgentScheduleInput(toolInput);
+    return "user-approval";
+  },
   description: TOOL_DESCRIPTION,
   inputSchema: manageAgentScheduleSchema,
   async execute(input, ctx) {
-    requireOnlyFields(input, TOP_LEVEL_FIELDS, "manage_agent_schedule");
-    const action = requireAction(input);
+    const parsed = requireManageAgentScheduleInput(input);
     const authorization = requireAgentScheduleAuthorization(ctx);
-    if (action === "create") {
-      const values = requireCreateInput(input);
+    if (parsed.action === "create") {
       return await agentScheduleRepository.create(authorization, {
-        ...values,
+        ...parsed.values,
         operationKey: ctx.callId,
       });
     }
-    if (action === "update") {
-      const { id, ...values } = requireUpdateInput(input);
+    if (parsed.action === "update") {
+      const { id, ...values } = parsed.values;
       return await agentScheduleRepository.update(authorization, id, {
         ...values,
         operationKey: ctx.callId,
       });
     }
-    if (action === "pause" || action === "resume") {
-      requireOnlyFields(input, ["action", "id"], `action=${action}`);
-      return await agentScheduleRepository.update(authorization, requiredUuid(input), {
-        enabled: action === "resume",
+    if (parsed.action === "pause" || parsed.action === "resume") {
+      return await agentScheduleRepository.update(authorization, parsed.id, {
+        enabled: parsed.action === "resume",
         operationKey: ctx.callId,
       });
     }
-    if (action === "run_now") {
-      requireOnlyFields(input, ["action", "id"], "action=run_now");
-      return await agentScheduleRepository.runNow(authorization, requiredUuid(input), ctx.callId);
+    if (parsed.action === "run_now") {
+      return await agentScheduleRepository.runNow(authorization, parsed.id, ctx.callId);
     }
 
-    requireOnlyFields(input, ["action", "id"], "action=delete");
     return {
-      deleted: await agentScheduleRepository.delete(authorization, requiredUuid(input), ctx.callId),
+      deleted: await agentScheduleRepository.delete(authorization, parsed.id, ctx.callId),
     };
   },
 });

@@ -24,7 +24,9 @@ export default defineTool({
     "Передай attachmentId только из <telegram_attachment_refs> или журнала текущей группы.",
     "После успешного импорта используй возвращённый path для чтения документа или анализа изображения.",
   ].join(" "),
-  inputSchema: z.object({ attachmentId: z.string().optional() }).passthrough(),
+  inputSchema: z.object({
+    attachmentId: z.uuid().describe("Обязательный UUID вложения из <telegram_attachment_refs> или журнала текущей группы"),
+  }).strict(),
   async execute(input, ctx) {
     const payload = requireInputRecord(
       input,

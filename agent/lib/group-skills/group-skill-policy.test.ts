@@ -12,9 +12,13 @@ import {
   GROUP_SAFE_SKILL_NAMES,
   parseGroupSkillAllowlist,
 } from "./group-skill-catalog.js";
+import { TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES } from "./trusted-google-workspace-skills.js";
 import { createConversationSkillResolver } from "./group-skill-resolver.js";
 
-function auth(environment: "external" | "family" | "private"): SessionAuth {
+function auth(
+  environment: "external" | "family" | "private",
+  skillAllowlist: string[] = [],
+): SessionAuth {
   const group = environment !== "private";
   const caller = {
     attributes: {
@@ -23,6 +27,7 @@ function auth(environment: "external" | "family" | "private"): SessionAuth {
       memoryScopes: environment === "private"
         ? ["personal", "family"]
         : [environment === "external" ? "group" : "family"],
+      ...(group ? { skillAllowlist } : {}),
       telegramChatType: group ? "group" : "private",
     },
     authenticator: "telegram",
@@ -40,15 +45,13 @@ describe("group skill policy", () => {
     expect(parseGroupSkillAllowlist(["pohuy", "pohuy"])).toBeNull();
   });
 
-  it("re-resolves current group grants without requiring a new session", async () => {
-    const loadGroupSkillAllowlist = vi.fn()
-      .mockResolvedValueOnce(new Set(["pohuy"]))
-      .mockResolvedValueOnce(new Set());
+  it("uses the verified external grant snapshot for the whole turn", async () => {
+    const loadGroupSkillAllowlist = vi.fn();
     const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist });
 
-    await expect(resolve(auth("external"))).resolves.toHaveProperty("pohuy");
+    await expect(resolve(auth("external", ["pohuy"]))).resolves.toHaveProperty("pohuy");
     await expect(resolve(auth("external"))).resolves.toEqual({});
-    expect(loadGroupSkillAllowlist).toHaveBeenCalledTimes(2);
+    expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
   });
 
   it("keeps safe skills available in private chat without a group database lookup", async () => {
@@ -56,6 +59,21 @@ describe("group skill policy", () => {
     const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist });
 
     await expect(resolve(auth("private"))).resolves.toHaveProperty("pohuy");
+    const skills = await resolve(auth("private"));
+    for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).toHaveProperty(name);
     expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
+  });
+
+  it("does not advertise trusted-only Google Workspace skills to an external group", async () => {
+    const resolve = createConversationSkillResolver({
+      loadGroupSkillAllowlist: vi.fn().mockResolvedValue(new Set(["pohuy"])),
+    });
+
+    const skills = await resolve(auth("external", ["pohuy"]));
+
+    expect(skills).toHaveProperty("pohuy");
+    for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) {
+      expect(skills).not.toHaveProperty(name);
+    }
   });
 });

@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Scope filters prevent cross-user, cross-group, and cross-family disclosure.
  * - Family and group mutations enforce author-or-owner access against current database roles.
- * - Create operations are replay-safe and physical deletion removes the searchable record.
+ * - Create and immediate-undo operations are replay-safe and provenance-bound.
  * - Scope quotas are enforced inside the write transaction.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { closeDatabase, database } from "./database.js";
 import { MEMORY_SCOPE_QUOTAS } from "./memory-config.js";
+import { memoryOperationHash } from "./memory-record.js";
 import { memoryRepository } from "./memory-repository.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
@@ -82,12 +83,14 @@ function createInput(
   scope: "family" | "group" | "personal",
   operationKey: string,
   content = "Пользователь предпочитает короткие ответы",
+  provenance = { sessionId: "session-current", turnId: "turn-current" },
 ) {
   return {
     confirmation: "user_confirmed" as const,
     content,
     kind: "preference" as const,
     operationKey,
+    provenance,
     scope,
     sensitivity: "normal" as const,
     source: `eve:session:${operationKey}`,
@@ -121,6 +124,8 @@ describeWithDatabase("memoryRepository", () => {
       telegramUserId: null,
       userId: first.owner.userId,
     });
+    await expect(memoryRepository.list(first.owner, { cursor: "invalid", limit: 20 }))
+      .rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
   });
 
   it("allows only the family author or current owner to update and delete a shared record", async () => {
@@ -217,6 +222,97 @@ describeWithDatabase("memoryRepository", () => {
     await expect(
       memoryRepository.create(family.owner, { ...input, content: "Подменённое значение" }),
     ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
+    await expect(memoryRepository.create(family.owner, {
+      ...input,
+      provenance: { sessionId: "replayed-from-another-session", turnId: "other-turn" },
+    })).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
+  });
+
+  it("undoes only the unchanged create from the same user, session, and turn and replays safely", async () => {
+    const family = await createFamily("undo-provenance");
+    const provenance = { sessionId: "session-undo", turnId: "turn-undo" };
+    const record = await memoryRepository.create(
+      family.owner,
+      createInput("personal", "undo-create", "Временная запись", provenance),
+    );
+
+    await expect(memoryRepository.canUndoCreate(family.owner, record.id, provenance)).resolves.toBe(true);
+    await expect(memoryRepository.canUndoCreate(
+      family.owner,
+      record.id,
+      { sessionId: "other-session", turnId: provenance.turnId },
+    )).resolves.toBe(false);
+    await expect(memoryRepository.canUndoCreate(
+      family.member,
+      record.id,
+      provenance,
+    )).resolves.toBe(false);
+
+    const undo = {
+      operationKey: "undo-call",
+      sessionId: provenance.sessionId,
+      turnId: provenance.turnId,
+    };
+    await expect(memoryRepository.undoCreate(family.owner, record.id, undo))
+      .resolves.toEqual({ deleted: true });
+    await expect(memoryRepository.undoCreate(family.owner, record.id, undo))
+      .resolves.toEqual({ deleted: true });
+    await expect(memoryRepository.undoCreate(family.owner, record.id, {
+      ...undo,
+      sessionId: "replayed-from-another-session",
+    })).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
+
+    const audit = await database().query<{ metadata: Record<string, unknown> }>(
+      "SELECT metadata FROM audit_events WHERE subject_id = $1 AND event_type = 'memory.deleted'",
+      [record.id],
+    );
+    expect(audit.rows[0]?.metadata).toMatchObject({ reason: "immediate_undo" });
+  });
+
+  it("denies immediate undo after an intervening update", async () => {
+    const family = await createFamily("undo-after-update");
+    const provenance = { sessionId: "session-update", turnId: "turn-update" };
+    const record = await memoryRepository.create(
+      family.owner,
+      createInput("personal", "updated-create", "Исходная запись", provenance),
+    );
+    await memoryRepository.update(family.owner, {
+      content: "Изменённая запись",
+      id: record.id,
+      operationKey: "intervening-update",
+    });
+
+    await expect(memoryRepository.canUndoCreate(family.owner, record.id, provenance)).resolves.toBe(false);
+    await expect(memoryRepository.undoCreate(family.owner, record.id, {
+      operationKey: "denied-undo",
+      ...provenance,
+    })).rejects.toThrowError(/AGENT_MEMORY_UNDO_DENIED/u);
+  });
+
+  it("never treats a historical operation without persisted provenance as immediate undo", async () => {
+    const family = await createFamily("historical-undo");
+    const inserted = await database().query<{ id: string }>(
+      `INSERT INTO memory_items
+         (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+          content, source, confirmation, sensitivity, operation_key)
+       VALUES ($1, $2, $2, $3, 'personal', 'fact', 'Историческая запись', 'eve:legacy',
+               'user_confirmed', 'normal', 'historical-create')
+       RETURNING id`,
+      [family.familyId, family.owner.userId, family.owner.telegramUserId],
+    );
+    const id = inserted.rows[0]!.id;
+    await database().query(
+      `INSERT INTO memory_mutation_operations
+         (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
+       VALUES ($1, 'historical-create', 'create', $2, $3)`,
+      [family.familyId, memoryOperationHash({ historical: true }), id],
+    );
+
+    await expect(memoryRepository.canUndoCreate(
+      family.owner,
+      id,
+      { sessionId: "legacy", turnId: "legacy" },
+    )).resolves.toBe(false);
   });
 
   it("enforces the configured personal quota before inserting another record", async () => {

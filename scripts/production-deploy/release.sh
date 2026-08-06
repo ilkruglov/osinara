@@ -246,7 +246,6 @@ validate_resolved_compose() {
         {service: "memory-embedding", type: "volume", source: "memory-embedding-model-e5", target: "/data"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
         {service: "sandbox-runner", type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock"},
-        {service: "sandbox-runner", type: "volume", source: "google-workspace-credentials", target: "/runner/google-workspace-credentials"},
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
         {service: "sandbox-runner", type: "volume", source: "workspace-data", target: "/runner/workspaces"}
       ] | sort_by(.service, .target)) and

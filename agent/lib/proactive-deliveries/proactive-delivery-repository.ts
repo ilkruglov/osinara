@@ -14,10 +14,15 @@ import {
   PROACTIVE_DELIVERY_CONTEXT_MAX_AGE_DAYS,
   PROACTIVE_DELIVERY_CONTEXT_MAX_CHARACTERS,
   PROACTIVE_DELIVERY_CONTEXT_MAX_ITEMS,
-  PROACTIVE_DELIVERY_HISTORY_MAX_ITEMS,
+  PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT,
 } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import {
+  decodeDateBigintCursor,
+  encodeDateBigintCursor,
+  paginationFilterDigest,
+} from "../keyset-pagination.js";
 import {
   formatProactiveDeliveryContext,
   type ProactiveDeliveryRecord,
@@ -53,6 +58,7 @@ interface DeliveryRow {
   delivered_at: Date;
   id: string;
   scheduled_for: Date;
+  source_id: string;
   source_kind: ProactiveDeliverySourceKind;
   title: string | null;
 }
@@ -103,8 +109,9 @@ function mapRows(rows: readonly DeliveryRow[]): ProactiveDeliveryRecord[] {
   return rows.map((row) => ({
     content: row.content_text,
     deliveredAt: row.delivered_at.toISOString(),
-    id: row.id,
+    deliveryId: row.id,
     scheduledFor: row.scheduled_for.toISOString(),
+    sourceId: row.source_id,
     sourceKind: row.source_kind,
     title: row.title,
   }));
@@ -176,7 +183,7 @@ export const proactiveDeliveryRepository = {
     // Select newest unseen rows first for a hard bound, then restore delivery chronology.
     const result = await database().query<DeliveryRow>(
       `SELECT * FROM (
-         SELECT id::text, source_kind, title, content_text, scheduled_for, delivered_at
+         SELECT id::text, source_id::text, source_kind, title, content_text, scheduled_for, delivered_at
            FROM proactive_deliveries
           WHERE id > $1::bigint AND family_id = $2 AND scope = $3
             AND owner_user_id IS NOT DISTINCT FROM $4::uuid
@@ -208,7 +215,7 @@ export const proactiveDeliveryRepository = {
       PROACTIVE_DELIVERY_CONTEXT_MAX_CHARACTERS,
     );
     if (!context) return null;
-    return { context, cursor: records.at(-1)!.id };
+    return { context, cursor: records.at(-1)!.deliveryId };
   },
 
   async advanceSessionCursor(applicationSessionId: string, cursor: string): Promise<void> {
@@ -229,23 +236,69 @@ export const proactiveDeliveryRepository = {
 
   async list(
     input: ProactiveDeliveryAuthorization & {
+      cursor?: string;
+      deliveredAfter: Date | null;
+      deliveredBefore: Date | null;
+      limit: number;
       query: string | null;
       sourceKind: ProactiveDeliverySourceKind | null;
     },
-  ): Promise<ProactiveDeliveryRecord[]> {
+  ): Promise<{ items: ProactiveDeliveryRecord[]; nextCursor: string | null }> {
     requireAuthorization(input);
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT) {
+      throw new AppError(
+        "AGENT_PROACTIVE_DELIVERY_LIMIT_INVALID",
+        "Некорректный размер страницы истории уведомлений",
+      );
+    }
+    for (const date of [input.deliveredAfter, input.deliveredBefore]) {
+      if (date !== null && (!(date instanceof Date) || Number.isNaN(date.getTime()))) {
+        throw new AppError(
+          "AGENT_PROACTIVE_DELIVERY_DATE_INVALID",
+          "Период истории уведомлений содержит некорректную дату",
+        );
+      }
+    }
+    if (input.deliveredAfter && input.deliveredBefore && input.deliveredAfter > input.deliveredBefore) {
+      throw new AppError(
+        "AGENT_PROACTIVE_DELIVERY_DATE_RANGE_INVALID",
+        "Начало периода истории уведомлений не может быть позже его окончания",
+      );
+    }
+    const cursorBinding = paginationFilterDigest([
+      "proactive-delivery-v1",
+      input.familyId,
+      input.scope,
+      input.ownerUserId,
+      input.groupId,
+      input.telegramChatId,
+      input.messageThreadId,
+      input.sourceKind,
+      input.query,
+      input.deliveredAfter?.toISOString() ?? null,
+      input.deliveredBefore?.toISOString() ?? null,
+    ]);
+    const cursor = decodeDateBigintCursor(
+      input.cursor,
+      "AGENT_PROACTIVE_DELIVERY_CURSOR_INVALID",
+      "Не удалось продолжить просмотр истории уведомлений",
+      cursorBinding,
+    );
     const result = await database().query<DeliveryRow>(
-      `SELECT id::text, source_kind, title, content_text, scheduled_for, delivered_at
+      `SELECT id::text, source_id::text, source_kind, title, content_text, scheduled_for, delivered_at
          FROM proactive_deliveries
         WHERE family_id = $1 AND scope = $2
           AND owner_user_id IS NOT DISTINCT FROM $3::uuid
           AND group_id IS NOT DISTINCT FROM $4::uuid
           AND telegram_chat_id = $5
           AND message_thread_id IS NOT DISTINCT FROM $6::bigint
-          AND ($7::proactive_delivery_source_kind IS NULL OR source_kind = $7)
-          AND ($8::text IS NULL OR search_vector @@ websearch_to_tsquery('russian', $8))
-        ORDER BY delivered_at DESC, id DESC
-        LIMIT $9`,
+           AND ($7::proactive_delivery_source_kind IS NULL OR source_kind = $7)
+           AND ($8::text IS NULL OR search_vector @@ websearch_to_tsquery('russian', $8))
+           AND ($9::timestamptz IS NULL OR delivered_at >= $9)
+           AND ($10::timestamptz IS NULL OR delivered_at <= $10)
+           AND ($11::timestamptz IS NULL OR (delivered_at, id) < ($11, $12::bigint))
+         ORDER BY delivered_at DESC, id DESC
+         LIMIT $13`,
       [
         input.familyId,
         input.scope,
@@ -255,9 +308,21 @@ export const proactiveDeliveryRepository = {
         input.messageThreadId,
         input.sourceKind,
         input.query,
-        PROACTIVE_DELIVERY_HISTORY_MAX_ITEMS,
+        input.deliveredAfter,
+        input.deliveredBefore,
+        cursor?.timestamp ?? null,
+        cursor?.id ?? null,
+        input.limit + 1,
       ],
     );
-    return mapRows(result.rows);
+    const hasNext = result.rows.length > input.limit;
+    const rows = result.rows.slice(0, input.limit);
+    const last = rows.at(-1);
+    return {
+      items: mapRows(rows),
+      nextCursor: hasNext && last
+        ? encodeDateBigintCursor(last.delivered_at, last.id, cursorBinding)
+        : null,
+    };
   },
 };

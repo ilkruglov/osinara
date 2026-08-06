@@ -112,7 +112,10 @@ describeWithDatabase("agent schedule repositories", () => {
       status: "active",
       title: "Новости ИИ",
     });
-    await expect(agentScheduleRepository.list(auth)).resolves.toEqual([schedule]);
+    await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toEqual({
+      items: [schedule],
+      nextCursor: null,
+    });
     await expect(agentScheduleRepository.findById(auth, schedule.id)).resolves.toEqual(schedule);
     await expect(
       agentScheduleRepository.findById(privateAuth(fixture, "owner"), schedule.id),
@@ -224,9 +227,10 @@ describeWithDatabase("agent schedule repositories", () => {
     await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(true);
     await expect(agentScheduleDispatchRepository.completeDeliveredRun(delivery)).resolves.toBe(false);
 
-    await expect(agentScheduleRepository.list(auth)).resolves.toEqual([
-      expect.objectContaining({ nextRunAt: "2026-07-20T09:00:00.000Z", status: "active" }),
-    ]);
+    await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ nextRunAt: "2026-07-20T09:00:00.000Z", status: "active" })],
+      nextCursor: null,
+    });
     await expect(database().query(
       "SELECT source_id::text, telegram_message_id::text FROM proactive_deliveries",
     )).resolves.toMatchObject({
@@ -294,9 +298,10 @@ describeWithDatabase("agent schedule repositories", () => {
       title: reclaimed!.title,
     });
 
-    await expect(agentScheduleRepository.list(auth)).resolves.toEqual([
-      expect.objectContaining({ status: "completed" }),
-    ]);
+    await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ status: "completed" })],
+      nextCursor: null,
+    });
   });
 
   it("does not expire a running scenario with its short handoff lease", async () => {
@@ -338,9 +343,13 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:02.000Z"),
     })).resolves.toEqual([]);
-    await expect(agentScheduleRepository.list(privateAuth(fixture, "member"))).resolves.toEqual([
-      expect.objectContaining({ lastErrorCode: null, status: "leased" }),
-    ]);
+    await expect(agentScheduleRepository.list(
+      privateAuth(fixture, "member"),
+      { limit: 100 },
+    )).resolves.toMatchObject({
+      items: [expect.objectContaining({ lastErrorCode: null, status: "leased" })],
+      nextCursor: null,
+    });
   });
 
   it("does not retry an expired lease after Eve handoff may have started", async () => {
@@ -368,9 +377,12 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:02.000Z"),
     })).resolves.toEqual([]);
-    await expect(agentScheduleRepository.list(auth)).resolves.toEqual([
-      expect.objectContaining({ lastErrorCode: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", status: "failed" }),
-    ]);
+    await expect(agentScheduleRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ lastErrorCode: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", status: "failed" }),
+      ],
+      nextCursor: null,
+    });
     const run = await database().query<{ error_code: string | null; status: string }>(
       "SELECT status, error_code FROM agent_schedule_runs WHERE schedule_id = $1",
       [claimed!.id],
@@ -378,5 +390,38 @@ describeWithDatabase("agent schedule repositories", () => {
     expect(run.rows).toEqual([
       { error_code: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", status: "ambiguous" },
     ]);
+  });
+
+  it("paginates more than 100 active schedules without duplicates or skipped timestamp ties", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    const inserted = await database().query<{ id: string }>(
+      `INSERT INTO agent_schedules
+         (family_id, owner_user_id, author_user_id, scope, title, user_request, scenario_prompt,
+          timezone, recurrence_kind, recurrence_interval, recurrence_anchor_local, next_run_at,
+          telegram_chat_id, telegram_chat_type, created_at)
+       SELECT $1, $2, $2, 'personal', 'Расписание ' || item, 'Запрос', 'Сценарий', 'UTC',
+              'daily', 1, timestamp '2026-01-01 00:00:00',
+              timestamptz '2026-01-01 00:00:00+00', 'schedule-member', 'private',
+              timestamptz '2026-02-01 00:00:00+00'
+         FROM generate_series(1, 102) AS item
+       RETURNING id`,
+      [fixture.familyId, fixture.memberId],
+    );
+
+    const first = await agentScheduleRepository.list(auth, { limit: 100 });
+    const second = await agentScheduleRepository.list(auth, {
+      cursor: first.nextCursor!,
+      limit: 100,
+    });
+    const ids = [...first.items, ...second.items].map((item) => item.id);
+
+    expect(first.nextCursor).not.toBeNull();
+    expect(second.nextCursor).toBeNull();
+    expect(ids).toHaveLength(102);
+    expect(new Set(ids)).toHaveLength(102);
+    expect(new Set(ids)).toEqual(new Set(inserted.rows.map((row) => row.id)));
+    await expect(agentScheduleRepository.list(auth, { cursor: "invalid", limit: 100 }))
+      .rejects.toMatchObject({ code: "AGENT_SCHEDULE_CURSOR_INVALID" });
   });
 });

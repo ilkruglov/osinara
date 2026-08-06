@@ -162,7 +162,7 @@ describe("production container contract", () => {
     expect(agent).not.toContain("/var/run/docker.sock");
     expect(agent).toContain("google-workspace-credentials:/app/google-workspace-credentials");
     expect(runner).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(runner).toContain("google-workspace-credentials:/runner/google-workspace-credentials");
+    expect(runner).not.toContain("google-workspace-credentials");
     expect(runner).toContain("      - sandbox-control");
     expect(runner).not.toContain("      - sandbox-egress");
     expect(compose).toContain(

@@ -5,7 +5,8 @@
  * - `notification_settings`: reads or updates timezone and quiet-hour policy.
  *
  * Key constructs:
- * - Object-shaped model schema avoids root discriminated unions in tool descriptors.
+ * - Object-shaped model schema publishes a required finite action discriminator.
+ * - One semantic parser validates both approval and execution inputs.
  * - Input validation explains the exact quiet-hours contract before repository calls.
  */
 import { defineTool } from "eve/tools";
@@ -29,11 +30,11 @@ const TOP_LEVEL_FIELDS = ["action", "quietEnd", "quietStart", "timezone"] as con
 
 const nullableTimeSchema = z.union([z.string(), z.null()]).optional();
 const notificationSettingsSchema = z.object({
-  action: z.string().optional(),
-  quietEnd: nullableTimeSchema,
-  quietStart: nullableTimeSchema,
-  timezone: z.string().optional(),
-}).passthrough();
+  action: z.enum(TOOL_ACTIONS).describe("Обязательный action: get или set."),
+  quietEnd: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
+  quietStart: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
+  timezone: z.string().optional().describe("Обязательный IANA timezone только для action=set."),
+}).strict();
 
 function requiredNullableTime(input: Record<string, unknown>, key: "quietEnd" | "quietStart"): string | null {
   const value = input[key];
@@ -66,21 +67,36 @@ function requireSetInput(input: Record<string, unknown>) {
   };
 }
 
+function requireNotificationSettingsInput(input: unknown) {
+  const payload = requireInputRecord(input, "notification_settings", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "notification_settings", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "notification_settings", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // MiniMax may materialize known set-only siblings for get. The read action ignores them and
+  // cannot turn those values into a write; unpublished fields still fail in the global guard.
+  if (action === "get") return { action } as const;
+  return { action, values: requireSetInput(payload) } as const;
+}
+
 const TOOL_DESCRIPTION = [
   "Получить или настроить личный IANA timezone и тихие часы для напоминаний.",
-  "Get payload: {\"action\":\"get\"}. Set payload: {\"action\":\"set\",\"timezone\":\"Europe/Moscow\",\"quietStart\":\"22:00\",\"quietEnd\":\"08:00\"}.",
-  "Чтобы отключить тихие часы, передай quietStart=null и quietEnd=null. Не угадывай timezone или тихие часы; если данных нет, спроси пользователя.",
+  "Для action=get обязателен только action: {\"action\":\"get\"}; остальные поля не передавайте.",
+  "Для action=set обязательны action, timezone, quietStart и quietEnd: {\"action\":\"set\",\"timezone\":\"Europe/Moscow\",\"quietStart\":\"22:00\",\"quietEnd\":\"08:00\"}.",
+  "timezone должен быть явным IANA timezone; quietStart и quietEnd должны быть разными значениями ЧЧ:ММ.",
+  "Чтобы отключить тихие часы, передай оба обязательных поля quietStart=null и quietEnd=null.",
+  "Не угадывай timezone или тихие часы и не подставляй defaults: если данных нет, спроси пользователя.",
+  "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
 ].join(" ");
 
 export default defineTool({
-  approval: ({ toolInput }) =>
-    toolInput?.action === "set" ? "user-approval" : "not-applicable",
+  approval: ({ toolInput }) => {
+    const parsed = requireNotificationSettingsInput(toolInput);
+    return parsed.action === "set" ? "user-approval" : "not-applicable";
+  },
   description: TOOL_DESCRIPTION,
   inputSchema: notificationSettingsSchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "notification_settings", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "notification_settings", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "notification_settings", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireNotificationSettingsInput(input);
     const authorization = requireReminderAuthorization(ctx);
     if (authorization.telegramChatType !== "private") {
       throw new AppError(
@@ -88,11 +104,10 @@ export default defineTool({
         "Настройки уведомлений доступны только в личном чате",
       );
     }
-    if (action === "get") {
-      requireOnlyFields(payload, ["action"], "action=get", INPUT_ERROR_CODE);
+    if (parsed.action === "get") {
       return await reminderRepository.getNotificationSettings(authorization);
     }
 
-    return await reminderRepository.configureNotifications(authorization, requireSetInput(payload));
+    return await reminderRepository.configureNotifications(authorization, parsed.values);
   },
 });

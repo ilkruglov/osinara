@@ -3,6 +3,8 @@
  *
  * Constructs covered:
  * - Personal, family, and external-group isolation.
+ * - Delegated trusted roots are re-authorized after membership revocation.
+ * - External file-operation authorization is recalculated after trust-zone changes.
  * - Filesystem-first discovery, binary persistence, explicit cross-scope move, and deletion.
  */
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -105,6 +107,31 @@ describeWithDatabase("workspace repository", () => {
     const memberFamily = memberMounts.find((mount) => mount.mountPoint === "family")!;
     await expect(readWorkspaceFile(root, memberFamily.workspaceId, "shared/visible.txt"))
       .resolves.toEqual(Buffer.from("общий файл"));
+  });
+
+  it("revokes delegated trusted roots when family membership is removed", async () => {
+    const f = await fixture();
+    const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));
+    roots.push(root);
+    const repository = createWorkspaceRepository(root);
+    const member = {
+      familyId: f.familyId,
+      groupId: null,
+      groupType: null,
+      role: "member" as const,
+      telegramChatType: "private" as const,
+      userId: f.memberId,
+    };
+
+    await expect(repository.trustedRoots(member)).resolves.toHaveLength(2);
+    await database().query(
+      "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
+      [f.familyId, f.memberId],
+    );
+
+    await expect(repository.trustedRoots(member)).rejects.toThrowError(
+      /AGENT_WORKSPACE_ACCESS_REVOKED/u,
+    );
   });
 
   it("preserves exact binary bytes and media type for Telegram files", async () => {
@@ -233,6 +260,40 @@ describeWithDatabase("workspace repository", () => {
     await repository.deleteFile(external, "group", "project/data.txt", "delete-group");
     await expect(listWorkspaceStoredFiles(root, groupMount.workspaceId)).resolves.toEqual([]);
   });
+
+  it.each(["deleted", "retyped"] as const)(
+    "denies a stale external file session after the group is %s",
+    async (scenario) => {
+      const f = await fixture();
+      const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));
+      roots.push(root);
+      const repository = createWorkspaceRepository(root);
+      const external = {
+        familyId: f.familyId,
+        groupId: f.externalGroupId,
+        groupType: "external" as const,
+        role: "external" as const,
+        telegramChatType: "supergroup" as const,
+        userId: null,
+      };
+
+      await expect(repository.externalGroupRoot(external)).resolves.toMatch(
+        new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/`, "u"),
+      );
+      if (scenario === "deleted") {
+        await database().query("DELETE FROM telegram_groups WHERE id = $1", [f.externalGroupId]);
+      } else {
+        await database().query(
+          "UPDATE telegram_groups SET type = 'family_private' WHERE id = $1",
+          [f.externalGroupId],
+        );
+      }
+
+      await expect(repository.externalGroupRoot(external)).rejects.toThrowError(
+        /AGENT_WORKSPACE_ACCESS_DENIED/u,
+      );
+    },
+  );
 
   it("physically deletes a group workspace after its trust zone is removed", async () => {
     const f = await fixture();

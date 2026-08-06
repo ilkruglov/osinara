@@ -19,6 +19,7 @@ function external(...capabilities: ExternalGroupToolName[]): string {
   return modeInstructions({
     capabilities: new Set(capabilities),
     environment: "external",
+    skills: new Set(),
   });
 }
 
@@ -157,7 +158,7 @@ describe("mode instruction anchors", () => {
   });
 
   it("gives the external mode a useful-work scope and people policy", () => {
-    const markdown = external("list_group_history", "send_workspace_file", "web_search");
+    const markdown = external("list_group_history", "send_workspace_file", "web_fetch");
 
     expect(markdown).toContain("## Назначение в этом чате");
     expect(markdown).toContain("## Границы задач");

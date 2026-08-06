@@ -5,11 +5,12 @@
  * - `createSandboxRunnerServer`: creates a dependency-injected internal HTTP server.
  *
  * Routes:
- * - Health, session create/removal, process execution, and binary file I/O.
+ * - Health, sessions, binary files, and isolated credentialed GWS execution.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 import {
+  parseGoogleWorkspaceExecutionRequest,
   parseCreateSandboxRequest,
   parseSandboxProcessRequest,
   parseSandboxRemovePathRequest,
@@ -80,7 +81,7 @@ function requiredPath(url: URL): string {
 }
 
 function requestError(error: unknown): boolean {
-  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
+  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
     .test(error.message);
 }
 
@@ -101,6 +102,23 @@ async function route(
       parseCreateSandboxRequest(await readJson(request)),
     );
     sendJson(response, result.created ? 201 : 200, result);
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === `${SANDBOX_RUNNER_API_PREFIX}/google-workspace/executions`
+  ) {
+    const controller = new AbortController();
+    request.once("aborted", () => controller.abort());
+    response.once("close", () => {
+      if (!response.writableEnded) controller.abort();
+    });
+    const result = await dependencies.engine.runGoogleWorkspace(
+      parseGoogleWorkspaceExecutionRequest(await readJson(request)),
+      controller.signal,
+    );
+    sendJson(response, 200, result);
     return;
   }
 

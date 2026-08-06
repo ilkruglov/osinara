@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Health and validated session creation routes.
  * - Fail-closed rejection before the Docker engine boundary.
- * - Process execution and disposable session removal delegation.
+ * - Process, isolated GWS execution, and disposable session removal delegation.
  */
 import type { AddressInfo } from "node:net";
 
@@ -29,6 +29,12 @@ function fakeEngine(): SandboxEngine {
     health: vi.fn(async () => undefined),
     readFile: vi.fn(async () => null),
     removePath: vi.fn(async () => undefined),
+    runGoogleWorkspace: vi.fn(async () => ({
+      exitCode: 0,
+      processId: "gws-process-1",
+      stderr: "",
+      stdout: "{}",
+    })),
     runProcess: vi.fn(async () => ({
       exitCode: 0,
       processId: "process-1",
@@ -57,6 +63,26 @@ afterEach(async () => {
 });
 
 describe("sandbox runner HTTP server", () => {
+  it("validates and delegates exact credentialed GWS argv", async () => {
+    const engine = fakeEngine();
+    const baseUrl = await start(engine);
+    const body = {
+      accessToken: "access-secret",
+      argv: ["calendar", "events", "list", "--params", "{}"],
+      timeoutMs: 60_000,
+      workspaceId: WORKSPACE_ID,
+    };
+
+    const response = await fetch(`${baseUrl}/v1/google-workspace/executions`, {
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(engine.runGoogleWorkspace).toHaveBeenCalledWith(body, expect.any(AbortSignal));
+  });
+
   it("creates a validated trusted session and delegates commands", async () => {
     const engine = fakeEngine();
     const baseUrl = await start(engine);

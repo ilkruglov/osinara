@@ -16,6 +16,7 @@ import { requireAllowedMemoryContent } from "../memory-content-policy.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import type { MemoryKind, MemorySensitivity } from "../memory-record.js";
 import { memoryRepository } from "../memory-repository.js";
+import { MEMORY_UNDO_DENIED_MESSAGE } from "../memory-undo-repository.js";
 import {
   optionalEnum,
   requireAction,
@@ -32,12 +33,12 @@ const MEMORY_SENSITIVITIES = ["normal", "sensitive"] as const;
 const TOP_LEVEL_FIELDS = ["action", "content", "id", "kind", "sensitivity"] as const;
 
 const manageMemorySchema = z.object({
-  action: z.string().optional(),
+  action: z.enum(TOOL_ACTIONS),
   content: z.string().optional(),
   id: z.string().optional(),
   kind: z.string().optional(),
   sensitivity: z.string().optional(),
-}).passthrough();
+}).strict();
 
 type MemoryAction = (typeof TOOL_ACTIONS)[number];
 
@@ -69,6 +70,20 @@ function requireIdOnlyInput(input: Record<string, unknown>, action: MemoryAction
   return requireMemoryId(input);
 }
 
+function requireManageMemoryInput(input: unknown) {
+  const payload = requireInputRecord(input, "manage_memory", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_memory", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_memory", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // Approval and execution share semantic parsing so malformed mutations never reach HITL.
+  if (action === "edit") return { action, values: requireEditInput(payload) } as const;
+  return { action, id: requireIdOnlyInput(payload, action) } as const;
+}
+
+function currentProvenance(session: { id: string; turn: { id: string } }) {
+  return { sessionId: session.id, turnId: session.turn.id };
+}
+
 const TOOL_DESCRIPTION = [
   "Исправить доступную запись долговременной памяти, удалить её или отменить только что выполненное сохранение.",
   "Перед edit/delete сначала найди id через search_memories или list_memories.",
@@ -77,9 +92,24 @@ const TOOL_DESCRIPTION = [
 ].join(" ");
 
 export default defineTool({
-  approval: ({ session, toolInput }) => {
-    // Undo is the immediate reversal offered after creation; edit and delete remain confirmation-gated.
-    if (toolInput?.action === "undo") return "not-applicable";
+  approval: async ({ session, toolInput }) => {
+    const parsed = requireManageMemoryInput(toolInput);
+    const authorization = requireMemoryAuthorization({ session });
+    if (parsed.action === "undo") {
+      const allowed = await memoryRepository.canUndoCreate(
+        authorization,
+        parsed.id,
+        currentProvenance(session),
+      );
+      return allowed
+        ? "not-applicable"
+        : {
+            type: "denied",
+            reason: `AGENT_MEMORY_UNDO_DENIED: ${MEMORY_UNDO_DENIED_MESSAGE}`,
+          };
+    }
+
+    // Private edits/deletes are displayed before execution; group policy remains repository-gated.
     return session.auth.current?.attributes.telegramChatType === "private"
       ? "user-approval"
       : "not-applicable";
@@ -87,19 +117,23 @@ export default defineTool({
   description: TOOL_DESCRIPTION,
   inputSchema: manageMemorySchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "manage_memory", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_memory", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "manage_memory", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireManageMemoryInput(input);
     const authorization = requireMemoryAuthorization(ctx);
-    if (action === "edit") {
-      const values = requireEditInput(payload);
+    if (parsed.action === "edit") {
       return await memoryRepository.update(authorization, {
-        ...values,
-        content: requireAllowedMemoryContent(values.content),
+        ...parsed.values,
+        content: requireAllowedMemoryContent(parsed.values.content),
         operationKey: ctx.callId,
       });
     }
 
-    return await memoryRepository.delete(authorization, requireIdOnlyInput(payload, action), ctx.callId);
+    if (parsed.action === "undo") {
+      return await memoryRepository.undoCreate(authorization, parsed.id, {
+        operationKey: ctx.callId,
+        ...currentProvenance(ctx.session),
+      });
+    }
+
+    return await memoryRepository.delete(authorization, parsed.id, ctx.callId);
   },
 });

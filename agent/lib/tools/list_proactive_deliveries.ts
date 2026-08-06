@@ -7,6 +7,10 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import {
+  PROACTIVE_DELIVERY_HISTORY_DEFAULT_LIMIT,
+  PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT,
+} from "../../config.js";
 import { AppError } from "../app-error.js";
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
 import {
@@ -49,14 +53,25 @@ export default defineTool({
     "Показать ранее доставленные в текущий чат напоминания и результаты агентных расписаний.",
     "Используй, когда пользователь ссылается на старый дайджест, отчёт, сводку или уведомление, которого уже нет в текущем контексте.",
     "query ищет по заголовку и тексту; sourceKind ограничивает результаты типом agent_schedule или reminder.",
+    "deliveredAfter и deliveredBefore задают включительный период по времени доставки в ISO datetime.",
+    "Результат: {items,nextCursor}; каждый item содержит отдельные поля deliveryId и sourceId. Для следующей страницы передай nextCursor без изменений.",
   ].join(" "),
   inputSchema: z.object({
+    cursor: z.string().min(1).optional(),
+    deliveredAfter: z.string().datetime({ offset: true }).optional(),
+    deliveredBefore: z.string().datetime({ offset: true }).optional(),
+    limit: z.number().int().min(1).max(PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT)
+      .default(PROACTIVE_DELIVERY_HISTORY_DEFAULT_LIMIT),
     query: z.string().trim().min(1).max(200).optional(),
     sourceKind: z.enum(["agent_schedule", "reminder"]).optional(),
   }).strict(),
   async execute(input, ctx) {
     return await proactiveDeliveryRepository.list({
       ...requireDeliveryAuthorization(ctx),
+      cursor: input.cursor,
+      deliveredAfter: input.deliveredAfter ? new Date(input.deliveredAfter) : null,
+      deliveredBefore: input.deliveredBefore ? new Date(input.deliveredBefore) : null,
+      limit: input.limit,
       query: input.query ?? null,
       sourceKind: input.sourceKind ?? null,
     });

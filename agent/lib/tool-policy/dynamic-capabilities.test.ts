@@ -2,21 +2,28 @@
  * Eve dynamic capability resolver tests.
  *
  * Constructs covered:
- * - `capabilities`: one step-scoped map per verified mode instead of static descriptors.
- * - An unresolvable mode or failed policy lookup yields no application tools at all.
- * - Live revocation applies before the next model call.
+ * - `capabilities`: one turn-scoped map per verified mode instead of static descriptors.
+ * - An unresolvable mode or failed policy lookup retains only fail-closed baseline wrappers.
+ * - Live policy changes affect visibility on the next turn and execution checks enforce revocation.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadCurrentExternalGroupCapabilities = vi.hoisted(() => vi.fn());
+const authorizeCurrentExternalGroupCapability = vi.hoisted(() => vi.fn());
 
-vi.mock("./external-group-live-policy.js", () => ({ loadCurrentExternalGroupCapabilities }));
+vi.mock("./external-group-live-policy.js", () => ({
+  loadCurrentExternalGroupCapabilities,
+  authorizeCurrentExternalGroupCapability,
+}));
 
 import capabilities from "../../tools/capabilities.js";
-import { FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS } from "./group-tool-catalog.js";
+import {
+  ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
+  FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+} from "./group-tool-catalog.js";
 
 function resolve(attributes: Record<string, unknown> | null) {
-  return capabilities.events["step.started"]?.({} as never, {
+  return capabilities.events["turn.started"]?.({} as never, {
     channel: { kind: "telegram" },
     messages: [],
     session: {
@@ -75,12 +82,31 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      ["load_skill", "remember", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      [
+        ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
+        "load_skill",
+        "remember",
+        ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+      ].sort(),
     );
     expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
       familyId: "family-1",
       groupId: "group-1",
     });
+  });
+
+  it("emits load_skill only when the external group has a current skill grant", async () => {
+    const surface = await resolve({
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      skillAllowlist: ["pohuy"],
+      telegramChatType: "supergroup",
+      toolAllowlist: [],
+    });
+
+    expect(surface).toHaveProperty("load_skill");
   });
 
   it("revokes a capability that is absent from the current database policy", async () => {
@@ -110,7 +136,11 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      ["load_skill", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      [
+        ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
+        "load_skill",
+        ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+      ].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining("AGENT_GROUP_TOOL_POLICY_LOOKUP_FAILED"),
@@ -124,7 +154,11 @@ describe("dynamic capability resolver", () => {
     const surface = await resolve(null);
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      ["load_skill", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      [
+        ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
+        "load_skill",
+        ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+      ].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining("AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID"),

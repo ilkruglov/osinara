@@ -87,25 +87,27 @@ Owner-only операции разрешены только в личном Tele
 
 Весь прикладной tool surface выдаётся per-mode через step-scoped Eve `defineDynamic` в `agent/tools/capabilities.ts`.
 Статических дескрипторов у приложения нет: инструмент, недоступный текущему режиму, не имеет дескриптора вообще, а не заменяется заглушкой.
-Реализации инструментов лежат в `agent/lib/tools/`; в `agent/tools/` остаётся только резолвер, иначе дескриптор станет виден во всех режимах.
+Реализации инструментов лежат в `agent/lib/tools/`; в `agent/tools/` остаются dynamic resolver и authored denial replacement `agent.ts`, иначе дескриптор станет виден во всех режимах.
 Матрица режимов и внешний allowlist собираются в `agent/lib/tool-policy/mode-tool-surface.ts`; сбой резолвера или недоказанный режим означает отсутствие прикладных инструментов.
-Нативные `glob`, `grep`, `read_file` и `write_file` остаются доступны и замкнуты внутри отдельного group workspace.
-Eve `0.22.5` не умеет скрывать собственные built-ins, поэтому `bash`, `todo`, `ask_question` и невыданные `web_fetch`/`web_search` во внешней группе перекрываются явным отказом. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
+Нативные контракты `glob`, `grep`, `read_file` и `write_file` во внешней группе перекрываются same-name dynamic wrappers: каждый execute повторно проверяет актуальную external registration, принимает только канонический путь внутри точного `/workspace/group` и запрещает symlink-компоненты до вызова Eve default executor. В trusted private/family режимах wrappers не выдаются, поэтому исходные Eve built-ins сохраняют personal/family mounts и tools environment.
+Eve `0.22.5` не умеет скрывать собственные built-ins, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
 Eve `0.22.5` всегда перечисляет статические authored skills в system prompt и не позволяет фильтровать их по сессии. Grantable `pohuy` поэтому вынесен из static discovery и выдаётся turn-scoped dynamic resolver только разрешённым группам; при обновлении Eve проверить, появился ли нативный механизм фильтрации.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
+Root generic `agent` заменён authored same-name denial tool: built-in child наследовал бы trusted sandbox, tools, skills и credentials boundary, а `disableTool()` к синтезируемому generic tool в Eve `0.22.5` неприменим. Большие trusted задачи анализа, преобразования материалов и подготовки документов идут только в declared `task_worker`. Worker получает fresh history, собственные instructions/tools, отдельный networkless и tool-less Docker container и те же авторизованные personal/family workspace mounts. Он не получает root connections, skills, memory tools или веб-доступ: root заранее сохраняет необходимые source materials в workspace. Same-name file wrappers повторно проверяют live membership и path/symlink confinement на каждом execute. Root проверяет artifact и сам выполняет профильное преобразование, доставку или mutation. Во внешних группах `task_worker` перекрывается dynamic denial.
 
 ## Структура проекта
 
 `agent/agent.ts` — модель, compaction и реальные framework limits.
 `agent/instructions.md` — постоянное mode-agnostic ядро промта, не authorization layer.
-`agent/instructions/` — три turn-scoped dynamic блока; порядок задан именами файлов: режим, стиль, память.
+`agent/instructions/` — четыре turn-scoped dynamic блока; порядок задан именами файлов: режим, делегация, стиль, память.
 `agent/channels/telegram.ts` — Telegram channel, events и durable ingress hooks.
-`agent/tools/capabilities.ts` — единственный discovered tool: dynamic surface текущего режима.
+`agent/tools/capabilities.ts` — dynamic surface текущего режима; `agent/tools/agent.ts` безопасно замещает небезопасный generic child.
 `agent/lib/tools/` — реализации model-facing typed tools; имя берётся из имени файла.
 `agent/lib/prompt/` — фрагменты промта и композиция блоков по режимам.
 `agent/skills/` — активные статические Eve skills и dynamic resolver для grantable group skills.
 `agent/lib/` — application logic, repositories, policies и colocated tests.
 `agent/sandbox.ts` — явный backend `just-bash` без настроенных network commands.
+`agent/subagents/task_worker/` — универсальный declared fresh-context worker без сети, с live-authorized file wrappers и отдельным restricted compute поверх общих authorized workspace volumes.
 `migrations/` и `scripts/` — schema, migration runner, bootstrap, Eve patch и workers.
 `infra/nginx.conf` и `compose.yaml` — edge allowlist и Docker services.
 

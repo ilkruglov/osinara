@@ -39,7 +39,9 @@ const MEDIA_TYPE_PATTERN = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/u;
 
 export const CONTROLLED_WEB_FETCH_INPUT_SCHEMA = z.object({
   url: z.string(),
-  format: z.enum(["html", "text", "markdown"]).optional(),
+  format: z.enum(["html", "extracted_text"])
+    .describe("html возвращает исходную HTML-разметку; extracted_text удаляет HTML-теги и возвращает обычный текст")
+    .optional(),
   timeout: z.number().positive().max(MAX_TIMEOUT_SECONDS).optional(),
 }).strict();
 
@@ -48,8 +50,8 @@ type ControlledWebFetchInput = z.infer<typeof CONTROLLED_WEB_FETCH_INPUT_SCHEMA>
 interface ControlledWebFetchResult {
   content: string;
   contentType: string;
+  finalUrl: string;
   truncated: boolean;
-  url: string;
 }
 
 type Fetch = (input: URL | string, init?: RequestInit) => Promise<Response>;
@@ -251,7 +253,7 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
         const responseContentType = textContentType(response);
         const body = await readBoundedBody(response);
         const decoded = new TextDecoder("utf-8", { fatal: false }).decode(body);
-        const requestedFormat = input.format ?? "markdown";
+        const requestedFormat = input.format ?? "extracted_text";
         const formatted = responseContentType === HTML_CONTENT_TYPE && requestedFormat !== "html"
           ? htmlToText(decoded)
           : decoded;
@@ -259,7 +261,7 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
         return {
           ...bounded,
           contentType: responseContentType,
-          url: currentUrl.toString(),
+          finalUrl: currentUrl.toString(),
         };
       }
     } catch (error) {
@@ -299,15 +301,16 @@ const executeControlledWebFetch = createControlledWebFetch({
 export const controlledWebFetchTool = defineTool({
   description: [
     "Загрузить HTTP(S)-страницу через защищённый сетевой шлюз.",
-    "Поддерживаются форматы html, text и markdown, таймаут до 120 секунд.",
-    "Ответ ограничен безопасными лимитами размера и числа строк.",
+    "Формат extracted_text удаляет HTML-теги и возвращает обычный текст; формат html возвращает исходную разметку.",
+    "По умолчанию используется extracted_text. Таймаут не более 120 секунд.",
+    "Ответ ограничен безопасными лимитами размера и числа строк и сообщает конечный URL, исходный Content-Type и признак усечения.",
   ].join(" "),
   inputSchema: CONTROLLED_WEB_FETCH_INPUT_SCHEMA,
   async execute(input, ctx) {
     return await executeControlledWebFetch(input, { abortSignal: ctx.abortSignal });
   },
-  // Keep event output structured while exposing only the strictly bounded textual content to the model.
+  // Preserve bounded content metadata so the model can assess redirects, representation, and truncation.
   toModelOutput(output) {
-    return { type: "text", value: output.content };
+    return { type: "json", value: output };
   },
 });

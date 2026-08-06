@@ -2,7 +2,7 @@
  * Versioned contract shared by the agent and the isolated sandbox runner.
  *
  * Exports:
- * - Runner request/response types for sessions, atomic seed bundles, processes, and files.
+ * - Runner request/response types for sessions, atomic seed bundles, processes, files, and GWS.
  * - `sandboxSeedDigest`: canonical content identity used by both agent and runner policy checks.
  * - `parseCreateSandboxRequest`: enforces the trusted/restricted scope boundary.
  * - Other `parse*` helpers: validate every untrusted HTTP payload fail-closed.
@@ -49,10 +49,10 @@ export function sandboxSeedDigest(
 }
 
 const createSandboxRequestSchema = z.strictObject({
-  access: z.enum(["restricted", "trusted"]),
+  access: z.enum(["restricted", "trusted", "worker"]),
   eveSessionId: eveSessionIdSchema,
   mounts: z.array(workspaceMountSchema).min(1).max(2),
-  sandboxSessionId: workspaceIdSchema,
+  sandboxSessionId: sessionIdSchema,
   seedDigest: z.string().regex(/^[0-9a-f]{64}$/u),
   seedFiles: z.array(seedFileSchema).max(SANDBOX_RUNNER_SEED_FILES_MAX).optional(),
 }).superRefine((request, context) => {
@@ -70,9 +70,9 @@ const createSandboxRequestSchema = z.strictObject({
   for (const [index, path] of seedPaths.entries()) {
     const workspacePath = /^\/workspace\/.+/u.test(path);
     const trustedToolPath = request.access === "trusted" && /^\/tools\/(?:family|personal)\/.+/u.test(path);
-    const restrictedHomePath = request.access === "restricted" && /^\/tmp\/home\/.+/u.test(path);
+    const isolatedHomePath = request.access !== "trusted" && /^\/tmp\/home\/.+/u.test(path);
     if (
-      (!workspacePath && !trustedToolPath && !restrictedHomePath) ||
+      (!workspacePath && !trustedToolPath && !isolatedHomePath) ||
       posix.normalize(path) !== path
     ) {
       context.addIssue({
@@ -90,6 +90,21 @@ const createSandboxRequestSchema = z.strictObject({
   if (request.access === "restricted") {
     if (points.length !== 1 || points[0] !== "group") {
       context.addIssue({ code: "custom", message: "Restricted scope mismatch", path: ["mounts"] });
+    }
+    return;
+  }
+
+  // Workers may inspect trusted workspaces but never receive a group trust zone or persistent tools.
+  if (request.access === "worker") {
+    if (points.includes("group")) {
+      context.addIssue({ code: "custom", message: "Worker scope mismatch", path: ["mounts"] });
+    }
+    if (request.sandboxSessionId !== request.eveSessionId) {
+      context.addIssue({
+        code: "custom",
+        message: "Worker compute identity must match its Eve session",
+        path: ["sandboxSessionId"],
+      });
     }
     return;
   }
@@ -116,13 +131,21 @@ const processRequestSchema = z.strictObject({
   workingDirectory: z.string().min(1).max(4_096).optional(),
 });
 
+const googleWorkspaceExecutionRequestSchema = z.strictObject({
+  accessToken: z.string().min(1).max(16 * 1024),
+  argv: z.array(z.string().min(1).max(64 * 1024)).min(1).max(128),
+  timeoutMs: z.number().int().positive().max(SANDBOX_RUNNER_TIMEOUT_MAX_MS),
+  workspaceId: workspaceIdSchema,
+});
+
 const removePathRequestSchema = z.strictObject({
   force: z.boolean().optional(),
   path: z.string().min(1).max(4_096),
   recursive: z.boolean().optional(),
 });
 
-export type SandboxAccess = "restricted" | "trusted";
+export type SandboxAccess = "restricted" | "trusted" | "worker";
+export type GoogleWorkspaceExecutionRequest = z.infer<typeof googleWorkspaceExecutionRequestSchema>;
 export type SandboxMountPoint = z.infer<typeof mountPointSchema>;
 export type SandboxRunnerCreateRequest = z.infer<typeof createSandboxRequestSchema>;
 export type SandboxRunnerMount = z.infer<typeof workspaceMountSchema>;
@@ -161,6 +184,16 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, code: string): T 
 
 export function parseCreateSandboxRequest(value: unknown): SandboxRunnerCreateRequest {
   return parseOrThrow(createSandboxRequestSchema, value, "AGENT_SANDBOX_RUNNER_SCOPE_INVALID");
+}
+
+export function parseGoogleWorkspaceExecutionRequest(
+  value: unknown,
+): GoogleWorkspaceExecutionRequest {
+  return parseOrThrow(
+    googleWorkspaceExecutionRequestSchema,
+    value,
+    "AGENT_SANDBOX_RUNNER_GOOGLE_WORKSPACE_REQUEST_INVALID",
+  );
 }
 
 export function parseSandboxProcessRequest(value: unknown): SandboxRunnerProcessRequest {

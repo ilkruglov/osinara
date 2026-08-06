@@ -3,12 +3,14 @@
  *
  * Constructs covered:
  * - One-time expiring OAuth state claims.
+ * - Repeated authorization starts retain only one simultaneously valid state.
  * - Existing and new credentials are bound to a workspace rather than a Telegram session.
  * - Family profile management is owner-only while active members may use the profile.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
+import { googleAccountRepository } from "./google-account-repository.js";
 import type { GoogleIntegrationAuthorization } from "./google-integration-contract.js";
 import { googleIntegrationRepository } from "./google-integration-repository.js";
 
@@ -53,22 +55,22 @@ async function connectedAccount(
 ) {
   const state = input.state ?? "complete-state-with-at-least-32-bytes";
   await googleIntegrationRepository.createAuthorization(auth, {
-    expiresAt: new Date("2026-07-12T12:10:00.000Z"),
+    expiresAt: new Date("2099-07-12T12:10:00.000Z"),
     rawState: state,
   });
   const claim = await googleIntegrationRepository.claimAuthorization(
     state,
-    new Date("2026-07-12T12:05:00.000Z"),
+    new Date("2099-07-12T12:05:00.000Z"),
   );
   return await googleIntegrationRepository.completeAuthorization(claim, {
     accessToken: "access-secret",
-    accessTokenExpiresAt: new Date("2026-07-12T13:05:00.000Z"),
+    accessTokenExpiresAt: new Date("2099-07-12T13:05:00.000Z"),
     displayName: "owner@example.com",
     encryptionKey,
     externalAccountId: input.externalAccountId ?? "google-subject-123",
     refreshToken: "refresh-secret",
     scopes: ["scope-a", "scope-b"],
-  });
+  }, async () => undefined);
 }
 
 describeWithDatabase("google integration repository", () => {
@@ -82,13 +84,13 @@ describeWithDatabase("google integration repository", () => {
   it("claims an unexpired Workspace OAuth state exactly once", async () => {
     const auth = await fixture();
     await googleIntegrationRepository.createAuthorization(auth, {
-      expiresAt: new Date("2026-07-12T12:10:00.000Z"),
+      expiresAt: new Date("2099-07-12T12:10:00.000Z"),
       rawState: "state-secret-with-at-least-32-bytes",
     });
 
     await expect(googleIntegrationRepository.claimAuthorization(
       "state-secret-with-at-least-32-bytes",
-      new Date("2026-07-12T12:05:00.000Z"),
+      new Date("2099-07-12T12:05:00.000Z"),
     )).resolves.toMatchObject({
       actorUserId: auth.userId,
       familyId: auth.familyId,
@@ -96,21 +98,51 @@ describeWithDatabase("google integration repository", () => {
     });
     await expect(googleIntegrationRepository.claimAuthorization(
       "state-secret-with-at-least-32-bytes",
-      new Date("2026-07-12T12:05:01.000Z"),
+      new Date("2099-07-12T12:05:01.000Z"),
     )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
   });
 
   it("rejects an expired state before token exchange", async () => {
     const auth = await fixture();
     await googleIntegrationRepository.createAuthorization(auth, {
-      expiresAt: new Date("2026-07-12T12:10:00.000Z"),
+      expiresAt: new Date("2099-07-12T12:10:00.000Z"),
       rawState: "expired-state-with-at-least-32-bytes",
     });
 
     await expect(googleIntegrationRepository.claimAuthorization(
       "expired-state-with-at-least-32-bytes",
-      new Date("2026-07-12T12:10:01.000Z"),
+      new Date("2099-07-12T12:10:01.000Z"),
     )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
+  });
+
+  it("creates only one valid pending state across concurrent authorization starts", async () => {
+    const auth = await fixture();
+    const attempts = [
+      {
+        expiresAt: new Date("2099-07-12T12:10:00.000Z"),
+        rawState: "first-state-with-at-least-32-random-bytes",
+      },
+      {
+        expiresAt: new Date("2099-07-12T12:11:00.000Z"),
+        rawState: "second-state-with-at-least-32-random-bytes",
+      },
+    ];
+    const results = await Promise.all(attempts.map(async (attempt) =>
+      await googleIntegrationRepository.createAuthorization(auth, attempt)
+    ));
+    const createdIndex = results.findIndex((result) => result.created);
+    const reusedIndex = results.findIndex((result) => !result.created);
+
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(results[reusedIndex]!.expiresAt).toBe(results[createdIndex]!.expiresAt);
+    await expect(googleIntegrationRepository.claimAuthorization(
+      attempts[reusedIndex]!.rawState,
+      new Date("2099-07-12T12:05:00.000Z"),
+    )).rejects.toThrowError(/AGENT_GOOGLE_OAUTH_STATE_INVALID/);
+    await expect(googleIntegrationRepository.claimAuthorization(
+      attempts[createdIndex]!.rawState,
+      new Date("2099-07-12T12:05:00.000Z"),
+    )).resolves.toMatchObject({ workspaceId: auth.workspaceId });
   });
 
   it("stores encrypted tokens and resolves only the current user's default account", async () => {
@@ -123,7 +155,7 @@ describeWithDatabase("google integration repository", () => {
       isDefault: true,
       status: "active",
     });
-    await expect(googleIntegrationRepository.getDefaultAccount(auth, encryptionKey)).resolves
+    await expect(googleAccountRepository.getDefaultAccount(auth, encryptionKey)).resolves
       .toMatchObject({ accessToken: "access-secret", id: account.id, refreshToken: "refresh-secret" });
     const raw = await database().query<{
       access_token_ciphertext: string;
@@ -141,7 +173,7 @@ describeWithDatabase("google integration repository", () => {
       state: "replacement-state-with-at-least-32-bytes",
     });
 
-    await expect(googleIntegrationRepository.getDefaultAccount(auth, encryptionKey)).resolves
+    await expect(googleAccountRepository.getDefaultAccount(auth, encryptionKey)).resolves
       .toMatchObject({ externalAccountId: "google-subject-456", id: replacement.id });
     const accounts = await database().query<{ external_account_id: string }>(
       "SELECT external_account_id FROM integration_accounts WHERE workspace_id = $1",
@@ -178,13 +210,18 @@ describeWithDatabase("google integration repository", () => {
       userId: member.rows[0]!.id,
     };
 
-    await expect(googleIntegrationRepository.getDefaultAccount(memberAuth, encryptionKey)).resolves
+    await expect(googleAccountRepository.getDefaultAccount(memberAuth, encryptionKey)).resolves
       .toMatchObject({ id: account.id, refreshToken: "refresh-secret" });
     await expect(googleIntegrationRepository.createAuthorization(memberAuth, {
-      expiresAt: new Date("2026-07-12T12:10:00.000Z"),
+      expiresAt: new Date("2099-07-12T12:10:00.000Z"),
       rawState: "member-state-with-at-least-32-bytes",
     })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
-    await expect(googleIntegrationRepository.assertManagement(memberAuth)).rejects.toThrowError(
+    await expect(googleAccountRepository.withProfileAccount(
+      memberAuth,
+      encryptionKey,
+      true,
+      async () => undefined,
+    )).rejects.toThrowError(
       /AGENT_OWNER_REQUIRED/,
     );
   });

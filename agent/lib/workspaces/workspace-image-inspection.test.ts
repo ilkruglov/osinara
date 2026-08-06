@@ -5,6 +5,7 @@
  * - `createWorkspaceImageInspector`: authorized bytes are sent to vision with the user's question.
  * - Telegram inbox images resolve by stable message ID instead of a model-copied filename.
  * - Opaque journal attachments are downloaded and analyzed without a workspace write.
+ * - Revoked live attachment access stops before Telegram download and vision analysis.
  * - Non-image and provider-oversized files fail before a paid model call.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -168,6 +169,62 @@ describe("createWorkspaceImageInspector", () => {
     });
     expect(downloadTelegramAttachment).toHaveBeenCalledOnce();
     expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ mediaType: "image/png" }));
+  });
+
+  it("does not download bytes or call vision after live attachment access is revoked", async () => {
+    const analyze = vi.fn();
+    const downloadTelegramAttachment = vi.fn();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      downloadTelegramAttachment,
+      findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
+        "AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED: Доступ к вложению был отозван",
+      )),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+
+    await expect(inspect({
+      ...auth,
+      groupId: "group-1",
+      groupType: "family_private",
+      telegramChatType: "supergroup",
+    }, {
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "family",
+    })).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED/);
+    expect(downloadTelegramAttachment).not.toHaveBeenCalled();
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it("does not download bytes or call vision after the external trust zone is removed", async () => {
+    const analyze = vi.fn();
+    const downloadTelegramAttachment = vi.fn();
+    const inspect = createWorkspaceImageInspector({
+      analyze,
+      downloadTelegramAttachment,
+      findTelegramAttachment: vi.fn().mockRejectedValue(new Error(
+        "AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND: Trust zone группы больше не существует",
+      )),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+    });
+
+    await expect(inspect({
+      ...auth,
+      groupId: "group-1",
+      groupType: "external",
+      role: "external",
+      telegramChatType: "supergroup",
+      userId: null,
+    }, {
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "group",
+    })).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
+    expect(downloadTelegramAttachment).not.toHaveBeenCalled();
+    expect(analyze).not.toHaveBeenCalled();
   });
 
   it("rejects a disguised image document before a paid vision call", async () => {

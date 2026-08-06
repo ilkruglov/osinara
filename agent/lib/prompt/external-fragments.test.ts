@@ -28,7 +28,6 @@ describe("external purpose derivation", () => {
   });
 
   it("adds a purpose line for each granted capability", () => {
-    expect(purpose("web_search")).toMatch(/актуальную информацию/iu);
     expect(purpose("web_fetch")).toMatch(/страницу по ссылке/iu);
     expect(purpose("search_memories")).toMatch(/уже обсуждали/iu);
     expect(purpose("remember")).toMatch(/запомнить/iu);
@@ -38,8 +37,8 @@ describe("external purpose derivation", () => {
   });
 
   it("omits the purpose line of a capability that is not granted", () => {
-    expect(purpose("remember")).not.toMatch(/актуальную информацию/iu);
-    expect(purpose("web_search")).not.toMatch(/более раннюю переписку/iu);
+    expect(purpose("remember")).not.toMatch(/страницу по ссылке/iu);
+    expect(purpose("web_fetch")).not.toMatch(/более раннюю переписку/iu);
     expect(purpose()).not.toMatch(/изображение/iu);
   });
 
@@ -56,7 +55,6 @@ describe("external purpose derivation", () => {
       "search_memories",
       "send_workspace_file",
       "web_fetch",
-      "web_search",
     );
 
     // The external policy forbids revealing tool names to participants, and this section is the

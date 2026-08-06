@@ -3,12 +3,12 @@
  *
  * Exports:
  * - `GoogleWorkspaceAuthorizedUserCredentials`: exact gws authorized-user credential contract.
- * - `createGoogleWorkspaceProfileStore`: atomic mount-safe workspace-profile writer/remover.
+ * - `createGoogleWorkspaceProfileStore`: read-only readiness check and atomic profile writer/remover.
  * - `googleWorkspaceProfileStore`: production store backed by its dedicated Docker volume.
  */
 import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
-import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { z } from "zod";
@@ -43,6 +43,16 @@ function isCredentialStoreEntry(entry: Dirent): boolean {
 
 export function createGoogleWorkspaceProfileStore(root: string) {
   return {
+    async exists(workspaceId: string): Promise<boolean> {
+      try {
+        await stat(join(workspaceDirectory(root, workspaceId), CREDENTIAL_FILE_NAME));
+        return true;
+      } catch (error) {
+        if (isErrnoException(error, "ENOENT")) return false;
+        throw error;
+      }
+    },
+
     async remove(workspaceId: string): Promise<void> {
       const directory = workspaceDirectory(root, workspaceId);
       let entries: Dirent[];

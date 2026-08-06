@@ -3,7 +3,9 @@
  *
  * Export:
  * - `loadCurrentExternalGroupCapabilities`: reads and validates the current PostgreSQL allowlist.
+ * - `authorizeCurrentExternalGroupCapability`: records the execution-time authorization boundary.
  */
+import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import {
   parseExternalGroupToolAllowlist,
@@ -26,4 +28,34 @@ export async function loadCurrentExternalGroupCapabilities(input: {
 
   // Missing, replaced, or malformed persisted policy always becomes deny-all.
   return allowed ?? new Set();
+}
+
+export async function authorizeCurrentExternalGroupCapability(
+  input: { familyId: string; groupId: string },
+  capability: ExternalGroupToolName,
+): Promise<void> {
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ tool_allowlist: string[] }>(
+      `SELECT tool_allowlist
+         FROM telegram_groups
+        WHERE id = $1 AND family_id = $2 AND type = 'external'
+        FOR SHARE`,
+      [input.groupId, input.familyId],
+    );
+    const allowed = parseExternalGroupToolAllowlist(result.rows[0]?.tool_allowlist);
+    if (!allowed?.has(capability)) {
+      throw new AppError(
+        "AGENT_GROUP_TOOL_FORBIDDEN",
+        "Этот инструмент не разрешён в текущей внешней группе. Обратитесь к владельцу агента",
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

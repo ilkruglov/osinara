@@ -371,13 +371,13 @@ describeWithDatabase("Telegram group journal repositories", () => {
       size: 1_024,
     });
     await expect(
-      telegramGroupAttachmentRepository.list(auth, null),
-    ).resolves.toMatchObject([{
+      telegramGroupAttachmentRepository.list(auth, { limit: 50, messageThreadId: null }),
+    ).resolves.toMatchObject({ items: [{
       attachmentId: reference.attachmentId,
       contentText: "договор",
       fileName: "договор.pdf",
       telegramMessageId: "42",
-    }]);
+    }], nextCursor: null });
   });
 
   it("authorizes an external image reference only inside its exact registered group", async () => {
@@ -426,8 +426,8 @@ describeWithDatabase("Telegram group journal repositories", () => {
     )).rejects.toThrowError(/AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND/);
     await expect(telegramGroupAttachmentRepository.list(
       { ...externalAuth, groupType: "family_private" },
-      null,
-    )).resolves.toEqual([]);
+      { limit: 50, messageThreadId: null },
+    )).resolves.toEqual({ items: [], nextCursor: null });
   });
 
   it("projects an observed replied-to image attachment through durable ancestry", async () => {
@@ -572,7 +572,10 @@ describeWithDatabase("Telegram group journal repositories", () => {
       role: "owner",
       telegramChatType: "supergroup",
       userId: ownerId,
-    }, null)).resolves.toMatchObject([{ telegramMessageId: "61" }]);
+    }, { limit: 50, messageThreadId: null })).resolves.toMatchObject({
+      items: [{ telegramMessageId: "61" }],
+      nextCursor: null,
+    });
   });
 
   it("enriches an observed reply target whose attachment reference is missing", async () => {

@@ -24,7 +24,24 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 
-const SCHEDULE_SCENARIO_PREVIEW_CHARACTERS = 1_200;
+function googleWorkspacePrompt(input: Record<string, unknown>): string {
+  const argv = input.argv;
+  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((item) => typeof item === "string")) {
+    throw new AppError(
+      "AGENT_APPROVAL_INPUT_INVALID",
+      "Не удалось показать параметры команды Google Workspace",
+    );
+  }
+  return [
+    "Подтверждение изменения в Google Workspace",
+    "",
+    "Точные аргументы команды:",
+    JSON.stringify(argv, null, 2),
+    "",
+    "После подтверждения команда будет выполнена один раз в текущем профиле.",
+    "При ошибке автоматического повтора не будет.",
+  ].join("\n");
+}
 
 interface ApprovalPresentationDependencies {
   findSchedule(auth: AgentScheduleAuthorization, id: string): Promise<AgentScheduleRecord | null>;
@@ -70,12 +87,6 @@ function scheduleDate(schedule: AgentScheduleRecord): string {
   }).format(new Date(schedule.nextRunAt));
 }
 
-function scenarioPreview(value: string): string {
-  return value.length <= SCHEDULE_SCENARIO_PREVIEW_CHARACTERS
-    ? value
-    : `${value.slice(0, SCHEDULE_SCENARIO_PREVIEW_CHARACTERS - 1).trimEnd()}…`;
-}
-
 function requestedRecurrence(value: unknown): AgentScheduleRecurrence {
   // Presentation accepts only the recurrence shapes it can explain unambiguously to the user.
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -117,7 +128,7 @@ function scheduleChanges(input: Record<string, unknown>): string[] {
   }
   if (typeof input.nextRunAt === "string") changes.push(`Следующий запуск: ${input.nextRunAt}`);
   if (typeof input.scenarioPrompt === "string") {
-    changes.push(`Сценарий: ${scenarioPreview(input.scenarioPrompt)}`);
+    changes.push(`Сценарий: ${input.scenarioPrompt}`);
   }
   if (changes.length === 0) {
     throw new AppError(
@@ -141,7 +152,7 @@ function schedulePrompt(
     `Назначение: ${schedule.userRequest}`,
     `Периодичность: ${describeRecurrence(schedule.recurrence)}`,
     `Следующий запуск: ${scheduleDate(schedule)} (${schedule.timezone})`,
-    `Сценарий: ${scenarioPreview(schedule.scenarioPrompt)}`,
+    `Сценарий: ${schedule.scenarioPrompt}`,
     ...(changes.length === 0 ? [] : ["", "Изменения:", ...changes]),
     "",
     `Что произойдёт: ${action.consequence}`,
@@ -153,6 +164,12 @@ export function createTelegramApprovalPresenter(
 ): TelegramApprovalPresenter {
   return async (request, ctx) => {
     const localized = localizeTelegramInputRequest(request);
+    if (
+      request.display === "confirmation" &&
+      request.action.toolName === "execute_google_workspace"
+    ) {
+      return { ...localized, prompt: googleWorkspacePrompt(request.action.input) };
+    }
     if (
       request.display !== "confirmation" ||
       request.action.toolName !== "manage_agent_schedule"

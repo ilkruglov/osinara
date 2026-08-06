@@ -2,7 +2,7 @@
  * Long-term memory record contracts and deterministic projections.
  *
  * Exports:
- * - Memory enums, item, row, and create-input types.
+ * - Memory enums, item, row, create-input, and durable operation provenance types.
  * - `rowToMemory`: converts PostgreSQL rows to model-safe records.
  * - `memoryOperationHash`: fingerprints replay-protected mutation input.
  */
@@ -14,6 +14,11 @@ export type MemoryKind = "episode" | "fact" | "family_shared" | "preference" | "
 export type MemoryConfirmation = "model_high" | "user_confirmed";
 export type MemorySensitivity = "normal" | "sensitive";
 export type MemoryEmbeddingStatus = "failed" | "indexed" | "pending";
+
+export interface MemoryOperationProvenance {
+  sessionId: string;
+  turnId: string;
+}
 
 export interface MemoryItem {
   author: {
@@ -40,6 +45,7 @@ export interface CreateMemoryInput {
   kind: MemoryKind;
   messageThreadId?: string;
   operationKey: string;
+  provenance: MemoryOperationProvenance;
   scope: MemoryScope;
   sensitivity: MemorySensitivity;
   source: string;

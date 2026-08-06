@@ -10,20 +10,14 @@ import type { SkillDefinition } from "eve/skills";
 
 import { AppError } from "../app-error.js";
 import { resolveConversationEnvironment } from "../conversation-environment.js";
-import { GROUP_SAFE_SKILL_DEFINITIONS } from "./group-skill-definitions.js";
+import { resolveExternalGroupSkillPolicy } from "../tool-policy/external-group-policy.js";
+import { selectGroupSafeSkillDefinitions } from "./group-skill-definitions.js";
 import type { GroupSafeSkillName } from "./group-skill-catalog.js";
 import { groupSkillPolicyRepository } from "./group-skill-repository.js";
+import { TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS } from "./trusted-google-workspace-skills.js";
 
 interface ConversationSkillResolverDependencies {
   loadGroupSkillAllowlist(groupId: string): Promise<ReadonlySet<GroupSafeSkillName>>;
-}
-
-function selectedSkillDefinitions(
-  names: ReadonlySet<GroupSafeSkillName>,
-): Record<string, SkillDefinition> {
-  return Object.fromEntries(
-    [...names].map((name) => [name, GROUP_SAFE_SKILL_DEFINITIONS[name]]),
-  );
 }
 
 export function createConversationSkillResolver(
@@ -32,7 +26,14 @@ export function createConversationSkillResolver(
   return async function resolveSkills(auth: SessionAuth): Promise<Record<string, SkillDefinition>> {
     const environment = resolveConversationEnvironment(auth);
     if (environment === "private") {
-      return selectedSkillDefinitions(new Set<GroupSafeSkillName>(["pohuy"]));
+      return {
+        ...TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS,
+        ...selectGroupSafeSkillDefinitions(new Set<GroupSafeSkillName>(["pohuy"])),
+      };
+    }
+
+    if (environment === "external") {
+      return selectGroupSafeSkillDefinitions(resolveExternalGroupSkillPolicy(auth));
     }
 
     const groupId = auth.current?.attributes.groupId;
@@ -42,7 +43,10 @@ export function createConversationSkillResolver(
         "Не удалось определить группу для загрузки skills",
       );
     }
-    return selectedSkillDefinitions(await dependencies.loadGroupSkillAllowlist(groupId));
+    const granted = selectGroupSafeSkillDefinitions(
+      await dependencies.loadGroupSkillAllowlist(groupId),
+    );
+    return { ...TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS, ...granted };
   };
 }
 

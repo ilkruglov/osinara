@@ -2,10 +2,11 @@
  * Reminder product and dispatcher limits.
  *
  * Exports:
- * - Named content, recurrence, batch, lease, and lateness constants.
+ * - Named content, pagination, recurrence, batch, lease, and lateness constants.
  */
 export const REMINDER_CONTENT_MAX_LENGTH = 1_000;
-export const REMINDER_LIST_LIMIT = 100;
+export const REMINDER_LIST_DEFAULT_LIMIT = 100;
+export const REMINDER_LIST_MAX_LIMIT = 100;
 export const REMINDER_RECURRENCE_INTERVAL_MAX = 365;
 export const REMINDER_DISPATCH_BATCH_SIZE = 25;
 export const REMINDER_DISPATCH_LEASE_MILLISECONDS = 5 * 60_000;
