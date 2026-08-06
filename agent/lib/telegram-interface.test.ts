@@ -80,6 +80,61 @@ describe("Telegram interface localization", () => {
     );
   });
 
+  it("shows the exact one-time reminder update before approval", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-reminder-update",
+        input: {
+          action: "update",
+          id: "00000000-0000-4000-8000-000000000001",
+          recurrence: null,
+          scope: "family",
+          timezone: "UTC",
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_reminder",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-reminder-update",
+    });
+
+    expect(request.prompt).toContain("Подтвердите действие: изменить напоминание.");
+    expect(request.prompt).toContain("ID: 00000000-0000-4000-8000-000000000001");
+    expect(request.prompt).toContain("Повторение: без повтора");
+    expect(request.prompt).not.toContain("Часовой пояс");
+    expect(request.prompt).not.toContain("Область");
+  });
+
+  it("shows reminder schedule parameters before create approval", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-reminder-create",
+        input: {
+          action: "create",
+          content: "Позвонить врачу",
+          firstRunAt: "2026-08-18T10:00:00+03:00",
+          recurrence: { interval: 2, unit: "daily" },
+          scope: "personal",
+          timezone: "Europe/Moscow",
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_reminder",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-reminder-create",
+    });
+
+    expect(request.prompt).toContain("Текст: Позвонить врачу");
+    expect(request.prompt).toContain("Время запуска: 2026-08-18T10:00:00+03:00");
+    expect(request.prompt).toContain("Часовой пояс: Europe/Moscow");
+    expect(request.prompt).toContain("Область: personal");
+    expect(request.prompt).toContain("Повторение: daily, интервал 2");
+  });
+
   it("shows exact group registration parameters before approval", () => {
     const request = localizeTelegramInputRequest({
       action: {
@@ -160,6 +215,131 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Режим сообщений: owner_only");
     expect(request.prompt).toContain("Полный список разрешённых инструментов: remember, list_group_history");
     expect(request.prompt).toContain("Группа и бот останутся подключены");
+  });
+
+  it("shows the complete skill replacement including revoking every skill", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-skills",
+        input: { action: "update_skills", skillAllowlist: [], telegramChatId: "-1001" },
+        kind: "tool-call" as const,
+        toolName: "manage_telegram_group",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-skills",
+    });
+
+    expect(request.prompt).toContain("изменить список skills внешней Telegram-группы");
+    expect(request.prompt).toContain("Telegram chat ID: -1001");
+    expect(request.prompt).toContain("Полный список разрешённых skills: пуст");
+  });
+
+  it("shows an explicitly empty tool policy during external registration", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-register-empty",
+        input: {
+          action: "register",
+          registration: {
+            messageMode: "addressed_only",
+            telegramChatId: "-1001",
+            title: "Изолированная группа",
+            toolAllowlist: [],
+            type: "external",
+          },
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_telegram_group",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-register-empty",
+    });
+
+    expect(request.prompt).toContain("Разрешённые инструменты: пуст");
+  });
+
+  it("shows every notification setting that will be applied", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-notifications",
+        input: {
+          action: "set",
+          quietEnd: null,
+          quietStart: null,
+          timezone: "Europe/Moscow",
+        },
+        kind: "tool-call" as const,
+        toolName: "notification_settings",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-notifications",
+    });
+
+    expect(request.prompt).toContain("Часовой пояс: Europe/Moscow");
+    expect(request.prompt).toContain("Тихие часы: отключены");
+  });
+
+  it("shows every changed memory field before edit approval", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-memory-edit",
+        input: {
+          action: "edit",
+          content: "Исправленное значение",
+          id: "00000000-0000-4000-8000-000000000001",
+          kind: "preference",
+          sensitivity: "sensitive",
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_memory",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-memory-edit",
+    });
+
+    expect(request.prompt).toContain("Новое значение: Исправленное значение");
+    expect(request.prompt).toContain("Тип памяти: preference");
+    expect(request.prompt).toContain("Чувствительность: sensitive");
+  });
+
+  it("shows every autonomous schedule parameter before create approval", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-schedule-create",
+        input: {
+          action: "create",
+          firstRunAt: "2026-08-20T09:00:00+03:00",
+          recurrence: { daysOfWeek: [1, 3, 5], interval: 1, kind: "weekly" },
+          scenarioPrompt: "Собери новости и приложи источники.",
+          scope: "personal",
+          timezone: "Europe/Moscow",
+          title: "Новости ИИ",
+          userRequest: "По будням присылай новости ИИ",
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-schedule-create",
+    });
+
+    expect(request.prompt).toContain("Название: Новости ИИ");
+    expect(request.prompt).toContain("Назначение: По будням присылай новости ИИ");
+    expect(request.prompt).toContain("Первый запуск: 2026-08-20T09:00:00+03:00");
+    expect(request.prompt).toContain("Часовой пояс: Europe/Moscow");
+    expect(request.prompt).toContain("Область: personal");
+    expect(request.prompt).toContain("Периодичность: weekly, интервал 1, дни 1, 3, 5");
+    expect(request.prompt).toContain("Сценарий: Собери новости и приложи источники.");
   });
 
   it("localizes removal of a workspace Google profile", () => {

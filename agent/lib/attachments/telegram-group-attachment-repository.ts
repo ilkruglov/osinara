@@ -7,7 +7,6 @@
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
-import { TELEGRAM_ATTACHMENT_REFERENCE_LIST_LIMIT } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { TelegramGroupAttachmentSummary } from "../telegram-group-journal-context.js";
@@ -16,6 +15,11 @@ import {
   requireTelegramPositiveBigint,
 } from "../telegram-group-message-storage.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
+import {
+  listTelegramGroupAttachments,
+  type TelegramGroupAttachmentListItem,
+  type TelegramGroupAttachmentListOptions,
+} from "./telegram-group-attachment-list-repository.js";
 
 interface AttachmentRow {
   attachment_file_id: string;
@@ -29,10 +33,10 @@ interface AttachmentRow {
   telegram_message_id: string;
 }
 
-interface AttachmentListRow extends AttachmentRow {
-  content_text: string | null;
-  sender_display_name: string | null;
-  sent_at: Date;
+interface AttachmentLookupRow {
+  attachment: AttachmentRow | null;
+  authorized: boolean;
+  registered: boolean;
 }
 
 export interface TelegramGroupAttachmentRepository {
@@ -51,13 +55,8 @@ export interface TelegramGroupAttachmentRepository {
   }>;
   list(
     auth: WorkspaceAuthorization,
-    messageThreadId: string | null,
-  ): Promise<Array<TelegramGroupAttachmentSummary & {
-    contentText: string | null;
-    senderDisplayName: string | null;
-    sentAt: string;
-    telegramMessageId: string;
-  }>>;
+    options: TelegramGroupAttachmentListOptions,
+  ): Promise<{ items: TelegramGroupAttachmentListItem[]; nextCursor: string | null }>;
   record(
     groupId: string,
     message: TelegramMessage,
@@ -163,22 +162,53 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
 
   async find(auth, attachmentId) {
     assertRegisteredGroupAttachmentAccess(auth);
-    const result = await database().query<AttachmentRow>(
-      `SELECT message.id, COALESCE(message.attachment_source_message_id,
-                message.telegram_message_id)::text AS telegram_message_id,
-              message.attachment_file_id, message.attachment_file_unique_id,
-              message.attachment_file_name, message.attachment_media_type,
-              message.attachment_size::text, message.attachment_kind,
-              telegram_group.telegram_chat_id
-       FROM telegram_group_messages message
-       JOIN telegram_groups telegram_group ON telegram_group.id = message.group_id
-       WHERE message.id = $1 AND message.group_id = $2
-          AND telegram_group.family_id = $3 AND telegram_group.type = $4
-         AND message.attachment_file_id IS NOT NULL`,
-      [attachmentId, auth.groupId, auth.familyId, auth.groupType],
+    // Resolve live authorization and the opaque reference in one database snapshot. A family
+    // membership revoked after session creation therefore cannot release a Telegram file ID.
+    const result = await database().query<AttachmentLookupRow>(
+      `WITH registered_group AS (
+         SELECT family_id
+         FROM telegram_groups
+         WHERE id = $2 AND family_id = $3 AND type = $4
+       ), current_access AS (
+         SELECT EXISTS (SELECT 1 FROM registered_group) AS registered,
+                CASE WHEN $4 = 'external'
+                  THEN EXISTS (SELECT 1 FROM registered_group)
+                  ELSE EXISTS (
+                    SELECT 1
+                    FROM registered_group
+                    JOIN family_memberships membership
+                      ON membership.family_id = registered_group.family_id
+                     AND membership.user_id = $5
+                  )
+                END AS authorized
+       ), attachment AS (
+         SELECT message.id, COALESCE(message.attachment_source_message_id,
+                   message.telegram_message_id)::text AS telegram_message_id,
+                message.attachment_file_id, message.attachment_file_unique_id,
+                message.attachment_file_name, message.attachment_media_type,
+                message.attachment_size::text, message.attachment_kind,
+                telegram_group.telegram_chat_id
+         FROM telegram_group_messages message
+         JOIN telegram_groups telegram_group ON telegram_group.id = message.group_id
+         WHERE message.id = $1 AND message.group_id = $2
+           AND telegram_group.family_id = $3 AND telegram_group.type = $4
+           AND message.attachment_file_id IS NOT NULL
+       )
+       SELECT current_access.authorized, current_access.registered,
+              CASE WHEN attachment.id IS NULL THEN NULL ELSE to_jsonb(attachment) END AS attachment
+       FROM current_access
+       LEFT JOIN attachment ON current_access.authorized`,
+      [attachmentId, auth.groupId, auth.familyId, auth.groupType, auth.userId],
     );
-    const row = result.rows[0];
-    if (!row) {
+    const row = result.rows[0]!;
+    if (!row.authorized && row.registered && auth.groupType === "family_private") {
+      throw new AppError(
+        "AGENT_TELEGRAM_ATTACHMENT_ACCESS_REVOKED",
+        "Доступ к семейному вложению был отозван",
+      );
+    }
+    const attachment = row.attachment;
+    if (!attachment) {
       throw new AppError(
         "AGENT_TELEGRAM_ATTACHMENT_NOT_FOUND",
         "Вложение не найдено в текущей зарегистрированной группе",
@@ -186,57 +216,27 @@ export const telegramGroupAttachmentRepository: TelegramGroupAttachmentRepositor
     }
     return {
       attachment: {
-        fileId: row.attachment_file_id,
-        ...(row.attachment_file_name === null ? {} : { fileName: row.attachment_file_name }),
-        ...(row.attachment_file_unique_id === null
+        fileId: attachment.attachment_file_id,
+        ...(attachment.attachment_file_name === null
           ? {}
-          : { fileUniqueId: row.attachment_file_unique_id }),
-        kind: row.attachment_kind,
-        ...(row.attachment_media_type === null ? {} : { mediaType: row.attachment_media_type }),
-        ...(row.attachment_size === null ? {} : { size: Number(row.attachment_size) }),
+          : { fileName: attachment.attachment_file_name }),
+        ...(attachment.attachment_file_unique_id === null
+          ? {}
+          : { fileUniqueId: attachment.attachment_file_unique_id }),
+        kind: attachment.attachment_kind,
+        ...(attachment.attachment_media_type === null
+          ? {}
+          : { mediaType: attachment.attachment_media_type }),
+        ...(attachment.attachment_size === null
+          ? {}
+          : { size: Number(attachment.attachment_size) }),
       },
-      chatId: row.telegram_chat_id,
-      messageId: row.telegram_message_id,
+      chatId: attachment.telegram_chat_id,
+      messageId: attachment.telegram_message_id,
     };
   },
 
-  async list(auth, messageThreadId) {
-    if (auth.groupType !== "family_private") {
-      throw new AppError(
-        "AGENT_TELEGRAM_ATTACHMENT_ACCESS_DENIED",
-        "Список вложений доступен только в исходной семейной группе",
-      );
-    }
-    if (messageThreadId !== null) {
-      requireTelegramPositiveBigint(messageThreadId, "message_thread_id");
-    }
-    const result = await database().query<AttachmentListRow>(
-      `SELECT message.id, COALESCE(message.attachment_source_message_id,
-                message.telegram_message_id)::text AS telegram_message_id,
-              message.attachment_file_id, message.attachment_file_unique_id,
-              message.attachment_file_name, message.attachment_media_type,
-              message.attachment_size::text, message.attachment_kind,
-              message.content_text, message.sender_display_name, message.sent_at,
-              telegram_group.telegram_chat_id
-       FROM telegram_group_messages message
-       JOIN telegram_groups telegram_group ON telegram_group.id = message.group_id
-       WHERE message.group_id = $1 AND telegram_group.family_id = $2
-          AND telegram_group.type = $4
-          AND message.message_thread_id IS NOT DISTINCT FROM $3::bigint
-          AND message.attachment_file_id IS NOT NULL
-       ORDER BY message.telegram_message_id DESC
-       LIMIT $5`,
-      [auth.groupId, auth.familyId, messageThreadId, auth.groupType,
-        TELEGRAM_ATTACHMENT_REFERENCE_LIST_LIMIT],
-    );
-    return result.rows.map((row) => ({
-      ...attachmentSummary(row),
-      contentText: row.content_text,
-      senderDisplayName: row.sender_display_name,
-      sentAt: row.sent_at.toISOString(),
-      telegramMessageId: row.telegram_message_id,
-    }));
-  },
+  list: listTelegramGroupAttachments,
 
   async record(groupId, message) {
     if (message.attachments.length !== 1) {

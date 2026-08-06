@@ -6,6 +6,8 @@
  * - Schedule updates expose the proposed values as well as the current subject.
  * - Technical UUIDs stay out of confirmation messages.
  * - The prompt explains the exact consequence before a decision is requested.
+ * - Google Workspace mutation approvals expose the complete exact argv.
+ * - Long schedule values remain complete for multipart Telegram delivery.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -52,6 +54,39 @@ const schedule = {
 };
 
 describe("Telegram approval presentation", () => {
+  it("shows every material Google Workspace argument", async () => {
+    const present = createTelegramApprovalPresenter({ findSchedule: vi.fn() });
+    const argv = [
+      "gmail",
+      "+send",
+      "--to",
+      "family@example.com",
+      "--subject",
+      "Семейный план",
+      "--body",
+      "Встречаемся в 19:00",
+    ];
+
+    const result = await present({
+      action: {
+        callId: "call-gws",
+        input: { argv },
+        kind: "tool-call",
+        toolName: "execute_google_workspace",
+      },
+      display: "confirmation",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "deny", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-gws",
+    }, context());
+
+    expect(result.prompt).toContain(JSON.stringify(argv, null, 2));
+    expect(result.prompt).toContain("будет выполнена один раз");
+  });
+
   it("describes a schedule resume without exposing its UUID", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
     const present = createTelegramApprovalPresenter({ findSchedule });
@@ -111,5 +146,31 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).toContain("Изменения:");
     expect(result.prompt).toContain("Название: Расширенный ИИ-дайджест");
     expect(result.prompt).toContain("Периодичность: каждые 2 дней");
+  });
+
+  it("preserves a complete long schedule scenario instead of approving a preview", async () => {
+    const findSchedule = vi.fn().mockResolvedValue(schedule);
+    const present = createTelegramApprovalPresenter({ findSchedule });
+    const scenarioPrompt = `${"Подробный шаг. ".repeat(500)}КОНЕЦ_СЦЕНАРИЯ`;
+
+    const result = await present({
+      action: {
+        callId: "call-long",
+        input: { action: "update", id: SCHEDULE_ID, scenarioPrompt },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "deny", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-long",
+    }, context());
+
+    expect(result.prompt).toContain(scenarioPrompt);
+    expect(result.prompt).toContain("КОНЕЦ_СЦЕНАРИЯ");
+    expect(result.prompt).not.toContain("КОНЕЦ_СЦЕНАРИ…");
   });
 });

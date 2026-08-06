@@ -102,7 +102,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=production-dependencies \
   /app/node_modules/@googleworkspace/cli/bin/gws \
-  /usr/local/bin/gws
+  /opt/osinara/gws
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
 

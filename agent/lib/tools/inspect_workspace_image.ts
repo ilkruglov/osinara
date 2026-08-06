@@ -28,11 +28,19 @@ const TOP_LEVEL_FIELDS = ["attachmentId", "path", "question", "scope", "telegram
 const TELEGRAM_MESSAGE_ID_PATTERN = /^\d+$/u;
 
 const inspectWorkspaceImageSchema = z.object({
-  attachmentId: z.string().optional(),
-  path: z.string().optional(),
-  question: z.string().optional(),
-  scope: z.string().optional(),
-  telegramMessageId: z.string().optional(),
+  attachmentId: z.uuid()
+    .describe("UUID вложения из <telegram_attachment_refs> или журнала; не передавай вместе с path или telegramMessageId")
+    .optional(),
+  path: z.string().min(1).max(512)
+    .describe("Путь относительно корня выбранного scope, например photos/image.png; не добавляй имя scope в начало")
+    .optional(),
+  question: z.string().min(1).max(4_000)
+    .describe("Обязательный конкретный вопрос к vision-модели об изображении"),
+  scope: z.enum(SCOPES)
+    .describe("Обязательная область, относительно корня которой разрешается path"),
+  telegramMessageId: z.string().regex(TELEGRAM_MESSAGE_ID_PATTERN)
+    .describe("Числовой ID текущего Telegram-сообщения; не передавай вместе с attachmentId или path")
+    .optional(),
 }).passthrough();
 
 function requireImageInput(input: Record<string, unknown>) {
@@ -62,7 +70,7 @@ function requireImageInput(input: Record<string, unknown>) {
   if (hasPath) {
     return {
       ...common,
-      path: requiredString(input, "path", INPUT_ERROR_CODE, "personal/photos/image.png", { maxLength: 512 }),
+      path: requiredString(input, "path", INPUT_ERROR_CODE, "photos/image.png", { maxLength: 512 }),
     };
   }
   const messageId = requiredString(input, "telegramMessageId", INPUT_ERROR_CODE, "773");
@@ -76,7 +84,7 @@ const TOOL_DESCRIPTION = [
   "Открыть изображение из workspace либо Telegram по безопасной ссылке и ответить через vision-модель.",
   "Для изображения в reply ancestry или <telegram_attachment_refs> передавай attachmentId: анализ скачивает bytes только в память и не сохраняет файл.",
   "Для изображения из текущего Telegram-вложения используй payload {\"telegramMessageId\":\"773\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}; не копируй длинный untrusted filename.",
-  "Для уже известного файла используй payload {\"path\":\"personal/photos/image.png\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}. Передавай ровно один источник.",
+  "Для уже известного файла передавай path относительно корня выбранного scope, без имени scope в начале: {\"path\":\"photos/image.png\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}. Передавай ровно один источник.",
 ].join(" ");
 
 export default defineTool({

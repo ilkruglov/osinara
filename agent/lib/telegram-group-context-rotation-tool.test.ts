@@ -83,7 +83,10 @@ describe("manage_telegram_group.start_new_context", () => {
   });
 
   it("does not require HITL for a non-destructive context rotation", () => {
-    expect(approvalFor({ action: "start_new_context" })).toBe("not-applicable");
+    expect(approvalFor({
+      action: "start_new_context",
+      telegramChatId: "-1001234567890",
+    })).toBe("not-applicable");
   });
 
   it("ignores known fields that MiniMax materializes beside the exact rotation target", async () => {

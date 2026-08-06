@@ -12,12 +12,16 @@
  * - External groups additionally deny the framework built-ins Eve always registers, and re-check
  *   every granted capability at execution time against the live database policy.
  */
+import type { SkillDefinition } from "eve/skills";
 import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
+import { isGroupSafeSkillName, type GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
+import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT } from "../memory-config.js";
 import exportMemory from "../tools/export_memory.js";
+import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import getCurrentTime from "../tools/get_current_time.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
@@ -42,7 +46,9 @@ import sendWorkspaceFile from "../tools/send_workspace_file.js";
 import startNewContext from "../tools/start_new_context.js";
 import { removeGroupFileTool } from "../workspaces/remove-group-file-tool.js";
 import { controlledWebFetchTool } from "./controlled-web-fetch.js";
-import { resolveExternalGroupToolPolicy } from "./external-group-policy.js";
+import { EXTERNAL_GROUP_FILE_TOOLS } from "./external-group-file-tools.js";
+import { authorizeCurrentExternalGroupCapability } from "./external-group-live-policy.js";
+import { resolveExternalGroupPolicyIdentity } from "./external-group-policy.js";
 import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
   isExternalGroupToolName,
@@ -54,12 +60,17 @@ type ToolMap = Readonly<Record<string, AnyToolDefinition>>;
 
 export type ModeToolSurfaceInput =
   | { environment: "family" | "private" }
-  | { capabilities: ReadonlySet<ExternalGroupToolName>; environment: "external" };
+  | {
+    capabilities: ReadonlySet<ExternalGroupToolName>;
+    environment: "external";
+    skills: Readonly<Partial<Record<GroupSafeSkillName, SkillDefinition>>>;
+  };
 
 const DENIED_TOOL_INPUT = z.record(z.string(), z.unknown());
 
 /** Tools whose authorization boundary accepts both a private chat and a closed family group. */
 export const TRUSTED_MODE_TOOLS: ToolMap = {
+  execute_google_workspace: executeGoogleWorkspace as unknown as AnyToolDefinition,
   get_current_time: getCurrentTime as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
   list_agent_schedules: listAgentSchedules as unknown as AnyToolDefinition,
@@ -100,8 +111,60 @@ export const FAMILY_ONLY_TOOL_NAMES = Object.keys(FAMILY_ONLY_TOOLS).sort();
 
 type DirectExternalToolName = Exclude<
   ExternalGroupToolName,
-  `manage_memory.${string}` | "web_search"
+  `manage_memory.${string}`
 >;
+
+const EXTERNAL_IMAGE_PATH_MAX_LENGTH = 512;
+const EXTERNAL_MODEL_TEXT_MAX_LENGTH = 4_000;
+const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
+
+// Shared executors remain unchanged, while external descriptors expose only their executable group
+// contract. This prevents the model from planning calls that external authorization must reject.
+const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
+  DirectExternalToolName,
+  Pick<AnyToolDefinition, "description" | "inputSchema">
+>>> = {
+  inspect_workspace_image: {
+    description:
+      "Проанализировать изображение текущей внешней группы по одному источнику: attachmentId, path в group workspace или telegramMessageId.",
+    inputSchema: z.object({
+      attachmentId: z.uuid().optional(),
+      path: z.string().min(1).max(EXTERNAL_IMAGE_PATH_MAX_LENGTH).optional(),
+      question: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
+      scope: z.literal("group").describe("Область текущей внешней группы"),
+      telegramMessageId: z.string().regex(/^\d+$/u).optional(),
+    }).passthrough(),
+  },
+  list_memories: {
+    description:
+      "Постранично показать записи долговременной памяти текущей внешней группы.",
+    inputSchema: z.object({
+      cursor: z.string().optional(),
+      limit: z.number().int().min(1).max(MEMORY_LIST_MAX_LIMIT).default(MEMORY_LIST_DEFAULT_LIMIT),
+      scope: z.literal("group").optional(),
+    }),
+  },
+  remember: {
+    description: "Сохранить одну устойчивую запись в память текущей внешней группы.",
+    inputSchema: z.object({
+      confirmationMode: z.enum(["automatic", "explicit"]),
+      content: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
+      kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
+      scope: z.literal("group").describe("Память текущей внешней группы"),
+      sensitivity: z.enum(["normal", "sensitive"]),
+    }),
+  },
+  send_workspace_file: {
+    description:
+      "Отправить файл из group workspace в текущий Telegram-чат или тему внешней группы.",
+    inputSchema: z.object({
+      caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
+      path: z.string().min(1).max(EXTERNAL_IMAGE_PATH_MAX_LENGTH),
+      presentation: z.enum(["document", "photo"]),
+      scope: z.literal("group").describe("Workspace текущей внешней группы"),
+    }),
+  },
+};
 
 const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
@@ -121,12 +184,19 @@ function groupToolForbidden(): AppError {
   );
 }
 
-function assertExternalGroupCapabilityAllowed(
+async function withExternalGroupCapability<T>(
   ctx: ToolContext,
   capability: ExternalGroupToolName,
-): void {
-  const policy = resolveExternalGroupToolPolicy(ctx.session.auth);
-  if (!policy.restricted || !policy.allowed.has(capability)) throw groupToolForbidden();
+  operation: () => Promise<T>,
+): Promise<T> {
+  const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
+  if (!identity) throw groupToolForbidden();
+
+  // Committing this final live check is the operation's authorization linearization point. The DB
+  // connection is released before repositories run so concurrent tools cannot exhaust the pool by
+  // each holding an outer connection while waiting for an inner repository connection.
+  await authorizeCurrentExternalGroupCapability(identity, capability);
+  return await operation();
 }
 
 function deniedTool(toolName: string): AnyToolDefinition {
@@ -145,9 +215,13 @@ function allowedDirectTool(
 ): AnyToolDefinition {
   return defineTool({
     ...definition,
+    ...EXTERNAL_DIRECT_TOOL_PRESENTATION[capability],
     async execute(input, ctx) {
-      assertExternalGroupCapabilityAllowed(ctx, capability);
-      return await definition.execute(input, ctx);
+      return await withExternalGroupCapability(
+        ctx,
+        capability,
+        async () => await definition.execute(input, ctx),
+      );
     },
   });
 }
@@ -164,22 +238,30 @@ function allowedMemoryTool(): AnyToolDefinition {
           "Не удалось определить операцию с памятью. Повторите запрос",
         );
       }
-      assertExternalGroupCapabilityAllowed(ctx, `manage_memory.${action}`);
-      return await definition.execute(input, ctx);
+      return await withExternalGroupCapability(
+        ctx,
+        `manage_memory.${action}`,
+        async () => await definition.execute(input, ctx),
+      );
     },
   });
 }
 
-function buildExternalToolSurface(allowed: ReadonlySet<ExternalGroupToolName>): ToolMap {
+function buildExternalToolSurface(
+  allowed: ReadonlySet<ExternalGroupToolName>,
+  skills: Readonly<Partial<Record<GroupSafeSkillName, SkillDefinition>>>,
+): ToolMap {
   const surface: Record<string, AnyToolDefinition> = {
-    // Eve decides whether to advertise this built-in from the turn's dynamic skill set. The wrapper
-    // independently enforces the live database grant at execution time.
-    load_skill: externalGroupLoadSkillTool,
+    ...EXTERNAL_GROUP_FILE_TOOLS,
+    load_skill: Object.keys(skills).length > 0
+      ? externalGroupLoadSkillTool
+      : deniedTool("load_skill"),
   };
+  // Eve's native descriptor is useful only when this exact turn has a loadable dynamic skill. The
+  // wrapper still independently enforces the latest database grant at execution time.
 
   // Granted application capabilities are re-checked at execution against the live policy.
   for (const capability of allowed) {
-    if (capability === "web_search") continue;
     if (capability.startsWith("manage_memory.")) continue;
     if (!isExternalGroupToolName(capability)) continue;
     const definition = EXTERNAL_DIRECT_TOOLS[capability as DirectExternalToolName];
@@ -193,10 +275,11 @@ function buildExternalToolSurface(allowed: ReadonlySet<ExternalGroupToolName>): 
   // Eve always registers its own built-ins, and 0.22.5 cannot hide a framework descriptor, so the
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
-    if (toolName === "web_search" || toolName === "web_fetch") {
+    if (toolName === "web_fetch") {
       if (!allowed.has(toolName)) surface[toolName] = deniedTool(toolName);
       continue;
     }
+    // Provider-native web_search has no local execution hook, so it is never grantable externally.
     surface[toolName] = deniedTool(toolName);
   }
   return surface;
@@ -220,10 +303,13 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const allowed = [...input.capabilities].some((name) => !isExternalGroupToolName(name))
     ? new Set<ExternalGroupToolName>()
     : input.capabilities;
-  const key = allowlistKey(allowed);
+  const skills = Object.keys(input.skills).some((name) => !isGroupSafeSkillName(name))
+    ? {}
+    : input.skills;
+  const key = `${allowlistKey(allowed)}|${Object.keys(skills).sort().join(",")}`;
   const cached = EXTERNAL_SURFACES.get(key);
   if (cached) return cached;
-  const surface = buildExternalToolSurface(allowed);
+  const surface = buildExternalToolSurface(allowed, skills);
   EXTERNAL_SURFACES.set(key, surface);
   return surface;
 }

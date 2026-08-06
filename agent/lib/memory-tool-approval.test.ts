@@ -5,7 +5,17 @@
  * - Sensitive and private-to-family writes require confirmation.
  * - Group corrections avoid unsafe callback identity reuse and rely on repository author checks.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { canUndoCreate } = vi.hoisted(() => ({ canUndoCreate: vi.fn() }));
+
+vi.mock("./memory-context.js", () => ({
+  requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
+  requireWritableScope: (_authorization: unknown, scope: unknown) => scope,
+}));
+vi.mock("./memory-repository.js", () => ({
+  memoryRepository: { canUndoCreate, create: vi.fn(), delete: vi.fn(), undoCreate: vi.fn(), update: vi.fn() },
+}));
 
 import manageMemory from "./tools/manage_memory.js";
 import remember from "./tools/remember.js";
@@ -41,9 +51,14 @@ describe("memory tool approvals", () => {
       .toBe("not-applicable");
   });
 
-  it("confirms private mutations but executes addressed group mutations under SQL author checks", () => {
-    expect(approvalFor(manageMemory, { action: "delete" }, "private")).toBe("user-approval");
-    expect(approvalFor(manageMemory, { action: "edit" }, "supergroup")).toBe("not-applicable");
-    expect(approvalFor(manageMemory, { action: "undo" }, "private")).toBe("not-applicable");
+  it("confirms private mutations but executes addressed group mutations under SQL author checks", async () => {
+    const id = "00000000-0000-4000-8000-000000000001";
+    expect(await approvalFor(manageMemory, { action: "delete", id }, "private"))
+      .toBe("user-approval");
+    expect(await approvalFor(
+      manageMemory,
+      { action: "edit", content: "Исправлено", id },
+      "supergroup",
+    )).toBe("not-applicable");
   });
 });

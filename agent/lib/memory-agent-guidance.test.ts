@@ -16,7 +16,11 @@ describe("agent memory guidance", () => {
     ["family", modeInstructions({ environment: "family" })],
     [
       "external with granted search",
-      modeInstructions({ capabilities: new Set(["search_memories"]), environment: "external" }),
+      modeInstructions({
+        capabilities: new Set(["search_memories"]),
+        environment: "external",
+        skills: new Set(),
+      }),
     ],
   ] as const)(
     "requires bounded multi-query context deepening in the %s mode",

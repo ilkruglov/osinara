@@ -54,6 +54,7 @@ interface InputRequestDependencies {
 }
 
 const HITL_PREPARING_MESSAGE = "Подготавливаю безопасный запрос подтверждения.";
+const HITL_PROMPT_CHUNK_CHARACTERS = 3_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 type TelegramJsonValue =
@@ -114,6 +115,23 @@ function callbackOptions(
   }));
 }
 
+function splitPrompt(prompt: string): string[] {
+  const chunks: string[] = [];
+  let offset = 0;
+  while (offset < prompt.length) {
+    let end = Math.min(offset + HITL_PROMPT_CHUNK_CHARACTERS, prompt.length);
+    // Keep UTF-16 surrogate pairs intact because Telegram rejects malformed text payloads.
+    if (end < prompt.length && /[\uD800-\uDBFF]/u.test(prompt[end - 1]!)) end -= 1;
+    chunks.push(prompt.slice(offset, end));
+    offset = end;
+  }
+  return chunks.length === 0 ? [""] : chunks;
+}
+
+function numberedPromptChunk(chunk: string, index: number, total: number): string {
+  return total === 1 ? chunk : `Часть ${index + 1} из ${total}\n\n${chunk}`;
+}
+
 export function createTelegramInputRequestHandler(dependencies: InputRequestDependencies) {
   return async function handleInputRequested(
     data: InputRequestedData,
@@ -144,35 +162,63 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
         "Eve не передал запрос, который нужно показать пользователю",
       );
     }
+
+    // Resolve trusted semantic subjects before parking so presentation failures remain recoverable.
+    const localizedRequests = [];
+    for (const request of data.requests) {
+      localizedRequests.push(await dependencies.present(request, ctx));
+    }
     await dependencies.parkSession({
       applicationSessionId: appSessionId,
       pendingRequestId: firstRequest.requestId,
       requesterTelegramUserId: telegramUserId,
       requesterUserId: UUID_PATTERN.test(caller.principalId) ? caller.principalId : null,
     });
-    for (const request of data.requests) {
-      const localizedRequest = await dependencies.present(request, ctx);
-      const rendered = renderTelegramInputRequest(localizedRequest, channel.state);
+    for (const localizedRequest of localizedRequests) {
+      const promptChunks = splitPrompt(localizedRequest.prompt);
+      const finalChunkIndex = promptChunks.length - 1;
+      const rendered = renderTelegramInputRequest({
+        ...localizedRequest,
+        prompt: numberedPromptChunk(
+          promptChunks[finalChunkIndex]!,
+          finalChunkIndex,
+          promptChunks.length,
+        ),
+      }, channel.state);
       const replyMarkup = localizeTelegramReplyMarkup(rendered.replyMarkup);
       const callbacks = callbackData(replyMarkup);
       const options = callbackOptions(localizedRequest, callbacks);
       const replyParameters = telegramTurnReplyParameters(channel.state, ctx);
 
+      // Long semantic prompts are sent in full before the final actionable message. No earlier
+      // chunk carries callbacks, so the user cannot approve before seeing every material value.
+      const detailMessageIds: string[] = [];
+      for (let index = 0; index < finalChunkIndex; index += 1) {
+        detailMessageIds.push(await postTelegramMessageWithoutContinuationChange(channel, {
+          ...(index === 0 && replyParameters !== undefined
+            ? { reply_parameters: replyParameters }
+            : {}),
+          text: numberedPromptChunk(promptChunks[index]!, index, promptChunks.length),
+        }));
+      }
+
       // The actionable prompt is revealed only after both the route and approver binding are durable.
       const sentMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
         ...(callbacks.length === 0 ? { reply_markup: replyMarkup } : {}),
-        ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
+        ...(detailMessageIds.length > 0 || replyParameters === undefined
+          ? {}
+          : { reply_parameters: replyParameters }),
         text: HITL_PREPARING_MESSAGE,
       });
       // Exact prompt ownership is required for both interactive and scheduled callback/reply claims.
-      await dependencies.registerMessageRoutes(channel, ctx, [sentMessageId]);
+      await dependencies.registerMessageRoutes(channel, ctx, [...detailMessageIds, sentMessageId]);
       await dependencies.approvals.register({
         applicationSessionId: appSessionId,
         callbackData: callbacks,
         callbackOptions: options,
         eveSessionId: ctx.session.id,
         requestId: localizedRequest.requestId,
-        promptText: rendered.text,
+        promptText: localizedRequest.prompt,
         telegramChatId: chatId,
         telegramChatType: chatType,
         telegramMessageId: sentMessageId,

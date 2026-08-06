@@ -27,6 +27,8 @@ describe("Google Workspace profile store", () => {
     roots.push(root);
     const store = createGoogleWorkspaceProfileStore(root);
 
+    await expect(store.exists(PERSONAL_WORKSPACE_ID)).resolves.toBe(false);
+
     await store.write(PERSONAL_WORKSPACE_ID, {
       client_id: "client-id",
       client_secret: "client-secret",
@@ -44,6 +46,7 @@ describe("Google Workspace profile store", () => {
     });
     expect((await stat(directory)).mode & 0o777).toBe(0o700);
     expect((await stat(credentials)).mode & 0o777).toBe(0o600);
+    await expect(store.exists(PERSONAL_WORKSPACE_ID)).resolves.toBe(true);
   });
 
   it("removes only credentials while preserving the workspace directory mount target", async () => {
@@ -67,6 +70,7 @@ describe("Google Workspace profile store", () => {
     // Active sandbox containers bind-mount this directory, so its inode must remain stable.
     const directoryAfterRemove = await stat(personalDirectory);
     expect(directoryAfterRemove.ino).toBe(directoryBeforeRemove.ino);
+    await expect(store.exists(PERSONAL_WORKSPACE_ID)).resolves.toBe(false);
     await expect(stat(personalCredentials)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(join(root, FAMILY_WORKSPACE_ID, "credentials.json"))).resolves.toBeDefined();
 

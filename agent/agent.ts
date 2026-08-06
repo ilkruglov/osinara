@@ -3,7 +3,7 @@
  *
  * Constructs:
  * - Explicit primary model from the multi-provider registry.
- * - Context compaction and a zero-depth delegation boundary for the root agent.
+ * - Context compaction and a single worker-depth delegation boundary for the root orchestrator.
  */
 import { defineAgent } from "eve";
 

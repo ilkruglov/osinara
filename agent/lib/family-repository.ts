@@ -5,7 +5,7 @@
  * - `PendingFamilyInvitation`: owner-visible pending candidate projection.
  * - `FamilyRepository`: injectable invitation administration contract.
  * - `familyRepository`: transactional family administration implementation.
- * - Current-owner authorization used immediately before non-database side effects.
+ * - Durable invitation transport reservation with live owner authorization.
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
@@ -35,9 +35,15 @@ interface ApproveInvitationInput {
   operationKey: string;
 }
 
+function invitationDeliveryAmbiguousError(): AppError {
+  return new AppError(
+    "AGENT_INVITATION_DELIVERY_AMBIGUOUS",
+    "Не удалось подтвердить отправку приглашения. Проверьте личный чат; повторная отправка этой ссылки заблокирована",
+  );
+}
+
 export interface FamilyRepository {
   approveInvitation(input: ApproveInvitationInput): Promise<{ approved: true }>;
-  assertCurrentOwner(familyId: string, requestedBy: string): Promise<void>;
   claimInvitation(code: string, profile: TelegramProfile): Promise<"invalid" | "pending">;
   createInvitation(
     familyId: string,
@@ -59,22 +65,15 @@ export interface FamilyRepository {
     invitationId: string;
     operationKey: string;
   }): Promise<void>;
+  markInvitationDeliveryStarted(input: {
+    createdBy: string;
+    familyId: string;
+    invitationId: string;
+    operationKey: string;
+  }): Promise<void>;
 }
 
 export const familyRepository: FamilyRepository = {
-  async assertCurrentOwner(familyId, requestedBy) {
-    // Session auth is a snapshot; side-effect boundaries must consult current membership state.
-    const owner = await database().query(
-      `SELECT 1
-       FROM family_memberships
-       WHERE family_id = $1 AND user_id = $2 AND role = 'owner'`,
-      [familyId, requestedBy],
-    );
-    if (!owner.rowCount) {
-      throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-    }
-  },
-
   async claimInvitation(code, profile) {
     const client = await database().connect();
     try {
@@ -198,11 +197,12 @@ export const familyRepository: FamilyRepository = {
       const result = await client.query<{
         code_hash: string;
         delivery_completed_at: Date | null;
+        delivery_started_at: Date | null;
         expires_at: Date;
         id: string;
         status: string;
       }>(
-        `SELECT id, code_hash, expires_at, delivery_completed_at, status
+        `SELECT id, code_hash, expires_at, delivery_started_at, delivery_completed_at, status
          FROM invitations
          WHERE family_id = $1 AND created_by = $2 AND operation_key = $3`,
         [familyId, createdBy, operationKey],
@@ -212,6 +212,9 @@ export const familyRepository: FamilyRepository = {
         throw new Error(
           "AGENT_INVITATION_REPLAY_MISMATCH: Не удалось безопасно восстановить приглашение",
         );
+      }
+      if (invitation.delivery_started_at !== null && invitation.delivery_completed_at === null) {
+        throw invitationDeliveryAmbiguousError();
       }
       if (
         invitation.status === "open" &&
@@ -391,13 +394,74 @@ export const familyRepository: FamilyRepository = {
     const result = await database().query(
       `UPDATE invitations
        SET delivery_completed_at = COALESCE(delivery_completed_at, now())
-       WHERE id = $1 AND family_id = $2 AND created_by = $3 AND operation_key = $4`,
+       WHERE id = $1 AND family_id = $2 AND created_by = $3 AND operation_key = $4
+         AND delivery_started_at IS NOT NULL`,
       [input.invitationId, input.familyId, input.createdBy, input.operationKey],
     );
     if (!result.rowCount) {
-      throw new Error(
-        "AGENT_INVITATION_DELIVERY_STATE_FAILED: Статус доставки приглашения не сохранен",
+      throw invitationDeliveryAmbiguousError();
+    }
+  },
+
+  async markInvitationDeliveryStarted(input) {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+
+      // Session authorization is a snapshot; reserve transport only while owner access is live.
+      const owner = await client.query(
+        `SELECT 1
+         FROM family_memberships
+         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
+         FOR SHARE`,
+        [input.familyId, input.createdBy],
       );
+      if (!owner.rowCount) {
+        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
+      }
+
+      // The row lock turns concurrent execution or replay into a durable fail-closed boundary.
+      const invitation = await client.query<{
+        delivery_completed_at: Date | null;
+        delivery_started_at: Date | null;
+        expires_at: Date;
+        status: string;
+      }>(
+        `SELECT delivery_started_at, delivery_completed_at, expires_at, status
+         FROM invitations
+         WHERE id = $1 AND family_id = $2 AND created_by = $3 AND operation_key = $4
+         FOR UPDATE`,
+        [input.invitationId, input.familyId, input.createdBy, input.operationKey],
+      );
+      const row = invitation.rows[0];
+      if (!row) {
+        throw new AppError(
+          "AGENT_INVITATION_DELIVERY_STATE_INVALID",
+          "Не удалось подготовить отправку приглашения. Создайте новое приглашение",
+        );
+      }
+      if (row.delivery_started_at !== null || row.delivery_completed_at !== null) {
+        throw invitationDeliveryAmbiguousError();
+      }
+      if (row.status !== "open" || row.expires_at.getTime() <= Date.now()) {
+        throw new AppError(
+          "AGENT_INVITATION_EXPIRED",
+          "Срок приглашения истек. Создайте новое приглашение",
+        );
+      }
+
+      await client.query(
+        `UPDATE invitations
+         SET delivery_started_at = now()
+         WHERE id = $1`,
+        [input.invitationId],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
   },
 };

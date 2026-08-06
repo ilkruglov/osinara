@@ -6,20 +6,15 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import {
+  decodeDateUuidCursor,
+  encodeDateUuidCursor,
+  paginationFilterDigest,
+} from "./keyset-pagination.js";
 import { MEMORY_LIST_MAX_LIMIT } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import type { MemoryItem, MemoryRow } from "./memory-record.js";
 import { rowToMemory } from "./memory-record.js";
-
-function decodeCursor(cursor: string | undefined): { id: string; updatedAt: Date } | null {
-  if (!cursor) return null;
-  const [timestamp, id, extra] = cursor.split("|");
-  const updatedAt = new Date(timestamp ?? "");
-  if (extra !== undefined || !id || Number.isNaN(updatedAt.getTime())) {
-    throw new AppError("AGENT_MEMORY_CURSOR_INVALID", "Не удалось продолжить просмотр памяти");
-  }
-  return { id, updatedAt };
-}
 
 export const memoryListRepository = {
   async list(
@@ -32,7 +27,20 @@ export const memoryListRepository = {
     if (options.scope && !auth.scopes.includes(options.scope)) {
       throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
     }
-    const cursor = decodeCursor(options.cursor);
+    const cursorBinding = paginationFilterDigest([
+      "memory-v1",
+      auth.familyId,
+      auth.userId,
+      auth.groupId,
+      [...auth.scopes].sort().join(","),
+      options.scope ?? null,
+    ]);
+    const cursor = decodeDateUuidCursor(
+      options.cursor,
+      "AGENT_MEMORY_CURSOR_INVALID",
+      "Не удалось продолжить просмотр памяти",
+      cursorBinding,
+    );
     const result = await database().query<MemoryRow>(
       `SELECT id, author_user_id, author_telegram_user_id, scope, kind, content, source,
               confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at
@@ -53,7 +61,7 @@ export const memoryListRepository = {
         auth.userId,
         auth.groupId,
         options.scope ?? null,
-        cursor?.updatedAt ?? null,
+        cursor?.timestamp ?? null,
         cursor?.id ?? null,
         options.limit + 1,
       ],
@@ -63,7 +71,9 @@ export const memoryListRepository = {
     const last = rows.at(-1);
     return {
       items: rows.map(rowToMemory),
-      nextCursor: hasNext && last ? `${last.updated_at.toISOString()}|${last.id}` : null,
+      nextCursor: hasNext && last
+        ? encodeDateUuidCursor(last.updated_at, last.id, cursorBinding)
+        : null,
     };
   },
 };

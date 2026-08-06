@@ -65,6 +65,7 @@ describe("manage_telegram_group.register", () => {
       messageMode: "all",
       telegramChatId: "-1003567628736",
       title: "Сицилия",
+      toolAllowlist: [],
       type: "family_private",
     });
     expect(registerGroup).toHaveBeenCalledWith({

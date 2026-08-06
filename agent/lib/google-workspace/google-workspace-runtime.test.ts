@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - The exact gws version is a production dependency with locked integrity.
- * - Docker installs the verified binary into the sandbox where Bash invokes it.
+ * - Docker keeps the verified binary behind a path hidden from native Bash.
  */
 import { readFile } from "node:fs/promises";
 
@@ -25,7 +25,7 @@ describe("Google Workspace runtime wiring", () => {
     });
   });
 
-  it("installs the verified binary and copies it into the sandbox runtime", async () => {
+  it("installs the verified binary only at the hidden one-shot execution path", async () => {
     const dockerfile = await readFile(new URL("Dockerfile", projectRoot), "utf8");
 
     expect(dockerfile).toContain([
@@ -41,10 +41,7 @@ describe("Google Workspace runtime wiring", () => {
     expect(dockerfile).toContain(
       "COPY --from=production-dependencies /app/node_modules ./node_modules",
     );
-    expect(dockerfile).toContain([
-      "COPY --from=production-dependencies \\",
-      "  /app/node_modules/@googleworkspace/cli/bin/gws \\",
-      "  /usr/local/bin/gws",
-    ].join("\n"));
+    expect(dockerfile).not.toContain("/usr/local/bin/gws");
+    expect(dockerfile).toContain("/opt/osinara/gws");
   });
 });

@@ -21,6 +21,7 @@ import {
   type MemorySensitivity,
   rowToMemory,
 } from "./memory-record.js";
+import { memoryUndoRepository } from "./memory-undo-repository.js";
 
 export type {
   CreateMemoryInput,
@@ -159,6 +160,8 @@ async function requireMutationAccess(
 }
 
 export const memoryRepository = {
+  canUndoCreate: memoryUndoRepository.canUndoCreate,
+
   async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<MemoryItem> {
     requireScope(auth, input.scope);
     const inputHash = memoryOperationHash(input);
@@ -225,9 +228,19 @@ export const memoryRepository = {
       // Operation, indexing request, and privacy-safe audit metadata commit with the memory itself.
       await client.query(
         `INSERT INTO memory_mutation_operations
-           (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
-         VALUES ($1, $2, 'create', $3, $4)`,
-        [auth.familyId, input.operationKey, inputHash, row.id],
+           (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
+            actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
+         VALUES ($1, $2, 'create', $3, $4, $5, $6, $7, $8)`,
+        [
+          auth.familyId,
+          input.operationKey,
+          inputHash,
+          row.id,
+          auth.userId,
+          auth.telegramUserId,
+          input.provenance.sessionId,
+          input.provenance.turnId,
+        ],
       );
       await client.query(
         "INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)",
@@ -294,6 +307,8 @@ export const memoryRepository = {
   },
 
   list: memoryListRepository.list,
+
+  undoCreate: memoryUndoRepository.undoCreate,
 
   async update(
     auth: MemoryAuthorization,

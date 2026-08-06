@@ -3,8 +3,10 @@
  *
  * Constructs covered:
  * - Scoped workspace mounts and exactly one active persistent tool environment.
+ * - Native Bash never receives the Google credential profile or gws execution boundary.
  * - Public-only proxy egress for trusted sessions.
  * - Network-less, tool-less external-group containers.
+ * - Network-less, tool-less delegated workers with trusted workspace mounts.
  * - Resource, capability, and privilege restrictions.
  * - Stale policy replacement and bounded warm-cache reconciliation at the Docker boundary.
  * - Explicit session and runner shutdown remove compute instead of retaining exited containers.
@@ -21,6 +23,7 @@ import {
   buildSandboxContainerOptions,
   createDockerSandboxEngine,
 } from "./docker-sandbox-engine.js";
+import { buildGoogleWorkspaceContainerOptions } from "./docker-sandbox-options.js";
 import { sandboxRequestHash } from "./docker-sandbox-lifecycle.js";
 
 const PERSONAL_WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
@@ -32,7 +35,6 @@ const EMPTY_SEED_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4959
 const temporaryRoots: string[] = [];
 
 const runtime = {
-  googleWorkspaceCredentialsVolume: "osinara_google-workspace-credentials",
   egressNetwork: "osinara_sandbox-egress",
   image: "osinara-sandbox-runtime:local",
   project: "osinara",
@@ -47,7 +49,7 @@ afterEach(async () => {
 });
 
 describe("buildSandboxContainerOptions", () => {
-  it("keeps family files visible in private chat without mounting family credentials", () => {
+  it("keeps family files visible in private chat without exposing Google credentials", () => {
     const options = buildSandboxContainerOptions(runtime, {
       access: "trusted",
       eveSessionId: EVE_SESSION_ID,
@@ -75,12 +77,6 @@ describe("buildSandboxContainerOptions", () => {
         Target: "/tools/personal",
         VolumeOptions: { Subpath: PERSONAL_WORKSPACE_ID },
       }),
-      expect.objectContaining({
-        ReadOnly: true,
-        Source: runtime.googleWorkspaceCredentialsVolume,
-        Target: "/credentials/google-workspace",
-        VolumeOptions: { Subpath: PERSONAL_WORKSPACE_ID },
-      }),
     ]);
     expect(options.HostConfig).toMatchObject({
       CapDrop: ["ALL"],
@@ -90,9 +86,12 @@ describe("buildSandboxContainerOptions", () => {
       Privileged: false,
       ReadonlyRootfs: false,
       SecurityOpt: ["no-new-privileges:true"],
+      Tmpfs: expect.objectContaining({
+        "/opt/osinara": expect.stringContaining("noexec"),
+      }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "6",
+      "dev.osinara.sandbox.policy-version": "8",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -101,16 +100,36 @@ describe("buildSandboxContainerOptions", () => {
       "AGENT_BROWSER_RESTORE_SAVE=auto",
       "AGENT_BROWSER_SESSION=osinara",
       "HOME=/tools/personal/home",
-      "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/credentials/google-workspace/credentials.json",
       "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
       "NPM_CONFIG_PREFIX=/tools/personal/npm",
     ]));
     expect(options.Env).not.toEqual(expect.arrayContaining([
+      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
       expect.stringContaining("/tools/family"),
     ]));
   });
 
-  it("mounts only the family tool environment in a family chat", () => {
+  it("creates one-shot GWS compute with exact argv and only one workspace", () => {
+    const dangerous = "$(touch /tmp/pwned); a && rm -rf /";
+    const options = buildGoogleWorkspaceContainerOptions(runtime, {
+      accessToken: "access-secret",
+      argv: ["gmail", "+send", "--subject", dangerous],
+      timeoutMs: 60_000,
+      workspaceId: PERSONAL_WORKSPACE_ID,
+    });
+
+    expect(options.Cmd).toEqual(["/opt/osinara/gws", "gmail", "+send", "--subject", dangerous]);
+    expect(options.HostConfig?.Mounts).toEqual([
+      expect.objectContaining({
+        Target: "/workspace",
+        VolumeOptions: { Subpath: PERSONAL_WORKSPACE_ID },
+      }),
+    ]);
+    expect(options.Env).toContain("GOOGLE_WORKSPACE_CLI_TOKEN=access-secret");
+    expect(options.HostConfig).toMatchObject({ ReadonlyRootfs: true });
+  });
+
+  it("mounts only the family tool environment without Google credentials", () => {
     const options = buildSandboxContainerOptions(runtime, {
       access: "trusted",
       eveSessionId: EVE_SESSION_ID,
@@ -130,17 +149,13 @@ describe("buildSandboxContainerOptions", () => {
         Target: "/tools/family",
         VolumeOptions: { Subpath: FAMILY_WORKSPACE_ID },
       }),
-      expect.objectContaining({
-        ReadOnly: true,
-        Source: runtime.googleWorkspaceCredentialsVolume,
-        Target: "/credentials/google-workspace",
-        VolumeOptions: { Subpath: FAMILY_WORKSPACE_ID },
-      }),
     ]);
     expect(options.Env).toEqual(expect.arrayContaining([
       "HOME=/tools/family/home",
-      "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/credentials/google-workspace/credentials.json",
       "NPM_CONFIG_PREFIX=/tools/family/npm",
+    ]));
+    expect(options.Env).not.toEqual(expect.arrayContaining([
+      expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
     ]));
   });
 
@@ -163,6 +178,30 @@ describe("buildSandboxContainerOptions", () => {
     ]);
     expect(options.Env).not.toEqual(expect.arrayContaining([
       expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
+      expect.stringContaining("PROXY="),
+      expect.stringContaining("/tools/"),
+    ]));
+  });
+
+  it("gives a delegated worker trusted workspace files without tools or network", () => {
+    const options = buildSandboxContainerOptions(runtime, {
+      access: "worker",
+      eveSessionId: EVE_SESSION_ID,
+      mounts: [
+        { mountPoint: "personal", workspaceId: PERSONAL_WORKSPACE_ID },
+        { mountPoint: "family", workspaceId: FAMILY_WORKSPACE_ID },
+      ],
+      sandboxSessionId: EVE_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
+    });
+
+    expect(options.HostConfig?.NetworkMode).toBe("none");
+    expect(options.HostConfig?.Mounts).toEqual([
+      expect.objectContaining({ Target: "/workspace/personal" }),
+      expect.objectContaining({ Target: "/workspace/family" }),
+    ]);
+    expect(options.Env).toEqual(["HOME=/tmp/home", expect.stringMatching(/^PATH=/u), "LANG=C.UTF-8"]);
+    expect(options.Env).not.toEqual(expect.arrayContaining([
       expect.stringContaining("PROXY="),
       expect.stringContaining("/tools/"),
     ]));
@@ -195,7 +234,6 @@ describe("buildSandboxContainerOptions", () => {
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: `${root}/google-workspace-credentials`,
         toolsRoot: `${root}/tools`,
         workspaceRoot: `${root}/workspaces`,
       },
@@ -246,7 +284,6 @@ describe("buildSandboxContainerOptions", () => {
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: `${root}/google-workspace-credentials`,
         toolsRoot: `${root}/tools`,
         workspaceRoot: `${root}/workspaces`,
       },
@@ -305,7 +342,6 @@ describe("buildSandboxContainerOptions", () => {
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
         toolsRoot: "/tools",
         workspaceRoot: "/workspaces",
       },
@@ -335,7 +371,6 @@ describe("buildSandboxContainerOptions", () => {
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
         toolsRoot: "/tools",
         workspaceRoot: "/workspaces",
       },
@@ -352,24 +387,35 @@ describe("buildSandboxContainerOptions", () => {
   it("removes compute on session and runner shutdown", async () => {
     const removeSession = vi.fn(async () => undefined);
     const removeOrphan = vi.fn(async () => undefined);
+    const removeGoogleWorkspaceOrphan = vi.fn(async () => undefined);
     const sessionContainer = {
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
       remove: removeSession,
     };
     const docker = {
       getContainer: vi.fn((id: string) =>
-        id === "shutdown-orphan" ? { remove: removeOrphan } : sessionContainer
+        id === "shutdown-orphan"
+          ? { remove: removeOrphan }
+          : id === "gws-orphan"
+          ? { remove: removeGoogleWorkspaceOrphan }
+          : sessionContainer
       ),
-      listContainers: vi.fn(async () => [{
-        Id: "shutdown-orphan",
-        Labels: { "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID },
-        State: "exited",
-      }]),
+      listContainers: vi.fn(async () => [
+        {
+          Id: "shutdown-orphan",
+          Labels: { "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID },
+          State: "exited",
+        },
+        {
+          Id: "gws-orphan",
+          Labels: { "dev.osinara.google-workspace-execution": "true" },
+          State: "exited",
+        },
+      ]),
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
         toolsRoot: "/tools",
         workspaceRoot: "/workspaces",
       },
@@ -381,6 +427,7 @@ describe("buildSandboxContainerOptions", () => {
 
     expect(removeSession).toHaveBeenCalledWith({ force: true, v: true });
     expect(removeOrphan).toHaveBeenCalledWith({ force: true, v: true });
+    expect(removeGoogleWorkspaceOrphan).toHaveBeenCalledWith({ force: true, v: true });
   });
 
   it("keeps repeated shutdown idempotent when another handle removed the container", async () => {
@@ -393,7 +440,6 @@ describe("buildSandboxContainerOptions", () => {
     const engine = createDockerSandboxEngine({
       docker,
       roots: {
-        googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
         toolsRoot: "/tools",
         workspaceRoot: "/workspaces",
       },

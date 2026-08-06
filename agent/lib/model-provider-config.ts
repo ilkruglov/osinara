@@ -36,7 +36,23 @@ const openAiChatCompletionsTransportSchema = z.object({
   baseUrl: externalBaseUrlSchema,
   protocol: z.literal("openai-chat-completions"),
   providerName: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
-}).strict();
+  thinking: z.discriminatedUnion("type", [
+    z.object({ effort: z.enum(["low", "high", "max"]), type: z.literal("enabled") }).strict(),
+    z.object({ type: z.literal("disabled") }).strict(),
+  ]).optional(),
+}).strict().superRefine((transport, context) => {
+  if (transport.providerName === "deepseek" && transport.thinking === undefined) {
+    context.addIssue({ code: "custom", message: "DeepSeek thinking mode must be explicit" });
+  }
+});
+const visionModelSchema = z.discriminatedUnion("supportsImageInput", [
+  z.object({ supportsImageInput: z.literal(false) }).strict(),
+  z.object({
+    id: modelIdSchema,
+    maxOutputTokens: z.number().int().positive(),
+    supportsImageInput: z.literal(true),
+  }).strict(),
+]);
 const modelProviderConfigSchema = z.object({
   agent: z.object({
     models: z.object({
@@ -45,17 +61,14 @@ const modelProviderConfigSchema = z.object({
         id: modelIdSchema,
         maxOutputTokens: z.number().int().positive(),
       }).strict(),
-      vision: z.object({
-        id: modelIdSchema,
-        maxOutputTokens: z.number().int().positive(),
-      }).strict(),
+      vision: visionModelSchema,
     }).strict(),
     transport: z.discriminatedUnion("protocol", [
       anthropicMessagesTransportSchema,
       openAiChatCompletionsTransportSchema,
     ]),
   }).strict(),
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(3),
   voice: z.object({ transcriptionModelId: modelIdSchema }).strict(),
 }).strict();
 

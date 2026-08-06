@@ -8,6 +8,9 @@ builds six container-only images, publishes immutable tags to GHCR, records arti
 and prepares `vVERSION` as a draft. CI uploads and byte-verifies every asset before publishing the
 draft as the latest release. A failed rerun may resume only a draft whose tag still resolves to the
 same commit; a published release or unrelated tag requires a package version bump.
+Every version must also provide a detailed user-facing changelog at `docs/releases/vVERSION.md`;
+the release job fails before image publication when that file is absent or empty and uses it as the
+exact GitHub Release description instead of an opaque generated commit list.
 Repository-level immutable releases are mandatory; both the application checker and server reject
 published releases whose API metadata does not report `immutable: true`.
 
@@ -66,18 +69,29 @@ sources a module. It creates `/opt/osinara/releases`, `/opt/osinara/backups`, an
 `/opt/osinara/release.env`.
 
 `/opt/osinara/.env` must be exactly `root:root 0600`. It contains `POSTGRES_PASSWORD`, the required
-internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`, `MODEL_UPSTREAM_API_KEY`, `GROQ_API_KEY`,
+internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`, `DEEPSEEK_API_KEY`,
+`MODEL_UPSTREAM_API_KEY`, `GROQ_API_KEY`,
 Telegram secrets, and environment-specific integration
 settings. It must never contain or export any of the six `OSINARA_*_IMAGE` variables or
 `SANDBOX_RUNTIME_IMAGE`; those values exist only in a validated per-release `release.env`.
 
 `/opt/osinara/model-providers.json` remains a schema-v1 deployment compatibility file so an older
 release can restart during recovery. Active model selection is immutable in each app image at
-`config/agent-model-providers.json`: it selects a protocol-native transport, independent primary
-and vision model IDs, explicit output limits, and the primary context window. The current Anthropic
-Messages transport carries typed thinking blocks without text parsing. Changing active model
-selection therefore requires a reviewed release and rolls back atomically with that image.
-The MiniMax transport explicitly enables a narrow web-search adapter because MiniMax returns
+`config/agent-model-providers.json`: schema v3 selects a protocol-native transport, explicit output
+and context limits, and a discriminated image-input capability. A supported vision route requires
+its own model ID and output limit; an unsupported route cannot construct a fake vision model.
+Changing active model selection therefore requires a reviewed release and rolls back atomically
+with that image.
+
+The active `deepseek-v4-flash` route uses DeepSeek OpenAI Chat Completions with thinking explicitly
+enabled at `high` effort. The transport keeps `reasoning_content` separate from user-visible text
+and replays it after tool calls, as required by DeepSeek multi-round semantics. The application caps
+one response at 128,000 tokens even though the provider advertises a larger native maximum. DeepSeek
+does not accept image input, so `inspect_workspace_image` returns a stable unsupported-capability
+result before reading bytes or starting a paid model call.
+
+The retained MiniMax alternative transport explicitly enables a narrow web-search adapter because
+MiniMax returns
 `content` where the Anthropic SDK requires `encrypted_content`, but rejects its own native
 `server_tool_use` / `web_search_tool_result` blocks when they are replayed. Responses retain the
 exact result value for SDK parsing; history converts each matched provider pair into an ordinary

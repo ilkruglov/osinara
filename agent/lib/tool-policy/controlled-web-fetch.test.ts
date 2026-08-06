@@ -34,13 +34,21 @@ describe("controlled external-group web fetch", () => {
     const dispatcher = new ProxyAgent(CONTROLLED_WEB_FETCH_PROXY_URL);
     const execute = createControlledWebFetch({ dispatcher, fetch });
 
-    const result = await execute({ format: "text", timeout: 12, url: "https://example.com/page" });
+    const result = await execute({
+      format: "extracted_text",
+      timeout: 12,
+      url: "https://example.com/page",
+    });
 
     expect(CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
-      format: "markdown",
+      format: "extracted_text",
       timeout: 120,
       url: "https://example.com",
     }).success).toBe(true);
+    expect(CONTROLLED_WEB_FETCH_INPUT_SCHEMA.safeParse({
+      format: "markdown",
+      url: "https://example.com",
+    }).success).toBe(false);
     expect(controlledWebFetchTool.execute).toBeTypeOf("function");
     expect(result.content).toBe("Hello");
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -151,7 +159,7 @@ describe("controlled external-group web fetch", () => {
     const fetch = vi.fn(async () => response("я".repeat(CONTROLLED_WEB_FETCH_MAX_MODEL_BYTES)));
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
-    const result = await execute({ format: "markdown", url: "https://example.com/text" });
+    const result = await execute({ format: "extracted_text", url: "https://example.com/text" });
 
     expect(Buffer.byteLength(result.content, "utf8")).toBeLessThanOrEqual(
       CONTROLLED_WEB_FETCH_MAX_MODEL_BYTES,
@@ -159,9 +167,29 @@ describe("controlled external-group web fetch", () => {
     expect(result.content).not.toContain("�");
     expect(result.truncated).toBe(true);
     expect(await controlledWebFetchTool.toModelOutput?.(result)).toEqual({
-      type: "text",
-      value: result.content,
+      type: "json",
+      value: {
+        content: result.content,
+        contentType: "text/plain",
+        finalUrl: "https://example.com/text",
+        truncated: true,
+      },
     });
+  });
+
+  it("returns raw HTML only when requested and otherwise labels extraction as plain text", async () => {
+    const fetch = vi.fn(async () => response("<article><h1>Title</h1><p>Body</p></article>", {
+      headers: { "content-type": "text/html" },
+    }));
+    const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
+
+    await expect(execute({ format: "extracted_text", url: "https://example.com/article" }))
+      .resolves.toMatchObject({ content: "Title\nBody", finalUrl: "https://example.com/article" });
+    await expect(execute({ format: "html", url: "https://example.com/article" }))
+      .resolves.toMatchObject({
+        content: "<article><h1>Title</h1><p>Body</p></article>",
+        finalUrl: "https://example.com/article",
+      });
   });
 
   it("bounds textual model content by line count", async () => {
@@ -170,7 +198,7 @@ describe("controlled external-group web fetch", () => {
     ));
     const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
 
-    const result = await execute({ format: "text", url: "https://example.com/lines" });
+    const result = await execute({ format: "extracted_text", url: "https://example.com/lines" });
 
     expect(result.content.split("\n")).toHaveLength(CONTROLLED_WEB_FETCH_MAX_MODEL_LINES);
     expect(result.truncated).toBe(true);

@@ -2,9 +2,10 @@
  * Agent capability surface regression tests.
  *
  * Constructs:
- * - `agent/tools` holds only the dynamic capability resolver; implementations live in lib.
+ * - `agent/tools` holds the dynamic resolver and a static opt-out for unsafe generic delegation.
  * - Exact application tool-module allowlist after CRUD consolidation.
  * - Exact static package directories plus the single dynamic policy resolver.
+ * - The declared task worker owns a narrow tool surface and isolated sandbox definition.
  * - The opt-in tone skill lives outside static Eve discovery.
  */
 import { readFile, readdir } from "node:fs/promises";
@@ -16,6 +17,7 @@ import { describe, expect, it } from "vitest";
 const AGENT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const EXPECTED_TOOL_MODULES = [
+  "execute_google_workspace.ts",
   "export_memory.ts",
   "get_current_time.ts",
   "import_telegram_attachment.ts",
@@ -41,48 +43,53 @@ const EXPECTED_TOOL_MODULES = [
   "start_new_context.ts",
 ] as const;
 
-const EXPECTED_DISCOVERED_TOOL_FILES = ["capabilities.ts"] as const;
+const EXPECTED_DISCOVERED_TOOL_FILES = ["agent.ts", "capabilities.ts"] as const;
+const EXPECTED_TASK_WORKER_TOOL_FILES = [
+  "agent.ts",
+  "ask_question.ts",
+  "bash.ts",
+  "glob.ts",
+  "grep.ts",
+  "read_file.ts",
+  "todo.ts",
+  "web_fetch.ts",
+  "web_search.ts",
+  "write_file.ts",
+] as const;
 
 const EXPECTED_SKILL_DIRECTORIES = [
   "agent-browser",
   "behavior-preferences",
   "docx",
   "find-docs",
-  "gws-calendar",
-  "gws-calendar-agenda",
-  "gws-calendar-insert",
-  "gws-docs",
-  "gws-docs-write",
-  "gws-drive",
-  "gws-drive-upload",
-  "gws-gmail",
-  "gws-gmail-forward",
-  "gws-gmail-read",
-  "gws-gmail-reply",
-  "gws-gmail-reply-all",
-  "gws-gmail-send",
-  "gws-gmail-triage",
-  "gws-gmail-watch",
-  "gws-people",
-  "gws-shared",
-  "gws-sheets",
-  "gws-sheets-append",
-  "gws-sheets-read",
   "pdf",
   "t-invest",
   "xlsx",
 ] as const;
 
 describe("agent capability surface", () => {
-  it("discovers only the dynamic capability resolver as an authored tool", async () => {
+  it("discovers only the dynamic resolver and generic-agent opt-out at root", async () => {
     const entries = await readdir(`${AGENT_ROOT}/tools`, { withFileTypes: true });
     const toolFiles = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
 
-    // A static descriptor would be visible in every mode, so no implementation may live here.
+    // The static file is a denial replacement, not a privileged application implementation.
     expect(toolFiles).toEqual([...EXPECTED_DISCOVERED_TOOL_FILES]);
+  });
+
+  it("declares one isolated task worker with no shell or interactive tools", async () => {
+    const workerRoot = `${AGENT_ROOT}/subagents/task_worker`;
+    const entries = await readdir(workerRoot, { withFileTypes: true });
+    expect(entries.filter((entry) => entry.isFile()).map((entry) => entry.name).sort()).toEqual([
+      "agent.ts",
+      "instructions.ts",
+      "sandbox.ts",
+    ]);
+
+    const toolFiles = await readdir(`${workerRoot}/tools`);
+    expect(toolFiles.sort()).toEqual([...EXPECTED_TASK_WORKER_TOOL_FILES]);
   });
 
   it("keeps every application tool implementation outside Eve discovery", async () => {

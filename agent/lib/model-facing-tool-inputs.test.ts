@@ -17,6 +17,7 @@ const toolCalls = vi.hoisted(() => ({
   importAttachment: vi.fn(),
   registerGroup: vi.fn(),
   reminderCreate: vi.fn(),
+  reminderUpdate: vi.fn(),
   removeRegistration: vi.fn(),
   updateMemory: vi.fn(),
 }));
@@ -35,9 +36,9 @@ vi.mock("./family-context.js", () => ({
 vi.mock("./family-repository.js", () => ({
   familyRepository: {
     approveInvitation: toolCalls.approveInvitation,
-    assertCurrentOwner: vi.fn(),
     createInvitation: toolCalls.createInvitation,
     markInvitationDelivered: vi.fn(),
+    markInvitationDeliveryStarted: vi.fn(),
   },
 }));
 vi.mock("./memory-context.js", () => ({
@@ -60,7 +61,7 @@ vi.mock("./reminders/reminder-repository.js", () => ({
     create: toolCalls.reminderCreate,
     delete: vi.fn(),
     getNotificationSettings: vi.fn(),
-    update: vi.fn(),
+    update: toolCalls.reminderUpdate,
   },
 }));
 vi.mock("./telegram-delivery.js", () => ({ deliverFamilyInvitation: vi.fn() }));
@@ -132,7 +133,7 @@ describe("model-facing tool input hardening", () => {
       /AGENT_WORKSPACE_IMAGE_INPUT_INVALID: Для inspect_workspace_image передайте ровно один источник/,
     ],
   ] as const)("%s returns an actionable input error for an empty payload", async (_name, tool, message) => {
-    await expect(tool.execute({}, context)).rejects.toThrowError(message);
+    await expect(tool.execute({} as never, context)).rejects.toThrowError(message);
   });
 
   it("explains the exact reminder recurrence shape when interval is missing", async () => {
@@ -143,10 +144,70 @@ describe("model-facing tool input hardening", () => {
       recurrence: { unit: "weekly" },
       scope: "personal",
       timezone: "Europe/Moscow",
-    }, context)).rejects.toThrowError(
+    } as never, context)).rejects.toThrowError(
       /AGENT_REMINDER_INPUT_INVALID: Для recurrence передайте null или объект \{"unit":"weekly","interval":1\}/,
     );
     expect(toolCalls.reminderCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete recurrence before requesting reminder approval", () => {
+    const approval = manageReminder.approval;
+    expect(approval).toBeTypeOf("function");
+
+    expect(() => approval!({
+      approvedTools: new Set(),
+      callId: "call-invalid-recurrence",
+      session: {} as never,
+      toolInput: {
+        action: "update",
+        id: "00000000-0000-4000-8000-000000000001",
+        recurrence: {},
+      } as never,
+      toolName: "manage_reminder",
+    } as never)).toThrowError(
+      /AGENT_REMINDER_INPUT_INVALID: Поле unit обязательно.*Пример: daily/u,
+    );
+    expect(toolCalls.reminderUpdate).not.toHaveBeenCalled();
+  });
+
+  it("requests one approval for a complete one-time recurrence update", () => {
+    const approval = manageReminder.approval;
+    expect(approval).toBeTypeOf("function");
+
+    expect(approval!({
+      approvedTools: new Set(),
+      callId: "call-valid-recurrence",
+      session: {} as never,
+      toolInput: {
+        action: "update",
+        id: "00000000-0000-4000-8000-000000000001",
+        recurrence: null,
+      },
+      toolName: "manage_reminder",
+    } as never)).toBe("user-approval");
+  });
+
+  it("ignores known create-only sibling fields on a recurrence update", async () => {
+    toolCalls.reminderUpdate.mockResolvedValue({ recurrence: null });
+
+    await expect(manageReminder.execute({
+      action: "update",
+      id: "00000000-0000-4000-8000-000000000001",
+      recurrence: null,
+      scope: "personal",
+      timezone: "Europe/Moscow",
+    }, context)).resolves.toEqual({ recurrence: null });
+
+    expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      "00000000-0000-4000-8000-000000000001",
+      {
+        content: undefined,
+        firstRunAt: undefined,
+        operationKey: "call-1",
+        recurrence: null,
+      },
+    );
   });
 
   it("accepts a group-scoped Telegram message ID for workspace image inspection", async () => {

@@ -17,7 +17,6 @@ import { SANDBOX_RUNNER_MAX_OUTPUT_BYTES } from "../../agent/lib/sandbox-runner/
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 const runtime = {
-  googleWorkspaceCredentialsVolume: "osinara_google-workspace-credentials",
   egressNetwork: "osinara_sandbox-egress",
   image: "osinara-sandbox-runtime:local",
   project: "osinara",
@@ -55,7 +54,6 @@ function processHarness(
   const engine = createDockerSandboxEngine({
     docker,
     roots: {
-      googleWorkspaceCredentialsRoot: "/google-workspace-credentials",
       toolsRoot: "/tools",
       workspaceRoot: "/workspaces",
     },

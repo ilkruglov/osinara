@@ -11,6 +11,10 @@
 import type { SessionAuth } from "eve/context";
 
 import {
+  type GroupSafeSkillName,
+  parseGroupSkillAllowlist,
+} from "../group-skills/group-skill-catalog.js";
+import {
   parseExternalGroupToolAllowlist,
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
@@ -66,4 +70,13 @@ export function resolveExternalGroupToolPolicy(auth: SessionAuth): GroupToolPoli
     allowed: allowed ?? new Set(),
     restricted: true,
   };
+}
+
+export function resolveExternalGroupSkillPolicy(
+  auth: SessionAuth,
+): ReadonlySet<GroupSafeSkillName> {
+  const caller = externalPolicyCaller(auth);
+  return caller
+    ? parseGroupSkillAllowlist(caller.attributes.skillAllowlist) ?? new Set<GroupSafeSkillName>()
+    : new Set<GroupSafeSkillName>();
 }

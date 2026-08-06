@@ -7,6 +7,7 @@
  * - Stable thread-scoped compute identity across changing Eve workflow roots.
  * - Reconnect metadata recreates disposable compute without rerunning `onSession`.
  * - Automatic trusted/restricted classification from workspace scopes.
+ * - Explicit worker classification keeps delegated compute separate and tool-less.
  * - Shell and binary file delegation with workspace mutation indexing.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,7 +19,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SandboxEngine } from "../../../services/sandbox-runner/sandbox-engine.js";
 import { createSandboxRunnerServer } from "../../../services/sandbox-runner/server.js";
-import { scopedWorkspaceRunner } from "./runner-sandbox-backend.js";
+import {
+  taskWorkerRunner,
+  scopedWorkspaceRunner,
+} from "./runner-sandbox-backend.js";
 
 const SESSION_ID = "wrun_01JZ8K4R0W6G73VTHX9NF2QABC";
 const BACKEND_SESSION_ID =
@@ -39,6 +43,12 @@ function fakeEngine(): SandboxEngine {
     health: vi.fn(async () => undefined),
     readFile: vi.fn(async () => new TextEncoder().encode("content")),
     removePath: vi.fn(async () => undefined),
+    runGoogleWorkspace: vi.fn(async () => ({
+      exitCode: 0,
+      processId: "gws-process-1",
+      stderr: "",
+      stdout: "{}",
+    })),
     runProcess: vi.fn(async () => ({
       exitCode: 0,
       processId: "process-1",
@@ -137,6 +147,33 @@ describe("scopedWorkspaceRunner", () => {
     await expect(handle.session.setNetworkPolicy("allow-all")).rejects.toThrowError(
       /AGENT_SANDBOX_RUNNER_NETWORK_POLICY_FORBIDDEN/,
     );
+  });
+
+  it("creates an isolated worker session for the same trusted workspace mounts", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
+    roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = taskWorkerRunner({ baseUrl: await runnerUrl(engine) });
+    const handle = await backend.create({
+      runtimeContext: { appRoot },
+      sessionKey: BACKEND_SESSION_ID,
+      templateKey: null,
+      tags: { sessionId: SESSION_ID },
+    });
+    await handle.useSessionFn({
+      mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
+      sandboxSessionId: SESSION_ID,
+    });
+
+    await handle.session.run({ command: "true" });
+    expect(engine.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      access: "worker",
+      sandboxSessionId: SESSION_ID,
+    }));
+    await expect(handle.session.setNetworkPolicy("allow-all")).rejects.toThrowError(
+      /AGENT_SANDBOX_RUNNER_NETWORK_POLICY_FORBIDDEN/,
+    );
+    await expect(handle.session.setNetworkPolicy("deny-all")).resolves.toBeUndefined();
   });
 
   it("restores mounts and recreates disposable compute from captured backend metadata", async () => {

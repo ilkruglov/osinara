@@ -55,6 +55,7 @@ describe("manage_telegram_group.remove", () => {
       ),
     ).resolves.toEqual({
       botMembership: "unchanged",
+      groupId: "group-1",
       registrationRemoved: true,
       telegramChatId: "-1003567628736",
     });
@@ -92,7 +93,7 @@ describe("manage_telegram_group.remove", () => {
   it("does not support an independent Telegram leave action", async () => {
     await expect(
       manageTelegramGroup.execute(
-        { action: "leave", telegramChatId: "-1003567628736" },
+        { action: "leave", telegramChatId: "-1003567628736" } as never,
         context("private"),
       ),
     ).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID/);

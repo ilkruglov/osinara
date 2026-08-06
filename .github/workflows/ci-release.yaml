@@ -82,8 +82,14 @@ jobs:
             printf '%s\n' "RELEASE_VERSION_ALREADY_EXISTS: tag ${TAG} exists without a resumable draft; bump package.json" >&2
             exit 1
           fi
+          RELEASE_NOTES_FILE="docs/releases/v${VERSION}.md"
+          if [[ ! -s "$RELEASE_NOTES_FILE" ]]; then
+            printf '%s\n' "RELEASE_NOTES_MISSING: ${RELEASE_NOTES_FILE} must contain the detailed changelog" >&2
+            exit 1
+          fi
           printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
           printf 'resume-draft=%s\n' "$RESUME_DRAFT" >> "$GITHUB_OUTPUT"
+          printf 'notes-file=%s\n' "$RELEASE_NOTES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Sign in to GHCR with the automatic token
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
@@ -273,6 +279,7 @@ jobs:
       - name: Create or resume draft and upload exact assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES_FILE: ${{ steps.release.outputs.notes-file }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           RESUME_DRAFT: ${{ steps.release.outputs.resume-draft }}
         shell: bash
@@ -281,9 +288,7 @@ jobs:
           TAG="v${RELEASE_VERSION}"
           if [[ "$RESUME_DRAFT" == "false" ]]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
-              --title "Osinara ${TAG}" \
-              --generate-notes \
-              --notes "Immutable production images for commit ${GITHUB_SHA}."
+              --title "Osinara ${TAG}" --notes-file "$RELEASE_NOTES_FILE"
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             osinara-deployment.json compose.production.yaml

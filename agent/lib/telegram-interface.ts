@@ -50,6 +50,7 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
       "удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата",
     update_policy:
       "изменить политику внешней Telegram-группы. Группа и бот останутся подключены",
+    update_skills: "изменить список skills внешней Telegram-группы",
   },
   notification_settings: {
     set: "изменить настройки уведомлений",
@@ -93,6 +94,27 @@ interface FailureData {
   message?: string;
 }
 
+function reminderRecurrenceLines(value: unknown): string[] {
+  if (value === null) return ["Повторение: без повтора"];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const recurrence = value as Record<string, unknown>;
+  return typeof recurrence.unit === "string" && typeof recurrence.interval === "number"
+    ? [`Повторение: ${recurrence.unit}, интервал ${recurrence.interval}`]
+    : [];
+}
+
+function agentScheduleRecurrenceLines(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const recurrence = value as Record<string, unknown>;
+  if (recurrence.kind === "once") return ["Периодичность: один раз"];
+  if (typeof recurrence.kind !== "string" || typeof recurrence.interval !== "number") return [];
+  const days = Array.isArray(recurrence.daysOfWeek) &&
+      recurrence.daysOfWeek.every((day) => typeof day === "number")
+    ? `, дни ${recurrence.daysOfWeek.join(", ")}`
+    : "";
+  return [`Периодичность: ${recurrence.kind}, интервал ${recurrence.interval}${days}`];
+}
+
 function approvalParameterLines(toolName: string, input: Record<string, unknown>): string[] {
   // Render only reviewed, user-understandable fields; unknown tool payloads remain hidden.
   const safe = (candidate: string): string => JSON.stringify(candidate).slice(1, -1);
@@ -108,6 +130,17 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
   switch (toolName) {
     case "manage_telegram_group": {
       if (input.action === "remove") return line("Telegram chat ID", "telegramChatId");
+      if (input.action === "update_skills") {
+        const allowlist = Array.isArray(input.skillAllowlist)
+          ? input.skillAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+          : null;
+        return [
+          ...line("Telegram chat ID", "telegramChatId"),
+          ...(allowlist === null
+            ? []
+            : [`Полный список разрешённых skills: ${allowlist || "пуст"}`]),
+        ];
+      }
       if (input.action === "update_policy") {
         // An empty array is still a complete replacement and must be visible before approval.
         const allowlist = Array.isArray(input.toolAllowlist)
@@ -124,8 +157,10 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
       const registration = input.registration;
       if (!registration || typeof registration !== "object") return [];
       const values = registration as Record<string, unknown>;
-      const allowlist = Array.isArray(values.toolAllowlist)
-        ? values.toolAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+      const rawAllowlist = values.toolAllowlist;
+      const hasAllowlist = Array.isArray(rawAllowlist);
+      const allowlist = Array.isArray(rawAllowlist)
+        ? rawAllowlist.filter((item): item is string => typeof item === "string").join(", ")
         : "";
       const registrationLine = (label: string, key: string): string[] => {
         const candidate = values[key];
@@ -136,7 +171,7 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...registrationLine("Telegram chat ID", "telegramChatId"),
         ...registrationLine("Тип группы", "type"),
         ...registrationLine("Режим сообщений", "messageMode"),
-        ...(allowlist ? [`Разрешённые инструменты: ${allowlist}`] : []),
+        ...(hasAllowlist ? [`Разрешённые инструменты: ${allowlist || "пуст"}`] : []),
       ];
     }
     case "manage_family_invitation":
@@ -147,7 +182,12 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
       ];
     case "manage_memory":
       return input.action === "edit"
-        ? [...line("ID записи", "id"), ...line("Новое значение", "content")]
+        ? [
+            ...line("ID записи", "id"),
+            ...line("Новое значение", "content"),
+            ...line("Тип памяти", "kind"),
+            ...line("Чувствительность", "sensitivity"),
+          ]
         : line("ID записи", "id");
     case "remember":
       return [
@@ -158,11 +198,37 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
     case "manage_behavior_preference":
       return [...line("Настройка", "preference"), ...line("Область", "scope")];
     case "manage_agent_schedule":
-      return [...line("ID", "id"), ...line("Название", "title"), ...line("Сценарий", "scenarioPrompt")];
+      return [
+        ...line("ID", "id"),
+        ...line("Название", "title"),
+        ...line("Назначение", "userRequest"),
+        ...line("Первый запуск", "firstRunAt"),
+        ...line("Следующий запуск", "nextRunAt"),
+        ...line("Часовой пояс", "timezone"),
+        ...line("Область", "scope"),
+        ...agentScheduleRecurrenceLines(input.recurrence),
+        ...line("Сценарий", "scenarioPrompt"),
+      ];
     case "manage_reminder":
-      return [...line("ID", "id"), ...line("Название", "title"), ...line("Текст", "content")];
+      return [
+        ...line("ID", "id"),
+        ...line("Текст", "content"),
+        ...line("Время запуска", "firstRunAt"),
+        ...(input.action === "create" ? line("Часовой пояс", "timezone") : []),
+        ...(input.action === "create" ? line("Область", "scope") : []),
+        ...reminderRecurrenceLines(input.recurrence),
+      ];
     case "remove_group_file":
       return line("Путь", "path");
+    case "notification_settings":
+      return [
+        ...line("Часовой пояс", "timezone"),
+        ...(input.quietStart === null && input.quietEnd === null
+          ? ["Тихие часы: отключены"]
+          : typeof input.quietStart === "string" && typeof input.quietEnd === "string"
+          ? [`Тихие часы: ${safe(input.quietStart)}–${safe(input.quietEnd)}`]
+          : []),
+      ];
     default:
       return [];
   }

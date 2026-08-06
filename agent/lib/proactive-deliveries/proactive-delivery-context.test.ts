@@ -17,9 +17,10 @@ function delivery(overrides: Partial<ProactiveDeliveryRecord> = {}): ProactiveDe
   return {
     content: "Утренняя сводка",
     deliveredAt: "2026-07-17T06:00:00.000Z",
-    id: "1",
+    deliveryId: "1",
     scheduledFor: "2026-07-17T06:00:00.000Z",
     sourceKind: "agent_schedule",
+    sourceId: "00000000-0000-4000-8000-000000000001",
     title: "Новости ИИ",
     ...overrides,
   };
@@ -32,7 +33,7 @@ describe("formatProactiveDeliveryContext", () => {
       delivery({
         content: "Позвонить врачу",
         deliveredAt: "2026-07-17T07:00:00.000Z",
-        id: "2",
+        deliveryId: "2",
         sourceKind: "reminder",
         title: null,
       }),
@@ -57,8 +58,8 @@ describe("formatProactiveDeliveryContext", () => {
 
   it("keeps the newest oversized delivery with an explicit truncation marker", () => {
     const context = formatProactiveDeliveryContext([
-      delivery({ content: "старое", id: "1" }),
-      delivery({ content: "н".repeat(5_000), id: "2" }),
+      delivery({ content: "старое", deliveryId: "1" }),
+      delivery({ content: "н".repeat(5_000), deliveryId: "2" }),
     ], 700);
 
     expect(context).not.toBeNull();

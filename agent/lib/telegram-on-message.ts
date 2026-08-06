@@ -436,6 +436,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
             : { telegramMessageThreadId: String(message.messageThreadId) }),
           telegramUserId: sender.id,
           ...(group ? { groupType: group.type } : {}),
+          ...(group ? { skillAllowlist: group.skillAllowlist } : {}),
           ...(group && group.type !== "family_private"
             ? { toolAllowlist: group.toolAllowlist }
             : {}),

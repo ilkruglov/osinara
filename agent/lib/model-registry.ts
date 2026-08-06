@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `primaryModel`: configured protocol-native text model for the Eve agent loop.
- * - `visionModel`: independently selected model on the same agent transport.
+ * - `visionModel`: independently selected model, or `null` when image input is unsupported.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
  */
 import { createGroq } from "@ai-sdk/groq";
@@ -20,12 +20,15 @@ export const primaryModel = createConfiguredLanguageModel({
   modelId: modelProviderConfig.agent.models.primary.id,
   transport: modelProviderConfig.agent.transport,
 });
-export const visionModel = createConfiguredLanguageModel({
-  apiKey: agentModelApiKey,
-  maxOutputTokens: modelProviderConfig.agent.models.vision.maxOutputTokens,
-  modelId: modelProviderConfig.agent.models.vision.id,
-  transport: modelProviderConfig.agent.transport,
-});
+const visionConfig = modelProviderConfig.agent.models.vision;
+export const visionModel = visionConfig.supportsImageInput
+  ? createConfiguredLanguageModel({
+      apiKey: agentModelApiKey,
+      maxOutputTokens: visionConfig.maxOutputTokens,
+      modelId: visionConfig.id,
+      transport: modelProviderConfig.agent.transport,
+    })
+  : null;
 
 // Voice remains isolated on Groq and never falls back to the agent transport.
 export const voiceTranscriptionModel = groq.transcription(

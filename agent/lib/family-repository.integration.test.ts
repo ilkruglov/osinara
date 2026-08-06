@@ -5,6 +5,7 @@
  * - Invitation claim reserves a candidate without granting membership.
  * - Owner approval atomically creates membership and consumes the invitation.
  * - Cross-family approval is rejected at the SQL authorization boundary.
+ * - Invitation transport attempts are durable and replay fails closed after ambiguity.
  * - Routine observations are scoped, replay-safe, and suggest on the third occurrence.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -174,6 +175,12 @@ describeWithDatabase("familyRepository invitations", () => {
 
     expect(replay).toEqual(first);
     expect(replay.deliveryRequired).toBe(true);
+    await familyRepository.markInvitationDeliveryStarted({
+      createdBy: owner.ownerId,
+      familyId: owner.familyId,
+      invitationId: first.invitationId,
+      operationKey: "durable-create-call",
+    });
     await familyRepository.markInvitationDelivered({
       createdBy: owner.ownerId,
       familyId: owner.familyId,
@@ -193,13 +200,74 @@ describeWithDatabase("familyRepository invitations", () => {
     );
     expect(count.rows[0]?.count).toBe("1");
 
+    const unsent = await familyRepository.createInvitation(
+      owner.familyId,
+      owner.ownerId,
+      "revoked-before-delivery-call",
+    );
     await database().query("DELETE FROM family_memberships WHERE user_id = $1", [owner.ownerId]);
+    await expect(familyRepository.markInvitationDeliveryStarted({
+      createdBy: owner.ownerId,
+      familyId: owner.familyId,
+      invitationId: unsent.invitationId,
+      operationKey: "revoked-before-delivery-call",
+    })).rejects.toThrowError(/AGENT_OWNER_REQUIRED/u);
     await expect(
       familyRepository.createInvitation(owner.familyId, owner.ownerId, "stale-owner-call"),
     ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
     await expect(
       familyRepository.listPendingInvitations(owner.familyId, owner.ownerId),
     ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
+  });
+
+  it("fails closed on replay when Telegram sent but delivery completion was not saved", async () => {
+    const owner = await createOwner("delivery-ambiguity");
+    const invitation = await familyRepository.createInvitation(
+      owner.familyId,
+      owner.ownerId,
+      "ambiguous-create-call",
+    );
+    await familyRepository.markInvitationDeliveryStarted({
+      createdBy: owner.ownerId,
+      familyId: owner.familyId,
+      invitationId: invitation.invitationId,
+      operationKey: "ambiguous-create-call",
+    });
+
+    // Telegram is considered sent at this point; emulate the following completion write missing its row.
+    await expect(familyRepository.markInvitationDelivered({
+      createdBy: owner.ownerId,
+      familyId: owner.familyId,
+      invitationId: "00000000-0000-4000-8000-000000000099",
+      operationKey: "ambiguous-create-call",
+    })).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+    await expect(familyRepository.createInvitation(
+      owner.familyId,
+      owner.ownerId,
+      "ambiguous-create-call",
+    )).rejects.toThrowError(/AGENT_INVITATION_DELIVERY_AMBIGUOUS/u);
+
+    const persisted = await database().query<{
+      count: string;
+      delivery_completed_at: Date | null;
+      delivery_started_at: Date | null;
+      status: string;
+    }>(
+      `SELECT count(*) OVER ()::text AS count, delivery_started_at, delivery_completed_at, status
+       FROM invitations
+       WHERE family_id = $1 AND operation_key = $2`,
+      [owner.familyId, "ambiguous-create-call"],
+    );
+    expect(persisted.rows[0]).toMatchObject({
+      count: "1",
+      delivery_completed_at: null,
+      status: "open",
+    });
+    expect(persisted.rows[0]?.delivery_started_at).toBeInstanceOf(Date);
+    await expect(familyRepository.claimInvitation(invitation.code, {
+      displayName: "Получатель ссылки",
+      telegramUserId: "ambiguity-candidate",
+    })).resolves.toBe("pending");
   });
 
   it("allows only one pending claim per candidate and supports candidate deletion", async () => {

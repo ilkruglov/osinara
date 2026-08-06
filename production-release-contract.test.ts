@@ -162,7 +162,7 @@ describe("production container contract", () => {
     expect(agent).not.toContain("/var/run/docker.sock");
     expect(agent).toContain("google-workspace-credentials:/app/google-workspace-credentials");
     expect(runner).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(runner).toContain("google-workspace-credentials:/runner/google-workspace-credentials");
+    expect(runner).not.toContain("google-workspace-credentials");
     expect(runner).toContain("      - sandbox-control");
     expect(runner).not.toContain("      - sandbox-egress");
     expect(compose).toContain(
@@ -229,7 +229,9 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("compose.production.yaml");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("--draft");
-    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--generate-notes/);
+    expect(workflow).toContain("RELEASE_NOTES_MISSING");
+    expect(workflow).toContain('RELEASE_NOTES_FILE="docs/releases/v${VERSION}.md"');
+    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/);
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
     expect(workflow).toContain("--clobber");

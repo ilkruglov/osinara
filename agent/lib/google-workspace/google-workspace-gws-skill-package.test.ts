@@ -16,7 +16,6 @@ const serviceSkills = [
   "gws-docs",
   "gws-docs-write",
   "gws-drive",
-  "gws-drive-upload",
   "gws-gmail",
   "gws-gmail-forward",
   "gws-gmail-read",
@@ -41,7 +40,10 @@ const apiSurfaceSkills = [
 ] as const;
 
 async function readSkill(skillName: string): Promise<string> {
-  return await readFile(new URL(`../../skills/${skillName}/SKILL.md`, import.meta.url), "utf8");
+  return await readFile(
+    new URL(`../../../config/trusted-skills/${skillName}/SKILL.md`, import.meta.url),
+    "utf8",
+  );
 }
 
 describe("Google Workspace gws skill packages", () => {
@@ -63,7 +65,7 @@ describe("Google Workspace gws skill packages", () => {
         const skill = await readSkill(skillName);
 
         expect(skill).toContain("../gws-shared/SKILL.md");
-        expect(skill).not.toContain("google_workspace");
+        expect(skill).not.toMatch(/(^|[^a-z_])google_workspace([^a-z_]|$)/u);
       }),
     );
   });
@@ -82,12 +84,13 @@ describe("Google Workspace gws skill packages", () => {
     const shared = await readSkill("gws-shared");
 
     expect(shared).toContain("name: gws-shared");
-    expect(shared).toContain("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE");
+    expect(shared).toContain("execute_google_workspace");
     expect(shared).toContain("manage_google_workspace_connection");
     expect(shared).toContain("gws auth login");
-    expect(shared).toContain("ask_question");
-    expect(shared).toContain("service-specific confirmation rules");
+    expect(shared).toContain("`ask_question` as a substitute");
+    expect(shared).toContain("automatic Eve HITL");
     expect(shared).toContain("Do not automatically retry failed `gws` mutations");
+    expect(shared).toContain("Do not pass `--upload`, `--output`, `--output-dir`, `--attach`, `-a`, or `-o`");
   });
 
   it("documents Google People contact mutation policy", async () => {
@@ -97,8 +100,8 @@ describe("Google Workspace gws skill packages", () => {
     expect(people).toContain("updateContact");
     expect(people).toContain("deleteContact");
     expect(people).toContain("batchCreateContacts");
-    expect(people).toContain("delete and batch operations require explicit user confirmation");
-    expect(people).toContain("create and update operations do not require an extra confirmation");
+    expect(people).toContain("execute_google_workspace supplies mandatory Eve HITL");
+    expect(people).toContain("Update a contact through mandatory Eve HITL");
     expect(people).toContain("metadata.sources.etag");
   });
 });

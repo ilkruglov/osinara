@@ -73,7 +73,20 @@ describe("consolidated tool action schemas", () => {
     expect(schema.safeParse({ action: "pause", id: ID }).success).toBe(true);
     expect(schema.safeParse({ action: "resume", id: ID }).success).toBe(true);
     expect(schema.safeParse({ action: "delete", id: ID }).success).toBe(true);
-    expect(schema.safeParse({ action: "toggle", id: ID }).success).toBe(true);
+    expect(schema.safeParse({ action: "toggle", id: ID }).success).toBe(false);
+    expect(schema.safeParse({ id: ID }).success).toBe(false);
+    expect(schema.safeParse({ action: "update", id: ID, recurrence: null }).success).toBe(true);
+    expect(schema.safeParse({
+      action: "update",
+      id: ID,
+      recurrence: { interval: 1, unit: "daily" },
+    }).success).toBe(true);
+    expect(schema.safeParse({ action: "update", id: ID, recurrence: {} }).success).toBe(false);
+    expect(schema.safeParse({
+      action: "update",
+      id: ID,
+      recurrence: { interval: 1 },
+    }).success).toBe(false);
   });
 
   it("publishes the complete external-group policy update fields in the model-facing schema", () => {
