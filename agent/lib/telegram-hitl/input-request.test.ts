@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createTelegramInputRequestHandler`: persists approver identity before exposing buttons.
  * - Interactive and scheduled requests receive aliases without changing Eve's continuation hook.
+ * - Long approval prompts are delivered completely before the actionable final message.
  */
 import type { SessionContext } from "eve/context";
 import type { TelegramEventContext } from "eve/channels/telegram";
@@ -12,6 +13,67 @@ import { describe, expect, it, vi } from "vitest";
 import { createTelegramInputRequestHandler } from "./input-request.js";
 
 describe("createTelegramInputRequestHandler", () => {
+  it("does not park a session when semantic presentation fails", async () => {
+    const parkSession = vi.fn();
+    const handler = createTelegramInputRequestHandler({
+      approvals: { register: vi.fn() },
+      parkSession,
+      present: vi.fn().mockRejectedValue(new Error("presentation failed")),
+      registerMessageRoutes: vi.fn(),
+    });
+    const channel = {
+      state: {
+        botUsername: "osinara_bot",
+        chatId: "101",
+        chatType: "private",
+        conversationId: "77",
+        hitlCallbacks: {},
+        messageThreadId: null,
+        nextHitlCallbackId: 0,
+        pendingFreeformReplies: {},
+        triggeringUserId: "101",
+      },
+      telegram: { request: vi.fn() },
+    } as unknown as TelegramEventContext;
+    const ctx = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "app-session-1",
+              telegramChatId: "101",
+              telegramChatType: "private",
+              telegramUserId: "101",
+            },
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "wrun_hitl",
+        turn: { id: "turn-1", sequence: 1 },
+      },
+    } as unknown as SessionContext;
+
+    await expect(handler({
+      requests: [{
+        action: {
+          callId: "call-1",
+          input: { action: "create" },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
+        },
+        display: "confirmation",
+        options: [],
+        prompt: "Approve tool call",
+        requestId: "request-1",
+      }],
+    } as never, channel, ctx)).rejects.toThrow("presentation failed");
+    expect(parkSession).not.toHaveBeenCalled();
+    expect(channel.telegram.request).not.toHaveBeenCalled();
+  });
+
   it("registers the expected approver and route before exposing callback buttons", async () => {
     const parkSession = vi.fn();
     const register = vi.fn();
@@ -250,5 +312,85 @@ describe("createTelegramInputRequestHandler", () => {
     } as never, channel, ctx);
 
     expect(registerMessageRoutes).toHaveBeenCalledWith(channel, ctx, ["91"]);
+  });
+
+  it("shows every part of a long confirmation before exposing approval buttons", async () => {
+    const longPrompt = `${"Начало и подробности операции. ".repeat(250)}КОНЕЦ_ПОЛНОГО_ТЕКСТА`;
+    let nextMessageId = 100;
+    const register = vi.fn();
+    const registerMessageRoutes = vi.fn();
+    const request = vi.fn().mockImplementation(async (method: string) => method === "sendMessage"
+      ? { body: { ok: true, result: { message_id: nextMessageId++ } }, ok: true, status: 200 }
+      : { body: {}, ok: true, status: 200 });
+    const handler = createTelegramInputRequestHandler({
+      approvals: { register },
+      parkSession: vi.fn(),
+      present: async (input) => ({ ...input, prompt: longPrompt }),
+      registerMessageRoutes,
+    });
+    const channel = {
+      state: {
+        botUsername: "osinara_bot",
+        chatId: "101",
+        chatType: "private",
+        conversationId: "77",
+        hitlCallbacks: {},
+        messageThreadId: null,
+        nextHitlCallbackId: 0,
+        pendingFreeformReplies: {},
+        triggeringUserId: "101",
+      },
+      telegram: { request },
+    } as unknown as TelegramEventContext;
+    const ctx = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "app-session-1",
+              telegramChatId: "101",
+              telegramChatType: "private",
+              telegramUserId: "101",
+            },
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "wrun_long_hitl",
+        turn: { id: "turn-long", sequence: 1 },
+      },
+    } as unknown as SessionContext;
+
+    await handler({
+      requests: [{
+        action: {
+          callId: "call-long",
+          input: { action: "update" },
+          kind: "tool-call",
+          toolName: "manage_agent_schedule",
+        },
+        display: "confirmation",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "deny", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-long",
+      }],
+    } as never, channel, ctx);
+
+    const sends = request.mock.calls.filter(([method]) => method === "sendMessage");
+    expect(sends.length).toBeGreaterThan(1);
+    expect(sends.slice(0, -1).map((call) => String(call[1].text)).join("\n"))
+      .toContain("Начало и подробности операции");
+    const edit = request.mock.calls.find(([method]) => method === "editMessageText");
+    expect(edit?.[1]).toMatchObject({ reply_markup: expect.any(Object) });
+    expect(String(edit?.[1].text)).toContain("КОНЕЦ_ПОЛНОГО_ТЕКСТА");
+    expect(register).toHaveBeenCalledWith(expect.objectContaining({ promptText: longPrompt }));
+    expect(register.mock.invocationCallOrder[0]).toBeLessThan(
+      request.mock.invocationCallOrder.at(-1)!,
+    );
   });
 });

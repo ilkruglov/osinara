@@ -232,7 +232,6 @@ validate_resolved_compose_security() {
         {service: "memory-extraction-worker", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
         {service: "sandbox-runner", type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock"},
-        {service: "sandbox-runner", type: "volume", source: "google-workspace-credentials", target: "/runner/google-workspace-credentials"},
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
         {service: "sandbox-runner", type: "volume", source: "workspace-data", target: "/runner/workspaces"}
       ] | sort_by(.service, .target)) and

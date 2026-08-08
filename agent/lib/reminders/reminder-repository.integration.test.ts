@@ -120,7 +120,10 @@ describeWithDatabase("reminder repositories", () => {
     });
 
     expect(reminder).toMatchObject({ content: "Позвонить врачу", scope: "personal", status: "active" });
-    await expect(reminderRepository.list(auth)).resolves.toEqual([reminder]);
+    await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toEqual({
+      items: [reminder],
+      nextCursor: null,
+    });
   });
 
   it("allows a family reminder to be changed only by its author or current owner", async () => {
@@ -147,6 +150,37 @@ describeWithDatabase("reminder repositories", () => {
       operationKey: "family-owner-update",
     })).resolves.toMatchObject({ content: "Собрать семейные документы" });
     await expect(reminderRepository.delete(member, reminder.id, "family-author-delete")).resolves.toBe(true);
+  });
+
+  it("replays an approved recurrence removal without a second mutation", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    await reminderRepository.configureNotifications(auth, {
+      quietEnd: null,
+      quietStart: null,
+      timezone: "Europe/Moscow",
+    });
+    const reminder = await reminderRepository.create(auth, {
+      content: "Позвонить врачу",
+      firstRunAt: new Date("2026-08-18T07:00:00.000Z"),
+      operationKey: "recurrence-created",
+      recurrence: { interval: 1, unit: "daily" },
+      scope: "personal",
+      timezone: "Europe/Moscow",
+    });
+    const update = { operationKey: "recurrence-removed", recurrence: null } as const;
+
+    const first = await reminderRepository.update(auth, reminder.id, update);
+    const replay = await reminderRepository.update(auth, reminder.id, update);
+
+    expect(first.recurrence).toBeNull();
+    expect(replay).toEqual(first);
+    const audits = await database().query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM audit_events
+        WHERE event_type = 'reminder.updated' AND subject_id = $1`,
+      [reminder.id],
+    );
+    expect(audits.rows[0]?.count).toBe("1");
   });
 
   it("defers a due reminder through quiet hours and completes a one-time delivery", async () => {
@@ -184,9 +218,10 @@ describeWithDatabase("reminder repositories", () => {
       new Date("2026-07-13T04:00:01.000Z"),
       { messageId: "601", text: "Напоминание:\n\nПроверить дверь" },
     );
-    await expect(reminderRepository.list(auth)).resolves.toEqual([
-      expect.objectContaining({ id: reminder.id, status: "completed" }),
-    ]);
+    await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: reminder.id, status: "completed" })],
+      nextCursor: null,
+    });
   });
 
   it("advances recurring wall-clock time across DST and skips missed occurrences", async () => {
@@ -217,7 +252,7 @@ describeWithDatabase("reminder repositories", () => {
       { messageId: "602", text: "Напоминание:\n\nУтреннее лекарство" },
     );
 
-    const [stored] = await reminderRepository.list(auth);
+    const { items: [stored] } = await reminderRepository.list(auth, { limit: 100 });
     expect(stored).toMatchObject({ id: reminder.id, nextRunAt: "2026-03-29T07:00:00.000Z", status: "active" });
   });
 
@@ -249,8 +284,40 @@ describeWithDatabase("reminder repositories", () => {
       limit: 1,
       now: new Date("2026-07-12T10:00:02.000Z"),
     })).resolves.toEqual([]);
-    await expect(reminderRepository.list(auth)).resolves.toEqual([
-      expect.objectContaining({ lastErrorCode: "AGENT_REMINDER_DELIVERY_AMBIGUOUS", status: "failed" }),
-    ]);
+    await expect(reminderRepository.list(auth, { limit: 100 })).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ lastErrorCode: "AGENT_REMINDER_DELIVERY_AMBIGUOUS", status: "failed" }),
+      ],
+      nextCursor: null,
+    });
+  });
+
+  it("paginates more than 100 active reminders without duplicates or skipped timestamp ties", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    const inserted = await database().query<{ id: string }>(
+      `INSERT INTO reminders
+         (family_id, owner_user_id, author_user_id, scope, content, timezone, telegram_chat_id,
+          recurrence_anchor_local, due_at, available_at, created_at)
+       SELECT $1, $2, $2, 'personal', 'Напоминание ' || item, 'UTC', 'reminder-member',
+              timestamp '2026-01-01 00:00:00', timestamptz '2026-01-01 00:00:00+00',
+              timestamptz '2026-01-01 00:00:00+00',
+              timestamptz '2026-02-01 00:00:00+00'
+         FROM generate_series(1, 102) AS item
+       RETURNING id`,
+      [fixture.familyId, fixture.memberId],
+    );
+
+    const first = await reminderRepository.list(auth, { limit: 100 });
+    const second = await reminderRepository.list(auth, { cursor: first.nextCursor!, limit: 100 });
+    const ids = [...first.items, ...second.items].map((item) => item.id);
+
+    expect(first.nextCursor).not.toBeNull();
+    expect(second.nextCursor).toBeNull();
+    expect(ids).toHaveLength(102);
+    expect(new Set(ids)).toHaveLength(102);
+    expect(new Set(ids)).toEqual(new Set(inserted.rows.map((row) => row.id)));
+    await expect(reminderRepository.list(auth, { cursor: "invalid", limit: 100 }))
+      .rejects.toMatchObject({ code: "AGENT_REMINDER_CURSOR_INVALID" });
   });
 });

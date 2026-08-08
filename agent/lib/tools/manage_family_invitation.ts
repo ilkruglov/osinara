@@ -5,11 +5,11 @@
  * - `manage_family_invitation`: creates a one-time invitation or approves a candidate.
  *
  * Key constructs:
- * - Object-shaped model schema avoids root discriminator unions in Eve descriptors.
+ * - Object-shaped model schema publishes a required finite action discriminator.
+ * - One semantic parser validates both approval and execution inputs.
  * - Input validators prevent malformed payloads from reaching invitation side effects.
  */
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import { requirePrivateTelegramOwner } from "../family-context.js";
@@ -33,11 +33,11 @@ const TOP_LEVEL_FIELDS = [
 ] as const;
 
 const manageFamilyInvitationSchema = z.object({
-  action: z.string().optional(),
-  candidateDisplayName: z.string().optional(),
-  candidateTelegramUserId: z.string().optional(),
-  invitationId: z.string().optional(),
-}).passthrough();
+  action: z.enum(TOOL_ACTIONS).describe("Обязательный action: create или approve."),
+  candidateDisplayName: z.string().optional().describe("Обязательно только для action=approve."),
+  candidateTelegramUserId: z.string().optional().describe("Обязательно только для action=approve."),
+  invitationId: z.string().optional().describe("UUID обязателен только для action=approve."),
+}).strict();
 
 function requireApproveInput(input: Record<string, unknown>) {
   requireOnlyFields(input, [
@@ -57,40 +57,59 @@ function requireApproveInput(input: Record<string, unknown>) {
   };
 }
 
+function requireManageFamilyInvitationInput(input: unknown) {
+  const payload = requireInputRecord(input, "manage_family_invitation", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_family_invitation", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_family_invitation", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // MiniMax may materialize known approve-only siblings for create. Creation ignores them and
+  // cannot bind a candidate accidentally; unpublished fields still fail in the global guard.
+  if (action === "create") return { action } as const;
+  return { action, candidate: requireApproveInput(payload) } as const;
+}
+
 const TOOL_DESCRIPTION = [
   "Создать одноразовое семейное приглашение или подтвердить кандидата из list_pending_family_invitations.",
-  "Доступно только владельцу в личном чате. Create payload: {\"action\":\"create\"}.",
-  "Approve payload: {\"action\":\"approve\",\"invitationId\":\"uuid\",\"candidateTelegramUserId\":\"123456789\",\"candidateDisplayName\":\"Анна\"}.",
+  "Доступно только владельцу в личном чате; оба action всегда требуют подтверждения.",
+  "Для action=create обязателен только action: {\"action\":\"create\"}; поля кандидата не передавайте.",
+  "Для action=approve обязательны action, invitationId, candidateTelegramUserId и candidateDisplayName: {\"action\":\"approve\",\"invitationId\":\"<UUID из list_pending_family_invitations>\",\"candidateTelegramUserId\":\"123456789\",\"candidateDisplayName\":\"Анна\"}.",
+  "invitationId должен быть UUID из list_pending_family_invitations; candidateTelegramUserId и candidateDisplayName должны точно соответствовать выбранному кандидату.",
+  "Не угадывай обязательные значения и не подставляй defaults: если их нет, снова запроси list_pending_family_invitations или спроси владельца.",
+  "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
 ].join(" ");
 
 export default defineTool({
-  approval: always(),
+  approval: ({ toolInput }) => {
+    requireManageFamilyInvitationInput(toolInput);
+    return "user-approval";
+  },
   description: TOOL_DESCRIPTION,
   inputSchema: manageFamilyInvitationSchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "manage_family_invitation", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_family_invitation", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "manage_family_invitation", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireManageFamilyInvitationInput(input);
     const owner = requirePrivateTelegramOwner(ctx);
-    if (action === "approve") {
-      const candidate = requireApproveInput(payload);
+    if (parsed.action === "approve") {
       return await familyRepository.approveInvitation({
         approvedBy: owner.userId,
         familyId: owner.familyId,
         operationKey: ctx.callId,
-        ...candidate,
+        ...parsed.candidate,
       });
     }
 
-    requireOnlyFields(payload, ["action"], "action=create", INPUT_ERROR_CODE);
     const invitation = await familyRepository.createInvitation(
       owner.familyId,
       owner.userId,
       ctx.callId,
     );
     if (invitation.deliveryRequired) {
-      // Authorization is rechecked immediately before the external Telegram side effect.
-      await familyRepository.assertCurrentOwner(owner.familyId, owner.userId);
+      // The repository persists one transport attempt and rechecks live owner access before send.
+      await familyRepository.markInvitationDeliveryStarted({
+        createdBy: owner.userId,
+        familyId: owner.familyId,
+        invitationId: invitation.invitationId,
+        operationKey: ctx.callId,
+      });
       await deliverFamilyInvitation({
         chatId: owner.telegramChatId,
         code: invitation.code,

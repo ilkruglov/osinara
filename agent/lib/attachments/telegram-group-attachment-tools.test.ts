@@ -28,14 +28,29 @@ import listTelegramAttachments from "../tools/list_telegram_attachments.js";
 
 describe("family Telegram attachment tools", () => {
   it("lists references only from the verified current topic", async () => {
-    calls.list.mockResolvedValue([{ attachmentId: "attachment-1" }]);
+    calls.list.mockResolvedValue({
+      items: [{ attachmentId: "attachment-1" }],
+      nextCursor: "cursor-1",
+    });
 
     await expect(
-      listTelegramAttachments.execute({}, { callId: "call-1" } as ToolContext),
-    ).resolves.toEqual([{ attachmentId: "attachment-1" }]);
+      listTelegramAttachments.execute({
+        cursor: "cursor-0",
+        fileName: "отчёт.pdf",
+        limit: 12,
+      }, { callId: "call-1" } as ToolContext),
+    ).resolves.toEqual({
+      items: [{ attachmentId: "attachment-1" }],
+      nextCursor: "cursor-1",
+    });
     expect(calls.list).toHaveBeenCalledWith(expect.objectContaining({
       familyId: "family-1",
       groupId: "group-1",
-    }), "42");
+    }), {
+      cursor: "cursor-0",
+      fileName: "отчёт.pdf",
+      limit: 12,
+      messageThreadId: "42",
+    });
   });
 });

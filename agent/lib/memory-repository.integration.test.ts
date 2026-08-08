@@ -8,18 +8,17 @@
  * - Create/edit operations are replay-safe; edits preserve an explicit correction version chain.
  * - Physical deletion removes the searchable record.
  * - Pagination cursors contain stable opaque refs rather than database UUIDs.
+ * - Create and immediate-undo operations are replay-safe and provenance-bound.
  * - Scope quotas are enforced inside the write transaction.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-
 import type { MemoryAuthorization } from "./memory-context.js";
 import { closeDatabase, database } from "./database.js";
 import { MEMORY_SCOPE_QUOTAS } from "./memory-config.js";
+import { memoryOperationHash } from "./memory-record.js";
 import { memoryRepository } from "./memory-repository.js";
-
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const integrationDatabaseUrl = process.env.DATABASE_URL;
-
 if (integrationTestsEnabled) {
   if (!integrationDatabaseUrl) {
     throw new Error(
@@ -32,20 +31,12 @@ if (integrationTestsEnabled) {
     );
   }
 }
-
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
-
-interface FamilyFixture {
-  familyId: string;
-  member: MemoryAuthorization;
-  owner: MemoryAuthorization;
-}
-
+interface FamilyFixture { familyId: string; member: MemoryAuthorization; owner: MemoryAuthorization }
 const INVALID_SOURCE = {
   conversationId: "00000000-0000-4000-8000-000000000090",
   timelineEntryId: "00000000-0000-4000-8000-000000000091",
 };
-
 async function createFamily(suffix: string): Promise<FamilyFixture> {
   const family = await database().query<{ id: string }>(
     "INSERT INTO families (name) VALUES ($1) RETURNING id",
@@ -69,28 +60,20 @@ async function createFamily(suffix: string): Promise<FamilyFixture> {
      VALUES ($1, $2, $3, 'family_private', 'addressed_only')`,
     [family.rows[0]!.id, `family-${suffix}`, `Семейный чат ${suffix}`],
   );
-
   return {
     familyId: family.rows[0]!.id,
     member: {
-      familyId: family.rows[0]!.id,
-      groupId: null,
-      role: "member",
-      scopes: ["personal", "family"],
+      familyId: family.rows[0]!.id, groupId: null, role: "member", scopes: ["personal", "family"],
       telegramUserId: member.telegram_user_id,
       userId: member.id,
     },
     owner: {
-      familyId: family.rows[0]!.id,
-      groupId: null,
-      role: "owner",
-      scopes: ["personal", "family"],
+      familyId: family.rows[0]!.id, groupId: null, role: "owner", scopes: ["personal", "family"],
       telegramUserId: owner.telegram_user_id,
       userId: owner.id,
     },
   };
 }
-
 async function correctionSource(
   auth: MemoryAuthorization,
   scope: "family" | "personal",
@@ -130,23 +113,23 @@ async function correctionSource(
   );
   return { conversationId: current.id, timelineEntryId: entry.rows[0]!.id };
 }
-
 function createInput(
   scope: "family" | "group" | "personal",
   operationKey: string,
   content = "Пользователь предпочитает короткие ответы",
+  provenance = { sessionId: "session-current", turnId: "turn-current" },
 ) {
   return {
     confirmation: "user_confirmed" as const,
     content,
     kind: "preference" as const,
     operationKey,
+    provenance,
     scope,
     sensitivity: "normal" as const,
     source: `eve:session:${operationKey}`,
   };
 }
-
 describeWithDatabase("memoryRepository", () => {
   beforeEach(async () => {
     await database().query(
@@ -154,28 +137,25 @@ describeWithDatabase("memoryRepository", () => {
          telegram_groups, family_memberships, users, families CASCADE`,
     );
   });
-
   afterAll(async () => {
     await closeDatabase();
   });
-
   it("isolates personal records by user and every record by family", async () => {
     const first = await createFamily("first");
     const second = await createFamily("second");
     await memoryRepository.create(first.owner, createInput("personal", "first-owner"));
     await memoryRepository.create(first.member, createInput("personal", "first-member"));
     await memoryRepository.create(second.owner, createInput("personal", "second-owner"));
-
     const visible = await memoryRepository.list(first.owner, { limit: 20 });
-
     expect(visible.items).toHaveLength(1);
     expect(visible.items[0]?.author).toEqual({
       status: "current_member",
       telegramUserId: null,
       userId: first.owner.userId,
     });
+    await expect(memoryRepository.list(first.owner, { cursor: "invalid", limit: 20 }))
+      .rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
   });
-
   it("allows only the family author or current owner to update and delete a shared record", async () => {
     const family = await createFamily("family-rights");
     const record = await memoryRepository.create(
@@ -183,7 +163,6 @@ describeWithDatabase("memoryRepository", () => {
       createInput("family", "family-create", "Отпуск запланирован на август"),
     );
     const source = await correctionSource(family.owner, "family");
-
     const corrected = await memoryRepository.updateByRef(family.owner, {
       content: "Отпуск запланирован на сентябрь",
       memoryRef: record.memoryRef,
@@ -208,14 +187,12 @@ describeWithDatabase("memoryRepository", () => {
     );
     expect(versions.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        claim_status: "superseded",
-        content: "Отпуск запланирован на август",
+        claim_status: "superseded", content: "Отпуск запланирован на август",
         memory_ref: record.memoryRef,
         relation_type: "correction",
       }),
       expect.objectContaining({
-        claim_status: "active",
-        content: "Отпуск запланирован на сентябрь",
+        claim_status: "active", content: "Отпуск запланирован на сентябрь",
         memory_ref: corrected.memoryRef,
       }),
     ]));
@@ -225,7 +202,6 @@ describeWithDatabase("memoryRepository", () => {
       operationKey: "family-owner-update",
       source,
     })).resolves.toEqual(corrected);
-
     const otherFamily = await createFamily("other-family");
     await expect(
       memoryRepository.updateByRef(otherFamily.owner, {
@@ -235,7 +211,6 @@ describeWithDatabase("memoryRepository", () => {
         source: INVALID_SOURCE,
       }),
     ).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
-
     await database().query(
       "UPDATE family_memberships SET role = 'member' WHERE family_id = $1 AND user_id = $2",
       [family.familyId, family.owner.userId],
@@ -244,28 +219,22 @@ describeWithDatabase("memoryRepository", () => {
       memoryRepository.deleteByRef(family.owner, record.memoryRef, "revoked-owner-delete"),
     ).rejects.toThrowError(/AGENT_MEMORY_MUTATION_DENIED/);
   });
-
   it("retains a family record without external identity after its author is deleted", async () => {
     const family = await createFamily("former-author");
     const record = await memoryRepository.create(
       family.member,
       createInput("family", "former-create", "Семейное правило остаётся общим"),
     );
-
     await database().query("DELETE FROM users WHERE id = $1", [family.member.userId]);
     const visible = await memoryRepository.list(family.owner, { limit: 20, scope: "family" });
-
     expect(visible.items).toHaveLength(1);
     expect(visible.items[0]).toMatchObject({
       id: record.id,
       author: {
-        status: "former_member",
-        telegramUserId: null,
-        userId: null,
+        status: "former_member", telegramUserId: null, userId: null,
       },
     });
   });
-
   it("lets a Telegram group author manage their record and rejects another participant", async () => {
     const family = await createFamily("group-rights");
     const group = await database().query<{ id: string }>(
@@ -275,16 +244,11 @@ describeWithDatabase("memoryRepository", () => {
       [family.familyId],
     );
     const author: MemoryAuthorization = {
-      familyId: family.familyId,
-      groupId: group.rows[0]!.id,
-      role: "external",
-      scopes: ["group"],
-      telegramUserId: "telegram-author",
-      userId: null,
+      familyId: family.familyId, groupId: group.rows[0]!.id, role: "external",
+      scopes: ["group"], telegramUserId: "telegram-author", userId: null,
     };
     const stranger = { ...author, telegramUserId: "telegram-stranger" };
     const record = await memoryRepository.create(author, createInput("group", "group-create"));
-
     await expect(
       memoryRepository.updateByRef(stranger, {
         content: "Чужое изменение",
@@ -297,19 +261,20 @@ describeWithDatabase("memoryRepository", () => {
       memoryRepository.deleteByRef(author, record.memoryRef, "group-author-delete"),
     ).resolves.toEqual({ deleted: true });
   });
-
   it("returns the original record for an identical Eve replay and rejects changed input", async () => {
     const family = await createFamily("replay");
     const input = createInput("personal", "same-call");
     const first = await memoryRepository.create(family.owner, input);
-
     await expect(memoryRepository.create(family.owner, input)).resolves.toEqual(first);
     await expect(
       memoryRepository.create(family.owner, { ...input, content: "Подменённое значение" }),
     ).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
+    await expect(memoryRepository.create(family.owner, {
+      ...input,
+      provenance: { sessionId: "replayed-from-another-session", turnId: "other-turn" },
+    })).rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/);
     expect(first.memoryRef).toMatch(/^mem_[0-9a-f]{32}$/u);
   });
-
   it("reinforces an exact explicit remember without creating a second claim", async () => {
     const family = await createFamily("explicit-exact");
     const first = await memoryRepository.create(
@@ -320,7 +285,6 @@ describeWithDatabase("memoryRepository", () => {
       family.owner,
       createInput("personal", "explicit-exact-second", "  анна   любит улун  "),
     );
-
     expect(second.id).toBe(first.id);
     const persisted = await database().query<{
       count: number;
@@ -337,7 +301,6 @@ describeWithDatabase("memoryRepository", () => {
       reinforcement_count: 1,
     })]);
   });
-
   it("resolves opaque refs only inside the authorized scope", async () => {
     const family = await createFamily("ref-scope");
     const personal = await memoryRepository.create(
@@ -349,7 +312,6 @@ describeWithDatabase("memoryRepository", () => {
       createInput("family", "ref-family"),
     );
     const otherFamily = await createFamily("ref-other-family");
-
     await expect(memoryRepository.updateByRef(family.member, {
       content: "Чужая личная запись",
       memoryRef: personal.memoryRef,
@@ -375,7 +337,6 @@ describeWithDatabase("memoryRepository", () => {
       operationKey: "ref-cross-family",
       source: INVALID_SOURCE,
     })).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
-
     const firstGroup = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
        VALUES ($1, '-100201', 'Первая группа', 'external', 'addressed_only') RETURNING id`,
@@ -399,12 +360,10 @@ describeWithDatabase("memoryRepository", () => {
       groupAuthor,
       createInput("group", "ref-group"),
     );
-
     await expect(
       memoryRepository.deleteByRef(otherGroup, groupMemory.memoryRef, "ref-cross-group"),
     ).rejects.toThrowError(/AGENT_MEMORY_NOT_FOUND/);
   });
-
   it("paginates with an opaque cursor that contains no database UUID", async () => {
     const family = await createFamily("cursor");
     const first = await memoryRepository.create(
@@ -415,9 +374,7 @@ describeWithDatabase("memoryRepository", () => {
       family.owner,
       createInput("personal", "cursor-second", "Омега"),
     );
-
     const page = await memoryRepository.list(family.owner, { limit: 1 });
-
     expect(page.nextCursor).not.toBeNull();
     expect(page.nextCursor).not.toContain(first.id);
     expect(page.nextCursor).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-/iu);
@@ -425,6 +382,74 @@ describeWithDatabase("memoryRepository", () => {
       cursor: page.nextCursor!,
       limit: 1,
     })).resolves.toMatchObject({ items: [{ memoryRef: expect.stringMatching(/^mem_/u) }] });
+    await expect(memoryRepository.list(family.owner, {
+      cursor: page.nextCursor!, limit: 1, scope: "family",
+    })).rejects.toMatchObject({ code: "AGENT_MEMORY_CURSOR_INVALID" });
+  });
+
+  it("bounds immediate undo by unchanged create provenance and replays it safely", async () => {
+    const family = await createFamily("undo-provenance");
+    const provenance = { sessionId: "session-undo", turnId: "turn-undo" };
+    const record = await memoryRepository.create(family.owner,
+      createInput("personal", "undo-create", "Временная запись", provenance));
+    await expect(memoryRepository.canUndoCreate(family.owner, record.memoryRef, provenance))
+      .resolves.toBe(true);
+    await expect(memoryRepository.canUndoCreate(family.owner, record.memoryRef,
+      { sessionId: "other-session", turnId: provenance.turnId })).resolves.toBe(false);
+    await expect(memoryRepository.canUndoCreate(family.member, record.memoryRef, provenance))
+      .resolves.toBe(false);
+    // A versioned correction records a mutation against the source claim and revokes immediate undo.
+    const updated = await memoryRepository.create(family.owner,
+      createInput("personal", "updated-create", "Исходная запись", provenance));
+    await memoryRepository.updateByRef(family.owner, {
+      content: "Изменённая запись", memoryRef: updated.memoryRef,
+      operationKey: "intervening-update", source: await correctionSource(family.owner, "personal"),
+    });
+    await expect(memoryRepository.canUndoCreate(family.owner, updated.memoryRef, provenance))
+      .resolves.toBe(false);
+    await expect(memoryRepository.undoCreate(family.owner, updated.memoryRef,
+      { operationKey: "denied-undo", ...provenance }))
+      .rejects.toThrowError(/AGENT_MEMORY_UNDO_DENIED/u);
+    const undo = { operationKey: "undo-call", ...provenance };
+    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef, undo))
+      .resolves.toEqual({ deleted: true });
+    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef, undo))
+      .resolves.toEqual({ deleted: true });
+    await expect(memoryRepository.undoCreate(family.owner, record.memoryRef,
+      { ...undo, sessionId: "replayed-from-another-session" }))
+      .rejects.toThrowError(/AGENT_MEMORY_REPLAY_MISMATCH/u);
+    const audit = await database().query<{ metadata: Record<string, unknown> }>(
+      "SELECT metadata FROM audit_events WHERE subject_id = $1 AND event_type = 'memory.deleted'",
+      [record.id],
+    );
+    expect(audit.rows[0]?.metadata).toMatchObject({ reason: "immediate_undo" });
+  });
+  it("never treats a historical operation without persisted provenance as immediate undo", async () => {
+    const family = await createFamily("historical-undo");
+    const inserted = await database().query<{ id: string }>(
+      `INSERT INTO memory_items
+         (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+          content, source, confirmation, sensitivity, operation_key)
+       VALUES ($1, $2, $2, $3, 'personal', 'fact', 'Историческая запись', 'eve:legacy',
+               'user_confirmed', 'normal', 'historical-create')
+       RETURNING id`,
+      [family.familyId, family.owner.userId, family.owner.telegramUserId],
+    );
+    await database().query(
+      `INSERT INTO memory_mutation_operations
+         (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
+       VALUES ($1, 'historical-create', 'create', $2, $3)`,
+      [family.familyId, memoryOperationHash({ historical: true }), inserted.rows[0]!.id],
+    );
+    const reference = await database().query<{ memory_ref: string }>(
+      "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
+      [inserted.rows[0]!.id],
+    );
+    await expect(memoryRepository.canUndoCreate(
+      family.owner,
+      reference.rows[0]!.memory_ref,
+      { sessionId: "legacy", turnId: "legacy" },
+    )).resolves.toBe(false);
   });
 
   it("enforces the configured personal quota before inserting another record", async () => {

@@ -54,7 +54,11 @@ describe("Telegram group history", () => {
     ["family", modeInstructions({ environment: "family" })],
     [
       "external with granted history",
-      modeInstructions({ capabilities: new Set(["list_group_history"]), environment: "external" }),
+      modeInstructions({
+        capabilities: new Set(["list_group_history"]),
+        environment: "external",
+        skills: new Set(),
+      }),
     ],
   ] as const)("forbids parallel history calls in the %s mode instructions", (_mode, instructions) => {
     expect(instructions).toContain("Не вызывай `list_group_history` параллельно");

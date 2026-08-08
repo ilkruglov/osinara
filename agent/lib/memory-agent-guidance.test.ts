@@ -17,7 +17,11 @@ describe("agent memory guidance", () => {
     ["family", modeInstructions({ environment: "family" })],
     [
       "external with granted search",
-      modeInstructions({ capabilities: new Set(["search_memories"]), environment: "external" }),
+      modeInstructions({
+        capabilities: new Set(["search_memories"]),
+        environment: "external",
+        skills: new Set(),
+      }),
     ],
   ] as const)(
     "requires bounded multi-query context deepening in the %s mode",
@@ -44,6 +48,7 @@ describe("agent memory guidance", () => {
     modeInstructions({
       capabilities: new Set(["search_memories", "manage_memory.delete"]),
       environment: "external",
+      skills: new Set(),
     }),
   ])("forbids destructive deduplication by similarity", (instructions) => {
     expect(instructions).toContain("Схлопывание точных дубликатов допустимо только сервером при чтении");

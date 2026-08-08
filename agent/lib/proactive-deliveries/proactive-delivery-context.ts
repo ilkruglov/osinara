@@ -12,8 +12,9 @@ export type ProactiveDeliverySourceKind = "agent_schedule" | "reminder";
 export interface ProactiveDeliveryRecord {
   content: string;
   deliveredAt: string;
-  id: string;
+  deliveryId: string;
   scheduledFor: string;
+  sourceId: string;
   sourceKind: ProactiveDeliverySourceKind;
   title: string | null;
 }

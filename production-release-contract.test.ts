@@ -10,6 +10,7 @@
  * - The exact production jq security predicate accepts only the intended resolved Compose surface.
  */
 import { execFileSync } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -83,7 +84,6 @@ function resolvedComposeSecurityFixture(): Record<string, unknown> {
       "sandbox-runner": service({
         volumes: [
           volume("/var/run/docker.sock", "/var/run/docker.sock", "bind"),
-          volume("google-workspace-credentials", "/runner/google-workspace-credentials"),
           volume("tool-environments", "/runner/tools"),
           volume("workspace-data", "/runner/workspaces"),
         ],
@@ -146,6 +146,25 @@ describe("production container contract", () => {
     const dockerfile = readProjectFile("Dockerfile");
 
     expect(dockerfile.match(/COPY scripts\/apply-eve-patches\.ts/g)).toHaveLength(2);
+  });
+
+  it("pins the official Russian root CA inside the sandbox runtime", () => {
+    const dockerfile = readProjectFile("Dockerfile");
+    const certificate = new X509Certificate(
+      readProjectFile("infra/certificates/russian-trusted-root-ca.crt"),
+    );
+
+    expect(certificate.subject).toContain("CN=Russian Trusted Root CA");
+    expect(certificate.issuer).toBe(certificate.subject);
+    expect(certificate.ca).toBe(true);
+    expect(certificate.verify(certificate.publicKey)).toBe(true);
+    expect(certificate.fingerprint256).toBe(
+      "D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31",
+    );
+    expect(dockerfile).toContain(
+      "COPY infra/certificates/russian-trusted-root-ca.crt /usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
+    );
+    expect(dockerfile).toContain("update-ca-certificates");
   });
 
   it("uses only required digest references and one shared app image", () => {
@@ -237,7 +256,7 @@ describe("production container contract", () => {
     expect(agent).not.toContain("/var/run/docker.sock");
     expect(agent).toContain("google-workspace-credentials:/app/google-workspace-credentials");
     expect(runner).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(runner).toContain("google-workspace-credentials:/runner/google-workspace-credentials");
+    expect(runner).not.toContain("google-workspace-credentials");
     expect(runner).toContain("      - sandbox-control");
     expect(runner).not.toContain("      - sandbox-egress");
     expect(compose).toContain(
@@ -258,6 +277,7 @@ describe("release workflow contract", () => {
   it("tests PR, develop, and main with the exact Compose suite", () => {
     const workflow = readProjectFile(".github/workflows/ci-release.yaml");
 
+    expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("develop");
     expect(workflow).toContain("main");
@@ -265,6 +285,9 @@ describe("release workflow contract", () => {
       "docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests",
     );
     expect(workflow).toContain("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}");
+    expect(workflow).toContain(
+      "github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+    );
   });
 
   it("publishes fixed GHCR names with immutable action revisions and attestations", () => {
@@ -304,7 +327,9 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("compose.production.yaml");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("--draft");
-    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--generate-notes/);
+    expect(workflow).toContain("RELEASE_NOTES_MISSING");
+    expect(workflow).toContain('RELEASE_NOTES_FILE="docs/releases/v${VERSION}.md"');
+    expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/);
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
     expect(workflow).toContain("--clobber");

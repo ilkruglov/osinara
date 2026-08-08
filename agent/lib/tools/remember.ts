@@ -69,6 +69,7 @@ export default defineTool({
       },
       kind: input.kind,
       operationKey: ctx.callId,
+      provenance: { sessionId: ctx.session.id, turnId: ctx.session.turn.id },
       scope,
       sensitivity: input.sensitivity,
       source: `eve:${ctx.session.id}:${ctx.session.turn.id}`,

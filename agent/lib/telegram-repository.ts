@@ -113,11 +113,12 @@ export const telegramRepository: TelegramRepository = {
       family_id: string;
       id: string;
       message_mode: RegisteredGroup["messageMode"];
+      skill_allowlist: string[];
       telegram_chat_id: string;
       tool_allowlist: string[];
       type: RegisteredGroup["type"];
     }>(
-      `SELECT id, family_id, telegram_chat_id, type, message_mode, tool_allowlist
+      `SELECT id, family_id, telegram_chat_id, type, message_mode, tool_allowlist, skill_allowlist
        FROM telegram_groups
        WHERE telegram_chat_id = $1`,
       [telegramChatId],
@@ -127,6 +128,7 @@ export const telegramRepository: TelegramRepository = {
     const common = {
       familyId: row.family_id,
       groupId: row.id,
+      skillAllowlist: row.skill_allowlist,
       telegramChatId: row.telegram_chat_id,
       toolAllowlist: row.tool_allowlist,
     };

@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `EXTERNAL_GROUP_CAPABILITY_CATALOG`: persisted capabilities with model usage metadata.
- * - `SANDBOX_FILE_CAPABILITY_CATALOG`: native capabilities available in every group workspace.
+ * - `SANDBOX_FILE_CAPABILITY_CATALOG`: same-name guarded Eve capabilities for group workspaces.
  * - Derived capability-name tuples used by validation and execution policy.
  * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: Eve built-ins overridden fail-closed externally.
  * - `ExternalGroupToolName`: validated persisted allowlist value.
@@ -77,10 +77,6 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     name: "web_fetch",
     usage: "безопасно загрузить текст HTTP(S)-страницы через контролируемый сетевой шлюз",
   },
-  {
-    name: "web_search",
-    usage: "искать актуальную публичную информацию через web search провайдера модели",
-  },
 ] as const satisfies readonly ExternalGroupCapability[];
 
 export const EXTERNAL_GROUP_TOOL_NAMES = capabilityNames(
@@ -88,7 +84,8 @@ export const EXTERNAL_GROUP_TOOL_NAMES = capabilityNames(
 );
 export type ExternalGroupToolName = (typeof EXTERNAL_GROUP_TOOL_NAMES)[number];
 
-// These native tools remain confined by Eve to /workspace/group and need no persisted grant.
+// Same-name wrappers preserve Eve's native contracts while adding live authorization and exact
+// group-root confinement. They remain baseline capabilities and need no persisted grant.
 export const SANDBOX_FILE_CAPABILITY_CATALOG = [
   { name: "glob", usage: "найти пути файлов в /workspace/group по glob-шаблону" },
   { name: "grep", usage: "найти текст внутри файлов в /workspace/group" },
@@ -101,8 +98,10 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
 );
 
 // Application tools are emitted per mode, so an external group never sees a descriptor it cannot
-// use. Eve 0.22.5 cannot hide its own built-ins, so only those still need an explicit denial.
-// `web_fetch` and `web_search` are listed because they are grantable: the denial is conditional.
+// use. Eve 0.22.5 allows same-name overrides but not per-mode removal, so forbidden built-ins still
+// receive explicit denial definitions while file built-ins receive guarded same-name wrappers.
+// `web_fetch` is conditionally denied because a local controlled override is grantable.
+// Provider-native `web_search` has no execution hook and therefore stays unconditionally denied.
 export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
   "ask_question",
   "bash",

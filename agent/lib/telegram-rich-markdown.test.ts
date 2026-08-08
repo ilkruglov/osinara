@@ -232,6 +232,7 @@ describe("Telegram rich presentation instructions", () => {
     expect(instructions).toMatch(/одна–три строки|одну–три строки/u);
     expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
     expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
+    expect(instructions).toContain("Если в текущем групповом сообщении упомянули твоё имя");
   });
 
   it("overrides the framework transport hint that forbids rich structure", async () => {

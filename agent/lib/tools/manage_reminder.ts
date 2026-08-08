@@ -9,7 +9,6 @@
  * - Action-specific validators return actionable Russian AppError messages.
  */
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 
 import {
@@ -47,19 +46,19 @@ const TOP_LEVEL_FIELDS = [
 ] as const;
 
 const recurrenceSchema = z.object({
-  interval: z.number().optional(),
-  unit: z.string().optional(),
-}).passthrough();
+  interval: z.number().int().min(1).max(REMINDER_RECURRENCE_INTERVAL_MAX),
+  unit: z.enum(RECURRENCE_UNITS),
+}).strict();
 
 const manageReminderSchema = z.object({
-  action: z.string().optional(),
+  action: z.enum(TOOL_ACTIONS),
   content: z.string().optional(),
   firstRunAt: z.string().optional(),
   id: z.string().optional(),
   recurrence: z.union([recurrenceSchema, z.null()]).optional(),
   scope: z.string().optional(),
   timezone: z.string().optional(),
-}).passthrough();
+}).strict();
 
 type ReminderAction = (typeof TOOL_ACTIONS)[number];
 
@@ -124,6 +123,9 @@ function requireUpdateInput(input: Record<string, unknown>) {
     "firstRunAt",
     "id",
     "recurrence",
+    // MiniMax materializes these known create-only siblings; update ignores them explicitly.
+    "scope",
+    "timezone",
   ], "action=update", INPUT_ERROR_CODE);
   const content = optionalString(input, "content", INPUT_ERROR_CODE, "Позвонить врачу", {
     maxLength: REMINDER_CONTENT_MAX_LENGTH,
@@ -144,46 +146,59 @@ function requireIdOnlyInput(input: Record<string, unknown>, action: ReminderActi
   return requireReminderId(input);
 }
 
+function requireManageReminderInput(input: unknown) {
+  const payload = requireInputRecord(input, "manage_reminder", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_reminder", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_reminder", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // Approval and execution share this parser so malformed model output never reaches HITL.
+  if (action === "create") return { action, values: requireCreateInput(payload) } as const;
+  if (action === "update") return { action, values: requireUpdateInput(payload) } as const;
+  return { action, id: requireIdOnlyInput(payload, action) } as const;
+}
+
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления.",
   "Это не агентное расписание: если нужен будущий автономный запуск агента с исследованием или отчётом, используй manage_agent_schedule.",
   "Create payload: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}.",
   "Повторение: без повтора recurrence=null; повтор — {\"unit\":\"daily\",\"interval\":1}, {\"unit\":\"weekly\",\"interval\":1} или {\"unit\":\"monthly\",\"interval\":1}.",
+  "Убрать повторение: {\"action\":\"update\",\"id\":\"<id из list_reminders>\",\"recurrence\":null}. Не удаляй и не пересоздавай напоминание для смены повторения.",
+  "Update передаёт id и только изменяемые content, firstRunAt или recurrence. Pause/resume/delete передают только action и id.",
   "firstRunAt всегда ISO datetime с UTC offset, timezone всегда IANA. Перед update/pause/resume/delete сначала найди id через list_reminders.",
 ].join(" ");
 
 export default defineTool({
-  approval: always(),
+  approval: ({ toolInput }) => {
+    requireManageReminderInput(toolInput);
+    return "user-approval";
+  },
   description: TOOL_DESCRIPTION,
   inputSchema: manageReminderSchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "manage_reminder", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_reminder", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "manage_reminder", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireManageReminderInput(input);
     const authorization = requireReminderAuthorization(ctx);
-    if (action === "create") {
-      const values = requireCreateInput(payload);
+    if (parsed.action === "create") {
       return await reminderRepository.create(authorization, {
-        ...values,
+        ...parsed.values,
         operationKey: ctx.callId,
       });
     }
-    if (action === "update") {
-      const { id, ...values } = requireUpdateInput(payload);
+    if (parsed.action === "update") {
+      const { id, ...values } = parsed.values;
       return await reminderRepository.update(authorization, id, {
         ...values,
         operationKey: ctx.callId,
       });
     }
-    if (action === "pause" || action === "resume") {
-      return await reminderRepository.update(authorization, requireIdOnlyInput(payload, action), {
-        enabled: action === "resume",
+    if (parsed.action === "pause" || parsed.action === "resume") {
+      return await reminderRepository.update(authorization, parsed.id, {
+        enabled: parsed.action === "resume",
         operationKey: ctx.callId,
       });
     }
 
     return {
-      deleted: await reminderRepository.delete(authorization, requireIdOnlyInput(payload, action), ctx.callId),
+      deleted: await reminderRepository.delete(authorization, parsed.id, ctx.callId),
     };
   },
 });

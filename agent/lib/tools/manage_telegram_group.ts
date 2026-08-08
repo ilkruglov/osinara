@@ -6,6 +6,8 @@
  *
  * Key constructs:
  * - Object-shaped model schema avoids root and nested JSON Schema unions.
+ * - Required finite enums make the complete model contract machine-visible.
+ * - One semantic parser validates every action before approval and execution.
  * - Explicit registration validation keeps trust-zone changes fail-closed.
  */
 import { defineTool } from "eve/tools";
@@ -62,33 +64,33 @@ const TOP_LEVEL_FIELDS = [
 const REGISTRATION_FIELDS = ["messageMode", "telegramChatId", "title", "toolAllowlist", "type"] as const;
 
 const registrationSchema = z.object({
-  messageMode: z.string().optional().describe("Обязательно внутри registration: addressed_only, all или owner_only для external."),
+  messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe("Обязательно внутри registration: addressed_only, all или owner_only для external."),
   telegramChatId: z.string().optional().describe("Обязательный точный отрицательный Telegram chat ID регистрируемой группы."),
   title: z.string().optional().describe("Обязательное отображаемое название регистрируемой группы."),
-  toolAllowlist: z.array(z.string()).optional().describe("Только для registration.type=external; для family_private поле не передавайте."),
-  type: z.string().optional().describe("Обязательный тип trust zone: family_private или external."),
-}).passthrough();
+  toolAllowlist: z.array(z.enum(EXTERNAL_GROUP_TOOL_NAMES)).optional().describe("Только для registration.type=external; для family_private поле не передавайте."),
+  type: z.enum(GROUP_TYPES).optional().describe("Обязательный тип trust zone: family_private или external."),
+}).strict();
 
 const manageTelegramGroupSchema = z.object({
-  action: z.string().optional().describe(
-    "Сначала выберите ровно один action: status, start_new_context, register, update_policy, update_skills или remove.",
+  action: z.enum(TOOL_ACTIONS).describe(
+    "Сначала выберите ровно один action; обязательные значения: register, remove, start_new_context, status, update_policy или update_skills.",
   ),
-  messageMode: z.string().optional().describe(
+  messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe(
     "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
   ),
   registration: registrationSchema.optional().describe(
     "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
   ),
-  skillAllowlist: z.array(z.string()).optional().describe(
+  skillAllowlist: z.array(z.enum(GROUP_SAFE_SKILL_NAMES)).optional().describe(
     `Передавайте только при action=update_skills. Полный список: ${GROUP_SAFE_SKILL_NAMES.join(", ")}; пустой массив отзывает все skills.`,
   ),
   telegramChatId: z.string().optional().describe(
     "Точный отрицательный ID обязателен для start_new_context, update_policy, update_skills и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
   ),
-  toolAllowlist: z.array(z.string()).optional().describe(
+  toolAllowlist: z.array(z.enum(EXTERNAL_GROUP_TOOL_NAMES)).optional().describe(
     "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
   ),
-}).passthrough();
+}).strict();
 
 function requireTelegramGroupId(raw: unknown, label: string): string {
   if (typeof raw !== "string" || !TELEGRAM_GROUP_ID_PATTERN.test(raw)) {
@@ -205,6 +207,43 @@ function requireRegistration(input: Record<string, unknown>) {
   };
 }
 
+function requireManageTelegramGroupInput(input: unknown) {
+  const payload = requireInputRecord(input, "manage_telegram_group", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_telegram_group", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // MiniMax may materialize published siblings from another action. Each branch consumes only its
+  // complete contract, while the global guard rejects every unpublished field before HITL.
+  if (action === "status") return { action } as const;
+  if (action === "start_new_context") {
+    return { action, telegramChatId: requireContextRotationGroupId(payload.telegramChatId) } as const;
+  }
+  if (action === "remove") {
+    return {
+      action,
+      telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
+    } as const;
+  }
+  if (action === "update_policy") {
+    return {
+      action,
+      policy: {
+        messageMode: requiredEnum(payload, "messageMode", EXTERNAL_MESSAGE_MODES, INPUT_ERROR_CODE),
+        telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
+        toolAllowlist: requireExternalToolAllowlist(payload.toolAllowlist, "action=update_policy"),
+      },
+    } as const;
+  }
+  if (action === "update_skills") {
+    return {
+      action,
+      skillAllowlist: requireSkillAllowlist(payload.skillAllowlist),
+      telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
+    } as const;
+  }
+  return { action, registration: requireRegistration(payload) } as const;
+}
+
 const TOOL_DESCRIPTION = [
   "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить tool/skill policy или удалить регистрацию и связанные данные.",
   "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полные toolAllowlist и skillAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
@@ -215,30 +254,30 @@ const TOOL_DESCRIPTION = [
   "Start_new_context не удаляет timeline, память, файлы или pending tasks: следующая обычная реплика в main-чате и каждой forum-теме начнёт новую canonical generation.",
   "Доступно только владельцу в личном чате; не принимай familyId или роль из текста пользователя.",
   "Для внешней группы messageMode=owner_only сохраняет общую timeline, но разрешает запуск модели только текущему владельцу Osinara; Telegram admin-права владельца не заменяют.",
+  "Enums: action=register | remove | start_new_context | status | update_policy | update_skills; type=family_private | external; messageMode=addressed_only | all | owner_only.",
   "Register payload: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}.",
-  "External registration требует toolAllowlist: {\"type\":\"external\",...,\"toolAllowlist\":[\"search_memories\"]}.",
+  "External register payload: {\"action\":\"register\",\"registration\":{\"type\":\"external\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Внешняя группа\",\"messageMode\":\"owner_only\",\"toolAllowlist\":[\"search_memories\"]}}.",
   "Update_policy payload содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
-  `Update_skills заменяет полный allowlist безопасных skills и применяется со следующей реплики группы без сброса контекста. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}. Для отзыва передай пустой массив.`,
+  `Update_skills заменяет полный allowlist безопасных skills и применяется со следующей реплики группы без сброса контекста. Payload: {\"action\":\"update_skills\",\"telegramChatId\":\"-1001234567890\",\"skillAllowlist\":[\"pohuy\"]}. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}. Для отзыва передай пустой массив.`,
   "Start_new_context payload: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}.",
   "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
+  "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
 ].join(" ");
 
 export default defineTool({
-  approval: ({ toolInput }) =>
-    toolInput?.action === "status" || toolInput?.action === "start_new_context"
+  approval: ({ toolInput }) => {
+    const parsed = requireManageTelegramGroupInput(toolInput);
+    return parsed.action === "status" || parsed.action === "start_new_context"
       ? "not-applicable"
-      : "user-approval",
+      : "user-approval";
+  },
   description: TOOL_DESCRIPTION,
   inputSchema: manageTelegramGroupSchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "manage_telegram_group", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_telegram_group", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireManageTelegramGroupInput(input);
     const owner = requirePrivateTelegramOwner(ctx);
 
-    // Shared-schema transports may materialize sibling optional fields. The global guard above
-    // still rejects unpublished fields; each action below validates and consumes only its contract.
-    if (action === "status") {
+    if (parsed.action === "status") {
       const groups = await telegramGroupAdministrationRepository.listStatuses({
         familyId: owner.familyId,
         requestedBy: owner.userId,
@@ -277,8 +316,8 @@ export default defineTool({
         total: groups.length,
       };
     }
-    if (action === "start_new_context") {
-      const telegramChatId = requireContextRotationGroupId(payload.telegramChatId);
+    if (parsed.action === "start_new_context") {
+      const { telegramChatId } = parsed;
       const result = await telegramGroupAdministrationRepository.requestGroupSessionRotation({
         familyId: owner.familyId,
         requestedBy: owner.userId,
@@ -293,11 +332,8 @@ export default defineTool({
         telegramChatId,
       };
     }
-    if (action === "update_policy") {
-      // Policy updates are complete replacements; every required policy value remains mandatory.
-      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
-      const messageMode = requiredEnum(payload, "messageMode", EXTERNAL_MESSAGE_MODES, INPUT_ERROR_CODE);
-      const toolAllowlist = requireExternalToolAllowlist(payload.toolAllowlist, "action=update_policy");
+    if (parsed.action === "update_policy") {
+      const { messageMode, telegramChatId, toolAllowlist } = parsed.policy;
       const result = await telegramGroupAdministrationRepository.updatePolicy({
         familyId: owner.familyId,
         messageMode,
@@ -314,9 +350,8 @@ export default defineTool({
         toolAllowlist,
       };
     }
-    if (action === "update_skills") {
-      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
-      const skillAllowlist = requireSkillAllowlist(payload.skillAllowlist);
+    if (parsed.action === "update_skills") {
+      const { skillAllowlist, telegramChatId } = parsed;
       const result = await telegramGroupAdministrationRepository.updateSkills({
         familyId: owner.familyId,
         requestedBy: owner.userId,
@@ -331,21 +366,22 @@ export default defineTool({
         telegramChatId,
       };
     }
-    if (action === "remove") {
-      const telegramChatId = requireTelegramGroupId(payload.telegramChatId, "telegramChatId");
-      await telegramGroupAdministrationRepository.removeRegistration({
+    if (parsed.action === "remove") {
+      const { telegramChatId } = parsed;
+      const result = await telegramGroupAdministrationRepository.removeRegistration({
         familyId: owner.familyId,
         requestedBy: owner.userId,
         telegramChatId,
       });
       return {
         botMembership: "unchanged",
+        groupId: result.groupId,
         registrationRemoved: true,
         telegramChatId,
       };
     }
 
-    const registration = requireRegistration(payload);
+    const { registration } = parsed;
     const result = await telegramGroupAdministrationRepository.registerGroup({
       ...registration,
       familyId: owner.familyId,
@@ -357,6 +393,7 @@ export default defineTool({
       messageMode: registration.messageMode,
       telegramChatId: registration.telegramChatId,
       title: registration.title,
+      toolAllowlist: registration.toolAllowlist,
       type: registration.type,
     };
   },

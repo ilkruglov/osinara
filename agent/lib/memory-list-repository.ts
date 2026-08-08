@@ -6,6 +6,7 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import { paginationFilterDigest } from "./keyset-pagination.js";
 import { MEMORY_LIST_MAX_LIMIT } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import type { ReferencedMemoryItem, ReferencedMemoryRow } from "./memory-record.js";
@@ -22,14 +23,18 @@ interface MemoryListRow extends ReferencedMemoryRow {
   source_observed_at: Date;
 }
 
-function decodeCursor(cursor: string | undefined): { memoryRef: string; updatedAt: Date } | null {
-  if (!cursor) return null;
-  const [timestamp, memoryRef, extra] = cursor.split("|");
+function decodeCursor(
+  cursor: string | undefined,
+  expectedBinding: string,
+): { memoryRef: string; updatedAt: Date } | null {
+  if (cursor === undefined) return null;
+  const [timestamp, memoryRef, binding, extra] = cursor.split("|");
   const updatedAt = new Date(timestamp ?? "");
   if (
     extra !== undefined ||
     !memoryRef ||
     !MEMORY_REF_PATTERN.test(memoryRef) ||
+    binding !== expectedBinding ||
     Number.isNaN(updatedAt.getTime())
   ) {
     throw new AppError("AGENT_MEMORY_CURSOR_INVALID", "Не удалось продолжить просмотр памяти");
@@ -48,7 +53,16 @@ export const memoryListRepository = {
     if (options.scope && !auth.scopes.includes(options.scope)) {
       throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
     }
-    const cursor = decodeCursor(options.cursor);
+    // Bind the opaque cursor to its authorization and filters so it cannot cross result sets.
+    const cursorBinding = paginationFilterDigest([
+      "memory-ref-v1",
+      auth.familyId,
+      auth.userId,
+      auth.groupId,
+      [...auth.scopes].sort().join(","),
+      options.scope ?? null,
+    ]);
+    const cursor = decodeCursor(options.cursor, cursorBinding);
     const result = await database().query<MemoryListRow>(
       `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
                item.content, item.source, item.confirmation, item.sensitivity,
@@ -100,7 +114,7 @@ export const memoryListRepository = {
         },
       })),
       nextCursor: hasNext && last
-        ? `${last.updated_at.toISOString()}|${last.memory_ref}`
+        ? `${last.updated_at.toISOString()}|${last.memory_ref}|${cursorBinding}`
         : null,
     };
   },

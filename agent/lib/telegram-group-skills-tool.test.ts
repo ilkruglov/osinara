@@ -100,7 +100,7 @@ describe("manage_telegram_group.update_skills", () => {
       action: "update_skills",
       skillAllowlist: ["unknown"],
       telegramChatId: "-1001234567890",
-    }, context())).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*pohuy/u);
+    } as never, context())).rejects.toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*pohuy/u);
     await expect(manageTelegramGroup.execute({
       action: "update_skills",
       skillAllowlist: ["pohuy", "pohuy"],

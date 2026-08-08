@@ -46,7 +46,7 @@ const input = {
   action: "update_policy" as const,
   messageMode: "owner_only" as const,
   telegramChatId: "-1003567628736",
-  toolAllowlist: ["remember", "list_group_history"],
+  toolAllowlist: ["remember", "list_group_history"] as Array<"remember" | "list_group_history">,
 };
 
 describe("manage_telegram_group.update_policy", () => {

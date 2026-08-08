@@ -8,6 +8,9 @@ builds six container-only images, publishes immutable tags to GHCR, records arti
 and prepares `vVERSION` as a draft. CI uploads and byte-verifies every asset before publishing the
 draft as the latest release. A failed rerun may resume only a draft whose tag still resolves to the
 same commit; a published release or unrelated tag requires a package version bump.
+Every version must also provide a detailed user-facing changelog at `docs/releases/vVERSION.md`;
+the release job fails before image publication when that file is absent or empty and uses it as the
+exact GitHub Release description instead of an opaque generated commit list.
 Repository-level immutable releases are mandatory; both the application checker and server reject
 published releases whose API metadata does not report `immutable: true`.
 
@@ -31,6 +34,12 @@ claims one approved PostgreSQL proposal after rechecking the current owner, veri
 release, Compose hash, fixed service/image/mount policy, and digest names. It pulls before stopping,
 backs up existing durable state, starts the released Compose graph without build, and checks
 `http://127.0.0.1:8082/eve/v1/health`.
+
+If GitHub loses the canonical `main` push event during an Actions outage, an operator may dispatch
+the same `CI and release` workflow manually with `gh workflow run "CI and release" --ref main`.
+The manual path still runs the production-equivalent test job first and publishes only from the
+current canonical `main` ref; it does not permit a branch build or bypass release validation.
+
 Before each non-initial deployment it also prunes older Osinara deployment backups, retaining the
 initial migration backup while clearing the timestamped slot for the pending snapshot; after
 successful backup creation exactly one previous-release backup remains. After a successful health

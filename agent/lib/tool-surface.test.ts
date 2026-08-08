@@ -2,7 +2,7 @@
  * Agent capability surface regression tests.
  *
  * Constructs:
- * - `agent/tools` holds only the dynamic capability resolver; implementations live in lib.
+ * - `agent/tools` holds only the dynamic resolver; native `agent` supplies fresh-context delegation.
  * - Exact application tool-module allowlist after CRUD consolidation.
  * - Exact static package directories plus the single dynamic policy resolver.
  * - The opt-in tone skill lives outside static Eve discovery.
@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 const AGENT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const EXPECTED_TOOL_MODULES = [
+  "execute_google_workspace.ts",
   "export_memory.ts",
   "get_current_time.ts",
   "get_memory_source.ts",
@@ -57,40 +58,19 @@ const EXPECTED_SKILL_DIRECTORIES = [
   "behavior-preferences",
   "docx",
   "find-docs",
-  "gws-calendar",
-  "gws-calendar-agenda",
-  "gws-calendar-insert",
-  "gws-docs",
-  "gws-docs-write",
-  "gws-drive",
-  "gws-drive-upload",
-  "gws-gmail",
-  "gws-gmail-forward",
-  "gws-gmail-read",
-  "gws-gmail-reply",
-  "gws-gmail-reply-all",
-  "gws-gmail-send",
-  "gws-gmail-triage",
-  "gws-gmail-watch",
-  "gws-people",
-  "gws-shared",
-  "gws-sheets",
-  "gws-sheets-append",
-  "gws-sheets-read",
   "pdf",
   "t-invest",
   "xlsx",
 ] as const;
 
 describe("agent capability surface", () => {
-  it("discovers only the dynamic capability resolver as an authored tool", async () => {
+  it("discovers only the dynamic resolver so Eve provides native delegation", async () => {
     const entries = await readdir(`${AGENT_ROOT}/tools`, { withFileTypes: true });
     const toolFiles = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
 
-    // A static descriptor would be visible in every mode, so no implementation may live here.
     expect(toolFiles).toEqual([...EXPECTED_DISCOVERED_TOOL_FILES]);
   });
 

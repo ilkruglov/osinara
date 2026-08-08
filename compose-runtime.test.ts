@@ -113,9 +113,7 @@ describe("Docker Compose runtime wiring", () => {
     expect(agent).toContain(
       "      - google-workspace-credentials:/app/google-workspace-credentials\n",
     );
-    expect(runner).toContain(
-      "      - google-workspace-credentials:/runner/google-workspace-credentials\n",
-    );
+    expect(runner).not.toContain("google-workspace-credentials");
     expect(runner).toContain("      - tool-environments:/runner/tools\n");
     expect(runner).toContain("      - sandbox-control\n");
     expect(runner).not.toContain("      - sandbox-egress\n");
@@ -137,7 +135,7 @@ describe("Docker Compose runtime wiring", () => {
       dockerfile.indexOf("FROM nginx:", dockerfile.indexOf("FROM first-party-node AS runtime")),
     );
 
-    // The native gws binary uses the OS trust store rather than Node's bundled root certificates.
+    // OAuth refresh and other HTTPS boundaries require the OS trust store in production.
     expect(runtime).toContain("ca-certificates");
     expect(runtime).toContain("rm -rf /var/lib/apt/lists/*");
   });

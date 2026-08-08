@@ -40,13 +40,13 @@ describe("setTelegramMessageReaction", () => {
     const target = telegramHandle({ ok: true, result: true });
 
     await expect(
-      setTelegramMessageReaction(target.telegram, "43", "🤣"),
+      setTelegramMessageReaction(target.telegram, "43", "🔥"),
     ).resolves.toBe("applied");
     expect(target.request).toHaveBeenCalledWith("setMessageReaction", {
       chat_id: "-100123",
       is_big: false,
       message_id: 43,
-      reaction: [{ emoji: "🤣", type: "emoji" }],
+      reaction: [{ emoji: "🔥", type: "emoji" }],
     });
   });
 

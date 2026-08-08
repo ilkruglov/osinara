@@ -128,7 +128,7 @@ describe("manage_telegram_group.status", () => {
     await expect(manageTelegramGroup.execute({
       action: "status",
       telegramChat: "-1001",
-    }, context())).rejects.toThrowError(
+    } as never, context())).rejects.toThrowError(
       /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat.*telegramChatId/u,
     );
     expect(listStatuses).not.toHaveBeenCalled();
@@ -136,11 +136,28 @@ describe("manage_telegram_group.status", () => {
 
   it("skips HITL only for read-only status and non-destructive context rotation", () => {
     expect(approvalFor({ action: "status" })).toBe("not-applicable");
-    expect(approvalFor({ action: "start_new_context" })).toBe("not-applicable");
-    expect(approvalFor({ action: "update_policy" })).toBe("user-approval");
-    expect(approvalFor({ action: "update_skills" })).toBe("user-approval");
-    expect(approvalFor({ action: "remove" })).toBe("user-approval");
-    expect(approvalFor({ action: "register" })).toBe("user-approval");
+    expect(approvalFor({ action: "start_new_context", telegramChatId: "-1001" })).toBe("not-applicable");
+    expect(approvalFor({
+      action: "update_policy",
+      messageMode: "all",
+      telegramChatId: "-1001",
+      toolAllowlist: [],
+    })).toBe("user-approval");
+    expect(approvalFor({
+      action: "update_skills",
+      skillAllowlist: [],
+      telegramChatId: "-1001",
+    })).toBe("user-approval");
+    expect(approvalFor({ action: "remove", telegramChatId: "-1001" })).toBe("user-approval");
+    expect(approvalFor({
+      action: "register",
+      registration: {
+        messageMode: "all",
+        telegramChatId: "-1001",
+        title: "Семья",
+        type: "family_private",
+      },
+    })).toBe("user-approval");
   });
 
   it("requires status before replacing an unknown current policy", () => {

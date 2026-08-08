@@ -6,7 +6,6 @@
  * - `memoryRepository`: transaction-safe scoped CRUD and retrieval operations.
  */
 import type { PoolClient } from "pg";
-
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import { createMemoryClaim } from "./memory-claim-writer.js";
@@ -18,13 +17,15 @@ import {
   memoryOperationHash,
   normalizeMemoryClaimContent,
   type MemoryKind,
+  type CreateMemoryInput,
+  type MemoryOperationProvenance,
   type MemoryRow,
   type MemorySensitivity,
   type ReferencedMemoryItem,
   type ReferencedMemoryRow,
   rowToReferencedMemory,
 } from "./memory-record.js";
-
+import { MEMORY_UNDO_DENIED_MESSAGE, type MemoryUndoInput } from "./memory-undo-repository.js";
 export type {
   CreateMemoryEvidenceInput,
   CreateMemoryInput,
@@ -34,14 +35,17 @@ export type {
   MemorySensitivity,
   ReferencedMemoryItem,
 } from "./memory-record.js";
-
 interface MutationOperationRow {
+  actor_telegram_user_id: string | null;
+  actor_user_id: string | null;
+  eve_session_id: string | null;
+  eve_turn_id: string | null;
   input_hash: string;
   memory_item_id: string | null;
   mutation_kind: "create" | "delete" | "update";
 }
-
 interface MutationMemoryRow extends ReferencedMemoryRow {
+  claim_status: "active" | "duplicate" | "superseded";
   group_id: string | null;
   memory_project_id: string | null;
   origin_conversation_id: string | null;
@@ -52,8 +56,8 @@ interface MutationMemoryRow extends ReferencedMemoryRow {
   subject_label: string | null;
   subject_participant_id: string | null;
   subject_user_id: string | null;
+  superseded_by: string | null;
 }
-
 function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
   if (!auth.scopes.includes(scope)) {
     throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
@@ -65,7 +69,6 @@ function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
     throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить группу памяти");
   }
 }
-
 async function existingOperation(
   client: PoolClient,
   auth: MemoryAuthorization,
@@ -74,7 +77,8 @@ async function existingOperation(
   inputHash: string,
 ): Promise<MutationOperationRow | null> {
   const result = await client.query<MutationOperationRow>(
-    `SELECT mutation_kind, input_hash, memory_item_id
+    `SELECT mutation_kind, input_hash, memory_item_id, actor_user_id, actor_telegram_user_id,
+            eve_session_id, eve_turn_id
      FROM memory_mutation_operations
      WHERE family_id = $1 AND operation_key = $2`,
     [auth.familyId, operationKey],
@@ -90,10 +94,11 @@ async function existingOperation(
   return operation;
 }
 
-async function selectAuthorizedMemoryByRef(
+async function selectAuthorizedMemory(
   client: PoolClient,
   auth: MemoryAuthorization,
-  memoryRef: string,
+  lookupValue: string,
+  lookupBy: "id" | "ref",
   lock = false,
 ): Promise<MutationMemoryRow | null> {
   // Scope predicates run in the same lookup that resolves the opaque ref to an internal UUID.
@@ -104,10 +109,10 @@ async function selectAuthorizedMemoryByRef(
              item.owner_user_id, item.group_id, item.origin_conversation_id,
              item.subject_family_id, item.subject_user_id, item.subject_participant_id,
              item.subject_conversation_id, item.subject_label, item.memory_project_id,
-             item.profile_eligible
+              item.profile_eligible, item.claim_status, item.superseded_by
      FROM memory_item_refs AS ref
      JOIN memory_items AS item ON item.id = ref.memory_item_id
-     WHERE ref.memory_ref = $1
+      WHERE ${lookupBy === "ref" ? "ref.memory_ref" : "item.id"} = $1
        AND item.family_id = $2
        AND (
          (item.scope = 'personal' AND 'personal' = ANY($3::memory_scope[]) AND item.owner_user_id = $4) OR
@@ -115,33 +120,7 @@ async function selectAuthorizedMemoryByRef(
          (item.scope = 'group' AND 'group' = ANY($3::memory_scope[]) AND item.group_id = $5)
        )
      ${lock ? "FOR UPDATE OF item" : ""}`,
-    [memoryRef, auth.familyId, auth.scopes, auth.userId, auth.groupId],
-  );
-  return result.rows[0] ?? null;
-}
-
-async function selectAuthorizedMemoryById(
-  client: PoolClient,
-  auth: MemoryAuthorization,
-  memoryItemId: string,
-  lock = false,
-): Promise<MutationMemoryRow | null> {
-  const result = await client.query<MutationMemoryRow>(
-    `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
-            item.content, item.source, item.confirmation, item.sensitivity, item.message_thread_id,
-             item.embedding_status, item.created_at, item.updated_at, ref.memory_ref,
-             item.owner_user_id, item.group_id, item.origin_conversation_id,
-             item.subject_family_id, item.subject_user_id, item.subject_participant_id,
-             item.subject_conversation_id, item.subject_label, item.memory_project_id,
-             item.profile_eligible
-     FROM memory_items AS item
-     JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
-     WHERE item.id = $1 AND item.family_id = $2 AND (
-       (item.scope = 'personal' AND 'personal' = ANY($3::memory_scope[]) AND item.owner_user_id = $4) OR
-       (item.scope = 'family' AND 'family' = ANY($3::memory_scope[])) OR
-       (item.scope = 'group' AND 'group' = ANY($3::memory_scope[]) AND item.group_id = $5)
-     ) ${lock ? "FOR UPDATE OF item" : ""}`,
-    [memoryItemId, auth.familyId, auth.scopes, auth.userId, auth.groupId],
+    [lookupValue, auth.familyId, auth.scopes, auth.userId, auth.groupId],
   );
   return result.rows[0] ?? null;
 }
@@ -196,8 +175,73 @@ async function requireMutationAccess(
   }
 }
 
+async function hasImmediateUndoProvenance(
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  memoryItemId: string,
+  provenance: MemoryOperationProvenance,
+): Promise<boolean> {
+  const result = await client.query(
+    `SELECT 1 FROM memory_items AS item
+     JOIN memory_mutation_operations AS creation
+       ON creation.family_id = item.family_id AND creation.memory_item_id = item.id
+      AND creation.operation_key = item.operation_key AND creation.mutation_kind = 'create'
+     WHERE item.family_id = $1 AND item.id = $2 AND item.claim_status = 'active'
+       AND creation.actor_user_id IS NOT DISTINCT FROM $3::uuid
+       AND creation.actor_telegram_user_id = $4
+       AND creation.eve_session_id = $5 AND creation.eve_turn_id = $6
+       AND ((item.scope IN ('personal', 'family') AND EXISTS (
+         SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $3
+       )) OR (item.scope = 'group' AND item.group_id = $7 AND EXISTS (
+         SELECT 1 FROM telegram_groups WHERE id = $7 AND family_id = $1
+       )))
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_mutation_operations AS later
+         WHERE later.family_id = $1 AND later.memory_item_id = $2
+           AND later.mutation_kind <> 'create'
+       )`,
+    [auth.familyId, memoryItemId, auth.userId, auth.telegramUserId,
+      provenance.sessionId, provenance.turnId, auth.groupId],
+  );
+  return Boolean(result.rowCount);
+}
 export const memoryRepository = {
-  create: createMemoryClaim,
+  async canUndoCreate(
+    auth: MemoryAuthorization,
+    memoryRef: string,
+    provenance: { sessionId: string; turnId: string },
+  ): Promise<boolean> {
+    const client = await database().connect();
+    try {
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref");
+      if (!memory || memory.claim_status !== "active") return false;
+      return await hasImmediateUndoProvenance(client, auth, memory.id, provenance);
+    } finally {
+      client.release();
+    }
+  },
+
+  async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<ReferencedMemoryItem> {
+    const memory = await createMemoryClaim(auth, input);
+    if (!input.provenance) return memory;
+
+    // Explicit creates become undo-eligible only after all verified provenance fields are persisted.
+    const result = await database().query(
+      `UPDATE memory_mutation_operations
+       SET actor_user_id = $4, actor_telegram_user_id = $5, eve_session_id = $6, eve_turn_id = $7
+       WHERE family_id = $1 AND operation_key = $2 AND mutation_kind = 'create'
+         AND memory_item_id = $3
+         AND (eve_session_id IS NULL OR
+           (actor_user_id IS NOT DISTINCT FROM $4::uuid AND actor_telegram_user_id = $5
+            AND eve_session_id = $6 AND eve_turn_id = $7))`,
+      [auth.familyId, input.operationKey, memory.id, auth.userId, auth.telegramUserId,
+        input.provenance.sessionId, input.provenance.turnId],
+    );
+    if (result.rowCount !== 1) {
+      throw new AppError("AGENT_MEMORY_REPLAY_MISMATCH", "Не удалось подтвердить источник операции памяти");
+    }
+    return memory;
+  },
 
   async deleteByRef(
     auth: MemoryAuthorization,
@@ -213,7 +257,7 @@ export const memoryRepository = {
         await client.query("COMMIT");
         return { deleted: true };
       }
-      const memory = await selectAuthorizedMemoryByRef(client, auth, memoryRef, true);
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
       if (!memory) {
         throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
       }
@@ -245,6 +289,65 @@ export const memoryRepository = {
 
   list: memoryListRepository.list,
 
+  async undoCreate(
+    auth: MemoryAuthorization,
+    memoryRef: string,
+    input: MemoryUndoInput,
+  ): Promise<{ deleted: true }> {
+    const inputHash = memoryOperationHash({ memoryRef });
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      const replay = await existingOperation(client, auth, input.operationKey, "delete", inputHash);
+      if (replay) {
+        const sameProvenance = replay.actor_user_id === auth.userId &&
+          replay.actor_telegram_user_id === auth.telegramUserId &&
+          replay.eve_session_id === input.sessionId && replay.eve_turn_id === input.turnId;
+        if (!sameProvenance) {
+          throw new AppError(
+            "AGENT_MEMORY_REPLAY_MISMATCH",
+            "Повтор операции памяти не совпадает с исходным запросом",
+          );
+        }
+        await client.query("COMMIT");
+        return { deleted: true };
+      }
+
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
+      if (!memory || memory.claim_status !== "active") {
+        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+      }
+      await requireMutationAccess(client, auth, memory);
+      if (!await hasImmediateUndoProvenance(client, auth, memory.id, input)) {
+        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+      }
+
+      // Provenance, replay marker, audit, and physical deletion commit as one operation.
+      await client.query(
+        `INSERT INTO memory_mutation_operations
+           (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
+            actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
+         VALUES ($1, $2, 'delete', $3, $4, $5, $6, $7, $8)`,
+        [auth.familyId, input.operationKey, inputHash, memory.id, auth.userId,
+          auth.telegramUserId, input.sessionId, input.turnId],
+      );
+      await client.query(
+        `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
+         VALUES ($1, $2, 'memory.deleted', $3,
+                 jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
+        [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
+      );
+      await client.query("DELETE FROM memory_items WHERE id = $1", [memory.id]);
+      await client.query("COMMIT");
+      return { deleted: true };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async updateByRef(
     auth: MemoryAuthorization,
     input: {
@@ -262,15 +365,18 @@ export const memoryRepository = {
       await client.query("BEGIN");
       const replay = await existingOperation(client, auth, input.operationKey, "update", inputHash);
       if (replay?.memory_item_id) {
-        const replayed = await selectAuthorizedMemoryById(client, auth, replay.memory_item_id, true);
-        if (!replayed) {
+        const source = await selectAuthorizedMemory(client, auth, replay.memory_item_id, "id", true);
+        const replayed = source?.superseded_by
+          ? await selectAuthorizedMemory(client, auth, source.superseded_by, "id", true)
+          : null;
+        if (!source || !replayed) {
           throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти уже удалена");
         }
         await requireMutationAccess(client, auth, replayed);
         await client.query("COMMIT");
         return rowToReferencedMemory(replayed);
       }
-      const memory = await selectAuthorizedMemoryByRef(client, auth, input.memoryRef, true);
+      const memory = await selectAuthorizedMemory(client, auth, input.memoryRef, "ref", true);
       if (!memory) {
         throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
       }
@@ -368,7 +474,7 @@ export const memoryRepository = {
         `INSERT INTO memory_mutation_operations
            (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
          VALUES ($1, $2, 'update', $3, $4)`,
-        [auth.familyId, input.operationKey, inputHash, row.id],
+        [auth.familyId, input.operationKey, inputHash, memory.id],
       );
       await client.query(
         `INSERT INTO memory_embedding_jobs (memory_item_id, status, attempts, updated_at)

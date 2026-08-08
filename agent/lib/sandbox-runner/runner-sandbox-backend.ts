@@ -32,10 +32,13 @@ import {
   sandboxSeedDigest,
 } from "./sandbox-runner-contract.js";
 import { SandboxRunnerClient } from "./runner-client.js";
+import {
+  accessForMounts,
+  type BackendProfile,
+  ROOT_RUNNER_PROFILE,
+  sandboxHome,
+} from "./runner-sandbox-profile.js";
 
-const BACKEND_NAME = "osinara-scoped-runner-v3";
-const CACHE_DIRECTORY = "osinara-scoped-runner";
-const BACKEND_STATE_SCHEMA_VERSION = 3;
 const TEMPLATE_SCHEMA_VERSION = 1;
 
 interface BackendOptions {
@@ -57,9 +60,10 @@ interface StoredBackendMetadata {
 function parseBackendMetadata(
   value: Record<string, unknown> | undefined,
   eveSessionId: string,
+  profile: BackendProfile,
 ): StoredBackendMetadata | null {
   if (!value) return null;
-  if (value.version !== BACKEND_STATE_SCHEMA_VERSION) {
+  if (value.version !== profile.stateSchemaVersion) {
     throw new Error("AGENT_SANDBOX_RUNNER_STATE_INVALID: Reconnect schema mismatch");
   }
   const request = parseCreateSandboxRequest({
@@ -73,12 +77,12 @@ function parseBackendMetadata(
     access: request.access,
     mounts: request.mounts,
     sandboxSessionId: request.sandboxSessionId,
-    version: BACKEND_STATE_SCHEMA_VERSION,
+    version: profile.stateSchemaVersion,
   };
 }
 
-function templatePath(appRoot: string, templateKey: string): string {
-  return join(appRoot, ".eve", "sandbox-cache", CACHE_DIRECTORY, "templates", `${templateKey}.json`);
+function templatePath(appRoot: string, cacheDirectory: string, templateKey: string): string {
+  return join(appRoot, ".eve", "sandbox-cache", cacheDirectory, "templates", `${templateKey}.json`);
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -101,10 +105,14 @@ function encodeTemplate(seedFiles: ReadonlyArray<SandboxSeedFile>): StoredTempla
   };
 }
 
-async function loadTemplate(appRoot: string, templateKey: string): Promise<StoredTemplate> {
-  const path = templatePath(appRoot, templateKey);
+async function loadTemplate(
+  appRoot: string,
+  templateKey: string,
+  profile: BackendProfile,
+): Promise<StoredTemplate> {
+  const path = templatePath(appRoot, profile.cacheDirectory, templateKey);
   if (!await exists(path)) {
-    throw new SandboxTemplateNotProvisionedError({ backendName: BACKEND_NAME, templateKey });
+    throw new SandboxTemplateNotProvisionedError({ backendName: profile.name, templateKey });
   }
   const template = JSON.parse(await readFile(path, "utf8")) as StoredTemplate;
   if (template.version !== TEMPLATE_SCHEMA_VERSION || !Array.isArray(template.files)) {
@@ -141,24 +149,6 @@ function resultStream(
       controller.close();
     },
   });
-}
-
-function accessForMounts(mounts: readonly WorkspaceSandboxMount[]): SandboxAccess {
-  const hasGroup = mounts.some((mount) => mount.mountPoint === "group");
-  const hasTrusted = mounts.some((mount) => mount.mountPoint !== "group");
-  if (hasGroup === hasTrusted) {
-    throw new Error("AGENT_SANDBOX_RUNNER_SCOPE_INVALID: Mixed or empty workspace mounts");
-  }
-  return hasGroup ? "restricted" : "trusted";
-}
-
-function sandboxHome(access: SandboxAccess, mounts: readonly WorkspaceSandboxMount[]): string {
-  if (access === "restricted") return "/tmp/home";
-  const primary = mounts.find((mount) => mount.mountPoint === "personal") ?? mounts[0];
-  if (!primary || primary.mountPoint === "group") {
-    throw new Error("AGENT_SANDBOX_RUNNER_SCOPE_INVALID: Trusted home scope is missing");
-  }
-  return `/tools/${primary.mountPoint}/home`;
 }
 
 function resolveSeedPath(
@@ -280,7 +270,7 @@ function buildSession(input: {
     async setNetworkPolicy(policy) {
       const access = input.access();
       const valid = (access === "trusted" && policy === "allow-all") ||
-        (access === "restricted" && policy === "deny-all");
+        (access !== "trusted" && access !== null && policy === "deny-all");
       if (!valid) {
         throw new Error(
           "AGENT_SANDBOX_RUNNER_NETWORK_POLICY_FORBIDDEN: Session network policy is immutable",
@@ -290,18 +280,25 @@ function buildSession(input: {
   };
 }
 
-export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBackend<
+function workspaceRunner(
+  profile: BackendProfile,
+  options: BackendOptions,
+): SandboxBackend<
   Record<string, never>,
   WorkspaceSandboxUseOptions
 > {
   const client = new SandboxRunnerClient(options.baseUrl ?? SANDBOX_RUNNER_BASE_URL);
   return {
-    name: BACKEND_NAME,
+    name: profile.name,
     async prewarm(input: SandboxBackendPrewarmInput<Record<string, never>>) {
       if (input.bootstrap) {
         throw new Error("AGENT_SANDBOX_RUNNER_BOOTSTRAP_UNSUPPORTED: Use Eve seed files");
       }
-      const path = templatePath(input.runtimeContext.appRoot, input.templateKey);
+      const path = templatePath(
+        input.runtimeContext.appRoot,
+        profile.cacheDirectory,
+        input.templateKey,
+      );
       if (await exists(path)) return { reused: true };
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, JSON.stringify(encodeTemplate(input.seedFiles)), { flag: "wx" });
@@ -310,10 +307,10 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
     async create(input) {
       const template = input.templateKey === null
         ? null
-        : await loadTemplate(input.runtimeContext.appRoot, input.templateKey);
+        : await loadTemplate(input.runtimeContext.appRoot, input.templateKey, profile);
       // A thread ID survives normal context rotation while a trust-zone replacement gets a new ID.
       const eveSessionId = parseSandboxEveSessionId(input.tags?.sessionId);
-      const restored = parseBackendMetadata(input.existingMetadata, eveSessionId);
+      const restored = parseBackendMetadata(input.existingMetadata, eveSessionId, profile);
       let request: SandboxRunnerCreateRequest | null = restored
         ? parseCreateSandboxRequest({
           access: restored.access,
@@ -377,12 +374,12 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
         async captureState() {
           const current = requireRequest();
           return {
-            backendName: BACKEND_NAME,
+            backendName: profile.name,
             metadata: {
               access: current.access,
               mounts: current.mounts,
               sandboxSessionId: current.sandboxSessionId,
-              version: BACKEND_STATE_SCHEMA_VERSION,
+              version: profile.stateSchemaVersion,
             },
             sessionKey: input.sessionKey,
           };
@@ -393,6 +390,13 @@ export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBack
       };
     },
   };
+}
+
+export function scopedWorkspaceRunner(options: BackendOptions = {}): SandboxBackend<
+  Record<string, never>,
+  WorkspaceSandboxUseOptions
+> {
+  return workspaceRunner(ROOT_RUNNER_PROFILE, options);
 }
 
 export async function deleteRunnerToolEnvironment(

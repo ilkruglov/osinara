@@ -39,6 +39,12 @@ function fakeEngine(): SandboxEngine {
     health: vi.fn(async () => undefined),
     readFile: vi.fn(async () => new TextEncoder().encode("content")),
     removePath: vi.fn(async () => undefined),
+    runGoogleWorkspace: vi.fn(async () => ({
+      exitCode: 0,
+      processId: "gws-process-1",
+      stderr: "",
+      stdout: "{}",
+    })),
     runProcess: vi.fn(async () => ({
       exitCode: 0,
       processId: "process-1",

@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `externalGroupCapabilityInstructions`: renders exact model-visible effective capabilities.
  * - Action-level memory grants remain granular and do not imply sibling actions.
+ * - Skill loading is advertised only for the exact live group grants.
  */
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +14,7 @@ describe("externalGroupCapabilityInstructions", () => {
   it("includes always-available files and only explicitly allowed application capabilities", () => {
     const markdown = externalGroupCapabilityInstructions(
       new Set(["remember", "manage_memory.undo"]),
+      new Set(),
     );
 
     expect(markdown).toContain("`glob`");
@@ -30,10 +32,27 @@ describe("externalGroupCapabilityInstructions", () => {
   });
 
   it("forbids offering any other visible static descriptor", () => {
-    const markdown = externalGroupCapabilityInstructions(new Set());
+    const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
 
     expect(markdown).toMatch(
       /не вызывай, не предлагай и не утверждай, что можешь использовать другие видимые static descriptors/iu,
     );
+  });
+
+  it("advertises executable load_skill only with an exact live skill grant", () => {
+    const withoutSkills = externalGroupCapabilityInstructions(new Set(), new Set());
+    const withPohuy = externalGroupCapabilityInstructions(new Set(), new Set(["pohuy"]));
+
+    expect(withoutSkills).not.toContain("`load_skill`");
+    expect(withoutSkills).not.toContain("`pohuy`");
+    expect(withPohuy).toContain("`load_skill` с `skill=pohuy`");
+    expect(withPohuy).toContain("Effective skill allowlist: `pohuy`.");
+  });
+
+  it("marks static trusted-only Google Workspace skills as unavailable externally", () => {
+    const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
+
+    expect(markdown).toMatch(/Google Workspace.*не доступны.*внешн/iu);
+    expect(markdown).not.toMatch(/`gws-[^`]+`/u);
   });
 });

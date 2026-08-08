@@ -15,6 +15,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
   LanguageModelV4FinishReason,
+  LanguageModelV4Prompt,
   LanguageModelV4StreamPart,
   SharedV4ProviderOptions,
 } from "@ai-sdk/provider";
@@ -92,6 +93,52 @@ function configuredProviderOptions(
   };
 }
 
+function removeUnresolvedOpenAIToolCalls(prompt: LanguageModelV4Prompt): LanguageModelV4Prompt {
+  // AI SDK treats a client-side approval as resolving its call, then removes the approval response
+  // from provider input. OpenAI-compatible APIs require immediate results for every retained call.
+  const normalized: LanguageModelV4Prompt = [];
+  for (let index = 0; index < prompt.length;) {
+    const message = prompt[index]!;
+    if (message.role !== "assistant") {
+      // A tool message outside its originating assistant group is invalid provider history.
+      if (message.role !== "tool") normalized.push(message);
+      index += 1;
+      continue;
+    }
+
+    // Only contiguous tool messages can complete this assistant turn under Chat Completions.
+    let nextIndex = index + 1;
+    const toolMessages: Extract<LanguageModelV4Prompt[number], { role: "tool" }>[] = [];
+    while (prompt[nextIndex]?.role === "tool") {
+      toolMessages.push(prompt[nextIndex] as typeof toolMessages[number]);
+      nextIndex += 1;
+    }
+    const immediateResultIds = new Set(toolMessages.flatMap((toolMessage) =>
+      toolMessage.content
+        .filter((part) => part.type === "tool-result")
+        .map((part) => part.toolCallId)
+    ));
+    const retainedCallIds = new Set<string>();
+    for (const part of message.content) {
+      if (part.type === "tool-call" && immediateResultIds.has(part.toolCallId)) {
+        retainedCallIds.add(part.toolCallId);
+      }
+    }
+    const content = message.content.filter((part) =>
+      part.type !== "tool-call" || retainedCallIds.has(part.toolCallId)
+    );
+    if (content.length > 0) normalized.push({ ...message, content });
+    for (const toolMessage of toolMessages) {
+      const toolContent = toolMessage.content.filter((part) =>
+        part.type === "tool-approval-response" || retainedCallIds.has(part.toolCallId)
+      );
+      if (toolContent.length > 0) normalized.push({ ...toolMessage, content: toolContent });
+    }
+    index = nextIndex;
+  }
+  return normalized;
+}
+
 function createTransportDefaultsMiddleware(
   maxOutputTokens: number,
   transport: AgentModelTransport,
@@ -102,6 +149,9 @@ function createTransportDefaultsMiddleware(
       return {
         ...params,
         maxOutputTokens: params.maxOutputTokens ?? maxOutputTokens,
+        prompt: transport.protocol === "openai-chat-completions"
+          ? removeUnresolvedOpenAIToolCalls(params.prompt)
+          : params.prompt,
         providerOptions: {
           ...params.providerOptions,
           ...configuredProviderOptions(params.providerOptions, transport),

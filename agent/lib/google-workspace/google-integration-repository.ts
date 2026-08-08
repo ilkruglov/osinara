@@ -5,147 +5,47 @@
  * - Workspace-bound authorization, claim, account, and credential contracts.
  * - `googleIntegrationRepository`: one-time OAuth state, profile persistence, lookup, and removal.
  */
-import { createHash } from "node:crypto";
-import type { PoolClient } from "pg";
-
 import { GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import type { FamilyRole } from "../family-access.js";
+import { assertGoogleWorkspaceAccess } from "./google-integration-access.js";
 import type {
   ClaimedGoogleAuthorization,
-  DecryptedGoogleAccount,
   GoogleIntegrationAccount,
   GoogleIntegrationAuthorization,
   GoogleIntegrationScope,
 } from "./google-integration-contract.js";
-import { decryptGoogleToken, encryptGoogleToken } from "./google-token-crypto.js";
+import {
+  type AccountRow,
+  type CompleteAuthorizationInput,
+  googleAccountFromRow,
+  googleOAuthStateHash,
+} from "./google-integration-persistence.js";
+import { encryptGoogleToken } from "./google-token-crypto.js";
 
 const CURRENT_ENCRYPTION_KEY_VERSION = 1;
 const GOOGLE_WORKSPACE_PROVIDER = "google_workspace";
 
-interface CompleteAuthorizationInput {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  displayName: string;
-  encryptionKey: string;
-  externalAccountId: string;
-  refreshToken: string;
-  scopes: string[];
-}
-
-interface AccountRow {
-  display_name: string;
-  external_account_id: string;
-  id: string;
-  is_default: boolean;
-  status: "active" | "reauth_required" | "revoked";
-}
-
-interface CredentialRow extends AccountRow {
-  access_token_auth_tag: string;
-  access_token_ciphertext: string;
-  access_token_expires_at: Date;
-  access_token_nonce: string;
-  refresh_token_auth_tag: string;
-  refresh_token_ciphertext: string;
-  refresh_token_nonce: string;
-  scopes: string[];
-}
-
-function stateHash(rawState: string): string {
-  if (rawState.length < 16) {
-    throw new AppError(
-      "AGENT_GOOGLE_OAUTH_STATE_INVALID",
-      "Ссылка авторизации Google недействительна. Запросите новую ссылку в Telegram",
-    );
-  }
-  return createHash("sha256").update(rawState).digest("hex");
-}
-
-function accountFromRow(row: AccountRow): GoogleIntegrationAccount {
-  return {
-    displayName: row.display_name,
-    externalAccountId: row.external_account_id,
-    id: row.id,
-    isDefault: row.is_default,
-    status: row.status,
-  };
-}
-
-async function assertWorkspaceAccess(
-  client: PoolClient,
-  auth: GoogleIntegrationAuthorization,
-  management: boolean,
-): Promise<void> {
-  const result = await client.query<{
-    owner_user_id: string | null;
-    role: FamilyRole;
-    scope: "family" | "personal";
-  }>(
-    `SELECT workspace.owner_user_id, workspace.scope, membership.role
-     FROM workspaces AS workspace
-     JOIN family_memberships AS membership
-       ON membership.family_id = workspace.family_id AND membership.user_id = $2
-     WHERE workspace.id = $1 AND workspace.family_id = $3
-       AND workspace.scope IN ('personal', 'family')
-     FOR SHARE OF workspace, membership`,
-    [auth.workspaceId, auth.userId, auth.familyId],
-  );
-  const workspace = result.rows[0];
-  const personal = workspace?.scope === "personal" && workspace.owner_user_id === auth.userId;
-  const family = workspace?.scope === "family";
-  if (!workspace || workspace.scope !== auth.scope || (!personal && !family)) {
-    throw new AppError(
-      "AGENT_GOOGLE_WORKSPACE_ACCESS_DENIED",
-      "У вас нет доступа к этому профилю Google Workspace",
-    );
-  }
-  if (management && family && workspace.role !== "owner") {
-    throw new AppError(
-      "AGENT_OWNER_REQUIRED",
-      "Подключать и отключать общий Google Workspace может только владелец семьи",
-    );
-  }
-}
-
 export const googleIntegrationRepository = {
-  async withProfileLock<T>(workspaceId: string, operation: () => Promise<T>): Promise<T> {
-    const client = await database().connect();
-    let locked = false;
-    try {
-      // A session advisory lock serializes DB metadata and derived credential-file changes.
-      await client.query(
-        "SELECT pg_advisory_lock(hashtextextended($1, $2))",
-        [workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
-      );
-      locked = true;
-      return await operation();
-    } finally {
-      try {
-        if (locked) {
-          await client.query(
-            "SELECT pg_advisory_unlock(hashtextextended($1, $2))",
-            [workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
-          );
-        }
-      } finally {
-        client.release();
-      }
-    }
-  },
-
   async createAuthorization(
     auth: GoogleIntegrationAuthorization,
     input: { expiresAt: Date; rawState: string },
-  ): Promise<{ expiresAt: string }> {
+  ): Promise<
+    | { authorizationId: string; created: true; expiresAt: string }
+    | { created: false; deliveryCompleted: boolean; expiresAt: string }
+  > {
     if (Number.isNaN(input.expiresAt.getTime())) {
       throw new AppError("AGENT_GOOGLE_OAUTH_EXPIRY_INVALID", "Не удалось создать OAuth-ссылку");
     }
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await assertWorkspaceAccess(client, auth, true);
+      // A transaction lock makes the pending-state check atomic across concurrent connect calls.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+        [auth.workspaceId, GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED],
+      );
+      await assertGoogleWorkspaceAccess(client, auth, true);
       await client.query(
         `UPDATE oauth_authorizations
          SET status = 'failed', error_code = 'AGENT_GOOGLE_OAUTH_STATE_EXPIRED'
@@ -153,22 +53,103 @@ export const googleIntegrationRepository = {
            AND status = 'pending' AND expires_at < now()`,
         [auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
       );
+      // Collapse states created by older or interrupted callers before reusing the newest link.
       await client.query(
+        `UPDATE oauth_authorizations
+         SET status = 'failed', completed_at = now(),
+             error_code = 'AGENT_GOOGLE_OAUTH_STATE_SUPERSEDED'
+         WHERE workspace_id = $1 AND provider = $2 AND status = 'pending'
+           AND expires_at >= now()
+           AND id <> COALESCE((
+             SELECT id FROM oauth_authorizations
+             WHERE workspace_id = $1 AND provider = $2 AND status = 'pending'
+               AND expires_at >= now()
+             ORDER BY created_at DESC
+             LIMIT 1
+           ), id)`,
+        [auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
+      );
+      const pending = await client.query<{
+        delivery_completed_at: Date | null;
+        expires_at: Date;
+      }>(
+        `SELECT expires_at, delivery_completed_at FROM oauth_authorizations
+         WHERE workspace_id = $1 AND provider = $2
+           AND status = 'pending' AND expires_at >= now()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
+      );
+      if (pending.rows[0]) {
+        await client.query("COMMIT");
+        return {
+          created: false,
+          deliveryCompleted: pending.rows[0].delivery_completed_at !== null,
+          expiresAt: pending.rows[0].expires_at.toISOString(),
+        };
+      }
+      const inserted = await client.query<{ id: string }>(
         `INSERT INTO oauth_authorizations
-           (family_id, actor_user_id, workspace_id, provider, state_hash, telegram_chat_id, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (family_id, actor_user_id, workspace_id, provider, state_hash, telegram_chat_id,
+            expires_at, delivery_started_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+         RETURNING id`,
         [
           auth.familyId,
           auth.userId,
           auth.workspaceId,
           GOOGLE_WORKSPACE_PROVIDER,
-          stateHash(input.rawState),
+          googleOAuthStateHash(input.rawState),
           auth.telegramUserId,
           input.expiresAt,
         ],
       );
+      const authorizationId = inserted.rows[0]?.id;
+      if (!authorizationId) {
+        throw new AppError(
+          "AGENT_GOOGLE_OAUTH_STATE_CREATE_FAILED",
+          "Не удалось создать OAuth-ссылку. Повторите подключение",
+        );
+      }
       await client.query("COMMIT");
-      return { expiresAt: input.expiresAt.toISOString() };
+      return { authorizationId, created: true, expiresAt: input.expiresAt.toISOString() };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async completeAuthorizationDelivery(
+    auth: GoogleIntegrationAuthorization,
+    authorizationId: string,
+  ): Promise<void> {
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      await assertGoogleWorkspaceAccess(client, auth, true);
+      const completed = await client.query(
+        `UPDATE oauth_authorizations
+         SET delivery_completed_at = COALESCE(delivery_completed_at, now())
+         WHERE id = $1 AND family_id = $2 AND actor_user_id = $3
+           AND workspace_id = $4 AND provider = $5 AND status = 'pending'
+           AND delivery_started_at IS NOT NULL`,
+        [
+          authorizationId,
+          auth.familyId,
+          auth.userId,
+          auth.workspaceId,
+          GOOGLE_WORKSPACE_PROVIDER,
+        ],
+      );
+      if (completed.rowCount !== 1) {
+        throw new AppError(
+          "AGENT_GOOGLE_OAUTH_DELIVERY_STATE_INVALID",
+          "Не удалось подтвердить отправку OAuth-ссылки. Проверьте личный чат",
+        );
+      }
+      await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -210,7 +191,7 @@ export const googleIntegrationRepository = {
        RETURNING oauth_row.id AS authorization_id, oauth_row.family_id,
                  oauth_row.actor_user_id, oauth_row.workspace_id,
                  oauth_row.telegram_chat_id, workspace.scope`,
-      [stateHash(rawState), now, GOOGLE_WORKSPACE_PROVIDER],
+       [googleOAuthStateHash(rawState), now, GOOGLE_WORKSPACE_PROVIDER],
     );
     const claimed = result.rows[0];
     if (!claimed) {
@@ -232,6 +213,7 @@ export const googleIntegrationRepository = {
   async completeAuthorization(
     claim: ClaimedGoogleAuthorization,
     input: CompleteAuthorizationInput,
+    materializeProfile: () => Promise<void>,
   ): Promise<GoogleIntegrationAccount> {
     if (!input.scopes.length) {
       throw new AppError("AGENT_GOOGLE_SCOPE_MISSING", "Google не предоставил разрешения Workspace");
@@ -241,6 +223,12 @@ export const googleIntegrationRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      await assertGoogleWorkspaceAccess(client, {
+        familyId: claim.familyId,
+        scope: claim.scope,
+        userId: claim.actorUserId,
+        workspaceId: claim.workspaceId,
+      }, true);
       const authorization = await client.query(
         `SELECT 1 FROM oauth_authorizations
          WHERE id = $1 AND family_id = $2 AND actor_user_id = $3 AND workspace_id = $4
@@ -340,8 +328,11 @@ export const googleIntegrationRepository = {
           claim.workspaceId,
         ],
       );
+      // The derived gws profile is materialized before commit while the workspace row is locked.
+      // Disconnect cannot delete DB credentials and then race a stale profile write.
+      await materializeProfile();
       await client.query("COMMIT");
-      return accountFromRow(stored);
+      return googleAccountFromRow(stored);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -359,62 +350,22 @@ export const googleIntegrationRepository = {
     );
   },
 
-  async getDefaultAccount(
+  async disconnect(
     auth: GoogleIntegrationAuthorization,
-    encryptionKey: string,
-  ): Promise<DecryptedGoogleAccount | null> {
-    const client = await database().connect();
-    try {
-      await assertWorkspaceAccess(client, auth, false);
-      const result = await client.query<CredentialRow>(
-        `SELECT account.id, account.external_account_id, account.display_name, account.status,
-                account.is_default, account.scopes,
-                credential.refresh_token_ciphertext, credential.refresh_token_nonce,
-                credential.refresh_token_auth_tag, credential.access_token_ciphertext,
-                credential.access_token_nonce, credential.access_token_auth_tag,
-                credential.access_token_expires_at
-         FROM integration_accounts AS account
-         JOIN integration_credentials AS credential ON credential.account_id = account.id
-         WHERE account.workspace_id = $1 AND account.provider = $2
-           AND account.is_default AND account.status = 'active'`,
-        [auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
-      );
-      const row = result.rows[0];
-      if (!row) return null;
-      return {
-        ...accountFromRow(row),
-        accessToken: decryptGoogleToken({
-          authTag: row.access_token_auth_tag,
-          ciphertext: row.access_token_ciphertext,
-          nonce: row.access_token_nonce,
-        }, encryptionKey),
-        accessTokenExpiresAt: row.access_token_expires_at,
-        refreshToken: decryptGoogleToken({
-          authTag: row.refresh_token_auth_tag,
-          ciphertext: row.refresh_token_ciphertext,
-          nonce: row.refresh_token_nonce,
-        }, encryptionKey),
-        scopes: row.scopes,
-      };
-    } finally {
-      client.release();
-    }
-  },
-
-  async assertManagement(auth: GoogleIntegrationAuthorization): Promise<void> {
-    const client = await database().connect();
-    try {
-      await assertWorkspaceAccess(client, auth, true);
-    } finally {
-      client.release();
-    }
-  },
-
-  async disconnect(auth: GoogleIntegrationAuthorization): Promise<boolean> {
+    removeProfile: () => Promise<void>,
+  ): Promise<boolean> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await assertWorkspaceAccess(client, auth, true);
+      await assertGoogleWorkspaceAccess(client, auth, true);
+      await client.query("SELECT id FROM workspaces WHERE id = $1 FOR UPDATE", [auth.workspaceId]);
+      // Explicit disconnect also revokes every not-yet-completed consent link for this profile.
+      await client.query(
+        `UPDATE oauth_authorizations
+         SET status = 'failed', completed_at = now(), error_code = 'AGENT_GOOGLE_OAUTH_DISCONNECTED'
+         WHERE workspace_id = $1 AND provider = $2 AND status IN ('pending', 'processing')`,
+        [auth.workspaceId, GOOGLE_WORKSPACE_PROVIDER],
+      );
       const deleted = await client.query<{ id: string }>(
         `DELETE FROM integration_accounts
          WHERE workspace_id = $1 AND provider = $2
@@ -437,6 +388,7 @@ export const googleIntegrationRepository = {
           ],
         );
       }
+      await removeProfile();
       await client.query("COMMIT");
       return deleted.rowCount !== 0;
     } catch (error) {

@@ -23,7 +23,10 @@ import {
 } from "../sessions/session-context.js";
 
 export default defineTool({
-  description: "Отправить файл из доступного workspace в текущий Telegram-чат или тему.",
+  description: [
+    "Отправить файл из доступного workspace в текущий Telegram-чат или тему.",
+    "Передавай path относительно корня выбранного scope, например reports/result.pdf; не добавляй personal, family или group в начало пути.",
+  ].join(" "),
   inputSchema: z.object({
     caption: z.string().max(1_024).optional(),
     path: z.string().min(1).max(512),

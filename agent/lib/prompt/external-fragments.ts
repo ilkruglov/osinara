@@ -20,7 +20,6 @@ const ALWAYS_AVAILABLE_PURPOSE =
 
 // Catalog order keeps the rendered list deterministic for prompt caching.
 const CAPABILITY_PURPOSES: readonly (readonly [ExternalGroupToolName, string])[] = [
-  ["web_search", "искать актуальную информацию по вопросу участника"],
   ["web_fetch", "открывать и пересказывать страницу по ссылке из чата"],
   ["search_memories", "вспоминать и находить то, что уже обсуждали в этой группе"],
   ["list_memories", "перечислять, что сохранено в памяти этой группы"],

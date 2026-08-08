@@ -5,6 +5,7 @@
  * - `SandboxEngine`: operations the authenticated internal HTTP server may delegate to Docker.
  */
 import type {
+  GoogleWorkspaceExecutionRequest,
   SandboxRunnerCreateRequest,
   SandboxRunnerProcessRequest,
   SandboxRunnerProcessResponse,
@@ -17,6 +18,10 @@ export interface SandboxEngine {
   createSession(request: SandboxRunnerCreateRequest): Promise<SandboxRunnerSessionResponse>;
   deleteToolEnvironment(workspaceId: string): Promise<void>;
   health(): Promise<void>;
+  runGoogleWorkspace(
+    request: GoogleWorkspaceExecutionRequest,
+    signal?: AbortSignal,
+  ): Promise<SandboxRunnerProcessResponse>;
   readFile(sessionId: string, path: string): Promise<Uint8Array | null>;
   removePath(sessionId: string, request: SandboxRunnerRemovePathRequest): Promise<void>;
   runProcess(

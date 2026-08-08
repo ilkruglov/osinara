@@ -7,7 +7,8 @@
  */
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import { REMINDER_LIST_LIMIT } from "./reminder-config.js";
+import { decodeDateUuidCursor, encodeDateUuidCursor } from "../keyset-pagination.js";
+import { REMINDER_LIST_MAX_LIMIT } from "./reminder-config.js";
 import type { ReminderAuthorization } from "./reminder-context.js";
 import {
   type ReminderRecord,
@@ -229,7 +230,18 @@ export const reminderRepository = {
     }
   },
 
-  async list(auth: ReminderAuthorization): Promise<ReminderRecord[]> {
+  async list(
+    auth: ReminderAuthorization,
+    options: { cursor?: string; limit: number },
+  ): Promise<{ items: ReminderRecord[]; nextCursor: string | null }> {
+    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > REMINDER_LIST_MAX_LIMIT) {
+      throw new AppError("AGENT_REMINDER_LIMIT_INVALID", "Некорректный размер страницы напоминаний");
+    }
+    const cursor = decodeDateUuidCursor(
+      options.cursor,
+      "AGENT_REMINDER_CURSOR_INVALID",
+      "Не удалось продолжить просмотр напоминаний",
+    );
     const result = await database().query<ReminderRow>(
       `SELECT ${REMINDER_COLUMNS}
        FROM reminders AS reminder
@@ -238,15 +250,22 @@ export const reminderRepository = {
            SELECT 1 FROM family_memberships
            WHERE family_id = $1 AND user_id = $2
          )
-         AND (
-            (reminder.scope = 'personal' AND reminder.owner_user_id = $2) OR
-            reminder.scope = 'family'
-          )
-       ORDER BY reminder.created_at DESC, reminder.id DESC
-       LIMIT $3`,
-      [auth.familyId, auth.userId, REMINDER_LIST_LIMIT],
+          AND (
+             (reminder.scope = 'personal' AND reminder.owner_user_id = $2) OR
+             reminder.scope = 'family'
+           )
+          AND ($3::timestamptz IS NULL OR (reminder.created_at, reminder.id) < ($3, $4::uuid))
+        ORDER BY reminder.created_at DESC, reminder.id DESC
+        LIMIT $5`,
+      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
     );
-    return result.rows.map(rowToReminder);
+    const hasNext = result.rows.length > options.limit;
+    const rows = result.rows.slice(0, options.limit);
+    const last = rows.at(-1);
+    return {
+      items: rows.map(rowToReminder),
+      nextCursor: hasNext && last ? encodeDateUuidCursor(last.created_at, last.id) : null,
+    };
   },
 
   async update(

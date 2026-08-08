@@ -188,7 +188,10 @@ describeWithDatabase("Telegram group journal ancestry and retention", () => {
       role: "owner",
       telegramChatType: "supergroup",
       userId: ownerId,
-    }, null)).resolves.toMatchObject([{ telegramMessageId: "61" }]);
+    }, { limit: 50, messageThreadId: null })).resolves.toMatchObject({
+      items: [{ telegramMessageId: "61" }],
+      nextCursor: null,
+    });
   });
 
   it("enriches an observed reply target whose attachment reference is missing", async () => {

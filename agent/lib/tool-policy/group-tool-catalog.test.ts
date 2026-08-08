@@ -58,9 +58,10 @@ describe("external group tool catalog", () => {
     }
   });
 
-  it("offers controlled provider search and proxied fetch as persisted grants", () => {
-    expect(EXTERNAL_GROUP_TOOL_NAMES).toEqual(
-      expect.arrayContaining(["web_search", "web_fetch"]),
-    );
+  it("offers only locally enforceable web access as a persisted grant", () => {
+    expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
+    expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
   });
 });

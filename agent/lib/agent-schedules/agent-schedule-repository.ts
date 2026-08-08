@@ -7,7 +7,8 @@
  */
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import { AGENT_SCHEDULE_LIST_LIMIT } from "./agent-schedule-config.js";
+import { decodeDateUuidCursor, encodeDateUuidCursor } from "../keyset-pagination.js";
+import { AGENT_SCHEDULE_LIST_MAX_LIMIT } from "./agent-schedule-config.js";
 import type { AgentScheduleAuthorization } from "./agent-schedule-context.js";
 import {
   type AgentScheduleRecord,
@@ -191,7 +192,18 @@ export const agentScheduleRepository = {
     }
   },
 
-  async list(auth: AgentScheduleAuthorization): Promise<AgentScheduleRecord[]> {
+  async list(
+    auth: AgentScheduleAuthorization,
+    options: { cursor?: string; limit: number },
+  ): Promise<{ items: AgentScheduleRecord[]; nextCursor: string | null }> {
+    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > AGENT_SCHEDULE_LIST_MAX_LIMIT) {
+      throw new AppError("AGENT_SCHEDULE_LIMIT_INVALID", "Некорректный размер страницы расписаний");
+    }
+    const cursor = decodeDateUuidCursor(
+      options.cursor,
+      "AGENT_SCHEDULE_CURSOR_INVALID",
+      "Не удалось продолжить просмотр агентных расписаний",
+    );
     const result = await database().query<AgentScheduleRow>(
       `SELECT ${AGENT_SCHEDULE_COLUMNS}
        FROM agent_schedules AS schedule
@@ -200,15 +212,22 @@ export const agentScheduleRepository = {
            SELECT 1 FROM family_memberships
            WHERE family_id = $1 AND user_id = $2
          )
-         AND (
-            (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
-            schedule.scope = 'family'
-          )
-       ORDER BY schedule.created_at DESC, schedule.id DESC
-       LIMIT $3`,
-      [auth.familyId, auth.userId, AGENT_SCHEDULE_LIST_LIMIT],
+          AND (
+             (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
+             schedule.scope = 'family'
+           )
+          AND ($3::timestamptz IS NULL OR (schedule.created_at, schedule.id) < ($3, $4::uuid))
+        ORDER BY schedule.created_at DESC, schedule.id DESC
+        LIMIT $5`,
+      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
     );
-    return result.rows.map(rowToAgentSchedule);
+    const hasNext = result.rows.length > options.limit;
+    const rows = result.rows.slice(0, options.limit);
+    const last = rows.at(-1);
+    return {
+      items: rows.map(rowToAgentSchedule),
+      nextCursor: hasNext && last ? encodeDateUuidCursor(last.created_at, last.id) : null,
+    };
   },
 
   async findById(

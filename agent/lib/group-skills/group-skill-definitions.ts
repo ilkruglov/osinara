@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `GROUP_SAFE_SKILL_DEFINITIONS`: complete dynamic Eve skill packages keyed by stable ID.
+ * - `selectGroupSafeSkillDefinitions`: projects an exact validated grant set for Eve.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -43,3 +44,11 @@ export const GROUP_SAFE_SKILL_DEFINITIONS: Readonly<
     markdown: text("instructions.md"),
   }),
 };
+
+export function selectGroupSafeSkillDefinitions(
+  names: ReadonlySet<GroupSafeSkillName>,
+): Record<string, SkillDefinition> {
+  return Object.fromEntries(
+    [...names].map((name) => [name, GROUP_SAFE_SKILL_DEFINITIONS[name]]),
+  );
+}

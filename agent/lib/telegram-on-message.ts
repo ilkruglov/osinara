@@ -9,6 +9,7 @@
  * - Group reply routing accepts bot or sender-less references only for exact known routes.
  * - Timeline-proven agent replies can start a fresh message turn after application session rotation.
  * - One server-clock snapshot anchors all time-sensitive work and model context in an accepted turn.
+ * - Registered groups project the verified dynamic skill policy into turn auth.
  * - Production side-effect adapters are assembled in `telegram-on-message-repositories.ts`.
  */
 import type {
@@ -389,7 +390,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
       );
     }
-    return buildTelegramTurnResult({
+    const turnResult = buildTelegramTurnResult({
       access,
       appSession,
       conversation,
@@ -407,6 +408,24 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       turnContext: groupTurnContext,
       turnStartedAt,
     });
+    if (!group) return turnResult;
+    if (!turnResult?.auth) {
+      throw new Error(
+        "AGENT_TELEGRAM_TURN_AUTH_MISSING: Не удалось подготовить авторизацию Telegram-turn",
+      );
+    }
+
+    // Dynamic tools and skills consume the same verified registration snapshot as this turn.
+    return {
+      ...turnResult,
+      auth: {
+        ...turnResult.auth,
+        attributes: {
+          ...turnResult.auth.attributes,
+          skillAllowlist: group.skillAllowlist,
+        },
+      },
+    };
   };
 }
 

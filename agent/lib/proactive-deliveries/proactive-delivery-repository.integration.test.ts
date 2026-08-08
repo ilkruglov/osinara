@@ -90,16 +90,25 @@ describeWithDatabase("proactive delivery repository", () => {
 
     await expect(proactiveDeliveryRepository.list({
       ...authorization,
+      deliveredAfter: null,
+      deliveredBefore: null,
+      limit: 10,
       query: "искусственный интеллект",
       sourceKind: "agent_schedule",
-    })).resolves.toHaveLength(1);
+    })).resolves.toMatchObject({ items: [expect.objectContaining({
+      deliveryId: expect.any(String),
+      sourceId: "00000000-0000-4000-8000-000000000101",
+    })], nextCursor: null });
     await expect(proactiveDeliveryRepository.list({
       ...authorization,
+      deliveredAfter: null,
+      deliveredBefore: null,
+      limit: 10,
       ownerUserId: memberId,
       telegramChatId: "delivery-member",
       query: null,
       sourceKind: null,
-    })).resolves.toEqual([]);
+    })).resolves.toEqual({ items: [], nextCursor: null });
 
     // Family deliveries are shared only through the exact registered group and topic.
     const group = await database().query<{ id: string }>(
@@ -128,12 +137,76 @@ describeWithDatabase("proactive delivery repository", () => {
       groupId: group.rows[0]!.id,
       messageThreadId: "77",
       ownerUserId: null,
+      deliveredAfter: null,
+      deliveredBefore: null,
+      limit: 10,
       query: null,
       scope: "family",
       sourceKind: "reminder",
       telegramChatId: "-100-delivery",
-    })).resolves.toEqual([
-      expect.objectContaining({ content: "Семейное напоминание", sourceKind: "reminder" }),
+    })).resolves.toMatchObject({
+      items: [expect.objectContaining({ content: "Семейное напоминание", sourceKind: "reminder" })],
+      nextCursor: null,
+    });
+  });
+
+  it("paginates delivery history beyond ten records and respects an exact date window", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Пагинация доставок') RETURNING id",
+    );
+    const user = await database().query<{ id: string }>(
+      "INSERT INTO users (telegram_user_id, display_name) VALUES ('delivery-page', 'Участник') RETURNING id",
+    );
+    await database().query(
+      "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [family.rows[0]!.id, user.rows[0]!.id],
+    );
+    const authorization = {
+      familyId: family.rows[0]!.id,
+      groupId: null,
+      messageThreadId: null,
+      ownerUserId: user.rows[0]!.id,
+      scope: "personal" as const,
+      telegramChatId: "delivery-page",
+    };
+    for (let index = 1; index <= 12; index += 1) {
+      await proactiveDeliveryRepository.record({
+        ...authorization,
+        content: `Доставка ${index}`,
+        deliveredAt: new Date(
+          `2026-07-${String(index === 10 ? 11 : index).padStart(2, "0")}T10:00:00.000Z`,
+        ),
+        scheduledFor: new Date(`2026-07-${String(index).padStart(2, "0")}T09:00:00.000Z`),
+        sourceId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        sourceKind: "reminder",
+        telegramMessageId: String(600 + index),
+        title: null,
+      });
+    }
+
+    const base = {
+      ...authorization,
+      deliveredAfter: new Date("2026-07-02T10:00:00.000Z"),
+      deliveredBefore: new Date("2026-07-11T10:00:00.000Z"),
+      limit: 4,
+      query: null,
+      sourceKind: null,
+    };
+    const first = await proactiveDeliveryRepository.list(base);
+    const second = await proactiveDeliveryRepository.list({ ...base, cursor: first.nextCursor! });
+    const third = await proactiveDeliveryRepository.list({ ...base, cursor: second.nextCursor! });
+    const items = [...first.items, ...second.items, ...third.items];
+
+    expect(items.map((item) => item.content)).toEqual([
+      "Доставка 11", "Доставка 10", "Доставка 9", "Доставка 8", "Доставка 7",
+      "Доставка 6", "Доставка 5", "Доставка 4", "Доставка 3", "Доставка 2",
     ]);
+    expect(new Set(items.map((item) => item.deliveryId))).toHaveLength(10);
+    expect(items.at(-1)).toMatchObject({
+      sourceId: "00000000-0000-4000-8000-000000000002",
+    });
+    expect(third.nextCursor).toBeNull();
+    await expect(proactiveDeliveryRepository.list({ ...base, cursor: "invalid" }))
+      .rejects.toMatchObject({ code: "AGENT_PROACTIVE_DELIVERY_CURSOR_INVALID" });
   });
 });

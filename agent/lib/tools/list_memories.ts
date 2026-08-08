@@ -13,7 +13,11 @@ import { memoryRepository } from "../memory-repository.js";
 import { toModelMemory } from "../model-memory.js";
 
 export default defineTool({
-  description: "Постранично показать записи долговременной памяти, доступные в текущем чате.",
+  description: [
+    "Постранично показать записи долговременной памяти, доступные в текущем чате.",
+    "Результат: {items,nextCursor}; items содержит текущую страницу, а nextCursor нужно без изменений",
+    "передать в следующий вызов. Значение null означает, что записей больше нет.",
+  ].join(" "),
   inputSchema: z.object({
     cursor: z.string().optional(),
     limit: z.number().int().min(1).max(MEMORY_LIST_MAX_LIMIT).default(MEMORY_LIST_DEFAULT_LIMIT),

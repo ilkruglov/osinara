@@ -2,12 +2,14 @@
  * Workspace-bound Google OAuth profile management tool.
  *
  * Export:
- * - `googleWorkspaceConnectionStatus`: maps stored grant scopes to user-visible status.
+ * - `googleWorkspaceConnectionStatus`: maps grants and native profile presence to readiness.
+ * - `createGoogleWorkspaceConnectionManager`: injectable explicit management boundaries.
  * - `manage_google_workspace_connection`: connects, inspects, or disconnects native gws credentials.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { googleAccountRepository } from "../google-workspace/google-account-repository.js";
 import type { GoogleIntegrationScope } from "../google-workspace/google-integration-contract.js";
 import { resolveGoogleWorkspaceAuthorization } from "../google-workspace/google-workspace-context.js";
 import {
@@ -30,7 +32,9 @@ interface GoogleWorkspaceConnectionStatusAccount {
 interface GoogleWorkspaceConnectionStatusResult {
   account?: string;
   connected: boolean;
+  materializationRequired?: true;
   missingScopes?: string[];
+  ready: boolean;
   reconnectRequired?: true;
   scope: GoogleIntegrationScope;
 }
@@ -38,17 +42,29 @@ interface GoogleWorkspaceConnectionStatusResult {
 export function googleWorkspaceConnectionStatus(
   account: GoogleWorkspaceConnectionStatusAccount | null,
   scope: GoogleIntegrationScope,
+  profileExists: boolean,
 ): GoogleWorkspaceConnectionStatusResult {
-  if (!account) return { connected: false, scope };
+  if (!account) return { connected: false, ready: false, scope };
 
   // Stored grants predate scope expansions; require consent instead of exposing stale gws profiles.
   const missingScopes = missingGoogleWorkspaceScopes(account.scopes);
   if (missingScopes.length) {
     return {
       account: account.displayName,
-      connected: true,
+      connected: false,
       missingScopes,
+      ready: false,
       reconnectRequired: true,
+      scope,
+    };
+  }
+
+  if (!profileExists) {
+    return {
+      account: account.displayName,
+      connected: false,
+      materializationRequired: true,
+      ready: false,
       scope,
     };
   }
@@ -56,52 +72,101 @@ export function googleWorkspaceConnectionStatus(
   return {
     account: account.displayName,
     connected: true,
+    ready: true,
     scope,
   };
 }
+
+interface GoogleWorkspaceConnectionManagerDependencies {
+  disconnect: typeof googleIntegrationRepository.disconnect;
+  getConfig: typeof requireGoogleOAuthEnvironment;
+  profileExists: typeof googleWorkspaceProfileStore.exists;
+  removeProfile: typeof googleWorkspaceProfileStore.remove;
+  startAuthorization: typeof startGoogleWorkspaceAuthorization;
+  withProfileAccount: typeof googleAccountRepository.withProfileAccount;
+  writeProfile: typeof googleWorkspaceProfileStore.write;
+}
+
+export function createGoogleWorkspaceConnectionManager(
+  dependencies: GoogleWorkspaceConnectionManagerDependencies,
+) {
+  return async function manageConnection(
+    input: z.infer<typeof connectionSchema>,
+    auth: Awaited<ReturnType<typeof resolveGoogleWorkspaceAuthorization>>,
+  ) {
+    if (input.action === "disconnect") {
+      return {
+        disconnected: await dependencies.disconnect(
+          auth,
+          async () => await dependencies.removeProfile(auth.workspaceId),
+        ),
+        ready: false,
+        scope: auth.scope,
+      };
+    }
+
+    // Status and connect need the exact provider secrets to decrypt or materialize credentials.
+    const config = dependencies.getConfig();
+    const result = await dependencies.withProfileAccount(
+      auth,
+      config.encryptionKey,
+      input.action === "connect",
+      async (account) => {
+        const profileExists = await dependencies.profileExists(auth.workspaceId);
+        const status = googleWorkspaceConnectionStatus(account, auth.scope, profileExists);
+        if (input.action === "status") return status;
+
+        // Connect is an explicit management boundary for both migrations and OAuth replacement.
+        if (account && !status.reconnectRequired) {
+          if (!profileExists) {
+            await dependencies.writeProfile(auth.workspaceId, {
+              client_id: config.clientId,
+              client_secret: config.clientSecret,
+              refresh_token: account.refreshToken,
+              type: "authorized_user",
+            });
+          }
+          return {
+            account: account.displayName,
+            connected: true,
+            ready: true,
+            scope: auth.scope,
+          };
+        }
+
+        // A stale or orphaned profile must not remain executable while new consent is pending.
+        if (profileExists) await dependencies.removeProfile(auth.workspaceId);
+        return null;
+      },
+    );
+    if (result) return result;
+
+    // Repository-level transaction locking deduplicates pending states without nested DB locks.
+    return {
+      ...await dependencies.startAuthorization(auth),
+      ready: false,
+    };
+  };
+}
+
+const manageGoogleWorkspaceConnection = createGoogleWorkspaceConnectionManager({
+  disconnect: googleIntegrationRepository.disconnect,
+  getConfig: requireGoogleOAuthEnvironment,
+  profileExists: googleWorkspaceProfileStore.exists,
+  removeProfile: googleWorkspaceProfileStore.remove,
+  startAuthorization: startGoogleWorkspaceAuthorization,
+  withProfileAccount: googleAccountRepository.withProfileAccount,
+  writeProfile: googleWorkspaceProfileStore.write,
+});
 
 export default defineTool({
   approval: ({ toolInput }) =>
     toolInput?.action === "disconnect" ? "user-approval" : "not-applicable",
   description:
-    "Подключить, проверить или отключить OAuth-профиль для native gws текущей личной или семейной области. Команды Google выполняются через gws в Bash, не через этот инструмент.",
+    "Подключить, без изменений проверить фактическую готовность или отключить OAuth-профиль Google Workspace текущей личной или семейной области. Команды Google выполняются только через execute_google_workspace.",
   inputSchema: connectionSchema,
   async execute(input, ctx) {
     const auth = await resolveGoogleWorkspaceAuthorization(ctx);
-    if (input.action === "connect") {
-      return await startGoogleWorkspaceAuthorization(auth);
-    }
-
-    if (input.action === "disconnect") {
-      return await googleIntegrationRepository.withProfileLock(auth.workspaceId, async () => {
-        // Authorize before touching the shared file, then remove access before metadata.
-        await googleIntegrationRepository.assertManagement(auth);
-        await googleWorkspaceProfileStore.remove(auth.workspaceId);
-        return {
-          disconnected: await googleIntegrationRepository.disconnect(auth),
-          scope: auth.scope,
-        };
-      });
-    }
-
-    return await googleIntegrationRepository.withProfileLock(auth.workspaceId, async () => {
-      const config = requireGoogleOAuthEnvironment();
-      const account = await googleIntegrationRepository.getDefaultAccount(auth, config.encryptionKey);
-      const status = googleWorkspaceConnectionStatus(account, auth.scope);
-      if (!account) return status;
-      if (status.reconnectRequired) {
-        await googleWorkspaceProfileStore.remove(auth.workspaceId);
-        return status;
-      }
-
-      // This also performs the approved one-time migration of an existing personal grant.
-      await googleWorkspaceProfileStore.write(auth.workspaceId, {
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        refresh_token: account.refreshToken,
-        type: "authorized_user",
-      });
-      return status;
-    });
+    return await manageGoogleWorkspaceConnection(input, auth);
   },
 });

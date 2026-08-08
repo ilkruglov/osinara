@@ -5,7 +5,10 @@
  * - `WorkspaceAuthorization`, file metadata, and scope types: public contracts.
  * - `createWorkspaceRepository`: direct filesystem operations behind current access checks.
  * - `workspaceRepository`: production repository rooted at `/app/workspaces`.
+ * - `externalGroupRoot`: resolves a group root at the final live authorization boundary.
+ * - `trustedRoots`: resolves current personal/family host roots for delegated file wrappers.
  */
+import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type { PoolClient } from "pg";
@@ -68,8 +71,9 @@ async function assertCurrentAccess(
       throw new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Групповой workspace доступен только в своей группе");
     }
     const group = await client.query(
-      `SELECT 1 FROM telegram_groups
-        WHERE id = $1 AND family_id = $2 AND type = 'external'`,
+       `SELECT 1 FROM telegram_groups
+        WHERE id = $1 AND family_id = $2 AND type = 'external'
+        FOR SHARE`,
       [auth.groupId, auth.familyId],
     );
     if (group.rowCount !== 1) {
@@ -110,6 +114,20 @@ async function resolveWorkspace(
   return result.rows[0]!;
 }
 
+function workspaceScopes(auth: WorkspaceAuthorization): WorkspaceScope[] {
+  const scopes: WorkspaceScope[] = auth.telegramChatType === "private"
+    ? ["personal", "family"]
+    : auth.groupType === "family_private"
+    ? ["family"]
+    : auth.groupType === "external"
+    ? ["group"]
+    : [];
+  if (scopes.length === 0) {
+    throw new AppError("AGENT_WORKSPACE_CONTEXT_INVALID", "Для текущего чата не определён workspace");
+  }
+  return scopes;
+}
+
 async function previousOperation<T>(client: PoolClient, operationKey: string): Promise<T | null> {
   const result = await client.query<{ result: T }>(
     "SELECT result FROM workspace_operations WHERE operation_key = $1",
@@ -134,20 +152,41 @@ async function saveOperation(
 
 export function createWorkspaceRepository(root: string) {
   return {
+    async externalGroupRoot(auth: WorkspaceAuthorization): Promise<string> {
+      if (
+        auth.groupType !== "external" ||
+        auth.role !== "external" ||
+        auth.telegramChatType === "private"
+      ) {
+        throw new AppError(
+          "AGENT_WORKSPACE_ACCESS_DENIED",
+          "Групповой workspace доступен только в своей внешней группе",
+        );
+      }
+
+      // Resolve against current PostgreSQL state on every file operation. Creating the directory
+      // here makes host-side path inspection available before Eve lazily starts the sandbox.
+      const client = await database().connect();
+      try {
+        await client.query("BEGIN");
+        const workspace = await resolveWorkspace(client, auth, "group");
+        const hostRoot = resolve(root, workspace.id);
+        await mkdir(hostRoot, { recursive: true });
+        await client.query("COMMIT");
+        return hostRoot;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async mounts(auth: WorkspaceAuthorization): Promise<Array<{
       mountPoint: WorkspaceScope;
       workspaceId: string;
     }>> {
-      const scopes: WorkspaceScope[] = auth.telegramChatType === "private"
-        ? ["personal", "family"]
-        : auth.groupType === "family_private"
-        ? ["family"]
-        : auth.groupType === "external"
-        ? ["group"]
-        : [];
-      if (scopes.length === 0) {
-        throw new AppError("AGENT_WORKSPACE_CONTEXT_INVALID", "Для текущего чата не определён workspace");
-      }
+      const scopes = workspaceScopes(auth);
       const client = await database().connect();
       try {
         const mounts = [];
@@ -156,6 +195,34 @@ export function createWorkspaceRepository(root: string) {
           mounts.push({ mountPoint: scope, workspaceId: workspace.id });
         }
         return mounts;
+      } finally {
+        client.release();
+      }
+    },
+
+    async trustedRoots(auth: WorkspaceAuthorization): Promise<Array<{
+      hostRoot: string;
+      mountPoint: "family" | "personal";
+    }>> {
+      const scopes = workspaceScopes(auth);
+      if (scopes.includes("group")) {
+        throw new AppError(
+          "AGENT_WORKSPACE_ACCESS_DENIED",
+          "Task worker доступен только для личного или семейного workspace",
+        );
+      }
+
+      // Resolve membership again for every wrapped file call before exposing its host-side root.
+      const client = await database().connect();
+      try {
+        const roots = [];
+        for (const scope of scopes) {
+          const workspace = await resolveWorkspace(client, auth, scope);
+          const hostRoot = resolve(root, workspace.id);
+          await mkdir(hostRoot, { recursive: true });
+          roots.push({ hostRoot, mountPoint: scope as "family" | "personal" });
+        }
+        return roots;
       } finally {
         client.release();
       }

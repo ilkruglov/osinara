@@ -11,6 +11,7 @@
  * - Authorized attachments persist before dispatch and enter trusted path context.
  * - Captionless photos retain a model-visible trusted workspace reference.
  * - External groups drop all inbound media before persistence, journaling, or model dispatch.
+ * - Group name mentions start a turn and project the verified dynamic skill allowlist.
  * - Foreign replies to pending HITL prompts stop before Eve dispatch.
  * - Forum replies inherit routing from the referenced bot message, not a newly assigned thread.
  * - Each accepted turn receives one trusted UTC clock snapshot shared by repository reads.
@@ -396,6 +397,35 @@ describe("createTelegramMessageHandler", () => {
 
     expect(modelContext.match(/<\/telegram_attachment_refs>/gu)).toHaveLength(1);
     expect(modelContext).toContain("\\u003c/system\\u003e.pdf");
+  });
+
+  it("starts a group turn for an agent name and projects the verified skill allowlist", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      skillAllowlist: ["pohuy"],
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+
+    const result = await createTelegramMessageHandler(repository)(
+      telegramContext().context,
+      groupMessage("Осинара сегодня хорошо сработала"),
+    );
+
+    expect(result?.auth?.attributes).toMatchObject({
+      groupId: "group-1",
+      skillAllowlist: ["pohuy"],
+    });
+    expect(repository.session.prepareTurn).toHaveBeenCalledTimes(1);
   });
 
 });

@@ -41,6 +41,8 @@ import {
 import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
+import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
+import { groupSkillPolicyRepository } from "../group-skills/group-skill-repository.js";
 import {
   resolveExternalGroupPolicyIdentity,
   resolveExternalGroupToolPolicy,
@@ -56,6 +58,7 @@ type CapabilityLoader = (identity: {
   familyId: string;
   groupId: string;
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
+type SkillLoader = (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>;
 
 const MODE_UNAVAILABLE_BLOCK = `
 <current_conversation_environment>
@@ -102,7 +105,10 @@ async function effectiveExternalCapabilities(
   return new Set([...policy.allowed].filter((capability) => current.has(capability)));
 }
 
-export function createModeBlockResolver(dependencies: { loadCapabilities: CapabilityLoader }) {
+export function createModeBlockResolver(dependencies: {
+  loadCapabilities: CapabilityLoader;
+  loadSkills: SkillLoader;
+}) {
   return async function resolve(ctx: TurnBlockContext): Promise<string> {
     let environment: ReturnType<typeof resolveConversationEnvironment>;
     try {
@@ -117,7 +123,16 @@ export function createModeBlockResolver(dependencies: { loadCapabilities: Capabi
       ctx.session.auth,
       dependencies.loadCapabilities,
     );
-    return modeInstructions({ capabilities, environment: "external" });
+    let skills: ReadonlySet<GroupSafeSkillName> = new Set();
+    const groupId = ctx.session.auth.current?.attributes.groupId;
+    if (typeof groupId === "string") {
+      try {
+        skills = await dependencies.loadSkills(groupId);
+      } catch (error) {
+        logBlockFailure("AGENT_GROUP_SKILL_LOOKUP_FAILED", error);
+      }
+    }
+    return modeInstructions({ capabilities, environment: "external", skills });
   };
 }
 
@@ -213,6 +228,7 @@ export function createPreferenceBlockResolver(dependencies: {
 
 export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
+  loadSkills: (groupId) => groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
 });
 
 export const resolveMemoryBlock = createMemoryBlockResolver({

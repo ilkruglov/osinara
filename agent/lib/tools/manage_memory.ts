@@ -16,6 +16,7 @@ import { requireAllowedMemoryContent } from "../memory-content-policy.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import type { MemoryKind, MemorySensitivity } from "../memory-record.js";
 import { memoryRepository } from "../memory-repository.js";
+import { MEMORY_UNDO_DENIED_MESSAGE } from "../memory-undo-repository.js";
 import { MEMORY_REF_PATTERN, toModelMemory } from "../model-memory.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import {
@@ -34,12 +35,12 @@ const MEMORY_SENSITIVITIES = ["normal", "sensitive"] as const;
 const TOP_LEVEL_FIELDS = ["action", "content", "kind", "memoryRef", "sensitivity"] as const;
 
 const manageMemorySchema = z.object({
-  action: z.string().optional(),
+  action: z.enum(TOOL_ACTIONS),
   content: z.string().optional(),
   kind: z.string().optional(),
   memoryRef: z.string().optional(),
   sensitivity: z.string().optional(),
-}).passthrough();
+}).strict();
 
 type MemoryAction = (typeof TOOL_ACTIONS)[number];
 
@@ -101,6 +102,20 @@ function requireCurrentCorrectionSource(ctx: Parameters<typeof requireToolApprov
   return { conversationId, timelineEntryId };
 }
 
+function requireManageMemoryInput(input: unknown) {
+  const payload = requireInputRecord(input, "manage_memory", INPUT_ERROR_CODE);
+  requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_memory", INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_memory", TOOL_ACTIONS, INPUT_ERROR_CODE);
+
+  // Approval and execution share semantic parsing so malformed mutations never reach HITL.
+  if (action === "edit") return { action, values: requireEditInput(payload) } as const;
+  return { action, memoryRef: requireRefOnlyInput(payload, action) } as const;
+}
+
+function currentProvenance(session: { id: string; turn: { id: string } }) {
+  return { sessionId: session.id, turnId: session.turn.id };
+}
+
 const TOOL_DESCRIPTION = [
   "Исправить доступную запись долговременной памяти, удалить её или отменить только что выполненное сохранение.",
   "Перед edit/delete сначала получи memoryRef через remember, search_memories или list_memories.",
@@ -109,34 +124,51 @@ const TOOL_DESCRIPTION = [
 ].join(" ");
 
 export default defineTool({
-  approval: ({ toolInput }) => {
-    // Undo is the immediate reversal offered after creation; edit and delete remain confirmation-gated.
-    if (toolInput?.action === "undo") return "not-applicable";
+  approval: async ({ session, toolInput }) => {
+    const parsed = requireManageMemoryInput(toolInput);
+    const authorization = requireMemoryAuthorization({ session });
+    if (parsed.action === "undo") {
+      const allowed = await memoryRepository.canUndoCreate(
+        authorization,
+        parsed.memoryRef,
+        currentProvenance(session),
+      );
+      return allowed
+        ? "not-applicable"
+        : {
+            type: "denied",
+            reason: `AGENT_MEMORY_UNDO_DENIED: ${MEMORY_UNDO_DENIED_MESSAGE}`,
+          };
+    }
+
+    // Every edit/delete is destructive and remains identity-bound through exact approval evidence.
     return "user-approval";
   },
   description: TOOL_DESCRIPTION,
   inputSchema: manageMemorySchema,
   async execute(input, ctx) {
-    const payload = requireInputRecord(input, "manage_memory", INPUT_ERROR_CODE);
-    requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_memory", INPUT_ERROR_CODE);
-    const action = requireAction(payload, "manage_memory", TOOL_ACTIONS, INPUT_ERROR_CODE);
+    const parsed = requireManageMemoryInput(input);
     const authorization = requireMemoryAuthorization(ctx);
-    if (action !== "undo") await requireToolApprovalEvidence(ctx, "manage_memory", input);
-    if (action === "edit") {
-      const values = requireEditInput(payload);
+    if (parsed.action !== "undo") {
+      await requireToolApprovalEvidence(ctx, "manage_memory", input);
+    }
+    if (parsed.action === "edit") {
       const updated = await memoryRepository.updateByRef(authorization, {
-        ...values,
-        content: requireAllowedMemoryContent(values.content),
+        ...parsed.values,
+        content: requireAllowedMemoryContent(parsed.values.content),
         operationKey: ctx.callId,
         source: requireCurrentCorrectionSource(ctx),
       });
       return toModelMemory(updated);
     }
 
-    return await memoryRepository.deleteByRef(
-      authorization,
-      requireRefOnlyInput(payload, action),
-      ctx.callId,
-    );
+    if (parsed.action === "undo") {
+      return await memoryRepository.undoCreate(authorization, parsed.memoryRef, {
+        operationKey: ctx.callId,
+        ...currentProvenance(ctx.session),
+      });
+    }
+
+    return await memoryRepository.deleteByRef(authorization, parsed.memoryRef, ctx.callId);
   },
 });
