@@ -48,4 +48,37 @@ describe("memory extraction worker", () => {
     expect(extract).toHaveBeenCalledTimes(1);
     expect(repository.complete).not.toHaveBeenCalled();
   });
+
+  it("propagates completion persistence failure without marking the provider job failed", async () => {
+    const persistenceFailure = new Error("database unavailable during completion");
+    const repository = {
+      claimPending: vi.fn().mockResolvedValue({
+        attempt: 1, batchId: "batch-2", id: "job-2", leaseToken: "lease-2",
+      }),
+      complete: vi.fn().mockRejectedValue(persistenceFailure),
+      fail: vi.fn(),
+      getBatch: vi.fn().mockResolvedValue({
+        id: "batch-2",
+        inputPayloadHash: "hash",
+        snapshotEntries: [],
+        status: "leased",
+      }),
+      markProviderCallStarted: vi.fn(),
+    };
+    const extract = vi.fn().mockResolvedValue([]);
+    const worker = createMemoryExtractionWorker({
+      catchUp: vi.fn().mockResolvedValue(0),
+      cleanup: vi.fn().mockResolvedValue(false),
+      extract,
+      processCandidates: vi.fn(),
+      processPendingCandidates: vi.fn().mockResolvedValue(false),
+      repository: repository as never,
+    });
+
+    await expect(worker()).rejects.toBe(persistenceFailure);
+
+    expect(extract).toHaveBeenCalledTimes(1);
+    expect(repository.complete).toHaveBeenCalledTimes(1);
+    expect(repository.fail).not.toHaveBeenCalled();
+  });
 });
