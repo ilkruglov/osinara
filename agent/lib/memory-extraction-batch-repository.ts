@@ -211,7 +211,7 @@ async function createBatch(
               reply_to_sequence_id::text
        FROM telegram_group_messages
         WHERE conversation_id = $1 AND id = ANY($2::uuid[])
-       ORDER BY sequence_id`,
+       ORDER BY telegram_group_messages.sequence_id`,
       [input.conversationId, entryIds],
     );
     const requestedEntries = selected.rows;

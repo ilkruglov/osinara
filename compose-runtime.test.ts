@@ -11,12 +11,17 @@
  * - Production agent runtime includes system CA roots for native integration binaries.
  * - Node application services explicitly select the production runtime image stage.
  * - Agent containers map the active DeepSeek secret into the provider-neutral runtime boundary.
- * - Memory extraction workers wait for and receive the local embedding service in every environment.
+ * - Memory extraction workers expose stabilized readiness after receiving the local embedding service.
  * - Nginx re-resolves the agent service after Docker replaces its container IP.
  */
 import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
+
+import {
+  MEMORY_EXTRACTION_WORKER_READY_PATH,
+  MEMORY_EXTRACTION_WORKER_STABILITY_MILLISECONDS,
+} from "./agent/lib/memory-config.js";
 
 interface PackageManifest {
   name: string;
@@ -172,6 +177,7 @@ describe("Docker Compose runtime wiring", () => {
 
   it("wires every memory extraction worker to the healthy local embedding service", () => {
     const composeFiles = ["compose.yaml", "compose.test.yaml", "compose.production.yaml"];
+    const workerScript = readFileSync(new URL("scripts/memory-extraction-worker.ts", projectRoot), "utf8");
 
     for (const composeFile of composeFiles) {
       const compose = readFileSync(new URL(composeFile, projectRoot), "utf8");
@@ -187,7 +193,11 @@ describe("Docker Compose runtime wiring", () => {
       expect(worker, composeFile).toContain(
         "MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80",
       );
+      expect(worker, composeFile).toContain("healthcheck:");
+      expect(worker, composeFile).toContain(MEMORY_EXTRACTION_WORKER_READY_PATH);
+      expect(worker, composeFile).toContain(String(MEMORY_EXTRACTION_WORKER_STABILITY_MILLISECONDS));
     }
+    expect(workerScript).toContain("MEMORY_EXTRACTION_WORKER_READY_PATH");
   });
 
   it("re-resolves the agent upstream after Docker replaces its container", () => {

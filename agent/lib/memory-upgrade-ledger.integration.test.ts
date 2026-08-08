@@ -3,7 +3,7 @@
  *
  * Key constructs:
  * - `V0101_LEDGER`: exact production v0.10.1 migration names through release number 048.
- * - `MEMORY_RELEASE_MIGRATIONS`: the only migrations that v0.11.0 may apply to that ledger.
+ * - `MEMORY_RELEASE_MIGRATIONS`: the only memory migrations applied after the v0.10.1 ledger.
  * - `runMigrationRunner`: executes the real migration entrypoint against an isolated test schema.
  * - Upgrade scenario: verifies ledger delta, unique migration purposes, and representative R0-R7 DB objects.
  */
@@ -83,6 +83,7 @@ const MEMORY_RELEASE_MIGRATIONS = [
   "054_r6_r7_memory_threads.sql",
   "055_memory_reliability_barriers.sql",
   "056_profile_projection_notice_delivery.sql",
+  "057_repair_memory_extraction_sequence_ranges.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -131,7 +132,7 @@ async function runMigrationRunner(): Promise<void> {
   );
 }
 
-describeWithDatabase("v0.10.1 production ledger upgrade to memory migrations 049-056", () => {
+describeWithDatabase("v0.10.1 production ledger upgrade to memory migrations 049-057", () => {
   afterAll(closeDatabase);
 
   it("applies only the renumbered memory release once and creates the R0-R7 schema", async () => {
@@ -175,7 +176,7 @@ describeWithDatabase("v0.10.1 production ledger upgrade to memory migrations 049
 
       await runMigrationRunner();
 
-      // The ledger delta proves the real runner skipped all shipped migrations and applied 049-056 once.
+      // The ledger delta proves the real runner skipped all shipped migrations and applied 049-057 once.
       const after = await client.query<{ name: string }>(
         "SELECT name FROM schema_migrations ORDER BY name",
       );

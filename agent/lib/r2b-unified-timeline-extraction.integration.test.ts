@@ -130,6 +130,27 @@ describeWithDatabase("R2b unified timeline and extraction", () => {
     await expect(createCatchUpExtractionBatches()).resolves.toBe(0);
   });
 
+  it("keeps catch-up ranges and snapshots in numeric sequence order", async () => {
+    const familyId = await createFamily("Numeric catch-up order");
+    const groupId = await createGroup({ familyId, idSuffix: "7204", type: "external" });
+    await insertEntry({ content: "Девятая запись", groupId, messageId: 9, sequence: 9, telegramUserId: "1", userName: "Анна" });
+    await insertEntry({ content: "Десятая запись", groupId, messageId: 10, sequence: 10, telegramUserId: "1", userName: "Анна" });
+
+    await expect(createCatchUpExtractionBatches()).resolves.toBe(1);
+
+    // PostgreSQL output aliases must not turn bigint ordering into lexicographic text ordering.
+    const range = await database().query<{ first: string; last: string }>(
+      `SELECT first_sequence::text AS first, last_sequence::text AS last
+       FROM memory_extraction_ranges`,
+    );
+    const snapshots = await database().query<{ sequence: string }>(
+      `SELECT sequence_id::text AS sequence FROM memory_extraction_snapshot_entries
+       ORDER BY ordinal`,
+    );
+    expect(range.rows).toEqual([{ first: "9", last: "10" }]);
+    expect(snapshots.rows.map((row) => row.sequence)).toEqual(["9", "10"]);
+  });
+
   it("treats catch-up-first coverage as a completed turn race without duplicating entries", async () => {
     const familyId = await createFamily("Catch-up race");
     const groupId = await createGroup({ familyId, idSuffix: "7202", type: "external" });

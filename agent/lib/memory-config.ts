@@ -4,7 +4,7 @@
  * Exports:
  * - `MEMORY_SCOPE_QUOTAS`: agreed maximum record counts by scope.
  * - Retrieval gates, ranking calibration, pagination, E5 model, chunking, and worker constants.
- * - Extraction snapshot, structured-output, job-attempt, evidence, and lease limits.
+ * - Extraction snapshot, structured-output, job-attempt, evidence, lease, and worker readiness limits.
  * - R3 always-on profile subject, claim, character, and inactivity limits.
  * - Durable profile-projection notice delivery lease.
  * - R4/R5 bounded consolidation candidate, provider, and lease limits.
@@ -37,6 +37,8 @@ export const MEMORY_EXTRACTION_CATCH_UP_CONVERSATIONS_PER_PASS = 8;
 export const MEMORY_EXTRACTION_EXTRACTOR_VERSION = "semantic-extractor-v1";
 export const MEMORY_EXTRACTION_SCHEMA_VERSION = "memory-candidate-v2";
 export const MEMORY_EXTRACTION_WORKER_IDLE_MILLISECONDS = 1_000;
+export const MEMORY_EXTRACTION_WORKER_READY_PATH = "/tmp/osinara-memory-extraction-worker-ready";
+export const MEMORY_EXTRACTION_WORKER_STABILITY_MILLISECONDS = 30_000;
 export const MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS = 1_000;
 export const MEMORY_APPROVAL_NOTICE_MAX_ITEMS = 10;
 export const MEMORY_CANDIDATE_RESOLUTION_LEASE_MILLISECONDS = 60_000;
