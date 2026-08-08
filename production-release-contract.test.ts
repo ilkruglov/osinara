@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   executeComposeSecurityPredicate,
+  PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND,
   resolvedComposeSecurityFixture,
 } from "./production-release-contract-fixtures.js";
 
@@ -143,6 +144,7 @@ describe("production container contract", () => {
     expect(worker).toContain("migrate:\n        condition: service_completed_successfully");
     expect(worker).toContain('.runtime/scripts/memory-extraction-worker.js');
     expect(worker).toContain("MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?");
+    expect(worker).toContain(PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND);
     expect(worker).toContain("restart: unless-stopped");
   });
 
