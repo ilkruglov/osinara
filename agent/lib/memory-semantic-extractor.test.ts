@@ -70,7 +70,7 @@ describe("memory semantic extractor", () => {
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({
-      maxOutputTokens: 4_096,
+      maxOutputTokens: 16_384,
       maxRetries: 0,
       timeout: 45_000,
       tools: undefined,
@@ -79,6 +79,7 @@ describe("memory semantic extractor", () => {
     const instructions = generate.mock.calls[0]![0].instructions as string;
     expect(instructions).toMatch(/недоверенн/iu);
     expect(instructions).toMatch(/JSON/u);
+    expect(instructions).toContain('{"candidates": [...]}');
     expect(prompt).toContain("src_1");
     expect(prompt).toContain("person_1");
     expect(prompt).not.toMatch(/10000000-0000-4000-8000-000000000001|telegram|familyId|groupId/u);

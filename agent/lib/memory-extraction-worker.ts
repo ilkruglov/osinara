@@ -50,8 +50,9 @@ export function createMemoryExtractionWorker(dependencies: WorkerDependencies) {
     // Resolve immutable PostgreSQL input before declaring that paid external work may have started.
     const batch = await dependencies.repository.getBatch(job.batchId);
     await dependencies.repository.markProviderCallStarted(job.id, job.leaseToken);
+    let decisions: Awaited<ReturnType<WorkerDependencies["extract"]>>;
     try {
-      const decisions = await dependencies.extract({
+      decisions = await dependencies.extract({
         entries: batch.snapshotEntries.map((entry) => ({
           actorKind: entry.actorKind,
           actorLabel: entry.actorLabel,
@@ -63,13 +64,6 @@ export function createMemoryExtractionWorker(dependencies: WorkerDependencies) {
           sourceRef: entry.sourceRef,
         })),
       });
-      await dependencies.repository.complete({
-        decisions,
-        diagnosticCode: null,
-        jobId: job.id,
-        leaseToken: job.leaseToken,
-        partialResults: false,
-      });
     } catch (error) {
       await dependencies.repository.fail(job.id, job.leaseToken, diagnosticCode(error));
       console.error(JSON.stringify({
@@ -78,8 +72,17 @@ export function createMemoryExtractionWorker(dependencies: WorkerDependencies) {
         error: error instanceof Error ? error.message : String(error),
         jobId: job.id,
       }));
-      throw error;
+      // The exact job is terminal and cannot benefit from a process restart or another provider call.
+      return true;
     }
+    // Persistence ambiguity must stop the process; it cannot be rewritten as a provider failure.
+    await dependencies.repository.complete({
+      decisions,
+      diagnosticCode: null,
+      jobId: job.id,
+      leaseToken: job.leaseToken,
+      partialResults: false,
+    });
     // Candidate writes have their own idempotent recovery scan and never rewrite provider state.
     await dependencies.processCandidates(job.batchId);
     return true;
