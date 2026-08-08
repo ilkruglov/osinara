@@ -195,6 +195,11 @@ services:
       DATABASE_URL: postgresql://osinara:${POSTGRES_PASSWORD}@postgres:5432/osinara
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
       MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
     restart: unless-stopped
 
   telegram-ingress-worker:

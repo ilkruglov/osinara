@@ -210,6 +210,11 @@ validate_resolved_compose_security() {
     all(.services[]; (has("build") or has("devices") or has("cap_add") or has("volumes_from")) | not) and
     all(.services[]; .logging.driver == "json-file" and
       .logging.options["max-size"] == "20m" and .logging.options["max-file"] == "5") and
+    .services["memory-extraction-worker"].healthcheck.test == [
+      "CMD", "node", "-e",
+      "const fs=require(\"node:fs\"),p=\"/tmp/osinara-memory-extraction-worker-ready\";if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"
+    ] and
+    .services["memory-extraction-worker"].healthcheck.retries == 120 and
     any(.services.agent.volumes[];
       .source == "/opt/osinara/model-providers.json" and
       .target == "/app/config/model-providers.json" and .read_only == true) and

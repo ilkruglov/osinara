@@ -36,7 +36,7 @@ async function coordinates(
     `SELECT id, sequence_id::text, message_thread_id::text, content_text
      FROM telegram_group_messages
      WHERE conversation_id = $1 AND id = ANY($2::uuid[])
-     ORDER BY sequence_id`,
+     ORDER BY telegram_group_messages.sequence_id`,
     [conversationId, entryIds],
   );
   if (result.rows.length !== entryIds.length) {

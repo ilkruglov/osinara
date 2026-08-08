@@ -58,4 +58,9 @@ services:
       DATABASE_URL: postgresql://osinara_test:osinara-test-only@postgres:5432/osinara_test
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
       MODEL_UPSTREAM_API_KEY: integration-test-model-key
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
     restart: "no"

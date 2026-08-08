@@ -78,6 +78,7 @@ describe("memory semantic extractor", () => {
     const prompt = generate.mock.calls[0]![0].prompt as string;
     const instructions = generate.mock.calls[0]![0].instructions as string;
     expect(instructions).toMatch(/недоверенн/iu);
+    expect(instructions).toMatch(/JSON/u);
     expect(prompt).toContain("src_1");
     expect(prompt).toContain("person_1");
     expect(prompt).not.toMatch(/10000000-0000-4000-8000-000000000001|telegram|familyId|groupId/u);

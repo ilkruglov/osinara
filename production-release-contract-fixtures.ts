@@ -1,0 +1,77 @@
+/**
+ * Production release contract test fixtures.
+ *
+ * Exports:
+ * - `resolvedComposeSecurityFixture`: accepted resolved production Compose security surface.
+ * - `executeComposeSecurityPredicate`: invokes the real root deployment jq predicate.
+ */
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = new URL("./", import.meta.url);
+const WORKER_HEALTH_COMMAND =
+  "const fs=require(\"node:fs\"),p=\"/tmp/osinara-memory-extraction-worker-ready\";" +
+  "if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)";
+
+export function resolvedComposeSecurityFixture(): Record<string, unknown> {
+  const logging = { driver: "json-file", options: { "max-file": "5", "max-size": "20m" } };
+  const volume = (source: string, target: string, type = "volume", readOnly = false) => ({
+    read_only: readOnly,
+    source,
+    target,
+    type,
+  });
+  const service = (extra: Record<string, unknown> = {}) => ({ logging, ...extra });
+
+  // The fixture mirrors `docker compose config --format json`, not authored YAML shorthand.
+  return {
+    services: {
+      agent: service({
+        volumes: [
+          volume("sandbox-data", "/app/.eve/sandbox-cache"),
+          volume("google-workspace-credentials", "/app/google-workspace-credentials"),
+          volume("workflow-data", "/app/.workflow-data"),
+          volume("workspace-data", "/app/workspaces"),
+          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
+        ],
+      }),
+      "cli-proxy-api": service({
+        volumes: [
+          volume("/opt/osinara/model-providers.json", "/config/model-providers.json", "bind", true),
+        ],
+      }),
+      edge: service({ ports: [{ host_ip: "127.0.0.1", published: "8082", target: 80 }] }),
+      "memory-embedding": service({
+        volumes: [volume("memory-embedding-model-e5", "/data")],
+      }),
+      "memory-embedding-worker": service(),
+      "memory-extraction-worker": service({
+        healthcheck: { retries: 120, test: ["CMD", "node", "-e", WORKER_HEALTH_COMMAND] },
+        volumes: [
+          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
+        ],
+      }),
+      migrate: service(),
+      postgres: service({ volumes: [volume("postgres-data", "/var/lib/postgresql/data")] }),
+      "sandbox-egress-proxy": service(),
+      "sandbox-runner": service({
+        volumes: [
+          volume("/var/run/docker.sock", "/var/run/docker.sock", "bind"),
+          volume("tool-environments", "/runner/tools"),
+          volume("workspace-data", "/runner/workspaces"),
+        ],
+      }),
+      "sandbox-runtime-image": service(),
+      "telegram-ingress-worker": service(),
+    },
+  };
+}
+
+export function executeComposeSecurityPredicate(config: Record<string, unknown>): void {
+  execFileSync("bash", [
+    "-c",
+    'source "$1"; validate_resolved_compose_security -',
+    "bash",
+    fileURLToPath(new URL("scripts/production-deploy/release.sh", projectRoot)),
+  ], { input: JSON.stringify(config), stdio: ["pipe", "pipe", "pipe"] });
+}

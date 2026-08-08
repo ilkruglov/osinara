@@ -9,12 +9,15 @@
  * - Root-owned systemd polling units and required production environment documentation.
  * - The exact production jq security predicate accepts only the intended resolved Compose surface.
  */
-import { execFileSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+
+import {
+  executeComposeSecurityPredicate,
+  resolvedComposeSecurityFixture,
+} from "./production-release-contract-fixtures.js";
 
 const projectRoot = new URL("./", import.meta.url);
 
@@ -41,66 +44,6 @@ function service(compose: string, name: string, nextName: string): string {
   expect(start, `${name} service is absent`).toBeGreaterThanOrEqual(0);
   expect(end, `${nextName} service boundary is absent`).toBeGreaterThan(start);
   return compose.slice(start, end);
-}
-
-function resolvedComposeSecurityFixture(): Record<string, unknown> {
-  const logging = { driver: "json-file", options: { "max-file": "5", "max-size": "20m" } };
-  const volume = (source: string, target: string, type = "volume", readOnly = false) => ({
-    read_only: readOnly,
-    source,
-    target,
-    type,
-  });
-  const service = (extra: Record<string, unknown> = {}) => ({ logging, ...extra });
-  return {
-    services: {
-      agent: service({
-        volumes: [
-          volume("sandbox-data", "/app/.eve/sandbox-cache"),
-          volume("google-workspace-credentials", "/app/google-workspace-credentials"),
-          volume("workflow-data", "/app/.workflow-data"),
-          volume("workspace-data", "/app/workspaces"),
-          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
-        ],
-      }),
-      "cli-proxy-api": service({
-        volumes: [
-          volume("/opt/osinara/model-providers.json", "/config/model-providers.json", "bind", true),
-        ],
-      }),
-      edge: service({ ports: [{ host_ip: "127.0.0.1", published: "8082", target: 80 }] }),
-      "memory-embedding": service({
-        volumes: [volume("memory-embedding-model-e5", "/data")],
-      }),
-      "memory-embedding-worker": service(),
-      "memory-extraction-worker": service({
-        volumes: [
-          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
-        ],
-      }),
-      migrate: service(),
-      postgres: service({ volumes: [volume("postgres-data", "/var/lib/postgresql/data")] }),
-      "sandbox-egress-proxy": service(),
-      "sandbox-runner": service({
-        volumes: [
-          volume("/var/run/docker.sock", "/var/run/docker.sock", "bind"),
-          volume("tool-environments", "/runner/tools"),
-          volume("workspace-data", "/runner/workspaces"),
-        ],
-      }),
-      "sandbox-runtime-image": service(),
-      "telegram-ingress-worker": service(),
-    },
-  };
-}
-
-function executeComposeSecurityPredicate(config: Record<string, unknown>): void {
-  execFileSync("bash", [
-    "-c",
-    'source "$1"; validate_resolved_compose_security -',
-    "bash",
-    fileURLToPath(new URL("scripts/production-deploy/release.sh", projectRoot)),
-  ], { input: JSON.stringify(config), stdio: ["pipe", "pipe", "pipe"] });
 }
 
 describe("production container contract", () => {
@@ -410,6 +353,7 @@ describe("server deployment contract", () => {
     expect(script).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
     expect(script).toContain("DEPLOY_COMPOSE_SECURITY_INVALID");
     expect(script).toContain('services["memory-extraction-worker"].depends_on.migrate.condition');
+    expect(script).toContain('services["memory-extraction-worker"].healthcheck.test');
     expect(script).toContain("privileged");
     expect(script).toContain("network_mode");
     expect(script).toContain("logging.driver");
