@@ -136,7 +136,7 @@ describe("production deploy shell policies", () => {
     expect(owned.stderr).toContain("DEPLOY_BACKUP_VOLUME_MISSING");
   });
 
-  it("retains the initial backup and clears the slot for one deploy backup", () => {
+  it("clears every old backup before creating the one rolling deploy backup", () => {
     const directory = mkdtempSync(join(tmpdir(), "osinara-backup-retention-"));
     temporaryDirectories.push(directory);
     for (const name of [
@@ -160,9 +160,7 @@ describe("production deploy shell policies", () => {
     `);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(readdirSync(directory).sort()).toEqual([
-      "initial-migration-v0.1.1",
-    ]);
+    expect(readdirSync(directory)).toEqual([]);
   });
 
   it("removes only non-retained Osinara release image references", () => {
@@ -200,5 +198,7 @@ describe("production deploy shell policies", () => {
     expect(calls).toContain(`image rm ghcr.io/nyxandro/osinara-app@sha256:${"a".repeat(64)}`);
     expect(calls).not.toContain(`image rm ghcr.io/nyxandro/osinara-app@sha256:${"b".repeat(64)}`);
     expect(calls).not.toContain(`image rm ghcr.io/nyxandro/osinara-app@sha256:${"c".repeat(64)}`);
+    expect(readdirSync(directory).filter((name) => name.startsWith("v")).sort())
+      .toEqual(["v0.2.10", "v0.2.9"]);
   });
 });

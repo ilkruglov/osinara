@@ -2,6 +2,7 @@
  * Production release contract test fixtures.
  *
  * Exports:
+ * - `PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND`: exact authored and resolved command.
  * - `resolvedComposeSecurityFixture`: accepted resolved production Compose security surface.
  * - `executeComposeSecurityPredicate`: invokes the real root deployment jq predicate.
  */
@@ -9,8 +10,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = new URL("./", import.meta.url);
-const WORKER_HEALTH_COMMAND =
-  "const fs=require(\"node:fs\"),p=\"/tmp/osinara-memory-extraction-worker-ready\";" +
+export const PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND =
+  "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';" +
   "if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)";
 
 export function resolvedComposeSecurityFixture(): Record<string, unknown> {
@@ -46,7 +47,10 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
       }),
       "memory-embedding-worker": service(),
       "memory-extraction-worker": service({
-        healthcheck: { retries: 120, test: ["CMD", "node", "-e", WORKER_HEALTH_COMMAND] },
+        healthcheck: {
+          retries: 120,
+          test: ["CMD", "node", "-e", PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND],
+        },
         volumes: [
           volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
         ],

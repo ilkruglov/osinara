@@ -55,7 +55,7 @@ release_image_refs_from_env() {
 prune_retired_release_images() {
   [[ -d "$RELEASES_DIR" ]] || return 0
   local -a release_dirs=()
-  local name path release_count retained_start index ref release_name
+  local name path release_count retained_start index ref release_name release_prunable
   declare -A retained_refs=()
 
   # Release directories are sorted by SemVer so v0.2.10 is newer than v0.2.9.
@@ -74,6 +74,7 @@ prune_retired_release_images() {
 
   for ((index = 0; index < retained_start; index += 1)); do
     release_name="${release_dirs[index]##*/}"
+    release_prunable=1
     while IFS= read -r ref; do
       [[ -n "${retained_refs[$ref]+retained}" ]] && continue
       if docker image inspect "$ref" >/dev/null 2>&1; then
@@ -82,9 +83,15 @@ prune_retired_release_images() {
           log_event "DEPLOY_RELEASE_IMAGE_PRUNED" "Removed retired ${release_name} image reference"
         else
           log_event "DEPLOY_RELEASE_IMAGE_PRUNE_SKIPPED" "Could not remove retired ${release_name} image reference"
+          release_prunable=0
         fi
       fi
     done < <(release_image_refs_from_env "${release_dirs[index]}/release.env")
+    if [[ "$release_prunable" -eq 1 ]]; then
+      rm -rf -- "${release_dirs[index]}" ||
+        fail "DEPLOY_RELEASE_DIRECTORY_PRUNE_FAILED" "Could not remove retired release directory: ${release_name}"
+      log_event "DEPLOY_RELEASE_DIRECTORY_PRUNED" "Removed retired release directory: ${release_name}"
+    fi
   done
 }
 
@@ -212,7 +219,7 @@ validate_resolved_compose_security() {
       .logging.options["max-size"] == "20m" and .logging.options["max-file"] == "5") and
     .services["memory-extraction-worker"].healthcheck.test == [
       "CMD", "node", "-e",
-      "const fs=require(\"node:fs\"),p=\"/tmp/osinara-memory-extraction-worker-ready\";if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"
+      "const fs=require(\u0027node:fs\u0027),p=\u0027/tmp/osinara-memory-extraction-worker-ready\u0027;if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"
     ] and
     .services["memory-extraction-worker"].healthcheck.retries == 120 and
     any(.services.agent.volumes[];
