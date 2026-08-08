@@ -78,7 +78,8 @@ export function createMemoryExtractionWorker(dependencies: WorkerDependencies) {
         error: error instanceof Error ? error.message : String(error),
         jobId: job.id,
       }));
-      throw error;
+      // The exact job is terminal and cannot benefit from a process restart or another provider call.
+      return true;
     }
     // Candidate writes have their own idempotent recovery scan and never rewrite provider state.
     await dependencies.processCandidates(job.batchId);

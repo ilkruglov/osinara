@@ -3,14 +3,14 @@
  *
  * Constructs covered:
  * - Durable provider marker precedes the only call.
- * - Provider ambiguity fails terminally and is not selected/retried on the next worker pass.
+ * - Provider ambiguity fails the job terminally without restarting or retrying the worker process.
  */
 import { describe, expect, it, vi } from "vitest";
 
 import { createMemoryExtractionWorker } from "./memory-extraction-worker.js";
 
 describe("memory extraction worker", () => {
-  it("marks an ambiguous provider failure and never calls the provider again", async () => {
+  it("marks a provider failure terminally and continues without retrying it", async () => {
     const extract = vi.fn().mockRejectedValue(new Error("connection closed after request"));
     const repository = {
       claimPending: vi.fn()
@@ -35,7 +35,7 @@ describe("memory extraction worker", () => {
       repository: repository as never,
     });
 
-    await expect(worker()).rejects.toThrowError("connection closed after request");
+    await expect(worker()).resolves.toBe(true);
     await expect(worker()).resolves.toBe(false);
 
     expect(repository.markProviderCallStarted).toHaveBeenCalledBefore(extract);
