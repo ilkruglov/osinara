@@ -111,6 +111,18 @@ The agent does not call this service. Its isolated baked compatibility config is
 model selection. Removing that deployment slot requires a separately approved two-phase controller
 migration; it must not be coupled to a model-provider switch.
 
+Any release that changes the exact production service, image, mount, port, logging, dependency, or
+host-capability allowlist is also a two-phase controller migration. After canonical merge and before
+owner approval, stop only `osinara-deploy.timer`, compare the installed root-owned controller modules
+with the exact canonical release commit, and atomically install only the changed modules. Verify the
+source checksum, shell syntax, `root:root` ownership, required `0750`/`0640` modes, then restart the
+timer. The running application and database remain untouched during this controller phase. Only
+afterward may the owner approve the application release in the bound private Telegram chat.
+
+If the old controller has already rejected an immutable release, its proposal remains terminal. Do
+not reset, clone, or reapprove it: publish a strictly newer patch release and require a new owner
+approval. This preserves the audit trail and the no-ambiguous-retry contract.
+
 The server host requires Docker Engine with Compose v2, systemd, `curl`, `jq`, `flock`, `stat`,
 `sha256sum`, `tar`, and standard GNU file utilities. Missing tools are deployment errors; the
 script does not download utilities or substitute alternate commands at runtime.
