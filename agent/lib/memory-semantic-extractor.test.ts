@@ -28,7 +28,6 @@ describe("memory semantic extractor", () => {
             kind: "fact",
             primarySourceRef: "src_1",
             sensitivity: "normal",
-            subjectParticipantRef: "person_1",
             supportingSourceRefs: [],
           },
           { action: "skip", primarySourceRef: "src_2", reason: "one_off_request" },
@@ -165,7 +164,11 @@ describe("memory semantic extractor", () => {
     expect(result[0]).not.toHaveProperty("subjectParticipantRef");
   });
 
-  it("rejects conflicting subject fields and primary-source reuse", async () => {
+  it.each([
+    ["firsthand subject label", { subjectLabel: "Пользователь" }],
+    ["firsthand participant ref", { subjectParticipantRef: "person_owner" }],
+    ["primary source reuse", { supportingSourceRefs: ["src_investments"] }],
+  ])("rejects %s", async (_case, invalidFields) => {
     const extract = createMemorySemanticExtractor({
       generate: vi.fn().mockResolvedValue(generated({
         candidates: [{
@@ -175,9 +178,8 @@ describe("memory semantic extractor", () => {
           kind: "preference",
           primarySourceRef: "src_investments",
           sensitivity: "normal",
-          subjectLabel: "Пользователь",
-          subjectParticipantRef: "person_owner",
-          supportingSourceRefs: ["src_investments"],
+          supportingSourceRefs: [],
+          ...invalidFields,
         }],
       })),
       model: {} as never,

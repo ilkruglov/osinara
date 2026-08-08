@@ -159,6 +159,8 @@ function mapDecision(
   if (
     supportingRefs.length !== candidate.supportingSourceRefs.length ||
     supportingRefs.includes(candidate.primarySourceRef) ||
+    (candidate.evidenceKind === "firsthand" &&
+      (candidate.subjectLabel !== undefined || candidate.subjectParticipantRef !== undefined)) ||
     (candidate.subjectLabel !== undefined && candidate.subjectParticipantRef !== undefined)
   ) {
     throw new AppError(
