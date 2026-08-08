@@ -28,15 +28,22 @@ describe("Telegram final-delivery failure suppression", () => {
     query.mockResolvedValue({ rows: [{ status }] });
 
     await expect(
-      telegramFinalDeliveryRepository.shouldSuppressFailureMessage("turn-1"),
+      telegramFinalDeliveryRepository.shouldSuppressFailureMessage("wrun-session-1", "turn-1"),
     ).resolves.toBe(expected);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("eve_session_id = $1 AND eve_turn_id = $2"),
+      ["wrun-session-1", "turn-1"],
+    );
   });
 
   it("does not suppress failure when no final-delivery intent exists", async () => {
     query.mockResolvedValue({ rows: [] });
 
     await expect(
-      telegramFinalDeliveryRepository.shouldSuppressFailureMessage("turn-missing"),
+      telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
+        "wrun-session-missing",
+        "turn-missing",
+      ),
     ).resolves.toBe(false);
   });
 });

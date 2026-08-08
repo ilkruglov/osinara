@@ -71,6 +71,12 @@ export interface CreateMemoryExtractionBatchInput {
   turnId: string;
 }
 
+export interface CreateTurnMemoryExtractionBatchInput
+  extends CreateMemoryExtractionBatchInput {
+  applicationSessionId: string;
+  eveSessionId: string;
+}
+
 export interface CompleteMemoryExtractionInput {
   decisions: readonly MemorySemanticDecision[];
   diagnosticCode: string | null;

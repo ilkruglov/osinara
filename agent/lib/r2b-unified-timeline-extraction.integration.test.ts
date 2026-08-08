@@ -19,6 +19,7 @@ import { processMemoryExtractionCandidates } from "./memory-extraction-candidate
 import { memoryApprovalNoticeRepository } from "./memory-approval-notice-repository.js";
 import { memoryExtractionRepository } from "./memory-extraction-repository.js";
 import { memorySensitiveApprovalRepository } from "./memory-sensitive-approval-repository.js";
+import { telegramFinalDeliveryRepository } from "./telegram-final-delivery-repository.js";
 import {
   completeExtractionBatch as completeBatch,
   createExtractionFamily as createFamily,
@@ -36,7 +37,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
 describeWithDatabase("R2b unified timeline and extraction", () => {
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE memory_extraction_batches, claim_evidence, memory_items,
+      `TRUNCATE telegram_final_deliveries, memory_extraction_batches, claim_evidence, memory_items,
          telegram_group_messages, telegram_groups, family_memberships, users, families CASCADE`,
     );
   });
@@ -177,6 +178,7 @@ describeWithDatabase("R2b unified timeline and extraction", () => {
       callerTelegramUserId: "2",
       conversationId: conversation.id,
       entryIds,
+      eveSessionId: "wrun_catch_up_race",
       omittedBeforeSequence: null,
       turnId: "catch-up-first-turn",
     })).resolves.toBeNull();
@@ -224,6 +226,7 @@ describeWithDatabase("R2b unified timeline and extraction", () => {
       callerTelegramUserId: "2",
       conversationId: conversation.id,
       entryIds,
+      eveSessionId: "wrun_partial_race",
       omittedBeforeSequence: null,
       turnId: "partial-race-turn",
     });
@@ -233,6 +236,7 @@ describeWithDatabase("R2b unified timeline and extraction", () => {
       callerTelegramUserId: "2",
       conversationId: conversation.id,
       entryIds,
+      eveSessionId: "wrun_partial_race",
       omittedBeforeSequence: null,
       turnId: "partial-race-turn",
     })).resolves.toEqual(turnBatch);
@@ -240,6 +244,84 @@ describeWithDatabase("R2b unified timeline and extraction", () => {
       "SELECT 1 FROM memory_extraction_entry_coverage WHERE conversation_id = $1",
       [conversation.id],
     )).resolves.toMatchObject({ rowCount: 2 });
+  });
+
+  it("isolates repeated Eve turn ids by Eve session", async () => {
+    const familyId = await createFamily("Eve turn identity");
+    const groupId = await createGroup({ familyId, idSuffix: "7205", type: "external" });
+    const entryIds = [
+      await insertEntry({ content: "Первая сессия", groupId, messageId: 1, sequence: 1, telegramUserId: "1", userName: "Анна" }),
+      await insertEntry({ content: "Вторая сессия", groupId, messageId: 2, sequence: 2, telegramUserId: "2", userName: "Пётр" }),
+    ];
+    const conversation = await conversationRepository.getByGroupId(groupId);
+    const session = await sessionRepository.prepareTurn({
+      baseContinuationToken: `eve-turn-identity:${groupId}`,
+      familyId,
+      groupId,
+      kind: "canonical",
+      now: new Date(),
+      scope: "group",
+      telegramForumTopicId: null,
+      userId: null,
+    });
+
+    // Eve turn ids restart from zero in each framework session and must not collide durably.
+    await expect(createTurnExtractionBatch({
+      applicationSessionId: session.id,
+      callerTelegramUserId: "1",
+      conversationId: conversation.id,
+      entryIds: [entryIds[0]!],
+      eveSessionId: "wrun_extraction_a",
+      omittedBeforeSequence: null,
+      turnId: "turn_0",
+    })).resolves.not.toBeNull();
+    await expect(createTurnExtractionBatch({
+      applicationSessionId: session.id,
+      callerTelegramUserId: "2",
+      conversationId: conversation.id,
+      entryIds: [entryIds[1]!],
+      eveSessionId: "wrun_extraction_b",
+      omittedBeforeSequence: null,
+      turnId: "turn_0",
+    })).resolves.not.toBeNull();
+
+    await expect(database().query<{ eve_session_id: string }>(
+      `SELECT eve_session_id FROM memory_extraction_batches
+       WHERE conversation_id = $1 ORDER BY eve_session_id`,
+      [conversation.id],
+    )).resolves.toMatchObject({
+      rows: [
+        { eve_session_id: "wrun_extraction_a" },
+        { eve_session_id: "wrun_extraction_b" },
+      ],
+    });
+
+    // The same framework identity also scopes Telegram's no-resend barrier between conversations.
+    const firstDelivery = await telegramFinalDeliveryRepository.start({
+      applicationSessionId: session.id,
+      chunkCount: 1,
+      eveSessionId: "wrun_delivery_a",
+      eveTurnId: "turn_0",
+      outputHash: "a".repeat(64),
+    });
+    const secondDelivery = await telegramFinalDeliveryRepository.start({
+      applicationSessionId: session.id,
+      chunkCount: 1,
+      eveSessionId: "wrun_delivery_b",
+      eveTurnId: "turn_0",
+      outputHash: "b".repeat(64),
+    });
+    expect(firstDelivery.status).toBe("started");
+    expect(secondDelivery.status).toBe("started");
+    await expect(database().query<{ eve_session_id: string }>(
+      `SELECT eve_session_id FROM telegram_final_deliveries
+       WHERE eve_turn_id = 'turn_0' ORDER BY eve_session_id`,
+    )).resolves.toMatchObject({
+      rows: [
+        { eve_session_id: "wrun_delivery_a" },
+        { eve_session_id: "wrun_delivery_b" },
+      ],
+    });
   });
 
   it("attributes Anna when Petr triggers and keeps private extraction personal", async () => {
