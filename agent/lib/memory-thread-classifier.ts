@@ -4,9 +4,9 @@
  * Exports:
  * - Model-safe source/thread input and closed decision contracts.
  * - `createMemoryThreadClassifier`: injectable bounded AI SDK classifier.
- * - `classifyMemoryThread`: production classifier using the configured primary model.
+ * - `classifyMemoryThread`: production classifier using the non-thinking structured memory route.
  */
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, type LanguageModel } from "ai";
 import { z } from "zod";
 
 import { AppError } from "./app-error.js";
@@ -16,7 +16,11 @@ import {
 } from "./memory-config.js";
 import type { MemoryKind } from "./memory-record.js";
 import type { ThreadEntryRole } from "./memory-thread-discovery-policy.js";
-import { primaryModel } from "./model-registry.js";
+import {
+  createMemoryStructuredOutputGenerator,
+  type MemoryStructuredGenerate,
+} from "./memory-structured-output.js";
+import { memoryStructuredModel } from "./model-registry.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 
 const opaqueSourceRef = z.string().regex(/^source_[0-9A-Za-z_-]{1,80}$/u);
@@ -56,9 +60,11 @@ export interface MemoryThreadDecision {
 }
 
 interface ClassifierDependencies {
-  generate(options: Record<string, unknown>): Promise<{ output: unknown }>;
+  generate: MemoryStructuredGenerate;
   model: LanguageModel;
 }
+
+const THREAD_TOOL_NAME = "submit_memory_thread";
 
 const CLASSIFIER_INSTRUCTIONS = `Ты классифицируешь source-backed claims одной проверенной identity в одной
 trust zone. Embeddings и частота уже только сформировали candidate cluster и ничего не доказывают.
@@ -68,7 +74,8 @@ trust zone. Embeddings и частота уже только сформиров�
 create_subthread допустим только для повторяющихся эпизодов с собственной долгосрочной целью,
 методикой, outcomes или open loops. Используй только предоставленные opaque refs. Для attach_existing
 нужен threadRef; для create_subthread parentThreadRef; для create actions нужны title и purpose.
-Каждая предложенная entry обязана ссылаться на supplied sourceRef. Не выдумывай scope, identity и IDs.`;
+Каждая предложенная entry обязана ссылаться на supplied sourceRef. Не выдумывай scope, identity и IDs.
+Вызови submit_memory_thread ровно один раз и не возвращай обычный текст.`;
 
 function invalidOutput(): AppError {
   return new AppError(
@@ -108,6 +115,7 @@ function validateDecision(
 }
 
 export function createMemoryThreadClassifier(dependencies: ClassifierDependencies) {
+  const generateStructured = createMemoryStructuredOutputGenerator(dependencies);
   return async function classify(input: MemoryThreadClassifierInput): Promise<MemoryThreadDecision> {
     const sourceRefs = new Set(input.sources.map((source) => source.ref));
     const threadRefs = [
@@ -122,23 +130,22 @@ export function createMemoryThreadClassifier(dependencies: ClassifierDependencie
         "Кандидат нитей памяти пуст или содержит повтор opaque ref",
       );
     }
-    const generated = await dependencies.generate({
-      maxOutputTokens: THREAD_DISCOVERY_MODEL_MAX_OUTPUT_TOKENS,
-      maxRetries: 0,
-      model: dependencies.model,
-      output: Output.object({ schema: decisionSchema }),
+    const generated = await generateStructured({
+      description: "Вернуть решение о создании или привязке source-backed нити памяти.",
+      errorCode: "AGENT_MEMORY_THREAD_CLASSIFIER_OUTPUT_INVALID",
+      errorMessage: "Классификатор нитей памяти вернул неподдерживаемое решение или ссылку",
       instructions: CLASSIFIER_INSTRUCTIONS,
+      maxOutputTokens: THREAD_DISCOVERY_MODEL_MAX_OUTPUT_TOKENS,
       prompt: `<untrusted_thread_candidates>\n${escapeUntrustedContextJson(input)}\n</untrusted_thread_candidates>`,
+      schema: decisionSchema,
       timeout: THREAD_DISCOVERY_MODEL_TIMEOUT_MILLISECONDS,
-      tools: undefined,
+      toolName: THREAD_TOOL_NAME,
     });
-    const parsed = decisionSchema.safeParse(generated.output);
-    if (!parsed.success) throw invalidOutput();
-    return validateDecision(parsed.data, input);
+    return validateDecision(generated, input);
   };
 }
 
 export const classifyMemoryThread = createMemoryThreadClassifier({
   generate: generateText as unknown as ClassifierDependencies["generate"],
-  model: primaryModel,
+  model: memoryStructuredModel,
 });

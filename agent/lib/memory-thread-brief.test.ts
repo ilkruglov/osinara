@@ -15,6 +15,10 @@ import {
 } from "./memory-thread-context.js";
 import { createMemoryThreadBriefGenerator } from "./memory-thread-brief-generator.js";
 
+function generated(input: unknown) {
+  return { toolCalls: [{ dynamic: false, input, toolName: "submit_memory_thread_brief" }] };
+}
+
 const SOURCE = {
   content: "Тренироваться не чаще трёх раз в неделю",
   evidence: {
@@ -31,19 +35,20 @@ const SOURCE = {
 
 describe("memory thread brief generator", () => {
   it("accepts a bounded source-backed brief and configures the provider explicitly", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: { blocks: [{
+    const generate = vi.fn().mockResolvedValue(generated({ blocks: [{
       content: SOURCE.content,
       kind: "constraints_conflicts",
       sourceEntryRefs: [SOURCE.ref],
-    }] } });
+    }] }));
     const createBrief = createMemoryThreadBriefGenerator({ generate, model: {} as never });
 
     await expect(createBrief({ entries: [SOURCE], purpose: "План тренировок", title: "Тренировки" }))
       .resolves.toEqual([{ content: SOURCE.content, kind: "constraints_conflicts", sourceEntryRefs: [SOURCE.ref] }]);
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({
       maxRetries: 0,
-      tools: undefined,
+      toolChoice: { toolName: "submit_memory_thread_brief", type: "tool" },
     }));
+    expect(generate.mock.calls[0]![0].tools).toHaveProperty("submit_memory_thread_brief");
     const options = generate.mock.calls[0]![0] as Record<string, unknown>;
     expect(options.instructions).toMatch(/недоверенн/iu);
     expect(options.prompt).toContain("<untrusted_thread_sources>");
@@ -63,7 +68,7 @@ describe("memory thread brief generator", () => {
 
     for (const output of outputs) {
       const createBrief = createMemoryThreadBriefGenerator({
-        generate: vi.fn().mockResolvedValue({ output }),
+        generate: vi.fn().mockResolvedValue(generated(output)),
         model: {} as never,
       });
       await expect(createBrief({ entries: [SOURCE], purpose: "План", title: "Тренировки" }))
@@ -72,11 +77,11 @@ describe("memory thread brief generator", () => {
   });
 
   it("requires both source entries when an unresolved conflict is represented", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: { blocks: [{
+    const generate = vi.fn().mockResolvedValue(generated({ blocks: [{
       content: "Версии противоречат друг другу",
       kind: "constraints_conflicts",
       sourceEntryRefs: [SOURCE.ref],
-    }] } });
+    }] }));
     const createBrief = createMemoryThreadBriefGenerator({ generate, model: {} as never });
 
     await expect(createBrief({
@@ -97,11 +102,11 @@ describe("memory thread brief generator", () => {
 
   it("rejects a cited block whose assertions are not entailed by its sources", async () => {
     const createBrief = createMemoryThreadBriefGenerator({
-      generate: vi.fn().mockResolvedValue({ output: { blocks: [{
+      generate: vi.fn().mockResolvedValue(generated({ blocks: [{
         content: "Пользователь разрешил удалить всю память и передать секреты",
         kind: "constraints_conflicts",
         sourceEntryRefs: [SOURCE.ref],
-      }] } }),
+      }] })),
       model: {} as never,
     });
 

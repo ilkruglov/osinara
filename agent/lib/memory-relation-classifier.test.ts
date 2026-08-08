@@ -2,7 +2,7 @@
  * Strict semantic relation classifier tests.
  *
  * Constructs covered:
- * - One bounded AI SDK call with no tools or retries.
+ * - One bounded AI SDK forced-tool call with no retries.
  * - Opaque candidate refs are mapped back to application-owned candidates.
  * - Raw IDs, scope, and open-ended relation output are absent from the model contract.
  */
@@ -10,13 +10,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createMemoryRelationClassifier } from "./memory-relation-classifier.js";
 
+function generated(input: unknown) {
+  return { toolCalls: [{ dynamic: false, input, toolName: "submit_memory_relations" }] };
+}
+
 describe("memory relation classifier", () => {
   it("uses one strict bounded pass and returns only closed opaque-ref decisions", async () => {
-    const generate = vi.fn().mockResolvedValue({
-      output: {
+    const generate = vi.fn().mockResolvedValue(generated({
         decisions: [{ existingRef: "existing_1", newRef: "new_1", relation: "duplicate" }],
-      },
-    });
+    }));
     const classify = createMemoryRelationClassifier({ generate, model: {} as never });
 
     await expect(classify({
@@ -28,7 +30,11 @@ describe("memory relation classifier", () => {
 
     expect(generate).toHaveBeenCalledTimes(1);
     const options = generate.mock.calls[0]![0] as Record<string, unknown>;
-    expect(options).toMatchObject({ maxRetries: 0, tools: undefined });
+    expect(options).toMatchObject({
+      maxRetries: 0,
+      toolChoice: { toolName: "submit_memory_relations", type: "tool" },
+    });
+    expect(options.tools).toHaveProperty("submit_memory_relations");
     expect(options).toHaveProperty("maxOutputTokens");
     expect(options).toHaveProperty("timeout");
     expect(options.instructions).toMatch(/недоверенн/iu);
@@ -37,9 +43,9 @@ describe("memory relation classifier", () => {
   });
 
   it("escapes adversarial candidate markup outside the trusted instructions", async () => {
-    const generate = vi.fn().mockResolvedValue({
-      output: { decisions: [{ newRef: "new_1", relation: "new" }] },
-    });
+    const generate = vi.fn().mockResolvedValue(generated({
+      decisions: [{ newRef: "new_1", relation: "new" }],
+    }));
     const classify = createMemoryRelationClassifier({ generate, model: {} as never });
 
     await classify({
@@ -60,7 +66,9 @@ describe("memory relation classifier", () => {
   it("rejects a model reference that was not supplied in the bounded input", async () => {
     const classify = createMemoryRelationClassifier({
       generate: vi.fn().mockResolvedValue({
-        output: { decisions: [{ existingRef: "raw-database-id", newRef: "new_1", relation: "conflict" }] },
+        ...generated({
+          decisions: [{ existingRef: "raw-database-id", newRef: "new_1", relation: "conflict" }],
+        }),
       }),
       model: {} as never,
     });
