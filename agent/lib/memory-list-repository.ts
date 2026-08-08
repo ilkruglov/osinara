@@ -9,6 +9,7 @@ import { database } from "./database.js";
 import { paginationFilterDigest } from "./keyset-pagination.js";
 import { MEMORY_LIST_MAX_LIMIT } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
+import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { ReferencedMemoryItem, ReferencedMemoryRow } from "./memory-record.js";
 import { rowToReferencedMemory } from "./memory-record.js";
 import {
@@ -81,11 +82,10 @@ export const memoryListRepository = {
        ) AS source_evidence ON true
         WHERE item.family_id = $1 AND item.claim_status = 'active'
           AND ($5::memory_scope IS NULL OR item.scope = $5)
-          AND (
-            (item.scope = 'personal' AND 'personal' = ANY($2::memory_scope[]) AND item.owner_user_id = $3) OR
-            (item.scope = 'family' AND 'family' = ANY($2::memory_scope[])) OR
-            (item.scope = 'group' AND 'group' = ANY($2::memory_scope[]) AND item.group_id = $4)
-          )
+           AND ${liveMemoryReadPredicate({
+             alias: "item",
+             personalIdentityColumn: "owner_user_id",
+           })}
           AND ($6::timestamptz IS NULL OR (item.updated_at, ref.memory_ref) < ($6, $7::text))
         ORDER BY item.updated_at DESC, ref.memory_ref DESC
         LIMIT $8`,

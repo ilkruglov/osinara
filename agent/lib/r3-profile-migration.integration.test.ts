@@ -2,7 +2,7 @@
  * R3 profile projection and sensitive approval migration tests.
  *
  * Constructs covered:
- * - Migration 048 defaults every existing/new external projection policy to disabled.
+ * - Migration 052 defaults every existing/new external projection policy to disabled.
  * - Group, subject, profile-view, notice, and approval references are opaque and constrained.
  * - Chat-local participant subjects cannot cross conversations and group deletion cascades R3 state.
  */
@@ -17,9 +17,9 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 const TEST_SCHEMA = "test_r3_profile_migration";
-const MIGRATION_NAME = "048_r3_verified_profiles.sql";
+const MIGRATION_NAME = "052_r3_verified_profiles.sql";
 
-async function applyMigrationsBefore048(client: import("pg").PoolClient): Promise<void> {
+async function applyMigrationsBefore052(client: import("pg").PoolClient): Promise<void> {
   const names = (await readdir(resolve("migrations")))
     .filter((name) => name.endsWith(".sql") && name < MIGRATION_NAME)
     .sort();
@@ -28,7 +28,7 @@ async function applyMigrationsBefore048(client: import("pg").PoolClient): Promis
   }
 }
 
-describeWithDatabase("048 R3 verified profiles migration", () => {
+describeWithDatabase("052 R3 verified profiles migration", () => {
   afterAll(closeDatabase);
 
   it("creates fail-closed policies, local subjects, durable views and approval refs", async () => {
@@ -37,7 +37,7 @@ describeWithDatabase("048 R3 verified profiles migration", () => {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query(`CREATE SCHEMA ${TEST_SCHEMA}`);
       await client.query(`SET search_path TO ${TEST_SCHEMA}, public`);
-      await applyMigrationsBefore048(client);
+      await applyMigrationsBefore052(client);
 
       const family = await client.query<{ id: string }>(
         "INSERT INTO families (name) VALUES ('R3 migration') RETURNING id",

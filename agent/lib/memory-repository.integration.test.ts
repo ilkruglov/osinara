@@ -400,7 +400,7 @@ describeWithDatabase("memoryRepository", () => {
       .resolves.toBe(false);
     // A versioned correction records a mutation against the source claim and revokes immediate undo.
     const updated = await memoryRepository.create(family.owner,
-      createInput("personal", "updated-create", "Исходная запись", provenance));
+      createInput("personal", "updated-create", "Любимый цвет пользователя синий", provenance));
     await memoryRepository.updateByRef(family.owner, {
       content: "Изменённая запись", memoryRef: updated.memoryRef,
       operationKey: "intervening-update", source: await correctionSource(family.owner, "personal"),

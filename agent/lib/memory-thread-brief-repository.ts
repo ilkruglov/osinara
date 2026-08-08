@@ -4,6 +4,7 @@
  * Exports:
  * - `createMemoryThreadBriefRepository`: injectable repository for cache integration tests.
  * - `memoryThreadBriefRepository.activate`: selects authorized signals, generates cache misses, and budgets context.
+ * - `isThreadFinallyAuthorized`: final live barrier before a completed or active DTO is emitted.
  * - Source selection and cache persistence are delegated to `memory-thread-brief-cache.ts`.
  */
 import { AppError } from "./app-error.js";
@@ -18,6 +19,7 @@ import {
   THREAD_CONTEXT_MAX_THREADS,
 } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
+import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { MemoryThreadBriefBlock } from "./memory-thread-brief-generator.js";
 import { generateMemoryThreadBrief } from "./memory-thread-brief-generator.js";
 import {
@@ -70,10 +72,11 @@ function titleSimilarity(value: number | string | null): number | null {
 async function getOrGenerateBrief(
   thread: ActivatedThreadRow,
   generateBrief: typeof generateMemoryThreadBrief,
+  auth: MemoryAuthorization,
 ): Promise<MemoryThreadBriefBlock[] | null> {
   const cachedClient = await database().connect();
   try {
-    const cached = await loadCachedBrief(cachedClient, thread.id, thread.generation);
+    const cached = await loadCachedBrief(cachedClient, thread.id, thread.generation, auth);
     if (cached) return cached;
   } finally {
     cachedClient.release();
@@ -99,7 +102,7 @@ async function getOrGenerateBrief(
   }
   try {
     // Immutable source rows are loaded and validated before paid provider work is marked started.
-    const sources = await loadBriefSources(database(), thread.id);
+    const sources = await loadBriefSources(database(), thread.id, auth);
     if (sources.length === 0) {
       throw new AppError(
         "AGENT_MEMORY_THREAD_BRIEF_SOURCE_MISSING",
@@ -115,7 +118,7 @@ async function getOrGenerateBrief(
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await persistBrief(client, thread, blocks);
+      await persistBrief(client, thread, blocks, auth);
       await memoryThreadBriefJobRepository.complete(
         client,
         claim.jobId,
@@ -144,21 +147,31 @@ async function getOrGenerateBrief(
   }
 }
 
-async function loadEpisodes(threadId: string): Promise<ActivatedMemoryThread["episodes"]> {
+async function loadEpisodes(
+  threadId: string,
+  auth: MemoryAuthorization,
+): Promise<ActivatedMemoryThread["episodes"]> {
   const result = await database().query<SourceRow>(
     `SELECT entry.entry_ref, entry.role::text, entry.occurred_at,
             COALESCE(claim.content, outcome.summary) AS content,
             COALESCE(memory_ref.memory_ref, outcome.outcome_ref) AS source_ref
      FROM memory_thread_entries AS entry
+     JOIN memory_threads AS thread ON thread.id = entry.thread_id
      LEFT JOIN memory_items AS claim ON claim.id = entry.source_claim_id
        AND claim.claim_status = 'active' AND claim.provenance_state = 'evidenced'
        AND EXISTS (SELECT 1 FROM claim_evidence WHERE claim_id = claim.id)
      LEFT JOIN memory_item_refs AS memory_ref ON memory_ref.memory_item_id = claim.id
      LEFT JOIN confirmed_outcomes AS outcome ON outcome.id = entry.source_outcome_id AND outcome.status = 'confirmed'
-     WHERE entry.thread_id = $1 AND entry.role = 'episode'
-       AND char_length(COALESCE(claim.content, outcome.summary)) <= $2
-     ORDER BY entry.occurred_at DESC, entry.id DESC LIMIT $3`,
-    [threadId, THREAD_EPISODE_MAX_CHARACTERS, THREAD_CONTEXT_EPISODES_PER_THREAD],
+     WHERE thread.family_id = $1
+       AND ${liveMemoryReadPredicate({
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })}
+       AND entry.thread_id = $5 AND entry.role = 'episode'
+       AND char_length(COALESCE(claim.content, outcome.summary)) <= $6
+     ORDER BY entry.occurred_at DESC, entry.id DESC LIMIT $7`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId,
+      THREAD_EPISODE_MAX_CHARACTERS, THREAD_CONTEXT_EPISODES_PER_THREAD],
   );
   return result.rows.map((row) => ({
     content: row.content,
@@ -167,15 +180,20 @@ async function loadEpisodes(threadId: string): Promise<ActivatedMemoryThread["ep
   }));
 }
 
-async function loadCompletionEpisode(threadId: string) {
+async function loadCompletionEpisode(threadId: string, auth: MemoryAuthorization) {
   const result = await database().query<{ entry_ref: string; outcome_ref: string; summary: string }>(
     `SELECT entry.entry_ref, outcome.outcome_ref, outcome.summary
      FROM memory_threads AS thread
      JOIN confirmed_outcomes AS outcome ON outcome.id = thread.completion_outcome_id
      JOIN memory_thread_entries AS entry ON entry.thread_id = thread.id
        AND entry.source_outcome_id = outcome.id
-     WHERE thread.id = $1 AND thread.status = 'completed'`,
-    [threadId],
+     WHERE thread.family_id = $1
+       AND ${liveMemoryReadPredicate({
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })}
+       AND thread.id = $5 AND thread.status = 'completed'`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId],
   );
   const row = result.rows[0];
   return row ? {
@@ -183,6 +201,23 @@ async function loadCompletionEpisode(threadId: string) {
     sourceEntryRefs: [row.entry_ref],
     sourceRecordRefs: [row.outcome_ref],
   } : undefined;
+}
+
+async function isThreadFinallyAuthorized(
+  threadId: string,
+  auth: MemoryAuthorization,
+): Promise<boolean> {
+  const result = await database().query(
+    `SELECT 1 FROM memory_threads AS thread
+     WHERE thread.family_id = $1
+       AND ${liveMemoryReadPredicate({
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })}
+       AND thread.id = $5`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId],
+  );
+  return result.rows.length === 1;
 }
 
 export function createMemoryThreadBriefRepository(dependencies: {
@@ -213,13 +248,10 @@ export function createMemoryThreadBriefRepository(dependencies: {
               CASE WHEN thread.title_embedding_model = $8
                 THEN 1 - (thread.title_embedding <=> $6::vector) ELSE NULL END AS title_similarity
        FROM memory_threads AS thread LEFT JOIN hits ON hits.thread_id = thread.id
-       WHERE thread.family_id = $1 AND (
-         (thread.scope = 'personal' AND 'personal' = ANY($2::memory_scope[])
-           AND thread.scope_partition_key = $3) OR
-         (thread.scope = 'family' AND 'family' = ANY($2::memory_scope[])) OR
-         (thread.scope = 'group' AND 'group' = ANY($2::memory_scope[])
-           AND thread.scope_partition_key = $4)
-        ) AND (thread.status = 'completed' OR EXISTS (
+       WHERE thread.family_id = $1 AND ${liveMemoryReadPredicate({
+          alias: "thread",
+          personalIdentityColumn: "scope_partition_key",
+        })} AND (thread.status = 'completed' OR EXISTS (
           SELECT 1 FROM memory_thread_entries AS available_entry
           LEFT JOIN memory_items AS available_claim ON available_claim.id = available_entry.source_claim_id
             AND available_claim.claim_status = 'active'
@@ -247,9 +279,17 @@ export function createMemoryThreadBriefRepository(dependencies: {
     for (const thread of result.rows) {
       const similarity = titleSimilarity(thread.title_similarity);
       if (thread.status === "completed") {
+        const completionEpisode = await loadCompletionEpisode(thread.id, input.auth);
+        const sourceEvidence = await loadMemoryThreadSourceEvidence(
+          database(),
+          thread.id,
+          input.auth,
+        );
+        // No content-bearing DTO is emitted if access changed during the preceding reads.
+        if (!await isThreadFinallyAuthorized(thread.id, input.auth)) continue;
         activated.push({
           blocks: [],
-          completionEpisode: await loadCompletionEpisode(thread.id),
+          completionEpisode,
           episodes: [],
           purpose: thread.purpose,
           relevance: {
@@ -257,25 +297,33 @@ export function createMemoryThreadBriefRepository(dependencies: {
             skillHint: thread.skill_hint,
             titleMatch: similarity !== null && similarity >= THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
           },
-          sourceEvidence: await loadMemoryThreadSourceEvidence(database(), thread.id),
+          sourceEvidence,
           status: thread.status,
           threadRef: thread.thread_ref,
           title: thread.title,
         });
         continue;
       }
-      const blocks = await getOrGenerateBrief(thread, dependencies.generateBrief);
+      const blocks = await getOrGenerateBrief(thread, dependencies.generateBrief, input.auth);
       if (blocks === null) continue;
+      const episodes = await loadEpisodes(thread.id, input.auth);
+      const sourceEvidence = await loadMemoryThreadSourceEvidence(
+        database(),
+        thread.id,
+        input.auth,
+      );
+      // Cache hits and source reads are provisional until this final live check succeeds.
+      if (!await isThreadFinallyAuthorized(thread.id, input.auth)) continue;
       activated.push({
         blocks,
-        episodes: await loadEpisodes(thread.id),
+        episodes,
         purpose: thread.purpose,
         relevance: {
           retrievalHits: thread.retrieval_hits,
           skillHint: thread.skill_hint,
           titleMatch: similarity !== null && similarity >= THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
         },
-        sourceEvidence: await loadMemoryThreadSourceEvidence(database(), thread.id),
+        sourceEvidence,
         status: thread.status,
         threadRef: thread.thread_ref,
         title: thread.title,

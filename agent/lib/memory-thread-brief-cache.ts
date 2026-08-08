@@ -19,6 +19,8 @@ import {
   THREAD_BRIEF_MAX_ITEMS,
   THREAD_BRIEF_SCHEMA_VERSION,
 } from "./memory-config.js";
+import type { MemoryAuthorization } from "./memory-context.js";
+import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type {
   MemoryThreadBriefBlock,
   MemoryThreadBriefSource,
@@ -46,6 +48,7 @@ export async function loadCachedBrief(
   client: PoolClient,
   threadId: string,
   generation: number,
+  auth: MemoryAuthorization,
 ): Promise<MemoryThreadBriefBlock[] | null> {
   const result = await client.query<{
     content: string;
@@ -59,22 +62,29 @@ export async function loadCachedBrief(
              array_agg(COALESCE(memory_ref.memory_ref, outcome.outcome_ref)
                ORDER BY entry.entry_ref) AS source_record_refs
      FROM memory_thread_briefs AS brief
+     JOIN memory_threads AS thread ON thread.id = brief.thread_id
      JOIN memory_thread_brief_blocks AS block ON block.brief_id = brief.id
      JOIN memory_thread_brief_block_sources AS source
        ON source.brief_id = block.brief_id AND source.block_ordinal = block.ordinal
      JOIN memory_thread_entries AS entry ON entry.id = source.thread_entry_id
      LEFT JOIN memory_items AS claim ON claim.id = entry.source_claim_id
      LEFT JOIN memory_item_refs AS memory_ref ON memory_ref.memory_item_id = claim.id
-     LEFT JOIN confirmed_outcomes AS outcome ON outcome.id = entry.source_outcome_id
-      WHERE brief.thread_id = $1 AND brief.generation = $2
-        AND brief.model_version = $3 AND brief.schema_version = $4
+      LEFT JOIN confirmed_outcomes AS outcome ON outcome.id = entry.source_outcome_id
+      WHERE thread.family_id = $1
+        AND ${liveMemoryReadPredicate({
+          alias: "thread",
+          personalIdentityColumn: "scope_partition_key",
+        })}
+        AND brief.thread_id = $5 AND brief.generation = $6
+        AND brief.model_version = $7 AND brief.schema_version = $8
         AND (
           (claim.claim_status = 'active' AND claim.provenance_state = 'evidenced'
             AND EXISTS (SELECT 1 FROM claim_evidence WHERE claim_id = claim.id)) OR
           outcome.status = 'confirmed'
         )
      GROUP BY block.ordinal, block.kind, block.content ORDER BY block.ordinal`,
-    [threadId, generation, THREAD_BRIEF_MODEL_VERSION, THREAD_BRIEF_SCHEMA_VERSION],
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId, generation,
+      THREAD_BRIEF_MODEL_VERSION, THREAD_BRIEF_SCHEMA_VERSION],
   );
   if (result.rows.length === 0) return null;
   return result.rows.map((row) => ({
@@ -88,6 +98,7 @@ export async function loadCachedBrief(
 export async function loadBriefSources(
   client: Pick<PoolClient, "query">,
   threadId: string,
+  auth: MemoryAuthorization,
 ): Promise<MemoryThreadBriefSource[]> {
   const result = await client.query<SourceRow>(
     `SELECT entry.entry_ref, entry.role::text, entry.occurred_at,
@@ -96,6 +107,7 @@ export async function loadBriefSources(
              COALESCE(conflict.conflict_refs, '{}'::text[]) AS unresolved_conflict_refs,
              COALESCE(conflict.other_entry_refs, '{}'::text[]) AS conflicting_entry_refs
       FROM memory_thread_entries AS entry
+      JOIN memory_threads AS thread ON thread.id = entry.thread_id
       LEFT JOIN memory_items AS claim ON claim.id = entry.source_claim_id
         AND claim.claim_status = 'active'
         AND claim.provenance_state = 'evidenced'
@@ -113,16 +125,22 @@ export async function loadBriefSources(
           WHEN disputed.claim_a_id = claim.id THEN disputed.claim_b_id ELSE disputed.claim_a_id END
        WHERE disputed.resolution = 'unresolved'
          AND claim.id IN (disputed.claim_a_id, disputed.claim_b_id)
-     ) AS conflict ON claim.id IS NOT NULL
-     WHERE entry.thread_id = $1 AND (claim.id IS NOT NULL OR outcome.id IS NOT NULL)
+      ) AS conflict ON claim.id IS NOT NULL
+      WHERE thread.family_id = $1
+        AND ${liveMemoryReadPredicate({
+          alias: "thread",
+          personalIdentityColumn: "scope_partition_key",
+        })}
+        AND entry.thread_id = $5 AND (claim.id IS NOT NULL OR outcome.id IS NOT NULL)
      ORDER BY CASE WHEN conflict.conflict_refs IS NOT NULL THEN 0 ELSE 1 END,
        CASE entry.role
        WHEN 'constraint' THEN 1 WHEN 'goal' THEN 2 WHEN 'open_loop' THEN 2
        WHEN 'method' THEN 3 WHEN 'decision' THEN 4 WHEN 'outcome' THEN 4
        WHEN 'lesson' THEN 5 ELSE 6 END,
        entry.occurred_at DESC, entry.id DESC
-     LIMIT $2`,
-    [threadId, THREAD_BRIEF_MAX_ITEMS],
+      LIMIT $6`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadId,
+      THREAD_BRIEF_MAX_ITEMS],
   );
 
   // Provider input is bounded in priority order; lower-priority rows are not partially truncated.
@@ -136,12 +154,15 @@ export async function loadBriefSources(
 
   // Conflict references and evidence are projected only for selected rows from this same thread.
   const selectedRefs = new Set(bounded.map((row) => row.entry_ref));
-  const evidence = new Map((await loadMemoryThreadSourceEvidence(client, threadId))
+  const evidence = new Map((await loadMemoryThreadSourceEvidence(client, threadId, auth))
     .map((item) => [item.sourceEntryRef, item]));
   return bounded.map((row) => {
     const conflictingRefs = (row.conflicting_entry_refs ?? [])
       .filter((entryRef) => selectedRefs.has(entryRef));
-    const sourceEvidence = evidence.get(row.entry_ref)!;
+    const sourceEvidence = evidence.get(row.entry_ref);
+    if (!sourceEvidence) {
+      throw new AppError("AGENT_MEMORY_THREAD_NOT_FOUND", "Нить памяти больше недоступна");
+    }
     const { sourceEntryRef: _sourceEntryRef, ...modelEvidence } = sourceEvidence;
     return {
       ...(conflictingRefs.length === 0
@@ -164,12 +185,41 @@ export async function persistBrief(
   client: PoolClient,
   thread: { generation: number; id: string },
   blocks: readonly MemoryThreadBriefBlock[],
+  auth: MemoryAuthorization,
 ): Promise<void> {
+  // Revalidate inside the write transaction before accepting provider output or source refs.
+  const current = await client.query<{ generation: number }>(
+    `SELECT thread.generation FROM memory_threads AS thread
+     WHERE thread.family_id = $1
+       AND ${liveMemoryReadPredicate({
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })}
+       AND thread.id = $5 FOR UPDATE`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, thread.id],
+  );
+  if (!current.rows[0]) {
+    throw new AppError("AGENT_MEMORY_THREAD_NOT_FOUND", "Нить памяти больше недоступна");
+  }
+  if (current.rows[0].generation !== thread.generation) {
+    throw new AppError(
+      "AGENT_MEMORY_THREAD_BRIEF_GENERATION_STALE",
+      "Нить памяти изменилась во время построения брифа",
+    );
+  }
+
   const entryRefs = [...new Set(blocks.flatMap((block) => block.sourceEntryRefs))];
   const entries = await client.query<{ entry_ref: string; id: string }>(
-    `SELECT id, entry_ref FROM memory_thread_entries
-     WHERE thread_id = $1 AND entry_ref = ANY($2::text[])`,
-    [thread.id, entryRefs],
+    `SELECT entry.id, entry.entry_ref
+     FROM memory_thread_entries AS entry
+     JOIN memory_threads AS thread ON thread.id = entry.thread_id
+     WHERE thread.family_id = $1
+       AND ${liveMemoryReadPredicate({
+         alias: "thread",
+         personalIdentityColumn: "scope_partition_key",
+       })}
+       AND entry.thread_id = $5 AND entry.entry_ref = ANY($6::text[])`,
+    [auth.familyId, auth.scopes, auth.userId, auth.groupId, thread.id, entryRefs],
   );
   const entryIds = new Map(entries.rows.map((entry) => [entry.entry_ref, entry.id]));
   if (entryIds.size !== entryRefs.length) {
@@ -178,17 +228,6 @@ export async function persistBrief(
       "Источник брифа изменился до сохранения проекции",
     );
   }
-  const current = await client.query<{ generation: number }>(
-    "SELECT generation FROM memory_threads WHERE id = $1 FOR UPDATE",
-    [thread.id],
-  );
-  if (current.rows[0]?.generation !== thread.generation) {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_BRIEF_GENERATION_STALE",
-      "Нить памяти изменилась во время построения брифа",
-    );
-  }
-
   // Blocks and source links share the caller's transaction and immutable generation key.
   const brief = await client.query<{ id: string }>(
     `INSERT INTO memory_thread_briefs

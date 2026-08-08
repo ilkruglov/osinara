@@ -2,7 +2,7 @@
  * Opaque memory reference migration integration tests.
  *
  * Constructs covered:
- * - Migration 045 backfills exactly one random model-safe ref for every existing memory item.
+ * - Migration 049 backfills exactly one random model-safe ref for every existing memory item.
  * - References are unique, stable, non-UUID values with a cascade lifecycle tied to their item.
  */
 import { readFile } from "node:fs/promises";
@@ -17,7 +17,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   : describe.skip;
 const TEST_SCHEMA = "test_memory_opaque_ref_migration";
 
-describeWithDatabase("045 opaque memory reference migration", () => {
+describeWithDatabase("049 opaque memory reference migration", () => {
   afterAll(closeDatabase);
 
   it("backfills every item once and cascades only its mapping", async () => {
@@ -34,7 +34,7 @@ describeWithDatabase("045 opaque memory reference migration", () => {
       `);
 
       await client.query(await readFile(
-        resolve("migrations/045_opaque_memory_refs.sql"),
+        resolve("migrations/049_opaque_memory_refs.sql"),
         "utf8",
       ));
 

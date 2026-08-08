@@ -2,7 +2,7 @@
  * PostgreSQL R1 memory retrieval migration integration test.
  *
  * Constructs covered:
- * - Migration 046 installs a stored Russian morphology vector and its GIN index.
+ * - Migration 050 installs a stored Russian morphology vector and its GIN index.
  * - R5 later adds a dedicated trigram index only for same-subject consolidation candidates.
  */
 import { afterAll, describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ if (enabled && (!databaseUrl || !new URL(databaseUrl).pathname.endsWith("_test")
 }
 const describeWithDatabase = enabled ? describe : describe.skip;
 
-describeWithDatabase("046 Russian memory retrieval migration", () => {
+describeWithDatabase("050 Russian memory retrieval migration", () => {
   afterAll(async () => closeDatabase());
 
   it("keeps morphology retrieval and adds the separate active-claim consolidation index", async () => {

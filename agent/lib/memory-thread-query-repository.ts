@@ -16,6 +16,7 @@ import {
   THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
+import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import { memoryEvidenceNotice, type ModelMemoryEvidence } from "./model-memory.js";
 
 export const THREAD_REF_PATTERN = /^thread_[0-9a-f]{32}$/u;
@@ -49,15 +50,27 @@ interface ThreadSummaryRow {
   updated_at: Date;
 }
 
-function authorizedThreadPredicate(alias: string): string {
-  return `(
-    (${alias}.scope = 'personal' AND 'personal' = ANY($2::memory_scope[])
-      AND ${alias}.scope_partition_key = $3) OR
-    (${alias}.scope = 'family' AND 'family' = ANY($2::memory_scope[])) OR
-    (${alias}.scope = 'group' AND 'group' = ANY($2::memory_scope[])
-      AND ${alias}.scope_partition_key = $4)
-  )`;
-}
+type ThreadReadRow = ThreadSummaryRow & { id: string } & ({
+  content: null;
+  entry_ref: null;
+  occurred_at: null;
+  role: null;
+  source_author_label: null;
+  source_evidence_kind: null;
+  source_observed_at: null;
+  source_ref: null;
+  source_type: null;
+} | {
+  content: string;
+  entry_ref: string;
+  occurred_at: Date;
+  role: ModelMemoryThreadEntry["role"];
+  source_author_label: string;
+  source_evidence_kind: ModelMemoryEvidence["kind"];
+  source_observed_at: Date;
+  source_ref: string;
+  source_type: ModelMemoryThreadEntry["sourceType"];
+});
 
 function vectorLiteral(vector: readonly number[]): string {
   if (vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
@@ -105,8 +118,11 @@ export const memoryThreadQueryRepository = {
               thread.updated_at, parent.thread_ref AS parent_thread_ref
        FROM memory_threads AS thread
        LEFT JOIN memory_threads AS parent ON parent.id = thread.parent_thread_id
-       LEFT JOIN memory_threads AS cursor ON cursor.thread_ref = $5
-       WHERE thread.family_id = $1 AND ${authorizedThreadPredicate("thread")}
+        LEFT JOIN memory_threads AS cursor ON cursor.thread_ref = $5
+        WHERE thread.family_id = $1 AND ${liveMemoryReadPredicate({
+          alias: "thread",
+          personalIdentityColumn: "scope_partition_key",
+        })}
          AND ($6::memory_scope IS NULL OR thread.scope = $6)
          AND ($7::memory_thread_status IS NULL OR thread.status = $7)
          AND ($5::text IS NULL OR (thread.updated_at, thread.thread_ref) <
@@ -137,8 +153,11 @@ export const memoryThreadQueryRepository = {
       `SELECT thread.thread_ref, thread.title, thread.purpose, thread.status::text,
               thread.updated_at, parent.thread_ref AS parent_thread_ref
        FROM memory_threads AS thread
-       LEFT JOIN memory_threads AS parent ON parent.id = thread.parent_thread_id
-       WHERE thread.family_id = $1 AND ${authorizedThreadPredicate("thread")}
+        LEFT JOIN memory_threads AS parent ON parent.id = thread.parent_thread_id
+        WHERE thread.family_id = $1 AND ${liveMemoryReadPredicate({
+          alias: "thread",
+          personalIdentityColumn: "scope_partition_key",
+        })}
          AND (thread.title_normalized % lower($5) OR lower(thread.purpose) % lower($5)
            OR (thread.title_embedding_model = $7
              AND 1 - (thread.title_embedding <=> $6::vector) >= $8))
@@ -168,54 +187,55 @@ export const memoryThreadQueryRepository = {
       throw new AppError("AGENT_MEMORY_THREAD_REF_INVALID", "Некорректная ссылка на нить памяти");
     }
     const limit = requireLimit(input.limit);
-    const threads = await database().query<ThreadSummaryRow & { id: string }>(
-      `SELECT thread.id, thread.thread_ref, thread.title, thread.purpose, thread.status::text,
-              thread.updated_at, parent.thread_ref AS parent_thread_ref
-       FROM memory_threads AS thread
-       LEFT JOIN memory_threads AS parent ON parent.id = thread.parent_thread_id
-       WHERE thread.thread_ref = $5 AND thread.family_id = $1
-         AND ${authorizedThreadPredicate("thread")}`,
-      [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadRef],
-    );
-    const thread = threads.rows[0];
-    if (!thread) throw new AppError("AGENT_MEMORY_THREAD_NOT_FOUND", "Нить памяти не найдена");
-    const result = await database().query<{
-      content: string;
-      entry_ref: string;
-      occurred_at: Date;
-      role: ModelMemoryThreadEntry["role"];
-      source_author_label: string;
-      source_evidence_kind: ModelMemoryEvidence["kind"];
-      source_observed_at: Date;
-      source_ref: string;
-      source_type: ModelMemoryThreadEntry["sourceType"];
-    }>(
-      `SELECT entry.entry_ref, entry.role::text, entry.occurred_at,
-              COALESCE(claim.content, outcome.summary) AS content,
-              COALESCE(memory_ref.memory_ref, outcome.outcome_ref) AS source_ref,
-               CASE WHEN claim.id IS NULL THEN 'confirmed_outcome' ELSE 'claim' END AS source_type,
-               COALESCE(source_evidence.evidence_kind, 'unresolved') AS source_evidence_kind,
-               COALESCE(source_evidence.author_label_snapshot, 'Источник не установлен')
-                 AS source_author_label,
-               COALESCE(source_evidence.observed_at, entry.occurred_at) AS source_observed_at
-       FROM memory_thread_entries AS entry
-       LEFT JOIN memory_items AS claim ON claim.id = entry.source_claim_id
-       LEFT JOIN memory_item_refs AS memory_ref ON memory_ref.memory_item_id = claim.id
-       LEFT JOIN confirmed_outcomes AS outcome ON outcome.id = entry.source_outcome_id
+    // Summary and history share one authorization snapshot, avoiding a preflight/read TOCTOU.
+    const result = await database().query<ThreadReadRow>(
+      `WITH authorized_thread AS (
+         SELECT thread.id, thread.thread_ref, thread.title, thread.purpose, thread.status::text,
+                thread.updated_at, parent.thread_ref AS parent_thread_ref
+         FROM memory_threads AS thread
+         LEFT JOIN memory_threads AS parent ON parent.id = thread.parent_thread_id
+         WHERE thread.thread_ref = $5 AND thread.family_id = $1
+           AND ${liveMemoryReadPredicate({
+             alias: "thread",
+             personalIdentityColumn: "scope_partition_key",
+           })}
+       )
+       SELECT thread.*, history.*
+       FROM authorized_thread AS thread
        LEFT JOIN LATERAL (
-         SELECT evidence_kind, author_label_snapshot, observed_at
-         FROM claim_evidence WHERE claim_id = claim.id AND evidence_role = 'primary'
-         ORDER BY observed_at, id LIMIT 1
-       ) AS source_evidence ON true
-       LEFT JOIN memory_thread_entries AS cursor ON cursor.entry_ref = $2 AND cursor.thread_id = $1
-       WHERE entry.thread_id = $1 AND ($2::text IS NULL OR
-         (entry.occurred_at, entry.entry_ref) < (cursor.occurred_at, cursor.entry_ref))
-       ORDER BY entry.occurred_at DESC, entry.entry_ref DESC LIMIT $3`,
-      [thread.id, input.cursor ?? null, limit + 1],
+         SELECT entry.entry_ref, entry.role::text, entry.occurred_at,
+                COALESCE(claim.content, outcome.summary) AS content,
+                COALESCE(memory_ref.memory_ref, outcome.outcome_ref) AS source_ref,
+                CASE WHEN claim.id IS NULL THEN 'confirmed_outcome' ELSE 'claim' END AS source_type,
+                COALESCE(source_evidence.evidence_kind, 'unresolved') AS source_evidence_kind,
+                COALESCE(source_evidence.author_label_snapshot, 'Источник не установлен')
+                  AS source_author_label,
+                COALESCE(source_evidence.observed_at, entry.occurred_at) AS source_observed_at
+         FROM memory_thread_entries AS entry
+         LEFT JOIN memory_items AS claim ON claim.id = entry.source_claim_id
+         LEFT JOIN memory_item_refs AS memory_ref ON memory_ref.memory_item_id = claim.id
+         LEFT JOIN confirmed_outcomes AS outcome ON outcome.id = entry.source_outcome_id
+         LEFT JOIN LATERAL (
+           SELECT evidence_kind, author_label_snapshot, observed_at
+           FROM claim_evidence WHERE claim_id = claim.id AND evidence_role = 'primary'
+           ORDER BY observed_at, id LIMIT 1
+         ) AS source_evidence ON true
+         LEFT JOIN memory_thread_entries AS cursor
+           ON cursor.entry_ref = $6 AND cursor.thread_id = thread.id
+         WHERE entry.thread_id = thread.id AND ($6::text IS NULL OR
+           (entry.occurred_at, entry.entry_ref) < (cursor.occurred_at, cursor.entry_ref))
+         ORDER BY entry.occurred_at DESC, entry.entry_ref DESC LIMIT $7
+       ) AS history ON true
+       ORDER BY history.occurred_at DESC NULLS LAST, history.entry_ref DESC NULLS LAST`,
+      [auth.familyId, auth.scopes, auth.userId, auth.groupId, threadRef,
+        input.cursor ?? null, limit + 1],
     );
+    const thread = result.rows[0];
+    if (!thread) throw new AppError("AGENT_MEMORY_THREAD_NOT_FOUND", "Нить памяти не найдена");
     const entries: ModelMemoryThreadEntry[] = [];
     let totalCharacters = 0;
     for (const row of result.rows.slice(0, limit)) {
+      if (row.entry_ref === null) continue;
       if (totalCharacters + row.content.length > THREAD_HISTORY_PAGE_MAX_CHARACTERS) break;
       entries.push({
         content: row.content,
@@ -233,7 +253,8 @@ export const memoryThreadQueryRepository = {
       });
       totalCharacters += row.content.length;
     }
-    const hasMore = result.rows.length > entries.length && entries.length > 0;
+    const historyRowCount = result.rows.filter((row) => row.entry_ref !== null).length;
+    const hasMore = historyRowCount > entries.length && entries.length > 0;
     return {
       entries,
       nextCursor: hasMore ? entries.at(-1)!.entryRef : null,

@@ -422,6 +422,13 @@ describe("server deployment contract", () => {
     const valid = resolvedComposeSecurityFixture();
     expect(() => executeComposeSecurityPredicate(valid)).not.toThrow();
 
+    // `volumes_from` must not bypass the exact mount allowlist through another service.
+    const inheritedRunnerVolumes = structuredClone(valid) as {
+      services: Record<string, { volumes_from?: string[] }>;
+    };
+    inheritedRunnerVolumes.services.agent!.volumes_from = ["sandbox-runner"];
+    expect(() => executeComposeSecurityPredicate(inheritedRunnerVolumes)).toThrow();
+
     const unsafe = structuredClone(valid) as {
       services: Record<string, { volumes?: unknown[] }>;
     };

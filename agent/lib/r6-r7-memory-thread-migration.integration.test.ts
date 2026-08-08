@@ -17,7 +17,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 const TEST_SCHEMA = "test_r6_r7_memory_threads";
-const MIGRATION_NAME = "050_r6_r7_memory_threads.sql";
+const MIGRATION_NAME = "054_r6_r7_memory_threads.sql";
 
 async function applyEarlierMigrations(client: import("pg").PoolClient): Promise<void> {
   const names = (await readdir(resolve("migrations")))
@@ -28,7 +28,7 @@ async function applyEarlierMigrations(client: import("pg").PoolClient): Promise<
   }
 }
 
-describeWithDatabase("050 R6/R7 memory threads migration", () => {
+describeWithDatabase("054 R6/R7 memory threads migration", () => {
   afterAll(closeDatabase);
 
   it("preserves claims and enforces source, identity, scope, hierarchy, and invalidation", async () => {

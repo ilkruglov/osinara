@@ -21,6 +21,7 @@ import {
   MEMORY_RETRIEVAL_RRF_RANK_OFFSET,
 } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
+import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { ReferencedMemoryRow } from "./memory-record.js";
 import { rowToReferencedMemory } from "./memory-record.js";
 import { externalProfileProjectionPredicate } from "./external-profile-projection-predicate.js";
@@ -93,21 +94,18 @@ function vectorLiteral(vector: readonly number[]): string {
   return `[${vector.join(",")}]`;
 }
 
-type AuthorizedClaimAlias = "a" | "b" | "item" | "partner";
-
-function authorizedClaimPredicate(alias: AuthorizedClaimAlias): string {
+function authorizedClaimPredicate(alias: "a" | "b" | "item" | "partner"): string {
   // The projection branch is deliberately part of the pre-ranking predicate. Exact participant
   // linkage and the live policy admit only the current private user's normal self claims; an
   // external turn has no personal scope and therefore remains confined to its own group branch.
-  return `(
-    (${alias}.scope = 'personal' AND 'personal' = ANY($2::memory_scope[])
-      AND ${alias}.owner_user_id = $3) OR
-    (${alias}.scope = 'family' AND 'family' = ANY($2::memory_scope[])) OR
-    (${alias}.scope = 'group' AND 'group' = ANY($2::memory_scope[])
-      AND ${alias}.group_id = $4) OR
-    ('personal' = ANY($2::memory_scope[]) AND
-      ${externalProfileProjectionPredicate({ claimAlias: alias, viewerUserParameter: "$3" })})
-  )`;
+  return liveMemoryReadPredicate({
+    alias,
+    externalProjectionPredicate: externalProfileProjectionPredicate({
+      claimAlias: alias,
+      viewerUserParameter: "$3",
+    }),
+    personalIdentityColumn: "owner_user_id",
+  });
 }
 
 function requiredScore(value: number | string): number {
@@ -379,7 +377,52 @@ export const memoryRetrievalRepository = {
     const completeClosure = closure.rows.filter((row) =>
       !blockedIds.has(row.a_id) && !blockedIds.has(row.b_id)
     );
-    const conflicts = completeClosure.map((row): MemoryConflictGroup => ({
+
+    // Reauthorize every possible output claim after all closure reads. This final barrier removes
+    // unrelated base candidates too, while retaining a conflict only when both versions survive.
+    const outputClaimIds = [...new Set([
+      ...selectedIds,
+      ...completeClosure.flatMap((row) => [row.a_id, row.b_id]),
+    ])];
+    const finalAuthorization = await database().query<{
+      has_unresolved_conflict: boolean;
+      id: string;
+    }>(
+      `SELECT item.id,
+              EXISTS (
+                SELECT 1 FROM claim_conflicts AS item_conflict
+                WHERE item_conflict.family_id = $1
+                  AND item_conflict.resolution = 'unresolved'
+                  AND item.id IN (item_conflict.claim_a_id, item_conflict.claim_b_id)
+              ) AS has_unresolved_conflict
+       FROM memory_items AS item
+       WHERE item.family_id = $1 AND item.claim_status = 'active'
+         AND item.id = ANY($5::uuid[])
+         AND ${authorizedClaimPredicate("item")}
+         AND NOT EXISTS (
+           SELECT 1
+           FROM claim_conflicts AS final_conflict
+           JOIN memory_items AS partner ON partner.id = CASE
+             WHEN final_conflict.claim_a_id = item.id THEN final_conflict.claim_b_id
+             ELSE final_conflict.claim_a_id END
+           WHERE final_conflict.family_id = $1
+             AND final_conflict.resolution = 'unresolved'
+             AND item.id IN (final_conflict.claim_a_id, final_conflict.claim_b_id)
+             AND NOT COALESCE(
+               partner.claim_status = 'active' AND ${authorizedClaimPredicate("partner")},
+               false
+             )
+         )`,
+      [auth.familyId, auth.scopes, auth.userId, auth.groupId, outputClaimIds],
+    );
+    const finalAuthorizedIds = new Set(finalAuthorization.rows.map((row) => row.id));
+    const finalOrdinaryIds = new Set(finalAuthorization.rows
+      .filter((row) => !row.has_unresolved_conflict)
+      .map((row) => row.id));
+    const finalClosure = completeClosure.filter((row) =>
+      finalAuthorizedIds.has(row.a_id) && finalAuthorizedIds.has(row.b_id)
+    );
+    const conflicts = finalClosure.map((row): MemoryConflictGroup => ({
       conflictRef: row.conflict_ref,
       instruction: "Не выбирать версию самостоятельно",
       versions: [{
@@ -396,18 +439,16 @@ export const memoryRetrievalRepository = {
         sourceLabel: row.b_source_label,
       }],
     }));
-    const conflictedRefs = new Set(
-      conflicts.flatMap((conflict) => conflict.versions.map((version) => version.memoryRef)),
-    );
     return {
       conflicts,
       relatedClaimIds: [...new Set([
         ...results.filter((result) => !blockedIds.has(result.memory.id))
+          .filter((result) => finalOrdinaryIds.has(result.memory.id))
           .map((result) => result.memory.id),
-        ...completeClosure.flatMap((row) => [row.a_id, row.b_id]),
+        ...finalClosure.flatMap((row) => [row.a_id, row.b_id]),
       ])],
       results: results.filter((result) =>
-        !blockedIds.has(result.memory.id) && !conflictedRefs.has(result.memory.memoryRef)
+        finalOrdinaryIds.has(result.memory.id) && !blockedIds.has(result.memory.id)
       ),
     };
   },

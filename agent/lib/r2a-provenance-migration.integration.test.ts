@@ -2,7 +2,7 @@
  * R2a provenance/extraction migration integration tests.
  *
  * Constructs covered:
- * - Migration 047 preserves every pre-existing claim/ref and backfills only Telegram conversations.
+ * - Migration 051 preserves every pre-existing claim/ref and backfills only Telegram conversations.
  * - Existing claims are active, legacy-unresolved, unendorsed, and receive no invented evidence.
  * - Participant backfill uses timeline Telegram IDs and exact users links, never usernames.
  * - Composite constraints reject cross-zone evidence and more than one primary source.
@@ -20,9 +20,9 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 const TEST_SCHEMA = "test_r2a_provenance_migration";
-const MIGRATION_NAME = "047_r2a_provenance_extraction_foundation.sql";
+const MIGRATION_NAME = "051_r2a_provenance_extraction_foundation.sql";
 
-async function applyMigrationsBefore047(client: import("pg").PoolClient): Promise<void> {
+async function applyMigrationsBefore051(client: import("pg").PoolClient): Promise<void> {
   const names = (await readdir(resolve("migrations")))
     .filter((name) => name.endsWith(".sql") && name < MIGRATION_NAME)
     .sort();
@@ -31,7 +31,7 @@ async function applyMigrationsBefore047(client: import("pg").PoolClient): Promis
   }
 }
 
-describeWithDatabase("047 R2a provenance/extraction migration", () => {
+describeWithDatabase("051 R2a provenance/extraction migration", () => {
   afterAll(closeDatabase);
 
   it("backfills exact identities and enforces provenance lifecycle and erasure", async () => {
@@ -40,7 +40,7 @@ describeWithDatabase("047 R2a provenance/extraction migration", () => {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
       await client.query(`CREATE SCHEMA ${TEST_SCHEMA}`);
       await client.query(`SET search_path TO ${TEST_SCHEMA}, public`);
-      await applyMigrationsBefore047(client);
+      await applyMigrationsBefore051(client);
 
       const family = await client.query<{ id: string }>(
         "INSERT INTO families (name) VALUES ('R2a migration') RETURNING id",

@@ -2,7 +2,7 @@
  * R4/R5 lifecycle, relation, conflict, and consolidation-job migration tests.
  *
  * Constructs covered:
- * - Migration 049 is additive and preserves existing claim fields and opaque refs.
+ * - Migration 053 is additive and preserves existing claim fields and opaque refs.
  * - Composite relation/conflict foreign keys reject cross-scope trust-zone links.
  * - Conflict refs are opaque and consolidation jobs have durable provider/terminal state.
  */
@@ -17,7 +17,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 const TEST_SCHEMA = "test_r4_r5_consolidation_migration";
-const MIGRATION_NAME = "049_r4_r5_claim_consolidation.sql";
+const MIGRATION_NAME = "053_r4_r5_claim_consolidation.sql";
 
 async function applyEarlierMigrations(client: import("pg").PoolClient): Promise<void> {
   const names = (await readdir(resolve("migrations")))
@@ -28,7 +28,7 @@ async function applyEarlierMigrations(client: import("pg").PoolClient): Promise<
   }
 }
 
-describeWithDatabase("049 R4/R5 claim consolidation migration", () => {
+describeWithDatabase("053 R4/R5 claim consolidation migration", () => {
   afterAll(closeDatabase);
 
   it("preserves rows and enforces same trust-zone relations and conflicts", async () => {

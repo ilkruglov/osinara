@@ -207,7 +207,7 @@ validate_resolved_compose_security() {
     all(.services[]; (.network_mode // "") != "host") and
     all(.services[]; (.pid // "") != "host") and
     all(.services[]; (.ipc // "") != "host") and
-    all(.services[]; (has("build") or has("devices") or has("cap_add")) | not) and
+    all(.services[]; (has("build") or has("devices") or has("cap_add") or has("volumes_from")) | not) and
     all(.services[]; .logging.driver == "json-file" and
       .logging.options["max-size"] == "20m" and .logging.options["max-file"] == "5") and
     any(.services.agent.volumes[];

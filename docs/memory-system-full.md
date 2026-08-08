@@ -14,11 +14,11 @@
 Память является application concern Osinara. Eve отвечает за историю и compaction активной
 agent-сессии, но не является источником долговременной памяти приложения.
 
-R0-R7 реализованы в application code и миграциях `045`-`050`. Единая timeline, source-aware
+R0-R7 реализованы в application code и миграциях `049`-`054`. Единая timeline, source-aware
 automatic extraction, profiles, conflicts, consolidation, memory threads и bounded briefs работают
 через существующие application boundaries. Независимый review/reliability audit дополнительно закрыт
-миграциями `051_memory_reliability_barriers.sql` и
-`052_profile_projection_notice_delivery.sql`: retention holds, terminal gaps, durable delivery
+миграциями `055_memory_reliability_barriers.sql` и
+`056_profile_projection_notice_delivery.sql`: retention holds, terminal gaps, durable delivery
 states, exact HITL evidence, worker crash semantics и безопасная очистка snapshots.
 Документ синхронизирован с release `0.11.0`.
 
@@ -88,7 +88,7 @@ Vector embeddings не являются памятью и не определя�
 
 `memory_items` хранит scoped authoritative claims с lifecycle, subject/project identity,
 normalization и indexing state. Нормализованная provenance хранится в `claim_evidence`; старые записи
-после миграции `047` сохранены как `active + legacy_unresolved`, без выдуманного evidence или
+после миграции `051` сохранены как `active + legacy_unresolved`, без выдуманного evidence или
 endorsement. Один claim может иметь primary, supporting и reinforcement evidence.
 
 CRUD выполняется через `remember`, `manage_memory`, `list_memories` и `search_memories`. Есть operation
@@ -237,10 +237,10 @@ membership между extraction и persistence завершает candidate о�
 6. применяет branch thresholds, exact-duplicate collapse и conflict closure;
 7. отдаёт модели до 12 authorized записей как недоверенный JSON.
 
-Multilingual E5 поддерживает смысловой поиск по русскому тексту. Миграция `046` добавляет
+Multilingual E5 поддерживает смысловой поиск по русскому тексту. Миграция `050` добавляет
 `russian_search_vector`; `simple` остаётся для точных имён, дат, чисел, тикеров и редких названий.
 Проверенный synthetic eval зафиксирован в `memory-retrieval-eval-fixture.v1.ts`; E5 уже покрывает typo
-case, поэтому отдельная retrieval trigram branch не добавлена. `pg_trgm` из миграции `049`
+case, поэтому отдельная retrieval trigram branch не добавлена. `pg_trgm` из миграции `053`
 используется только для bounded consolidation candidate generation.
 
 При недостаточном контексте модель может сделать до трёх разных смысловых запросов через
@@ -624,7 +624,7 @@ temporal historical intervals.
 | `endorsed_by_user_id` | Кто явно подтвердил содержание |
 | `endorsed_at` | Когда содержание было подтверждено |
 
-Model self-confidence не становится метаданными истинности. Миграция `047` сохранила старые rows как
+Model self-confidence не становится метаданными истинности. Миграция `051` сохранила старые rows как
 `legacy_unresolved`, с `endorsed_by_user_id = NULL`, `endorsed_at = NULL` и без invented evidence.
 
 ### 6.4 Субъект утверждения
@@ -731,7 +731,7 @@ personal claims пользователя
 
 External часть по умолчанию **отключена** для каждой группы. Только актуальный owner может явно
 включить её через opaque `groupRef`; изменение replay-protected, exact-HITL-protected, audited и
-создаёт versioned group notice. Миграция `052_profile_projection_notice_delivery.sql` делает policy
+создаёт versioned group notice. Миграция `056_profile_projection_notice_delivery.sql` делает policy
 fail-closed: до `delivery_status = presented` для **текущей** `policy_version` external claim не входит
 ни в profile, ни в retrieval, ни в source lookup. Notice переходит `pending → started → presented`
 только после успешного `sendMessage`; send failure не подтверждает доставку, а stale `started`
@@ -1359,7 +1359,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R0. Safety and model contract — реализовано
 
-- **Миграция:** `migrations/045_opaque_memory_refs.sql`.
+- **Миграция:** `migrations/049_opaque_memory_refs.sql`.
 - **Код:** `agent/lib/model-memory.ts`, `agent/lib/memory-repository.ts`,
   `agent/lib/memory-source-repository.ts`, `agent/lib/tools/manage_memory.ts`,
   `agent/lib/tools/get_memory_source.ts`.
@@ -1371,7 +1371,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R1. Retrieval quality — реализовано
 
-- **Миграция:** `migrations/046_russian_memory_retrieval.sql`.
+- **Миграция:** `migrations/050_russian_memory_retrieval.sql`.
 - **Код:** `agent/lib/memory-retrieval-repository.ts`,
   `agent/lib/memory-retrieval-ranking.ts`, `agent/lib/memory-config.ts`,
   `agent/lib/memory-retrieval-eval-fixture.v1.ts`.
@@ -1385,7 +1385,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R2a. Provenance and extraction foundation — реализовано
 
-- **Миграция:** `migrations/047_r2a_provenance_extraction_foundation.sql`.
+- **Миграция:** `migrations/051_r2a_provenance_extraction_foundation.sql`.
 - **Код:** `agent/lib/conversation-repository.ts`, `agent/lib/memory-extraction-contract.ts`,
   `agent/lib/memory-extraction-repository.ts`, `agent/lib/memory-semantic-extractor.ts`,
   `agent/lib/claim-evidence-writer.ts`, `agent/lib/memory-source-repository.ts`.
@@ -1399,7 +1399,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R2b. Unified timeline and automatic extraction — реализовано
 
-- **Миграция:** schema foundation находится в `047`; reliability barriers добавлены отдельной `051`.
+- **Миграция:** schema foundation находится в `051`; reliability barriers добавлены отдельной `055`.
 - **Код:** `agent/lib/conversation-timeline-repository.ts`,
   `agent/lib/memory-extraction-batch-coordinator.ts`,
   `agent/lib/memory-extraction-candidate-processor.ts`,
@@ -1419,8 +1419,8 @@ persisted contract, application code и регрессионным тестам.
 
 ### R3. Verified subjects and profiles — реализовано
 
-- **Миграции:** `migrations/048_r3_verified_profiles.sql` и review-fix
-  `migrations/052_profile_projection_notice_delivery.sql`.
+- **Миграции:** `migrations/052_r3_verified_profiles.sql` и review-fix
+  `migrations/056_profile_projection_notice_delivery.sql`.
 - **Код:** `agent/lib/profile-selection.ts`, `agent/lib/profile-view-repository.ts`,
   `agent/lib/profile-projection-policy-repository.ts`,
   `agent/lib/external-profile-projection-predicate.ts`,
@@ -1438,7 +1438,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R4. Conflicts — реализовано
 
-- **Миграция:** `migrations/049_r4_r5_claim_consolidation.sql`.
+- **Миграция:** `migrations/053_r4_r5_claim_consolidation.sql`.
 - **Код:** `agent/lib/memory-conflict-repository.ts`,
   `agent/lib/tools/manage_memory_conflict.ts`, `agent/lib/memory-retrieval-repository.ts`.
 - **Поведение:** same-zone conflict relations, retrieval closure, grouped model context, opaque refs,
@@ -1452,7 +1452,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R5. Similar claims and lifecycle — реализовано
 
-- **Миграция:** `migrations/049_r4_r5_claim_consolidation.sql`.
+- **Миграция:** `migrations/053_r4_r5_claim_consolidation.sql`.
 - **Код:** `agent/lib/memory-relation-classifier.ts`,
   `agent/lib/memory-consolidation-guards.ts`,
   `agent/lib/memory-consolidation-job-repository.ts`,
@@ -1468,7 +1468,7 @@ persisted contract, application code и регрессионным тестам.
 
 ### R6. Memory threads and briefs — реализовано
 
-- **Миграция:** `migrations/050_r6_r7_memory_threads.sql`.
+- **Миграция:** `migrations/054_r6_r7_memory_threads.sql`.
 - **Код:** `agent/lib/confirmed-outcome-repository.ts`,
   `agent/lib/memory-thread-coordinator.ts`, `agent/lib/memory-thread-query-repository.ts`,
   `agent/lib/memory-thread-brief-repository.ts`,
@@ -1489,8 +1489,8 @@ persisted contract, application code и регрессионным тестам.
 
 ### R7. Advanced candidates, recovery discovery and decay — реализовано
 
-- **Миграции:** `migrations/049_r4_r5_claim_consolidation.sql` и
-  `migrations/050_r6_r7_memory_threads.sql`.
+- **Миграции:** `migrations/053_r4_r5_claim_consolidation.sql` и
+  `migrations/054_r6_r7_memory_threads.sql`.
 - **Код:** `agent/lib/memory-extraction-candidate-processor.ts`,
   `agent/lib/memory-thread-discovery-policy.ts`,
   `agent/lib/memory-thread-discovery-repository.ts`,
@@ -1506,16 +1506,16 @@ persisted contract, application code и регрессионным тестам.
 
 ### Independent reliability audit — реализовано
 
-- **Opaque IDs:** `045` и opaque refs в `047`-`050`; проверяются model/tool/thread/profile tests.
-- **Provenance:** `047`, `claim_evidence`, `memory-source-repository.ts`; old rows честно остаются
+- **Opaque IDs:** `049` и opaque refs в `051`-`054`; проверяются model/tool/thread/profile tests.
+- **Provenance:** `051`, `claim_evidence`, `memory-source-repository.ts`; old rows честно остаются
   `legacy_unresolved`/non-endorsed, nullable live source links не стирают retained metadata.
 - **HITL:** exact tool call evidence (`tool_call_id`, `tool_name`, full input hash), current
-  identity/role revalidation и replay protection в `048`, `require-tool-approval-evidence.ts` и
+  identity/role revalidation и replay protection в `052`, `require-tool-approval-evidence.ts` и
   `telegram-hitl/approval-repository.ts`. Все sensitive/destructive memory tools проверяют evidence
   перед repository mutation; это покрыто `memory-tool-results.test.ts`, `manage-memory-tool.test.ts`,
   `manage-memory-conflict-tool.test.ts`, `manage-profile-projection-tool.test.ts` и
   `telegram-hitl/approval-repository.integration.test.ts`.
-- **Retention holds and gaps:** `migrations/051_memory_reliability_barriers.sql`,
+- **Retention holds and gaps:** `migrations/055_memory_reliability_barriers.sql`,
   `memory-extraction-progress-repository.ts`, `memory-reliability.integration.test.ts` и
   `memory-family-extraction-authorization.integration.test.ts`; lost, unauthorized and oversized
   entries получают terminal diagnostics, а contiguous cursor не перескакивает недоказанный range.
@@ -1526,7 +1526,7 @@ persisted contract, application code и регрессионным тестам.
   terminal resolution; покрыто `memory-reliability.integration.test.ts`.
 - **Outbox:** `telegram-final-delivery.ts`, `telegram-final-delivery-repository.ts` and
   `telegram-final-delivery.test.ts`; ambiguous Telegram acceptance is never auto-resent.
-- **Notices:** thread notices из `051` и profile projection notices из `052` получают durable
+- **Notices:** thread notices из `055` и profile projection notices из `056` получают durable
   delivery state; `presented` фиксируется только после confirmed send. Profile projection остаётся
   fail-closed до delivered notice текущей policy version. Stale `started` thread notice становится
   terminal `ambiguous`, больше не выбирается для отправки и не блокирует отдельный более новый
@@ -1561,11 +1561,11 @@ persisted contract, application code и регрессионным тестам.
 ### Final review verification
 
 - Release `0.11.0`; R0-R7 сохраняют статус **реализовано**.
-- Последний завершённый test run: **1084 tests passed, 1 skipped**.
+- Последний завершённый test run: **1260 tests passed, 1 skipped**.
 - Последний завершённый dependency audit: **`npm audit` — 0 vulnerabilities**.
 - Release gates для перечисленных review blockers имеют статус **complete**. Финальный fresh-DB
-  Docker Compose rerun, typecheck, runtime/Eve build, manifest, audit и diff checks завершены успешно;
-  известных P0/P1 не осталось.
+  Docker Compose rerun, typecheck, runtime/Eve build, manifest, audit и diff checks завершены успешно.
+  Независимый итоговый audit: **P0 = 0, P1 = 0, P2 = 0**.
 
 ---
 
@@ -1806,20 +1806,20 @@ persisted contract, application code и регрессионным тестам.
 
 ### 2026-08-08
 
-- R0-R7 реализованы миграциями `045`-`050` и application modules, перечисленными в разделе 14.
+- R0-R7 реализованы миграциями `049`-`054` и application modules, перечисленными в разделе 14.
 - Утверждён и реализован bounded background catch-up для retained entries, не попавших в turn batch.
 - Conversation identity закреплена за Telegram chat; forum topic остаётся source partition metadata
   внутри chat-level timeline/profile boundary.
 - 60-day dormancy реализована недеструктивно только для automatic profile selection.
 - External self-projection закреплена как default-off; включение доступно только актуальному owner и
-  требует confirmed delivery versioned notice группе. Миграция `052` блокирует projection/retrieval/
+  требует confirmed delivery versioned notice группе. Миграция `056` блокирует projection/retrieval/
   source lookup до `presented` notice текущей policy version. `inferred` external claims не
   проецируются.
 - Personal export закреплён как authoritative-only: только personal claims владельца, без входящих
   family/external projections.
 - Legacy claims сохранены как `legacy_unresolved` и non-endorsed; backfill не создаёт evidence.
 - Sensitive claims всегда исключены из always-on profile, даже после approval.
-- Независимый reliability audit добавил миграцию `051`: extraction retention holds и explicit gaps,
+- Независимый reliability audit добавил миграцию `055`: extraction retention holds и explicit gaps,
   terminal candidate leases, recovery cleanup, thread/approval delivery states и durable Telegram
   final-delivery outbox.
 - Family-private non-member sources исключаются до snapshot/provider и повторно проверяются для всех
@@ -1841,5 +1841,5 @@ persisted contract, application code и регрессионным тестам.
   повторно.
 - Production deploy исполняет exact resolved-Compose security predicate для полного mount/port и
   root-capability surface; contract test запускает саму Bash/`jq` функцию и fail-closed unsafe fixture.
-- Release `0.11.0`: финальный fresh-DB прогон дал 1084 passed / 1 skipped; `npm audit` сообщил
-  0 vulnerabilities. Release gates и review blockers завершены, известных P0/P1 не осталось.
+- Release `0.11.0`: финальный fresh-DB прогон дал 1260 passed / 1 skipped; `npm audit` сообщил
+  0 vulnerabilities. Release gates и review blockers завершены.
