@@ -2,13 +2,15 @@
  * Long-term memory record contracts and deterministic projections.
  *
  * Exports:
- * - Memory enums, item, row, create-input, and durable operation provenance types.
- * - `rowToMemory`: converts PostgreSQL rows to model-safe records.
+ * - Memory enums, internal item, referenced-item, row, create-input, provenance, and evidence types.
+ * - `rowToMemory` / `rowToReferencedMemory`: convert PostgreSQL rows to internal records.
  * - `memoryOperationHash`: fingerprints replay-protected mutation input.
+ * - `normalizeMemoryClaimContent`: exact-duplicate normalization without semantic heuristics.
  */
 import { createHash } from "node:crypto";
 
 import type { MemoryScope } from "./memory-context.js";
+import type { ModelMemoryEvidence } from "./model-memory.js";
 
 export type MemoryKind = "episode" | "fact" | "family_shared" | "preference" | "profile";
 export type MemoryConfirmation = "model_high" | "user_confirmed";
@@ -39,17 +41,38 @@ export interface MemoryItem {
   updatedAt: string;
 }
 
+export interface ReferencedMemoryItem extends MemoryItem {
+  memoryRef: string;
+  sourceEvidence?: ModelMemoryEvidence;
+}
+
 export interface CreateMemoryInput {
   confirmation: MemoryConfirmation;
   content: string;
+  evidence?: CreateMemoryEvidenceInput;
+  explicitSource?: CreateMemoryExplicitSourceInput;
   kind: MemoryKind;
   messageThreadId?: string;
   operationKey: string;
-  provenance: MemoryOperationProvenance;
+  provenance?: MemoryOperationProvenance;
   scope: MemoryScope;
   sensitivity: MemorySensitivity;
   source: string;
   sourceEventId?: string;
+}
+
+export interface CreateMemoryExplicitSourceInput {
+  conversationId: string;
+  subjectLabel?: string;
+  subjectRef?: string;
+  timelineEntryId: string;
+}
+
+export interface CreateMemoryEvidenceInput {
+  approvalInputHash?: string;
+  approvalOperationKey?: string;
+  approvalRef?: string;
+  extractionCandidateId: string;
 }
 
 export interface MemoryRow {
@@ -66,6 +89,10 @@ export interface MemoryRow {
   sensitivity: MemorySensitivity;
   source: string;
   updated_at: Date;
+}
+
+export interface ReferencedMemoryRow extends MemoryRow {
+  memory_ref: string;
 }
 
 export function rowToMemory(row: MemoryRow): MemoryItem {
@@ -94,6 +121,22 @@ export function rowToMemory(row: MemoryRow): MemoryItem {
   };
 }
 
+export function rowToReferencedMemory(row: ReferencedMemoryRow): ReferencedMemoryItem {
+  return {
+    ...rowToMemory(row),
+    memoryRef: row.memory_ref,
+  };
+}
+
 export function memoryOperationHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+export function normalizeMemoryClaimContent(content: string): string {
+  return content
+    .normalize("NFKC")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }

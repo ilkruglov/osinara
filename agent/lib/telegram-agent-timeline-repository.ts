@@ -35,16 +35,21 @@ export async function nextTelegramGroupSequence(
   groupId: string,
 ): Promise<string> {
   const result = await client.query<{ sequence_id: string }>(
-    `UPDATE telegram_groups
+    `UPDATE application_conversations
      SET next_timeline_sequence = greatest(
        next_timeline_sequence,
+       (SELECT next_timeline_sequence FROM telegram_groups WHERE id = $1),
        coalesce((SELECT max(sequence_id) FROM telegram_group_messages WHERE group_id = $1), 0)
      ) + 1
-     WHERE id = $1 RETURNING next_timeline_sequence::text AS sequence_id`,
+     WHERE telegram_group_id = $1 RETURNING next_timeline_sequence::text AS sequence_id`,
     [groupId],
   );
   const sequence = result.rows[0]?.sequence_id;
   if (!sequence) throw new Error("AGENT_TELEGRAM_GROUP_NOT_FOUND: Группа не зарегистрирована");
+  await client.query(
+    "UPDATE telegram_groups SET next_timeline_sequence = $2 WHERE id = $1",
+    [groupId, sequence],
+  );
   return sequence;
 }
 

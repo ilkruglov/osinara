@@ -1,0 +1,178 @@
+/**
+ * Model-facing memory tool result contract tests.
+ *
+ * Constructs covered:
+ * - `remember`: returns a model-safe item and references undo by opaque `memoryRef`.
+ * - `list_memories`: projects internal records while preserving an opaque pagination cursor.
+ * - `search_memories`: returns the already-safe retrieval DTO unchanged.
+ */
+import type { ToolContext } from "eve/tools";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { createMemory, listMemories, requireApprovalEvidence, retrieveMemories } = vi.hoisted(() => ({
+  createMemory: vi.fn(),
+  listMemories: vi.fn(),
+  requireApprovalEvidence: vi.fn(),
+  retrieveMemories: vi.fn(),
+}));
+
+vi.mock("./memory-context.js", () => ({
+  requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
+  requireWritableScope: (_authorization: unknown, scope: string) => scope,
+}));
+vi.mock("./memory-content-policy.js", () => ({
+  requireAllowedMemoryContent: (content: string) => content,
+}));
+vi.mock("./memory-repository.js", () => ({
+  memoryRepository: { create: createMemory, list: listMemories },
+}));
+vi.mock("./memory-retrieval.js", () => ({
+  retrieveRelevantMemories: retrieveMemories,
+}));
+vi.mock("./session-auth.js", () => ({
+  resolveSessionCaller: () => ({
+    attributes: {
+      telegramConversationId: "conversation-1",
+      telegramTimelineEntryId: "timeline-entry-1",
+    },
+  }),
+}));
+vi.mock("./require-tool-approval-evidence.js", () => ({
+  requireToolApprovalEvidence: requireApprovalEvidence,
+}));
+
+import listMemoriesTool from "./tools/list_memories.js";
+import remember from "./tools/remember.js";
+import searchMemories from "./tools/search_memories.js";
+
+const MEMORY_ID = "00000000-0000-4000-8000-000000000001";
+const MEMORY_REF = "mem_0123456789abcdef0123456789abcdef";
+const internalMemory = {
+  author: { status: "current_member", telegramUserId: "7100000001", userId: "user-1" },
+  confirmation: "user_confirmed",
+  content: "Пользователь любит чай",
+  createdAt: "2026-08-01T10:00:00.000Z",
+  embeddingStatus: "pending",
+  id: MEMORY_ID,
+  kind: "preference",
+  memoryRef: MEMORY_REF,
+  messageThreadId: "42",
+  scope: "personal",
+  sensitivity: "normal",
+  source: "eve:session-internal:turn-internal",
+  updatedAt: "2026-08-01T10:00:00.000Z",
+  sourceEvidence: {
+    authorLabel: "Анна",
+    kind: "reported",
+    notice: "Сообщено другим участником; не является подтверждением субъекта.",
+    observedAt: "2026-08-01T09:55:00.000Z",
+  },
+} as const;
+const context = {
+  callId: "call-1",
+  session: { id: "session-internal", turn: { id: "turn-internal" } },
+} as ToolContext;
+
+describe("model-facing memory tool results", () => {
+  beforeEach(() => {
+    createMemory.mockReset();
+    listMemories.mockReset();
+    requireApprovalEvidence.mockReset();
+    requireApprovalEvidence.mockResolvedValue(undefined);
+    retrieveMemories.mockReset();
+  });
+
+  it("requires exact approval evidence before a sensitive remember write", async () => {
+    createMemory.mockResolvedValue(internalMemory);
+    const input = {
+      content: internalMemory.content,
+      kind: "preference" as const,
+      scope: "personal" as const,
+      sensitivity: "sensitive" as const,
+    };
+
+    await remember.execute(input, context);
+
+    expect(requireApprovalEvidence).toHaveBeenCalledWith(context, "remember", input);
+    expect(requireApprovalEvidence.mock.invocationCallOrder[0])
+      .toBeLessThan(createMemory.mock.invocationCallOrder[0]!);
+  });
+
+  it("returns only a safe item and opaque undo ref from remember", async () => {
+    createMemory.mockResolvedValue(internalMemory);
+
+    const result = await remember.execute({
+      content: internalMemory.content,
+      kind: "preference",
+      scope: "personal",
+      sensitivity: "normal",
+      subjectRef: "subj_11111111111111111111111111111111",
+    }, context);
+
+    expect(result.item).toEqual({
+      authorStatus: "current_member",
+      confirmation: "user_confirmed",
+      content: internalMemory.content,
+      createdAt: internalMemory.createdAt,
+      kind: "preference",
+      memoryRef: MEMORY_REF,
+      scope: "personal",
+      sensitivity: "normal",
+      updatedAt: internalMemory.updatedAt,
+    });
+    expect(JSON.stringify(result)).not.toContain(MEMORY_ID);
+    expect(result.notice).toContain(`memoryRef ${MEMORY_REF}`);
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        confirmation: "user_confirmed",
+        explicitSource: {
+          conversationId: "conversation-1",
+          subjectRef: "subj_11111111111111111111111111111111",
+          timelineEntryId: "timeline-entry-1",
+        },
+      }),
+    );
+  });
+
+  it("returns only safe list items and keeps the repository cursor", async () => {
+    listMemories.mockResolvedValue({ items: [internalMemory], nextCursor: "opaque-cursor" });
+
+    const result = await listMemoriesTool.execute({ limit: 20 }, context);
+
+    expect(result).toEqual({
+      items: [{
+        authorStatus: "current_member",
+        confirmation: "user_confirmed",
+        content: internalMemory.content,
+        createdAt: internalMemory.createdAt,
+        evidence: internalMemory.sourceEvidence,
+        kind: "preference",
+        memoryRef: MEMORY_REF,
+        scope: "personal",
+        sensitivity: "normal",
+        updatedAt: internalMemory.updatedAt,
+      }],
+      nextCursor: "opaque-cursor",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/user-1|7100000001|session-internal|turn-internal/u);
+  });
+
+  it("returns only the safe retrieval DTO from search_memories", async () => {
+    const safeMemory = {
+      authorStatus: "current_member",
+      confirmation: "user_confirmed",
+      content: internalMemory.content,
+      createdAt: internalMemory.createdAt,
+      kind: "preference",
+      memoryRef: MEMORY_REF,
+      scope: "personal",
+      sensitivity: "normal",
+      updatedAt: internalMemory.updatedAt,
+    };
+    retrieveMemories.mockResolvedValue([safeMemory]);
+
+    await expect(searchMemories.execute({ query: "чай" }, context)).resolves.toEqual([safeMemory]);
+    expect(JSON.stringify(await retrieveMemories.mock.results[0]!.value)).not.toContain(MEMORY_ID);
+  });
+});

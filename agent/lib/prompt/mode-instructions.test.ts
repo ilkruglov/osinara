@@ -169,6 +169,15 @@ describe("mode instruction anchors", () => {
     expect(markdown).toContain("send_workspace_file");
   });
 
+  it("routes a persistent style wish only into the typed preference set", () => {
+    for (const markdown of [privateMode, familyMode]) {
+      expect(markdown).toContain("manage_behavior_preference");
+      expect(markdown).toMatch(/ближайшую доступную настройку/u);
+      expect(markdown).toMatch(/не выражается ни одной из них/u);
+      expect(markdown).toMatch(/не храни как свободный текст/u);
+    }
+  });
+
   it("keeps external-group task boundaries out of trusted modes", () => {
     // Group-specific scope guidance must not leak into trusted modes.
     for (const markdown of [privateMode, familyMode]) {
@@ -210,11 +219,13 @@ describe("external instructions follow the effective allowlist", () => {
   });
 
   it("teaches the memory write contract only when a write action is granted", () => {
-    expect(external("remember")).toContain("confirmationMode");
+    expect(external("remember")).toMatch(/только после прямой просьбы пользователя/iu);
+    expect(external("remember")).not.toContain("confirmationMode");
+    expect(external("remember")).toMatch(/не вызывай `remember` автоматически/iu);
     expect(external("manage_memory.edit")).toContain('"action":"edit"');
     expect(external("manage_memory.delete")).toContain('"action":"delete"');
     expect(external("manage_memory.edit")).not.toContain('"action":"delete"');
-    expect(external()).not.toContain("confirmationMode");
+    expect(external()).not.toContain("прямой просьбы пользователя");
     expect(external()).not.toContain("manage_memory");
   });
 });

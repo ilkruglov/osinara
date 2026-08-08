@@ -55,7 +55,12 @@ export interface TelegramIngressRepository {
   beginDispatch(updateId: string, leaseToken: string): Promise<void>;
   claimNext(leaseMilliseconds: number): Promise<TelegramIngressClaim | null>;
   complete(updateId: string, leaseToken: string): Promise<void>;
-  completeWithSession(updateId: string, leaseToken: string, sessionId: string): Promise<void>;
+  completeWithSession(
+    updateId: string,
+    leaseToken: string,
+    sessionId: string,
+    nextEventIndex: number,
+  ): Promise<void>;
   enqueue(input: EnqueueTelegramUpdateInput): Promise<"duplicate" | "inserted">;
   fail(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
   rekeyQueue(input: {
@@ -65,6 +70,7 @@ export interface TelegramIngressRepository {
   }): Promise<void>;
   release(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
   renewLease(updateId: string, leaseToken: string, leaseMilliseconds: number): Promise<Date>;
+  sessionEventStreamCursor(sessionId: string): Promise<number>;
   saveVoiceTranscript(updateId: string, leaseToken: string, transcript: string): Promise<void>;
 }
 

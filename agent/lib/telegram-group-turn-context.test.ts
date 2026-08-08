@@ -61,6 +61,37 @@ const input = {
 };
 
 describe("Telegram group turn context", () => {
+  it("uses the same bounded context contract for a private conversation", async () => {
+    const deps = dependencies(null);
+    const privateEntry = {
+      ...entry("98", "Личный контекст"),
+      entryId: "00000000-0000-4000-8000-000000000098",
+    };
+    const timeline = {
+      listIncremental: vi.fn(),
+      listRecent: vi.fn().mockResolvedValue([privateEntry]),
+    };
+    const prepare = createTelegramGroupTurnContextPreparer({ ...deps, timeline });
+
+    const result = await prepare({
+      ...input,
+      conversationId: "conversation-personal-1",
+      groupId: null,
+    });
+
+    expect(timeline.listRecent).toHaveBeenCalledWith({
+      beforeSequence: "100",
+      conversationId: "conversation-personal-1",
+      limit: 49,
+    });
+    expect(result.durableMessage).toContain("Личный контекст");
+    expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
+    expect(result.visibleEntryIds).toEqual([
+      "00000000-0000-4000-8000-000000000098",
+      input.currentEntryId,
+    ]);
+  });
+
   it("embeds the bootstrap timeline and reply ancestry into a new durable turn", async () => {
     const deps = dependencies(null);
     deps.journal.listRecent.mockResolvedValue([entry("98", "Казань"), entry("99", "Тула")]);
@@ -72,7 +103,7 @@ describe("Telegram group turn context", () => {
       anchorEntryId: input.currentEntryId,
       beforeSequence: input.currentSequence,
       groupId: input.groupId,
-      limit: 50,
+      limit: 49,
       messageThreadId: null,
     });
     expect(deps.journal.listIncremental).not.toHaveBeenCalled();
@@ -101,7 +132,7 @@ describe("Telegram group turn context", () => {
       applicationSessionId: "session-1",
       beforeSequence: "105",
       groupId: "group-1",
-      limit: 50,
+      limit: 49,
       messageThreadId: null,
     });
     expect(deps.journal.listRecent).not.toHaveBeenCalled();

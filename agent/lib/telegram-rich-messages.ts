@@ -273,25 +273,35 @@ export async function postTelegramRichMessage(
   const chunks = formatTelegramRichMessages(markdown);
   const sentMessages: SentTelegramMessage[] = [];
   for (const [index, chunk] of chunks.entries()) {
-    const response = await requestTelegramRichApi(
-      "sendRichMessage",
-      richBody(
-        target,
-        { markdown: chunk },
-        false,
-        index === 0 ? replyParameters : undefined,
-      ),
+    const sent = await postTelegramRichMessageChunk(
+      chunk,
+      target,
+      state,
+      index === 0 ? replyParameters : undefined,
     );
-    const sent = requireSentMessage(response);
     sentMessages.push(sent);
-
-    // Eve normally anchors groups inside `telegram.post`; raw rich delivery mirrors that contract.
-    if (state) {
-      if (state.chatType === null) state.chatType = sent.chatType;
-      if (sent.chatType === "group" || sent.chatType === "supergroup") {
-        state.conversationId = sent.messageId;
-      }
-    }
   }
   return sentMessages;
+}
+
+export async function postTelegramRichMessageChunk(
+  markdown: string,
+  target: TelegramRichTarget,
+  state?: TelegramRichAnchorState,
+  replyParameters?: TelegramReplyParameters,
+): Promise<SentTelegramMessage> {
+  const response = await requestTelegramRichApi(
+    "sendRichMessage",
+    richBody(target, { markdown }, false, replyParameters),
+  );
+  const sent = requireSentMessage(response);
+
+  // Eve normally anchors groups inside `telegram.post`; raw rich delivery mirrors that contract.
+  if (state) {
+    if (state.chatType === null) state.chatType = sent.chatType;
+    if (sent.chatType === "group" || sent.chatType === "supergroup") {
+      state.conversationId = sent.messageId;
+    }
+  }
+  return sent;
 }

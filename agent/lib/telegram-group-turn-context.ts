@@ -12,9 +12,10 @@ import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
 } from "../config.js";
 import { AppError } from "./app-error.js";
+import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 import { groupTimelineCursorRepository } from "./sessions/group-timeline-cursor-repository.js";
-import { formatTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
+import { selectTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
 import {
   telegramGroupJournalRepository,
   type TelegramGroupJournalRepository,
@@ -26,7 +27,8 @@ interface PrepareTelegramGroupTurnContextInput {
   currentSenderDisplayName: string;
   currentSenderUsername: string | null;
   currentSequence: string;
-  groupId: string;
+  conversationId?: string;
+  groupId: string | null;
   includeAttachmentReferences: boolean;
   messageText: string;
   messageThreadId: string | null;
@@ -36,12 +38,15 @@ interface PrepareTelegramGroupTurnContextInput {
 
 interface TelegramGroupTurnContextDependencies {
   journal: Pick<TelegramGroupJournalRepository, "listIncremental" | "listRecent">;
+  timeline?: Pick<typeof conversationTimelineRepository, "listIncremental" | "listRecent">;
   sessions: Pick<typeof groupTimelineCursorRepository, "currentGroupTimelineCursor">;
 }
 
 export interface PreparedTelegramGroupTurnContext {
   cursorSequence: string;
   durableMessage: string;
+  omittedBeforeSequence: string | null;
+  visibleEntryIds: string[];
 }
 
 export type TelegramGroupTurnContextPreparer = (
@@ -51,6 +56,7 @@ export type TelegramGroupTurnContextPreparer = (
 const CURRENT_MESSAGE_OPEN_TAG = "<current_telegram_message>";
 const CURRENT_MESSAGE_CLOSE_TAG = "</current_telegram_message>";
 const TURN_MESSAGE_ERROR_CODE = "AGENT_TELEGRAM_TURN_MESSAGE_INVALID";
+const CURRENT_TIMELINE_ENTRY_COUNT = 1;
 
 function turnMessageError(reason: string, detail?: string): AppError {
   // The exact failure stays in logs; the caller only needs the stable contract error.
@@ -124,48 +130,91 @@ export function createTelegramGroupTurnContextPreparer(
     const cursor = await dependencies.sessions.currentGroupTimelineCursor(
       input.applicationSessionId,
     );
+    const useConversationTimeline = input.conversationId !== undefined;
+    if (useConversationTimeline && !dependencies.timeline) {
+      throw new AppError(
+        "AGENT_CONVERSATION_TIMELINE_REPOSITORY_MISSING",
+        "Не удалось загрузить историю личного разговора",
+      );
+    }
     const page = cursor === null
       ? {
-          entries: await dependencies.journal.listRecent({
+          entries: useConversationTimeline
+            ? await dependencies.timeline!.listRecent({
+                beforeSequence: input.currentSequence,
+                conversationId: input.conversationId!,
+                limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+              })
+            : await dependencies.journal.listRecent({
             anchorEntryId: input.currentEntryId,
             beforeSequence: input.currentSequence,
-            groupId: input.groupId,
-            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
+            groupId: input.groupId!,
+            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
             messageThreadId: input.messageThreadId,
           }),
           omittedBeforeSequence: null,
         }
-      : await dependencies.journal.listIncremental({
-          afterSequence: cursor,
-          anchorEntryId: input.currentEntryId,
-          applicationSessionId: input.applicationSessionId,
-          beforeSequence: input.currentSequence,
-          groupId: input.groupId,
-          limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
-          messageThreadId: input.messageThreadId,
-        });
+      : useConversationTimeline
+        ? await dependencies.timeline!.listIncremental({
+            afterSequence: cursor,
+            applicationSessionId: input.applicationSessionId,
+            beforeSequence: input.currentSequence,
+            conversationId: input.conversationId!,
+            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+          })
+        : await dependencies.journal.listIncremental({
+            afterSequence: cursor,
+            anchorEntryId: input.currentEntryId,
+            applicationSessionId: input.applicationSessionId,
+            beforeSequence: input.currentSequence,
+            groupId: input.groupId!,
+            limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+            messageThreadId: input.messageThreadId,
+          });
     // External capability revocation hides even historical opaque references from new model turns.
     const visibleEntries = input.includeAttachmentReferences
       ? page.entries
       : page.entries.map(({ attachment: _attachment, ...entry }) => entry);
-    const timeline = formatTelegramGroupJournalContext(
+    const currentMessageCharacters = durableTurnMessage(null, input).length;
+    const timelineCharacterBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
+      currentMessageCharacters - 2;
+    if (timelineCharacterBudget <= 0) {
+      throw new AppError(
+        "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
+        "Текущее сообщение превышает допустимый размер контекста разговора",
+      );
+    }
+    const selected = selectTelegramGroupJournalContext(
       visibleEntries,
-      TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
+      timelineCharacterBudget,
       page.omittedBeforeSequence,
       input.replyToSequenceId,
     );
+    const timeline = selected.context;
     // A DB-resolved reply is usable only when its protected target survived model-context bounds.
     const replyTargetIncluded = input.replyToSequenceId === null ||
       timeline?.includes(`\n#${input.replyToSequenceId} [`) === true;
     const replyToSequenceId = replyTargetIncluded ? input.replyToSequenceId : null;
     const replyTargetUnavailable = input.replyTargetUnavailable || !replyTargetIncluded;
+    const durableMessage = durableTurnMessage(timeline, {
+      ...input,
+      replyTargetUnavailable,
+      replyToSequenceId,
+    });
+    if (durableMessage.length > TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS) {
+      throw new AppError(
+        "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
+        "История разговора превышает допустимый размер контекста",
+      );
+    }
     return {
       cursorSequence: input.currentSequence,
-      durableMessage: durableTurnMessage(timeline, {
-        ...input,
-        replyTargetUnavailable,
-        replyToSequenceId,
-      }),
+      durableMessage,
+      omittedBeforeSequence: page.omittedBeforeSequence,
+      visibleEntryIds: [
+        ...selected.entries.flatMap((entry) => entry.entryId ? [entry.entryId] : []),
+        input.currentEntryId,
+      ],
     };
   };
 }
@@ -173,4 +222,5 @@ export function createTelegramGroupTurnContextPreparer(
 export const telegramGroupTurnContextPreparer = createTelegramGroupTurnContextPreparer({
   journal: telegramGroupJournalRepository,
   sessions: groupTimelineCursorRepository,
+  timeline: conversationTimelineRepository,
 });

@@ -200,35 +200,20 @@ prepare_candidate_release() {
   validate_resolved_compose
 }
 
-validate_resolved_compose() {
-  local images_file="${WORK_DIR}/resolved-images.txt"
-  local expected_images_file="${WORK_DIR}/expected-images.txt"
-  local config_json="${WORK_DIR}/resolved-compose.json"
-  compose_candidate config --images | LC_ALL=C sort > "$images_file"
-  printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
-    "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$CLI_PROXY_IMAGE" \
-    "$POSTGRES_IMAGE" "$TEI_IMAGE" | LC_ALL=C sort > "$expected_images_file"
-  cmp --silent "$images_file" "$expected_images_file" ||
-    fail "DEPLOY_COMPOSE_IMAGE_SET_INVALID" "Resolved Compose image multiset is not approved"
-
-  compose_candidate config --format json > "$config_json"
-  jq -e '
-    (.services | keys) == [
-      "agent", "cli-proxy-api", "edge", "memory-embedding", "memory-embedding-worker", "migrate", "postgres",
-      "sandbox-egress-proxy", "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
-    ] and
-    .services.agent.depends_on.migrate.condition == "service_completed_successfully"
-  ' "$config_json" >/dev/null ||
-    fail "DEPLOY_COMPOSE_SERVICE_SET_INVALID" "Resolved Compose service set is not approved"
+validate_resolved_compose_security() {
+  local config_json="$1"
   jq -e '
     all(.services[]; (.privileged // false) == false) and
     all(.services[]; (.network_mode // "") != "host") and
     all(.services[]; (.pid // "") != "host") and
     all(.services[]; (.ipc // "") != "host") and
-    all(.services[]; (has("build") or has("devices") or has("cap_add")) | not) and
+    all(.services[]; (has("build") or has("devices") or has("cap_add") or has("volumes_from")) | not) and
     all(.services[]; .logging.driver == "json-file" and
       .logging.options["max-size"] == "20m" and .logging.options["max-file"] == "5") and
     any(.services.agent.volumes[];
+      .source == "/opt/osinara/model-providers.json" and
+      .target == "/app/config/model-providers.json" and .read_only == true) and
+    any(.services["memory-extraction-worker"].volumes[];
       .source == "/opt/osinara/model-providers.json" and
       .target == "/app/config/model-providers.json" and .read_only == true) and
     any(.services["cli-proxy-api"].volumes[];
@@ -244,6 +229,7 @@ validate_resolved_compose() {
         {service: "agent", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
         {service: "cli-proxy-api", type: "bind", source: "/opt/osinara/model-providers.json", target: "/config/model-providers.json"},
         {service: "memory-embedding", type: "volume", source: "memory-embedding-model-e5", target: "/data"},
+        {service: "memory-extraction-worker", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
         {service: "sandbox-runner", type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock"},
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
@@ -253,7 +239,32 @@ validate_resolved_compose() {
       {service: $service.key, host_ip, published, target}] == [{
         service: "edge", host_ip: "127.0.0.1", published: "8082", target: 80
       }])
+  ' "$config_json" >/dev/null
+}
+
+validate_resolved_compose() {
+  local images_file="${WORK_DIR}/resolved-images.txt"
+  local expected_images_file="${WORK_DIR}/expected-images.txt"
+  local config_json="${WORK_DIR}/resolved-compose.json"
+  compose_candidate config --images | LC_ALL=C sort > "$images_file"
+  printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
+    "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$CLI_PROXY_IMAGE" \
+    "$POSTGRES_IMAGE" "$TEI_IMAGE" | LC_ALL=C sort > "$expected_images_file"
+  cmp --silent "$images_file" "$expected_images_file" ||
+    fail "DEPLOY_COMPOSE_IMAGE_SET_INVALID" "Resolved Compose image multiset is not approved"
+
+  compose_candidate config --format json > "$config_json"
+  jq -e '
+    (.services | keys) == [
+      "agent", "cli-proxy-api", "edge", "memory-embedding", "memory-embedding-worker", "memory-extraction-worker", "migrate", "postgres",
+      "sandbox-egress-proxy", "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
+    ] and
+    .services.agent.depends_on.migrate.condition == "service_completed_successfully" and
+    .services["memory-extraction-worker"].depends_on.migrate.condition == "service_completed_successfully" and
+    .services["memory-extraction-worker"].depends_on["memory-embedding"].condition == "service_healthy"
   ' "$config_json" >/dev/null ||
+    fail "DEPLOY_COMPOSE_SERVICE_SET_INVALID" "Resolved Compose service set is not approved"
+  validate_resolved_compose_security "$config_json" ||
     fail "DEPLOY_COMPOSE_SECURITY_INVALID" "Resolved Compose enables an unsafe host capability"
 }
 

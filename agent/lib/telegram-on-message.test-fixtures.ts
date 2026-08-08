@@ -60,6 +60,29 @@ export function repositories() {
     attachments: {
       persist: vi.fn().mockResolvedValue([]),
     },
+    conversations: {
+      getByChatId: vi.fn().mockResolvedValue({
+        familyId: "family-1",
+        id: "conversation-private-1",
+        label: "Анна",
+        ownerUserId: "user-1",
+        scope: "personal",
+        scopePartitionKey: "user-1",
+        telegramChatId: "telegram-101",
+        telegramGroupId: null,
+      }),
+      getByGroupId: vi.fn().mockResolvedValue({
+        familyId: "family-1",
+        id: "conversation-group-1",
+        label: "Группа",
+        ownerUserId: null,
+        scope: "family",
+        scopePartitionKey: "family-1",
+        telegramChatId: "group-101",
+        telegramGroupId: "group-1",
+      }),
+      syncTimelineParticipants: vi.fn().mockResolvedValue([]),
+    },
     family: {
       claimInvitation: vi.fn(),
     },
@@ -67,10 +90,27 @@ export function repositories() {
       prepare: vi.fn().mockResolvedValue({
         cursorSequence: "1",
         durableMessage: "<current_telegram_message>test</current_telegram_message>",
+        omittedBeforeSequence: null,
+        visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
       }),
     },
     hitl: {
       authorizeReply: vi.fn().mockResolvedValue("not_applicable"),
+    },
+    memoryApprovals: {
+      pendingContext: vi.fn().mockResolvedValue(null),
+    },
+    profilePolicies: {
+      claimPendingGroupNotice: vi.fn().mockResolvedValue(null),
+      markGroupNoticePresented: vi.fn().mockResolvedValue(undefined),
+    },
+    profiles: {
+      create: vi.fn().mockResolvedValue({
+        generatedAt: "2026-08-08T00:00:00.000Z",
+        profileViewRef: "view_00000000000000000000000000000001",
+        subjects: [],
+        totalCharacters: 0,
+      }),
     },
     journal: {
       listBefore: vi.fn().mockResolvedValue([]),
@@ -102,6 +142,20 @@ export function repositories() {
       findGroup: vi.fn().mockResolvedValue(null),
       findIdentity: vi.fn().mockResolvedValue(null),
       hasOwner: vi.fn(),
+    },
+    timeline: {
+      recordInbound: vi.fn().mockResolvedValue({
+        entryId: "00000000-0000-4000-8000-000000000011",
+        replyTargetUnavailable: false,
+        replyToSequenceId: null,
+        sequenceId: "1",
+        status: "inserted",
+      }),
+    },
+    threadNotices: {
+      complete: vi.fn(),
+      fail: vi.fn(),
+      takePending: vi.fn().mockResolvedValue(null),
     },
   };
 }

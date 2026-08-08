@@ -197,7 +197,9 @@ describe("Telegram rich presentation instructions", () => {
     const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
 
     expect(instructions).toContain("По умолчанию отвечай обычным текстом");
-    expect(instructions).toContain("Если сомневаешься, пиши обычным текстом");
+    // The markup default and the volume rule are separate decisions, and both tie-breakers are stated.
+    expect(instructions).toContain("Если сомневаешься в разметке, пиши обычным текстом");
+    expect(instructions).toContain("если сомневаешься в объёме, сворачивай");
     // The default must be stated before the syntax reference, not buried after it.
     const defaultRule = instructions.indexOf("По умолчанию отвечай обычным текстом");
     expect(defaultRule).toBeGreaterThan(-1);
@@ -223,14 +225,14 @@ describe("Telegram rich presentation instructions", () => {
   it("requires long answers to collapse their bulk behind a details block", async () => {
     const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
 
-    expect(instructions).toContain("## Длинные ответы прячь под раскрытие");
+    expect(instructions).toContain("## Длинные ответы всегда прячь под раскрытие");
     expect(instructions).toContain("`</details>`");
     expect(instructions).toContain("`<details open>`");
     // The lead must stay outside the accordion, and short answers must not be hidden at all.
     expect(instructions).toMatch(/одна–три строки|одну–три строки/u);
     expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
-    expect(instructions).toContain("до семи строк отправляй его как есть");
     expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
+    expect(instructions).toContain("Если в текущем групповом сообщении упомянули твоё имя");
   });
 
   it("overrides the framework transport hint that forbids rich structure", async () => {

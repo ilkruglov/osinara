@@ -18,6 +18,7 @@ import manageTelegramGroup from "./tools/manage_telegram_group.js";
 import notificationSettings from "./tools/notification_settings.js";
 
 const ID = "00000000-0000-4000-8000-000000000001";
+const MEMORY_REF = "mem_00000000000000000000000000000001";
 
 function schemaOf(tool: { inputSchema: unknown }): z.ZodType {
   return tool.inputSchema as z.ZodType;
@@ -53,10 +54,11 @@ describe("consolidated tool action schemas", () => {
   it("accepts every memory mutation shape through the model-facing schema", () => {
     const schema = schemaOf(manageMemory);
 
-    expect(schema.safeParse({ action: "edit", content: "Исправлено", id: ID }).success).toBe(true);
-    expect(schema.safeParse({ action: "delete", id: ID }).success).toBe(true);
-    expect(schema.safeParse({ action: "undo", id: ID }).success).toBe(true);
-    expect(schema.safeParse({ action: "edit", id: ID }).success).toBe(true);
+    expect(schema.safeParse({ action: "edit", content: "Исправлено", memoryRef: MEMORY_REF }).success)
+      .toBe(true);
+    expect(schema.safeParse({ action: "delete", memoryRef: MEMORY_REF }).success).toBe(true);
+    expect(schema.safeParse({ action: "undo", memoryRef: MEMORY_REF }).success).toBe(true);
+    expect(schema.safeParse({ action: "edit", memoryRef: MEMORY_REF }).success).toBe(true);
   });
 
   it("accepts explicit reminder mutation shapes through the model-facing schema", () => {

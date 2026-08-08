@@ -17,7 +17,9 @@ import { formatTelegramTurnFailure } from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput } from "../lib/telegram-progress.js";
-import { postTelegramRichMessage } from "../lib/telegram-rich-messages.js";
+import { deliverTelegramFinalOutput } from "../lib/telegram-final-delivery.js";
+import { telegramFinalDeliveryRepository } from "../lib/telegram-final-delivery-repository.js";
+import { postTelegramRichMessageChunk } from "../lib/telegram-rich-messages.js";
 import {
   applicationSessionId,
   registerTelegramDeliveredMessageRoutes,
@@ -38,6 +40,9 @@ import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proacti
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
 import { AppError } from "../lib/app-error.js";
+import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
+import { createTurnExtractionBatch } from "../lib/memory-extraction-batch-coordinator.js";
+import { memoryApprovalNoticeRepository } from "../lib/memory-approval-notice-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -70,12 +75,25 @@ export default telegramChannel({
         return;
       }
       const message = output.message;
-      const sentMessages = await postTelegramRichMessage(
-        message,
-        channel.telegram,
-        channel.state,
-        isScheduledSession(ctx) ? undefined : telegramTurnReplyParameters(channel.state, ctx),
-      );
+      const replyParameters = isScheduledSession(ctx)
+        ? undefined
+        : telegramTurnReplyParameters(channel.state, ctx);
+      const sentMessages = await deliverTelegramFinalOutput({
+        applicationSessionId: sessionId,
+        deliveryIdentity: {
+          chatId: channel.telegram.chatId,
+          messageThreadId: channel.telegram.messageThreadId ?? null,
+          replyParameters: replyParameters ?? null,
+        },
+        eveTurnId: ctx.session.turn.id,
+        markdown: message,
+        sendChunk: (chunk, ordinal) => postTelegramRichMessageChunk(
+          chunk,
+          channel.telegram,
+          channel.state,
+          ordinal === 0 ? replyParameters : undefined,
+        ),
+      });
       const deliveredAt = new Date();
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       const groupId = scheduledDelivery?.groupId ??
@@ -104,7 +122,10 @@ export default telegramChannel({
           title: scheduledDelivery.title,
         });
       }
-      if (groupId && data.finishReason === "stop") {
+      const conversationId = typeof currentAttributes?.telegramConversationId === "string"
+        ? currentAttributes.telegramConversationId
+        : null;
+      if ((conversationId || groupId) && data.finishReason === "stop") {
         const replyToEntryId = typeof currentAttributes?.telegramTimelineEntryId === "string"
           ? currentAttributes.telegramTimelineEntryId
           : null;
@@ -113,15 +134,27 @@ export default telegramChannel({
             ? currentAttributes.telegramForumTopicId
             : null);
         // The primary delivery receipt is durable before this secondary conversation projection.
-        await telegramGroupJournalRepository.recordAgentResponse({
-          applicationSessionId: isScheduledSession(ctx) ? null : sessionId,
-          contentText: message,
-          deliveredAt,
-          groupId,
-          messageThreadId: forumTopicId,
-          replyToEntryId,
-          telegramMessageIds: sentMessages.map((sent) => sent.messageId),
-        });
+        if (groupId) {
+          await telegramGroupJournalRepository.recordAgentResponse({
+            applicationSessionId: isScheduledSession(ctx) ? null : sessionId,
+            contentText: message,
+            deliveredAt,
+            groupId,
+            messageThreadId: forumTopicId,
+            replyToEntryId,
+            telegramMessageIds: sentMessages.map((sent) => sent.messageId),
+          });
+        } else if (conversationId) {
+          await conversationTimelineRepository.recordAgentResponse({
+            applicationSessionId: sessionId,
+            contentText: message,
+            conversationId,
+            deliveredAt,
+            messageThreadId: null,
+            replyToEntryId,
+            telegramMessageIds: sentMessages.map((sent) => sent.messageId),
+          });
+        }
       }
       if (!isScheduledSession(ctx)) {
         await registerTelegramDeliveredMessageRoutes(
@@ -144,15 +177,20 @@ export default telegramChannel({
           new Date(),
         );
       }
-      const replyParameters = isScheduledSession(ctx)
-        ? undefined
-        : telegramTurnReplyParameters(channel.state, ctx);
-      const failureMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
-        ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
-        text: formatTelegramTurnFailure(data),
-      });
-      if (!isScheduledSession(ctx)) {
-        await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);
+      // A final send that started may already be visible; never append a second failure message.
+       const finalDeliveryMayBeVisible =
+         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(ctx.session.turn.id);
+       if (!finalDeliveryMayBeVisible) {
+        const replyParameters = isScheduledSession(ctx)
+          ? undefined
+          : telegramTurnReplyParameters(channel.state, ctx);
+        const failureMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
+          ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
+          text: formatTelegramTurnFailure(data),
+        });
+        if (!isScheduledSession(ctx)) {
+          await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);
+        }
       }
       await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
@@ -160,18 +198,55 @@ export default telegramChannel({
     async "turn.started"(_data, _channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
-      // A started turn already owns a durable workflow input, so its embedded timeline delta can
-      // advance the application cursor without losing context across a subsequent process crash.
-      const groupTimelineSequence =
-        ctx.session.auth.current?.attributes.telegramGroupTimelineSequence;
-      if (typeof groupTimelineSequence === "string") {
+      const attributes = ctx.session.auth.current?.attributes;
+      const pendingApprovalRefs = attributes?.pendingMemoryApprovalRefs;
+      const pendingApprovalClaimToken = attributes?.pendingMemoryApprovalClaimToken;
+      if (
+        Array.isArray(pendingApprovalRefs) &&
+        pendingApprovalRefs.every((value): value is string => typeof value === "string") &&
+        typeof pendingApprovalClaimToken === "string"
+      ) {
+        await memoryApprovalNoticeRepository.confirmPresented(
+          pendingApprovalRefs,
+          pendingApprovalClaimToken,
+        );
+      }
+      const conversationId = attributes?.telegramConversationId;
+      const visibleEntryIds = attributes?.telegramTimelineVisibleEntryIds;
+      if (
+        typeof conversationId === "string" &&
+        Array.isArray(visibleEntryIds) &&
+        visibleEntryIds.every((value): value is string => typeof value === "string")
+      ) {
+        const callerTelegramUserId = attributes?.telegramUserId;
+        if (typeof callerTelegramUserId !== "string") {
+          throw new AppError(
+            "AGENT_MEMORY_EXTRACTION_CALLER_MISSING",
+            "Не удалось определить инициатора извлечения памяти из Telegram",
+          );
+        }
+        // Snapshot the exact durable model input before the conversation cursor can move past it.
+        await createTurnExtractionBatch({
+          applicationSessionId: sessionId,
+          callerTelegramUserId,
+          conversationId,
+          entryIds: visibleEntryIds,
+          omittedBeforeSequence:
+            typeof attributes?.telegramTimelineOmittedBeforeSequence === "string"
+              ? attributes.telegramTimelineOmittedBeforeSequence
+              : null,
+          turnId: ctx.session.turn.id,
+        });
+      }
+      const timelineSequence = attributes?.telegramTimelineSequence;
+      if (typeof timelineSequence === "string") {
         await groupTimelineCursorRepository.advance(
           sessionId,
           ctx.session.id,
-          groupTimelineSequence,
+          timelineSequence,
         );
       }
-      const proactiveDeliveryCursor = ctx.session.auth.current?.attributes.proactiveDeliveryCursor;
+      const proactiveDeliveryCursor = attributes?.proactiveDeliveryCursor;
       if (typeof proactiveDeliveryCursor === "string") {
         await proactiveDeliveryRepository.advanceSessionCursor(
           sessionId,

@@ -18,6 +18,8 @@ import {
   createPreferenceBlockResolver,
 } from "./turn-blocks.js";
 
+const createProfile = vi.fn();
+
 function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   return {
     current: {
@@ -128,7 +130,12 @@ describe("memory block resolution", () => {
   it("returns retrieved records for an authorized turn", async () => {
     const resolve = createMemoryBlockResolver({
       authorize: () => authorization,
-      retrieve: vi.fn().mockResolvedValue([]),
+      createProfile,
+      retrieve: vi.fn().mockResolvedValue({
+        memories: [],
+        retrievedClaimIds: [],
+        threads: { threads: [], totalCharacters: 0 },
+      }),
     });
 
     const markdown = await resolve(
@@ -140,7 +147,7 @@ describe("memory block resolution", () => {
 
   it("returns no block when the turn carries no user text", async () => {
     const retrieve = vi.fn();
-    const resolve = createMemoryBlockResolver({ authorize: () => authorization, retrieve });
+    const resolve = createMemoryBlockResolver({ authorize: () => authorization, createProfile, retrieve });
 
     expect(await resolve(context(privateAuth))).toBeNull();
     expect(retrieve).not.toHaveBeenCalled();
@@ -151,6 +158,7 @@ describe("memory block resolution", () => {
       authorize: () => {
         throw new Error("AGENT_MEMORY_CONTEXT_INVALID: нет области памяти");
       },
+      createProfile,
       retrieve: vi.fn(),
     });
 
@@ -165,6 +173,7 @@ describe("memory block resolution", () => {
   it("discloses unavailable memory instead of throwing on retrieval failure", async () => {
     const resolve = createMemoryBlockResolver({
       authorize: () => authorization,
+      createProfile,
       retrieve: vi.fn().mockRejectedValue(new Error("embedding service down")),
     });
 
@@ -173,6 +182,56 @@ describe("memory block resolution", () => {
     );
 
     expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
+  });
+
+  it("builds the same-turn profile from verified signals and retrieval-related claim identities", async () => {
+    const retrieve = vi.fn().mockResolvedValue({
+      memories: [],
+      retrievedClaimIds: ["claim-related"],
+      threads: { threads: [], totalCharacters: 0 },
+    });
+    const profile = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T10:00:00.000Z",
+      profileViewRef: "view_11111111111111111111111111111111",
+      subjects: [{
+        claims: [],
+        label: "Пётр",
+        priority: "retrieval_related",
+        subjectRef: "subj_11111111111111111111111111111111",
+        totalCharacters: 0,
+      }],
+      totalCharacters: 0,
+    });
+    const resolve = createMemoryBlockResolver({
+      authorize: () => authorization,
+      createProfile: profile,
+      retrieve,
+    });
+    const telegramAuth = auth({
+      memoryScopes: ["personal", "family"],
+      telegramConversationId: "conversation-1",
+      telegramProfileMentionUserIds: ["202"],
+      telegramProfileReplyUserId: "203",
+      telegramProfileReplyTimelineSequence: "44",
+      telegramTurnStartedAt: "2026-08-08T10:00:00.000Z",
+      telegramUserId: "101",
+    });
+
+    const markdown = await resolve(
+      context(telegramAuth, [{ content: "что любит Пётр?", role: "user" }] as ModelMessage[]),
+    );
+
+    expect(profile).toHaveBeenCalledWith(authorization, {
+      conversationId: "conversation-1",
+      currentTelegramUserId: "101",
+      explicitMentionTelegramUserIds: ["202"],
+      now: new Date("2026-08-08T10:00:00.000Z"),
+      replyTelegramUserId: "203",
+      replyTimelineSequence: "44",
+      retrievalClaimIds: ["claim-related"],
+    });
+    expect(markdown).toContain("<verified_profile_view");
+    expect(markdown).toContain('"priority":"retrieval_related"');
   });
 });
 

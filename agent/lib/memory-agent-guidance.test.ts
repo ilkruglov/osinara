@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Every mode that can search memory defines bounded context deepening before complex work.
  * - The explicit search tool advertises iterative semantic retrieval to the model.
+ * - Similarity never instructs the model to merge or delete durable records.
  */
 import { describe, expect, it } from "vitest";
 
@@ -39,5 +40,20 @@ describe("agent memory guidance", () => {
     expect(searchMemories.description).toContain("до трёх раз");
     expect(searchMemories.description).toContain("разными смысловыми формулировками");
     expect(searchMemories.description).toContain("остановись");
+  });
+
+  it.each([
+    modeInstructions({ environment: "private" }),
+    modeInstructions({ environment: "family" }),
+    modeInstructions({
+      capabilities: new Set(["search_memories", "manage_memory.delete"]),
+      environment: "external",
+      skills: new Set(),
+    }),
+  ])("forbids destructive deduplication by similarity", (instructions) => {
+    expect(instructions).toContain("Схлопывание точных дубликатов допустимо только сервером при чтении");
+    expect(instructions).toContain("не изменяет хранимые записи");
+    expect(instructions).toContain("не объединяй и не удаляй записи только из-за похожести");
+    expect(instructions).not.toContain("остальные удали");
   });
 });

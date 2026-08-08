@@ -33,4 +33,17 @@ describe("Telegram channel draft policy", () => {
     expect(source).not.toContain("agentScheduleDispatchRepository.completeRun(");
     expect(source).toContain("AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING");
   });
+
+  it("snapshots extraction input before advancing the conversation cursor", async () => {
+    const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+    const turnStarted = source.indexOf('async "turn.started"');
+    const turnCompleted = source.indexOf('async "turn.completed"');
+    const snapshot = source.indexOf("await createTurnExtractionBatch(", turnStarted);
+    const cursor = source.indexOf("await groupTimelineCursorRepository.advance(", turnStarted);
+
+    expect(snapshot).toBeGreaterThan(turnStarted);
+    expect(snapshot).toBeLessThan(cursor);
+    expect(snapshot).toBeLessThan(turnCompleted);
+    expect(source.indexOf("await createTurnExtractionBatch(", turnCompleted)).toBe(-1);
+  });
 });

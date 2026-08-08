@@ -3,9 +3,9 @@
  *
  * Exports:
  * - `MEMORY_DEEPENING_PROTOCOL`: bounded multi-query context deepening for modes with search.
- * - `MEMORY_WRITE_CONTRACT`: automatic-save policy and sensitivity classification.
+ * - `MEMORY_WRITE_CONTRACT`: explicit `remember` policy and sensitivity classification.
  * - `memoryEditContract`: `manage_memory` JSON contract limited to the allowed actions.
- * - `MEMORY_DEDUPLICATION`: merge rule for identical records found during search.
+ * - `MEMORY_EXACT_DUPLICATE_HANDLING`: non-destructive exact-read collapse guidance.
  * - `IMAGE_INSPECTION_CONTRACT`: single-source payload rule for the vision tool.
  * - `SEND_WORKSPACE_FILE_RULES`: explicit-request delivery rules for workspace files.
  * - `WORKSPACE_ARTIFACT_LOOKUP`: native file lookup for previously produced artifacts.
@@ -29,7 +29,9 @@ export const MEMORY_DEEPENING_PROTOCOL = `
 `.trim();
 
 export const MEMORY_WRITE_CONTRACT = `
-Автоматически сохраняй устойчивые подтверждённые факты, события и предпочтения, полезные в будущих разговорах. Не сохраняй одноразовые запросы, быстро устаревающие сведения, свои предположения или выводы с недостаточной уверенностью. Для автоматического сохранения используй \`confirmationMode: automatic\`; \`confirmationMode: explicit\` используй только после прямой просьбы пользователя сохранить сведения. Уведомлять об автоматическом сохранении пользователя не нужно. При сохранении событий всегда сопровождай запись памяти датой и деталями.
+Вызывай \`remember\` только после прямой просьбы пользователя запомнить именно это сведение. Устойчивые факты из обычного разговора извлекает backend после хода: не вызывай \`remember\` автоматически и не дублируй extraction. Не сохраняй одноразовые запросы, быстро устаревающие сведения, свои предположения или выводы с недостаточной уверенностью. При явном сохранении события всегда сопровождай запись памяти датой и деталями.
+
+Если сведение относится к человеку из \`<verified_profile_view>\`, передай его точный opaque \`subjectRef\`. Для объекта или человека без доступного verified ref можно передать короткий \`subjectLabel\`. Не угадывай ref и не передавай оба поля одновременно.
 
 При сохранении записи памяти из ссылки, видео, изображения и прочих типов контента старайся сначала получить больше информации для обогащения записи. Если данных недостаточно, уточни необходимые детали у пользователя.
 
@@ -37,11 +39,11 @@ export const MEMORY_WRITE_CONTRACT = `
 `.trim();
 
 const MEMORY_EDIT_EXAMPLES: Readonly<Record<MemoryEditAction, string>> = {
-  delete: 'Удаление: `{"action":"delete","id":"uuid"}`.',
+  delete: 'Удаление: `{"action":"delete","memoryRef":"mem_..."}`.',
   edit:
-    'Исправление: `{"action":"edit","id":"uuid","content":"Исправленный текст памяти","kind":"preference","sensitivity":"normal"}`; `kind` и `sensitivity` передавай только когда нужно изменить классификацию.',
+    'Исправление: `{"action":"edit","memoryRef":"mem_...","content":"Исправленный текст памяти","kind":"preference","sensitivity":"normal"}`; `kind` и `sensitivity` передавай только когда нужно изменить классификацию.',
   undo:
-    'Undo используй только для немедленной отмены только что предложенного сохранения: `{"action":"undo","id":"uuid"}`.',
+    'Undo используй только для немедленной отмены только что предложенного сохранения: `{"action":"undo","memoryRef":"mem_..."}`.',
 };
 
 // Catalog order keeps the rendered contract deterministic while the set stays authoritative.
@@ -53,14 +55,14 @@ export function memoryEditContract(actions: ReadonlySet<MemoryEditAction>): stri
     .map((action) => MEMORY_EDIT_EXAMPLES[action]);
   if (examples.length === 0) return null;
   return [
-    "Для исправления и удаления сначала найди стабильный ID записи, не угадывай его.",
+    "Для исправления и удаления сначала получи стабильный `memoryRef` записи, не угадывай его.",
     `Для \`manage_memory\` используй только явный JSON-контракт. ${examples.join(" ")}`,
-    "Если tool вернул `AGENT_MEMORY_INPUT_INVALID`, исправь payload по тексту ошибки; если нет обязательного ID или содержимого, задай один конкретный вопрос.",
+    "Если tool вернул `AGENT_MEMORY_INPUT_INVALID`, исправь payload по тексту ошибки; если нет обязательного `memoryRef` или содержимого, задай один конкретный вопрос.",
   ].join("\n\n");
 }
 
-export const MEMORY_DEDUPLICATION =
-  "Если во время поиска по памяти ты обнаружишь несколько записей с идентичным содержанием, объедини их в одну запись, сохранив только подтверждённые факты и дату последнего изменения, а остальные удали.";
+export const MEMORY_EXACT_DUPLICATE_HANDLING =
+  "Схлопывание точных дубликатов допустимо только сервером при чтении и не изменяет хранимые записи. Поэтому не объединяй и не удаляй записи только из-за похожести или совпадения результата поиска; изменение памяти допустимо лишь по явному запросу пользователя к конкретному `memoryRef`.";
 
 export const IMAGE_INSPECTION_CONTRACT =
   "Для анализа доступного изображения обязательно используй `inspect_workspace_image`: основная модель не видит изображение автоматически. Передавай ровно один источник изображения, разрешённый scope и конкретный question. Vision получает только явный вопрос и bytes изображения, не историю разговора и не подпись. Не утверждай ничего о содержимом до успешного результата tool. Если tool вернул `AGENT_WORKSPACE_IMAGE_INPUT_INVALID`, исправь payload по объяснению; не выдумывай содержимое изображения.";

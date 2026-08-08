@@ -39,19 +39,30 @@ export default defineDynamic({
           code: "AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID",
           error: error instanceof Error ? error.message : String(error),
         }));
-        return buildModeToolSurface({ capabilities: new Set(), environment: "external", skills: {} });
+        return buildModeToolSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+          skills: {},
+        });
       }
       if (environment !== "external") return buildModeToolSurface({ environment });
 
       const policy = resolveExternalGroupToolPolicy(auth);
       const identity = resolveExternalGroupPolicyIdentity(auth);
       if (!policy.restricted || !identity) {
-        return buildModeToolSurface({ capabilities: new Set(), environment: "external", skills: {} });
+        return buildModeToolSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+          skills: {},
+        });
       }
 
       // Intersection prevents a stale verified session from gaining capabilities outside its auth
       // snapshot. Execution wrappers independently enforce revocation after this turn boundary.
       let current: ReadonlySet<ExternalGroupToolName> = new Set();
+      let includeApplicationCore = true;
       try {
         current = await loadCurrentExternalGroupCapabilities(identity);
       } catch (error) {
@@ -60,6 +71,9 @@ export default defineDynamic({
           error: error instanceof Error ? error.message : String(error),
           groupId: identity.groupId,
         }));
+        // R0-R7 core tools also rely on a current external registration, while independently
+        // live-checked skills may still remain available for this turn.
+        includeApplicationCore = false;
       }
 
       // Skill descriptors use the same verified turn snapshot as Eve's dynamic skill resolver.
@@ -68,6 +82,7 @@ export default defineDynamic({
       return buildModeToolSurface({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),
         environment: "external",
+        includeApplicationCore,
         skills,
       });
     },

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT } from "../memory-config.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { memoryRepository } from "../memory-repository.js";
+import { toModelMemory } from "../model-memory.js";
 
 export default defineTool({
   description: [
@@ -23,6 +24,10 @@ export default defineTool({
     scope: z.enum(["personal", "family", "group"]).optional(),
   }),
   async execute(input, ctx) {
-    return await memoryRepository.list(requireMemoryAuthorization(ctx), input);
+    const page = await memoryRepository.list(requireMemoryAuthorization(ctx), input);
+    return {
+      items: page.items.map((item) => toModelMemory(item, item.sourceEvidence)),
+      nextCursor: page.nextCursor,
+    };
   },
 });

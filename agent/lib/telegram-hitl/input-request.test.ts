@@ -171,6 +171,9 @@ describe("createTelegramInputRequestHandler", () => {
       telegramMessageId: "88",
       telegramMessageThreadId: "55",
       telegramUserId: "101",
+      toolCallId: "call-1",
+      toolInputHash: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      toolName: "manage_reminder",
     }));
     expect(request).toHaveBeenCalledWith("editMessageText", {
       chat_id: "-1001",

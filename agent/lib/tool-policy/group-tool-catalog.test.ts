@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: covers the Eve built-ins that cannot be hidden.
  * - Capability metadata: provides generated model usage for every effective external capability.
+ * - Memory capability usage: exposes only the model-safe `memoryRef` contract.
  */
 import { describe, expect, it } from "vitest";
 
@@ -63,5 +64,17 @@ describe("external group tool catalog", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
+  });
+
+  it("describes external memory mutations through model-safe memoryRef values", () => {
+    const mutationUsage = EXTERNAL_GROUP_CAPABILITY_CATALOG
+      .filter(({ name }) => name.startsWith("manage_memory."))
+      .map(({ usage }) => usage);
+
+    expect(mutationUsage).toHaveLength(3);
+    for (const usage of mutationUsage) {
+      expect(usage).toContain("memoryRef");
+      expect(usage).not.toMatch(/\bID\b/u);
+    }
   });
 });

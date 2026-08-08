@@ -1,59 +1,54 @@
 /**
- * Deterministic prohibited-memory content policy.
+ * Automatic memory content safety policy.
  *
- * Export:
- * - `requireAllowedMemoryContent`: rejects recognizable secrets and payment card numbers.
+ * Exports:
+ * - `memoryContentRejectionCode`: rejects secrets and payment credentials before claim writing.
+ * - `requireAllowedMemoryContent`: shared fail-fast policy for every manual/automatic writer.
  */
 import { AppError } from "./app-error.js";
-import { MEMORY_CONTENT_MAX_LENGTH } from "./memory-config.js";
 
-const PRIVATE_KEY_PATTERN = /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/i;
-const CREDENTIAL_LABEL_PATTERN =
-  /(?:парол(?:ь|я)|password|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|секрет(?:ный)? ключ)\s*[:=]\s*\S+/i;
-const PROVIDER_TOKEN_PATTERN = /\b(?:sk|ghp|github_pat|xox[baprs])_[A-Za-z0-9_-]{12,}\b/;
-const ONE_TIME_CODE_PATTERN =
-  /(?:одноразов(?:ый|ого) код|код подтверждения|verification code|one[- ]time code|otp)\D{0,8}\d{4,10}\b/i;
-const CARD_CANDIDATE_PATTERN = /(?:\d[ -]?){13,19}/g;
+const PRIVATE_KEY_PATTERN = /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/u;
+const CREDENTIAL_ASSIGNMENT_PATTERN = /(?:api[_ -]?key|access[_ -]?token|secret|password|парол[ья])\s*(?::|=|\s)\s*\S{8,}/iu;
+const CVV_PATTERN = /(?:cvv|cvc|код\s+с\s+оборот[а-я]*)\s*[:=]?\s*\d{3,4}(?!\d)/iu;
+const ONE_TIME_CODE_PATTERN = /(?:одноразов(?:ый|ого)\s+код|otp|2fa)\s*[:=]?\s*\d{4,8}(?!\d)/iu;
+const PAYMENT_CARD_CANDIDATE_PATTERN = /(?:\d[ -]?){13,19}/gu;
 
-function passesLuhn(value: string): boolean {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
+function luhn(value: string): boolean {
+  const digits = value.replace(/\D/gu, "");
+  if (digits.length < 13 || digits.length > 19 || /^(\d)\1+$/u.test(digits)) return false;
   let sum = 0;
-  let doubleDigit = false;
+  let double = false;
   for (let index = digits.length - 1; index >= 0; index -= 1) {
     let digit = Number(digits[index]);
-    if (doubleDigit) {
+    if (double) {
       digit *= 2;
       if (digit > 9) digit -= 9;
     }
     sum += digit;
-    doubleDigit = !doubleDigit;
+    double = !double;
   }
   return sum % 10 === 0;
 }
 
-export function requireAllowedMemoryContent(content: string): string {
-  const normalized = content.trim();
-  if (!normalized || normalized.length > MEMORY_CONTENT_MAX_LENGTH) {
-    throw new AppError(
-      "AGENT_MEMORY_CONTENT_INVALID",
-      `Текст памяти должен содержать от 1 до ${MEMORY_CONTENT_MAX_LENGTH} символов`,
-    );
+export function memoryContentRejectionCode(content: string): string | null {
+  if (PRIVATE_KEY_PATTERN.test(content) || CREDENTIAL_ASSIGNMENT_PATTERN.test(content)) {
+    return "AGENT_MEMORY_EXTRACTION_SECRET_REJECTED";
   }
+  if (ONE_TIME_CODE_PATTERN.test(content)) return "AGENT_MEMORY_EXTRACTION_SECRET_REJECTED";
+  if (CVV_PATTERN.test(content)) return "AGENT_MEMORY_EXTRACTION_PAYMENT_CREDENTIAL_REJECTED";
+  const cardCandidates = content.match(PAYMENT_CARD_CANDIDATE_PATTERN) ?? [];
+  return cardCandidates.some(luhn)
+    ? "AGENT_MEMORY_EXTRACTION_PAYMENT_CREDENTIAL_REJECTED"
+    : null;
+}
 
-  // Reject rather than redact: partial secret storage would be misleading and difficult to erase safely.
-  const cardCandidates = normalized.match(CARD_CANDIDATE_PATTERN) ?? [];
-  const prohibited =
-    PRIVATE_KEY_PATTERN.test(normalized) ||
-    CREDENTIAL_LABEL_PATTERN.test(normalized) ||
-    PROVIDER_TOKEN_PATTERN.test(normalized) ||
-    ONE_TIME_CODE_PATTERN.test(normalized) ||
-    cardCandidates.some(passesLuhn);
-  if (prohibited) {
+export function requireAllowedMemoryContent(content: string): string {
+  const rejectionCode = memoryContentRejectionCode(content);
+  if (rejectionCode) {
     throw new AppError(
       "AGENT_MEMORY_CONTENT_FORBIDDEN",
-      "Эту информацию нельзя сохранять в памяти. Используйте защищённое хранилище для секретов",
+      "Секреты и платёжные данные нельзя сохранять в долговременной памяти",
     );
   }
-  return normalized;
+  return content;
 }

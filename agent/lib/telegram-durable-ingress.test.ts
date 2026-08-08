@@ -7,6 +7,7 @@
  * - Voice results persist once before native Eve dispatch.
  * - Captionless attachments receive a non-empty factual model message after durable storage.
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
+ * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -61,6 +62,7 @@ function repository() {
       rekeyQueue: vi.fn(),
       release: vi.fn(),
       renewLease: vi.fn(),
+      sessionEventStreamCursor: vi.fn().mockResolvedValue(0),
       saveVoiceTranscript: vi.fn(),
     } satisfies TelegramIngressRepository,
   };
@@ -143,6 +145,58 @@ describe("createTelegramDurableIngress", () => {
       "1001",
       storage.claim.leaseToken,
       "session-1",
+      1,
+    );
+  });
+
+  it("does not let an old session.waiting complete a newly dispatched turn", async () => {
+    const storage = repository();
+    storage.value.sessionEventStreamCursor.mockResolvedValue(2);
+    const requestedStartIndexes: number[] = [];
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async (options?: { startIndex?: number }) => {
+        requestedStartIndexes.push(options?.startIndex ?? 0);
+        return new ReadableStream({
+          start(controller) {
+            // The old waiting event is at index 1 and must be excluded by startIndex=2.
+            controller.enqueue({ type: "turn.started" });
+            controller.enqueue({ type: "turn.completed" });
+            controller.enqueue({ type: "session.waiting" });
+          },
+        });
+      },
+      id: "session-reused",
+    });
+    const raw = voicePayload();
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn().mockResolvedValue(false),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(requestedStartIndexes).toEqual([2]);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1001",
+      storage.claim.leaseToken,
+      "session-reused",
+      5,
     );
   });
 

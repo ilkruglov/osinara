@@ -6,38 +6,58 @@
  * - `memoryRepository`: transaction-safe scoped CRUD and retrieval operations.
  */
 import type { PoolClient } from "pg";
-
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import { createMemoryClaim } from "./memory-claim-writer.js";
+import { insertClaimEvidence } from "./claim-evidence-writer.js";
+import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { memoryListRepository } from "./memory-list-repository.js";
-import { enforceMemoryQuota } from "./memory-quota.js";
 import {
   memoryOperationHash,
-  type CreateMemoryInput,
-  type MemoryItem,
+  normalizeMemoryClaimContent,
   type MemoryKind,
+  type CreateMemoryInput,
+  type MemoryOperationProvenance,
   type MemoryRow,
   type MemorySensitivity,
-  rowToMemory,
+  type ReferencedMemoryItem,
+  type ReferencedMemoryRow,
+  rowToReferencedMemory,
 } from "./memory-record.js";
-import { memoryUndoRepository } from "./memory-undo-repository.js";
-
+import { MEMORY_UNDO_DENIED_MESSAGE, type MemoryUndoInput } from "./memory-undo-repository.js";
 export type {
+  CreateMemoryEvidenceInput,
   CreateMemoryInput,
   MemoryConfirmation,
   MemoryEmbeddingStatus,
-  MemoryItem,
   MemoryKind,
   MemorySensitivity,
+  ReferencedMemoryItem,
 } from "./memory-record.js";
-
 interface MutationOperationRow {
+  actor_telegram_user_id: string | null;
+  actor_user_id: string | null;
+  eve_session_id: string | null;
+  eve_turn_id: string | null;
   input_hash: string;
   memory_item_id: string | null;
   mutation_kind: "create" | "delete" | "update";
 }
-
+interface MutationMemoryRow extends ReferencedMemoryRow {
+  claim_status: "active" | "duplicate" | "superseded";
+  group_id: string | null;
+  memory_project_id: string | null;
+  origin_conversation_id: string | null;
+  owner_user_id: string | null;
+  profile_eligible: boolean;
+  subject_conversation_id: string | null;
+  subject_family_id: string | null;
+  subject_label: string | null;
+  subject_participant_id: string | null;
+  subject_user_id: string | null;
+  superseded_by: string | null;
+}
 function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
   if (!auth.scopes.includes(scope)) {
     throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
@@ -49,7 +69,6 @@ function requireScope(auth: MemoryAuthorization, scope: MemoryScope): void {
     throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить группу памяти");
   }
 }
-
 async function existingOperation(
   client: PoolClient,
   auth: MemoryAuthorization,
@@ -58,7 +77,8 @@ async function existingOperation(
   inputHash: string,
 ): Promise<MutationOperationRow | null> {
   const result = await client.query<MutationOperationRow>(
-    `SELECT mutation_kind, input_hash, memory_item_id
+    `SELECT mutation_kind, input_hash, memory_item_id, actor_user_id, actor_telegram_user_id,
+            eve_session_id, eve_turn_id
      FROM memory_mutation_operations
      WHERE family_id = $1 AND operation_key = $2`,
     [auth.familyId, operationKey],
@@ -74,19 +94,33 @@ async function existingOperation(
   return operation;
 }
 
-async function selectMemoryById(
+async function selectAuthorizedMemory(
   client: PoolClient,
-  familyId: string,
-  memoryId: string,
+  auth: MemoryAuthorization,
+  lookupValue: string,
+  lookupBy: "id" | "ref",
   lock = false,
-): Promise<MemoryRow | null> {
-  const result = await client.query<MemoryRow>(
-    `SELECT id, author_user_id, author_telegram_user_id, scope, kind, content, source,
-            confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at
-     FROM memory_items
-     WHERE family_id = $1 AND id = $2
-     ${lock ? "FOR UPDATE" : ""}`,
-    [familyId, memoryId],
+): Promise<MutationMemoryRow | null> {
+  // Scope predicates run in the same lookup that resolves the opaque ref to an internal UUID.
+  const result = await client.query<MutationMemoryRow>(
+    `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
+            item.content, item.source, item.confirmation, item.sensitivity, item.message_thread_id,
+             item.embedding_status, item.created_at, item.updated_at, ref.memory_ref,
+             item.owner_user_id, item.group_id, item.origin_conversation_id,
+             item.subject_family_id, item.subject_user_id, item.subject_participant_id,
+             item.subject_conversation_id, item.subject_label, item.memory_project_id,
+              item.profile_eligible, item.claim_status, item.superseded_by
+     FROM memory_item_refs AS ref
+     JOIN memory_items AS item ON item.id = ref.memory_item_id
+      WHERE ${lookupBy === "ref" ? "ref.memory_ref" : "item.id"} = $1
+       AND item.family_id = $2
+       AND (
+         (item.scope = 'personal' AND 'personal' = ANY($3::memory_scope[]) AND item.owner_user_id = $4) OR
+         (item.scope = 'family' AND 'family' = ANY($3::memory_scope[])) OR
+         (item.scope = 'group' AND 'group' = ANY($3::memory_scope[]) AND item.group_id = $5)
+       )
+     ${lock ? "FOR UPDATE OF item" : ""}`,
+    [lookupValue, auth.familyId, auth.scopes, auth.userId, auth.groupId],
   );
   return result.rows[0] ?? null;
 }
@@ -116,24 +150,6 @@ async function isCurrentFamilyMember(
   return Boolean(result.rowCount);
 }
 
-async function requireCurrentWriteContext(
-  client: PoolClient,
-  auth: MemoryAuthorization,
-  scope: MemoryScope,
-): Promise<void> {
-  if (scope !== "group") {
-    if (await isCurrentFamilyMember(client, auth)) return;
-    throw new AppError("AGENT_ACCESS_DENIED", "Доступ к семейному агенту был отозван");
-  }
-  const group = await client.query(
-    "SELECT 1 FROM telegram_groups WHERE id = $1 AND family_id = $2 FOR SHARE",
-    [auth.groupId, auth.familyId],
-  );
-  if (!group.rowCount) {
-    throw new AppError("AGENT_GROUP_NOT_REGISTERED", "Эта группа больше не подключена к агенту");
-  }
-}
-
 async function requireMutationAccess(
   client: PoolClient,
   auth: MemoryAuthorization,
@@ -159,115 +175,80 @@ async function requireMutationAccess(
   }
 }
 
+async function hasImmediateUndoProvenance(
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  memoryItemId: string,
+  provenance: MemoryOperationProvenance,
+): Promise<boolean> {
+  const result = await client.query(
+    `SELECT 1 FROM memory_items AS item
+     JOIN memory_mutation_operations AS creation
+       ON creation.family_id = item.family_id AND creation.memory_item_id = item.id
+      AND creation.operation_key = item.operation_key AND creation.mutation_kind = 'create'
+     WHERE item.family_id = $1 AND item.id = $2 AND item.claim_status = 'active'
+       AND creation.actor_user_id IS NOT DISTINCT FROM $3::uuid
+       AND creation.actor_telegram_user_id = $4
+       AND creation.eve_session_id = $5 AND creation.eve_turn_id = $6
+       AND ((item.scope IN ('personal', 'family') AND EXISTS (
+         SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $3
+       )) OR (item.scope = 'group' AND item.group_id = $7 AND EXISTS (
+         SELECT 1 FROM telegram_groups WHERE id = $7 AND family_id = $1
+       )))
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_mutation_operations AS later
+         WHERE later.family_id = $1 AND later.memory_item_id = $2
+           AND later.mutation_kind <> 'create'
+       )`,
+    [auth.familyId, memoryItemId, auth.userId, auth.telegramUserId,
+      provenance.sessionId, provenance.turnId, auth.groupId],
+  );
+  return Boolean(result.rowCount);
+}
 export const memoryRepository = {
-  canUndoCreate: memoryUndoRepository.canUndoCreate,
-
-  async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<MemoryItem> {
-    requireScope(auth, input.scope);
-    const inputHash = memoryOperationHash(input);
+  async canUndoCreate(
+    auth: MemoryAuthorization,
+    memoryRef: string,
+    provenance: { sessionId: string; turnId: string },
+  ): Promise<boolean> {
     const client = await database().connect();
     try {
-      await client.query("BEGIN");
-      const replay = await existingOperation(
-        client,
-        auth,
-        input.operationKey,
-        "create",
-        inputHash,
-      );
-      if (replay) {
-        const replayed = replay.memory_item_id
-          ? await selectMemoryById(client, auth.familyId, replay.memory_item_id)
-          : null;
-        if (!replayed) {
-          throw new AppError(
-            "AGENT_MEMORY_REPLAY_COMPLETED",
-            "Исходная операция завершена, но запись уже удалена",
-          );
-        }
-        await client.query("COMMIT");
-        return rowToMemory(replayed);
-      }
-
-      await requireCurrentWriteContext(client, auth, input.scope);
-      await enforceMemoryQuota(client, auth, input.scope);
-      const ownerUserId = input.scope === "personal" ? auth.userId : null;
-      const groupId = input.scope === "group" ? auth.groupId : null;
-      const authorUserId = input.scope === "group" ? auth.userId : auth.userId;
-      if (input.scope !== "group" && !authorUserId) {
-        throw new AppError("AGENT_MEMORY_CONTEXT_INVALID", "Не удалось определить автора памяти");
-      }
-      const result = await client.query<MemoryRow>(
-        `INSERT INTO memory_items
-           (family_id, owner_user_id, group_id, author_user_id, author_telegram_user_id,
-            scope, kind, content, source, source_event_id, message_thread_id, confirmation,
-            sensitivity, operation_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-         RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
-                   confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at`,
-        [
-          auth.familyId,
-          ownerUserId,
-          groupId,
-          authorUserId,
-          input.scope === "group" ? auth.telegramUserId : null,
-          input.scope,
-          input.kind,
-          input.content,
-          input.source,
-          input.sourceEventId ?? null,
-          input.messageThreadId ?? null,
-          input.confirmation,
-          input.sensitivity,
-          input.operationKey,
-        ],
-      );
-      const row = result.rows[0];
-      if (!row) throw new Error("AGENT_MEMORY_WRITE_FAILED: Память не была сохранена");
-
-      // Operation, indexing request, and privacy-safe audit metadata commit with the memory itself.
-      await client.query(
-        `INSERT INTO memory_mutation_operations
-           (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
-            actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
-         VALUES ($1, $2, 'create', $3, $4, $5, $6, $7, $8)`,
-        [
-          auth.familyId,
-          input.operationKey,
-          inputHash,
-          row.id,
-          auth.userId,
-          auth.telegramUserId,
-          input.provenance.sessionId,
-          input.provenance.turnId,
-        ],
-      );
-      await client.query(
-        "INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)",
-        [row.id],
-      );
-      await client.query(
-        `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
-         VALUES ($1, $2, 'memory.created', $3,
-                 jsonb_build_object('scope', $4::text, 'kind', $5::text, 'sensitivity', $6::text))`,
-        [auth.familyId, auth.userId, row.id, input.scope, input.kind, input.sensitivity],
-      );
-      await client.query("COMMIT");
-      return rowToMemory(row);
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref");
+      if (!memory || memory.claim_status !== "active") return false;
+      return await hasImmediateUndoProvenance(client, auth, memory.id, provenance);
     } finally {
       client.release();
     }
   },
 
-  async delete(
+  async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<ReferencedMemoryItem> {
+    const memory = await createMemoryClaim(auth, input);
+    if (!input.provenance) return memory;
+
+    // Explicit creates become undo-eligible only after all verified provenance fields are persisted.
+    const result = await database().query(
+      `UPDATE memory_mutation_operations
+       SET actor_user_id = $4, actor_telegram_user_id = $5, eve_session_id = $6, eve_turn_id = $7
+       WHERE family_id = $1 AND operation_key = $2 AND mutation_kind = 'create'
+         AND memory_item_id = $3
+         AND (eve_session_id IS NULL OR
+           (actor_user_id IS NOT DISTINCT FROM $4::uuid AND actor_telegram_user_id = $5
+            AND eve_session_id = $6 AND eve_turn_id = $7))`,
+      [auth.familyId, input.operationKey, memory.id, auth.userId, auth.telegramUserId,
+        input.provenance.sessionId, input.provenance.turnId],
+    );
+    if (result.rowCount !== 1) {
+      throw new AppError("AGENT_MEMORY_REPLAY_MISMATCH", "Не удалось подтвердить источник операции памяти");
+    }
+    return memory;
+  },
+
+  async deleteByRef(
     auth: MemoryAuthorization,
-    id: string,
+    memoryRef: string,
     operationKey: string,
   ): Promise<{ deleted: true }> {
-    const inputHash = memoryOperationHash({ id });
+    const inputHash = memoryOperationHash({ memoryRef });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -276,7 +257,7 @@ export const memoryRepository = {
         await client.query("COMMIT");
         return { deleted: true };
       }
-      const memory = await selectMemoryById(client, auth.familyId, id, true);
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
       if (!memory) {
         throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
       }
@@ -287,15 +268,15 @@ export const memoryRepository = {
         `INSERT INTO memory_mutation_operations
            (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
          VALUES ($1, $2, 'delete', $3, $4)`,
-        [auth.familyId, operationKey, inputHash, id],
+        [auth.familyId, operationKey, inputHash, memory.id],
       );
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'memory.deleted', $3,
                  jsonb_build_object('scope', $4::text, 'kind', $5::text))`,
-        [auth.familyId, auth.userId, id, memory.scope, memory.kind],
+        [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
       );
-      await client.query("DELETE FROM memory_items WHERE id = $1", [id]);
+      await client.query("DELETE FROM memory_items WHERE id = $1", [memory.id]);
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {
@@ -308,77 +289,207 @@ export const memoryRepository = {
 
   list: memoryListRepository.list,
 
-  undoCreate: memoryUndoRepository.undoCreate,
+  async undoCreate(
+    auth: MemoryAuthorization,
+    memoryRef: string,
+    input: MemoryUndoInput,
+  ): Promise<{ deleted: true }> {
+    const inputHash = memoryOperationHash({ memoryRef });
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      const replay = await existingOperation(client, auth, input.operationKey, "delete", inputHash);
+      if (replay) {
+        const sameProvenance = replay.actor_user_id === auth.userId &&
+          replay.actor_telegram_user_id === auth.telegramUserId &&
+          replay.eve_session_id === input.sessionId && replay.eve_turn_id === input.turnId;
+        if (!sameProvenance) {
+          throw new AppError(
+            "AGENT_MEMORY_REPLAY_MISMATCH",
+            "Повтор операции памяти не совпадает с исходным запросом",
+          );
+        }
+        await client.query("COMMIT");
+        return { deleted: true };
+      }
 
-  async update(
+      const memory = await selectAuthorizedMemory(client, auth, memoryRef, "ref", true);
+      if (!memory || memory.claim_status !== "active") {
+        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+      }
+      await requireMutationAccess(client, auth, memory);
+      if (!await hasImmediateUndoProvenance(client, auth, memory.id, input)) {
+        throw new AppError("AGENT_MEMORY_UNDO_DENIED", MEMORY_UNDO_DENIED_MESSAGE);
+      }
+
+      // Provenance, replay marker, audit, and physical deletion commit as one operation.
+      await client.query(
+        `INSERT INTO memory_mutation_operations
+           (family_id, operation_key, mutation_kind, input_hash, memory_item_id,
+            actor_user_id, actor_telegram_user_id, eve_session_id, eve_turn_id)
+         VALUES ($1, $2, 'delete', $3, $4, $5, $6, $7, $8)`,
+        [auth.familyId, input.operationKey, inputHash, memory.id, auth.userId,
+          auth.telegramUserId, input.sessionId, input.turnId],
+      );
+      await client.query(
+        `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
+         VALUES ($1, $2, 'memory.deleted', $3,
+                 jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
+        [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
+      );
+      await client.query("DELETE FROM memory_items WHERE id = $1", [memory.id]);
+      await client.query("COMMIT");
+      return { deleted: true };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async updateByRef(
     auth: MemoryAuthorization,
     input: {
       content: string;
-      id: string;
       kind?: MemoryKind;
+      memoryRef: string;
       operationKey: string;
       sensitivity?: MemorySensitivity;
+      source: { conversationId: string; timelineEntryId: string };
     },
-  ): Promise<MemoryItem> {
+  ): Promise<ReferencedMemoryItem> {
     const inputHash = memoryOperationHash(input);
     const client = await database().connect();
     try {
       await client.query("BEGIN");
       const replay = await existingOperation(client, auth, input.operationKey, "update", inputHash);
       if (replay?.memory_item_id) {
-        const replayed = await selectMemoryById(client, auth.familyId, replay.memory_item_id);
-        if (!replayed) {
+        const source = await selectAuthorizedMemory(client, auth, replay.memory_item_id, "id", true);
+        const replayed = source?.superseded_by
+          ? await selectAuthorizedMemory(client, auth, source.superseded_by, "id", true)
+          : null;
+        if (!source || !replayed) {
           throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти уже удалена");
         }
+        await requireMutationAccess(client, auth, replayed);
         await client.query("COMMIT");
-        return rowToMemory(replayed);
+        return rowToReferencedMemory(replayed);
       }
-      const memory = await selectMemoryById(client, auth.familyId, input.id, true);
+      const memory = await selectAuthorizedMemory(client, auth, input.memoryRef, "ref", true);
       if (!memory) {
         throw new AppError("AGENT_MEMORY_NOT_FOUND", "Запись памяти не найдена");
       }
       await requireMutationAccess(client, auth, memory);
-      const result = await client.query<MemoryRow>(
-        `UPDATE memory_items
-         SET content = $2,
-             kind = COALESCE($3, kind),
-              sensitivity = COALESCE($4, sensitivity),
-              confirmation = 'user_confirmed',
-              embedding_status = 'pending',
-             updated_at = now()
-         WHERE id = $1
+      const correctionKind = input.kind ?? memory.kind;
+      const correctionSensitivity = input.sensitivity ?? memory.sensitivity;
+      const explicitPrepared = await prepareExplicitClaimEvidence(client, auth, {
+        confirmation: "user_confirmed",
+        content: input.content,
+        explicitSource: input.source,
+        kind: correctionKind,
+        operationKey: input.operationKey,
+        scope: memory.scope,
+        sensitivity: correctionSensitivity,
+        source: "explicit_correction",
+      }, null);
+      const primarySource = explicitPrepared.sources[0]!;
+      const prepared = {
+        ...explicitPrepared,
+        evidenceKind: (memory.subject_participant_id !== null &&
+          memory.subject_participant_id !== primarySource.authorParticipantId) ||
+          (memory.subject_user_id !== null && memory.subject_user_id !== primarySource.authorUserId)
+          ? "reported" as const
+          : "firsthand" as const,
+        subjectConversationId: memory.subject_conversation_id,
+        subjectLabel: memory.subject_label,
+        subjectParticipantId: memory.subject_participant_id,
+        subjectUserId: memory.subject_user_id,
+      };
+      const result = await client.query<Omit<ReferencedMemoryRow, "memory_ref">>(
+        `INSERT INTO memory_items
+           (family_id, owner_user_id, group_id, author_user_id, author_telegram_user_id,
+            scope, kind, content, source, source_event_id, message_thread_id, confirmation,
+             sensitivity, operation_key, provenance_state, origin_conversation_id,
+             subject_family_id, subject_user_id, subject_participant_id, subject_conversation_id,
+             subject_label, memory_project_id, save_approved, endorsed_by_user_id, endorsed_at,
+             content_normalized, profile_eligible)
+          SELECT family_id, owner_user_id, group_id, $2, $3, scope, COALESCE($4, kind), $5,
+                  'explicit_correction', $9, $10, 'user_confirmed',
+                  COALESCE($6, sensitivity), $7, 'evidenced', $11,
+                 subject_family_id, subject_user_id, subject_participant_id,
+                 subject_conversation_id, subject_label, memory_project_id, true, $2,
+                 CASE WHEN $2::uuid IS NULL THEN NULL ELSE now() END,
+                  $8,
+                  profile_eligible AND COALESCE($6, sensitivity) = 'normal'
+         FROM memory_items WHERE id = $1 AND claim_status = 'active'
          RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                    confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at`,
-        [input.id, input.content, input.kind ?? null, input.sensitivity ?? null],
+        [memory.id, auth.userId, memory.scope === "group" ? auth.telegramUserId : null,
+          input.kind ?? null, input.content, input.sensitivity ?? null, input.operationKey,
+           normalizeMemoryClaimContent(input.content), primarySource.sourceMessageId,
+           primarySource.messageThreadId, prepared.conversationId],
       );
       const row = result.rows[0];
-      if (!row) throw new Error("AGENT_MEMORY_UPDATE_FAILED: Память не была обновлена");
+      if (!row) {
+        throw new AppError("AGENT_MEMORY_UPDATE_FAILED", "Не удалось обновить запись памяти");
+      }
 
-      // Corrected text invalidates every previous semantic chunk in the same transaction.
-      await client.query("DELETE FROM memory_embedding_chunks WHERE memory_item_id = $1", [input.id]);
+      const reference = await client.query<{ memory_ref: string }>(
+        "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
+        [row.id],
+      );
+      const memoryRef = reference.rows[0]?.memory_ref;
+      if (!memoryRef) {
+        throw new AppError(
+          "AGENT_MEMORY_REF_CREATE_FAILED",
+          "Не удалось создать безопасную ссылку на исправленную запись памяти",
+        );
+      }
+      await insertClaimEvidence(client, row.id, prepared);
+      // Thread role/order follows the corrected version before retiring the old source.
+      await client.query(
+        `INSERT INTO memory_thread_entries
+           (thread_id, family_id, scope, scope_partition_key, source_claim_id, role, occurred_at)
+         SELECT thread_id, family_id, scope, scope_partition_key, $2, role, occurred_at
+         FROM memory_thread_entries WHERE source_claim_id = $1
+         ON CONFLICT (thread_id, source_claim_id, source_outcome_id) DO NOTHING`,
+        [memory.id, row.id],
+      );
+      await client.query(
+        `INSERT INTO claim_relations
+           (source_claim_id, target_claim_id, family_id, scope, scope_partition_key,
+            relation_type, detection_method)
+         SELECT id, $2, family_id, scope, scope_partition_key, 'correction', 'user_explicit'
+         FROM memory_items WHERE id = $1`,
+        [memory.id, row.id],
+      );
+      await client.query(
+        `UPDATE memory_items SET claim_status = 'superseded', superseded_by = $2,
+                duplicate_of = NULL, updated_at = now() WHERE id = $1`,
+        [memory.id, row.id],
+      );
 
       await client.query(
         `INSERT INTO memory_mutation_operations
            (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
          VALUES ($1, $2, 'update', $3, $4)`,
-        [auth.familyId, input.operationKey, inputHash, input.id],
+        [auth.familyId, input.operationKey, inputHash, memory.id],
       );
       await client.query(
         `INSERT INTO memory_embedding_jobs (memory_item_id, status, attempts, updated_at)
          VALUES ($1, 'pending', 0, now())
-         ON CONFLICT (memory_item_id) DO UPDATE
-         SET status = 'pending', attempts = 0, lease_token = NULL, lease_expires_at = NULL,
-             last_error_code = NULL, updated_at = now()`,
-        [input.id],
+         ON CONFLICT (memory_item_id) DO NOTHING`,
+        [row.id],
       );
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'memory.updated', $3,
                  jsonb_build_object('scope', $4::text, 'kind', $5::text, 'sensitivity', $6::text))`,
-        [auth.familyId, auth.userId, input.id, row.scope, row.kind, row.sensitivity],
+        [auth.familyId, auth.userId, row.id, row.scope, row.kind, row.sensitivity],
       );
       await client.query("COMMIT");
-      return rowToMemory(row);
+      return rowToReferencedMemory({ ...row, memory_ref: memoryRef });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
