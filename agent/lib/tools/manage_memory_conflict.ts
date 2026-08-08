@@ -13,17 +13,11 @@ import { MEMORY_REF_PATTERN } from "../model-memory.js";
 import { AppError } from "../app-error.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
-const conflictInputSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("choose"),
-    conflictRef: z.string(),
-    memoryRef: z.string(),
-  }).strict(),
-  z.object({
-    action: z.enum(["keep_both", "keep_unresolved"]),
-    conflictRef: z.string(),
-  }).strict(),
-]);
+const conflictInputSchema = z.object({
+  action: z.enum(["choose", "keep_both", "keep_unresolved"]),
+  conflictRef: z.string(),
+  memoryRef: z.string().optional(),
+}).strict();
 const CONFLICT_REF_PATTERN = /^conf_[0-9a-f]{32}$/u;
 
 function invalidInput(): AppError {
@@ -44,14 +38,25 @@ export default defineTool({
   async execute(input, ctx) {
     const parsed = conflictInputSchema.safeParse(input);
     if (!parsed.success || !CONFLICT_REF_PATTERN.test(parsed.data.conflictRef)) throw invalidInput();
-    if (parsed.data.action === "choose" && !MEMORY_REF_PATTERN.test(parsed.data.memoryRef)) {
+    if (
+      parsed.data.action === "choose" &&
+      (parsed.data.memoryRef === undefined || !MEMORY_REF_PATTERN.test(parsed.data.memoryRef))
+    ) {
       throw invalidInput();
     }
+    if (parsed.data.action !== "choose" && parsed.data.memoryRef !== undefined) throw invalidInput();
     // Conflict resolution is consequential even when both claims remain, so bind every action.
     await requireToolApprovalEvidence(ctx, "manage_memory_conflict", input);
-    return await memoryConflictRepository.resolve(requireMemoryAuthorization(ctx), {
-      ...parsed.data,
-      operationKey: ctx.callId,
-    });
+    const resolution = parsed.data.action === "choose"
+      ? {
+          action: parsed.data.action,
+          conflictRef: parsed.data.conflictRef,
+          memoryRef: parsed.data.memoryRef!,
+        }
+      : { action: parsed.data.action, conflictRef: parsed.data.conflictRef };
+    return await memoryConflictRepository.resolve(
+      requireMemoryAuthorization(ctx),
+      { ...resolution, operationKey: ctx.callId },
+    );
   },
 });
