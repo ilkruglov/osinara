@@ -17,6 +17,7 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 import { AppError } from "../app-error.js";
+import { memoryOperationHash } from "../memory-record.js";
 import {
   applicationSessionId,
   registerTelegramDeliveredMessageRoutes,
@@ -180,6 +181,9 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
           ? null
           : String(channel.state.messageThreadId),
         telegramUserId,
+        toolCallId: localizedRequest.action.callId,
+        toolInputHash: memoryOperationHash(localizedRequest.action.input),
+        toolName: localizedRequest.action.toolName,
       });
       if (rendered.freeformRequestId) {
         registerTelegramFreeformPrompt(channel.state, {

@@ -35,14 +35,22 @@ export default defineDynamic({
           code: "AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID",
           error: error instanceof Error ? error.message : String(error),
         }));
-        return buildModeToolSurface({ capabilities: new Set(), environment: "external" });
+        return buildModeToolSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+        });
       }
       if (environment !== "external") return buildModeToolSurface({ environment });
 
       const policy = resolveExternalGroupToolPolicy(auth);
       const identity = resolveExternalGroupPolicyIdentity(auth);
       if (!policy.restricted || !identity) {
-        return buildModeToolSurface({ capabilities: new Set(), environment: "external" });
+        return buildModeToolSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+        });
       }
 
       // Revocation takes effect before every model call. Intersection prevents a stale session from
@@ -56,7 +64,11 @@ export default defineDynamic({
           error: error instanceof Error ? error.message : String(error),
           groupId: identity.groupId,
         }));
-        return buildModeToolSurface({ capabilities: new Set(), environment: "external" });
+        return buildModeToolSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+        });
       }
       return buildModeToolSurface({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),

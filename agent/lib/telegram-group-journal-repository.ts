@@ -129,6 +129,7 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
     actorId: row.actor_id,
     actorKind: row.actor_kind,
     contentText: row.content_text,
+    entryId: row.id,
     messageKind: row.message_kind,
     messageThreadId: row.message_thread_id,
     replyToMessageId: row.reply_to_message_id,

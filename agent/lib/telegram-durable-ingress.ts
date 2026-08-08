@@ -44,7 +44,7 @@ const telegramVoiceSchema = z.object({
 });
 
 interface EveSessionResult {
-  getEventStream(): Promise<ReadableStream<{ type: string }>>;
+  getEventStream(options?: { startIndex?: number }): Promise<ReadableStream<{ type: string }>>;
   id: string;
 }
 
@@ -112,14 +112,19 @@ function voiceMetadata(raw: Record<string, unknown>) {
   };
 }
 
-async function waitForSessionBoundary(session: EveSessionResult): Promise<void> {
-  const stream = await session.getEventStream();
+async function waitForSessionBoundary(
+  session: EveSessionResult,
+  startIndex: number,
+): Promise<number> {
+  const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
   let reachedBoundary = false;
+  let nextEventIndex = startIndex;
   try {
     while (true) {
       const event = await reader.read();
       if (event.done) break;
+      nextEventIndex += 1;
       if (
         event.value.type === "session.waiting" ||
         event.value.type === "session.completed" ||
@@ -139,6 +144,7 @@ async function waitForSessionBoundary(session: EveSessionResult): Promise<void> 
       "Eve завершил поток без подтверждения состояния сессии Telegram",
     );
   }
+  return nextEventIndex;
 }
 
 function shouldTranscribeVoice(message: TelegramMessage, botUsername: string): boolean {
@@ -285,12 +291,15 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           continue;
         }
-        await waitForSessionBoundary(session);
+        // The durable cursor excludes every event from earlier turns of a reused Eve session.
+        const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
+        const nextEventIndex = await waitForSessionBoundary(session, streamCursor);
         if (heartbeatError) throw heartbeatError;
         await dependencies.repository.completeWithSession(
           claim.updateId,
           claim.leaseToken,
           session.id,
+          nextEventIndex,
         );
       } catch (error) {
         const failure = {

@@ -1,5 +1,5 @@
 /**
- * Durable per-session cursor into a Telegram group timeline.
+ * Durable per-session cursor into the unified application conversation timeline.
  *
  * Export:
  * - `groupTimelineCursorRepository`: reads and monotonically advances active group cursors.
@@ -34,8 +34,7 @@ export const groupTimelineCursorRepository = {
           SET group_timeline_cursor = greatest(coalesce(group_timeline_cursor, 0), $3::bigint)
         WHERE id = $1
           AND eve_session_id = $2
-          AND group_id IS NOT NULL
-          AND retired_at IS NULL`,
+           AND retired_at IS NULL`,
       [applicationSessionId, eveSessionId, sequence],
     );
     if (result.rowCount === 1) return "recorded";
@@ -51,14 +50,14 @@ export const groupTimelineCursorRepository = {
     const result = await database().query<{ group_timeline_cursor: string | null }>(
       `SELECT group_timeline_cursor::text
          FROM conversation_sessions
-        WHERE id = $1 AND group_id IS NOT NULL AND retired_at IS NULL`,
+         WHERE id = $1 AND retired_at IS NULL`,
       [applicationSessionId],
     );
     const row = result.rows[0];
     if (!row) {
       throw new AppError(
-        "AGENT_GROUP_SESSION_NOT_ACTIVE",
-        "Контекст группового разговора уже завершён",
+        "AGENT_CONVERSATION_SESSION_NOT_ACTIVE",
+        "Контекст разговора уже завершён",
       );
     }
     return row.group_timeline_cursor;

@@ -29,6 +29,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     usage: "анализировать изображение, уже находящееся в workspace текущей группы",
   },
   { name: "list_memories", usage: "постранично читать память текущей группы" },
+  { name: "list_memory_threads", usage: "постранично читать нити памяти текущей группы" },
   {
     name: "list_group_history",
     usage: "читать и фильтровать сохранённую историю текущей Telegram-группы",
@@ -45,6 +46,19 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     name: "manage_memory.undo",
     usage: "немедленно отменить только что выполненное сохранение памяти по возвращённому ID",
   },
+  {
+    name: "manage_memory_conflict",
+    usage: "после явного подтверждения разрешить показанный конфликт памяти текущей группы",
+  },
+  {
+    name: "manage_memory_thread.complete",
+    usage: "явно завершить нить текущей группы по проверенному событию и source refs",
+  },
+  {
+    name: "manage_memory_thread.reactivate",
+    usage: "явно реактивировать завершённую нить текущей группы",
+  },
+  { name: "read_memory_thread", usage: "читать bounded source-backed историю нити текущей группы" },
   { name: "remember", usage: "сохранить одну запись в память текущей группы" },
   {
     name: "remove_group_file",
@@ -54,6 +68,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     name: "search_memories",
     usage: "найти по словам и смыслу записи памяти текущей группы",
   },
+  { name: "search_memory_threads", usage: "искать нити памяти текущей группы по смыслу" },
   {
     name: "send_workspace_file",
     usage: "отправить файл из workspace в текущий Telegram-чат или тему",

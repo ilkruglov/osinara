@@ -8,6 +8,8 @@
 import { describe, expect, it } from "vitest";
 
 import manageMemory from "./tools/manage_memory.js";
+import manageMemoryApproval from "./tools/manage_memory_approval.js";
+import manageMemoryThread from "./tools/manage_memory_thread.js";
 import remember from "./tools/remember.js";
 
 function approvalFor(tool: unknown, input: Record<string, unknown>, chatType: string) {
@@ -41,9 +43,21 @@ describe("memory tool approvals", () => {
       .toBe("not-applicable");
   });
 
-  it("confirms private mutations but executes addressed group mutations under SQL author checks", () => {
+  it("confirms every destructive memory mutation independently of chat type", () => {
     expect(approvalFor(manageMemory, { action: "delete" }, "private")).toBe("user-approval");
-    expect(approvalFor(manageMemory, { action: "edit" }, "supergroup")).toBe("not-applicable");
+    expect(approvalFor(manageMemory, { action: "delete" }, "supergroup")).toBe("user-approval");
+    expect(approvalFor(manageMemory, { action: "edit" }, "supergroup")).toBe("user-approval");
     expect(approvalFor(manageMemory, { action: "undo" }, "private")).toBe("not-applicable");
+  });
+
+  it("requires identity-bound HITL for sensitive decisions and thread lifecycle", () => {
+    expect(approvalFor(manageMemoryApproval, { action: "approve" }, "private"))
+      .toBe("user-approval");
+    expect(approvalFor(manageMemoryApproval, { action: "reject" }, "supergroup"))
+      .toBe("user-approval");
+    expect(approvalFor(manageMemoryThread, { action: "complete" }, "private"))
+      .toBe("user-approval");
+    expect(approvalFor(manageMemoryThread, { action: "reactivate" }, "supergroup"))
+      .toBe("user-approval");
   });
 });

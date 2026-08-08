@@ -11,6 +11,7 @@
  * - Production agent runtime includes system CA roots for native integration binaries.
  * - Node application services explicitly select the production runtime image stage.
  * - Agent containers map the active DeepSeek secret into the provider-neutral runtime boundary.
+ * - Memory extraction workers wait for and receive the local embedding service in every environment.
  * - Nginx re-resolves the agent service after Docker replaces its container IP.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -145,12 +146,15 @@ describe("Docker Compose runtime wiring", () => {
     const compose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
     const workerEntrypoints = new Map([
       ["memory-embedding-worker", ".runtime/scripts/memory-embedding-worker.js"],
+      ["memory-extraction-worker", ".runtime/scripts/memory-extraction-worker.js"],
       ["telegram-ingress-worker", ".runtime/scripts/telegram-ingress-worker.js"],
     ]);
 
     // An explicit target prevents a later Dockerfile stage, such as Nginx edge, from silently
     // replacing the Node runtime when stages are reordered or appended.
-    for (const serviceName of ["agent", "memory-embedding-worker", "telegram-ingress-worker"]) {
+    for (const serviceName of [
+      "agent", "memory-embedding-worker", "memory-extraction-worker", "telegram-ingress-worker",
+    ]) {
       const serviceStart = compose.indexOf(`\n  ${serviceName}:\n`);
       const nextServiceOffset = compose.slice(serviceStart + 1).search(/\n  \S/);
       const serviceEnd = nextServiceOffset === -1
@@ -165,6 +169,26 @@ describe("Docker Compose runtime wiring", () => {
           `    entrypoint: ["node", "${workerEntrypoint}"]\n`,
         );
       }
+    }
+  });
+
+  it("wires every memory extraction worker to the healthy local embedding service", () => {
+    const composeFiles = ["compose.yaml", "compose.test.yaml", "compose.production.yaml"];
+
+    for (const composeFile of composeFiles) {
+      const compose = readFileSync(new URL(composeFile, projectRoot), "utf8");
+      const serviceStart = compose.indexOf("\n  memory-extraction-worker:\n");
+      const nextServiceOffset = compose.slice(serviceStart + 1).search(/\n  \S/u);
+      const serviceEnd = nextServiceOffset === -1
+        ? undefined
+        : serviceStart + nextServiceOffset + 1;
+      const worker = compose.slice(serviceStart, serviceEnd);
+
+      expect(serviceStart, `${composeFile} worker is absent`).toBeGreaterThanOrEqual(0);
+      expect(worker, composeFile).toContain("memory-embedding:\n        condition: service_healthy");
+      expect(worker, composeFile).toContain(
+        "MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80",
+      );
     }
   });
 

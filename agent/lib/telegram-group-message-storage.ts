@@ -10,6 +10,7 @@ import type { TelegramMessage } from "eve/channels/telegram";
 import type { PoolClient } from "pg";
 
 import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
+import { memoryContentRejectionCode } from "./memory-content-policy.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -89,7 +90,8 @@ export function telegramMessageKind(message: TelegramMessage): string {
 
 export function telegramMessageContent(message: TelegramMessage): string | null {
   const content = [message.text, message.caption].filter(Boolean).join("\n").trim();
-  return content || null;
+  if (!content || memoryContentRejectionCode(content)) return null;
+  return content;
 }
 
 export function telegramSenderDisplayName(message: TelegramMessage): string | null {
@@ -103,8 +105,16 @@ export async function lockTelegramGroupJournal(
   client: PoolClient,
   groupId: string,
 ): Promise<void> {
-  // One transaction per group owns insertion and pruning, preventing concurrent cap overruns.
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [groupId]);
+  // Group compatibility writers share the application-conversation lock with snapshots/catch-up.
+  const conversation = await client.query<{ id: string }>(
+    "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
+    [groupId],
+  );
+  const conversationId = conversation.rows[0]?.id;
+  if (!conversationId) {
+    throw new Error("AGENT_APPLICATION_CONVERSATION_NOT_FOUND: Для группы не найден разговор");
+  }
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [conversationId]);
 }
 
 export async function pruneTelegramGroupJournal(
@@ -118,7 +128,10 @@ export async function pruneTelegramGroupJournal(
        WHERE group_id = $1
        ORDER BY sequence_id DESC
        OFFSET $2
-     )`,
+      ) AND NOT EXISTS (
+        SELECT 1 FROM memory_extraction_retention_holds AS hold
+        WHERE hold.timeline_entry_id = telegram_group_messages.id
+      )`,
     [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
   );
 }

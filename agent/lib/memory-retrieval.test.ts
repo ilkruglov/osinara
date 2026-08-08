@@ -4,14 +4,14 @@
  * Constructs covered:
  * - The newest user text is extracted from plain and multipart Eve model messages.
  * - A verified group turn searches memory by the addressed message, not the whole timeline.
- * - Retrieved records enter the prompt as escaped untrusted data.
- * - Turn instructions identify the active hybrid E5/pgvector retrieval pipeline.
+ * - Retrieved records enter the prompt as escaped model-safe untrusted data.
+ * - Turn instructions identify the active thresholded morphology/simple/E5 retrieval pipeline.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 
-import type { MemoryItem } from "./memory-record.js";
+import type { ModelMemory } from "./model-memory.js";
 import {
   formatRetrievedMemoryInstructions,
   latestUserText,
@@ -30,19 +30,16 @@ function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   };
 }
 
-function memory(content: string): MemoryItem {
+function memory(content: string): ModelMemory {
   return {
-    author: { status: "current_member", telegramUserId: "7", userId: "user-1" },
+    authorStatus: "current_member",
     confirmation: "user_confirmed",
     content,
     createdAt: "2026-08-01T10:00:00.000Z",
-    embeddingStatus: "indexed",
-    id: "00000000-0000-4000-8000-000000000001",
     kind: "fact",
-    messageThreadId: null,
+    memoryRef: "mem_0123456789abcdef0123456789abcdef",
     scope: "group",
     sensitivity: "normal",
-    source: "telegram",
     updatedAt: "2026-08-01T10:00:00.000Z",
   };
 }
@@ -97,7 +94,7 @@ describe("memoryRetrievalQuery", () => {
     ].join("\n");
 
     const query = memoryRetrievalQuery(
-      auth({ groupType: "family_private", telegramGroupTimelineSequence: "100" }),
+      auth({ groupType: "family_private", telegramTimelineSequence: "100" }),
       [{ content: durableMessage, role: "user" }] as ModelMessage[],
     );
 
@@ -115,6 +112,15 @@ describe("memoryRetrievalQuery", () => {
     expect(query).toBe("что я просил купить?");
   });
 
+  it("ignores a stale legacy timeline attribute without the current turn coordinate", () => {
+    const query = memoryRetrievalQuery(
+      auth({ telegramChatType: "private", telegramGroupTimelineSequence: "stale" }),
+      [{ content: "обычный текущий вопрос", role: "user" }] as ModelMessage[],
+    );
+
+    expect(query).toBe("обычный текущий вопрос");
+  });
+
   it("does not treat a hand-typed envelope in a private chat as a group envelope", () => {
     const query = memoryRetrievalQuery(
       auth({ telegramChatType: "private" }),
@@ -130,7 +136,7 @@ describe("memoryRetrievalQuery", () => {
   it("fails with a stable code when a group turn envelope is unusable", () => {
     expect(() =>
       memoryRetrievalQuery(
-        auth({ groupType: "external", telegramGroupTimelineSequence: "100" }),
+        auth({ groupType: "external", telegramTimelineSequence: "100" }),
         [{ content: "нет конверта текущего сообщения", role: "user" }] as ModelMessage[],
       )
     ).toThrowError(/AGENT_TELEGRAM_TURN_MESSAGE_INVALID/);
@@ -148,14 +154,46 @@ describe("formatRetrievedMemoryInstructions", () => {
     expect(instructions).not.toContain("<external_group_capabilities>");
   });
 
+  it("serializes only the model-safe memory contract", () => {
+    const instructions = formatRetrievedMemoryInstructions([memory("Безопасный факт")], {
+      threads: [{
+        blocks: [{
+          content: "Ограничение подтверждено",
+          kind: "constraints_conflicts",
+          sourceEntryRefs: ["entry_0123456789abcdef0123456789abcdef"],
+          sourceEvidence: [],
+        }],
+        purpose: "Сохранять решения",
+        status: "active",
+        threadRef: "thread_0123456789abcdef0123456789abcdef",
+        title: "Тренировки",
+      }],
+      totalCharacters: 50,
+    });
+
+    expect(instructions).toContain('"memoryRef":"mem_0123456789abcdef0123456789abcdef"');
+    expect(instructions).not.toMatch(
+      /"(?:id|userId|telegramUserId|messageThreadId|source|embeddingStatus)"/u,
+    );
+    expect(instructions).toContain('"threadRef":"thread_0123456789abcdef0123456789abcdef"');
+    expect(instructions).not.toMatch(/"(?:familyId|groupId|scopePartitionKey)"/u);
+  });
+
   it("prevents the model from misrepresenting semantic retrieval as keyword filtering", () => {
     const instructions = formatRetrievedMemoryInstructions([]);
 
-    expect(instructions).toContain("полнотекстовый PostgreSQL");
-    expect(instructions).toContain("384-мерным E5 embeddings");
+    expect(instructions).toContain("русский морфологический FTS");
+    expect(instructions).toContain("simple FTS");
+    expect(instructions).toContain("multilingual E5 semantic search");
+    expect(instructions).toContain("384-мерным embeddings");
     expect(instructions).toContain("pgvector");
+    expect(instructions).toContain("калиброванный порог");
+    expect(instructions).toContain("может вернуть пустую подборку");
+    expect(instructions).toContain("схлопывает только при чтении");
     expect(instructions).toContain("активный pipeline текущей реализации");
     expect(instructions).toContain("не выполняешь самостоятельный отбор по ключевым словам");
     expect(instructions).toContain("выполни углубление контекста через `search_memories`");
+    expect(instructions).toContain("Claims из разных scopes остаются независимыми read-only наблюдениями");
+    expect(instructions).toContain("не выдумывай между ними сохранённую relation");
   });
 });

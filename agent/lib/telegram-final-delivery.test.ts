@@ -1,0 +1,78 @@
+/**
+ * Durable Telegram final-delivery crash-window tests.
+ *
+ * Constructs covered:
+ * - A delivered replay returns stored receipts without another native send.
+ * - A started/ambiguous replay never invokes Telegram again.
+ * - A crash after provider acceptance but before chunk persistence becomes terminal ambiguity.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const repository = vi.hoisted(() => ({
+  complete: vi.fn(),
+  confirmChunk: vi.fn(),
+  fail: vi.fn(),
+  start: vi.fn(),
+}));
+
+vi.mock("./telegram-final-delivery-repository.js", () => ({
+  telegramFinalDeliveryRepository: repository,
+}));
+
+import { deliverTelegramFinalOutput } from "./telegram-final-delivery.js";
+
+const base = {
+  applicationSessionId: "00000000-0000-4000-8000-000000000001",
+  deliveryIdentity: { chatId: "101" },
+  eveTurnId: "turn-1",
+  markdown: "Готово",
+};
+
+describe("Telegram final delivery", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns durable receipts on replay without a second send", async () => {
+    repository.start.mockResolvedValue({
+      messages: [{ chatType: "private", messageId: "501" }],
+      status: "delivered",
+    });
+    const sendChunk = vi.fn();
+
+    await expect(deliverTelegramFinalOutput({ ...base, sendChunk })).resolves.toEqual([
+      { chatType: "private", messageId: "501" },
+    ]);
+    expect(sendChunk).not.toHaveBeenCalled();
+  });
+
+  it("does not resend a delivery whose started state is crash-ambiguous", async () => {
+    repository.start.mockResolvedValue({
+      diagnosticCode: "AGENT_TELEGRAM_FINAL_DELIVERY_AMBIGUOUS",
+      status: "ambiguous",
+    });
+    const sendChunk = vi.fn();
+
+    await expect(deliverTelegramFinalOutput({ ...base, sendChunk }))
+      .rejects.toThrowError(/AGENT_TELEGRAM_FINAL_DELIVERY_AMBIGUOUS/u);
+    expect(sendChunk).not.toHaveBeenCalled();
+  });
+
+  it("marks acceptance-before-receipt-persistence as ambiguous without retrying", async () => {
+    repository.start.mockResolvedValue({
+      deliveryId: "00000000-0000-4000-8000-000000000002",
+      deliveryToken: "00000000-0000-4000-8000-000000000003",
+      status: "started",
+    });
+    repository.confirmChunk.mockRejectedValue(new Error("database disconnected after Telegram accepted"));
+    const sendChunk = vi.fn().mockResolvedValue({ chatType: "private", messageId: "502" });
+
+    await expect(deliverTelegramFinalOutput({ ...base, sendChunk }))
+      .rejects.toThrowError("database disconnected after Telegram accepted");
+    expect(sendChunk).toHaveBeenCalledTimes(1);
+    expect(repository.fail).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000003",
+      "AGENT_TELEGRAM_FINAL_DELIVERY_AMBIGUOUS",
+      true,
+    );
+  });
+});

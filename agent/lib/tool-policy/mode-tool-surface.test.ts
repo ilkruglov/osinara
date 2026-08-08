@@ -51,6 +51,36 @@ describe("trusted mode tool surfaces", () => {
     );
   });
 
+  it("exposes R3 profile policy and provenance only in the intended trust zones", () => {
+    const privateNames = names({ environment: "private" });
+    const familyNames = names({ environment: "family" });
+    const externalNames = names({ capabilities: new Set(), environment: "external" });
+
+    expect(privateNames).toEqual(expect.arrayContaining([
+      "get_memory_source",
+      "list_memory_threads",
+      "manage_memory_approval",
+      "manage_memory_thread",
+      "manage_profile_projection",
+      "read_memory_thread",
+      "read_profile_view",
+      "search_memory_threads",
+    ]));
+    expect(familyNames).toEqual(expect.arrayContaining([
+      "list_memory_threads",
+      "manage_memory_approval",
+      "manage_memory_thread",
+      "read_memory_thread",
+      "read_profile_view",
+      "search_memory_threads",
+    ]));
+    expect(familyNames).not.toContain("get_memory_source");
+    expect(externalNames).toEqual(expect.arrayContaining([
+      "manage_memory_approval",
+      "read_profile_view",
+    ]));
+  });
+
   it("gives a family group the shared tools plus group history and attachments only", () => {
     expect(names({ environment: "family" })).toEqual(
       [...TRUSTED_MODE_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES].sort(),
@@ -93,7 +123,12 @@ describe("trusted mode tool surfaces", () => {
 describe("external group tool surface", () => {
   it("emits nothing but framework denials without a grant", () => {
     expect(names({ capabilities: new Set(), environment: "external" })).toEqual(
-      [...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill"].sort(),
+      [
+        ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+        "load_skill",
+        "manage_memory_approval",
+        "read_profile_view",
+      ].sort(),
     );
   });
 
@@ -115,9 +150,12 @@ describe("external group tool surface", () => {
     const grantable = new Set<string>([
       ...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, "")),
     ]);
+    const alwaysExternal = new Set(["manage_memory_approval", "read_profile_view"]);
 
     for (const emitted of names({ capabilities: new Set(), environment: "external" })) {
-      expect(applicationNames.has(emitted) && !grantable.has(emitted)).toBe(false);
+      expect(
+        applicationNames.has(emitted) && !grantable.has(emitted) && !alwaysExternal.has(emitted),
+      ).toBe(false);
     }
   });
 
@@ -173,10 +211,31 @@ describe("external group tool surface", () => {
     ).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
   });
 
+  it("keeps memory-thread lifecycle action-level and re-checks the live external policy", async () => {
+    const surface = buildModeToolSurface({
+      capabilities: new Set(["manage_memory_thread.complete"]),
+      environment: "external",
+    });
+    const revoked = { session: { auth: externalAuth([]) } } as never;
+
+    expect(surface).toHaveProperty("manage_memory_thread");
+    await expect(surface.manage_memory_thread!.execute({
+      action: "complete",
+      authority: "current_user_statement",
+      sourceEntryRefs: ["entry_0123456789abcdef0123456789abcdef"],
+      threadRef: "thread_0123456789abcdef0123456789abcdef",
+    }, revoked)).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+  });
+
   it("denies every capability when the trusted snapshot is corrupt", () => {
     expect(names({
       capabilities: new Set(["unknown_tool"] as unknown as ExternalGroupToolName[]),
       environment: "external",
-    })).toEqual([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill"].sort());
+    })).toEqual([
+      ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+      "load_skill",
+      "manage_memory_approval",
+      "read_profile_view",
+    ].sort());
   });
 });

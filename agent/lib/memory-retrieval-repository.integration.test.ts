@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Full-text and best-chunk vector candidates are fused once per parent record.
  * - Personal and family authorization is applied before ranking.
+ * - Unresolved conflict closure loads both authorized versions even when one has no retrieval score.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -87,12 +88,64 @@ describeWithDatabase("memoryRetrievalRepository", () => {
 
     const results = await memoryRetrievalRepository.search(
       auth,
-      "Что нельзя добавлять в десерт с орехами?",
+      "орехами",
       vector(1, 0),
     );
 
-    expect(results[0]?.content).toBe("Пользователь не ест орехи");
-    expect(results.filter((item) => item.content === "Пользователь не ест орехи")).toHaveLength(1);
-    expect(results.map((item) => item.content)).not.toContain("Скрытая аллергия на орехи");
+    expect(results[0]?.memory.content).toBe("Пользователь не ест орехи");
+    expect(results.filter((result) => result.memory.content === "Пользователь не ест орехи"))
+      .toHaveLength(1);
+    expect(results.map((result) => result.memory.content)).not.toContain("Скрытая аллергия на орехи");
+    expect(results[0]?.evidence.russianMorphologyRank).not.toBeNull();
+  });
+
+  it("loads an unresolved low-score conflict partner as one complete opaque group", async () => {
+    const first = await database().query<{ id: string }>(
+      `INSERT INTO memory_items
+         (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+          content, content_normalized, source, confirmation, sensitivity, operation_key,
+          embedding_status)
+       VALUES ($1, $2, $2, $3, 'personal', 'fact', 'Код домофона 1234',
+               'код домофона 1234', 'test:conflict', 'user_confirmed', 'normal',
+               'conflict-visible', 'indexed') RETURNING id`,
+      [auth.familyId, auth.userId, auth.telegramUserId],
+    );
+    const second = await database().query<{ id: string }>(
+      `INSERT INTO memory_items
+         (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+          content, content_normalized, source, confirmation, sensitivity, operation_key)
+       VALUES ($1, $2, $2, $3, 'personal', 'fact', 'Код домофона 9876',
+               'код домофона 9876', 'test:conflict', 'user_confirmed', 'normal',
+               'conflict-low-score') RETURNING id`,
+      [auth.familyId, auth.userId, auth.telegramUserId],
+    );
+    await database().query(
+      `INSERT INTO memory_embedding_chunks
+         (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
+       VALUES ($1, 0, 'Код домофона 1234', 0, 18, $2::vector, $3)`,
+      [first.rows[0]!.id, `[${vector(1, 0).join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+    );
+    await database().query(
+      `INSERT INTO claim_conflicts
+         (claim_a_id, claim_b_id, family_id, scope, scope_partition_key, detection_method)
+       VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), $3,
+               'personal', $4, 'deterministic_guard')`,
+      [first.rows[0]!.id, second.rows[0]!.id, auth.familyId, auth.userId],
+    );
+
+    const result = await memoryRetrievalRepository.searchWithConflictClosure(
+      auth,
+      "домофон 1234",
+      vector(1, 0),
+    );
+
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]?.conflictRef).toMatch(/^conf_[0-9a-f]{32}$/u);
+    expect(result.conflicts[0]?.versions.map((version) => version.content).sort()).toEqual([
+      "Код домофона 1234",
+      "Код домофона 9876",
+    ]);
+    expect(JSON.stringify(result.conflicts)).not.toContain(first.rows[0]!.id);
+    expect(JSON.stringify(result.conflicts)).not.toContain(second.rows[0]!.id);
   });
 });

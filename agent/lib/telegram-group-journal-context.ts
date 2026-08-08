@@ -5,11 +5,14 @@
  * - `TelegramGroupJournalEntry`: normalized unified timeline projection.
  * - `TelegramGroupAttachmentSummary`: model-safe lazy attachment reference metadata.
  * - `formatTelegramGroupJournalContext`: bounded, untrusted JSON context serialization.
+ * - `selectTelegramGroupJournalContext`: exact entries retained by character bounds.
  */
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 
 export interface TelegramGroupJournalEntry {
   attachment?: TelegramGroupAttachmentSummary;
+  /** Internal selection identity; the formatter never renders it to the model. */
+  entryId?: string;
   actorId: string;
   actorKind: "agent_self" | "user";
   contentText: string | null;
@@ -89,6 +92,20 @@ export function formatTelegramGroupJournalContext(
   omittedBeforeSequence: string | null = null,
   protectedReplyRootSequenceId: string | null = null,
 ): string | null {
+  return selectTelegramGroupJournalContext(
+    entries,
+    maxCharacters,
+    omittedBeforeSequence,
+    protectedReplyRootSequenceId,
+  ).context;
+}
+
+export function selectTelegramGroupJournalContext(
+  entries: readonly TelegramGroupJournalEntry[],
+  maxCharacters: number,
+  omittedBeforeSequence: string | null = null,
+  protectedReplyRootSequenceId: string | null = null,
+): { context: string | null; entries: TelegramGroupJournalEntry[] } {
   if (!Number.isSafeInteger(maxCharacters) || maxCharacters <= 0) {
     throw new Error(
       "AGENT_TELEGRAM_JOURNAL_LIMIT_INVALID: Лимит контекста журнала должен быть положительным целым числом",
@@ -103,12 +120,12 @@ export function formatTelegramGroupJournalContext(
   // Inputs are chronological; removing from the front preserves the most recent useful context.
   while (messages.length > 0) {
     const context = renderContext(messages, omittedBeforeSequence, truncated);
-    if (context.length <= maxCharacters) return context;
+    if (context.length <= maxCharacters) return { context, entries: messages };
     // Preserve a coherent reply/target pair when the gap marker alone would evict conversation
     // content from an exceptionally tight budget. The normal production budget retains both.
     if ((truncated || omittedBeforeSequence !== null) &&
       renderContext(messages, null, false).length <= maxCharacters) {
-      return renderContext(messages, null, false);
+      return { context: renderContext(messages, null, false), entries: messages };
     }
     const referenced = new Set(messages.flatMap((entry) =>
       entry.replyToSequenceId === null ? [] : [entry.replyToSequenceId]
@@ -124,7 +141,7 @@ export function formatTelegramGroupJournalContext(
   }
   if (truncated || omittedBeforeSequence !== null) {
     const gapOnly = renderContext([], omittedBeforeSequence, truncated);
-    return gapOnly.length <= maxCharacters ? gapOnly : null;
+    return { context: gapOnly.length <= maxCharacters ? gapOnly : null, entries: [] };
   }
-  return null;
+  return { context: null, entries: [] };
 }

@@ -61,7 +61,9 @@ function updateInput(updateId: string, continuationKey: string, text: string) {
 describeWithDatabase("telegramIngressRepository", () => {
   beforeEach(async () => {
     await database().query(
-      "TRUNCATE telegram_ingress_ignored_updates, telegram_ingress_updates, telegram_ingress_continuation_aliases, telegram_ingress_queues CASCADE",
+      `TRUNCATE eve_session_event_cursors, telegram_ingress_ignored_updates,
+         telegram_ingress_updates, telegram_ingress_continuation_aliases,
+         telegram_ingress_queues CASCADE`,
     );
   });
 
@@ -242,11 +244,48 @@ describeWithDatabase("telegramIngressRepository", () => {
       first!.updateId,
       first!.leaseToken,
       "eve-session-2001",
+      4,
     );
 
     await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toMatchObject({
       updateId: "2002",
     });
+  });
+
+  it("persists a monotonic Eve event cursor atomically with ingress completion", async () => {
+    const continuationKey = "telegram:private:cursor";
+    const sessionId = "eve-session-cursor";
+    await telegramIngressRepository.enqueue(updateInput("2101", continuationKey, "первый turn"));
+    const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    await telegramIngressRepository.completeWithSession(
+      first!.updateId,
+      first!.leaseToken,
+      sessionId,
+      4,
+    );
+    await expect(telegramIngressRepository.sessionEventStreamCursor(sessionId)).resolves.toBe(4);
+
+    // A stale boundary cannot complete ingress unless its cursor update commits in the same transaction.
+    await telegramIngressRepository.enqueue(updateInput("2102", continuationKey, "второй turn"));
+    const second = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    await expect(telegramIngressRepository.completeWithSession(
+      second!.updateId,
+      second!.leaseToken,
+      sessionId,
+      3,
+    )).rejects.toThrowError(/AGENT_TELEGRAM_SESSION_CURSOR_REGRESSION/u);
+    await expect(database().query<{ status: string }>(
+      "SELECT status FROM telegram_ingress_updates WHERE update_id = 2102",
+    )).resolves.toMatchObject({ rows: [{ status: "processing" }] });
+    await expect(telegramIngressRepository.sessionEventStreamCursor(sessionId)).resolves.toBe(4);
+
+    await telegramIngressRepository.completeWithSession(
+      second!.updateId,
+      second!.leaseToken,
+      sessionId,
+      7,
+    );
+    await expect(telegramIngressRepository.sessionEventStreamCursor(sessionId)).resolves.toBe(7);
   });
 
   it("reclaims an expired lease and rejects the stale worker token", async () => {
@@ -267,6 +306,7 @@ describeWithDatabase("telegramIngressRepository", () => {
         first!.updateId,
         first!.leaseToken,
         "stale-session",
+        1,
       ),
     ).rejects.toThrowError(/AGENT_TELEGRAM_LEASE_LOST/);
   });

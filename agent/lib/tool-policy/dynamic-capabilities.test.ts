@@ -75,7 +75,13 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(Object.keys(surface ?? {}).sort()).toEqual(
-      ["load_skill", "remember", ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort(),
+      [
+        "load_skill",
+        "manage_memory_approval",
+        "read_profile_view",
+        "remember",
+        ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+      ].sort(),
     );
     expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
       familyId: "family-1",

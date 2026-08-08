@@ -9,6 +9,7 @@
  * - Group reply routing accepts bot or sender-less references only for exact known routes.
  * - Timeline-proven agent replies can start a fresh message turn after application session rotation.
  * - One server-clock snapshot anchors all time-sensitive work and model context in an accepted turn.
+ * - Production side-effect adapters are assembled in `telegram-on-message-repositories.ts`.
  */
 import type {
   TelegramContext,
@@ -16,26 +17,11 @@ import type {
   TelegramMessage,
 } from "eve/channels/telegram";
 
-import { downloadTelegramAttachment } from "./attachments/telegram-attachment-download.js";
-import {
-  telegramGroupAttachmentRepository,
-  type TelegramGroupAttachmentRepository,
-} from "./attachments/telegram-group-attachment-repository.js";
-import {
-  createTelegramWorkspaceAttachmentImporter,
-  type StoredTelegramAttachment,
-} from "./attachments/telegram-workspace-attachments.js";
+import type { StoredTelegramAttachment } from "./attachments/telegram-workspace-attachments.js";
 import { isAppError } from "./app-error.js";
-import { formatCurrentTimeContext } from "./current-time.js";
-import { evaluateConversationAccess, type RegisteredGroup } from "./family-access.js";
-import { familyRepository, type FamilyRepository } from "./family-repository.js";
+import { bindTelegramConversationTimeline } from "./telegram-conversation-timeline.js";
+import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
-import {
-  proactiveDeliveryRepository,
-} from "./proactive-deliveries/proactive-delivery-repository.js";
-import {
-  sessionRepository,
-} from "./sessions/session-repository.js";
 import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
   classifyTelegramInboundMedia,
@@ -43,72 +29,27 @@ import {
   isReplyToBot,
 } from "./telegram-message-policy.js";
 import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
-import {
-  telegramGroupTurnContextPreparer,
-  type TelegramGroupTurnContextPreparer,
-} from "./telegram-group-turn-context.js";
 import { telegramForumTopicId } from "./telegram-group-message-storage.js";
+import { deliverPendingMemoryThreadNotice } from "./telegram-memory-thread-notice.js";
+import { verifiedTelegramProfileSignals } from "./telegram-profile-subjects.js";
+import { sameTelegramGroupPolicy } from "./telegram-group-policy-snapshot.js";
 import {
-  telegramGroupJournalRepository,
-  type TelegramGroupJournalRepository,
-} from "./telegram-group-journal-repository.js";
-import { telegramRepository, type TelegramRepository } from "./telegram-repository.js";
-import {
-  formatStoredTelegramAttachments,
-  formatTelegramAttachmentReferences,
   telegramAttachmentScope,
   telegramProactiveDeliveryAuthorization,
   telegramProfileName,
   telegramSessionScope,
   telegramWorkspaceAuthorization,
 } from "./telegram-on-message-context.js";
+import { buildTelegramTurnResult } from "./telegram-turn-result.js";
 import {
   telegramBaseContinuationToken,
   telegramReplyContinuationTokens,
 } from "./telegram-reply-routing.js";
 import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
 import {
-  telegramHitlApprovalRepository,
-  type TelegramHitlApprovalRepository,
-} from "./telegram-hitl/approval-repository.js";
-import { workspaceBinaryRepository } from "./workspaces/workspace-binary-repository.js";
-import type {
-  WorkspaceAuthorization,
-  WorkspaceScope,
-} from "./workspaces/workspace-repository.js";
-
-interface TelegramMessageRepositories {
-  attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
-  attachments: {
-    persist(input: {
-      attachments: readonly TelegramMessage["attachments"][number][];
-      auth: WorkspaceAuthorization;
-      chatId: string;
-      messageId: string;
-      scope: WorkspaceScope;
-    }): Promise<StoredTelegramAttachment[]>;
-  };
-  family: Pick<FamilyRepository, "claimInvitation">;
-  groupContext: { prepare: TelegramGroupTurnContextPreparer };
-  hitl: Pick<TelegramHitlApprovalRepository, "authorizeReply">;
-  journal: Pick<TelegramGroupJournalRepository, "record">;
-  proactiveDeliveries: Pick<typeof proactiveDeliveryRepository, "listPendingContext">;
-  session: Pick<typeof sessionRepository, "hasRoute" | "prepareTurn">;
-  telegram: TelegramRepository;
-}
-
-function sameGroupPolicy(left: RegisteredGroup, right: RegisteredGroup | null): boolean {
-  if (!right) return false;
-  if (
-    left.familyId !== right.familyId ||
-    left.groupId !== right.groupId ||
-    left.messageMode !== right.messageMode ||
-    left.telegramChatId !== right.telegramChatId ||
-    left.type !== right.type ||
-    left.toolAllowlist.length !== right.toolAllowlist.length
-  ) return false;
-  return left.toolAllowlist.every((capability, index) => capability === right.toolAllowlist[index]);
-}
+  productionTelegramMessageRepositories,
+  type TelegramMessageRepositories,
+} from "./telegram-on-message-repositories.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -150,7 +91,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       mediaKind === "image_document_candidate") &&
       externalAllowlist?.has("inspect_workspace_image") === true;
     let journalDuplicate = false;
-    let inboundTimeline: Awaited<ReturnType<TelegramGroupJournalRepository["record"]>> | null = null;
+    let inboundTimeline: Awaited<
+      ReturnType<TelegramMessageRepositories["journal"]["record"]>
+    > | null = null;
     const hasLazyGroupAttachment = group !== null && message.attachments.length > 0 &&
       (group.type === "family_private" || externalImageAllowed);
     if (message.chat.type !== "private") {
@@ -198,7 +141,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // Group policy and identity are separate DB records. Re-reading the group establishes a
     // fail-closed authorization boundary if owner-only mode, type, or capabilities changed while
     // the incoming message was journaled and participant identity was resolved.
-    if (group && !sameGroupPolicy(group, await repositories.telegram.findGroup(message.chat.id))) {
+    if (group && !sameTelegramGroupPolicy(group, await repositories.telegram.findGroup(message.chat.id))) {
       return null;
     }
 
@@ -277,7 +220,21 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     }
 
     const access = decision.access;
+    const turnStartedAt = new Date();
 
+    // Authorization precedes private persistence. Group persistence already occurred before trigger
+    // evaluation so passive registered-group messages remain complete.
+    const timelineBinding = await bindTelegramConversationTimeline({
+      conversations: repositories.conversations,
+      existingGroupTimeline: inboundTimeline,
+      familyId: access.familyId,
+      groupId: group?.groupId ?? null,
+      message,
+      timeline: repositories.timeline,
+    });
+    const conversation = timelineBinding.conversation;
+    inboundTimeline = timelineBinding.inboundTimeline;
+    if (message.chat.type === "private" && inboundTimeline.status === "duplicate") return null;
     // Family media stays remote until the model explicitly imports this safe opaque reference.
     const currentAttachment = hasLazyGroupAttachment && group
       ? await repositories.attachmentReferences.record(group.groupId, message)
@@ -297,6 +254,17 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) return null;
 
+    // The accepted verified message reactivates exactly its participant identity before profile
+    // selection. This does not enumerate or inject every participant in the conversation.
+    await repositories.conversations.syncTimelineParticipants(conversation.id, [inboundTimeline.entryId]);
+    const memoryAuthorization = {
+      familyId: access.familyId,
+      groupId: access.groupId,
+      role: access.role,
+      scopes: access.memoryScopes,
+      telegramUserId: sender.id,
+      userId: access.userId,
+    };
     let replyHandling: "message" | undefined;
     // A persisted agent timeline anchor is trusted even when Telegram omits compact sender metadata.
     const trustedAgentReply = inboundTimeline?.replyToAgent === true;
@@ -336,6 +304,26 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       if (replyAuthorization === "authorized") resumesPendingTask = true;
     }
 
+    // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
+    // proved that this accepted message will continue into an agent turn.
+    const profileSignals = verifiedTelegramProfileSignals(message);
+    const pendingMemoryApprovalContext = await repositories.memoryApprovals.pendingContext(
+      memoryAuthorization,
+      conversation.id,
+    );
+    await deliverPendingMemoryThreadNotice(memoryAuthorization, conversation.id,
+      repositories.threadNotices, (text) => ctx.telegram.sendMessage(text));
+    if (group) {
+      const policyNotice = await repositories.profilePolicies.claimPendingGroupNotice(group.groupId);
+      if (policyNotice) {
+        await ctx.telegram.sendMessage(`AGENT_PROFILE_PROJECTION_POLICY_NOTICE: ${policyNotice.text}`);
+        await repositories.profilePolicies.markGroupNoticePresented({
+          deliveryToken: policyNotice.deliveryToken,
+          noticeRef: policyNotice.noticeRef,
+        });
+      }
+    }
+
     let storedAttachments: StoredTelegramAttachment[] = [];
     if (
       message.attachments.length > 0 &&
@@ -356,7 +344,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       }
     }
     // One instant anchors session rotation, pending-delivery visibility, and model-visible time.
-    const turnStartedAt = new Date();
     const resolvedSessionScope = telegramSessionScope(decision);
     const verifiedForumTopicId = forumTopicId === null ? null : Number(forumTopicId);
     const baseContinuationToken = group
@@ -380,15 +367,16 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         now: turnStartedAt,
       })
       : null;
-    const groupTurnContext = group && inboundTimeline
+    const groupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
           currentEntryId: inboundTimeline.entryId,
           currentSenderDisplayName: telegramProfileName(message),
           currentSenderUsername: sender.username ?? null,
           currentSequence: inboundTimeline.sequenceId,
-          groupId: group.groupId,
-          includeAttachmentReferences: group.type === "family_private" ||
+          ...(group ? {} : { conversationId: conversation.id }),
+          groupId: group?.groupId ?? null,
+          includeAttachmentReferences: group?.type === "family_private" ||
             externalAllowlist?.has("inspect_workspace_image") === true,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
@@ -396,74 +384,32 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           replyToSequenceId: inboundTimeline.replyToSequenceId,
         })
       : null;
-    const principalId = access.userId ?? `telegram:${sender.id}`;
-    const context = [
-      `Verified conversation scope: ${access.memoryScopes.join(", ")}.`,
-      `Verified role: ${access.role}.`,
-      "Verified Telegram delivery: reply in concise Rich Markdown; the channel safely supports Markdown tables and approved text-rich structure.",
-      formatCurrentTimeContext(turnStartedAt),
-    ];
-    if (storedAttachments.length > 0) {
-      context.push(formatStoredTelegramAttachments(storedAttachments));
+    if (!groupTurnContext) {
+      throw new Error(
+        "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
+      );
     }
-    if (lazyAttachment) context.push(formatTelegramAttachmentReferences([lazyAttachment]));
-    if (pendingDeliveries) context.push(pendingDeliveries.context);
-
-    return {
-      auth: {
-        attributes: {
-          familyId: access.familyId,
-          applicationSessionId: appSession.id,
-          memoryScopes: access.memoryScopes,
-          role: access.role,
-          sandboxSessionId: appSession.sandboxSessionId,
-          ...(pendingDeliveries
-            ? { proactiveDeliveryCursor: pendingDeliveries.cursor }
-            : {}),
-          telegramChatId: message.chat.id,
-          telegramChatType: message.chat.type,
-          telegramMessageId: message.messageId,
-          ...(message.chat.type === "private"
-            ? {}
-            : { telegramReplyToMessageId: message.messageId }),
-          ...(inboundTimeline ? { telegramTimelineEntryId: inboundTimeline.entryId } : {}),
-          ...(groupTurnContext
-            ? { telegramGroupTimelineSequence: groupTurnContext.cursorSequence }
-            : {}),
-          ...(forumTopicId === null ? {} : { telegramForumTopicId: forumTopicId }),
-          ...(message.messageThreadId === undefined
-            ? {}
-            : { telegramMessageThreadId: String(message.messageThreadId) }),
-          telegramUserId: sender.id,
-          ...(group ? { groupType: group.type } : {}),
-          ...(group && group.type !== "family_private"
-            ? { toolAllowlist: group.toolAllowlist }
-            : {}),
-          ...(access.groupId ? { groupId: access.groupId } : {}),
-        },
-        authenticator: "telegram",
-        principalId,
-        principalType: "user",
-      },
-      context,
-      continuationToken: appSession.continuationToken,
-      ...(groupTurnContext ? { message: groupTurnContext.durableMessage } : {}),
-      ...(replyHandling === undefined ? {} : { replyHandling }),
-    };
+    return buildTelegramTurnResult({
+      access,
+      appSession,
+      conversation,
+      forumTopicId,
+      group,
+      lazyAttachment,
+      message,
+      pendingDelivery: pendingDeliveries,
+      pendingMemoryApprovalContext,
+      profileSignals,
+      profileReplyTimelineSequence: inboundTimeline.replyToSequenceId,
+      replyHandling,
+      storedAttachments,
+      timelineEntryId: inboundTimeline.entryId,
+      turnContext: groupTurnContext,
+      turnStartedAt,
+    });
   };
 }
 
-export const handleTelegramMessage = createTelegramMessageHandler({
-  attachmentReferences: telegramGroupAttachmentRepository,
-  attachments: createTelegramWorkspaceAttachmentImporter({
-    download: downloadTelegramAttachment,
-    writeBinary: workspaceBinaryRepository.writeBinary,
-  }),
-  family: familyRepository,
-  groupContext: { prepare: telegramGroupTurnContextPreparer },
-  hitl: telegramHitlApprovalRepository,
-  journal: telegramGroupJournalRepository,
-  proactiveDeliveries: proactiveDeliveryRepository,
-  session: sessionRepository,
-  telegram: telegramRepository,
-});
+export const handleTelegramMessage = createTelegramMessageHandler(
+  productionTelegramMessageRepositories,
+);

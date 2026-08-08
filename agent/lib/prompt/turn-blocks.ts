@@ -25,12 +25,20 @@ import {
   requireMemoryAuthorization,
   type MemoryAuthorization,
 } from "../memory-context.js";
-import type { MemoryItem } from "../memory-record.js";
 import {
   formatRetrievedMemoryInstructions,
   memoryRetrievalQuery,
   retrieveRelevantMemories,
+  retrieveMemoryTurnContext,
+  type MemoryTurnContext,
+  type ModelMemoryContextItem,
 } from "../memory-retrieval.js";
+import { applicationThreadSkillHints } from "../memory-thread-activation.js";
+import {
+  formatProfileViewContext,
+  profileViewRepository,
+} from "../profile-view-repository.js";
+import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import {
@@ -115,20 +123,75 @@ export function createModeBlockResolver(dependencies: { loadCapabilities: Capabi
 
 export function createMemoryBlockResolver(dependencies: {
   authorize: (ctx: TurnBlockContext) => MemoryAuthorization;
-  retrieve: (auth: MemoryAuthorization, query: string) => Promise<MemoryItem[]>;
+  createProfile: (auth: MemoryAuthorization, input: CreateProfileViewInput) => Promise<ProfileView>;
+  retrieve: (
+    auth: MemoryAuthorization,
+    query: string,
+    skillHints: readonly string[],
+  ) => Promise<MemoryTurnContext>;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
     try {
       const authorization = dependencies.authorize(ctx);
       const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
       if (query === null) return null;
-      return formatRetrievedMemoryInstructions(
-        await dependencies.retrieve(authorization, query),
+      const context = await dependencies.retrieve(
+        authorization,
+        query,
+        applicationThreadSkillHints(ctx.messages),
       );
+      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds);
+      const profile = profileInput === null
+        ? null
+        : await dependencies.createProfile(authorization, profileInput);
+      return [
+        ...(profile === null ? [] : [formatProfileViewContext(profile)]),
+        formatRetrievedMemoryInstructions(context.memories, context.threads),
+      ].join("\n\n");
     } catch (error) {
       logBlockFailure("AGENT_MEMORY_UNAVAILABLE", error);
       return MEMORY_UNAVAILABLE_BLOCK;
     }
+  };
+}
+
+function telegramProfileInput(
+  ctx: TurnBlockContext,
+  retrievalClaimIds: readonly string[],
+): CreateProfileViewInput | null {
+  const attributes = ctx.session.auth.current?.attributes;
+  const conversationId = attributes?.telegramConversationId;
+  if (typeof conversationId !== "string") return null;
+  if (!attributes) return null;
+  const currentTelegramUserId = attributes.telegramUserId;
+  const turnStartedAt = attributes.telegramTurnStartedAt;
+  const mentions = attributes.telegramProfileMentionUserIds;
+  if (typeof currentTelegramUserId !== "string" || typeof turnStartedAt !== "string" ||
+    (mentions !== undefined && !Array.isArray(mentions))) {
+    throw new Error(
+      "AGENT_PROFILE_TURN_CONTEXT_INVALID: Не удалось проверить данные текущего Telegram-профиля",
+    );
+  }
+  const now = new Date(turnStartedAt);
+  if (Number.isNaN(now.getTime())) {
+    throw new Error("AGENT_PROFILE_TURN_CONTEXT_INVALID: Некорректно время текущего Telegram-хода");
+  }
+  const replyTelegramUserId = attributes.telegramProfileReplyUserId;
+  const replyTimelineSequence = attributes.telegramProfileReplyTimelineSequence;
+  if ((replyTelegramUserId !== undefined && typeof replyTelegramUserId !== "string") ||
+    (replyTimelineSequence !== undefined && typeof replyTimelineSequence !== "string")) {
+    throw new Error(
+      "AGENT_PROFILE_TURN_CONTEXT_INVALID: Некорректен проверенный сигнал Telegram-профиля",
+    );
+  }
+  return {
+    conversationId,
+    currentTelegramUserId,
+    explicitMentionTelegramUserIds: mentions === undefined ? [] : [...mentions],
+    now,
+    replyTelegramUserId: replyTelegramUserId ?? null,
+    ...(replyTimelineSequence === undefined ? {} : { replyTimelineSequence }),
+    retrievalClaimIds: [...retrievalClaimIds],
   };
 }
 
@@ -154,7 +217,8 @@ export const resolveModeBlock = createModeBlockResolver({
 
 export const resolveMemoryBlock = createMemoryBlockResolver({
   authorize: requireMemoryAuthorization,
-  retrieve: retrieveRelevantMemories,
+  createProfile: profileViewRepository.create,
+  retrieve: retrieveMemoryTurnContext,
 });
 
 export const resolvePreferenceBlock = createPreferenceBlockResolver({

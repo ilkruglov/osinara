@@ -84,6 +84,9 @@ async function fixture(options: {
     telegramMessageId: "88",
     telegramMessageThreadId: "55",
     telegramUserId: OWNER_TELEGRAM_ID,
+    toolCallId: "call-1",
+    toolInputHash: "a".repeat(64),
+    toolName: "test_tool",
   });
   return { ownerId: owner.rows[0]!.id, sessionId: session.id };
 }
@@ -153,6 +156,44 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       });
     await expect(telegramHitlApprovalRepository.claimCallback(input))
       .resolves.toEqual({ status: "expired" });
+    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval({
+      applicationSessionId: current.sessionId,
+      eveSessionId: "wrun_hitl",
+      telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-1",
+      toolInputHash: "a".repeat(64),
+      toolName: "test_tool",
+    })).rejects.toThrowError(/AGENT_TOOL_APPROVAL_EVIDENCE_INVALID/u);
+  });
+
+  it("authorizes execution only for the exact consumed identity-bound tool call", async () => {
+    const current = await fixture();
+    await telegramHitlApprovalRepository.claimCallback({
+      baseContinuationToken: "-1001:55:88",
+      callbackData: "eve:0",
+      telegramChatId: "-1001",
+      telegramMessageId: "88",
+      telegramUserId: OWNER_TELEGRAM_ID,
+    });
+
+    const exact = {
+      applicationSessionId: current.sessionId,
+      eveSessionId: "wrun_hitl",
+      telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-1",
+      toolInputHash: "a".repeat(64),
+      toolName: "test_tool",
+    };
+    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval(exact))
+      .resolves.toBeUndefined();
+    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval({
+      ...exact,
+      toolInputHash: "f".repeat(64),
+    })).rejects.toThrowError(/AGENT_TOOL_APPROVAL_EVIDENCE_INVALID/u);
+    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval({
+      ...exact,
+      telegramUserId: "202",
+    })).rejects.toThrowError(/AGENT_TOOL_APPROVAL_EVIDENCE_INVALID/u);
   });
 
   it("keeps a callback claimable after the Eve turn pauses for approval", async () => {
@@ -198,6 +239,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       telegramMessageId: "89",
       telegramMessageThreadId: "55",
       telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-2",
+      toolInputHash: "b".repeat(64),
+      toolName: "test_tool",
     });
 
     await expect(telegramHitlApprovalRepository.claimCallback({
@@ -232,6 +276,9 @@ describeWithDatabase("Telegram HITL approval repository", () => {
       telegramMessageId: "90",
       telegramMessageThreadId: "55",
       telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-new-root",
+      toolInputHash: "c".repeat(64),
+      toolName: "test_tool",
     });
 
     await telegramHitlApprovalRepository.clearForEveSession(current.sessionId, "wrun_hitl");
