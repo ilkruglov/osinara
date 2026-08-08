@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `primaryModel`: configured protocol-native text model for the Eve agent loop.
+ * - `memoryStructuredModel`: non-thinking model route for forced schema-bearing memory tools.
  * - `visionModel`: independently selected model, or `null` when image input is unsupported.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
  */
@@ -19,6 +20,15 @@ export const primaryModel = createConfiguredLanguageModel({
   maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
   modelId: modelProviderConfig.agent.models.primary.id,
   transport: modelProviderConfig.agent.transport,
+});
+const memoryStructuredTransport = modelProviderConfig.agent.transport.protocol === "openai-chat-completions"
+  ? { ...modelProviderConfig.agent.transport, thinking: { type: "disabled" } as const }
+  : modelProviderConfig.agent.transport;
+export const memoryStructuredModel = createConfiguredLanguageModel({
+  apiKey: agentModelApiKey,
+  maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
+  modelId: modelProviderConfig.agent.models.primary.id,
+  transport: memoryStructuredTransport,
 });
 const visionConfig = modelProviderConfig.agent.models.vision;
 export const visionModel = visionConfig.supportsImageInput

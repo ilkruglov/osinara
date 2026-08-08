@@ -11,10 +11,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createMemorySemanticExtractor } from "./memory-semantic-extractor.js";
 
+function generated(input: unknown) {
+  return {
+    toolCalls: [{ dynamic: false, input, toolName: "submit_memory_extraction" }],
+  };
+}
+
 describe("memory semantic extractor", () => {
   it("uses one bounded no-retry call and maps opaque refs to snapshot sources", async () => {
-    const generate = vi.fn().mockResolvedValue({
-      output: {
+    const generate = vi.fn().mockResolvedValue(generated({
         candidates: [
           {
             action: "save",
@@ -23,14 +28,12 @@ describe("memory semantic extractor", () => {
             kind: "fact",
             primarySourceRef: "src_1",
             sensitivity: "normal",
-            subjectParticipantRef: "person_1",
             supportingSourceRefs: [],
           },
           { action: "skip", primarySourceRef: "src_2", reason: "one_off_request" },
           { action: "ambiguous", primarySourceRef: "src_3", reason: "subject_unclear" },
         ],
-      },
-    });
+    }));
     const extract = createMemorySemanticExtractor({ generate, model: { modelId: "primary" } as never });
 
     const result = await extract({
@@ -73,12 +76,13 @@ describe("memory semantic extractor", () => {
       maxOutputTokens: 16_384,
       maxRetries: 0,
       timeout: 45_000,
-      tools: undefined,
+      toolChoice: { toolName: "submit_memory_extraction", type: "tool" },
     }));
+    expect(generate.mock.calls[0]![0].tools).toHaveProperty("submit_memory_extraction");
     const prompt = generate.mock.calls[0]![0].prompt as string;
     const instructions = generate.mock.calls[0]![0].instructions as string;
     expect(instructions).toMatch(/недоверенн/iu);
-    expect(instructions).toMatch(/JSON/u);
+    expect(instructions).toContain("submit_memory_extraction");
     expect(instructions).toContain('{"candidates": [...]}');
     expect(prompt).toContain("src_1");
     expect(prompt).toContain("person_1");
@@ -92,8 +96,7 @@ describe("memory semantic extractor", () => {
   });
 
   it("preserves a sensitive candidate as needs_approval", async () => {
-    const generate = vi.fn().mockResolvedValue({
-      output: {
+    const generate = vi.fn().mockResolvedValue(generated({
         candidates: [{
           action: "needs_approval",
           content: "Анне противопоказан аспирин.",
@@ -103,8 +106,7 @@ describe("memory semantic extractor", () => {
           sensitivity: "sensitive",
           supportingSourceRefs: [],
         }],
-      },
-    });
+    }));
     const extract = createMemorySemanticExtractor({ generate, model: {} as never });
 
     const result = await extract({
@@ -128,8 +130,7 @@ describe("memory semantic extractor", () => {
   });
 
   it("does not infer a reported subject from names when no verified ref was returned", async () => {
-    const generate = vi.fn().mockResolvedValue({
-      output: {
+    const generate = vi.fn().mockResolvedValue(generated({
         candidates: [{
           action: "save",
           content: "Анна любит улун.",
@@ -140,8 +141,7 @@ describe("memory semantic extractor", () => {
           subjectLabel: "Анна",
           supportingSourceRefs: [],
         }],
-      },
-    });
+    }));
     const extract = createMemorySemanticExtractor({ generate, model: {} as never });
 
     const result = await extract({
@@ -164,8 +164,43 @@ describe("memory semantic extractor", () => {
     expect(result[0]).not.toHaveProperty("subjectParticipantRef");
   });
 
+  it.each([
+    ["firsthand subject label", { subjectLabel: "Пользователь" }],
+    ["firsthand participant ref", { subjectParticipantRef: "person_owner" }],
+    ["primary source reuse", { supportingSourceRefs: ["src_investments"] }],
+  ])("rejects %s", async (_case, invalidFields) => {
+    const extract = createMemorySemanticExtractor({
+      generate: vi.fn().mockResolvedValue(generated({
+        candidates: [{
+          action: "save",
+          content: "Пользователь обсуждает инвестиции.",
+          evidenceKind: "firsthand",
+          kind: "preference",
+          primarySourceRef: "src_investments",
+          sensitivity: "normal",
+          supportingSourceRefs: [],
+          ...invalidFields,
+        }],
+      })),
+      model: {} as never,
+    });
+
+    await expect(extract({
+      entries: [{
+        actorKind: "user",
+        actorLabel: "Владелец",
+        content: "Будем долго обсуждать инвестиции",
+        observedAt: "2026-08-08T16:26:08.000Z",
+        participantRef: "person_owner",
+        replyToSourceRef: null,
+        snapshotEntryId: "10000000-0000-4000-8000-000000000007",
+        sourceRef: "src_investments",
+      }],
+    })).rejects.toThrowError(/AGENT_MEMORY_EXTRACTION_OUTPUT_INVALID/u);
+  });
+
   it("escapes timeline markup so participant text cannot terminate the data boundary", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: { candidates: [] } });
+    const generate = vi.fn().mockResolvedValue(generated({ candidates: [] }));
     const extract = createMemorySemanticExtractor({ generate, model: {} as never });
 
     await extract({

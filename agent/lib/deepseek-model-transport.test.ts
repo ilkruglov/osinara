@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Explicit thinking controls are sent on every DeepSeek model request.
+ * - Non-thinking background calls can force one schema-bearing tool.
  * - `reasoning_content` remains separate from visible output.
  * - Tool-call reasoning is replayed exactly as required by DeepSeek multi-round context.
  * - Approval-only tool calls are removed unless a real tool result completes the pair.
@@ -81,6 +82,60 @@ describe("DeepSeek model transport", () => {
     ]));
     expect(result.content.filter((part) => part.type === "text")).toEqual([
       { text: "Видимый ответ.", type: "text" },
+    ]);
+  });
+
+  it("forces a schema-bearing tool when background thinking is explicitly disabled", async () => {
+    let body: Record<string, unknown> | undefined;
+    const model = createConfiguredLanguageModel({
+      apiKey: "deepseek-secret",
+      fetch: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return completion({
+          content: null,
+          role: "assistant",
+          tool_calls: [{
+            function: {
+              arguments: JSON.stringify({ decisions: ["save"] }),
+              name: "submit_memory_test",
+            },
+            id: "call_memory_001",
+            type: "function",
+          }],
+        }, "tool_calls");
+      },
+      maxOutputTokens: 2_048,
+      modelId: "deepseek-v4-flash",
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "openai-chat-completions",
+        providerName: "deepseek",
+        thinking: { type: "disabled" },
+      },
+    });
+
+    const result = await generateText({
+      maxRetries: 0,
+      model,
+      prompt: "Классифицируй память",
+      toolChoice: { toolName: "submit_memory_test", type: "tool" },
+      tools: {
+        submit_memory_test: tool({
+          inputSchema: z.object({ decisions: z.array(z.string()) }).strict(),
+        }),
+      },
+    });
+
+    expect(body).toMatchObject({
+      thinking: { type: "disabled" },
+      tool_choice: { function: { name: "submit_memory_test" }, type: "function" },
+    });
+    expect(body).not.toHaveProperty("reasoning_effort");
+    expect(result.toolCalls).toEqual([
+      expect.objectContaining({
+        input: { decisions: ["save"] },
+        toolName: "submit_memory_test",
+      }),
     ]);
   });
 

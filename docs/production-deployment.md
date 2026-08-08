@@ -96,6 +96,12 @@ one response at 128,000 tokens even though the provider advertises a larger nati
 does not accept image input, so `inspect_workspace_image` returns a stable unsupported-capability
 result before reading bytes or starting a paid model call.
 
+Background memory extraction, relation classification, thread discovery, and thread briefs use the
+same model with thinking explicitly disabled and one forced schema-bearing tool. DeepSeek rejects
+both `json_schema` response format and forced tool choice while thinking is enabled. Do not return
+these boundaries to `Output.object`: the OpenAI-compatible adapter degrades its schema to
+`json_object`, so the model never receives the validation contract.
+
 The retained MiniMax alternative transport explicitly enables a narrow web-search adapter because
 MiniMax returns
 `content` where the Anthropic SDK requires `encrypted_content`, but rejects its own native

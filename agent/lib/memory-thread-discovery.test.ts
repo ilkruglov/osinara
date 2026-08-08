@@ -22,6 +22,10 @@ import {
 const NOW = new Date("2026-08-08T12:00:00.000Z");
 let sourceOrdinal = 0;
 
+function generated(input: unknown) {
+  return { toolCalls: [{ dynamic: false, input, toolName: "submit_memory_thread" }] };
+}
+
 function recoveryClaim(overrides: Partial<{
   batchRef: string;
   observedAt: string;
@@ -139,12 +143,12 @@ function classifierInput(): MemoryThreadClassifierInput {
 
 describe("memory thread classifier", () => {
   it("uses one bounded strict call and returns only supplied opaque refs", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: {
+    const generate = vi.fn().mockResolvedValue(generated({
       action: "create_new",
       entries: [{ role: "goal", sourceRef: "source_a" }],
       purpose: "Сохранять план, решения и результаты тренировок",
       title: "Тренировки",
-    } });
+    }));
     const classify = createMemoryThreadClassifier({ generate, model: {} as never });
 
     await expect(classify(classifierInput())).resolves.toMatchObject({
@@ -154,8 +158,9 @@ describe("memory thread classifier", () => {
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate).toHaveBeenCalledWith(expect.objectContaining({
       maxRetries: 0,
-      tools: undefined,
+      toolChoice: { toolName: "submit_memory_thread", type: "tool" },
     }));
+    expect(generate.mock.calls[0]![0].tools).toHaveProperty("submit_memory_thread");
     const options = generate.mock.calls[0]![0] as Record<string, unknown>;
     expect(options.instructions).toMatch(/недоверенн/iu);
     expect(options.prompt).toContain("<untrusted_thread_candidates>");
@@ -163,7 +168,7 @@ describe("memory thread classifier", () => {
   });
 
   it("escapes source instructions outside the classifier policy", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: { action: "unrelated", entries: [] } });
+    const generate = vi.fn().mockResolvedValue(generated({ action: "unrelated", entries: [] }));
     const classify = createMemoryThreadClassifier({ generate, model: {} as never });
     const original = classifierInput();
     const input = { ...original, sources: [{
@@ -179,11 +184,11 @@ describe("memory thread classifier", () => {
   });
 
   it("rejects an unavailable source or existing thread ref", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: {
+    const generate = vi.fn().mockResolvedValue(generated({
       action: "attach_existing",
       entries: [{ role: "goal", sourceRef: "source_unknown" }],
       threadRef: "thread_unknown",
-    } });
+    }));
     const classify = createMemoryThreadClassifier({ generate, model: {} as never });
 
     await expect(classify(classifierInput())).rejects.toThrowError(
@@ -192,7 +197,7 @@ describe("memory thread classifier", () => {
   });
 
   it("keeps ambiguous terminal and does not invent a creation fallback", async () => {
-    const generate = vi.fn().mockResolvedValue({ output: { action: "ambiguous", entries: [] } });
+    const generate = vi.fn().mockResolvedValue(generated({ action: "ambiguous", entries: [] }));
     const classify = createMemoryThreadClassifier({ generate, model: {} as never });
 
     await expect(classify(classifierInput())).resolves.toEqual({ action: "ambiguous", entries: [] });
