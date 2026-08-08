@@ -54,7 +54,8 @@ describeWithDatabase("058 Eve turn identity migration", () => {
       `);
       await client.query(`
         INSERT INTO conversation_sessions (id, eve_session_id) VALUES
-          ('00000000-0000-4000-8000-000000000001', 'wrun_existing');
+          ('00000000-0000-4000-8000-000000000001', 'wrun_existing'),
+          ('00000000-0000-4000-8000-000000000002', 'wrun_second');
         INSERT INTO memory_extraction_batches
           (id, conversation_id, application_session_id, turn_id, extractor_version, schema_version)
         VALUES
@@ -82,7 +83,7 @@ describeWithDatabase("058 Eve turn identity migration", () => {
             turn_id, extractor_version, schema_version)
          VALUES ('00000000-0000-4000-8000-000000000013',
                  '00000000-0000-4000-8000-000000000021',
-                 '00000000-0000-4000-8000-000000000001', 'turn', 'wrun_second',
+                 '00000000-0000-4000-8000-000000000002', 'turn', 'wrun_second',
                  'turn_0', 'extractor-v1', 'schema-v1')`,
       )).resolves.toHaveProperty("rowCount", 1);
       await expect(client.query(
@@ -91,7 +92,7 @@ describeWithDatabase("058 Eve turn identity migration", () => {
             turn_id, extractor_version, schema_version)
          VALUES ('00000000-0000-4000-8000-000000000014',
                  '00000000-0000-4000-8000-000000000021',
-                 '00000000-0000-4000-8000-000000000001', 'turn', 'wrun_second',
+                 '00000000-0000-4000-8000-000000000002', 'turn', 'wrun_second',
                  'turn_0', 'extractor-v1', 'schema-v1')`,
       )).rejects.toMatchObject({ code: "23505" });
 
@@ -103,13 +104,13 @@ describeWithDatabase("058 Eve turn identity migration", () => {
         `INSERT INTO telegram_final_deliveries
            (id, eve_session_id, eve_turn_id, application_session_id)
          VALUES ('00000000-0000-4000-8000-000000000032', 'wrun_second', 'turn_0',
-                 '00000000-0000-4000-8000-000000000001')`,
+                 '00000000-0000-4000-8000-000000000002')`,
       )).resolves.toHaveProperty("rowCount", 1);
       await expect(client.query(
         `INSERT INTO telegram_final_deliveries
            (id, eve_session_id, eve_turn_id, application_session_id)
          VALUES ('00000000-0000-4000-8000-000000000033', 'wrun_second', 'turn_0',
-                 '00000000-0000-4000-8000-000000000001')`,
+                 '00000000-0000-4000-8000-000000000002')`,
       )).rejects.toMatchObject({ code: "23505" });
     } finally {
       await client.query("RESET search_path");
