@@ -7,6 +7,7 @@
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const { requireApprovalEvidence, resolveConflict } = vi.hoisted(() => ({
   requireApprovalEvidence: vi.fn(),
@@ -34,6 +35,11 @@ describe("manage_memory_conflict", () => {
     requireApprovalEvidence.mockReset();
     requireApprovalEvidence.mockResolvedValue(undefined);
     resolveConflict.mockReset();
+  });
+
+  it("exposes an object-root JSON Schema accepted by the model provider", () => {
+    expect(z.toJSONSchema(manageMemoryConflict.inputSchema as z.ZodType))
+      .toMatchObject({ type: "object" });
   });
 
   it("routes an explicit winner without database IDs", async () => {
@@ -76,6 +82,15 @@ describe("manage_memory_conflict", () => {
     await expect(manageMemoryConflict.execute({
       action: "keep_both",
       conflictRef: "00000000-0000-4000-8000-000000000001",
+    }, context)).rejects.toThrowError(/AGENT_MEMORY_CONFLICT_INPUT_INVALID/u);
+    expect(resolveConflict).not.toHaveBeenCalled();
+  });
+
+  it("rejects a memory ref for non-choose actions", async () => {
+    await expect(manageMemoryConflict.execute({
+      action: "keep_both",
+      conflictRef: CONFLICT_REF,
+      memoryRef: MEMORY_REF,
     }, context)).rejects.toThrowError(/AGENT_MEMORY_CONFLICT_INPUT_INVALID/u);
     expect(resolveConflict).not.toHaveBeenCalled();
   });
