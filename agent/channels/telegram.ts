@@ -85,6 +85,7 @@ export default telegramChannel({
           messageThreadId: channel.telegram.messageThreadId ?? null,
           replyParameters: replyParameters ?? null,
         },
+        eveSessionId: ctx.session.id,
         eveTurnId: ctx.session.turn.id,
         markdown: message,
         sendChunk: (chunk, ordinal) => postTelegramRichMessageChunk(
@@ -178,9 +179,12 @@ export default telegramChannel({
         );
       }
       // A final send that started may already be visible; never append a second failure message.
-       const finalDeliveryMayBeVisible =
-         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(ctx.session.turn.id);
-       if (!finalDeliveryMayBeVisible) {
+      const finalDeliveryMayBeVisible =
+        await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
+          ctx.session.id,
+          ctx.session.turn.id,
+        );
+      if (!finalDeliveryMayBeVisible) {
         const replyParameters = isScheduledSession(ctx)
           ? undefined
           : telegramTurnReplyParameters(channel.state, ctx);
@@ -216,6 +220,7 @@ export default telegramChannel({
       if (
         typeof conversationId === "string" &&
         Array.isArray(visibleEntryIds) &&
+        visibleEntryIds.length > 0 &&
         visibleEntryIds.every((value): value is string => typeof value === "string")
       ) {
         const callerTelegramUserId = attributes?.telegramUserId;
@@ -231,6 +236,7 @@ export default telegramChannel({
           callerTelegramUserId,
           conversationId,
           entryIds: visibleEntryIds,
+          eveSessionId: ctx.session.id,
           omittedBeforeSequence:
             typeof attributes?.telegramTimelineOmittedBeforeSequence === "string"
               ? attributes.telegramTimelineOmittedBeforeSequence

@@ -46,4 +46,12 @@ describe("Telegram channel draft policy", () => {
     expect(snapshot).toBeLessThan(turnCompleted);
     expect(source.indexOf("await createTurnExtractionBatch(", turnCompleted)).toBe(-1);
   });
+
+  it("skips extraction when the durable timeline projection is empty", async () => {
+    const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+    const turnStarted = source.indexOf('async "turn.started"');
+    const turnCompleted = source.indexOf('async "turn.completed"');
+
+    expect(source.slice(turnStarted, turnCompleted)).toContain("visibleEntryIds.length > 0");
+  });
 });

@@ -24,6 +24,7 @@ import { deliverTelegramFinalOutput } from "./telegram-final-delivery.js";
 const base = {
   applicationSessionId: "00000000-0000-4000-8000-000000000001",
   deliveryIdentity: { chatId: "101" },
+  eveSessionId: "wrun_session_1",
   eveTurnId: "turn-1",
   markdown: "Готово",
 };
@@ -41,6 +42,13 @@ describe("Telegram final delivery", () => {
     await expect(deliverTelegramFinalOutput({ ...base, sendChunk })).resolves.toEqual([
       { chatType: "private", messageId: "501" },
     ]);
+    expect(repository.start).toHaveBeenCalledWith({
+      applicationSessionId: base.applicationSessionId,
+      chunkCount: 1,
+      eveSessionId: base.eveSessionId,
+      eveTurnId: base.eveTurnId,
+      outputHash: expect.any(String),
+    });
     expect(sendChunk).not.toHaveBeenCalled();
   });
 

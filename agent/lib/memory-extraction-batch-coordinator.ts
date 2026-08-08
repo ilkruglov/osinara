@@ -53,6 +53,7 @@ async function createExactBatch(input: {
   callerTelegramUserId: string | null;
   conversationId: string;
   entryIds: readonly string[];
+  eveSessionId: string | null;
   omittedBeforeSequence: string | null;
   skipCoveredEntries: boolean;
   turnId: string;
@@ -86,9 +87,20 @@ async function createExactBatch(input: {
     timelineEntryIds: rows.map((row) => row.id),
     turnId: input.turnId,
   };
-  return input.skipCoveredEntries
-    ? await memoryExtractionRepository.createTurnBatch(batchInput)
-    : await memoryExtractionRepository.createRecoveryBatch(batchInput);
+  if (!input.skipCoveredEntries) {
+    return await memoryExtractionRepository.createRecoveryBatch(batchInput);
+  }
+  if (input.applicationSessionId === null || input.eveSessionId === null) {
+    throw new AppError(
+      "AGENT_MEMORY_EXTRACTION_SESSION_BOUNDARY_INVALID",
+      "Turn-пакет извлечения не связан с текущей сессией Eve",
+    );
+  }
+  return await memoryExtractionRepository.createTurnBatch({
+    ...batchInput,
+    applicationSessionId: input.applicationSessionId,
+    eveSessionId: input.eveSessionId,
+  });
 }
 
 export async function createTurnExtractionBatch(input: {
@@ -96,6 +108,7 @@ export async function createTurnExtractionBatch(input: {
   callerTelegramUserId: string;
   conversationId: string;
   entryIds: readonly string[];
+  eveSessionId: string;
   omittedBeforeSequence: string | null;
   turnId: string;
 }): Promise<MemoryExtractionBatch | null> {
@@ -181,6 +194,7 @@ export async function createCatchUpExtractionBatches(): Promise<number> {
         callerTelegramUserId: null,
         conversationId: conversation.id,
         entryIds: rows.map((row) => row.id),
+        eveSessionId: null,
         omittedBeforeSequence: null,
         skipCoveredEntries: false,
         turnId: `catchup:${rows[0]!.sequence_id}:${rows.at(-1)!.sequence_id}`,

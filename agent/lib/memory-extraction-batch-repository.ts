@@ -11,6 +11,7 @@ import {
   loadExtractionBatch,
   requireExtractionBigint,
   type CreateMemoryExtractionBatchInput,
+  type CreateTurnMemoryExtractionBatchInput,
   type MemoryExtractionBatch,
 } from "./memory-extraction-contract.js";
 import {
@@ -37,8 +38,12 @@ interface TimelineSnapshotRow {
 }
 
 type CoverageMode = "reject" | "skip";
+type PersistedMemoryExtractionBatchInput = CreateMemoryExtractionBatchInput & {
+  batchKind: "catchup" | "turn";
+  eveSessionId: string | null;
+};
 
-function validateBatchInput(input: CreateMemoryExtractionBatchInput): {
+function validateBatchInput(input: PersistedMemoryExtractionBatchInput): {
   entryIds: string[];
   messageThreadId: string | null;
 } {
@@ -59,7 +64,11 @@ function validateBatchInput(input: CreateMemoryExtractionBatchInput): {
     !input.schemaVersion.trim() ||
     input.extractorVersion.length > MEMORY_EXTRACTION_VERSION_MAX_CHARACTERS ||
     input.schemaVersion.length > MEMORY_EXTRACTION_VERSION_MAX_CHARACTERS ||
-    !input.turnId.trim()
+    !input.turnId.trim() ||
+    (input.batchKind === "turn" &&
+      (input.applicationSessionId === null || input.eveSessionId === null || !input.eveSessionId.trim())) ||
+    (input.batchKind === "catchup" &&
+      (input.applicationSessionId !== null || input.eveSessionId !== null))
   ) {
     throw new AppError(
       "AGENT_MEMORY_EXTRACTION_BATCH_INVALID",
@@ -88,7 +97,7 @@ function snapshotPayload(entries: readonly TimelineSnapshotRow[]): unknown[] {
 }
 
 function requestIdentityHash(
-  input: CreateMemoryExtractionBatchInput,
+  input: PersistedMemoryExtractionBatchInput,
   entryIds: readonly string[],
   messageThreadId: string | null,
 ): string {
@@ -104,7 +113,7 @@ function requestIdentityHash(
 }
 
 async function createBatch(
-  input: CreateMemoryExtractionBatchInput,
+  input: PersistedMemoryExtractionBatchInput,
   coverageMode: CoverageMode,
 ): Promise<MemoryExtractionBatch | null> {
   const { entryIds, messageThreadId } = validateBatchInput(input);
@@ -123,9 +132,11 @@ async function createBatch(
       request_identity_hash: string;
     }>(
       `SELECT id, request_identity_hash FROM memory_extraction_batches
-       WHERE conversation_id = $1 AND turn_id = $2
-         AND extractor_version = $3 AND schema_version = $4`,
-      [input.conversationId, input.turnId, input.extractorVersion, input.schemaVersion],
+       WHERE conversation_id = $1 AND batch_kind = $2
+         AND eve_session_id IS NOT DISTINCT FROM $3 AND turn_id = $4
+         AND extractor_version = $5 AND schema_version = $6`,
+      [input.conversationId, input.batchKind, input.eveSessionId, input.turnId,
+        input.extractorVersion, input.schemaVersion],
     );
     if (replay.rows[0]) {
       const stored = replay.rows[0];
@@ -313,13 +324,13 @@ async function createBatch(
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO memory_extraction_batches
          (conversation_id, family_id, scope, scope_partition_key, application_session_id,
-          caller_user_id, caller_telegram_user_id, turn_id, extractor_version, schema_version,
-          request_identity_hash, input_payload_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+          batch_kind, eve_session_id, caller_user_id, caller_telegram_user_id, turn_id,
+          extractor_version, schema_version, request_identity_hash, input_payload_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
       [input.conversationId, conversation.family_id, conversation.scope,
-        conversation.scope_partition_key, input.applicationSessionId, callerUserId,
-        input.callerTelegramUserId, input.turnId, input.extractorVersion, input.schemaVersion,
-        identityHash, inputPayloadHash],
+        conversation.scope_partition_key, input.applicationSessionId, input.batchKind,
+        input.eveSessionId, callerUserId, input.callerTelegramUserId, input.turnId,
+        input.extractorVersion, input.schemaVersion, identityHash, inputPayloadHash],
     );
     const batchId = inserted.rows[0]!.id;
     const coverage = await client.query(
@@ -389,7 +400,7 @@ export const memoryExtractionBatchRepository = {
   },
 
   async createBatch(input: CreateMemoryExtractionBatchInput): Promise<MemoryExtractionBatch> {
-    const batch = await createBatch(input, "reject");
+    const batch = await createBatch({ ...input, batchKind: "catchup", eveSessionId: null }, "reject");
     if (!batch) {
       throw new AppError(
         "AGENT_MEMORY_EXTRACTION_BATCH_CREATE_FAILED",
@@ -402,10 +413,12 @@ export const memoryExtractionBatchRepository = {
   async createRecoveryBatch(
     input: CreateMemoryExtractionBatchInput,
   ): Promise<MemoryExtractionBatch | null> {
-    return await createBatch(input, "reject");
+    return await createBatch({ ...input, batchKind: "catchup", eveSessionId: null }, "reject");
   },
 
-  async createTurnBatch(input: CreateMemoryExtractionBatchInput): Promise<MemoryExtractionBatch | null> {
-    return await createBatch(input, "skip");
+  async createTurnBatch(
+    input: CreateTurnMemoryExtractionBatchInput,
+  ): Promise<MemoryExtractionBatch | null> {
+    return await createBatch({ ...input, batchKind: "turn" }, "skip");
   },
 };
