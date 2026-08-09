@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `MEMORY_SCOPE_QUOTAS`: agreed maximum record counts by scope.
- * - Retrieval gates, ranking calibration, pagination, E5 model, and chunking constants.
+ * - Retrieval and thread-creation gates, ranking calibration, pagination, E5, and chunking.
  * - Timeline-selection and retired-worker controller compatibility constants.
  * - R3 always-on profile subject, claim, character, and inactivity limits.
  * - Durable profile-projection notice delivery lease.
@@ -43,6 +43,9 @@ export const THREAD_HISTORY_PAGE_MAX_ENTRIES = 20;
 export const THREAD_HISTORY_PAGE_MAX_CHARACTERS = 12_000;
 export const THREAD_SOURCE_INPUT_MAX_CHARACTERS = 40_000;
 export const THREAD_TITLE_MIN_SEMANTIC_SIMILARITY = 0.78;
+// Short E5 passage embeddings have a high unrelated baseline; creation therefore uses a separate
+// calibrated gate above the observed negative range instead of reusing broad retrieval recall.
+export const THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY = 0.92;
 // Creation uses a conservative lexical gate: false positives stop a write and require clarification.
 export const THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY = 0.9;
 export const THREAD_CREATION_CANDIDATE_LIMIT = 3;

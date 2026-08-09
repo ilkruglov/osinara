@@ -27,6 +27,16 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   : describe.skip;
 const POSITIVE_VECTOR = [1, ...Array.from({ length: 383 }, () => 0)];
 const NEGATIVE_VECTOR = [-1, ...Array.from({ length: 383 }, () => 0)];
+const SEMANTIC_DUPLICATE_VECTOR = [
+  0.925,
+  Math.sqrt(1 - 0.925 ** 2),
+  ...Array.from({ length: 382 }, () => 0),
+];
+const DISTINCT_TOPIC_VECTOR = [
+  0.9,
+  Math.sqrt(1 - 0.9 ** 2),
+  ...Array.from({ length: 382 }, () => 0),
+];
 
 async function createFixture() {
   const family = await database().query<{ id: string }>(
@@ -192,6 +202,9 @@ describeWithDatabase("main-agent memory write", () => {
 
   it("rejects a semantically similar thread title and rolls back the new claim", async () => {
     const fixture = await createFixture();
+    vi.mocked(embedMemoryPassages)
+      .mockResolvedValueOnce([POSITIVE_VECTOR])
+      .mockResolvedValueOnce([SEMANTIC_DUPLICATE_VECTOR]);
     const first = await memoryRepository.create(fixture.auth, {
       confirmation: "model_high",
       content: "Начинаю готовиться к первому марафону",
@@ -231,7 +244,10 @@ describeWithDatabase("main-agent memory write", () => {
         title: "План марафона",
       },
     })).rejects.toThrowError(
-      new RegExp(`AGENT_MEMORY_THREAD_CANDIDATE_EXISTS.*${first.thread!.threadRef}`, "u"),
+      new RegExp(
+        `AGENT_MEMORY_THREAD_CANDIDATE_EXISTS.*${first.thread!.threadRef}.*не более одной попытки`,
+        "u",
+      ),
     );
     await expect(database().query(
       `SELECT
@@ -239,6 +255,50 @@ describeWithDatabase("main-agent memory write", () => {
          (SELECT count(*)::integer FROM memory_items
           WHERE operation_key = 'thread-candidate-semantic-second') AS rejected_claims`,
     )).resolves.toMatchObject({ rows: [{ rejected_claims: 0, threads: 1 }] });
+  });
+
+  it("allows a distinct topic above the broader retrieval similarity gate", async () => {
+    const fixture = await createFixture();
+    vi.mocked(embedMemoryPassages)
+      .mockResolvedValueOnce([POSITIVE_VECTOR])
+      .mockResolvedValueOnce([DISTINCT_TOPIC_VECTOR]);
+    const input = (title: string, purpose: string, operationKey: string) => ({
+      confirmation: "model_high" as const,
+      content: `Начата отдельная тема: ${title}`,
+      explicitSource: {
+        conversationId: fixture.conversationId,
+        timelineEntryId: fixture.timelineEntryId,
+      },
+      kind: "fact" as const,
+      operationKey,
+      scope: "family" as const,
+      sensitivity: "normal" as const,
+      source: `eve:${operationKey}`,
+      thread: {
+        action: "create" as const,
+        purpose,
+        role: "goal" as const,
+        title,
+      },
+    });
+
+    const first = await memoryRepository.create(fixture.auth, input(
+      "Инвестиции",
+      "Планировать инвестиционные взносы и финансовые цели",
+      "distinct-topic-first",
+    ));
+    const second = await memoryRepository.create(fixture.auth, input(
+      "Физическая форма",
+      "Следить за массой тела, сном и режимом дня",
+      "distinct-topic-second",
+    ));
+
+    expect(first.thread).toMatchObject({ action: "created" });
+    expect(second.thread).toMatchObject({ action: "created" });
+    expect(second.thread!.threadRef).not.toBe(first.thread!.threadRef);
+    await expect(database().query(
+      "SELECT count(*)::integer AS threads FROM memory_threads",
+    )).resolves.toMatchObject({ rows: [{ threads: 2 }] });
   });
 
   it("rejects a thread with a strongly matching purpose despite a dissimilar title vector", async () => {

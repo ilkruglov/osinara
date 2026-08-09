@@ -67,6 +67,14 @@ describe("agent memory guidance", () => {
     expect(instructions).toContain("`remember`");
     expect(instructions).toContain("одним вызовом");
     expect(instructions).toContain("AGENT_MEMORY_THREAD_CANDIDATE_EXISTS");
+    expect(instructions).toContain("Для root-нити текущего автора не передавай");
+    expect(instructions).toContain(
+      '`identity: "project"` допустима только для общей памяти нескольких участников',
+    );
+    expect(instructions).toContain("`subjectLabel` сохраняет только метку claim");
+    expect(instructions).toContain("ровно один повторный вызов");
+    expect(instructions).toContain("не вызывай `remember` снова");
+    expect(instructions).toContain("Нити не создаются автоматически позже");
     expect(instructions).not.toMatch(/backend extraction|извлекает backend/iu);
   });
 

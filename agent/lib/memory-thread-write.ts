@@ -15,9 +15,9 @@ import {
   MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   THREAD_CREATION_CANDIDATE_LIMIT,
+  THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
   THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
   THREAD_PURPOSE_MAX_CHARACTERS,
-  THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
   THREAD_TITLE_MAX_CHARACTERS,
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
@@ -306,7 +306,8 @@ async function findOrCreateThread(
     [auth.familyId, scope, partition, identity.subjectUserId, identity.subjectParticipantId,
       identity.memoryProjectId, parentThreadId, input.title, input.purpose,
       vectorLiteral(titleEmbedding), MEMORY_EMBEDDING_MODEL_VERSION,
-      THREAD_TITLE_MIN_SEMANTIC_SIMILARITY, THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
+      THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
+      THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
       projectRoot, THREAD_CREATION_CANDIDATE_LIMIT],
   );
   if (candidates.rows.length > 0) {
@@ -315,7 +316,8 @@ async function findOrCreateThread(
       .join(", ");
     throw new AppError(
       "AGENT_MEMORY_THREAD_CANDIDATE_EXISTS",
-      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; иначе уточните название и назначение новой нити`,
+      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; ` +
+        "иначе сделайте не более одной попытки с уточнёнными названием и назначением новой нити",
     );
   }
 

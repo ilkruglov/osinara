@@ -9,6 +9,7 @@
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const { createMemory, listMemories, requireApprovalEvidence, retrieveMemories } = vi.hoisted(() => ({
   createMemory: vi.fn(),
@@ -102,6 +103,44 @@ describe("model-facing memory tool results", () => {
     expect(requireApprovalEvidence).toHaveBeenCalledWith(context, "remember", input);
     expect(requireApprovalEvidence.mock.invocationCallOrder[0])
       .toBeLessThan(createMemory.mock.invocationCallOrder[0]!);
+  });
+
+  it("rejects impossible thread identities before tool execution", () => {
+    const schema = remember.inputSchema as z.ZodType;
+    const input = {
+      basis: "user_requested",
+      content: "Начинаю отдельную длительную тему",
+      kind: "fact",
+      scope: "personal",
+      sensitivity: "normal",
+      thread: {
+        action: "create",
+        purpose: "Сохранять цели и результаты",
+        role: "goal",
+        title: "Здоровье",
+      },
+    };
+
+    expect(schema.safeParse(input).success).toBe(true);
+    const personalProject = schema.safeParse({
+      ...input,
+      thread: { ...input.thread, identity: "project" },
+    });
+    const freeLabelThread = schema.safeParse({
+      ...input,
+      subjectLabel: "Пух",
+      thread: { ...input.thread, identity: "subject" },
+    });
+    expect(personalProject.success).toBe(false);
+    expect(freeLabelThread.success).toBe(false);
+    if (!personalProject.success) {
+      expect(personalProject.error.issues[0]!.message)
+        .toContain("AGENT_MEMORY_THREAD_INPUT_INVALID");
+    }
+    if (!freeLabelThread.success) {
+      expect(freeLabelThread.error.issues[0]!.message)
+        .toContain("AGENT_MEMORY_THREAD_INPUT_INVALID");
+    }
   });
 
   it("returns only a safe item and opaque undo ref from remember", async () => {

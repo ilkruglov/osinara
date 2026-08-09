@@ -147,11 +147,12 @@ active thread. Thread lookup всегда проверяет family, scope, part
 
 Перед созданием нового title backend под тем же advisory lock ищет до трёх active candidates. Для
 subject и subthread сохраняется exact identity/parent axis; новый project root сравнивается с другими
-project roots только внутри того же authorized scope partition. Semantic title similarity `>= 0.78`
-или сильная purpose trigram similarity `>= 0.9` возвращает
+project roots только внутри того же authorized scope partition. Creation-only semantic title
+similarity `>= 0.92` или сильная purpose trigram similarity `>= 0.9` возвращает
 `AGENT_MEMORY_THREAD_CANDIDATE_EXISTS` с opaque refs. Весь новый claim и временно созданный project
-откатываются; основной агент читает кандидатов и повторяет `remember` с explicit `attach`, если тема
-совпадает.
+откатываются. Широкий retrieval/activation threshold остаётся `0.78`; его нельзя переиспользовать как
+duplicate blocker для коротких E5 passage embeddings. Основной агент читает кандидата и либо вызывает
+`remember` с explicit `attach`, либо делает ровно одну уточнённую попытку создать заведомо другую тему.
 
 ## 6. Retrieval и автоматическая activation
 

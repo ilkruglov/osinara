@@ -31,7 +31,9 @@ const threadSchema = z.discriminatedUnion("action", [
   }).strict(),
   z.object({
     action: z.literal("create"),
-    identity: z.enum(["subject", "project"]).optional(),
+    identity: z.enum(["subject", "project"]).optional().describe(
+      "Не передавайте для текущего автора; project допустим только для общей памяти нескольких участников.",
+    ),
     parentThreadRef: z.string().regex(THREAD_REF_PATTERN).optional(),
     purpose: z.string().trim().min(1).max(THREAD_PURPOSE_MAX_CHARACTERS),
     role: threadRoleSchema,
@@ -49,12 +51,33 @@ const memoryCreateSchema = z.object({
   scope: z.enum(["personal", "family", "group"]),
   sensitivity: z.enum(["normal", "sensitive"]),
   subjectLabel: z.string().trim().min(1).max(200).optional(),
-  subjectRef: z.string().regex(/^subj_[0-9a-f]{32}$/u).optional(),
+  subjectRef: z.string().regex(/^subj_[0-9a-f]{32}$/u).optional().describe(
+    "Точный verified subjectRef для другого известного субъекта; не нужен текущему автору.",
+  ),
   thread: threadSchema.optional(),
 }).strict().refine(
   (input) => input.subjectLabel === undefined || input.subjectRef === undefined,
   { message: "Передайте subjectRef или subjectLabel, но не оба поля" },
-);
+).superRefine((input, context) => {
+  if (input.thread?.action !== "create") return;
+
+  // These combinations can never satisfy the repository identity invariants, so reject them before
+  // embedding or opening a transaction and return a precise correction to the model.
+  if (input.scope === "personal" && input.thread.identity === "project") {
+    context.addIssue({
+      code: "custom",
+      message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи; для текущего автора не передавайте identity",
+      path: ["thread", "identity"],
+    });
+  }
+  if (input.subjectLabel !== undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "AGENT_MEMORY_THREAD_INPUT_INVALID: subjectLabel не подтверждает identity нити; используйте verified subjectRef или текущего автора",
+      path: ["subjectLabel"],
+    });
+  }
+});
 
 export default defineTool({
   approval: ({ session, toolInput }) => {
