@@ -55,4 +55,43 @@ describe("createTelegramAttachmentMaterializer", () => {
       scope: "family",
     });
   });
+
+  it("materializes an authorized external text reference into the group workspace", async () => {
+    const externalAuth = {
+      ...auth,
+      groupType: "external" as const,
+      role: "external" as const,
+      telegramChatType: "supergroup" as const,
+      userId: null,
+    };
+    const reference = {
+      attachment: {
+        fileId: "telegram-text-secret",
+        fileName: "notes.md",
+        fileUniqueId: "stable-text-id",
+        kind: "document" as const,
+        mediaType: "text/markdown",
+        size: 256,
+      },
+      chatId: "-1002",
+      messageId: "43",
+    };
+    const findAttachment = vi.fn().mockResolvedValue(reference);
+    const persist = vi.fn().mockResolvedValue([{
+      mediaType: "text/markdown",
+      path: "inbox/43/notes.md",
+      scope: "group",
+      telegramMessageId: "43",
+    }]);
+    const materialize = createTelegramAttachmentMaterializer({ findAttachment, persist });
+
+    await expect(materialize(
+      externalAuth,
+      "00000000-0000-4000-8000-000000000098",
+    )).resolves.toMatchObject({ path: "inbox/43/notes.md", scope: "group" });
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      auth: externalAuth,
+      scope: "group",
+    }));
+  });
 });

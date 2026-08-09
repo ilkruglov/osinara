@@ -124,9 +124,17 @@ export const telegramIngressRepository: TelegramIngressRepository = {
         return true;
       }
       if (
-         policy?.type === "external" &&
+        policy?.type === "external" &&
+        input.mediaKind === "text_document_candidate" &&
+        externalAllowlist?.has("import_telegram_attachment") === true
+      ) {
+        await client.query("COMMIT");
+        return true;
+      }
+      if (
+        policy?.type === "external" &&
           (input.mediaKind === "native_photo" || input.mediaKind === "image_document_candidate") &&
-         externalAllowlist?.has("inspect_workspace_image") === true
+        externalAllowlist?.has("inspect_workspace_image") === true
       ) {
         await client.query("COMMIT");
         return true;

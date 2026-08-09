@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { searchTelegramGroupHistory } from "../telegram-group-history.js";
 import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
+import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 
 const POSITIVE_BIGINT = z.string().regex(/^[1-9]\d*$/u);
 
@@ -49,6 +50,11 @@ export default defineTool({
     ).optional(),
   }).strict(),
   async execute(input, ctx) {
-    return await searchTelegramGroupHistory(telegramGroupJournalRepository, input, ctx);
+    return await searchTelegramGroupHistory(
+      telegramGroupJournalRepository,
+      input,
+      ctx,
+      loadCurrentExternalGroupCapabilities,
+    );
   },
 });

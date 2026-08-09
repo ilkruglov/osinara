@@ -290,6 +290,53 @@ describe("createTelegramMessageHandler", () => {
     },
   );
 
+  it("records an allowlisted external text document as a lazy readable attachment", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: ["import_telegram_attachment"],
+      type: "external",
+    });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.attachmentReferences.record.mockResolvedValue({
+      attachmentId: "00000000-0000-4000-8000-000000000099",
+      fileName: "notes.md",
+      kind: "document",
+      mediaType: "text/markdown",
+      telegramMessageId: "1",
+    });
+    const message: TelegramMessage = {
+      ...groupMessage(`@${BOT_USERNAME} прочитай файл`),
+      attachments: [{
+        fileId: "telegram-text-1",
+        fileName: "notes.md",
+        kind: "document",
+        mediaType: "text/markdown",
+      }],
+      raw: {
+        document: {
+          file_id: "telegram-text-1",
+          file_name: "notes.md",
+          mime_type: "text/markdown",
+        },
+      },
+    };
+
+    const result = await createTelegramMessageHandler(repository)(telegramContext().context, message);
+
+    expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.attachments.persist).not.toHaveBeenCalled();
+    expect(result?.context?.join("\n")).toContain("00000000-0000-4000-8000-000000000099");
+    expect(repository.session.prepareTurn).toHaveBeenCalledOnce();
+  });
+
   it("records an authorized unaddressed family attachment without downloading or dispatching", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({

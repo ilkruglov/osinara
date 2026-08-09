@@ -164,6 +164,13 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
       telegramMessageId: z.string().regex(/^\d+$/u).optional(),
     }).passthrough(),
   },
+  import_telegram_attachment: {
+    description:
+      "Скачать разрешённый UTF-8 файл TXT, Markdown, JSON, CSV или TSV из сообщения текущей внешней группы в /workspace/group; после импорта прочитай возвращённый path через read_file.",
+    inputSchema: z.object({
+      attachmentId: z.uuid().describe("Opaque attachmentId из текущего сообщения или истории группы"),
+    }).strict(),
+  },
   list_memories: {
     description:
       "Постранично показать записи долговременной памяти текущей внешней группы.",
@@ -229,6 +236,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
 };
 
 const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
+  import_telegram_attachment: importTelegramAttachment as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
   list_group_history: listGroupHistory as unknown as AnyToolDefinition,
   list_memories: listMemories as unknown as AnyToolDefinition,

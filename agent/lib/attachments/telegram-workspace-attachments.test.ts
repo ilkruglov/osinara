@@ -159,8 +159,8 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     }));
   });
 
-  it("isolates an external native photo in its group workspace inbox", async () => {
-    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00]);
+  it("persists only readable UTF-8 text in an external group workspace inbox", async () => {
+    const bytes = Buffer.from("# Group notes\n\nDecision: ship safely.\n", "utf8");
     const groupAuth = {
       ...auth,
       groupId: "00000000-0000-4000-8000-000000000456",
@@ -172,8 +172,8 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     const writeBinary = vi.fn().mockResolvedValue({
       byteSize: bytes.byteLength,
       contentSha256: "d".repeat(64),
-      mediaType: "image/jpeg",
-      path: "inbox/45/photo-photo-id.jpg",
+      mediaType: "text/markdown",
+      path: "inbox/45/notes.md",
       scope: "group",
       updatedAt: "2026-08-03T00:00:00.000Z",
     });
@@ -184,10 +184,11 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
 
     await importer.persist({
       attachments: [{
-        fileId: "photo-file",
-        fileUniqueId: "photo-id",
-        kind: "photo",
-        mediaType: "image/jpeg",
+        fileId: "text-file",
+        fileName: "notes.md",
+        fileUniqueId: "text-id",
+        kind: "document",
+        mediaType: "text/markdown",
       }],
       auth: groupAuth,
       chatId: "-100456",
@@ -196,8 +197,39 @@ describe("createTelegramWorkspaceAttachmentImporter", () => {
     });
 
     expect(writeBinary).toHaveBeenCalledWith(groupAuth, expect.objectContaining({
-      path: "inbox/45/photo-photo-id.jpg",
+      mediaType: "text/markdown",
+      path: "inbox/45/notes.md",
       scope: "group",
     }));
+  });
+
+  it("rejects binary bytes disguised as external text before persistence", async () => {
+    const writeBinary = vi.fn();
+    const groupAuth = {
+      ...auth,
+      groupId: "00000000-0000-4000-8000-000000000456",
+      groupType: "external" as const,
+      role: "external" as const,
+      telegramChatType: "supergroup" as const,
+      userId: null,
+    };
+    const importer = createTelegramWorkspaceAttachmentImporter({
+      download: vi.fn().mockResolvedValue(Buffer.from([0x00, 0xff, 0x01])),
+      writeBinary,
+    });
+
+    await expect(importer.persist({
+      attachments: [{
+        fileId: "binary-file",
+        fileName: "notes.txt",
+        kind: "document",
+        mediaType: "text/plain",
+      }],
+      auth: groupAuth,
+      chatId: "-100456",
+      messageId: "46",
+      scope: "group",
+    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    expect(writeBinary).not.toHaveBeenCalled();
   });
 });

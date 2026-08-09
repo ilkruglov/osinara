@@ -14,7 +14,10 @@ import type {
   WorkspaceFileRecord,
   WorkspaceScope,
 } from "../workspaces/workspace-repository.js";
-import { validateAttachmentContent } from "./attachment-policy.js";
+import {
+  validateAttachmentContent,
+  validateReadableTextAttachmentContent,
+} from "./attachment-policy.js";
 import { telegramInboxDirectory } from "./telegram-inbox-path.js";
 
 interface AttachmentImporterDependencies {
@@ -99,7 +102,11 @@ export function createTelegramWorkspaceAttachmentImporter(
       const stored: StoredTelegramAttachment[] = [];
       for (const [index, attachment] of input.attachments.entries()) {
         const bytes = await dependencies.download(attachment);
-        const validated = await validateAttachmentContent({
+        // Restricted groups persist only files that Eve's text-only read_file can consume.
+        const validator = input.scope === "group"
+          ? validateReadableTextAttachmentContent
+          : validateAttachmentContent;
+        const validated = await validator({
           bytes,
           ...(attachment.mediaType ? { declaredMediaType: attachment.mediaType } : {}),
           fileName: defaultAttachmentName(attachment, index),

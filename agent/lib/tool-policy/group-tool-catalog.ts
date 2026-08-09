@@ -25,6 +25,10 @@ function capabilityNames<const Catalog extends readonly ExternalGroupCapability[
 // Persisted grants are action-level where one static descriptor contains distinct side effects.
 export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
+    name: "import_telegram_attachment",
+    usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV и TSV из сообщений текущей группы",
+  },
+  {
     name: "inspect_workspace_image",
     usage: "анализировать изображение, уже находящееся в workspace текущей группы",
   },

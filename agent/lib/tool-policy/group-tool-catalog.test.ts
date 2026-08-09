@@ -44,6 +44,11 @@ describe("external group tool catalog", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("inspect_workspace_pdf");
   });
 
+  it("offers explicit Telegram attachment import without granting Bash", () => {
+    expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("import_telegram_attachment");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("bash");
+  });
+
   it("defines non-empty model usage for every persisted and always-available capability", () => {
     expect(EXTERNAL_GROUP_CAPABILITY_CATALOG.map(({ name }) => name)).toEqual(
       EXTERNAL_GROUP_TOOL_NAMES,

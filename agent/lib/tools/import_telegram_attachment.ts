@@ -1,8 +1,9 @@
 /**
- * Lazy family Telegram attachment import tool.
+ * Lazy registered-group Telegram attachment import tool.
  *
  * Export:
- * - Eve `import_telegram_attachment` tool that materializes one authorized journal reference.
+ * - Eve `import_telegram_attachment` materializes one authorized family or external journal reference.
+ * - External imports expose the canonical sandbox path accepted by guarded file tools.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -17,10 +18,11 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_ATTACHMENT_IMPORT_INPUT_INVALID";
 const TOP_LEVEL_FIELDS = ["attachmentId"] as const;
+const EXTERNAL_GROUP_SANDBOX_ROOT = "/workspace/group";
 
 export default defineTool({
   description: [
-    "Скачать по требованию одно ранее полученное вложение семейной Telegram-группы в family workspace.",
+    "Скачать по требованию одно разрешённое вложение зарегистрированной Telegram-группы в её workspace.",
     "Передай attachmentId только из <telegram_attachment_refs> или журнала текущей группы.",
     "После успешного импорта используй возвращённый path для чтения документа или анализа изображения.",
   ].join(" "),
@@ -38,11 +40,19 @@ export default defineTool({
       payload,
       "attachmentId",
       INPUT_ERROR_CODE,
-      "ссылка на вложение из текущей семейной группы",
+      "ссылка на вложение из текущей зарегистрированной группы",
     );
-    return await materializeTelegramAttachment(
-      requireWorkspaceAuthorization(ctx),
-      attachmentId,
-    );
+    const authorization = requireWorkspaceAuthorization(ctx);
+    const attachment = await materializeTelegramAttachment(authorization, attachmentId);
+
+    // Restricted file wrappers require an absolute path under the exact group mount.
+    if (authorization.groupType === "external") {
+      return {
+        ...attachment,
+        path: `${EXTERNAL_GROUP_SANDBOX_ROOT}/${attachment.path}`,
+      };
+    }
+
+    return attachment;
   },
 });

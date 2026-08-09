@@ -65,7 +65,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | Личный чат | `personal` и `family` | `/workspace/personal`, `/workspace/family` | Полный trusted sandbox, personal tools environment. |
 | Семейная группа | Только `family` | `/workspace/family` | Trusted sandbox, family tools environment. |
-| Внешняя группа | Только `group` | `/workspace/group` | Без Bash, сети и persistent credentials; только безопасные file tools. |
+| Внешняя группа | Только `group` | `/workspace/group` | Без Bash, произвольного сетевого доступа и persistent credentials; `web_fetch` доступен только через controlled wrapper и отдельную capability; безопасные file tools и настраиваемый импорт UTF-8 TXT/MD/JSON/CSV/TSV из Telegram. |
 | Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же trust-zone surface, кроме root-owned `remember`; отдельные history и state. |
 
 ## Production Flow

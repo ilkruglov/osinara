@@ -2,7 +2,7 @@
  * Telegram inbound dispatch policy.
  *
  * Exports:
- * - `TelegramInboundMediaKind`: strict none/native-photo/unsupported-media decision.
+ * - `TelegramInboundMediaKind`: strict none/photo/readable-text/unsupported-media decision.
  * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
  * - `isAgentNameMentioned`: recognizes established agent-name stems at Unicode word boundaries.
@@ -13,6 +13,7 @@
 import type { TelegramMessage } from "eve/channels/telegram";
 
 import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
+import { isReadableTextDocumentCandidate } from "./attachments/attachment-policy.js";
 
 interface TelegramDispatchMessage {
   chat: {
@@ -68,6 +69,7 @@ export type TelegramInboundMediaKind =
   | "image_document_candidate"
   | "native_photo"
   | "none"
+  | "text_document_candidate"
   | "unsupported_media";
 
 function containsTelegramFileReference(value: unknown): boolean {
@@ -129,14 +131,15 @@ export function classifyTelegramInboundMedia(
     const exactFile = raw.file_id === attachment.fileId;
     const exactMime = raw.mime_type === undefined || raw.mime_type === attachment.mediaType;
     const exactName = raw.file_name === undefined || raw.file_name === attachment.fileName;
-    const rawCandidate = isTelegramImageDocumentCandidate({
+    const candidate = {
       ...attachment,
       ...(typeof raw.file_name === "string" ? { fileName: raw.file_name } : { fileName: undefined }),
       ...(typeof raw.mime_type === "string" ? { mediaType: raw.mime_type } : { mediaType: undefined }),
-    });
-    return exactFile && exactMime && exactName && rawCandidate
-      ? "image_document_candidate"
-      : "unsupported_media";
+    };
+    if (!exactFile || !exactMime || !exactName) return "unsupported_media";
+    if (isTelegramImageDocumentCandidate(candidate)) return "image_document_candidate";
+    if (isReadableTextDocumentCandidate(candidate)) return "text_document_candidate";
+    return "unsupported_media";
   }
   return "unsupported_media";
 }
