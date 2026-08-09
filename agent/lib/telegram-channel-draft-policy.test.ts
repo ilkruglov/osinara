@@ -5,6 +5,7 @@
  * - The channel does not emit text-like drafts before knowing the terminal delivery kind.
  * - Token deltas and tool-loop events never trigger draft API calls.
  * - Scheduled Telegram delivery is durably confirmed before secondary group timeline persistence.
+ * - Turn start never launches a second semantic pass over the conversation.
  */
 import { readFile } from "node:fs/promises";
 
@@ -34,24 +35,9 @@ describe("Telegram channel draft policy", () => {
     expect(source).toContain("AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING");
   });
 
-  it("snapshots extraction input before advancing the conversation cursor", async () => {
+  it("does not create background extraction work at turn start", async () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
-    const turnStarted = source.indexOf('async "turn.started"');
-    const turnCompleted = source.indexOf('async "turn.completed"');
-    const snapshot = source.indexOf("await createTurnExtractionBatch(", turnStarted);
-    const cursor = source.indexOf("await groupTimelineCursorRepository.advance(", turnStarted);
 
-    expect(snapshot).toBeGreaterThan(turnStarted);
-    expect(snapshot).toBeLessThan(cursor);
-    expect(snapshot).toBeLessThan(turnCompleted);
-    expect(source.indexOf("await createTurnExtractionBatch(", turnCompleted)).toBe(-1);
-  });
-
-  it("skips extraction when the durable timeline projection is empty", async () => {
-    const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
-    const turnStarted = source.indexOf('async "turn.started"');
-    const turnCompleted = source.indexOf('async "turn.completed"');
-
-    expect(source.slice(turnStarted, turnCompleted)).toContain("visibleEntryIds.length > 0");
+    expect(source).not.toContain("createTurnExtractionBatch");
   });
 });

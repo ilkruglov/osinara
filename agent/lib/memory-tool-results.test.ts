@@ -2,7 +2,8 @@
  * Model-facing memory tool result contract tests.
  *
  * Constructs covered:
- * - `remember`: returns a model-safe item and references undo by opaque `memoryRef`.
+ * - `remember`: persists the main agent's source-backed decision and optional atomic thread action.
+ * - Tool results expose only opaque memory/thread refs and preserve immediate undo guidance.
  * - `list_memories`: projects internal records while preserving an opaque pagination cursor.
  * - `search_memories`: returns the already-safe retrieval DTO unchanged.
  */
@@ -67,6 +68,10 @@ const internalMemory = {
     notice: "Сообщено другим участником; не является подтверждением субъекта.",
     observedAt: "2026-08-01T09:55:00.000Z",
   },
+  thread: {
+    action: "created" as const,
+    threadRef: "thread_22222222222222222222222222222222",
+  },
 } as const;
 const context = {
   callId: "call-1",
@@ -85,6 +90,7 @@ describe("model-facing memory tool results", () => {
   it("requires exact approval evidence before a sensitive remember write", async () => {
     createMemory.mockResolvedValue(internalMemory);
     const input = {
+      basis: "agent_inferred" as const,
       content: internalMemory.content,
       kind: "preference" as const,
       scope: "personal" as const,
@@ -102,11 +108,19 @@ describe("model-facing memory tool results", () => {
     createMemory.mockResolvedValue(internalMemory);
 
     const result = await remember.execute({
+      basis: "agent_inferred",
       content: internalMemory.content,
       kind: "preference",
       scope: "personal",
       sensitivity: "normal",
       subjectRef: "subj_11111111111111111111111111111111",
+      thread: {
+        action: "create",
+        identity: "subject",
+        purpose: "Сохранять предпочтения пользователя",
+        role: "constraint",
+        title: "Чай",
+      },
     }, context);
 
     expect(result.item).toEqual({
@@ -120,16 +134,24 @@ describe("model-facing memory tool results", () => {
       sensitivity: "normal",
       updatedAt: internalMemory.updatedAt,
     });
+    expect(result.thread).toEqual(internalMemory.thread);
     expect(JSON.stringify(result)).not.toContain(MEMORY_ID);
     expect(result.notice).toContain(`memoryRef ${MEMORY_REF}`);
     expect(createMemory).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        confirmation: "user_confirmed",
+        confirmation: "model_high",
         explicitSource: {
           conversationId: "conversation-1",
           subjectRef: "subj_11111111111111111111111111111111",
           timelineEntryId: "timeline-entry-1",
+        },
+        thread: {
+          action: "create",
+          identity: "subject",
+          purpose: "Сохранять предпочтения пользователя",
+          role: "constraint",
+          title: "Чай",
         },
       }),
     );

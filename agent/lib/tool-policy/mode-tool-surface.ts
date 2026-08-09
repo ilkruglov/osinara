@@ -4,7 +4,8 @@
  * Exports:
  * - `ModeToolSurfaceInput`: verified facts a tool surface may be built from.
  * - `TRUSTED_MODE_TOOL_NAMES`, `PRIVATE_ONLY_TOOL_NAMES`, `FAMILY_ONLY_TOOL_NAMES`: the matrix.
- * - `buildModeToolSurface`: the exact tool map for one verified turn.
+ * - `buildModeToolSurface`: the exact root-agent tool map for one verified turn.
+ * - `buildSubagentToolSurface`: the same trust zone without root-owned durable-memory writes.
  *
  * Key constructs:
  * - Application tools are emitted per mode instead of authored statically, so a tool that cannot
@@ -44,7 +45,6 @@ import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
 import manageFamilyInvitation from "../tools/manage_family_invitation.js";
 import manageGoogleWorkspaceConnection from "../tools/manage_google_workspace_connection.js";
 import manageMemory from "../tools/manage_memory.js";
-import manageMemoryApproval from "../tools/manage_memory_approval.js";
 import manageMemoryConflict from "../tools/manage_memory_conflict.js";
 import manageMemoryThread from "../tools/manage_memory_thread.js";
 import manageProfileProjection from "../tools/manage_profile_projection.js";
@@ -98,7 +98,6 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   manage_google_workspace_connection:
     manageGoogleWorkspaceConnection as unknown as AnyToolDefinition,
   manage_memory: manageMemory as unknown as AnyToolDefinition,
-  manage_memory_approval: manageMemoryApproval as unknown as AnyToolDefinition,
   manage_memory_conflict: manageMemoryConflict as unknown as AnyToolDefinition,
   manage_memory_thread: manageMemoryThread as unknown as AnyToolDefinition,
   manage_reminder: manageReminder as unknown as AnyToolDefinition,
@@ -143,6 +142,10 @@ const EXTERNAL_MODEL_TEXT_MAX_LENGTH = 4_000;
 const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
 const EXTERNAL_SUBJECT_LABEL_MAX_LENGTH = 200;
 const EXTERNAL_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
+const EXTERNAL_THREAD_REF_PATTERN = /^thread_[0-9a-f]{32}$/u;
+const EXTERNAL_THREAD_ROLE = z.enum([
+  "goal", "constraint", "method", "decision", "episode", "outcome", "lesson", "open_loop",
+]);
 
 // Shared executors remain unchanged, while external descriptors expose only their executable group
 // contract. This prevents the model from planning calls that external authorization must reject.
@@ -183,12 +186,31 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
   remember: {
     description: "Сохранить одну устойчивую запись в память текущей внешней группы.",
     inputSchema: z.object({
+      basis: z.enum(["agent_inferred", "user_requested"]),
       content: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
       kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
       scope: z.literal("group").describe("Память текущей внешней группы"),
       sensitivity: z.enum(["normal", "sensitive"]),
       subjectLabel: z.string().trim().min(1).max(EXTERNAL_SUBJECT_LABEL_MAX_LENGTH).optional(),
       subjectRef: z.string().regex(EXTERNAL_SUBJECT_REF_PATTERN).optional(),
+      thread: z.discriminatedUnion("action", [
+        z.object({
+          action: z.literal("attach"),
+          role: EXTERNAL_THREAD_ROLE,
+          threadRef: z.string().regex(EXTERNAL_THREAD_REF_PATTERN),
+        }).strict(),
+        z.object({
+          action: z.literal("create"),
+          identity: z.enum(["subject", "project"]).optional(),
+          parentThreadRef: z.string().regex(EXTERNAL_THREAD_REF_PATTERN).optional(),
+          purpose: z.string().trim().min(1).max(500),
+          role: EXTERNAL_THREAD_ROLE,
+          title: z.string().trim().min(1).max(120),
+        }).strict().refine(
+          (input) => input.parentThreadRef === undefined || input.identity === undefined,
+          { message: "Для subthread identity определяется проверенной родительской нитью" },
+        ),
+      ]).optional(),
     }).strict().refine(
       (input) => input.subjectLabel === undefined || input.subjectRef === undefined,
       { message: "Передайте subjectRef или subjectLabel, но не оба поля" },
@@ -324,7 +346,6 @@ function buildExternalToolSurface(
       : deniedTool("load_skill"),
   };
   if (includeApplicationCore) {
-    surface.manage_memory_approval = manageMemoryApproval as unknown as AnyToolDefinition;
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
   }
   // Eve's native descriptor is useful only when this exact turn has a loadable dynamic skill. The
@@ -390,5 +411,10 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   if (cached) return cached;
   const surface = buildExternalToolSurface(allowed, includeApplicationCore, skills);
   EXTERNAL_SURFACES.set(key, surface);
+  return surface;
+}
+
+export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
+  const { remember: _remember, ...surface } = buildModeToolSurface(input);
   return surface;
 }

@@ -3,27 +3,19 @@
  *
  * Constructs covered:
  * - `primaryModel`: server-configured protocol-native text route for the Eve agent loop.
- * - `memoryStructuredModel`: same configured model identity on the non-thinking memory route.
  * - `visionModel`: absent when the active provider explicitly lacks image input.
  * - `voiceTranscriptionModel`: explicit Groq Whisper transcription route.
  */
 import { describe, expect, it } from "vitest";
 
 import { modelProviderConfig } from "./model-provider-config.js";
-import {
-  memoryStructuredModel,
-  primaryModel,
-  visionModel,
-  voiceTranscriptionModel,
-} from "./model-registry.js";
+import { primaryModel, visionModel, voiceTranscriptionModel } from "./model-registry.js";
 
 describe("model registry", () => {
   it("selects the configured protocol-native text model", () => {
     expect(modelProviderConfig.agent.transport.protocol).toBe("openai-chat-completions");
     expect(primaryModel.modelId).toBe(modelProviderConfig.agent.models.primary.id);
     expect(primaryModel.provider).toBe("deepseek.chat");
-    expect(memoryStructuredModel.modelId).toBe(modelProviderConfig.agent.models.primary.id);
-    expect(memoryStructuredModel.provider).toBe("deepseek.chat");
   });
 
   it("does not construct a model that cannot accept image input", () => {

@@ -53,7 +53,11 @@ Osinara также отвечает за group registration, scopes, authorizati
 Источники доверия — проверенный channel update, session auth и актуальное состояние PostgreSQL.
 
 Long-term memory является application concern, а не заменой Eve `defineState`.
-Работа над расширением памяти отложена; не менять её без отдельного обсуждения.
+Смысловое решение о сохранении claim и create/attach thread принимает только основной чат-агент
+через `remember`. Backend выводит source/identity/scope из verified Telegram context и PostgreSQL и
+коммитит claim, evidence, Eve provenance и optional thread entry одной транзакцией. Subagent не
+получает `remember`. Background semantic extraction, relation/thread classifiers и LLM briefs удалены;
+retrieval и thread activation используют только локальный E5 и scoped SQL.
 
 ## Как проходит Telegram update
 
@@ -94,7 +98,7 @@ Eve `0.22.5` не умеет скрывать собственные built-ins, 
 Eve `0.22.5` всегда перечисляет статические authored skills в system prompt и не позволяет фильтровать их по сессии. Grantable `pohuy` поэтому вынесен из static discovery и выдаётся turn-scoped dynamic resolver только разрешённым группам; при обновлении Eve проверить, появился ли нативный механизм фильтрации.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
-Нативный Eve `agent` используется для сложной работы, которой полезен свежий контекст. Child получает отдельные history и state, но наследует проверенный auth, connections, tools, skills, sandbox и workspace текущего parent turn. Поэтому capability surface остаётся ровно таким же, как в исходном trust zone: trusted child сохраняет trusted доступы, а external child остаётся внутри restricted group boundary. Глубина ограничена одним child-уровнем через `maxSubagentDepth: 1`; child не получает orchestration prompt для рекурсивной делегации.
+Нативный Eve `agent` используется для сложной работы, которой полезен свежий контекст. Child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember`. Поэтому durable-memory решение остаётся у основного чат-агента, trusted child сохраняет остальные trusted доступы, а external child остаётся внутри restricted group boundary. Глубина ограничена одним child-уровнем через `maxSubagentDepth: 1`; child не получает orchestration prompt для рекурсивной делегации.
 
 ## Структура проекта
 

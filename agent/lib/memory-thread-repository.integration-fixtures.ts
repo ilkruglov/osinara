@@ -5,15 +5,13 @@
  * - `ThreadRepositoryFixture`: trusted IDs and authorization for one family thread scenario.
  * - `THREAD_TITLE_VECTOR`: deterministic title embedding used by activation tests.
  * - `createThreadRepositoryFixture`: creates one evidenced family claim and Telegram source.
- * - `createBroadThread`: runs immediate discovery and commits one broad root thread.
- * - `createAdditionalProjectClaim`: adds a second evidenced claim in the same project context.
+ * - `createBroadThread`: materializes a persisted broad root-thread fixture.
+ * - `createAdditionalProjectClaim`: uses the current writer to attach a second sourced claim.
  */
-import { expect } from "vitest";
-
 import { database } from "./database.js";
+import { MEMORY_EMBEDDING_MODEL_VERSION } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
-import { commitMemoryThreadDecision } from "./memory-thread-coordinator.js";
-import { memoryThreadDiscoveryRepository } from "./memory-thread-discovery-repository.js";
+import { memoryRepository } from "./memory-repository.js";
 import { memoryThreadQueryRepository } from "./memory-thread-query-repository.js";
 
 export interface ThreadRepositoryFixture {
@@ -104,22 +102,42 @@ export async function createThreadRepositoryFixture(): Promise<ThreadRepositoryF
 }
 
 export async function createBroadThread(fixture: ThreadRepositoryFixture) {
-  await expect(memoryThreadDiscoveryRepository.stageImmediateCandidate(fixture.claimId, true))
-    .resolves.toBe(true);
-  const job = await memoryThreadDiscoveryRepository.claimPending();
-  await memoryThreadDiscoveryRepository.markProviderCallStarted(job!.id, job!.leaseToken);
-  const classifierInput = await memoryThreadDiscoveryRepository.loadClassifierInput(job!.id);
-  await commitMemoryThreadDecision(job!.id, job!.leaseToken, {
-    action: "create_new",
-    entries: [{ role: "goal", sourceRef: classifierInput.sources[0]!.ref }],
-    purpose: "Сохранять цели, решения и результаты ремонта",
-    title: fixture.projectTitle,
-  }, async () => [THREAD_TITLE_VECTOR]);
+  // Repository/lifecycle tests need stable persisted state, not the retired discovery pipeline.
+  const project = await database().query<{ id: string }>(
+    `INSERT INTO memory_projects (family_id, scope, scope_partition_key, title)
+     VALUES ($1, 'family', $1, $2) RETURNING id`,
+    [fixture.familyId, fixture.projectTitle],
+  );
+  await database().query(
+    "UPDATE memory_items SET memory_project_id = $2 WHERE id = $1",
+    [fixture.claimId, project.rows[0]!.id],
+  );
+  const thread = await database().query<{ id: string }>(
+    `INSERT INTO memory_threads
+       (family_id, scope, scope_partition_key, memory_project_id, title, purpose,
+        title_embedding, title_embedding_model)
+     VALUES ($1, 'family', $1, $2, $3, 'Сохранять цели, решения и результаты ремонта',
+             $4::vector, $5) RETURNING id`,
+    [fixture.familyId, project.rows[0]!.id, fixture.projectTitle,
+      `[${THREAD_TITLE_VECTOR.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+  );
+  await database().query(
+    `INSERT INTO memory_thread_entries
+       (thread_id, family_id, scope, scope_partition_key, source_claim_id, role, occurred_at)
+     SELECT $1, family_id, scope, scope_partition_key, id, 'goal', created_at
+     FROM memory_items WHERE id = $2`,
+    [thread.rows[0]!.id, fixture.claimId],
+  );
+  await database().query(
+    "INSERT INTO memory_thread_creation_notices (thread_id, family_id) VALUES ($1, $2)",
+    [thread.rows[0]!.id, fixture.familyId],
+  );
   return await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 });
 }
 
 export async function createAdditionalProjectClaim(
   fixture: ThreadRepositoryFixture,
+  threadRef: string,
 ): Promise<string> {
   const origin = await database().query<{ group_id: string; participant_id: string }>(
     `SELECT conversation.telegram_group_id AS group_id, participant.id AS participant_id
@@ -136,27 +154,19 @@ export async function createAdditionalProjectClaim(
              'text', 'По ремонту выбрали поэтапный метод', now()) RETURNING id`,
     [fixture.conversationId, origin.rows[0]!.group_id],
   );
-  const claim = await database().query<{ id: string }>(
-    `INSERT INTO memory_items
-       (family_id, author_user_id, scope, kind, content, source, confirmation, sensitivity,
-        operation_key, provenance_state, origin_conversation_id, subject_label, save_approved,
-        content_normalized, profile_eligible)
-     VALUES ($1, $2, 'family', 'fact', 'Ремонт выполняется поэтапно', 'extraction',
-             'model_high', 'normal', 'thread-repository-second', 'evidenced', $3, 'квартира',
-             true, 'ремонт выполняется поэтапно', false) RETURNING id`,
-    [fixture.familyId, fixture.userId, fixture.conversationId],
-  );
-  await database().query(
-    `INSERT INTO claim_evidence
-       (claim_id, family_id, scope, scope_partition_key, evidence_role, evidence_kind,
-        origin_conversation_id, origin_conversation_label_snapshot, origin_telegram_group_id,
-        author_participant_id, author_user_id, author_label_snapshot, observed_at,
-        evidence_snippet, timeline_entry_id, timeline_sequence, source_message_id, source_snapshot)
-     VALUES ($1, $2, 'family', $2, 'primary', 'firsthand', $3, 'Family', $4, $5, $6,
-             'Owner', now(), 'По ремонту выбрали поэтапный метод', $7, 2, 704,
-             '{"content":"По ремонту выбрали поэтапный метод"}'::jsonb)`,
-    [claim.rows[0]!.id, fixture.familyId, fixture.conversationId, origin.rows[0]!.group_id,
-      origin.rows[0]!.participant_id, fixture.userId, timeline.rows[0]!.id],
-  );
-  return claim.rows[0]!.id;
+  const claim = await memoryRepository.create(fixture.auth, {
+    confirmation: "model_high",
+    content: "Ремонт выполняется поэтапно",
+    explicitSource: {
+      conversationId: fixture.conversationId,
+      timelineEntryId: timeline.rows[0]!.id,
+    },
+    kind: "fact",
+    operationKey: "thread-repository-second",
+    scope: "family",
+    sensitivity: "normal",
+    source: "test:main-agent",
+    thread: { action: "attach", role: "method", threadRef },
+  });
+  return claim.id;
 }

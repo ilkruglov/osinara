@@ -8,7 +8,7 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
-import { MEMORY_EXTRACTION_SNAPSHOT_MAX_ENTRIES } from "./memory-config.js";
+import { CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES } from "./memory-config.js";
 import type { MemoryScope } from "./memory-context.js";
 
 export interface ApplicationConversation {
@@ -86,7 +86,7 @@ function requireEntryIds(entryIds: readonly string[]): string[] {
   if (
     unique.length === 0 ||
     unique.length !== entryIds.length ||
-    unique.length > MEMORY_EXTRACTION_SNAPSHOT_MAX_ENTRIES
+    unique.length > CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES
   ) {
     throw new AppError(
       "AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID",

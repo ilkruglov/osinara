@@ -3,7 +3,7 @@
  *
  * Key constructs:
  * - `V0101_LEDGER`: exact production v0.10.1 migration names through release number 048.
- * - `MEMORY_RELEASE_MIGRATIONS`: memory migrations and their reliability repair after v0.10.1.
+ * - `MEMORY_RELEASE_MIGRATIONS`: memory migrations through the main-agent ownership cutover.
  * - `runMigrationRunner`: executes the real migration entrypoint against an isolated test schema.
  * - Upgrade scenario: verifies ledger delta, unique migration purposes, and representative R0-R7 DB objects.
  */
@@ -85,6 +85,7 @@ const MEMORY_RELEASE_MIGRATIONS = [
   "056_profile_projection_notice_delivery.sql",
   "057_repair_memory_extraction_sequence_ranges.sql",
   "058_scope_eve_turn_identity.sql",
+  "059_main_agent_owned_memory.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

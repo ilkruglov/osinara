@@ -1,5 +1,5 @@
 /**
- * Exact normalized extraction duplicate reinforcement.
+ * Exact normalized source-backed duplicate reinforcement.
  *
  * Exports:
  * - `reinforceExactClaim`: serializes same-subject lookup and atomically records reinforcement.
@@ -15,6 +15,7 @@ import type { ReferencedMemoryRow } from "./memory-record.js";
 
 interface ExactClaimIdentity {
   contentNormalized: string;
+  memoryProjectId: string | null;
   operationKey: string;
   prepared: PreparedClaimEvidence | null;
   scope: "family" | "group" | "personal";
@@ -27,7 +28,6 @@ interface ExactClaimIdentity {
 export async function reinforceExactClaim(
   client: PoolClient,
   auth: MemoryAuthorization,
-  inputHash: string,
   identity: ExactClaimIdentity,
 ): Promise<ReferencedMemoryRow | null> {
   const prepared = identity.prepared;
@@ -35,6 +35,7 @@ export async function reinforceExactClaim(
   // This lock closes the race between exact lookup and new-claim insertion without a global lock.
   const duplicateLock = JSON.stringify({
     content: identity.contentNormalized,
+    memoryProjectId: identity.memoryProjectId,
     partition: identity.scopePartitionKey,
     scope: identity.scope,
     subjectLabel: identity.subjectLabel,
@@ -52,13 +53,15 @@ export async function reinforceExactClaim(
      WHERE item.family_id = $1 AND item.scope = $2
        AND item.scope_partition_key = $3 AND item.claim_status = 'active'
        AND item.content_normalized = $4
-       AND item.subject_participant_id IS NOT DISTINCT FROM $5::uuid
+        AND item.subject_participant_id IS NOT DISTINCT FROM $5::uuid
         AND item.subject_user_id IS NOT DISTINCT FROM $6::uuid
         AND item.subject_family_id IS NULL
         AND item.subject_label IS NOT DISTINCT FROM $7::text
+        AND item.memory_project_id IS NOT DISTINCT FROM $8::uuid
      ORDER BY item.created_at, item.id LIMIT 1 FOR UPDATE OF item`,
     [auth.familyId, identity.scope, identity.scopePartitionKey, identity.contentNormalized,
-      identity.subjectParticipantId, identity.subjectUserId, identity.subjectLabel],
+      identity.subjectParticipantId, identity.subjectUserId, identity.subjectLabel,
+      identity.memoryProjectId],
   );
   const existing = duplicate.rows[0];
   if (!existing) return null;
@@ -68,12 +71,6 @@ export async function reinforceExactClaim(
     `UPDATE memory_items SET reinforcement_count = reinforcement_count + 1,
             last_reinforced_at = now(), updated_at = now() WHERE id = $1`,
     [existing.id],
-  );
-  await client.query(
-    `INSERT INTO memory_mutation_operations
-       (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
-     VALUES ($1, $2, 'create', $3, $4)`,
-    [auth.familyId, identity.operationKey, inputHash, existing.id],
   );
   await client.query(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)

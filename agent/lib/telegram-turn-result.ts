@@ -13,7 +13,6 @@ import type { ConversationAccess, RegisteredGroup } from "./family-access.js";
 import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-context.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
 import type { PreparedSession } from "./sessions/session-repository.js";
-import type { PendingMemoryApprovalContext } from "./memory-approval-notice-repository.js";
 import {
   formatStoredTelegramAttachments,
   formatTelegramAttachmentReferences,
@@ -28,7 +27,6 @@ export function buildTelegramTurnResult(input: {
   lazyAttachment: (TelegramGroupAttachmentSummary & { telegramMessageId: string }) | null;
   message: TelegramMessage;
   pendingDelivery: { context: string; cursor: string } | null;
-  pendingMemoryApprovalContext: PendingMemoryApprovalContext | null;
   profileReplyTimelineSequence: string | null;
   profileSignals: {
     explicitMentionTelegramUserIds: readonly string[];
@@ -53,7 +51,6 @@ export function buildTelegramTurnResult(input: {
   }
   if (input.lazyAttachment) context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
   if (input.pendingDelivery) context.push(input.pendingDelivery.context);
-  if (input.pendingMemoryApprovalContext) context.push(input.pendingMemoryApprovalContext.context);
 
   return {
     auth: {
@@ -63,12 +60,6 @@ export function buildTelegramTurnResult(input: {
         ...(input.access.groupId ? { groupId: input.access.groupId } : {}),
         ...(input.group ? { groupType: input.group.type } : {}),
         memoryScopes: input.access.memoryScopes,
-        ...(input.pendingMemoryApprovalContext === null
-          ? {}
-          : {
-              pendingMemoryApprovalClaimToken: input.pendingMemoryApprovalContext.claimToken,
-              pendingMemoryApprovalRefs: input.pendingMemoryApprovalContext.refs,
-            }),
         ...(input.pendingDelivery ? { proactiveDeliveryCursor: input.pendingDelivery.cursor } : {}),
         role: input.access.role,
         sandboxSessionId: input.appSession.sandboxSessionId,

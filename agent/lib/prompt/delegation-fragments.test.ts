@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Root sessions receive bounded delegation criteria and a self-contained task-envelope contract.
+ * - Durable-memory decisions stay with the root even when other trust-zone tools are inherited.
  * - Child copies receive no root-only orchestration guidance.
  */
 import { describe, expect, it } from "vitest";
@@ -40,7 +41,8 @@ describe("native delegation prompt", () => {
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("критерии готовности");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("outputSchema");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("не видит историю");
-    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("те же доступы");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("root-owned `remember`");
+    expect(ORCHESTRATOR_DELEGATION_RULES).toContain("основной чат-агент");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("короткую отбивку");
     expect(ORCHESTRATOR_DELEGATION_RULES).toContain("не обещай срок");
   });

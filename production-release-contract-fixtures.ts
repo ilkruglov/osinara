@@ -51,9 +51,7 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
           retries: 120,
           test: ["CMD", "node", "-e", PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND],
         },
-        volumes: [
-          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
-        ],
+        network_mode: "none",
       }),
       migrate: service(),
       postgres: service({ volumes: [volume("postgres-data", "/var/lib/postgresql/data")] }),

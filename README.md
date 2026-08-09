@@ -31,7 +31,7 @@ Osinara — приватный семейный Telegram-агент на TypeScr
 | --- | --- |
 | Telegram | Durable webhook ingress, быстрый ACK Telegram, FIFO-drain по chat/topic, rich replies, HITL callbacks. |
 | Семья и группы | Bootstrap владельца, приглашения, подтверждение участников, owner-only операции, семейные и внешние группы. |
-| Память | Личная, семейная и групповая long-term memory с поиском, экспортом, безопасной чувствительностью и отдельными scopes. |
+| Память | Root-agent source-backed writes, atomic memory threads, локальный hybrid retrieval, экспорт, HITL для sensitive data и отдельные scopes. |
 | Расписания | Напоминания и автономные agent schedules: дайджесты, отчёты, регулярные сценарии и delivery в Telegram. |
 | Голос | Groq Whisper transcription перед основным agent turn с повторной проверкой authorization. |
 | Workspaces | Изолированные personal, family и group файловые области, attachment persistence, безопасная отправка файлов. |
@@ -66,7 +66,7 @@ flowchart LR
 | Личный чат | `personal` и `family` | `/workspace/personal`, `/workspace/family` | Полный trusted sandbox, personal tools environment. |
 | Семейная группа | Только `family` | `/workspace/family` | Trusted sandbox, family tools environment. |
 | Внешняя группа | Только `group` | `/workspace/group` | Без Bash, сети и persistent credentials; только безопасные file tools. |
-| Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же capability surface текущего trust zone; отдельные history и state. |
+| Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же trust-zone surface, кроме root-owned `remember`; отдельные history и state. |
 
 ## Production Flow
 
@@ -81,6 +81,8 @@ flowchart LR
 
 Архитектура canonical и task sessions для Telegram-групп:
 [`docs/group-session-architecture.md`](docs/group-session-architecture.md).
+
+Полная спецификация памяти: [`docs/memory-system-full.md`](docs/memory-system-full.md).
 
 ## Быстрый Старт
 

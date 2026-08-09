@@ -349,10 +349,7 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
     });
 
     // Erased provenance may remain as family audit history, but must never regenerate model context.
-    const generateBrief = vi.fn(async () => {
-      throw new Error("AGENT_TEST_UNRESOLVED_SOURCE_REACHED_GENERATOR");
-    });
-    const briefs = createMemoryThreadBriefRepository({ generateBrief });
+    const briefs = createMemoryThreadBriefRepository();
     await expect(briefs.activate({
       auth: {
         familyId: family.rows[0]!.id,
@@ -366,6 +363,5 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
       retrievedClaimIds: [familyZone.claimId],
       skillHints: [],
     })).resolves.toEqual({ threads: [], totalCharacters: 0 });
-    expect(generateBrief).not.toHaveBeenCalled();
   });
 });

@@ -222,10 +222,10 @@ validate_resolved_compose_security() {
       "const fs=require(\u0027node:fs\u0027),p=\u0027/tmp/osinara-memory-extraction-worker-ready\u0027;if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"
     ] and
     .services["memory-extraction-worker"].healthcheck.retries == 120 and
+    .services["memory-extraction-worker"].network_mode == "none" and
+    ((.services["memory-extraction-worker"].environment // {}) | length) == 0 and
+    ((.services["memory-extraction-worker"].volumes // []) | length) == 0 and
     any(.services.agent.volumes[];
-      .source == "/opt/osinara/model-providers.json" and
-      .target == "/app/config/model-providers.json" and .read_only == true) and
-    any(.services["memory-extraction-worker"].volumes[];
       .source == "/opt/osinara/model-providers.json" and
       .target == "/app/config/model-providers.json" and .read_only == true) and
     any(.services["cli-proxy-api"].volumes[];
@@ -241,7 +241,6 @@ validate_resolved_compose_security() {
         {service: "agent", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
         {service: "cli-proxy-api", type: "bind", source: "/opt/osinara/model-providers.json", target: "/config/model-providers.json"},
         {service: "memory-embedding", type: "volume", source: "memory-embedding-model-e5", target: "/data"},
-        {service: "memory-extraction-worker", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
         {service: "sandbox-runner", type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock"},
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
@@ -272,8 +271,7 @@ validate_resolved_compose() {
       "sandbox-egress-proxy", "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
     ] and
     .services.agent.depends_on.migrate.condition == "service_completed_successfully" and
-    .services["memory-extraction-worker"].depends_on.migrate.condition == "service_completed_successfully" and
-    .services["memory-extraction-worker"].depends_on["memory-embedding"].condition == "service_healthy"
+    .services["memory-extraction-worker"].depends_on.migrate.condition == "service_completed_successfully"
   ' "$config_json" >/dev/null ||
     fail "DEPLOY_COMPOSE_SERVICE_SET_INVALID" "Resolved Compose service set is not approved"
   validate_resolved_compose_security "$config_json" ||

@@ -3,18 +3,15 @@
  *
  * Constructs covered:
  * - First-conversation continuation creates one broad subjectless family project/thread and notice.
- * - Brief cache is source-backed, generation-aware, and invalidated synchronously by claim edits.
+ * - Deterministic context reflects source edits immediately without a generated cache.
  * - Completion retains full history, links the parent, loads only the completion episode, and reactivates explicitly.
  * - All repository/tool-shaped results expose opaque refs without database or identity IDs.
  */
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 import { confirmedOutcomeRepository } from "./confirmed-outcome-repository.js";
 import { createMemoryThreadBriefRepository } from "./memory-thread-brief-repository.js";
-import type { MemoryThreadBriefSource } from "./memory-thread-brief-generator.js";
-import { commitMemoryThreadDecision } from "./memory-thread-coordinator.js";
-import { memoryThreadDiscoveryRepository } from "./memory-thread-discovery-repository.js";
 import { memoryThreadLifecycleRepository } from "./memory-thread-lifecycle-repository.js";
 import { memoryThreadNoticeRepository } from "./memory-thread-notice-repository.js";
 import { memoryThreadQueryRepository } from "./memory-thread-query-repository.js";
@@ -36,7 +33,7 @@ describeWithDatabase("memory thread repositories", () => {
 
   afterAll(closeDatabase);
 
-  it("creates broad-first project state and uses generation-aware brief/notice caches", async () => {
+  it("creates broad-first project state and uses live source context plus durable notices", async () => {
     const fixture = await createFixture();
     const page = await createBroadThread(fixture);
 
@@ -53,17 +50,8 @@ describeWithDatabase("memory thread repositories", () => {
     );
     expect(identity.rows[0]!.memory_project_id).toEqual(expect.any(String));
 
-    // A later subjectless claim sees existing scoped projects and attaches without a duplicate thread.
-    const additionalClaimId = await createAdditionalProjectClaim(fixture);
-    await memoryThreadDiscoveryRepository.stageImmediateCandidate(additionalClaimId, true);
-    const attachJob = await memoryThreadDiscoveryRepository.claimPending();
-    await memoryThreadDiscoveryRepository.markProviderCallStarted(attachJob!.id, attachJob!.leaseToken);
-    const attachInput = await memoryThreadDiscoveryRepository.loadClassifierInput(attachJob!.id);
-    await commitMemoryThreadDecision(attachJob!.id, attachJob!.leaseToken, {
-      action: "attach_existing",
-      entries: [{ role: "method", sourceRef: attachInput.sources[0]!.ref }],
-      threadRef: attachInput.existingThreads[0]!.ref,
-    });
+    // A later main-agent claim attaches atomically without creating a duplicate thread.
+    const additionalClaimId = await createAdditionalProjectClaim(fixture, page.items[0]!.threadRef);
     expect((await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 })).items).toHaveLength(1);
     const attachedIdentity = await database().query<{ memory_project_id: string | null }>(
       "SELECT memory_project_id FROM memory_items WHERE id = $1",
@@ -111,16 +99,7 @@ describeWithDatabase("memory thread repositories", () => {
     await expect(memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId))
       .resolves.toBeNull();
 
-    const generateBrief = vi.fn(async (input: {
-      entries: readonly MemoryThreadBriefSource[];
-      purpose: string;
-      title: string;
-    }) => [{
-      content: input.entries[0]!.content,
-      kind: "active_goals_open_loops" as const,
-      sourceEntryRefs: [input.entries[0]!.ref],
-    }]);
-    const briefs = createMemoryThreadBriefRepository({ generateBrief });
+    const briefs = createMemoryThreadBriefRepository();
     const activation = {
       auth: fixture.auth,
       queryEmbedding: TITLE_VECTOR,
@@ -140,14 +119,14 @@ describeWithDatabase("memory thread repositories", () => {
     expect(first).toEqual(second);
     expect(fromTitle.threads[0]?.title).toBe("Ремонт");
     expect(fromSkill.threads[0]?.title).toBe("Ремонт");
-    expect(generateBrief).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(first)).toContain("Ремонт будет продолжаться поэтапно");
     expect(JSON.stringify(first)).not.toMatch(/"(?:id|familyId|groupId|userId|scopePartitionKey)"/u);
     await database().query(
       "UPDATE memory_items SET content = 'Ремонт продолжается по новому плану' WHERE id = $1",
       [fixture.claimId],
     );
-    await briefs.activate(activation);
-    expect(generateBrief).toHaveBeenCalledTimes(2);
+    const refreshed = await briefs.activate(activation);
+    expect(JSON.stringify(refreshed)).toContain("Ремонт продолжается по новому плану");
   });
 
   it("retains completed subthread history, links its parent, and requires explicit reactivation", async () => {
@@ -218,13 +197,7 @@ describeWithDatabase("memory thread repositories", () => {
     );
     expect(parentCompletion.rows).toEqual([{ count: 1 }]);
 
-    const briefRepository = createMemoryThreadBriefRepository({
-      generateBrief: vi.fn(async (input) => [{
-        content: input.entries[0]!.content,
-        kind: "active_goals_open_loops" as const,
-        sourceEntryRefs: [input.entries[0]!.ref],
-      }]),
-    });
+    const briefRepository = createMemoryThreadBriefRepository();
     const context = await briefRepository.activate({
       auth: fixture.auth,
       queryEmbedding: TITLE_VECTOR,
@@ -240,11 +213,6 @@ describeWithDatabase("memory thread repositories", () => {
         status: "completed",
       });
       expect(completedContext).not.toHaveProperty("blocks");
-    } else {
-      // The active parent may already represent the same authoritative outcome once as its episode.
-      expect(context.threads.some((thread) => thread.episodes?.some((episode) =>
-        episode.content === "Ремонт кухни завершён, всё работает"
-      ))).toBe(true);
     }
 
     const reactivationMessage = await database().query<{ id: string }>(
@@ -387,14 +355,12 @@ describeWithDatabase("memory thread repositories", () => {
       [thread.rows[0]!.id, fixture.familyId, group.rows[0]!.id, claim.rows[0]!.id],
     );
 
-    const generator = vi.fn();
-    const briefs = createMemoryThreadBriefRepository({ generateBrief: generator });
+    const briefs = createMemoryThreadBriefRepository();
     await expect(briefs.activate({
       auth: { ...fixture.auth, scopes: ["personal", "family"] },
       queryEmbedding: TITLE_VECTOR,
       retrievedClaimIds: [claim.rows[0]!.id],
       skillHints: [],
     })).resolves.toEqual({ threads: [], totalCharacters: 0 });
-    expect(generator).not.toHaveBeenCalled();
   });
 });

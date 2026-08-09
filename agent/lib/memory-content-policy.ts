@@ -32,13 +32,13 @@ function luhn(value: string): boolean {
 
 export function memoryContentRejectionCode(content: string): string | null {
   if (PRIVATE_KEY_PATTERN.test(content) || CREDENTIAL_ASSIGNMENT_PATTERN.test(content)) {
-    return "AGENT_MEMORY_EXTRACTION_SECRET_REJECTED";
+    return "AGENT_MEMORY_SECRET_REJECTED";
   }
-  if (ONE_TIME_CODE_PATTERN.test(content)) return "AGENT_MEMORY_EXTRACTION_SECRET_REJECTED";
-  if (CVV_PATTERN.test(content)) return "AGENT_MEMORY_EXTRACTION_PAYMENT_CREDENTIAL_REJECTED";
+  if (ONE_TIME_CODE_PATTERN.test(content)) return "AGENT_MEMORY_SECRET_REJECTED";
+  if (CVV_PATTERN.test(content)) return "AGENT_MEMORY_PAYMENT_CREDENTIAL_REJECTED";
   const cardCandidates = content.match(PAYMENT_CARD_CANDIDATE_PATTERN) ?? [];
   return cardCandidates.some(luhn)
-    ? "AGENT_MEMORY_EXTRACTION_PAYMENT_CREDENTIAL_REJECTED"
+    ? "AGENT_MEMORY_PAYMENT_CREDENTIAL_REJECTED"
     : null;
 }
 

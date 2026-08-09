@@ -19,7 +19,6 @@ import {
 import { conversationRepository } from "./conversation-repository.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { familyRepository, type FamilyRepository } from "./family-repository.js";
-import { memoryApprovalNoticeRepository } from "./memory-approval-notice-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 import { proactiveDeliveryRepository } from "./proactive-deliveries/proactive-delivery-repository.js";
 import { sessionRepository } from "./sessions/session-repository.js";
@@ -61,7 +60,6 @@ export interface TelegramMessageRepositories {
     typeof conversationRepository,
     "getByChatId" | "getByGroupId" | "syncTimelineParticipants"
   >;
-  memoryApprovals: Pick<typeof memoryApprovalNoticeRepository, "pendingContext">;
   threadNotices: MemoryThreadNoticeDeliveryRepository;
   profilePolicies: Pick<
     typeof profileProjectionPolicyRepository,
@@ -85,7 +83,6 @@ export const productionTelegramMessageRepositories = {
     writeBinary: workspaceBinaryRepository.writeBinary,
   }),
   conversations: conversationRepository,
-  memoryApprovals: memoryApprovalNoticeRepository,
   profilePolicies: profileProjectionPolicyRepository,
   family: familyRepository,
   groupContext: { prepare: telegramGroupTurnContextPreparer },

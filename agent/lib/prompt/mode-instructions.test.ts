@@ -219,13 +219,15 @@ describe("external instructions follow the effective allowlist", () => {
   });
 
   it("teaches the memory write contract only when a write action is granted", () => {
-    expect(external("remember")).toMatch(/только после прямой просьбы пользователя/iu);
-    expect(external("remember")).not.toContain("confirmationMode");
-    expect(external("remember")).toMatch(/не вызывай `remember` автоматически/iu);
+    expect(external("remember")).toContain("сама решай");
+    expect(external("remember")).toContain('basis: "agent_inferred"');
+    expect(external("remember")).toContain('basis: "user_requested"');
+    expect(external("remember")).toContain("отдельного фонового semantic extraction нет");
+    expect(external("remember")).not.toMatch(/backend extraction/iu);
     expect(external("manage_memory.edit")).toContain('"action":"edit"');
     expect(external("manage_memory.delete")).toContain('"action":"delete"');
     expect(external("manage_memory.edit")).not.toContain('"action":"delete"');
-    expect(external()).not.toContain("прямой просьбы пользователя");
+    expect(external()).not.toContain("сама решай");
     expect(external()).not.toContain("manage_memory");
   });
 });

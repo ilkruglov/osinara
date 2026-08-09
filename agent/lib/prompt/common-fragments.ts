@@ -3,9 +3,9 @@
  *
  * Exports:
  * - `MEMORY_DEEPENING_PROTOCOL`: bounded multi-query context deepening for modes with search.
- * - `MEMORY_WRITE_CONTRACT`: explicit `remember` policy and sensitivity classification.
+ * - `MEMORY_WRITE_CONTRACT`: main-agent `remember` and atomic thread-decision policy.
  * - `memoryEditContract`: `manage_memory` JSON contract limited to the allowed actions.
- * - `MEMORY_EXACT_DUPLICATE_HANDLING`: non-destructive exact-read collapse guidance.
+ * - `MEMORY_EXACT_DUPLICATE_HANDLING`: server-owned exact reinforcement guidance.
  * - `IMAGE_INSPECTION_CONTRACT`: single-source payload rule for the vision tool.
  * - `SEND_WORKSPACE_FILE_RULES`: explicit-request delivery rules for workspace files.
  * - `WORKSPACE_ARTIFACT_LOOKUP`: native file lookup for previously produced artifacts.
@@ -29,13 +29,19 @@ export const MEMORY_DEEPENING_PROTOCOL = `
 `.trim();
 
 export const MEMORY_WRITE_CONTRACT = `
-Вызывай \`remember\` только после прямой просьбы пользователя запомнить именно это сведение. Устойчивые факты из обычного разговора извлекает backend после хода: не вызывай \`remember\` автоматически и не дублируй extraction. Не сохраняй одноразовые запросы, быстро устаревающие сведения, свои предположения или выводы с недостаточной уверенностью. При явном сохранении события всегда сопровождай запись памяти датой и деталями.
+В основном чате сама решай, содержит ли текущее сообщение устойчивый факт, предпочтение, важное событие, цель, ограничение, решение или открытый вопрос, полезный в будущих разговорах. Сохраняй такое сведение через \`remember\` в этом же ходе; отдельного фонового semantic extraction нет. Не сохраняй одноразовые запросы, быстро устаревающие сведения, свои предположения или выводы с недостаточной уверенностью. Событие сохраняй с датой и существенными деталями.
+
+Передавай \`basis: "user_requested"\` только когда текущий пользователь прямо попросил сохранить это сведение; для самостоятельного решения используй \`basis: "agent_inferred"\`. Не выдавай собственный вывод за подтверждение пользователя.
+
+Если запись начинает либо продолжает длительную тему, одним вызовом \`remember\` создай или прикрепи нить. При продолжении сначала используй автоматически активированную нить либо найди точный \`threadRef\` через поиск нитей; не угадывай refs. Новую root-нить связывай с проверенным субъектом записи, а \`project\` выбирай только для общей долгой деятельности без отдельного verified subject. Для subthread передавай только проверенный parentThreadRef: backend сам наследует identity.
+
+Если \`remember\` вернул \`AGENT_MEMORY_THREAD_CANDIDATE_EXISTS\`, новый claim не сохранён. Сопоставь названия указанных opaque \`threadRef\` с текущей темой; если доступен \`read_memory_thread\`, прочитай сомнительного кандидата. При совпадении повтори \`remember\` с \`action: "attach"\`. Для действительно другой темы уточни title и purpose так, чтобы они однозначно её различали.
 
 Если сведение относится к человеку из \`<verified_profile_view>\`, передай его точный opaque \`subjectRef\`. Для объекта или человека без доступного verified ref можно передать короткий \`subjectLabel\`. Не угадывай ref и не передавай оба поля одновременно.
 
 При сохранении записи памяти из ссылки, видео, изображения и прочих типов контента старайся сначала получить больше информации для обогащения записи. Если данных недостаточно, уточни необходимые детали у пользователя.
 
-Чувствительные сведения помечай как \`sensitive\`: они сохраняются только после подтверждения. Автоматически запрещено сохранять пароли, токены, API-ключи, приватные ключи, одноразовые коды и платёжные реквизиты, это допускается только с явной просьбой пользователя.
+Чувствительные сведения помечай как \`sensitive\`: они сохраняются только после подтверждения. Пароли, токены, API-ключи, приватные ключи, одноразовые коды и платёжные реквизиты не сохраняй никогда.
 `.trim();
 
 const MEMORY_EDIT_EXAMPLES: Readonly<Record<MemoryEditAction, string>> = {
@@ -62,7 +68,7 @@ export function memoryEditContract(actions: ReadonlySet<MemoryEditAction>): stri
 }
 
 export const MEMORY_EXACT_DUPLICATE_HANDLING =
-  "Схлопывание точных дубликатов допустимо только сервером при чтении и не изменяет хранимые записи. Поэтому не объединяй и не удаляй записи только из-за похожести или совпадения результата поиска; изменение памяти допустимо лишь по явному запросу пользователя к конкретному `memoryRef`.";
+  "Точное совпадение текста в той же проверенной identity сервер может записать как reinforcement существующего claim. Поэтому сама не объединяй и не удаляй записи только из-за похожести или совпадения результата поиска; иные изменения памяти допустимы лишь по явному запросу пользователя к конкретному `memoryRef`.";
 
 export const IMAGE_INSPECTION_CONTRACT =
   "Для анализа доступного изображения обязательно используй `inspect_workspace_image`: основная модель не видит изображение автоматически. Передавай ровно один источник изображения, разрешённый scope и конкретный question. Vision получает только явный вопрос и bytes изображения, не историю разговора и не подпись. Не утверждай ничего о содержимом до успешного результата tool. Если tool вернул `AGENT_WORKSPACE_IMAGE_INPUT_INVALID`, исправь payload по объяснению; не выдумывай содержимое изображения.";

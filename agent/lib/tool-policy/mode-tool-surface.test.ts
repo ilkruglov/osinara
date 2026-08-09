@@ -6,6 +6,7 @@
  * - An external group emits guarded file tools, granted capabilities, and framework denials.
  * - Granted capabilities re-check the live policy at execution and stay action-level for memory.
  * - HITL approval configuration survives dynamic emission.
+ * - Native subagents inherit trust-zone reads/actions but cannot make durable-memory decisions.
  */
 import type { SessionAuth } from "eve/context";
 import type { SkillDefinition } from "eve/skills";
@@ -25,6 +26,7 @@ import {
   PRIVATE_ONLY_TOOL_NAMES,
   TRUSTED_MODE_TOOL_NAMES,
   buildModeToolSurface,
+  buildSubagentToolSurface,
 } from "./mode-tool-surface.js";
 import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
@@ -72,7 +74,6 @@ describe("trusted mode tool surfaces", () => {
     expect(privateNames).toEqual(expect.arrayContaining([
       "get_memory_source",
       "list_memory_threads",
-      "manage_memory_approval",
       "manage_memory_thread",
       "manage_profile_projection",
       "read_memory_thread",
@@ -81,7 +82,6 @@ describe("trusted mode tool surfaces", () => {
     ]));
     expect(familyNames).toEqual(expect.arrayContaining([
       "list_memory_threads",
-      "manage_memory_approval",
       "manage_memory_thread",
       "read_memory_thread",
       "read_profile_view",
@@ -89,7 +89,6 @@ describe("trusted mode tool surfaces", () => {
     ]));
     expect(familyNames).not.toContain("get_memory_source");
     expect(externalNames).toEqual(expect.arrayContaining([
-      "manage_memory_approval",
       "read_profile_view",
     ]));
   });
@@ -131,6 +130,16 @@ describe("trusted mode tool surfaces", () => {
       ).toBeDefined();
     }
   });
+
+  it("keeps remember exclusively on the root chat agent", () => {
+    expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("remember");
+    expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("remember");
+    expect(buildSubagentToolSurface({
+      capabilities: new Set(["remember"]),
+      environment: "external",
+      skills: {},
+    })).not.toHaveProperty("remember");
+  });
 });
 
 describe("external group tool surface", () => {
@@ -152,7 +161,6 @@ describe("external group tool surface", () => {
         ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
         "load_skill",
-        "manage_memory_approval",
         "read_profile_view",
       ].sort(),
     );
@@ -197,7 +205,7 @@ describe("external group tool surface", () => {
     const grantable = new Set<string>([
       ...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, "")),
     ]);
-    const alwaysExternal = new Set(["manage_memory_approval", "read_profile_view"]);
+    const alwaysExternal = new Set(["read_profile_view"]);
 
     for (const emitted of names({ capabilities: new Set(), environment: "external", skills: {} })) {
       expect(
@@ -321,7 +329,6 @@ describe("external group tool surface", () => {
       ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
       ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
       "load_skill",
-      "manage_memory_approval",
       "read_profile_view",
     ].sort());
   });
@@ -344,6 +351,7 @@ describe("external group tool surface", () => {
       list_memories: {},
       list_memory_threads: {},
       remember: {
+        basis: "agent_inferred",
         content: "Проверка",
         kind: "fact",
         sensitivity: "normal",
@@ -363,6 +371,7 @@ describe("external group tool surface", () => {
     const trustedRemember = buildModeToolSurface({ environment: "private" }).remember!;
     const trustedSchema = trustedRemember.inputSchema as z.ZodType;
     expect(trustedSchema.safeParse({
+      basis: "agent_inferred",
       content: "Проверка",
       kind: "fact",
       scope: "personal",

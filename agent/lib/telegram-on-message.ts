@@ -308,10 +308,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
     // proved that this accepted message will continue into an agent turn.
     const profileSignals = verifiedTelegramProfileSignals(message);
-    const pendingMemoryApprovalContext = await repositories.memoryApprovals.pendingContext(
-      memoryAuthorization,
-      conversation.id,
-    );
     await deliverPendingMemoryThreadNotice(memoryAuthorization, conversation.id,
       repositories.threadNotices, (text) => ctx.telegram.sendMessage(text));
     if (group) {
@@ -399,7 +395,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       lazyAttachment,
       message,
       pendingDelivery: pendingDeliveries,
-      pendingMemoryApprovalContext,
       profileSignals,
       profileReplyTimelineSequence: inboundTimeline.replyToSequenceId,
       replyHandling,
