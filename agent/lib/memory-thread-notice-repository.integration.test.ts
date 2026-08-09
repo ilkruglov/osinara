@@ -36,7 +36,7 @@ describeWithDatabase("memory thread notice durable recovery", () => {
     await database().query(
       `UPDATE memory_thread_creation_notices
        SET status = 'started', delivery_token = gen_random_uuid(),
-           delivery_started_at = $2
+           delivery_started_at = $2, delivery_diagnostic_code = NULL
        WHERE thread_id = $1`,
       [thread.rows[0]!.id, new Date(Date.now() - THREAD_NOTICE_DELIVERY_LEASE_MILLISECONDS - 1)],
     );

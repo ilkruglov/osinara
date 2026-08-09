@@ -427,10 +427,12 @@ export async function materializeMemoryThreadWrite(
      ON CONFLICT (thread_id, source_claim_id, source_outcome_id) DO NOTHING`,
     [prepared.threadId, prepared.role, claimId],
   );
-  if (prepared.result.action === "created") {
+  // Group-origin threads are fully materialized but remain silent in every shared chat.
+  if (prepared.result.action === "created" && prepared.preparedEvidence.telegramGroupId === null) {
     await client.query(
-      "INSERT INTO memory_thread_creation_notices (thread_id, family_id) VALUES ($1, $2)",
-      [prepared.threadId, auth.familyId],
+      `INSERT INTO memory_thread_creation_notices
+         (thread_id, family_id, origin_conversation_id) VALUES ($1, $2, $3)`,
+      [prepared.threadId, auth.familyId, prepared.preparedEvidence.conversationId],
     );
   }
   await client.query(

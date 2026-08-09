@@ -164,6 +164,9 @@ replay не зависит от обычного timeline pruning, но удал
 source-level advisory lock. Успешный attach, успешный retry и второй candidate outcome являются
 terminal для новых create решений по тому же source entry. Второй candidate outcome сохраняет один
 terminal attach к одному из выданных refs, после которого новые attach также запрещены.
+Создание и активация нитей в family/external Telegram-группах происходят без системных сообщений.
+Creation notice ставится в durable queue и доставляется только для нити, созданной из verified
+private conversation; Telegram handler дополнительно не читает эту queue на group/supergroup turns.
 
 ## 6. Retrieval и автоматическая activation
 

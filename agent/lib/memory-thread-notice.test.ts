@@ -3,12 +3,19 @@
  *
  * Constructs covered:
  * - A committed background thread notice appears on the next authorized turn exactly as stored.
+ * - Family and external group turns never inspect or send thread creation notices.
  * - The notice is informational Russian text and never asks for confirmation.
  */
 import { describe, expect, it } from "vitest";
 
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
-import { privateMessage, repositories, telegramContext } from "./telegram-on-message.test-fixtures.js";
+import {
+  BOT_USERNAME,
+  groupMessage,
+  privateMessage,
+  repositories,
+  telegramContext,
+} from "./telegram-on-message.test-fixtures.js";
 
 describe("memory thread creation notice", () => {
   it("shows the pending title and purpose on the next authorized turn", async () => {
@@ -44,4 +51,40 @@ describe("memory thread creation notice", () => {
       expect.any(String),
     );
   });
+
+  it.each(["family_private", "external"] as const)(
+    "does not inspect pending notices in a %s group turn",
+    async (groupType) => {
+      const repository = repositories();
+      repository.telegram.findGroup.mockResolvedValue({
+        familyId: "family-1",
+        groupId: "group-1",
+        messageMode: "addressed_only",
+        telegramChatId: "group-101",
+        toolAllowlist: [],
+        type: groupType,
+      });
+      repository.telegram.findIdentity.mockResolvedValue({
+        familyId: "family-1",
+        role: "member",
+        userId: "user-1",
+      });
+      repository.threadNotices.takePending.mockResolvedValue({
+        deliveryToken: "00000000-0000-4000-8000-000000000002",
+        purpose: "Скрытое системное уведомление.",
+        text: "Начата новая нить памяти: «Скрытая».",
+        threadId: "00000000-0000-4000-8000-000000000001",
+        threadRef: "thread_0123456789abcdef0123456789abcdef",
+        title: "Скрытая",
+      });
+      const telegram = telegramContext();
+      const handler = createTelegramMessageHandler(repository);
+
+      await handler(telegram.context, groupMessage(`@${BOT_USERNAME} продолжим`));
+
+      expect(repository.threadNotices.takePending).not.toHaveBeenCalled();
+      expect(repository.threadNotices.complete).not.toHaveBeenCalled();
+      expect(telegram.sendMessage).not.toHaveBeenCalled();
+    },
+  );
 });

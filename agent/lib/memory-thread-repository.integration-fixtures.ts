@@ -129,8 +129,11 @@ export async function createBroadThread(fixture: ThreadRepositoryFixture) {
     [thread.rows[0]!.id, fixture.claimId],
   );
   await database().query(
-    "INSERT INTO memory_thread_creation_notices (thread_id, family_id) VALUES ($1, $2)",
-    [thread.rows[0]!.id, fixture.familyId],
+    `INSERT INTO memory_thread_creation_notices
+       (thread_id, family_id, status, origin_conversation_id, delivery_started_at,
+        delivery_diagnostic_code)
+     VALUES ($1, $2, 'failed', $3, now(), 'AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY')`,
+    [thread.rows[0]!.id, fixture.familyId, fixture.conversationId],
   );
   return await memoryThreadQueryRepository.list(fixture.auth, { limit: 20 });
 }
