@@ -11,8 +11,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { conversationRepository } from "./conversation-repository.js";
 import { closeDatabase, database } from "./database.js";
 import type { MemoryAuthorization } from "./memory-context.js";
-import { processMemoryExtractionCandidates } from "./memory-extraction-candidate-processor.js";
-import { memoryExtractionRepository } from "./memory-extraction-repository.js";
+import { memoryRepository } from "./memory-repository.js";
 import { memorySourceRepository } from "./memory-source-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 
@@ -47,52 +46,52 @@ describeWithDatabase("R3 memory source lookup", () => {
        VALUES ($1, '-1009501', 'Закрытый источник', 'external', 'addressed_only') RETURNING id`,
       [family.rows[0]!.id],
     );
+    const conversation = await conversationRepository.getByGroupId(group.rows[0]!.id);
+    const participant = await database().query<{ id: string }>(
+      `INSERT INTO conversation_participants
+         (conversation_id, family_id, scope, scope_partition_key, telegram_user_id,
+          linked_user_id, display_name_snapshot, first_observed_at, last_observed_at)
+       VALUES ($1, $2, 'group', $3, '9501', $4, 'Анна', now(), now()) RETURNING id`,
+      [conversation.id, family.rows[0]!.id, group.rows[0]!.id, user.rows[0]!.id],
+    );
+    expect(participant.rows[0]).toBeDefined();
+    const subject = await database().query<{ subject_ref: string }>(
+      `SELECT subject_ref FROM profile_subjects
+       WHERE conversation_id = $1 AND subject_participant_id = $2`,
+      [conversation.id, participant.rows[0]!.id],
+    );
     const entry = await database().query<{ id: string }>(
       `INSERT INTO telegram_group_messages
-         (group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+         (group_id, conversation_id, telegram_message_id, sequence_id, actor_kind, actor_id,
           telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
-       VALUES ($1, 777, 1, 'user', 'telegram:9501', '9501', 'Анна', false,
-               'text', 'Я предпочитаю утренние встречи', now()) RETURNING id`,
-      [group.rows[0]!.id],
+        VALUES ($1, $2, 777, 1, 'user', 'telegram:9501', '9501', 'Анна', false,
+                'text', 'Я предпочитаю утренние встречи', now()) RETURNING id`,
+      [group.rows[0]!.id, conversation.id],
     );
-    const conversation = await conversationRepository.getByGroupId(group.rows[0]!.id);
-    const batch = await memoryExtractionRepository.createBatch({
-      applicationSessionId: null,
-      callerTelegramUserId: "9501",
-      conversationId: conversation.id,
-      extractorVersion: "source-test",
-      firstSequence: "1",
-      lastSequence: "1",
-      omittedBeforeSequence: null,
-      schemaVersion: "source-test",
-      timelineEntryIds: [entry.rows[0]!.id],
-      turnId: "source-turn",
+    const groupAuth: MemoryAuthorization = {
+      familyId: family.rows[0]!.id,
+      groupId: group.rows[0]!.id,
+      role: "external",
+      scopes: ["group"],
+      telegramUserId: "9501",
+      userId: null,
+    };
+    const claim = await memoryRepository.create(groupAuth, {
+      confirmation: "model_high",
+      content: "Анна предпочитает утренние встречи.",
+      explicitSource: {
+        conversationId: conversation.id,
+        subjectRef: subject.rows[0]!.subject_ref,
+        timelineEntryId: entry.rows[0]!.id,
+      },
+      kind: "preference",
+      operationKey: "source-lookup-remember",
+      provenance: { sessionId: "source-session", turnId: "source-turn" },
+      scope: "group",
+      sensitivity: "normal",
+      source: "eve:source-session:source-turn",
     });
-    const job = await memoryExtractionRepository.claimPending();
-    await memoryExtractionRepository.markProviderCallStarted(job!.id, job!.leaseToken);
-    await memoryExtractionRepository.complete({
-      decisions: [{
-        action: "save",
-        content: "Анна предпочитает утренние встречи.",
-        evidenceKind: "firsthand",
-        kind: "preference",
-        primarySnapshotEntryId: batch.snapshotEntries[0]!.id,
-        sensitivity: "normal",
-        subjectParticipantRef: batch.snapshotEntries[0]!.participantRef!,
-        supportingSnapshotEntryIds: [],
-      }],
-      diagnosticCode: null,
-      jobId: job!.id,
-      leaseToken: job!.leaseToken,
-      partialResults: false,
-    });
-    await processMemoryExtractionCandidates(batch.id);
-    const claim = await database().query<{ id: string; memory_ref: string }>(
-      `SELECT claim.id, ref.memory_ref FROM memory_items AS claim
-       JOIN memory_item_refs AS ref ON ref.memory_item_id = claim.id
-       WHERE claim.content = 'Анна предпочитает утренние встречи.'`,
-    );
-    const memoryRef = claim.rows[0]!.memory_ref;
+    const memoryRef = claim.memoryRef;
     const personalAuth: MemoryAuthorization = {
       familyId: family.rows[0]!.id,
       groupId: null,
@@ -129,13 +128,13 @@ describeWithDatabase("R3 memory source lookup", () => {
     // The same shared projection predicate must reject inferred evidence through direct source lookup.
     await database().query(
       "UPDATE claim_evidence SET evidence_kind = 'inferred' WHERE claim_id = $1",
-      [claim.rows[0]!.id],
+      [claim.id],
     );
     await expect(memorySourceRepository.lookup(personalAuth, memoryRef))
       .rejects.toThrowError(/AGENT_MEMORY_SOURCE_NOT_FOUND/u);
     await database().query(
       "UPDATE claim_evidence SET evidence_kind = 'firsthand' WHERE claim_id = $1",
-      [claim.rows[0]!.id],
+      [claim.id],
     );
 
     await database().query("DELETE FROM telegram_group_messages WHERE id = $1", [entry.rows[0]!.id]);

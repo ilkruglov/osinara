@@ -154,26 +154,17 @@ services:
   memory-extraction-worker:
     image: ${OSINARA_APP_IMAGE:?OSINARA_APP_IMAGE must be an exact digest reference}
     depends_on:
-      memory-embedding:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     entrypoint: ["node", ".runtime/scripts/memory-extraction-worker.js"]
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
-      MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+    network_mode: none
     healthcheck:
       test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
       interval: 5s
       timeout: 3s
       retries: 120
-    networks:
-      - app-network
     restart: unless-stopped
     logging: *bounded-json-logs
-    volumes:
-      - /opt/osinara/model-providers.json:/app/config/model-providers.json:ro
 
   telegram-ingress-worker:
     image: ${OSINARA_APP_IMAGE:?OSINARA_APP_IMAGE must be an exact digest reference}

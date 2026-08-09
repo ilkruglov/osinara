@@ -1,18 +1,17 @@
 /**
- * Activated memory-thread brief cache and bounded context repository.
+ * Activated memory-thread source context repository.
  *
  * Exports:
- * - `createMemoryThreadBriefRepository`: injectable repository for cache integration tests.
- * - `memoryThreadBriefRepository.activate`: selects authorized signals, generates cache misses, and budgets context.
+ * - `createMemoryThreadBriefRepository`: deterministic source-backed repository factory.
+ * - `memoryThreadBriefRepository.activate`: selects authorized signals and budgets source records.
  * - `isThreadFinallyAuthorized`: final live barrier before a completed or active DTO is emitted.
- * - Source selection and cache persistence are delegated to `memory-thread-brief-cache.ts`.
+ * - Source selection is delegated to `memory-thread-source-repository.ts`.
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
-  THREAD_BRIEF_SCHEMA_VERSION,
   THREAD_CONTEXT_EPISODES_PER_THREAD,
   THREAD_EPISODE_MAX_CHARACTERS,
   THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
@@ -20,22 +19,18 @@ import {
 } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
-import type { MemoryThreadBriefBlock } from "./memory-thread-brief-generator.js";
-import { generateMemoryThreadBrief } from "./memory-thread-brief-generator.js";
 import {
-  loadBriefSources,
-  loadCachedBrief,
-  memoryThreadBriefPayloadHash,
-  persistBrief,
-  type SourceRow,
-  THREAD_BRIEF_MODEL_VERSION,
-} from "./memory-thread-brief-cache.js";
+  buildMemoryThreadBrief,
+  type MemoryThreadBriefBlock,
+} from "./memory-thread-brief-generator.js";
+import {
+  loadMemoryThreadSources,
+  type ThreadSourceRow,
+} from "./memory-thread-source-repository.js";
 import { assembleMemoryThreadContext, type ActivatedMemoryThread, type MemoryThreadContext } from "./memory-thread-context.js";
 import { loadMemoryThreadSourceEvidence } from "./memory-thread-source-evidence.js";
-import { memoryThreadBriefJobRepository } from "./memory-thread-brief-job-repository.js";
 
 interface ActivatedThreadRow {
-  generation: number;
   id: string;
   purpose: string;
   retrieval_hits: number;
@@ -69,89 +64,23 @@ function titleSimilarity(value: number | string | null): number | null {
   return similarity;
 }
 
-async function getOrGenerateBrief(
+async function buildBrief(
   thread: ActivatedThreadRow,
-  generateBrief: typeof generateMemoryThreadBrief,
   auth: MemoryAuthorization,
-): Promise<MemoryThreadBriefBlock[] | null> {
-  const cachedClient = await database().connect();
-  try {
-    const cached = await loadCachedBrief(cachedClient, thread.id, thread.generation, auth);
-    if (cached) return cached;
-  } finally {
-    cachedClient.release();
-  }
-  const claim = await memoryThreadBriefJobRepository.claim({
-    generation: thread.generation,
-    modelVersion: THREAD_BRIEF_MODEL_VERSION,
-    schemaVersion: THREAD_BRIEF_SCHEMA_VERSION,
-    threadId: thread.id,
-  });
-  if (claim.status === "busy") return null;
-  if (claim.status === "completed") {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_BRIEF_CACHE_MISSING",
-      "Завершённый бриф потерял сохранённую проекцию",
-    );
-  }
-  if (claim.status === "failed") {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_BRIEF_RETRY_REQUIRED",
-      "Построение брифа завершилось неоднозначно и требует явного повторного запуска",
-    );
-  }
-  try {
-    // Immutable source rows are loaded and validated before paid provider work is marked started.
-    const sources = await loadBriefSources(database(), thread.id, auth);
-    if (sources.length === 0) {
-      throw new AppError(
-        "AGENT_MEMORY_THREAD_BRIEF_SOURCE_MISSING",
-        "У нити памяти не осталось доступных подтверждённых источников",
-      );
-    }
-    await memoryThreadBriefJobRepository.markProviderCallStarted(claim.jobId, claim.leaseToken);
-    const blocks = await generateBrief({
-      entries: sources,
-      purpose: thread.purpose,
-      title: thread.title,
-    });
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      await persistBrief(client, thread, blocks, auth);
-      await memoryThreadBriefJobRepository.complete(
-        client,
-        claim.jobId,
-        claim.leaseToken,
-        memoryThreadBriefPayloadHash(blocks),
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-    const sourceRecordByEntry = new Map(sources.map((source) => [source.ref, source.sourceRef]));
-    return blocks.map((block) => ({
-      ...block,
-      sourceRecordRefs: block.sourceEntryRefs.map((entryRef) => sourceRecordByEntry.get(entryRef)!),
-    }));
-  } catch (error) {
-    await memoryThreadBriefJobRepository.fail(
-      claim.jobId,
-      claim.leaseToken,
-      error instanceof AppError ? error.code : "AGENT_MEMORY_THREAD_BRIEF_PROVIDER_FAILED",
-    );
-    throw error;
-  }
+): Promise<MemoryThreadBriefBlock[]> {
+  const sources = await loadMemoryThreadSources(database(), thread.id, auth);
+  const sourceRecordByEntry = new Map(sources.map((source) => [source.ref, source.sourceRef]));
+  return buildMemoryThreadBrief({ entries: sources }).map((block) => ({
+    ...block,
+    sourceRecordRefs: block.sourceEntryRefs.map((entryRef) => sourceRecordByEntry.get(entryRef)!),
+  }));
 }
 
 async function loadEpisodes(
   threadId: string,
   auth: MemoryAuthorization,
 ): Promise<ActivatedMemoryThread["episodes"]> {
-  const result = await database().query<SourceRow>(
+  const result = await database().query<ThreadSourceRow>(
     `SELECT entry.entry_ref, entry.role::text, entry.occurred_at,
             COALESCE(claim.content, outcome.summary) AS content,
             COALESCE(memory_ref.memory_ref, outcome.outcome_ref) AS source_ref
@@ -220,9 +149,7 @@ async function isThreadFinallyAuthorized(
   return result.rows.length === 1;
 }
 
-export function createMemoryThreadBriefRepository(dependencies: {
-  generateBrief: typeof generateMemoryThreadBrief;
-}) {
+export function createMemoryThreadBriefRepository() {
   return {
     async activate(input: {
     auth: MemoryAuthorization;
@@ -243,7 +170,7 @@ export function createMemoryThreadBriefRepository(dependencies: {
          WHERE entry.source_claim_id = ANY($5::uuid[]) GROUP BY entry.thread_id
        )
        SELECT thread.id, thread.thread_ref, thread.title, thread.purpose, thread.status::text,
-              thread.generation, COALESCE(hits.retrieval_hits, 0) AS retrieval_hits,
+               COALESCE(hits.retrieval_hits, 0) AS retrieval_hits,
               thread.title_normalized = ANY($7::text[]) AS skill_hint,
               CASE WHEN thread.title_embedding_model = $8
                 THEN 1 - (thread.title_embedding <=> $6::vector) ELSE NULL END AS title_similarity
@@ -304,15 +231,14 @@ export function createMemoryThreadBriefRepository(dependencies: {
         });
         continue;
       }
-      const blocks = await getOrGenerateBrief(thread, dependencies.generateBrief, input.auth);
-      if (blocks === null) continue;
+      const blocks = await buildBrief(thread, input.auth);
       const episodes = await loadEpisodes(thread.id, input.auth);
       const sourceEvidence = await loadMemoryThreadSourceEvidence(
         database(),
         thread.id,
         input.auth,
       );
-      // Cache hits and source reads are provisional until this final live check succeeds.
+      // Source reads are provisional until this final live check succeeds.
       if (!await isThreadFinallyAuthorized(thread.id, input.auth)) continue;
       activated.push({
         blocks,
@@ -334,6 +260,4 @@ export function createMemoryThreadBriefRepository(dependencies: {
   };
 }
 
-export const memoryThreadBriefRepository = createMemoryThreadBriefRepository({
-  generateBrief: generateMemoryThreadBrief,
-});
+export const memoryThreadBriefRepository = createMemoryThreadBriefRepository();

@@ -27,7 +27,6 @@ import {
 } from "./memory-record.js";
 import { MEMORY_UNDO_DENIED_MESSAGE, type MemoryUndoInput } from "./memory-undo-repository.js";
 export type {
-  CreateMemoryEvidenceInput,
   CreateMemoryInput,
   MemoryConfirmation,
   MemoryEmbeddingStatus,
@@ -222,25 +221,7 @@ export const memoryRepository = {
   },
 
   async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<ReferencedMemoryItem> {
-    const memory = await createMemoryClaim(auth, input);
-    if (!input.provenance) return memory;
-
-    // Explicit creates become undo-eligible only after all verified provenance fields are persisted.
-    const result = await database().query(
-      `UPDATE memory_mutation_operations
-       SET actor_user_id = $4, actor_telegram_user_id = $5, eve_session_id = $6, eve_turn_id = $7
-       WHERE family_id = $1 AND operation_key = $2 AND mutation_kind = 'create'
-         AND memory_item_id = $3
-         AND (eve_session_id IS NULL OR
-           (actor_user_id IS NOT DISTINCT FROM $4::uuid AND actor_telegram_user_id = $5
-            AND eve_session_id = $6 AND eve_turn_id = $7))`,
-      [auth.familyId, input.operationKey, memory.id, auth.userId, auth.telegramUserId,
-        input.provenance.sessionId, input.provenance.turnId],
-    );
-    if (result.rowCount !== 1) {
-      throw new AppError("AGENT_MEMORY_REPLAY_MISMATCH", "Не удалось подтвердить источник операции памяти");
-    }
-    return memory;
+    return await createMemoryClaim(auth, input);
   },
 
   async deleteByRef(
@@ -392,7 +373,7 @@ export const memoryRepository = {
         scope: memory.scope,
         sensitivity: correctionSensitivity,
         source: "explicit_correction",
-      }, null);
+      });
       const primarySource = explicitPrepared.sources[0]!;
       const prepared = {
         ...explicitPrepared,

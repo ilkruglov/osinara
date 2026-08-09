@@ -41,8 +41,6 @@ import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-re
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
 import { AppError } from "../lib/app-error.js";
 import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
-import { createTurnExtractionBatch } from "../lib/memory-extraction-batch-coordinator.js";
-import { memoryApprovalNoticeRepository } from "../lib/memory-approval-notice-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -203,47 +201,6 @@ export default telegramChannel({
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
       const attributes = ctx.session.auth.current?.attributes;
-      const pendingApprovalRefs = attributes?.pendingMemoryApprovalRefs;
-      const pendingApprovalClaimToken = attributes?.pendingMemoryApprovalClaimToken;
-      if (
-        Array.isArray(pendingApprovalRefs) &&
-        pendingApprovalRefs.every((value): value is string => typeof value === "string") &&
-        typeof pendingApprovalClaimToken === "string"
-      ) {
-        await memoryApprovalNoticeRepository.confirmPresented(
-          pendingApprovalRefs,
-          pendingApprovalClaimToken,
-        );
-      }
-      const conversationId = attributes?.telegramConversationId;
-      const visibleEntryIds = attributes?.telegramTimelineVisibleEntryIds;
-      if (
-        typeof conversationId === "string" &&
-        Array.isArray(visibleEntryIds) &&
-        visibleEntryIds.length > 0 &&
-        visibleEntryIds.every((value): value is string => typeof value === "string")
-      ) {
-        const callerTelegramUserId = attributes?.telegramUserId;
-        if (typeof callerTelegramUserId !== "string") {
-          throw new AppError(
-            "AGENT_MEMORY_EXTRACTION_CALLER_MISSING",
-            "Не удалось определить инициатора извлечения памяти из Telegram",
-          );
-        }
-        // Snapshot the exact durable model input before the conversation cursor can move past it.
-        await createTurnExtractionBatch({
-          applicationSessionId: sessionId,
-          callerTelegramUserId,
-          conversationId,
-          entryIds: visibleEntryIds,
-          eveSessionId: ctx.session.id,
-          omittedBeforeSequence:
-            typeof attributes?.telegramTimelineOmittedBeforeSequence === "string"
-              ? attributes.telegramTimelineOmittedBeforeSequence
-              : null,
-          turnId: ctx.session.turn.id,
-        });
-      }
       const timelineSequence = attributes?.telegramTimelineSequence;
       if (typeof timelineSequence === "string") {
         await groupTimelineCursorRepository.advance(

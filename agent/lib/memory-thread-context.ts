@@ -61,8 +61,10 @@ function relevanceOrder(left: ActivatedMemoryThread, right: ActivatedMemoryThrea
   return left.threadRef.localeCompare(right.threadRef);
 }
 
-function itemCharacters(content: string): number {
-  return content.length;
+function blockCharacters(block: MemoryThreadBriefBlock): number {
+  return block.content.length +
+    (block.conflictingEntryRefs ?? []).reduce((total, ref) => total + ref.length, 0) +
+    (block.unresolvedConflictRefs ?? []).reduce((total, ref) => total + ref.length, 0);
 }
 
 function sourceEvidenceFor(
@@ -132,7 +134,7 @@ export function assembleMemoryThreadContext(
       if (block.sourceEntryRefs.some((ref) => seenEntryRefs.has(ref)) ||
         block.sourceRecordRefs?.some((ref) => seenSourceRecords.has(ref))) continue;
       const blockEvidence = sourceEvidenceFor(block.sourceEntryRefs, thread.sourceEvidence);
-      const characters = itemCharacters(block.content) + sourceEvidenceCharacters(blockEvidence);
+      const characters = blockCharacters(block) + sourceEvidenceCharacters(blockEvidence);
       if (briefCharacters + characters > THREAD_BRIEF_MAX_CHARACTERS ||
         totalCharacters + threadCharacters + characters > THREAD_CONTEXT_MAX_CHARACTERS) continue;
       const { sourceRecordRefs: _sourceRecordRefs, ...modelBlock } = block;

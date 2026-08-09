@@ -2,7 +2,7 @@
  * Long-term memory record contracts and deterministic projections.
  *
  * Exports:
- * - Memory enums, internal item, referenced-item, row, create-input, provenance, and evidence types.
+ * - Memory enums, item, create-input, provenance, evidence, and atomic thread-write types.
  * - `rowToMemory` / `rowToReferencedMemory`: convert PostgreSQL rows to internal records.
  * - `memoryOperationHash`: fingerprints replay-protected mutation input.
  * - `normalizeMemoryClaimContent`: exact-duplicate normalization without semantic heuristics.
@@ -16,6 +16,33 @@ export type MemoryKind = "episode" | "fact" | "family_shared" | "preference" | "
 export type MemoryConfirmation = "model_high" | "user_confirmed";
 export type MemorySensitivity = "normal" | "sensitive";
 export type MemoryEmbeddingStatus = "failed" | "indexed" | "pending";
+export type MemoryThreadEntryRole =
+  | "constraint"
+  | "decision"
+  | "episode"
+  | "goal"
+  | "lesson"
+  | "method"
+  | "open_loop"
+  | "outcome";
+
+export type CreateMemoryThreadInput = {
+  action: "attach";
+  role: MemoryThreadEntryRole;
+  threadRef: string;
+} | {
+  action: "create";
+  identity?: "project" | "subject";
+  parentThreadRef?: string;
+  purpose: string;
+  role: MemoryThreadEntryRole;
+  title: string;
+};
+
+export interface MemoryThreadWriteResult {
+  action: "attached" | "created";
+  threadRef: string;
+}
 
 export interface MemoryOperationProvenance {
   sessionId: string;
@@ -44,12 +71,12 @@ export interface MemoryItem {
 export interface ReferencedMemoryItem extends MemoryItem {
   memoryRef: string;
   sourceEvidence?: ModelMemoryEvidence;
+  thread?: MemoryThreadWriteResult;
 }
 
 export interface CreateMemoryInput {
   confirmation: MemoryConfirmation;
   content: string;
-  evidence?: CreateMemoryEvidenceInput;
   explicitSource?: CreateMemoryExplicitSourceInput;
   kind: MemoryKind;
   messageThreadId?: string;
@@ -59,6 +86,7 @@ export interface CreateMemoryInput {
   sensitivity: MemorySensitivity;
   source: string;
   sourceEventId?: string;
+  thread?: CreateMemoryThreadInput;
 }
 
 export interface CreateMemoryExplicitSourceInput {
@@ -66,13 +94,6 @@ export interface CreateMemoryExplicitSourceInput {
   subjectLabel?: string;
   subjectRef?: string;
   timelineEntryId: string;
-}
-
-export interface CreateMemoryEvidenceInput {
-  approvalInputHash?: string;
-  approvalOperationKey?: string;
-  approvalRef?: string;
-  extractionCandidateId: string;
 }
 
 export interface MemoryRow {

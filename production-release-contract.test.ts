@@ -132,18 +132,22 @@ describe("production container contract", () => {
     }
     expect(compose.match(/image: \$\{OSINARA_APP_IMAGE:\?/g)).toHaveLength(5);
     expect(compose).toContain("SANDBOX_RUNTIME_IMAGE: ${SANDBOX_RUNTIME_IMAGE:?");
-    expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(4);
+    expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(3);
     expect(compose).not.toContain("DATABASE_URL: postgresql://");
   });
 
-  it("runs memory extraction from the shared image after migrations", () => {
+  it("keeps the retired memory worker isolated after migrations", () => {
     const compose = readProjectFile("compose.production.yaml");
     const worker = service(compose, "memory-extraction-worker", "telegram-ingress-worker");
 
     expect(worker).toContain("image: ${OSINARA_APP_IMAGE:?");
     expect(worker).toContain("migrate:\n        condition: service_completed_successfully");
     expect(worker).toContain('.runtime/scripts/memory-extraction-worker.js');
-    expect(worker).toContain("MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?");
+    expect(worker).toContain("network_mode: none");
+    expect(worker).not.toContain("MODEL_UPSTREAM_API_KEY");
+    expect(worker).not.toContain("DATABASE_URL");
+    expect(worker).not.toContain("MEMORY_EMBEDDING_BASE_URL");
+    expect(worker).not.toContain("model-providers.json");
     expect(worker).toContain(PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND);
     expect(worker).toContain("restart: unless-stopped");
   });
@@ -312,6 +316,8 @@ describe("server deployment contract", () => {
     expect(main.indexOf("pull_release_images")).toBeLessThan(main.indexOf("create_postgres_backup"));
     expect(main.indexOf("create_postgres_backup")).toBeLessThan(main.indexOf("stop_current_services"));
     expect(main.indexOf("stop_current_services")).toBeLessThan(main.indexOf("snapshot_durable_volumes"));
+    const backup = readProjectFile("scripts/production-deploy/backup.sh");
+    expect(backup).toMatch(/compose_current stop[^\n]*memory-extraction-worker/u);
     expect(main.lastIndexOf("record_proposal_result")).toBeLessThan(
       main.lastIndexOf("prune_retired_release_images"),
     );
@@ -354,7 +360,7 @@ describe("server deployment contract", () => {
     expect(script).toContain("DEPLOY_COMPOSE_SERVICE_SET_INVALID");
     expect(script).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
     expect(script).toContain("DEPLOY_COMPOSE_SECURITY_INVALID");
-    expect(script).toContain('services["memory-extraction-worker"].depends_on.migrate.condition');
+    expect(script).toContain('.services["memory-extraction-worker"].network_mode == "none"');
     expect(script).toContain('services["memory-extraction-worker"].healthcheck.test');
     expect(script).toContain("privileged");
     expect(script).toContain("network_mode");
@@ -375,14 +381,10 @@ describe("server deployment contract", () => {
     inheritedRunnerVolumes.services.agent!.volumes_from = ["sandbox-runner"];
     expect(() => executeComposeSecurityPredicate(inheritedRunnerVolumes)).toThrow();
 
-    const unsafe = structuredClone(valid) as {
-      services: Record<string, { volumes?: unknown[] }>;
-    };
-    unsafe.services["memory-extraction-worker"]!.volumes!.push({
-      source: "/",
-      target: "/host",
-      type: "bind",
-    });
+    const unsafe = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
+    unsafe.services["memory-extraction-worker"]!.volumes = [{
+      source: "/", target: "/host", type: "bind",
+    }];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
   });
 

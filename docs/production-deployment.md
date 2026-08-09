@@ -96,11 +96,16 @@ one response at 128,000 tokens even though the provider advertises a larger nati
 does not accept image input, so `inspect_workspace_image` returns a stable unsupported-capability
 result before reading bytes or starting a paid model call.
 
-Background memory extraction, relation classification, thread discovery, and thread briefs use the
-same model with thinking explicitly disabled and one forced schema-bearing tool. DeepSeek rejects
-both `json_schema` response format and forced tool choice while thinking is enabled. Do not return
-these boundaries to `Output.object`: the OpenAI-compatible adapter degrades its schema to
-`json_object`, so the model never receives the validation contract.
+Long-term memory has no separate model route. The root Eve agent decides whether to call `remember`;
+PostgreSQL validates the current Telegram source and atomically writes optional thread state. Thread
+activation and context use local E5 embeddings plus deterministic source projections. Semantic
+extraction, relation/thread classifiers, and LLM-generated briefs are not part of the runtime.
+
+`memory-extraction-worker` remains in the production Compose graph only because the installed schema-v1
+controller requires that service, image slot, migration dependency, and health command. Its current
+entrypoint is an idle no-op with `network_mode: none`, no environment, and no mounts; it publishes
+readiness without database, embedding, or model calls. Removing the service requires a separate
+two-phase controller migration; do not combine it with an ordinary application release.
 
 The retained MiniMax alternative transport explicitly enables a narrow web-search adapter because
 MiniMax returns

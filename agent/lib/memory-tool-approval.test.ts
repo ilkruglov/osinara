@@ -2,7 +2,7 @@
  * Memory tool approval policy regression tests.
  *
  * Constructs covered:
- * - Sensitive and private-to-family writes require confirmation.
+ * - Sensitive and private-to-family writes require direct tool confirmation.
  * - Every destructive mutation requires HITL; immediate undo requires durable provenance instead.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +24,6 @@ vi.mock("./memory-repository.js", () => ({
 }));
 
 import manageMemory from "./tools/manage_memory.js";
-import manageMemoryApproval from "./tools/manage_memory_approval.js";
 import manageMemoryThread from "./tools/manage_memory_thread.js";
 import remember from "./tools/remember.js";
 
@@ -80,11 +79,7 @@ describe("memory tool approvals", () => {
       .toBe("not-applicable");
   });
 
-  it("requires identity-bound HITL for sensitive decisions and thread lifecycle", () => {
-    expect(approvalFor(manageMemoryApproval, { action: "approve" }, "private"))
-      .toBe("user-approval");
-    expect(approvalFor(manageMemoryApproval, { action: "reject" }, "supergroup"))
-      .toBe("user-approval");
+  it("requires identity-bound HITL for thread lifecycle", () => {
     expect(approvalFor(manageMemoryThread, { action: "complete" }, "private"))
       .toBe("user-approval");
     expect(approvalFor(manageMemoryThread, { action: "reactivate" }, "supergroup"))

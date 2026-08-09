@@ -5,8 +5,8 @@
  * - Personal and family reads fail closed when a stale turn outlives family membership.
  * - Group reads require the current registration and family-private groups require membership.
  * - External groups retain their isolated group identity without granting family access.
- * - Cached brief and source loaders independently revalidate stale authorization.
- * - Activation reauthorizes after a cache hit and all subsequent content/evidence reads.
+ * - Deterministic thread sources independently revalidate stale authorization.
+ * - Activation reauthorizes after every content/evidence read.
  * - List, retrieval/conflict closure, thread list/search/read, and brief activation share semantics.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,8 +19,8 @@ import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryListRepository } from "./memory-list-repository.js";
 import { memoryRepository } from "./memory-repository.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
-import { loadBriefSources, loadCachedBrief } from "./memory-thread-brief-cache.js";
 import { createMemoryThreadBriefRepository } from "./memory-thread-brief-repository.js";
+import { loadMemoryThreadSources } from "./memory-thread-source-repository.js";
 import { memoryThreadQueryRepository } from "./memory-thread-query-repository.js";
 import {
   createBroadThread,
@@ -68,14 +68,6 @@ interface ReadFixture {
   groupId: string | null;
   threadRef: string;
   userId: string;
-}
-
-function briefGenerator() {
-  return vi.fn(async (input: { entries: readonly { content: string; ref: string }[] }) => [{
-    content: input.entries[0]!.content,
-    kind: "active_goals_open_loops" as const,
-    sourceEntryRefs: [input.entries[0]!.ref],
-  }]);
 }
 
 async function indexClaim(claimId: string): Promise<void> {
@@ -234,8 +226,7 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
 }
 
 async function expectReadable(fixture: ReadFixture): Promise<void> {
-  const generator = briefGenerator();
-  const briefs = createMemoryThreadBriefRepository({ generateBrief: generator });
+  const briefs = createMemoryThreadBriefRepository();
   expect((await memoryListRepository.list(fixture.auth, { limit: 20 })).items.length).toBeGreaterThan(0);
   expect((await memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR)).length)
     .toBeGreaterThan(0);
@@ -258,8 +249,7 @@ async function expectReadable(fixture: ReadFixture): Promise<void> {
 }
 
 async function expectDenied(fixture: ReadFixture): Promise<void> {
-  const generator = briefGenerator();
-  const briefs = createMemoryThreadBriefRepository({ generateBrief: generator });
+  const briefs = createMemoryThreadBriefRepository();
   await expect(memoryListRepository.list(fixture.auth, { limit: 20 }))
     .resolves.toMatchObject({ items: [] });
   await expect(memoryRetrievalRepository.search(fixture.auth, "ремонт", QUERY_VECTOR))
@@ -280,7 +270,6 @@ async function expectDenied(fixture: ReadFixture): Promise<void> {
     retrievedClaimIds: [fixture.claimId],
     skillHints: [],
   })).resolves.toEqual({ threads: [], totalCharacters: 0 });
-  expect(generator).not.toHaveBeenCalled();
 }
 
 describeWithDatabase("live memory read authorization", () => {
@@ -302,70 +291,49 @@ describeWithDatabase("live memory read authorization", () => {
     await expectDenied(fixture);
   });
 
-  it("does not return or persist a brief when membership is revoked during generation", async () => {
+  it("builds source-backed blocks without persisting a generated brief cache", async () => {
     const fixture = await createTrustedFixture();
-    const generateBrief = vi.fn(async (input: { entries: readonly { content: string; ref: string }[] }) => {
-      // Simulate revocation after authorized source selection but before provider output is accepted.
-      await database().query(
-        "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-        [fixture.familyId, fixture.userId],
-      );
-      return [{
-        content: input.entries[0]!.content,
-        kind: "active_goals_open_loops" as const,
-        sourceEntryRefs: [input.entries[0]!.ref],
-      }];
-    });
-    const briefs = createMemoryThreadBriefRepository({ generateBrief });
+    const briefs = createMemoryThreadBriefRepository();
 
     await expect(briefs.activate({
       auth: fixture.auth,
       queryEmbedding: QUERY_VECTOR,
       retrievedClaimIds: [fixture.claimId],
       skillHints: [],
-    })).rejects.toMatchObject({ code: "AGENT_MEMORY_THREAD_NOT_FOUND" });
+    })).resolves.toMatchObject({
+      threads: [expect.objectContaining({ blocks: expect.any(Array) })],
+    });
     await expect(database().query(
       "SELECT 1 FROM memory_thread_briefs AS brief JOIN memory_threads AS thread ON thread.id = brief.thread_id WHERE thread.thread_ref = $1",
       [fixture.threadRef],
     )).resolves.toMatchObject({ rows: [] });
   });
 
-  it("denies cached brief and source loaders directly after membership revocation", async () => {
+  it("denies the thread source loader directly after membership revocation", async () => {
     const fixture = await createTrustedFixture();
-    const briefs = createMemoryThreadBriefRepository({ generateBrief: briefGenerator() });
-    await briefs.activate({
-      auth: fixture.auth,
-      queryEmbedding: QUERY_VECTOR,
-      retrievedClaimIds: [fixture.claimId],
-      skillHints: [],
-    });
-    const thread = await database().query<{ generation: number; id: string }>(
-      "SELECT id, generation FROM memory_threads WHERE thread_ref = $1",
+    const thread = await database().query<{ id: string }>(
+      "SELECT id FROM memory_threads WHERE thread_ref = $1",
       [fixture.threadRef],
     );
     const internal = thread.rows[0]!;
     const client = await database().connect();
     try {
-      // Prove the defense-in-depth loaders themselves, independently of activation candidate selection.
-      await expect(loadCachedBrief(client, internal.id, internal.generation, fixture.auth))
-        .resolves.not.toBeNull();
-      await expect(loadBriefSources(client, internal.id, fixture.auth)).resolves.not.toHaveLength(0);
+      // Prove the defense-in-depth loader independently of activation candidate selection.
+      await expect(loadMemoryThreadSources(client, internal.id, fixture.auth))
+        .resolves.not.toHaveLength(0);
       await database().query(
         "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
         [fixture.familyId, fixture.userId],
       );
-      await expect(loadCachedBrief(client, internal.id, internal.generation, fixture.auth))
-        .resolves.toBeNull();
-      await expect(loadBriefSources(client, internal.id, fixture.auth)).resolves.toEqual([]);
+      await expect(loadMemoryThreadSources(client, internal.id, fixture.auth)).resolves.toEqual([]);
     } finally {
       client.release();
     }
   });
 
-  it("withholds cached blocks when membership is revoked immediately after the cache hit", async () => {
+  it("withholds deterministic blocks when membership is revoked before the final evidence read", async () => {
     const fixture = await createTrustedFixture();
-    const generator = briefGenerator();
-    const briefs = createMemoryThreadBriefRepository({ generateBrief: generator });
+    const briefs = createMemoryThreadBriefRepository();
     const activation = {
       auth: fixture.auth,
       queryEmbedding: QUERY_VECTOR,
@@ -375,10 +343,8 @@ describeWithDatabase("live memory read authorization", () => {
     await expect(briefs.activate(activation)).resolves.toMatchObject({
       threads: [expect.objectContaining({ blocks: expect.any(Array) })],
     });
-    generator.mockClear();
-
     let revoked = false;
-    // The seeded cache removes provider work; revoke at the next real evidence read boundary.
+    // Revoke at the final source-evidence boundary after deterministic source selection.
     sourceEvidenceBoundary.beforeRead = async () => {
       sourceEvidenceBoundary.beforeRead = null;
       await database().query(
@@ -390,7 +356,6 @@ describeWithDatabase("live memory read authorization", () => {
     try {
       await expect(briefs.activate(activation)).resolves.toEqual({ threads: [], totalCharacters: 0 });
       expect(revoked).toBe(true);
-      expect(generator).not.toHaveBeenCalled();
     } finally {
       sourceEvidenceBoundary.beforeRead = null;
     }

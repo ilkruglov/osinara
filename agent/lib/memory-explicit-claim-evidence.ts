@@ -8,7 +8,6 @@ import type { PoolClient } from "pg";
 
 import { AppError } from "./app-error.js";
 import type { PreparedClaimEvidence } from "./claim-evidence-writer.js";
-import type { MemoryConsolidationResolution } from "./memory-consolidation-contract.js";
 import { MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS } from "./memory-config.js";
 import { requireAllowedMemoryContent } from "./memory-content-policy.js";
 import type { MemoryAuthorization } from "./memory-context.js";
@@ -46,7 +45,6 @@ export async function prepareExplicitClaimEvidence(
   client: PoolClient,
   auth: MemoryAuthorization,
   input: CreateMemoryInput,
-  consolidation: MemoryConsolidationResolution | null,
 ): Promise<PreparedClaimEvidence> {
   const source = input.explicitSource;
   if (!source || (source.subjectRef !== undefined && source.subjectLabel !== undefined)) {
@@ -125,22 +123,16 @@ export async function prepareExplicitClaimEvidence(
     : "firsthand";
 
   return {
-    approval: null,
     auditActorUserId: auth.userId,
-    candidateId: input.operationKey,
-    consolidation,
     contentNormalized: normalizeMemoryClaimContent(input.content),
     conversationId: source.conversationId,
     conversationLabelSnapshot: row.conversation_label,
     evidenceKind,
     familyId: auth.familyId,
-    operationKey: input.operationKey,
     primaryAuthorTelegramUserId: auth.telegramUserId,
     primaryAuthorUserId: row.author_user_id,
-    resolutionStatus: "resolution_processing",
     scope: input.scope,
     scopePartitionKey: row.scope_partition_key,
-    sourceKind: "explicit",
     sources: [{
       authorLabelSnapshot: row.author_label,
       authorParticipantId: row.author_participant_id,

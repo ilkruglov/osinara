@@ -23,12 +23,16 @@ import {
 import type { ExternalGroupToolName } from "../lib/tool-policy/group-tool-catalog.js";
 import {
   buildModeToolSurface,
+  buildSubagentToolSurface,
 } from "../lib/tool-policy/mode-tool-surface.js";
 
 export default defineDynamic({
   events: {
     "turn.started": async (_event, ctx) => {
       const auth = ctx.session.auth;
+      const buildSurface = ctx.channel.kind === "subagent"
+        ? buildSubagentToolSurface
+        : buildModeToolSurface;
       let environment: ReturnType<typeof resolveConversationEnvironment>;
       try {
         environment = resolveConversationEnvironment(auth);
@@ -39,19 +43,19 @@ export default defineDynamic({
           code: "AGENT_TOOL_SURFACE_ENVIRONMENT_INVALID",
           error: error instanceof Error ? error.message : String(error),
         }));
-        return buildModeToolSurface({
+        return buildSurface({
           capabilities: new Set(),
           environment: "external",
           includeApplicationCore: false,
           skills: {},
         });
       }
-      if (environment !== "external") return buildModeToolSurface({ environment });
+      if (environment !== "external") return buildSurface({ environment });
 
       const policy = resolveExternalGroupToolPolicy(auth);
       const identity = resolveExternalGroupPolicyIdentity(auth);
       if (!policy.restricted || !identity) {
-        return buildModeToolSurface({
+        return buildSurface({
           capabilities: new Set(),
           environment: "external",
           includeApplicationCore: false,
@@ -79,7 +83,7 @@ export default defineDynamic({
       // Skill descriptors use the same verified turn snapshot as Eve's dynamic skill resolver.
       // Live execution still denies a skill that the owner revokes while this turn is running.
       const skills = selectGroupSafeSkillDefinitions(resolveExternalGroupSkillPolicy(auth));
-      return buildModeToolSurface({
+      return buildSurface({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),
         environment: "external",
         includeApplicationCore,

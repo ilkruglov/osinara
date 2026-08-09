@@ -97,9 +97,6 @@ export function repositories() {
     hitl: {
       authorizeReply: vi.fn().mockResolvedValue("not_applicable"),
     },
-    memoryApprovals: {
-      pendingContext: vi.fn().mockResolvedValue(null),
-    },
     profilePolicies: {
       claimPendingGroupNotice: vi.fn().mockResolvedValue(null),
       markGroupNoticePresented: vi.fn().mockResolvedValue(undefined),

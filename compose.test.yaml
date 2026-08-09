@@ -48,16 +48,8 @@ services:
     build:
       context: .
       target: runtime
-    depends_on:
-      memory-embedding:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
     entrypoint: ["node", ".runtime/scripts/memory-extraction-worker.js"]
-    environment:
-      DATABASE_URL: postgresql://osinara_test:osinara-test-only@postgres:5432/osinara_test
-      MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
-      MODEL_UPSTREAM_API_KEY: integration-test-model-key
+    network_mode: none
     healthcheck:
       test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
       interval: 5s
