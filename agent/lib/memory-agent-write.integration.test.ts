@@ -108,7 +108,7 @@ describeWithDatabase("main-agent memory write", () => {
       consolidation_jobs: 0,
       discovery_jobs: 0,
       extraction_jobs: 0,
-      pending_notices: 1,
+      pending_notices: 0,
     }] });
   });
 

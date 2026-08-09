@@ -308,8 +308,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
     // proved that this accepted message will continue into an agent turn.
     const profileSignals = verifiedTelegramProfileSignals(message);
-    await deliverPendingMemoryThreadNotice(memoryAuthorization, conversation.id,
-      repositories.threadNotices, (text) => ctx.telegram.sendMessage(text));
+    // Thread lifecycle is silent in shared chats; only a verified private turn may consume notices.
+    if (message.chat.type === "private") {
+      await deliverPendingMemoryThreadNotice(memoryAuthorization, conversation.id,
+        repositories.threadNotices, (text) => ctx.telegram.sendMessage(text));
+    }
     if (group) {
       const policyNotice = await repositories.profilePolicies.claimPendingGroupNotice(group.groupId);
       if (policyNotice) {

@@ -87,6 +87,7 @@ const MEMORY_RELEASE_MIGRATIONS = [
   "058_scope_eve_turn_identity.sql",
   "059_main_agent_owned_memory.sql",
   "060_memory_thread_creation_attempts.sql",
+  "061_private_memory_thread_notices.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

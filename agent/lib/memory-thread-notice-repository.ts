@@ -2,7 +2,7 @@
  * Durable exactly-once memory-thread creation notice boundary.
  *
  * Export:
- * - `memoryThreadNoticeRepository.takePending`: atomically takes one notice on an authorized turn.
+ * - `memoryThreadNoticeRepository.takePending`: takes one notice in its verified private conversation.
  */
 import { database } from "./database.js";
 import { THREAD_NOTICE_DELIVERY_LEASE_MILLISECONDS } from "./memory-config.js";
@@ -43,9 +43,13 @@ export const memoryThreadNoticeRepository = {
       }>(
         `WITH candidate AS (
           SELECT notice.thread_id
-         FROM memory_thread_creation_notices AS notice
-         JOIN memory_threads AS thread ON thread.id = notice.thread_id
-         WHERE notice.family_id = $1 AND notice.status = 'pending' AND (
+          FROM memory_thread_creation_notices AS notice
+          JOIN memory_threads AS thread ON thread.id = notice.thread_id
+          JOIN application_conversations AS origin
+            ON origin.id = notice.origin_conversation_id
+           AND origin.telegram_group_id IS NULL
+          WHERE notice.family_id = $1 AND notice.status = 'pending'
+            AND notice.origin_conversation_id = $5 AND (
            (thread.scope = 'personal' AND 'personal' = ANY($2::memory_scope[])
              AND thread.scope_partition_key = $3) OR
            (thread.scope = 'family' AND 'family' = ANY($2::memory_scope[])) OR
@@ -61,7 +65,7 @@ export const memoryThreadNoticeRepository = {
         )
          SELECT updated.thread_id, updated.delivery_token, thread.thread_ref, thread.title, thread.purpose
          FROM updated JOIN memory_threads AS thread ON thread.id = updated.thread_id`,
-        [auth.familyId, auth.scopes, auth.userId, auth.groupId],
+        [auth.familyId, auth.scopes, auth.userId, auth.groupId, conversationId],
       );
       await client.query("COMMIT");
       const row = result.rows[0];

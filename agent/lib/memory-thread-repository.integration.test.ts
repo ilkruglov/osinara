@@ -90,12 +90,6 @@ describeWithDatabase("memory thread repositories", () => {
       outcomeRef: outcome.outcomeRef,
     })).resolves.toEqual({ outcomeRef: outcome.outcomeRef, status: "retracted" });
 
-    const firstNotice = await memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId);
-    expect(firstNotice).toMatchObject({
-      purpose: "Сохранять цели, решения и результаты ремонта",
-      title: "Ремонт",
-    });
-    expect(firstNotice!.text).toContain("Начата новая нить памяти: «Ремонт»");
     await expect(memoryThreadNoticeRepository.takePending(fixture.auth, fixture.conversationId))
       .resolves.toBeNull();
 

@@ -157,8 +157,11 @@ async function createZone(input: {
     [brief.rows[0]!.id, thread.rows[0]!.id, claimEntry.id],
   );
   await database().query(
-    "INSERT INTO memory_thread_creation_notices (thread_id, family_id) VALUES ($1, $2)",
-    [thread.rows[0]!.id, input.familyId],
+    `INSERT INTO memory_thread_creation_notices
+       (thread_id, family_id, status, origin_conversation_id, delivery_started_at,
+        delivery_diagnostic_code)
+     VALUES ($1, $2, 'failed', $3, now(), 'AGENT_MEMORY_THREAD_NOTICE_PRIVATE_ONLY')`,
+    [thread.rows[0]!.id, input.familyId, conversation.rows[0]!.id],
   );
   const job = await database().query<{ id: string }>(
     `INSERT INTO memory_thread_discovery_jobs
@@ -330,7 +333,7 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
         brief_survives: false,
         claim_entries: 0,
         completion_outcome_id: null,
-        creation_notices: 1,
+        creation_notices: 0,
         discovery_coverage: 1,
         discovery_existing: 1,
         discovery_sources: 1,
