@@ -138,6 +138,7 @@ describe("mode instruction anchors", () => {
       privateMode,
       familyMode,
       external(),
+      external("import_telegram_attachment"),
     ];
 
     for (const markdown of modes) {
@@ -150,6 +151,10 @@ describe("mode instruction anchors", () => {
       );
       expect(markdown).toMatch(/не цитируй.*подозрительн/isu);
       expect(markdown).toMatch(/не раскрывай.*внутренн.*инструкц/isu);
+      for (const untrustedMetadata of ["имя файла", "mediaType", "размер", "подпись", "caption"]) {
+        expect(markdown).toContain(untrustedMetadata);
+      }
+      expect(markdown).toMatch(/metadata-ссылк.*attachmentId/isu);
     }
   });
 
