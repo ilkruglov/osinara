@@ -15,9 +15,9 @@ import {
   MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   THREAD_CREATION_CANDIDATE_LIMIT,
+  THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
   THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
   THREAD_PURPOSE_MAX_CHARACTERS,
-  THREAD_TITLE_MIN_SEMANTIC_SIMILARITY,
   THREAD_TITLE_MAX_CHARACTERS,
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
@@ -42,6 +42,31 @@ interface ThreadRow extends ThreadIdentity {
 interface SimilarThreadRow {
   thread_ref: string;
   title: string;
+}
+
+export interface MemoryThreadCandidate {
+  threadRef: string;
+  title: string;
+}
+
+export class MemoryThreadCandidateError extends AppError {
+  readonly candidates: readonly MemoryThreadCandidate[];
+
+  constructor(candidates: readonly MemoryThreadCandidate[]) {
+    const references = candidates
+      .map((candidate) => `«${candidate.title}» (${candidate.threadRef})`)
+      .join(", ");
+    super(
+      "AGENT_MEMORY_THREAD_CANDIDATE_EXISTS",
+      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; ` +
+        "иначе сделайте не более одной попытки с уточнёнными названием и назначением новой нити",
+    );
+    this.candidates = candidates;
+  }
+}
+
+export function isMemoryThreadCandidateError(error: unknown): error is MemoryThreadCandidateError {
+  return error instanceof MemoryThreadCandidateError;
 }
 
 export interface PreparedMemoryThreadWrite {
@@ -306,17 +331,15 @@ async function findOrCreateThread(
     [auth.familyId, scope, partition, identity.subjectUserId, identity.subjectParticipantId,
       identity.memoryProjectId, parentThreadId, input.title, input.purpose,
       vectorLiteral(titleEmbedding), MEMORY_EMBEDDING_MODEL_VERSION,
-      THREAD_TITLE_MIN_SEMANTIC_SIMILARITY, THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
+      THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
+      THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY,
       projectRoot, THREAD_CREATION_CANDIDATE_LIMIT],
   );
   if (candidates.rows.length > 0) {
-    const references = candidates.rows
-      .map((candidate) => `«${candidate.title}» (${candidate.thread_ref})`)
-      .join(", ");
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_CANDIDATE_EXISTS",
-      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; иначе уточните название и назначение новой нити`,
-    );
+    throw new MemoryThreadCandidateError(candidates.rows.map((candidate) => ({
+      threadRef: candidate.thread_ref,
+      title: candidate.title,
+    })));
   }
 
   const inserted = await client.query<{ id: string; thread_ref: string }>(

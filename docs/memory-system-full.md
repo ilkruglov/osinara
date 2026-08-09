@@ -147,11 +147,23 @@ active thread. Thread lookup всегда проверяет family, scope, part
 
 Перед созданием нового title backend под тем же advisory lock ищет до трёх active candidates. Для
 subject и subthread сохраняется exact identity/parent axis; новый project root сравнивается с другими
-project roots только внутри того же authorized scope partition. Semantic title similarity `>= 0.78`
-или сильная purpose trigram similarity `>= 0.9` возвращает
+project roots только внутри того же authorized scope partition. Creation-only semantic title
+similarity `>= 0.92` или сильная purpose trigram similarity `>= 0.9` возвращает
 `AGENT_MEMORY_THREAD_CANDIDATE_EXISTS` с opaque refs. Весь новый claim и временно созданный project
-откатываются; основной агент читает кандидатов и повторяет `remember` с explicit `attach`, если тема
-совпадает.
+откатываются. Широкий retrieval/activation threshold остаётся `0.78`; его нельзя переиспользовать как
+duplicate blocker для коротких E5 passage embeddings. Основной агент читает кандидата и либо вызывает
+`remember` с explicit `attach`, либо делает ровно одну уточнённую попытку создать заведомо другую тему.
+До E5 backend коротко резервирует tool operation по verified source. Pending lease сериализует
+параллельные вызовы, а expired exact replay безопасно забирает ту же попытку. Candidate metadata
+финализируется в `memory_thread_creation_attempts` после rollback к savepoint, в одной транзакции с
+откатом rejected claim/project и без rejected claim text. Успешный refined retry закрывает тот же
+budget; третий create отклоняется с `AGENT_MEMORY_THREAD_RETRY_EXHAUSTED` до embedding. Candidate
+replay не зависит от обычного timeline pruning, но удаляется вместе с conversation/family trust zone.
+Успешный explicit attach к одному из выданных candidate refs атомарно переводит candidate в
+`resolved` и закрывает взаимоисключающую ветку refined create; attach и retry сериализуются тем же
+source-level advisory lock. Успешный attach, успешный retry и второй candidate outcome являются
+terminal для новых create решений по тому же source entry. Второй candidate outcome сохраняет один
+terminal attach к одному из выданных refs, после которого новые attach также запрещены.
 
 ## 6. Retrieval и автоматическая activation
 

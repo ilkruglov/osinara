@@ -86,6 +86,7 @@ const MEMORY_RELEASE_MIGRATIONS = [
   "057_repair_memory_extraction_sequence_ranges.sql",
   "058_scope_eve_turn_identity.sql",
   "059_main_agent_owned_memory.sql",
+  "060_memory_thread_creation_attempts.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -107,6 +108,7 @@ const EXPECTED_R0_R7_TABLES = [
   "memory_extraction_gaps",
   "telegram_final_deliveries",
   "memory_thread_brief_jobs",
+  "memory_thread_creation_attempts",
 ] as const;
 
 function testDatabaseUrlForSchema(): string {
@@ -134,7 +136,7 @@ async function runMigrationRunner(): Promise<void> {
   );
 }
 
-describeWithDatabase("v0.10.1 production ledger upgrade to memory migrations 049-058", () => {
+describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrations", () => {
   afterAll(closeDatabase);
 
   it("applies only the renumbered memory release once and creates the R0-R7 schema", async () => {
@@ -178,7 +180,7 @@ describeWithDatabase("v0.10.1 production ledger upgrade to memory migrations 049
 
       await runMigrationRunner();
 
-      // The ledger delta proves the real runner skipped all shipped migrations and applied 049-058 once.
+      // The ledger delta proves the real runner skipped all shipped migrations and applied the rest once.
       const after = await client.query<{ name: string }>(
         "SELECT name FROM schema_migrations ORDER BY name",
       );
