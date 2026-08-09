@@ -162,7 +162,8 @@ replay не зависит от обычного timeline pruning, но удал
 Успешный explicit attach к одному из выданных candidate refs атомарно переводит candidate в
 `resolved` и закрывает взаимоисключающую ветку refined create; attach и retry сериализуются тем же
 source-level advisory lock. Успешный attach, успешный retry и второй candidate outcome являются
-terminal для новых attach/create решений по тому же source entry.
+terminal для новых create решений по тому же source entry. Второй candidate outcome сохраняет один
+terminal attach к одному из выданных refs, после которого новые attach также запрещены.
 
 ## 6. Retrieval и автоматическая activation
 

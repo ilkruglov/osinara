@@ -121,10 +121,12 @@ describeWithDatabase("memory thread candidate retry", () => {
       `SELECT candidate_thread_refs[1] AS thread_ref
        FROM memory_thread_creation_attempts WHERE operation_key = 'retry-candidate-first'`,
     );
-    await expect(attach("retry-candidate-late-attach", candidate.rows[0]!.thread_ref))
-      .rejects.toThrowError(/AGENT_MEMORY_THREAD_RESOLUTION_COMPLETED/u);
     await expect(create("retry-candidate-third", "Сон и режим"))
       .rejects.toThrowError(/AGENT_MEMORY_THREAD_RETRY_EXHAUSTED/u);
+    await expect(attach("retry-candidate-late-attach", candidate.rows[0]!.thread_ref))
+      .resolves.toMatchObject({ thread: { action: "attached" } });
+    await expect(attach("retry-candidate-late-repeat", candidate.rows[0]!.thread_ref))
+      .rejects.toThrowError(/AGENT_MEMORY_THREAD_RESOLUTION_COMPLETED/u);
 
     expect(embedMemoryPassages).toHaveBeenCalledTimes(3);
     await expect(database().query(
@@ -134,11 +136,11 @@ describeWithDatabase("memory thread candidate retry", () => {
     )).resolves.toMatchObject({ rows: [{ attempts: 2, operation_keys: 2 }] });
     await expect(database().query(
       "SELECT status FROM memory_thread_creation_attempts ORDER BY attempt_number",
-    )).resolves.toMatchObject({ rows: [{ status: "candidate" }, { status: "candidate" }] });
+    )).resolves.toMatchObject({ rows: [{ status: "resolved" }, { status: "resolved" }] });
     await expect(database().query(
-      "SELECT count(*)::integer AS rejected_claims FROM memory_items WHERE source = $1",
+      "SELECT operation_key FROM memory_items WHERE source = $1 ORDER BY operation_key",
       ["eve:retry-session:retry-turn"],
-    )).resolves.toMatchObject({ rows: [{ rejected_claims: 0 }] });
+    )).resolves.toMatchObject({ rows: [{ operation_key: "retry-candidate-late-attach" }] });
   });
 
   it("closes the retry budget when the refined create succeeds", async () => {

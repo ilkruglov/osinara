@@ -358,8 +358,7 @@ export async function beginMemoryThreadCandidateAttach(
     [auth.familyId, source.conversationId, source.timelineEntryId],
   );
   if (attempts.rows.some((attempt) => attempt.status === "pending")) throw attemptInProgress();
-  if (attempts.rows.some((attempt) => ["completed", "resolved"].includes(attempt.status)) ||
-    attempts.rows.length >= THREAD_CREATION_MAX_ATTEMPTS) {
+  if (attempts.rows.some((attempt) => ["completed", "resolved"].includes(attempt.status))) {
     throw resolutionCompleted();
   }
   const candidates = attempts.rows.filter((attempt) => attempt.status === "candidate");

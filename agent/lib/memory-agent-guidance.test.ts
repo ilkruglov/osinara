@@ -73,7 +73,8 @@ describe("agent memory guidance", () => {
     );
     expect(instructions).toContain("`subjectLabel` сохраняет только метку claim");
     expect(instructions).toContain("ровно один повторный вызов");
-    expect(instructions).toContain("не вызывай `remember` снова");
+    expect(instructions).toContain('больше не повторяй `action: "create"`');
+    expect(instructions).toContain("разрешён один terminal attach");
     expect(instructions).toContain("Нити не создаются автоматически позже");
     expect(instructions).not.toMatch(/backend extraction|извлекает backend/iu);
   });
