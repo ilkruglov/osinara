@@ -52,9 +52,14 @@ describe("memory thread creation notice", () => {
     );
   });
 
-  it.each(["family_private", "external"] as const)(
-    "does not inspect pending notices in a %s group turn",
-    async (groupType) => {
+  it.each([
+    { groupType: "family_private" as const, telegramChatType: "group" as const },
+    { groupType: "family_private" as const, telegramChatType: "supergroup" as const },
+    { groupType: "external" as const, telegramChatType: "group" as const },
+    { groupType: "external" as const, telegramChatType: "supergroup" as const },
+  ])(
+    "does not inspect pending notices in a $groupType Telegram $telegramChatType turn",
+    async ({ groupType, telegramChatType }) => {
       const repository = repositories();
       repository.telegram.findGroup.mockResolvedValue({
         familyId: "family-1",
@@ -79,8 +84,12 @@ describe("memory thread creation notice", () => {
       });
       const telegram = telegramContext();
       const handler = createTelegramMessageHandler(repository);
+      const message = groupMessage(`@${BOT_USERNAME} продолжим`);
 
-      await handler(telegram.context, groupMessage(`@${BOT_USERNAME} продолжим`));
+      await handler(telegram.context, {
+        ...message,
+        chat: { ...message.chat, type: telegramChatType },
+      });
 
       expect(repository.threadNotices.takePending).not.toHaveBeenCalled();
       expect(repository.threadNotices.complete).not.toHaveBeenCalled();
