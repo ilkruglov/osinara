@@ -64,6 +64,7 @@ describe("trusted mode tool surfaces", () => {
     expect(names({ environment: "private" })).toEqual(
       [...TRUSTED_MODE_TOOL_NAMES, ...PRIVATE_ONLY_TOOL_NAMES].sort(),
     );
+    expect(names({ environment: "private" })).toContain("manage_external_group_schedule");
   });
 
   it("exposes R3 profile policy and provenance only in the intended trust zones", () => {
@@ -97,6 +98,21 @@ describe("trusted mode tool surfaces", () => {
     expect(names({ environment: "family" })).toEqual(
       [...TRUSTED_MODE_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES].sort(),
     );
+    expect(names({ environment: "family" })).not.toContain("manage_external_group_schedule");
+  });
+
+  it("exposes the run-bound history reader only to a scheduled external turn", () => {
+    const ordinary = names({ capabilities: new Set(), environment: "external", skills: {} });
+    const scheduled = names({
+      capabilities: new Set(),
+      environment: "external",
+      scheduledHistory: true,
+      skills: {},
+    } as never);
+
+    expect(ordinary).not.toContain("read_scheduled_group_history");
+    expect(scheduled).toContain("read_scheduled_group_history");
+    expect(scheduled).toContain("agent");
   });
 
   it("never exposes another zone's tools", () => {
@@ -384,6 +400,7 @@ describe("external group tool surface", () => {
         content: "Проверка",
         kind: "fact",
         sensitivity: "normal",
+        subject: { kind: "current_author" },
       },
       send_workspace_file: { path: "result.pdf", presentation: "document" },
     } as const;
@@ -405,6 +422,7 @@ describe("external group tool surface", () => {
       kind: "fact",
       scope: "personal",
       sensitivity: "normal",
+      subject: { kind: "current_author" },
     }).success).toBe(true);
   });
 });

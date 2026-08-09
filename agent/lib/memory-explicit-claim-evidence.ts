@@ -47,14 +47,14 @@ export async function prepareExplicitClaimEvidence(
   input: CreateMemoryInput,
 ): Promise<PreparedClaimEvidence> {
   const source = input.explicitSource;
-  if (!source || (source.subjectRef !== undefined && source.subjectLabel !== undefined)) {
+  if (!source) {
     throw new AppError(
       "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
-      "Явное сохранение требует одного проверенного источника и не более одного субъекта",
+      "Явное сохранение требует одного проверенного источника и явного subject intent",
     );
   }
-  if (source.subjectLabel !== undefined &&
-    (!source.subjectLabel.trim() || source.subjectLabel.length > 200)) {
+  if (source.subject.kind === "label" &&
+    (!source.subject.label.trim() || source.subject.label.length > 200)) {
     throw new AppError(
       "AGENT_MEMORY_SUBJECT_LABEL_INVALID",
       "Текстовая метка субъекта памяти должна содержать от 1 до 200 символов",
@@ -91,25 +91,54 @@ export async function prepareExplicitClaimEvidence(
   }
   requireAllowedMemoryContent(row.content_text);
 
-  // Opaque subject refs resolve only inside the verified origin conversation.
+  // Subject identity is explicit: author, current-turn verified ref, label-only, or none.
   let subjectParticipantId: string | null = null;
   let subjectConversationId: string | null = null;
   let subjectUserId: string | null = null;
-  if (source.subjectRef !== undefined) {
+  if (source.subject.kind === "current_author") {
+    if (input.scope === "group") {
+      subjectParticipantId = row.author_participant_id;
+      subjectConversationId = source.conversationId;
+    } else {
+      if (!row.author_user_id || row.author_user_id !== auth.userId) {
+        throw new AppError(
+          "AGENT_MEMORY_SUBJECT_CURRENT_AUTHOR_INVALID",
+          "Не удалось подтвердить семейную identity текущего автора. Повторите запрос после обновления чата",
+        );
+      }
+      subjectUserId = row.author_user_id;
+    }
+  }
+  if (source.subject.kind === "verified_ref") {
+    if (!input.provenance) {
+      throw new AppError(
+        "AGENT_MEMORY_SUBJECT_REF_TURN_INVALID",
+        "Для другого субъекта отсутствует проверенный контекст текущего хода",
+      );
+    }
     const subjectResult = await client.query<{
       subject_participant_id: string | null;
       subject_user_id: string | null;
     }>(
-      `SELECT subject_participant_id, subject_user_id
-       FROM profile_subjects
-       WHERE subject_ref = $1 AND conversation_id = $2 AND family_id = $3`,
-      [source.subjectRef, source.conversationId, auth.familyId],
+      `SELECT subject.subject_participant_id, subject.subject_user_id
+         FROM profile_views AS view
+         JOIN profile_view_subjects AS selected ON selected.profile_view_id = view.id
+         JOIN profile_subjects AS subject ON subject.id = selected.profile_subject_id
+        WHERE selected.subject_ref_snapshot = $1 AND subject.subject_ref = $1
+           AND view.viewer_conversation_id = $2 AND view.family_id = $3
+          AND view.eve_session_id = $4 AND view.eve_turn_id = $5
+          AND view.viewer_user_id IS NOT DISTINCT FROM $6`,
+      [source.subject.subjectRef, source.conversationId, auth.familyId,
+        input.provenance.sessionId, input.provenance.turnId, auth.userId],
     );
     const subject = subjectResult.rows[0];
-    if (!subject || (input.scope === "group") !== (subject.subject_participant_id !== null)) {
+    const validIdentity = input.scope === "group"
+      ? subject?.subject_participant_id !== null && subject?.subject_user_id === null
+      : subject?.subject_user_id !== null && subject?.subject_participant_id === null;
+    if (!subject || !validIdentity) {
       throw new AppError(
         "AGENT_MEMORY_SUBJECT_REF_INVALID",
-        "Субъект памяти недоступен в текущем разговоре",
+        "Ссылка на субъект недоступна в текущем ходе. Используйте subjectRef из текущего профиля",
       );
     }
     subjectParticipantId = subject.subject_participant_id;
@@ -148,7 +177,8 @@ export async function prepareExplicitClaimEvidence(
       timelineSequence: row.timeline_sequence,
     }],
     subjectConversationId,
-    subjectLabel: source.subjectLabel ?? null,
+    subjectKind: source.subject.kind,
+    subjectLabel: source.subject.kind === "label" ? source.subject.label : null,
     subjectParticipantId,
     subjectUserId,
     telegramGroupId: row.telegram_group_id,

@@ -162,6 +162,7 @@ export async function createAdditionalProjectClaim(
     content: "Ремонт выполняется поэтапно",
     explicitSource: {
       conversationId: fixture.conversationId,
+      subject: { kind: "none" },
       timelineEntryId: timeline.rows[0]!.id,
     },
     kind: "fact",

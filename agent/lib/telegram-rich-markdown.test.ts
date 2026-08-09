@@ -92,6 +92,15 @@ describe("sanitizeTelegramRichMarkdown", () => {
     );
   });
 
+  it("rejects an outerless GFM table wider than Telegram Rich Message supports", () => {
+    const columns = Array.from({ length: 21 }, (_, index) => `C${index + 1}`);
+    const delimiters = columns.map(() => "---");
+
+    expect(() => sanitizeTelegramRichMarkdown(
+      `${columns.join(" | ")}\n${delimiters.join(" | ")}\n${columns.join(" | ")}`,
+    )).toThrowError("AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE");
+  });
+
   it("canonicalizes tolerated spellings of the collapsible block", () => {
     const sanitized = sanitizeTelegramRichMarkdown(
       ['<details open="true"><summary >Итог</summary>', "", "Текст", "", "</DETAILS>"].join("\n"),
@@ -169,6 +178,18 @@ describe("formatTelegramRichMessages", () => {
     expect(chunks.every((chunk) => chunk.endsWith("</details>"))).toBe(true);
     expect(chunks.at(-1)).toContain(tail);
   });
+
+  it("keeps every rich chunk below the provider block-count limit", () => {
+    const body = Array.from({ length: 501 }, (_, index) => `- пункт ${index + 1}`).join("\n");
+    const chunks = formatTelegramRichMessages(
+      `<details><summary>Большой список</summary>\n\n${body}\n\n</details>`,
+    );
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.startsWith("<details><summary>"))).toBe(true);
+    expect(chunks.every((chunk) => chunk.endsWith("</details>"))).toBe(true);
+    expect(chunks.every((chunk) => (chunk.match(/^- /gmu)?.length ?? 0) <= 498)).toBe(true);
+  });
 });
 
 describe("Telegram rich presentation instructions", () => {
@@ -199,6 +220,8 @@ describe("Telegram rich presentation instructions", () => {
     expect(instructions).toContain("По умолчанию отвечай обычным текстом");
     // The markup default and the volume rule are separate decisions, and both tie-breakers are stated.
     expect(instructions).toContain("Если сомневаешься в разметке, пиши обычным текстом");
+    expect(instructions).toContain("без Markdown-разметки");
+    expect(instructions).toContain("обычным Telegram-сообщением");
     expect(instructions).toContain("если сомневаешься в объёме, сворачивай");
     // The default must be stated before the syntax reference, not buried after it.
     const defaultRule = instructions.indexOf("По умолчанию отвечай обычным текстом");
@@ -233,6 +256,9 @@ describe("Telegram rich presentation instructions", () => {
     expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
     expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
     expect(instructions).toContain("Если в текущем групповом сообщении упомянули твоё имя");
+    expect(instructions).toMatch(/больше семи строк/u);
+    expect(instructions).toMatch(/больше двух абзацев/u);
+    expect(instructions).toMatch(/больше шестисот символов/u);
   });
 
   it("overrides the framework transport hint that forbids rich structure", async () => {

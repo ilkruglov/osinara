@@ -67,11 +67,10 @@ describe("agent memory guidance", () => {
     expect(instructions).toContain("`remember`");
     expect(instructions).toContain("одним вызовом");
     expect(instructions).toContain("AGENT_MEMORY_THREAD_CANDIDATE_EXISTS");
-    expect(instructions).toContain("Для root-нити текущего автора не передавай");
-    expect(instructions).toContain(
-      '`identity: "project"` допустима только для общей памяти нескольких участников',
-    );
-    expect(instructions).toContain("`subjectLabel` сохраняет только метку claim");
+    expect(instructions).toContain('Для утверждения текущего автора используй `{"kind":"current_author"}`');
+    expect(instructions).toContain('Project-thread требует `subject.kind="none"`');
+    expect(instructions).toContain("Identity выбранной нити никогда не назначает субъект записи молча");
+    expect(instructions).toContain("label сохраняет только текстовую метку claim");
     expect(instructions).toContain("ровно один повторный вызов");
     expect(instructions).toContain('больше не повторяй `action: "create"`');
     expect(instructions).toContain("разрешён один terminal attach");

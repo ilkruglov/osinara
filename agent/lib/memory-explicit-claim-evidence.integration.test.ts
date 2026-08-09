@@ -2,7 +2,7 @@
  * Explicit remember provenance integration tests.
  *
  * Constructs covered:
- * - Opaque subject refs resolve only inside the current verified conversation.
+ * - Opaque subject refs resolve only for the exact current turn and viewer.
  * - A verified author statement about another member is persisted as reported with exact provenance.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -56,10 +56,24 @@ describeWithDatabase("explicit claim evidence", () => {
               ($1, $2, 'family', $2, 'explicit-subject', $4, 'Пётр', now(), now())`,
       [conversation.rows[0]!.id, family.rows[0]!.id, author.id, subject.id],
     );
-    const subjectRef = await database().query<{ subject_ref: string }>(
-      `SELECT subject_ref FROM profile_subjects
+    const subjectRef = await database().query<{ id: string; subject_ref: string }>(
+      `SELECT id, subject_ref FROM profile_subjects
        WHERE conversation_id = $1 AND subject_user_id = $2`,
       [conversation.rows[0]!.id, subject.id],
+    );
+    const view = await database().query<{ id: string }>(
+      `INSERT INTO profile_views
+         (family_id, viewer_conversation_id, viewer_user_id, subject_count,
+          claim_count, total_characters, eve_session_id, eve_turn_id)
+       VALUES ($1, $2, $3, 1, 0, 0, 'explicit-session', 'explicit-turn') RETURNING id`,
+      [family.rows[0]!.id, conversation.rows[0]!.id, author.id],
+    );
+    await database().query(
+      `INSERT INTO profile_view_subjects
+         (profile_view_id, ordinal, profile_subject_id, subject_ref_snapshot,
+          subject_label_snapshot, priority_reason, total_characters)
+       VALUES ($1, 0, $2, $3, 'Пётр', 'explicit_mention', 0)`,
+      [view.rows[0]!.id, subjectRef.rows[0]!.id, subjectRef.rows[0]!.subject_ref],
     );
     const timeline = await database().query<{ id: string }>(
       `INSERT INTO telegram_group_messages
@@ -83,11 +97,15 @@ describeWithDatabase("explicit claim evidence", () => {
       content: "Пётр предпочитает улун",
       explicitSource: {
         conversationId: conversation.rows[0]!.id,
-        subjectRef: subjectRef.rows[0]!.subject_ref,
+        subject: {
+          kind: "verified_ref",
+          subjectRef: subjectRef.rows[0]!.subject_ref,
+        },
         timelineEntryId: timeline.rows[0]!.id,
       },
       kind: "preference",
       operationKey: "explicit-reported-claim",
+      provenance: { sessionId: "explicit-session", turnId: "explicit-turn" },
       scope: "family",
       sensitivity: "normal",
       source: "eve:test-explicit",
@@ -111,6 +129,88 @@ describeWithDatabase("explicit claim evidence", () => {
         subject_user_id: subject.id,
         timeline_entry_id: timeline.rows[0]!.id,
       }],
+    });
+
+    await expect(memoryRepository.create(auth, {
+      confirmation: "user_confirmed",
+      content: "Пётр предпочитает улун",
+      explicitSource: {
+        conversationId: conversation.rows[0]!.id,
+        subject: {
+          kind: "verified_ref",
+          subjectRef: subjectRef.rows[0]!.subject_ref,
+        },
+        timelineEntryId: timeline.rows[0]!.id,
+      },
+      kind: "preference",
+      operationKey: "stale-view-reported-claim",
+      provenance: { sessionId: "explicit-session", turnId: "another-turn" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:test-explicit-stale",
+    })).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
+
+    const otherViewer = await database().query<{ id: string }>(
+      `INSERT INTO profile_views
+         (family_id, viewer_conversation_id, viewer_user_id, subject_count,
+          claim_count, total_characters, eve_session_id, eve_turn_id)
+       VALUES ($1, $2, $3, 1, 0, 0, 'other-viewer-session', 'other-viewer-turn') RETURNING id`,
+      [family.rows[0]!.id, conversation.rows[0]!.id, subject.id],
+    );
+    await database().query(
+      `INSERT INTO profile_view_subjects
+         (profile_view_id, ordinal, profile_subject_id, subject_ref_snapshot,
+          subject_label_snapshot, priority_reason, total_characters)
+       VALUES ($1, 0, $2, $3, 'Пётр', 'current_author', 0)`,
+      [otherViewer.rows[0]!.id, subjectRef.rows[0]!.id, subjectRef.rows[0]!.subject_ref],
+    );
+    await expect(memoryRepository.create(auth, {
+      confirmation: "user_confirmed",
+      content: "Пётр предпочитает улун",
+      explicitSource: {
+        conversationId: conversation.rows[0]!.id,
+        subject: {
+          kind: "verified_ref",
+          subjectRef: subjectRef.rows[0]!.subject_ref,
+        },
+        timelineEntryId: timeline.rows[0]!.id,
+      },
+      kind: "preference",
+      operationKey: "other-viewer-reported-claim",
+      provenance: { sessionId: "other-viewer-session", turnId: "other-viewer-turn" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:test-explicit-other-viewer",
+    })).rejects.toMatchObject({ code: "AGENT_MEMORY_SUBJECT_REF_INVALID" });
+
+    const firstPersonSource = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       VALUES ($1, $2, 802, 2, 'user', 'telegram:explicit-author', 'explicit-author',
+               'Анна', false, 'text', 'Я предпочитаю сенчу', now()) RETURNING id`,
+      [conversation.rows[0]!.id, group.rows[0]!.id],
+    );
+    const firstPerson = await memoryRepository.create(auth, {
+      confirmation: "user_confirmed",
+      content: "Анна предпочитает сенчу",
+      explicitSource: {
+        conversationId: conversation.rows[0]!.id,
+        subject: { kind: "current_author" },
+        timelineEntryId: firstPersonSource.rows[0]!.id,
+      },
+      kind: "preference",
+      operationKey: "current-author-claim",
+      provenance: { sessionId: "explicit-session", turnId: "explicit-turn" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:test-current-author",
+    });
+    await expect(database().query(
+      "SELECT subject_user_id, profile_eligible FROM memory_items WHERE id = $1",
+      [firstPerson.id],
+    )).resolves.toMatchObject({
+      rows: [{ profile_eligible: true, subject_user_id: author.id }],
     });
   });
 });

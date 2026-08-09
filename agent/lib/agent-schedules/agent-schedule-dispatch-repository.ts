@@ -19,14 +19,28 @@ import type {
 import {
   completeDeliveredAgentScheduleRun,
   type CompleteDeliveredAgentScheduleRunInput,
-  finishActiveAgentScheduleRun,
 } from "./agent-schedule-run-completion.js";
+import {
+  authorizeAgentScheduleDelivery,
+  type AgentScheduleDeliveryAuthorizationInput,
+} from "./agent-schedule-delivery-authorization.js";
+import {
+  failAgentScheduleRun,
+  failAgentScheduleRunByIdentityForNotification,
+  failAgentScheduleRunForNotification,
+} from "./agent-schedule-run-failure.js";
+import {
+  beginAgentScheduleDispatch,
+  markAgentScheduleRunning,
+} from "./agent-schedule-dispatch-state.js";
 
 export interface ClaimedAgentSchedule {
   authorUserId: string;
+  capabilityAllowlist: string[];
   familyId: string;
   forumTopicId: string | null;
   groupId: string | null;
+  historyWindowDays: number | null;
   id: string;
   leaseToken: string;
   messageThreadId: string | null;
@@ -55,6 +69,7 @@ interface CandidateRow {
   family_id: string;
   forum_topic_id: string | null;
   group_id: string | null;
+  history_window_days: number | null;
   id: string;
   message_thread_id: string | null;
   next_run_at: Date;
@@ -67,6 +82,7 @@ interface CandidateRow {
   telegram_user_id: string;
   timezone: string;
   title: string;
+  tool_allowlist: string[];
   user_request: string;
 }
 
@@ -145,6 +161,13 @@ export const agentScheduleDispatchRepository = {
             WHERE schedule_id = $1 AND lease_token = $2 AND status IN ('claimed', 'dispatching')`,
           [row.id, row.lease_token, options.now],
         );
+        await client.query(
+          `DELETE FROM agent_schedule_history_snapshots AS snapshot
+            USING agent_schedule_runs AS run
+            WHERE snapshot.run_id = run.id AND run.schedule_id = $1
+              AND run.lease_token = $2 AND run.status = 'ambiguous'`,
+          [row.id, row.lease_token],
+        );
       }
       await recordFailures(client, ambiguous.rows, "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS");
 
@@ -159,13 +182,22 @@ export const agentScheduleDispatchRepository = {
         [options.now, AGENT_SCHEDULE_DISPATCH_MAX_SAFE_ATTEMPTS],
       );
       for (const row of exhausted.rows) {
-        await client.query(
+        const terminalRuns = await client.query<{ id: string }>(
           `UPDATE agent_schedule_runs
               SET status = 'failed', error_code = 'AGENT_SCHEDULE_ATTEMPTS_EXHAUSTED',
                   completed_at = $2, updated_at = $2
-            WHERE schedule_id = $1 AND status = 'claimed' AND dispatch_started_at IS NULL`,
+             WHERE schedule_id = $1 AND status = 'claimed' AND dispatch_started_at IS NULL`,
           [row.id, options.now],
         );
+        if (terminalRuns.rowCount) {
+          await client.query(
+            `DELETE FROM agent_schedule_history_snapshots AS snapshot
+              USING agent_schedule_runs AS run
+              WHERE snapshot.run_id = run.id AND run.schedule_id = $1
+                AND run.status = 'failed'`,
+            [row.id],
+          );
+        }
       }
       await recordFailures(client, exhausted.rows, "AGENT_SCHEDULE_ATTEMPTS_EXHAUSTED");
       await client.query(
@@ -185,19 +217,51 @@ export const agentScheduleDispatchRepository = {
              NOT EXISTS (
                SELECT 1 FROM family_memberships
                 WHERE family_id = schedule.family_id AND user_id = schedule.author_user_id
-             ) OR (
-               schedule.scope = 'family' AND NOT EXISTS (
+              ) OR (
+                schedule.scope = 'family' AND NOT EXISTS (
                  SELECT 1 FROM telegram_groups AS group_row
                   WHERE group_row.id = schedule.group_id
                     AND group_row.family_id = schedule.family_id
                     AND group_row.telegram_chat_id = schedule.telegram_chat_id
                     AND group_row.type = 'family_private'
-               )
-             )
+                )
+              ) OR (
+                schedule.scope = 'group' AND (
+                  NOT EXISTS (
+                    SELECT 1 FROM family_memberships AS owner_membership
+                     WHERE owner_membership.family_id = schedule.family_id
+                       AND owner_membership.user_id = schedule.author_user_id
+                       AND owner_membership.role = 'owner'
+                  ) OR NOT EXISTS (
+                    SELECT 1 FROM telegram_groups AS group_row
+                     WHERE group_row.id = schedule.group_id
+                       AND group_row.family_id = schedule.family_id
+                       AND group_row.telegram_chat_id = schedule.telegram_chat_id
+                       AND group_row.telegram_chat_type = schedule.telegram_chat_type
+                       AND group_row.type = 'external'
+                  )
+                )
+              )
            )
           RETURNING schedule.id, schedule.family_id`,
         [options.now],
       );
+      for (const row of invalid.rows) {
+        await client.query(
+          `UPDATE agent_schedule_runs
+              SET status = 'failed', error_code = 'AGENT_SCHEDULE_DESTINATION_REVOKED',
+                  completed_at = $2, updated_at = $2
+            WHERE schedule_id = $1 AND status = 'claimed' AND dispatch_started_at IS NULL`,
+          [row.id, options.now],
+        );
+        await client.query(
+          `DELETE FROM agent_schedule_history_snapshots AS snapshot
+            USING agent_schedule_runs AS run
+            WHERE snapshot.run_id = run.id AND run.schedule_id = $1
+              AND run.status = 'failed'`,
+          [row.id],
+        );
+      }
       await recordFailures(client, invalid.rows, "AGENT_SCHEDULE_DESTINATION_REVOKED");
 
       const candidates = await client.query<CandidateRow>(
@@ -206,6 +270,7 @@ export const agentScheduleDispatchRepository = {
                 schedule.scenario_prompt, schedule.timezone, schedule.recurrence_kind,
                 schedule.next_run_at, schedule.telegram_chat_id, schedule.telegram_chat_type,
                  schedule.message_thread_id::text, schedule.forum_topic_id::text,
+                 schedule.history_window_days, schedule.tool_allowlist,
                  membership.role, users.telegram_user_id
            FROM agent_schedules AS schedule
            JOIN family_memberships AS membership
@@ -267,9 +332,11 @@ export const agentScheduleDispatchRepository = {
         }
         claimed.push({
           authorUserId: candidate.author_user_id,
+          capabilityAllowlist: candidate.tool_allowlist,
           familyId: candidate.family_id,
           forumTopicId: candidate.forum_topic_id,
           groupId: candidate.group_id,
+          historyWindowDays: candidate.history_window_days,
           id: candidate.id,
           leaseToken,
           messageThreadId: candidate.message_thread_id,
@@ -298,48 +365,11 @@ export const agentScheduleDispatchRepository = {
     }
   },
 
-  async markDispatchStarted(job: ClaimedAgentSchedule): Promise<void> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const schedule = await client.query(
-        `UPDATE agent_schedules SET dispatch_started_at = now(), updated_at = now()
-          WHERE id = $1 AND status = 'leased' AND lease_token = $2
-            AND dispatch_started_at IS NULL`,
-        [job.id, job.leaseToken],
-      );
-      const run = await client.query(
-        `UPDATE agent_schedule_runs
-            SET status = 'dispatching', dispatch_started_at = now(), updated_at = now()
-          WHERE id = $1 AND schedule_id = $2 AND lease_token = $3 AND status = 'claimed'`,
-        [job.runId, job.id, job.leaseToken],
-      );
-      if (schedule.rowCount !== 1 || run.rowCount !== 1) {
-        throw new AppError("AGENT_SCHEDULE_LEASE_STALE", "Запуск расписания уже неактуален");
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
+  markDispatchStarted: beginAgentScheduleDispatch,
+  markRunning: markAgentScheduleRunning,
 
-  async markRunning(
-    job: ClaimedAgentSchedule,
-    input: { applicationSessionId: string; eveSessionId: string },
-  ): Promise<void> {
-    const result = await database().query(
-      `UPDATE agent_schedule_runs
-          SET status = 'running', application_session_id = $4, eve_session_id = $5,
-              updated_at = now()
-        WHERE id = $1 AND schedule_id = $2 AND lease_token = $3 AND status = 'dispatching'`,
-      [job.runId, job.id, job.leaseToken, input.applicationSessionId, input.eveSessionId],
-    );
-    if (result.rowCount !== 1) {
-      throw new AppError("AGENT_SCHEDULE_LEASE_STALE", "Запуск расписания уже неактуален");
-    }
+  async authorizeDelivery(input: AgentScheduleDeliveryAuthorizationInput): Promise<void> {
+    await authorizeAgentScheduleDelivery(input);
   },
 
   async completeDeliveredRun(input: CompleteDeliveredAgentScheduleRunInput): Promise<boolean> {
@@ -385,6 +415,8 @@ export const agentScheduleDispatchRepository = {
           WHERE id = $1 AND schedule_id = $2 AND lease_token = $3`,
         [job.runId, job.id, job.leaseToken, errorCode],
       );
+      // A terminal run cannot call the run-bound reader, so discard its transient history copy.
+      await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [job.runId]);
       await recordFailures(client, [{ family_id: failed.rows[0].family_id, id: job.id }], errorCode);
       await client.query("COMMIT");
     } catch (error) {
@@ -395,28 +427,7 @@ export const agentScheduleDispatchRepository = {
     }
   },
 
-  async failRun(
-    applicationSessionId: string,
-    eveSessionId: string,
-    errorCode: string,
-    failedAt: Date,
-  ): Promise<boolean> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const failed = await finishActiveAgentScheduleRun(client, {
-        applicationSessionId,
-        completedAt: failedAt,
-        errorCode,
-        eveSessionId,
-      });
-      await client.query("COMMIT");
-      return failed;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
+  failRun: failAgentScheduleRun,
+  failRunByIdentityForNotification: failAgentScheduleRunByIdentityForNotification,
+  failRunForNotification: failAgentScheduleRunForNotification,
 };

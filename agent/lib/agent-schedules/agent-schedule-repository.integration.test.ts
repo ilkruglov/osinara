@@ -174,7 +174,6 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:02.000Z"),
     })).resolves.toEqual([]);
 
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:test-run",
       kind: "scheduled",
@@ -184,6 +183,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:01.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
     });
     await agentScheduleDispatchRepository.markRunning(claimed!, {
       applicationSessionId: prepared.id,
@@ -266,7 +268,6 @@ describeWithDatabase("agent schedule repositories", () => {
     expect(reclaimed).toMatchObject({ runId: claimed!.runId, title: "Восстановимый запуск" });
     expect(reclaimed!.leaseToken).not.toBe(claimed!.leaseToken);
 
-    await agentScheduleDispatchRepository.markDispatchStarted(reclaimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:recoverable-run",
       kind: "scheduled",
@@ -276,6 +277,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:02.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(reclaimed!, {
+      applicationSessionId: prepared.id,
     });
     await agentScheduleDispatchRepository.markRunning(reclaimed!, {
       applicationSessionId: prepared.id,
@@ -321,7 +325,6 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:00.000Z"),
     });
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:long-running",
       kind: "scheduled",
@@ -331,6 +334,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:00.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
     });
 
     await agentScheduleDispatchRepository.markRunning(claimed!, {
@@ -370,7 +376,19 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:00.000Z"),
     });
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
+    const prepared = await sessionRepository.prepareTurn({
+      baseContinuationToken: "schedule-member::schedule:ambiguous",
+      familyId: fixture.familyId,
+      groupId: null,
+      kind: "scheduled",
+      now: new Date("2026-07-17T09:00:00.000Z"),
+      scope: "personal",
+      telegramForumTopicId: null,
+      userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
+    });
 
     await expect(agentScheduleDispatchRepository.claimDue({
       leaseMilliseconds: 1_000,

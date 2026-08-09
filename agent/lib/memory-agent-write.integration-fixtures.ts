@@ -54,6 +54,7 @@ export async function createMainAgentMemoryFixture() {
   return {
     auth,
     conversationId: conversation.rows[0]!.id,
+    familyId: family.rows[0]!.id,
     groupId: group.rows[0]!.id,
     timelineEntryId: message.rows[0]!.id,
     userId: user.rows[0]!.id,

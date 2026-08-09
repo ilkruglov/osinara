@@ -47,11 +47,15 @@ import {
   resolveExternalGroupPolicyIdentity,
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
+import { scheduledGroupHistoryAccess } from "../agent-schedules/scheduled-group-history-context.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
   readonly messages: readonly ModelMessage[];
-  readonly session: { readonly auth: SessionAuth; readonly id: string };
+  readonly session: {
+    readonly auth: SessionAuth;
+    readonly id: string;
+  };
 }
 
 type CapabilityLoader = (identity: {
@@ -132,7 +136,12 @@ export function createModeBlockResolver(dependencies: {
         logBlockFailure("AGENT_GROUP_SKILL_LOOKUP_FAILED", error);
       }
     }
-    return modeInstructions({ capabilities, environment: "external", skills });
+    return modeInstructions({
+      capabilities,
+      environment: "external",
+      scheduledHistory: scheduledGroupHistoryAccess(ctx.session.auth) !== null,
+      skills,
+    });
   };
 }
 
@@ -145,7 +154,7 @@ export function createMemoryBlockResolver(dependencies: {
     skillHints: readonly string[],
   ) => Promise<MemoryTurnContext>;
 }) {
-  return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
+  return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<string | null> {
     try {
       const authorization = dependencies.authorize(ctx);
       const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
@@ -155,7 +164,7 @@ export function createMemoryBlockResolver(dependencies: {
         query,
         applicationThreadSkillHints(ctx.messages),
       );
-      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds);
+      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds, turnId);
       const profile = profileInput === null
         ? null
         : await dependencies.createProfile(authorization, profileInput);
@@ -173,6 +182,7 @@ export function createMemoryBlockResolver(dependencies: {
 function telegramProfileInput(
   ctx: TurnBlockContext,
   retrievalClaimIds: readonly string[],
+  turnId: string,
 ): CreateProfileViewInput | null {
   const attributes = ctx.session.auth.current?.attributes;
   const conversationId = attributes?.telegramConversationId;
@@ -204,6 +214,7 @@ function telegramProfileInput(
     currentTelegramUserId,
     explicitMentionTelegramUserIds: mentions === undefined ? [] : [...mentions],
     now,
+    provenance: { sessionId: ctx.session.id, turnId },
     replyTelegramUserId: replyTelegramUserId ?? null,
     ...(replyTimelineSequence === undefined ? {} : { replyTimelineSequence }),
     retrievalClaimIds: [...retrievalClaimIds],

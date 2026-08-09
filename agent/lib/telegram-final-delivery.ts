@@ -2,14 +2,18 @@
  * Crash-safe orchestration for one native Telegram final message.
  *
  * Exports:
- * - `deliverTelegramFinalOutput`: sends formatted chunks once behind the durable outbox barrier.
+ * - `deliverTelegramFinalOutput`: sends plain or rich chunks once behind the durable outbox barrier.
  */
 import { createHash } from "node:crypto";
 
 import { AppError } from "./app-error.js";
-import { formatTelegramRichMessages } from "./telegram-rich-markdown.js";
+import {
+  formatTelegramFinalPresentation,
+  type TelegramFinalPresentationChunk,
+} from "./telegram-final-presentation.js";
 import type { SentTelegramMessage } from "./telegram-rich-messages.js";
 import { telegramFinalDeliveryRepository } from "./telegram-final-delivery-repository.js";
+import { formatTelegramRichMessages } from "./telegram-rich-markdown.js";
 
 function hash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -28,11 +32,12 @@ export async function deliverTelegramFinalOutput(input: {
   eveSessionId: string;
   eveTurnId: string;
   markdown: string;
-  sendChunk(chunk: string, ordinal: number): Promise<SentTelegramMessage>;
+  sendChunk(chunk: TelegramFinalPresentationChunk, ordinal: number): Promise<SentTelegramMessage>;
 }): Promise<SentTelegramMessage[]> {
-  const chunks = formatTelegramRichMessages(input.markdown);
+  const chunks = formatTelegramFinalPresentation(input.markdown);
+  const legacyChunks = formatTelegramRichMessages(input.markdown);
   const outputHash = hash({
-    chunks: chunks.map((chunk) => hash(chunk)),
+    chunks: chunks.map((chunk) => hash(chunk.text)),
     deliveryIdentity: input.deliveryIdentity,
   });
   const start = await telegramFinalDeliveryRepository.start({
@@ -40,6 +45,11 @@ export async function deliverTelegramFinalOutput(input: {
     chunkCount: chunks.length,
     eveSessionId: input.eveSessionId,
     eveTurnId: input.eveTurnId,
+    legacyChunkCount: legacyChunks.length,
+    legacyOutputHash: hash({
+      chunks: legacyChunks.map((chunk) => hash(chunk)),
+      deliveryIdentity: input.deliveryIdentity,
+    }),
     outputHash,
   });
   if (start.status === "delivered") return start.messages;
@@ -51,7 +61,7 @@ export async function deliverTelegramFinalOutput(input: {
       const message = await input.sendChunk(chunk, ordinal);
       await telegramFinalDeliveryRepository.confirmChunk({
         chatType: message.chatType,
-        contentHash: hash(chunk),
+        contentHash: hash(chunk.text),
         deliveryId: start.deliveryId,
         deliveryToken: start.deliveryToken,
         messageId: message.messageId,

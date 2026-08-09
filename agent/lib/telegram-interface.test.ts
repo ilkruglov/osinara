@@ -342,6 +342,38 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Сценарий: Собери новости и приложи источники.");
   });
 
+  it("shows the external destination, history window, and capabilities before approval", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-external-schedule-create",
+        input: {
+          action: "create",
+          capabilityAllowlist: ["send_workspace_file", "web_fetch"],
+          firstRunAt: "2026-08-24T09:00:00+03:00",
+          historyWindowDays: 7,
+          recurrence: { daysOfWeek: [1], interval: 1, kind: "weekly" },
+          scenarioPrompt: "Прочитай snapshot, создай HTML и отправь его в группу.",
+          telegramChatId: "-1001234567890",
+          timezone: "Europe/Moscow",
+          title: "Недельная выжимка",
+          userRequest: "Каждый понедельник присылай выжимку обсуждения за неделю",
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_external_group_schedule",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-external-schedule-create",
+    });
+
+    expect(request.prompt).toContain("создать автоматизацию внешней группы");
+    expect(request.prompt).toContain("Telegram chat ID: -1001234567890");
+    expect(request.prompt).toContain("Окно истории, дней: 7");
+    expect(request.prompt).toContain("Разрешённые возможности: send_workspace_file, web_fetch");
+    expect(request.prompt).toContain("Сценарий: Прочитай snapshot, создай HTML и отправь его в группу.");
+  });
+
   it("localizes removal of a workspace Google profile", () => {
     const request = localizeTelegramInputRequest({
       action: {

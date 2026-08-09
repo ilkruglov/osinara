@@ -43,7 +43,7 @@ export function buildTelegramTurnResult(input: {
   const context = [
     `Verified conversation scope: ${input.access.memoryScopes.join(", ")}.`,
     `Verified role: ${input.access.role}.`,
-    "Verified Telegram delivery: reply in concise Rich Markdown; the channel safely supports Markdown tables and approved text-rich structure.",
+    "Verified Telegram delivery: reply in concise plain text by default; use supported Rich Markdown only when formatting materially improves the answer.",
     formatCurrentTimeContext(input.turnStartedAt),
   ];
   if (input.storedAttachments.length > 0) {

@@ -55,6 +55,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Анна начала готовиться к марафону",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "episode",
@@ -122,6 +123,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Подготовка продолжается по плану",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "none" as const },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact" as const,
@@ -159,6 +161,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Начинаю готовиться к первому марафону",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "episode",
@@ -179,6 +182,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Определён новый этап тренировочного плана",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact",
@@ -216,6 +220,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: `Начата отдельная тема: ${title}`,
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" as const },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact" as const,
@@ -260,6 +265,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Начинаем ремонт кухни",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "none" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "episode",
@@ -281,6 +287,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Выбираем материалы для кухонного ремонта",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "none" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact",
@@ -313,6 +320,7 @@ describeWithDatabase("main-agent memory write", () => {
       content,
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact" as const,
@@ -345,6 +353,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Анна начала готовиться к марафону",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" as const },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "episode" as const,
@@ -373,6 +382,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Анна начала готовиться к марафону",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" as const },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "episode" as const,
@@ -399,6 +409,7 @@ describeWithDatabase("main-agent memory write", () => {
       content: "Эта запись не должна сохраниться",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact",

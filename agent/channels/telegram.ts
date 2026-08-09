@@ -6,7 +6,7 @@
  * - Application-owned family/group authorization in `onMessage`.
  * - Durable identity-bound HITL callbacks and replies.
  * - Validated attachment persistence with model-safe workspace references.
- * - Completed Rich Message or silent reaction delivery without speculative chat drafts.
+ * - Completed ordinary/Rich Message or silent reaction delivery without speculative chat drafts.
  * - Verified group replies anchored to the triggering member message.
  * - Successfully delivered final group output persisted as one logical timeline entry.
  */
@@ -20,6 +20,7 @@ import { completedTelegramOutput } from "../lib/telegram-progress.js";
 import { deliverTelegramFinalOutput } from "../lib/telegram-final-delivery.js";
 import { telegramFinalDeliveryRepository } from "../lib/telegram-final-delivery-repository.js";
 import { postTelegramRichMessageChunk } from "../lib/telegram-rich-messages.js";
+import { postTelegramPlainMessageChunk } from "../lib/telegram-plain-messages.js";
 import {
   applicationSessionId,
   registerTelegramDeliveredMessageRoutes,
@@ -61,6 +62,7 @@ export default telegramChannel({
       const sessionId = applicationSessionId(ctx);
       if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
       const currentAttributes = ctx.session.auth.current?.attributes;
+      const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       if (output.kind === "reaction") {
         const telegramMessageId = currentAttributes?.telegramMessageId;
         if (isScheduledSession(ctx) || typeof telegramMessageId !== "string") {
@@ -73,6 +75,19 @@ export default telegramChannel({
         return;
       }
       const message = output.message;
+      if (scheduledDelivery) {
+        await agentScheduleDispatchRepository.authorizeDelivery({
+          applicationSessionId: sessionId,
+          eveSessionId: ctx.session.id,
+          familyId: scheduledDelivery.familyId,
+          groupId: scheduledDelivery.groupId,
+          messageThreadId: scheduledDelivery.messageThreadId,
+          ownerUserId: scheduledDelivery.ownerUserId,
+          runId: scheduledDelivery.runId,
+          scope: scheduledDelivery.scope,
+          telegramChatId: scheduledDelivery.telegramChatId,
+        });
+      }
       const replyParameters = isScheduledSession(ctx)
         ? undefined
         : telegramTurnReplyParameters(channel.state, ctx);
@@ -86,15 +101,20 @@ export default telegramChannel({
         eveSessionId: ctx.session.id,
         eveTurnId: ctx.session.turn.id,
         markdown: message,
-        sendChunk: (chunk, ordinal) => postTelegramRichMessageChunk(
-          chunk,
-          channel.telegram,
-          channel.state,
-          ordinal === 0 ? replyParameters : undefined,
-        ),
+        sendChunk: (chunk, ordinal) => chunk.format === "plain"
+          ? postTelegramPlainMessageChunk(
+              chunk.text,
+              channel,
+              ordinal === 0 ? replyParameters : undefined,
+            )
+          : postTelegramRichMessageChunk(
+              chunk.text,
+              channel.telegram,
+              channel.state,
+              ordinal === 0 ? replyParameters : undefined,
+            ),
       });
       const deliveredAt = new Date();
-      const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       const groupId = scheduledDelivery?.groupId ??
         (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
       if (scheduledDelivery) {
@@ -164,25 +184,40 @@ export default telegramChannel({
       }
     },
     async "session.failed"(data, channel) {
-      await handleTelegramSessionFailure(data, channel, sessionRepository);
+      await handleTelegramSessionFailure(
+        data,
+        channel,
+        sessionRepository,
+        agentScheduleDispatchRepository,
+      );
     },
     async "turn.failed"(data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
-      if (isScheduledSession(ctx)) {
-        await agentScheduleDispatchRepository.failRun(
-          sessionId,
-          ctx.session.id,
-          data.code,
-          new Date(),
-        );
-      }
+      const scheduledDelivery = scheduledDeliveryMetadata(ctx);
+      const notifyFailure = scheduledDelivery === null
+        ? true
+        : await agentScheduleDispatchRepository.failRunForNotification(
+            {
+              applicationSessionId: sessionId,
+              eveSessionId: ctx.session.id,
+              familyId: scheduledDelivery.familyId,
+              groupId: scheduledDelivery.groupId,
+              messageThreadId: scheduledDelivery.messageThreadId,
+              ownerUserId: scheduledDelivery.ownerUserId,
+              runId: scheduledDelivery.runId,
+              scope: scheduledDelivery.scope,
+              telegramChatId: scheduledDelivery.telegramChatId,
+            },
+            data.code,
+            new Date(),
+          );
       // A final send that started may already be visible; never append a second failure message.
       const finalDeliveryMayBeVisible =
         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
           ctx.session.id,
           ctx.session.turn.id,
         );
-      if (!finalDeliveryMayBeVisible) {
+      if (!finalDeliveryMayBeVisible && notifyFailure) {
         const replyParameters = isScheduledSession(ctx)
           ? undefined
           : telegramTurnReplyParameters(channel.state, ctx);

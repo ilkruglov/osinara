@@ -19,9 +19,22 @@ export interface TelegramProfile {
   username?: string;
 }
 
+interface TelegramGroupRow {
+  family_id: string;
+  id: string;
+  message_mode: RegisteredGroup["messageMode"];
+  skill_allowlist: string[];
+  telegram_chat_id: string;
+  tool_allowlist: string[];
+  type: RegisteredGroup["type"];
+}
+
 export interface TelegramRepository {
   claimFirstOwner(code: string, profile: TelegramProfile): Promise<"claimed" | "configured" | "invalid">;
-  findGroup(telegramChatId: string): Promise<RegisteredGroup | null>;
+  findGroup(
+    telegramChatId: string,
+    telegramChatType: "group" | "supergroup",
+  ): Promise<RegisteredGroup | null>;
   findIdentity(telegramUserId: string): Promise<FamilyIdentity | null>;
   hasOwner(): Promise<boolean>;
 }
@@ -108,21 +121,24 @@ export const telegramRepository: TelegramRepository = {
     }
   },
 
-  async findGroup(telegramChatId) {
-    const result = await database().query<{
-      family_id: string;
-      id: string;
-      message_mode: RegisteredGroup["messageMode"];
-      skill_allowlist: string[];
-      telegram_chat_id: string;
-      tool_allowlist: string[];
-      type: RegisteredGroup["type"];
-    }>(
-      `SELECT id, family_id, telegram_chat_id, type, message_mode, tool_allowlist, skill_allowlist
-       FROM telegram_groups
-       WHERE telegram_chat_id = $1`,
-      [telegramChatId],
+  async findGroup(telegramChatId, telegramChatType) {
+    // Only the first verified update writes the type; steady-state reads avoid row locks and bloat.
+    const initialized = await database().query<TelegramGroupRow>(
+      `UPDATE telegram_groups SET telegram_chat_type = $2
+        WHERE telegram_chat_id = $1 AND telegram_chat_type IS NULL
+      RETURNING id, family_id, telegram_chat_id, type, message_mode,
+                tool_allowlist, skill_allowlist`,
+      [telegramChatId, telegramChatType],
     );
+    const result = initialized.rows[0]
+      ? initialized
+      : await database().query<TelegramGroupRow>(
+          `SELECT id, family_id, telegram_chat_id, type, message_mode,
+                  tool_allowlist, skill_allowlist
+             FROM telegram_groups
+            WHERE telegram_chat_id = $1 AND telegram_chat_type = $2`,
+          [telegramChatId, telegramChatType],
+        );
     const row = result.rows[0];
     if (!row) return null;
     const common = {

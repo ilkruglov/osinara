@@ -19,6 +19,7 @@ import {
 } from "./turn-blocks.js";
 
 const createProfile = vi.fn();
+const TEST_TURN_ID = "turn-1";
 
 function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   return {
@@ -140,6 +141,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("активный pipeline текущей реализации");
@@ -149,7 +151,7 @@ describe("memory block resolution", () => {
     const retrieve = vi.fn();
     const resolve = createMemoryBlockResolver({ authorize: () => authorization, createProfile, retrieve });
 
-    expect(await resolve(context(privateAuth))).toBeNull();
+    expect(await resolve(context(privateAuth), TEST_TURN_ID)).toBeNull();
     expect(retrieve).not.toHaveBeenCalled();
   });
 
@@ -164,6 +166,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
@@ -179,6 +182,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
@@ -219,6 +223,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(telegramAuth, [{ content: "что любит Пётр?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(profile).toHaveBeenCalledWith(authorization, {
@@ -226,6 +231,7 @@ describe("memory block resolution", () => {
       currentTelegramUserId: "101",
       explicitMentionTelegramUserIds: ["202"],
       now: new Date("2026-08-08T10:00:00.000Z"),
+      provenance: { sessionId: "session-1", turnId: TEST_TURN_ID },
       replyTelegramUserId: "203",
       replyTimelineSequence: "44",
       retrievalClaimIds: ["claim-related"],

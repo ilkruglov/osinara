@@ -44,6 +44,7 @@ export interface CreateProfileViewInput {
   currentTelegramUserId: string;
   explicitMentionTelegramUserIds: readonly string[];
   now: Date;
+  provenance: { sessionId: string; turnId: string };
   replyTelegramUserId: string | null;
   replyTimelineSequence?: string | null;
   retrievalClaimIds: readonly string[];

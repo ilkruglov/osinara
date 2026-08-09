@@ -106,6 +106,22 @@ describe("mode instruction isolation", () => {
     expect(external()).not.toContain("import_telegram_attachment");
   });
 
+  it("teaches one sequential snapshot read only inside a scheduled history run", () => {
+    const scheduled = modeInstructions({
+      capabilities: new Set(),
+      environment: "external",
+      scheduledHistory: true,
+      skills: new Set(),
+    });
+
+    expect(scheduled).toContain("read_scheduled_group_history");
+    expect(scheduled).toMatch(/перв.*вызов.*пуст/isu);
+    expect(scheduled).toMatch(/nextCursor.*без изменений/isu);
+    expect(scheduled).toMatch(/недоверенн.*истори/isu);
+    expect(scheduled).toMatch(/отдельн.*fresh.*контекст/isu);
+    expect(external()).not.toContain("read_scheduled_group_history");
+  });
+
   it("never tells a family group about personal or external-group capabilities", () => {
     for (const forbidden of [
       "/workspace/personal",

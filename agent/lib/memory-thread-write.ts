@@ -156,9 +156,8 @@ function sourceSubject(
   scope: MemoryScope,
   prepared: PreparedClaimEvidence,
 ): ThreadIdentity {
-  if (prepared.subjectLabel !== null && prepared.subjectUserId === null &&
-    prepared.subjectParticipantId === null) {
-    throw invalidInput("Для нити нужен проверенный субъект, а не свободная текстовая метка");
+  if (prepared.subjectKind === "label" || prepared.subjectKind === "none") {
+    throw invalidInput("Subject-thread требует явного current_author или verified_ref");
   }
   if (prepared.subjectUserId || prepared.subjectParticipantId) {
     return {
@@ -168,25 +167,7 @@ function sourceSubject(
       subjectUserId: prepared.subjectUserId,
     };
   }
-  const primary = prepared.sources.find((source) => source.role === "primary");
-  if (!primary) throw invalidInput("У записи памяти отсутствует проверенный основной источник");
-  if (scope === "group") {
-    return {
-      memoryProjectId: null,
-      subjectConversationId: prepared.conversationId,
-      subjectParticipantId: primary.authorParticipantId,
-      subjectUserId: null,
-    };
-  }
-  if (!primary.authorUserId) {
-    throw invalidInput("Автор источника больше не является проверенным участником семьи");
-  }
-  return {
-    memoryProjectId: null,
-    subjectConversationId: null,
-    subjectParticipantId: null,
-    subjectUserId: primary.authorUserId,
-  };
+  throw invalidInput(`Не удалось вывести ${scope} subject identity из проверенного источника`);
 }
 
 function withThreadIdentity(
@@ -212,9 +193,16 @@ function requireCompatibleIdentity(
   prepared: PreparedClaimEvidence,
   identity: ThreadIdentity,
 ): void {
-  if (prepared.subjectLabel !== null && prepared.subjectUserId === null &&
-    prepared.subjectParticipantId === null) {
-    throw invalidInput("Текстовую метку субъекта нельзя подменить identity существующей нити");
+  if (identity.memoryProjectId !== null) {
+    if (prepared.subjectKind !== "none") {
+      throw invalidInput("Project-thread принимает только явный subject.kind=none");
+    }
+    return;
+  }
+  if (prepared.subjectKind !== "current_author" && prepared.subjectKind !== "verified_ref") {
+    throw invalidInput(
+      "Subject-thread требует явный current_author или verified_ref; identity нити не наследуется",
+    );
   }
   const subjectMismatch =
     (prepared.subjectUserId !== null && prepared.subjectUserId !== identity.subjectUserId) ||
@@ -234,8 +222,7 @@ async function projectIdentity(
   title: string,
   prepared: PreparedClaimEvidence,
 ): Promise<ThreadIdentity> {
-  if (scope === "personal" || prepared.subjectUserId || prepared.subjectParticipantId ||
-    prepared.subjectLabel) {
+  if (scope === "personal" || prepared.subjectKind !== "none") {
     throw invalidInput("Project identity доступна только для общей семейной или групповой записи");
   }
   const partition = scopePartitionKey(auth, scope);

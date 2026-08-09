@@ -29,7 +29,7 @@ export function createTelegramVoiceAuthorizer(
     }
 
     // Resolve group trust before identity: external media must never reach Groq or Telegram getFile.
-    const registeredGroup = await repository.findGroup(message.chat.id);
+    const registeredGroup = await repository.findGroup(message.chat.id, message.chat.type);
     if (!registeredGroup || registeredGroup.type !== "family_private") return false;
     const identity = await repository.findIdentity(sender.id);
     return evaluateConversationAccess({

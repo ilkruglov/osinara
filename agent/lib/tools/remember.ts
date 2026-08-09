@@ -5,8 +5,6 @@
  * - Eve `remember` tool for one main-agent source-backed claim and optional atomic thread action.
  */
 import { defineTool } from "eve/tools";
-import { z } from "zod";
-
 import { AppError } from "../app-error.js";
 import { requireAllowedMemoryContent } from "../memory-content-policy.js";
 import { requireMemoryAuthorization, requireWritableScope } from "../memory-context.js";
@@ -14,75 +12,12 @@ import { memoryRepository } from "../memory-repository.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import { toModelMemory } from "../model-memory.js";
 import { resolveSessionCaller } from "../session-auth.js";
-import {
-  THREAD_PURPOSE_MAX_CHARACTERS,
-  THREAD_TITLE_MAX_CHARACTERS,
-} from "../memory-config.js";
-import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
-
-const threadRoleSchema = z.enum([
-  "goal", "constraint", "method", "decision", "episode", "outcome", "lesson", "open_loop",
-]);
-const threadSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("attach"),
-    role: threadRoleSchema,
-    threadRef: z.string().regex(THREAD_REF_PATTERN),
-  }).strict(),
-  z.object({
-    action: z.literal("create"),
-    identity: z.enum(["subject", "project"]).optional().describe(
-      "Не передавайте для текущего автора; project допустим только для общей памяти нескольких участников.",
-    ),
-    parentThreadRef: z.string().regex(THREAD_REF_PATTERN).optional(),
-    purpose: z.string().trim().min(1).max(THREAD_PURPOSE_MAX_CHARACTERS),
-    role: threadRoleSchema,
-    title: z.string().trim().min(1).max(THREAD_TITLE_MAX_CHARACTERS),
-  }).strict().refine(
-    (input) => input.parentThreadRef === undefined || input.identity === undefined,
-    { message: "Для subthread identity определяется только проверенной родительской нитью" },
-  ),
-]);
-
-const memoryCreateSchema = z.object({
-  basis: z.enum(["agent_inferred", "user_requested"]),
-  content: z.string().min(1).max(4_000),
-  kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
-  scope: z.enum(["personal", "family", "group"]),
-  sensitivity: z.enum(["normal", "sensitive"]),
-  subjectLabel: z.string().trim().min(1).max(200).optional(),
-  subjectRef: z.string().regex(/^subj_[0-9a-f]{32}$/u).optional().describe(
-    "Точный verified subjectRef для другого известного субъекта; не нужен текущему автору.",
-  ),
-  thread: threadSchema.optional(),
-}).strict().refine(
-  (input) => input.subjectLabel === undefined || input.subjectRef === undefined,
-  { message: "Передайте subjectRef или subjectLabel, но не оба поля" },
-).superRefine((input, context) => {
-  if (input.thread?.action !== "create") return;
-
-  // These combinations can never satisfy the repository identity invariants, so reject them before
-  // embedding or opening a transaction and return a precise correction to the model.
-  if (input.scope === "personal" && input.thread.identity === "project") {
-    context.addIssue({
-      code: "custom",
-      message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи; для текущего автора не передавайте identity",
-      path: ["thread", "identity"],
-    });
-  }
-  if (input.subjectLabel !== undefined) {
-    context.addIssue({
-      code: "custom",
-      message: "AGENT_MEMORY_THREAD_INPUT_INVALID: subjectLabel не подтверждает identity нити; используйте verified subjectRef или текущего автора",
-      path: ["subjectLabel"],
-    });
-  }
-});
+import { rememberInputSchema, type RememberInput } from "../remember-contract.js";
 
 export default defineTool({
   approval: ({ session, toolInput }) => {
     // Sensitive data and disclosure from a private chat into family memory require explicit consent.
-    const input = toolInput as z.infer<typeof memoryCreateSchema> | undefined;
+    const input = toolInput as RememberInput | undefined;
     const privateFamilyWrite =
       input?.scope === "family" && session.auth.current?.attributes.telegramChatType === "private";
     return input?.sensitivity === "sensitive" || privateFamilyWrite
@@ -91,7 +26,7 @@ export default defineTool({
   },
   description:
     "Сохранить одну устойчивую запись, которую ты сама определила из текущего сообщения пользователя; optional thread тем же вызовом атомарно создаёт нить или прикрепляет запись к найденной нити. Не сохраняй предположения и одноразовые запросы.",
-  inputSchema: memoryCreateSchema,
+  inputSchema: rememberInputSchema,
   async execute(input, ctx) {
     const authorization = requireMemoryAuthorization(ctx);
     const scope = requireWritableScope(authorization, input.scope);
@@ -118,8 +53,7 @@ export default defineTool({
       content: requireAllowedMemoryContent(input.content),
       explicitSource: {
         conversationId,
-        ...(input.subjectLabel === undefined ? {} : { subjectLabel: input.subjectLabel }),
-        ...(input.subjectRef === undefined ? {} : { subjectRef: input.subjectRef }),
+        subject: input.subject,
         timelineEntryId,
       },
       kind: input.kind,

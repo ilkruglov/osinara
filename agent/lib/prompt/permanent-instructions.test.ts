@@ -100,7 +100,10 @@ describe("permanent instructions", () => {
     expect(instructions).toContain("## Длинные ответы всегда прячь под раскрытие");
     // Genre must not become an escape hatch: long plain prose is still a long answer.
     expect(instructions).toMatch(/не зависит от жанра/u);
-    expect(instructions).toMatch(/больше трёх абзацев/u);
+    expect(instructions).toMatch(/больше двух абзацев/u);
+    expect(instructions).toMatch(/больше семи строк/u);
+    expect(instructions).toMatch(/больше шестисот символов/u);
+    expect(instructions).toMatch(/список длиннее пяти пунктов/u);
     expect(instructions).toMatch(/Одного признака достаточно/u);
     // An explicit pre-send checkpoint, not a vague preference.
     expect(instructions).toMatch(/Перед отправкой проверь/u);
@@ -111,6 +114,16 @@ describe("permanent instructions", () => {
     expect(instructions).toMatch(/сомневаешься в объёме, сворачивай/u);
     // The short-answer counterbalance stays, so the rule cannot flip into wrapping everything.
     expect(instructions).toMatch(/Не прячь под раскрытие короткий ответ/u);
+  });
+
+  it("uses a live conversational rhythm without making every answer comprehensive", async () => {
+    const instructions = await permanentInstructions();
+
+    expect(instructions).toContain("## Живой ритм разговора");
+    expect(instructions).toMatch(/сколько естественно сказать сейчас/u);
+    expect(instructions).toMatch(/ответ со строчной буквы/u);
+    expect(instructions).toMatch(/Не превращай простой вопрос в мини-статью/u);
+    expect(instructions).toMatch(/не добавляй.*встречный вопрос.*без необходимости/u);
   });
 
   it("stays materially smaller than the mode-agnostic plus mode-specific whole", async () => {

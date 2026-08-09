@@ -37,6 +37,7 @@ describeWithDatabase("private memory thread notice", () => {
       content: "Анна начала готовиться к марафону",
       explicitSource: {
         conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
         timelineEntryId: fixture.timelineEntryId,
       },
       kind: "fact",

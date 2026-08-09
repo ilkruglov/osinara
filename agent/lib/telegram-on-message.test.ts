@@ -205,7 +205,8 @@ describe("createTelegramMessageHandler", () => {
       scope: "personal",
     });
     expect(result?.context?.join("\n")).toContain("inbox/1/договор.pdf");
-    expect(result?.context?.join("\n")).toContain("safely supports Markdown tables");
+    expect(result?.context?.join("\n")).toContain("plain text by default");
+    expect(result?.context?.join("\n")).toContain("Rich Markdown only when formatting");
   });
 
   it("persists a captionless private photo and exposes its trusted workspace path", async () => {

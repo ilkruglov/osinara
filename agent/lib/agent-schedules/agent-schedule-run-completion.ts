@@ -34,7 +34,7 @@ export interface CompleteDeliveredAgentScheduleRunInput {
   ownerUserId: string | null;
   runId: string;
   scheduledFor: Date;
-  scope: "family" | "personal";
+  scope: "family" | "group" | "personal";
   telegramChatId: string;
   telegramMessageId: string;
   title: string;
@@ -139,6 +139,8 @@ export async function finishActiveAgentScheduleRun(
       WHERE id = $1`,
     [row.run_id, input.errorCode === null ? "completed" : "failed", input.completedAt, input.errorCode],
   );
+  // History chunks exist only to serve the active model run and must not become retained copies.
+  await client.query("DELETE FROM agent_schedule_history_snapshots WHERE run_id = $1", [row.run_id]);
 
   const next = await nextOccurrence(client, row.schedule_id, row.recurrence_kind, input.completedAt);
   if (!next) {

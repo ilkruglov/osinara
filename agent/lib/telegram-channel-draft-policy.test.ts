@@ -4,7 +4,7 @@
  * Constructs covered:
  * - The channel does not emit text-like drafts before knowing the terminal delivery kind.
  * - Token deltas and tool-loop events never trigger draft API calls.
- * - Scheduled Telegram delivery is durably confirmed before secondary group timeline persistence.
+ * - Scheduled Telegram delivery is reauthorized before send and confirmed before timeline persistence.
  * - Turn start never launches a second semantic pass over the conversation.
  */
 import { readFile } from "node:fs/promises";
@@ -26,9 +26,13 @@ describe("Telegram channel draft policy", () => {
 
   it("records scheduled delivery confirmation before the group timeline", async () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+    const authorization = source.indexOf("await agentScheduleDispatchRepository.authorizeDelivery(");
+    const delivery = source.indexOf("await deliverTelegramFinalOutput(");
     const confirmation = source.indexOf("await agentScheduleDispatchRepository.completeDeliveredRun(");
     const timeline = source.indexOf("await telegramGroupJournalRepository.recordAgentResponse(");
 
+    expect(authorization).toBeGreaterThan(-1);
+    expect(delivery).toBeGreaterThan(authorization);
     expect(confirmation).toBeGreaterThan(-1);
     expect(timeline).toBeGreaterThan(confirmation);
     expect(source).not.toContain("agentScheduleDispatchRepository.completeRun(");

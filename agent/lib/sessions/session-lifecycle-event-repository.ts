@@ -87,6 +87,25 @@ async function resolveFailureSessionForUpdate(
 }
 
 export const sessionLifecycleEventRepository = {
+  async retireUnstartedScheduledSession(id: string): Promise<void> {
+    const retired = await applyTerminalMutation({
+      id,
+      sql:
+      `UPDATE conversation_sessions
+          SET pending_operation = false, task_state = 'failed', retired_at = now(),
+              delete_after = now() + $2 * interval '1 day'
+        WHERE id = $1 AND retired_at IS NULL AND kind = 'scheduled'
+          AND eve_session_id IS NULL`,
+      parameters: [id, SESSION_RETENTION_DAYS],
+    });
+    if (!retired) {
+      throw new AppError(
+        "AGENT_SCHEDULE_SESSION_RETIRE_FAILED",
+        "Не удалось закрыть незапущенный контекст автоматизации",
+      );
+    }
+  },
+
   async hasPendingOperation(id: string, eveSessionId: string): Promise<boolean> {
     const result = await database().query<{ pending: boolean }>(
       `SELECT EXISTS (

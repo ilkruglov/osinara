@@ -294,13 +294,14 @@ export const profileViewRepository = {
       const selection = selectProfileClaims(candidates, input.now);
       const selectedClaims = selection.subjects.flatMap((subject) => subject.claims);
       const insertedView = await client.query<{ created_at: Date; id: string; profile_view_ref: string }>(
-        `INSERT INTO profile_views
-           (family_id, viewer_conversation_id, viewer_user_id, subject_count,
-            claim_count, total_characters)
-         VALUES ($1, $2, $3, $4, $5, $6)
+         `INSERT INTO profile_views
+            (family_id, viewer_conversation_id, viewer_user_id, subject_count,
+             claim_count, total_characters, eve_session_id, eve_turn_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, profile_view_ref, created_at`,
         [auth.familyId, input.conversationId, auth.userId, selection.subjects.length,
-          selectedClaims.length, selection.totalCharacters],
+          selectedClaims.length, selection.totalCharacters,
+          input.provenance.sessionId, input.provenance.turnId],
       );
       const view = insertedView.rows[0]!;
       for (const [subjectOrdinal, selectedSubject] of selection.subjects.entries()) {
