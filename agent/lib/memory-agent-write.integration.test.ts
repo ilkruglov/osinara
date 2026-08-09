@@ -18,7 +18,7 @@ vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
 }));
 
 import { closeDatabase, database } from "./database.js";
-import type { MemoryAuthorization } from "./memory-context.js";
+import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-fixtures.js";
 import { embedMemoryPassages } from "./memory-embedding-client.js";
 import { memoryRepository } from "./memory-repository.js";
 
@@ -38,57 +38,6 @@ const DISTINCT_TOPIC_VECTOR = [
   ...Array.from({ length: 382 }, () => 0),
 ];
 
-async function createFixture() {
-  const family = await database().query<{ id: string }>(
-    "INSERT INTO families (name) VALUES ('Main agent memory') RETURNING id",
-  );
-  const user = await database().query<{ id: string }>(
-    "INSERT INTO users (telegram_user_id, display_name) VALUES ('agent-memory-author', 'Анна') RETURNING id",
-  );
-  await database().query(
-    "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
-    [family.rows[0]!.id, user.rows[0]!.id],
-  );
-  const group = await database().query<{ id: string }>(
-    `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
-     VALUES ($1, '-100-agent-memory', 'Семья', 'family_private', 'addressed_only') RETURNING id`,
-    [family.rows[0]!.id],
-  );
-  const conversation = await database().query<{ id: string }>(
-    "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
-    [group.rows[0]!.id],
-  );
-  await database().query(
-    `INSERT INTO conversation_participants
-       (conversation_id, family_id, scope, scope_partition_key, telegram_user_id,
-        linked_user_id, display_name_snapshot, first_observed_at, last_observed_at)
-     VALUES ($1, $2, 'family', $2, 'agent-memory-author', $3, 'Анна', now(), now())`,
-    [conversation.rows[0]!.id, family.rows[0]!.id, user.rows[0]!.id],
-  );
-  const message = await database().query<{ id: string }>(
-    `INSERT INTO telegram_group_messages
-       (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
-        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
-     VALUES ($1, $2, 901, 1, 'user', 'telegram:agent-memory-author', 'agent-memory-author',
-             'Анна', false, 'text', 'Я начинаю готовиться к марафону', now()) RETURNING id`,
-    [conversation.rows[0]!.id, group.rows[0]!.id],
-  );
-  const auth: MemoryAuthorization = {
-    familyId: family.rows[0]!.id,
-    groupId: group.rows[0]!.id,
-    role: "owner",
-    scopes: ["family"],
-    telegramUserId: "agent-memory-author",
-    userId: user.rows[0]!.id,
-  };
-  return {
-    auth,
-    conversationId: conversation.rows[0]!.id,
-    timelineEntryId: message.rows[0]!.id,
-    userId: user.rows[0]!.id,
-  };
-}
-
 describeWithDatabase("main-agent memory write", () => {
   beforeEach(async () => {
     vi.mocked(embedMemoryPassages).mockReset().mockResolvedValue([
@@ -100,7 +49,7 @@ describeWithDatabase("main-agent memory write", () => {
   afterAll(closeDatabase);
 
   it("atomically creates an author-bound claim and thread without specialized model jobs", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     const memory = await memoryRepository.create(fixture.auth, {
       confirmation: "model_high",
       content: "Анна начала готовиться к марафону",
@@ -164,7 +113,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("keeps exact reinforcement isolated between semantically distinct project identities", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     vi.mocked(embedMemoryPassages)
       .mockResolvedValueOnce([POSITIVE_VECTOR])
       .mockResolvedValueOnce([NEGATIVE_VECTOR]);
@@ -201,7 +150,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("rejects a semantically similar thread title and rolls back the new claim", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     vi.mocked(embedMemoryPassages)
       .mockResolvedValueOnce([POSITIVE_VECTOR])
       .mockResolvedValueOnce([SEMANTIC_DUPLICATE_VECTOR]);
@@ -258,7 +207,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("allows a distinct topic above the broader retrieval similarity gate", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     vi.mocked(embedMemoryPassages)
       .mockResolvedValueOnce([POSITIVE_VECTOR])
       .mockResolvedValueOnce([DISTINCT_TOPIC_VECTOR]);
@@ -302,7 +251,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("rejects a thread with a strongly matching purpose despite a dissimilar title vector", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     vi.mocked(embedMemoryPassages)
       .mockResolvedValueOnce([POSITIVE_VECTOR])
       .mockResolvedValueOnce([NEGATIVE_VECTOR]);
@@ -358,7 +307,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("attaches to an exact active title instead of treating it as an ambiguous candidate", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     const create = (content: string, operationKey: string) => memoryRepository.create(fixture.auth, {
       confirmation: "model_high" as const,
       content,
@@ -390,7 +339,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("replays a created thread without requiring another embedding call", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     const input = {
       confirmation: "model_high" as const,
       content: "Анна начала готовиться к марафону",
@@ -418,7 +367,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("denies a replay after live family membership revocation", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
     const input = {
       confirmation: "model_high" as const,
       content: "Анна начала готовиться к марафону",
@@ -443,7 +392,7 @@ describeWithDatabase("main-agent memory write", () => {
   });
 
   it("rolls back the claim when an attached opaque thread ref is unavailable", async () => {
-    const fixture = await createFixture();
+    const fixture = await createMainAgentMemoryFixture();
 
     await expect(memoryRepository.create(fixture.auth, {
       confirmation: "model_high",

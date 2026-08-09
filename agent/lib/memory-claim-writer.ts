@@ -22,7 +22,20 @@ import {
   normalizeMemoryClaimContent,
 } from "./memory-record.js";
 import {
+  beginMemoryThreadCandidateAttach,
+  completeMemoryThreadCandidateAttach,
+  completeMemoryThreadCreationAttempt,
+  lockMemoryThreadCandidateAttach,
+  recordMemoryThreadCandidateAttempt,
+  releaseMemoryThreadCreationAttempt,
+  replayMemoryThreadCreationAttempt,
+  requireMemoryThreadCreationReservation,
+  reserveMemoryThreadCreationAttempt,
+  type MemoryThreadCreationReservation,
+} from "./memory-thread-creation-attempts.js";
+import {
   embedMemoryThreadTitle,
+  isMemoryThreadCandidateError,
   materializeMemoryThreadWrite,
   prepareMemoryThreadWrite,
   type PreparedMemoryThreadWrite,
@@ -148,15 +161,26 @@ async function replayBeforeTitleEmbedding(
   auth: MemoryAuthorization,
   input: CreateMemoryInput,
   inputHash: string,
-): Promise<ReferencedMemoryItem | null> {
+): Promise<{
+  replay: ReferencedMemoryItem | null;
+  reservation: MemoryThreadCreationReservation | null;
+}> {
   const client = await database().connect();
   try {
     await client.query("BEGIN");
     // Replay must remain available when local E5 is down, but never bypass live authorization.
     await requireCurrentWriteContext(client, auth, input.scope);
     const replay = await existingCreate(client, auth, input, inputHash);
+    if (replay) {
+      await client.query("COMMIT");
+      return { replay, reservation: null };
+    }
+    await replayMemoryThreadCreationAttempt(client, auth, input, inputHash);
+    // A new reservation is persisted only after the Telegram source has been verified in this scope.
+    await prepareExplicitClaimEvidence(client, auth, input);
+    const reservation = await reserveMemoryThreadCreationAttempt(client, auth, input, inputHash);
     await client.query("COMMIT");
-    return replay;
+    return { replay: null, reservation };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -165,25 +189,90 @@ async function replayBeforeTitleEmbedding(
   }
 }
 
+async function releaseReservationAfterEmbeddingFailure(
+  auth: MemoryAuthorization,
+  reservation: MemoryThreadCreationReservation,
+): Promise<void> {
+  const client = await database().connect();
+  try {
+    await client.query("BEGIN");
+    await releaseMemoryThreadCreationAttempt(client, auth, reservation);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function completeThreadReservation(
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  reservation: MemoryThreadCreationReservation | null,
+): Promise<void> {
+  if (reservation) await completeMemoryThreadCreationAttempt(client, auth, reservation);
+}
+
+async function completeThreadOutcome(
+  client: PoolClient,
+  auth: MemoryAuthorization,
+  input: CreateMemoryInput,
+  reservation: MemoryThreadCreationReservation | null,
+  resolvingCandidate: boolean,
+): Promise<void> {
+  await completeThreadReservation(client, auth, reservation);
+  if (resolvingCandidate) await completeMemoryThreadCandidateAttach(client, auth, input);
+}
+
 export async function createMemoryClaim(
   auth: MemoryAuthorization,
   input: CreateMemoryInput,
 ): Promise<ReferencedMemoryItem> {
   requireScope(auth, input.scope);
   const inputHash = memoryOperationHash(input);
+  let reservation: MemoryThreadCreationReservation | null = null;
   if (input.thread?.action === "create") {
-    const replay = await replayBeforeTitleEmbedding(auth, input, inputHash);
+    const preflight = await replayBeforeTitleEmbedding(auth, input, inputHash);
+    const { replay } = preflight;
     if (replay) return replay;
+    reservation = preflight.reservation;
   }
-  const titleEmbedding = await embedMemoryThreadTitle(input.thread);
+  let titleEmbedding: Awaited<ReturnType<typeof embedMemoryThreadTitle>>;
+  try {
+    titleEmbedding = await embedMemoryThreadTitle(input.thread);
+  } catch (error) {
+    // An explicit failed call may retry; a crash instead leaves a bounded lease for safe takeover.
+    if (reservation) await releaseReservationAfterEmbeddingFailure(auth, reservation);
+    throw error;
+  }
   const client = await database().connect();
+  let savepointCreated = false;
+  let resolvingCandidate = false;
   try {
     await client.query("BEGIN");
     await requireCurrentWriteContext(client, auth, input.scope);
     const replay = await existingCreate(client, auth, input, inputHash);
     if (replay) {
+      if (reservation) await releaseMemoryThreadCreationAttempt(client, auth, reservation);
       await client.query("COMMIT");
       return replay;
+    }
+    const attachLocked = await lockMemoryThreadCandidateAttach(client, auth, input);
+    if (attachLocked) {
+      // The operation can commit while this concurrent replay waits for the source lock.
+      const lockedReplay = await existingCreate(client, auth, input, inputHash);
+      if (lockedReplay) {
+        await client.query("COMMIT");
+        return lockedReplay;
+      }
+      resolvingCandidate = await beginMemoryThreadCandidateAttach(client, auth, input);
+    }
+    if (reservation) {
+      await requireMemoryThreadCreationReservation(client, auth, input, inputHash, reservation);
+      // The reservation row and live membership locks predate this savepoint and survive claim rollback.
+      await client.query("SAVEPOINT memory_thread_claim_write");
+      savepointCreated = true;
     }
     let prepared = input.explicitSource
       ? await prepareExplicitClaimEvidence(client, auth, input)
@@ -231,6 +320,7 @@ export async function createMemoryClaim(
     if (reinforced) {
       if (threadWrite) await materializeMemoryThreadWrite(client, auth, reinforced.id, threadWrite);
       await insertCreateOperation(client, auth, input, inputHash, reinforced.id, threadWrite);
+      await completeThreadOutcome(client, auth, input, reservation, resolvingCandidate);
       await client.query("COMMIT");
       return {
         ...rowToReferencedMemory(reinforced),
@@ -293,13 +383,40 @@ export async function createMemoryClaim(
       [auth.familyId, prepared?.auditActorUserId ?? auth.userId, row.id,
         input.scope, input.kind, input.sensitivity],
     );
+    await completeThreadOutcome(client, auth, input, reservation, resolvingCandidate);
     await client.query("COMMIT");
     return {
       ...rowToReferencedMemory({ ...row, memory_ref: memoryRef }),
       ...(threadWrite ? { thread: threadWrite.result } : {}),
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (reservation && savepointCreated) {
+      try {
+        // Claim/project writes roll back while the pre-savepoint auth and reservation locks remain held.
+        await client.query("ROLLBACK TO SAVEPOINT memory_thread_claim_write");
+        if (isMemoryThreadCandidateError(error)) {
+          await recordMemoryThreadCandidateAttempt(client, auth, reservation, error.candidates);
+        } else {
+          await releaseMemoryThreadCreationAttempt(client, auth, reservation);
+        }
+        await client.query("COMMIT");
+      } catch (finalizationError) {
+        await client.query("ROLLBACK");
+        throw finalizationError;
+      }
+    } else {
+      await client.query("ROLLBACK");
+      if (reservation) {
+        try {
+          await client.query("BEGIN");
+          await releaseMemoryThreadCreationAttempt(client, auth, reservation);
+          await client.query("COMMIT");
+        } catch (releaseError) {
+          await client.query("ROLLBACK");
+          throw releaseError;
+        }
+      }
+    }
     throw error;
   } finally {
     client.release();

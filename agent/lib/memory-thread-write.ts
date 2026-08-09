@@ -44,6 +44,31 @@ interface SimilarThreadRow {
   title: string;
 }
 
+export interface MemoryThreadCandidate {
+  threadRef: string;
+  title: string;
+}
+
+export class MemoryThreadCandidateError extends AppError {
+  readonly candidates: readonly MemoryThreadCandidate[];
+
+  constructor(candidates: readonly MemoryThreadCandidate[]) {
+    const references = candidates
+      .map((candidate) => `«${candidate.title}» (${candidate.threadRef})`)
+      .join(", ");
+    super(
+      "AGENT_MEMORY_THREAD_CANDIDATE_EXISTS",
+      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; ` +
+        "иначе сделайте не более одной попытки с уточнёнными названием и назначением новой нити",
+    );
+    this.candidates = candidates;
+  }
+}
+
+export function isMemoryThreadCandidateError(error: unknown): error is MemoryThreadCandidateError {
+  return error instanceof MemoryThreadCandidateError;
+}
+
 export interface PreparedMemoryThreadWrite {
   identity: ThreadIdentity;
   preparedEvidence: PreparedClaimEvidence;
@@ -311,14 +336,10 @@ async function findOrCreateThread(
       projectRoot, THREAD_CREATION_CANDIDATE_LIMIT],
   );
   if (candidates.rows.length > 0) {
-    const references = candidates.rows
-      .map((candidate) => `«${candidate.title}» (${candidate.thread_ref})`)
-      .join(", ");
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_CANDIDATE_EXISTS",
-      `Похожая нить уже существует: ${references}. При совпадении прикрепите запись; ` +
-        "иначе сделайте не более одной попытки с уточнёнными названием и назначением новой нити",
-    );
+    throw new MemoryThreadCandidateError(candidates.rows.map((candidate) => ({
+      threadRef: candidate.thread_ref,
+      title: candidate.title,
+    })));
   }
 
   const inserted = await client.query<{ id: string; thread_ref: string }>(

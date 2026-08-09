@@ -49,6 +49,8 @@ export const THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY = 0.92;
 // Creation uses a conservative lexical gate: false positives stop a write and require clarification.
 export const THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY = 0.9;
 export const THREAD_CREATION_CANDIDATE_LIMIT = 3;
+export const THREAD_CREATION_MAX_ATTEMPTS = 2;
+export const THREAD_CREATION_ATTEMPT_LEASE_MILLISECONDS = 5 * 60 * 1_000;
 export const THREAD_NOTICE_DELIVERY_LEASE_MILLISECONDS = 5 * 60 * 1_000;
 
 // Profile context is a bounded read projection; whole claims are skipped rather than truncated.
