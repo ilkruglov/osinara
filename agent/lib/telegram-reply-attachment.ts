@@ -31,5 +31,8 @@ export function telegramReplyAttachmentTarget(
 
   if (group.type === "family_private") return target;
   const mediaKind = classifyTelegramInboundMedia(target);
-  return mediaKind === "native_photo" || mediaKind === "image_document_candidate" ? target : null;
+  return mediaKind === "native_photo" || mediaKind === "image_document_candidate" ||
+    mediaKind === "text_document_candidate"
+    ? target
+    : null;
 }

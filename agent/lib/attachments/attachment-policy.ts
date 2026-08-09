@@ -4,6 +4,7 @@
  * Exports:
  * - `ValidatedAttachmentContent`: canonical safe filename and content-derived media type.
  * - `validateAttachmentContent`: accepts arbitrary documents while validating native photos.
+ * - External readable-text candidate and content guards for the restricted group workspace.
  */
 import { extname, posix } from "node:path";
 
@@ -20,14 +21,68 @@ const TEXT_EXTENSION_MEDIA_TYPES: Readonly<Record<string, string>> = {
   ".json": "application/json",
   ".md": "text/markdown",
   ".txt": "text/plain",
+  ".tsv": "text/tab-separated-values",
   ".xml": "application/xml",
   ".yaml": "application/yaml",
   ".yml": "application/yaml",
 };
 
+const EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".md": "text/markdown",
+  ".txt": "text/plain",
+  ".tsv": "text/tab-separated-values",
+};
+
 export interface ValidatedAttachmentContent {
   fileName: string;
   mediaType: string;
+}
+
+export function isReadableTextDocumentCandidate(input: {
+  fileName?: string;
+  kind: "document" | "photo";
+  mediaType?: string;
+}): boolean {
+  if (input.kind !== "document" || !input.fileName) return false;
+  const extension = extname(input.fileName.normalize("NFKC")).toLowerCase();
+  return EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES[extension] !== undefined;
+}
+
+function textRequired(): AppError {
+  return new AppError(
+    "AGENT_ATTACHMENT_TEXT_REQUIRED",
+    "В этой группе можно импортировать только UTF-8 файлы TXT, Markdown, JSON, CSV или TSV",
+  );
+}
+
+export async function validateReadableTextAttachmentContent(input: {
+  bytes: Uint8Array;
+  declaredMediaType?: string;
+  fileName: string;
+  kind: "document" | "photo";
+}): Promise<ValidatedAttachmentContent> {
+  const fileName = sanitizeAttachmentFileName(input.fileName);
+  if (!isReadableTextDocumentCandidate({
+    fileName,
+    kind: input.kind,
+    ...(input.declaredMediaType ? { mediaType: input.declaredMediaType } : {}),
+  })) throw textRequired();
+  if (await fileTypeFromBuffer(input.bytes)) throw textRequired();
+
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(input.bytes);
+    // Eve's read_file rejects NUL-bearing files as binary, so persistence must prove the same contract.
+    if (text.includes("\0")) throw textRequired();
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw textRequired();
+  }
+  return {
+    fileName,
+    mediaType: EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES[extname(fileName).toLowerCase()]!,
+  };
 }
 
 export function sanitizeAttachmentFileName(fileName: string): string {

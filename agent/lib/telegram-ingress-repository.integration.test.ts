@@ -161,6 +161,37 @@ describeWithDatabase("telegramIngressRepository", () => {
     expect(ignored.rows).toEqual([{ update_id: "1014" }]);
   });
 
+  it("accepts text-document candidates only for an external group with attachment import enabled", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('External text attachment family') RETURNING id",
+    );
+    await database().query(
+      `INSERT INTO telegram_groups
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
+       VALUES
+         ($1, '-100-text-enabled', 'Text enabled', 'external', 'addressed_only',
+          ARRAY['import_telegram_attachment']),
+         ($1, '-100-text-disabled', 'Text disabled', 'external', 'addressed_only', '{}')`,
+      [family.rows[0]!.id],
+    );
+
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-text-enabled",
+      chatType: "supergroup",
+      mediaKind: "text_document_candidate",
+      updateId: "1015",
+    })).resolves.toBe(true);
+    await expect(telegramIngressRepository.acceptMedia({
+      chatId: "-100-text-disabled",
+      chatType: "supergroup",
+      mediaKind: "text_document_candidate",
+      updateId: "1016",
+    })).resolves.toBe(false);
+    await expect(database().query(
+      "SELECT 1 FROM telegram_ingress_ignored_updates WHERE update_id = 1016",
+    )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
   it("tombstones a photo when any persisted external capability is malformed", async () => {
     const family = await database().query<{ id: string }>(
       "INSERT INTO families (name) VALUES ('Malformed photo policy family') RETURNING id",

@@ -153,7 +153,7 @@ describe("external Telegram native photos", () => {
 
     expect(repository.attachmentReferences.captureReplyTarget).not.toHaveBeenCalled();
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
-      includeAttachmentReferences: false,
+      attachmentReferenceAccess: { images: false, readableText: false },
     }));
   });
 

@@ -21,7 +21,7 @@ export const VISION_IMAGE_MEDIA_TYPES = new Set([
 const VISION_IMAGE_EXTENSIONS = new Set([".jpeg", ".jpg", ".png", ".webp"]);
 
 export function isTelegramImageDocumentCandidate(
-  attachment: TelegramAttachment,
+  attachment: Pick<TelegramAttachment, "fileName" | "kind" | "mediaType">,
 ): boolean {
   if (attachment.kind !== "document") return false;
   return attachment.mediaType?.toLowerCase().startsWith("image/") === true ||

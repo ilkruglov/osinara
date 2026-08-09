@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { validateAttachmentContent } from "./attachment-policy.js";
+import {
+  validateAttachmentContent,
+  validateReadableTextAttachmentContent,
+} from "./attachment-policy.js";
 
 const PNG_BYTES = Buffer.from(
   "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489" +
@@ -75,5 +78,57 @@ describe("validateAttachmentContent", () => {
       fileName: "photo.jpg",
       kind: "photo",
     })).rejects.toThrowError(/AGENT_ATTACHMENT_TYPE_MISMATCH/);
+  });
+});
+
+describe("validateReadableTextAttachmentContent", () => {
+  it.each([
+    ["notes.txt", "text/plain"],
+    ["README.md", "text/markdown"],
+    ["payload.json", "application/json"],
+    ["report.csv", "text/csv"],
+    ["report.tsv", "text/tab-separated-values"],
+  ])("accepts strict UTF-8 %s as %s", async (fileName, mediaType) => {
+    await expect(validateReadableTextAttachmentContent({
+      bytes: Buffer.from("ключ,значение\nчай,2\n", "utf8"),
+      declaredMediaType: "application/octet-stream",
+      fileName,
+      kind: "document",
+    })).resolves.toEqual({ fileName, mediaType });
+  });
+
+  it.each(["page.html", "settings.yaml", "document.pdf"])(
+    "rejects unsupported external document %s",
+    async (fileName) => {
+      await expect(validateReadableTextAttachmentContent({
+        bytes: Buffer.from("readable text", "utf8"),
+        fileName,
+        kind: "document",
+      })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+    },
+  );
+
+  it("rejects valid UTF-8 containing NUL", async () => {
+    await expect(validateReadableTextAttachmentContent({
+      bytes: Buffer.from("before\0after", "utf8"),
+      fileName: "notes.txt",
+      kind: "document",
+    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+  });
+
+  it("rejects invalid UTF-8 without relying on NUL detection", async () => {
+    await expect(validateReadableTextAttachmentContent({
+      bytes: Buffer.from([0xc3, 0x28]),
+      fileName: "notes.txt",
+      kind: "document",
+    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+  });
+
+  it("rejects detected binary magic under a readable extension", async () => {
+    await expect(validateReadableTextAttachmentContent({
+      bytes: Buffer.from("504b0506000000000000000000000000000000000000", "hex"),
+      fileName: "notes.txt",
+      kind: "document",
+    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
   });
 });

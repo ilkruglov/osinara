@@ -15,6 +15,10 @@ import { AppError } from "./app-error.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 import { groupTimelineCursorRepository } from "./sessions/group-timeline-cursor-repository.js";
+import {
+  type TelegramAttachmentReferenceAccess,
+  visibleTelegramTimelineEntry,
+} from "./telegram-attachment-reference-access.js";
 import { selectTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
 import {
   telegramGroupJournalRepository,
@@ -23,13 +27,13 @@ import {
 
 interface PrepareTelegramGroupTurnContextInput {
   applicationSessionId: string;
+  attachmentReferenceAccess: TelegramAttachmentReferenceAccess;
   currentEntryId: string;
   currentSenderDisplayName: string;
   currentSenderUsername: string | null;
   currentSequence: string;
   conversationId?: string;
   groupId: string | null;
-  includeAttachmentReferences: boolean;
   messageText: string;
   messageThreadId: string | null;
   replyTargetUnavailable: boolean;
@@ -171,10 +175,10 @@ export function createTelegramGroupTurnContextPreparer(
             limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
             messageThreadId: input.messageThreadId,
           });
-    // External capability revocation hides even historical opaque references from new model turns.
-    const visibleEntries = input.includeAttachmentReferences
-      ? page.entries
-      : page.entries.map(({ attachment: _attachment, ...entry }) => entry);
+    // Current capabilities filter each historical reference by its exact admitted media class.
+    const visibleEntries = page.entries.map((entry) =>
+      visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess)
+    );
     const currentMessageCharacters = durableTurnMessage(null, input).length;
     const timelineCharacterBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
       currentMessageCharacters - 2;

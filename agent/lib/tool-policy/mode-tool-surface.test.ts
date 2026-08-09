@@ -230,6 +230,35 @@ describe("external group tool surface", () => {
       .toContain("remove_group_file");
   });
 
+  it("surfaces Telegram text attachment import only when explicitly allowed", () => {
+    expect(names({ capabilities: new Set(), environment: "external", skills: {} }))
+      .not.toContain("import_telegram_attachment");
+    expect(names({
+      capabilities: new Set(["import_telegram_attachment"]),
+      environment: "external",
+      skills: {},
+    })).toContain("import_telegram_attachment");
+  });
+
+  it("denies Telegram attachment import after its external capability is revoked", async () => {
+    const surface = buildModeToolSurface({
+      capabilities: new Set(["import_telegram_attachment"]),
+      environment: "external",
+      skills: {},
+    });
+    const staleContext = {
+      session: { auth: externalAuth(["import_telegram_attachment"]) },
+    } as never;
+
+    await expect(surface.import_telegram_attachment!.execute({
+      attachmentId: "00000000-0000-4000-8000-000000000099",
+    }, staleContext)).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
+      familyId: "family-1",
+      groupId: "group-1",
+    });
+  });
+
   it("denies every framework built-in an external group must not reach", async () => {
     const surface = buildModeToolSurface({ capabilities: new Set(), environment: "external", skills: {} });
 

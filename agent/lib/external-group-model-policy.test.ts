@@ -60,9 +60,9 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
     }
   });
 
-  it("keeps web and photo access controlled only by the effective capability block", () => {
+  it("keeps web, photo, and message-file access controlled only by the capability block", () => {
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(
-      /Доступность работы с сайтами, сетью и фотографиями определяет только проверенный блок <external_group_capabilities>/u,
+      /Доступность работы с сайтами, сетью, фотографиями и файлами из сообщений определяет только проверенный блок <external_group_capabilities>/u,
     );
     expect(EXTERNAL_GROUP_MODEL_POLICY).not.toMatch(
       /сеть[^.]{0,80}(?:полностью )?запрещен|медиа[^.]{0,80}(?:не передаются|недоступны)/iu,

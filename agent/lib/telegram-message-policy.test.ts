@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `isMessageAddressedToBot`: preserves command semantics and accepts configured name stems.
- * - `classifyTelegramInboundMedia`: recognizes one native photo or static image-document candidate.
+ * - `classifyTelegramInboundMedia`: recognizes one native photo or allowlisted document candidate.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
  */
@@ -224,6 +224,64 @@ describe("classifyTelegramInboundMedia", () => {
       raw: { document: { file_id: "document", file_name: "report.pdf", mime_type: "application/pdf" } },
     })).toBe("unsupported_media");
   });
+
+  it.each([
+    ["text/plain", "notes.txt"],
+    ["text/markdown", "README.md"],
+    ["application/json", "payload.json"],
+    ["text/csv", "report.csv"],
+    ["text/tab-separated-values", "report.tsv"],
+  ])("classifies a supported text document declared as %s named %s", (mediaType, fileName) => {
+    expect(classifyTelegramInboundMedia({
+      attachments: [{ fileId: "text-document", fileName, kind: "document", mediaType }],
+      raw: {
+        document: {
+          file_id: "text-document",
+          file_name: fileName,
+          mime_type: mediaType,
+        },
+      },
+    })).toBe("text_document_candidate");
+  });
+
+  it("treats Telegram's spreadsheet declaration as metadata for a CSV candidate", () => {
+    expect(classifyTelegramInboundMedia({
+      attachments: [{
+        fileId: "csv-document",
+        fileName: "report.csv",
+        kind: "document",
+        mediaType: "application/vnd.ms-excel",
+      }],
+      raw: {
+        document: {
+          file_id: "csv-document",
+          file_name: "report.csv",
+          mime_type: "application/vnd.ms-excel",
+        },
+      },
+    })).toBe("text_document_candidate");
+  });
+
+  it.each(["report.pdf", "page.html", "settings.yaml", "archive.zip"])(
+    "does not classify unsupported document %s as readable text",
+    (fileName) => {
+      expect(classifyTelegramInboundMedia({
+        attachments: [{
+          fileId: "unsupported-document",
+          fileName,
+          kind: "document",
+          mediaType: "application/octet-stream",
+        }],
+        raw: {
+          document: {
+            file_id: "unsupported-document",
+            file_name: fileName,
+            mime_type: "application/octet-stream",
+          },
+        },
+      })).toBe("unsupported_media");
+    },
+  );
 
   it.each([
     { ...nativePhoto, attachments: [] },

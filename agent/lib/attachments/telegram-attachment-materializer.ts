@@ -3,13 +3,14 @@
  *
  * Exports:
  * - `createTelegramAttachmentMaterializer`: resolves one opaque reference and persists its bytes.
- * - `materializeTelegramAttachment`: production family-journal to workspace pipeline.
+ * - `materializeTelegramAttachment`: production registered-group journal to workspace pipeline.
  */
 import type { TelegramAttachment } from "eve/channels/telegram";
 
 import { telegramGroupAttachmentRepository } from "./telegram-group-attachment-repository.js";
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
+import { AppError } from "../app-error.js";
 import { downloadTelegramAttachment } from "./telegram-attachment-download.js";
 import {
   createTelegramWorkspaceAttachmentImporter,
@@ -30,7 +31,7 @@ interface TelegramAttachmentMaterializerDependencies {
     auth: WorkspaceAuthorization;
     chatId: string;
     messageId: string;
-    scope: "family";
+    scope: "family" | "group";
   }): Promise<StoredTelegramAttachment[]>;
 }
 
@@ -41,13 +42,24 @@ export function createTelegramAttachmentMaterializer(
     auth: WorkspaceAuthorization,
     attachmentId: string,
   ): Promise<StoredTelegramAttachment> => {
+    const scope = auth.groupType === "family_private"
+      ? "family"
+      : auth.groupType === "external"
+        ? "group"
+        : null;
+    if (scope === null) {
+      throw new AppError(
+        "AGENT_TELEGRAM_ATTACHMENT_SCOPE_FORBIDDEN",
+        "Вложения можно импортировать только из зарегистрированной группы",
+      );
+    }
     const reference = await dependencies.findAttachment(auth, attachmentId);
     const stored = await dependencies.persist({
       attachments: [reference.attachment],
       auth,
       chatId: reference.chatId,
       messageId: reference.messageId,
-      scope: "family",
+      scope,
     });
     const attachment = stored[0];
     if (!attachment) {

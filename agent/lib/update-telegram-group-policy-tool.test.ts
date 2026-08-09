@@ -78,6 +78,9 @@ describe("manage_telegram_group.update_policy", () => {
       "ровно action, telegramChatId, messageMode и полный toolAllowlist",
     );
     expect(manageTelegramGroup.description).toContain("type и title не передавай");
+    expect(manageTelegramGroup.description).toContain(
+      "сначала вызови status и перенеси неизменённые текущие права",
+    );
     expect(manageTelegramGroup.description).toContain("сохраняет её ID, название, тип, историю, workspace, память и сессии");
   });
 

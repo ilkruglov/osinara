@@ -28,6 +28,7 @@ describe("external purpose derivation", () => {
   });
 
   it("adds a purpose line for each granted capability", () => {
+    expect(purpose("import_telegram_attachment")).toMatch(/текстов.*файл.*сообщени/iu);
     expect(purpose("web_fetch")).toMatch(/страницу по ссылке/iu);
     expect(purpose("search_memories")).toMatch(/уже обсуждали/iu);
     expect(purpose("remember")).toMatch(/запомнить/iu);
@@ -44,6 +45,7 @@ describe("external purpose derivation", () => {
 
   it("describes purposes in human terms without naming any tool or capability", () => {
     const everything = purpose(
+      "import_telegram_attachment",
       "inspect_workspace_image",
       "list_group_history",
       "list_memories",

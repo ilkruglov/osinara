@@ -91,16 +91,19 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const externalImageAllowed = (mediaKind === "native_photo" ||
       mediaKind === "image_document_candidate") &&
       externalAllowlist?.has("inspect_workspace_image") === true;
+    const externalTextAttachmentAllowed = mediaKind === "text_document_candidate" &&
+      externalAllowlist?.has("import_telegram_attachment") === true;
     let journalDuplicate = false;
     let inboundTimeline: Awaited<
       ReturnType<TelegramMessageRepositories["journal"]["record"]>
     > | null = null;
     const hasLazyGroupAttachment = group !== null && message.attachments.length > 0 &&
-      (group.type === "family_private" || externalImageAllowed);
+      (group.type === "family_private" || externalImageAllowed || externalTextAttachmentAllowed);
     if (message.chat.type !== "private") {
       if (!group) return null;
-      // External media is fail-closed except for a current, explicitly allowlisted native photo.
-      if (group.type !== "family_private" && mediaKind !== "none" && !externalImageAllowed) {
+      // External media is fail-closed except for the exact capability admitted by its classifier.
+      if (group.type !== "family_private" && mediaKind !== "none" &&
+        !externalImageAllowed && !externalTextAttachmentAllowed) {
         return null;
       }
       // Every registered group shares one timeline independently of whether this message starts a turn.
@@ -236,16 +239,25 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const conversation = timelineBinding.conversation;
     inboundTimeline = timelineBinding.inboundTimeline;
     if (message.chat.type === "private" && inboundTimeline.status === "duplicate") return null;
-    // Family media stays remote until the model explicitly imports this safe opaque reference.
+    // Group media stays remote until a mode-authorized tool consumes this safe opaque reference.
     const currentAttachment = hasLazyGroupAttachment && group
       ? await repositories.attachmentReferences.record(group.groupId, message)
       : null;
-    const replyInspectionAllowed = group?.type === "family_private" ||
-      externalAllowlist?.has("inspect_workspace_image") === true;
-    const replyAttachmentTarget = group && inboundTimeline && replyInspectionAllowed
+    const replyAttachmentTarget = group && inboundTimeline
       ? telegramReplyAttachmentTarget(message, group)
       : null;
-    const replyAttachment = replyAttachmentTarget && group && inboundTimeline
+    const replyMediaKind = replyAttachmentTarget
+      ? classifyTelegramInboundMedia(replyAttachmentTarget)
+      : "none";
+    const externalReplyAllowed = (
+      (replyMediaKind === "native_photo" || replyMediaKind === "image_document_candidate") &&
+      externalAllowlist?.has("inspect_workspace_image") === true
+    ) || (
+      replyMediaKind === "text_document_candidate" &&
+      externalAllowlist?.has("import_telegram_attachment") === true
+    );
+    const replyAttachment = replyAttachmentTarget && group && inboundTimeline &&
+      (group.type === "family_private" || externalReplyAllowed)
       ? await repositories.attachmentReferences.captureReplyTarget(
         group.groupId,
         inboundTimeline.entryId,
@@ -370,14 +382,20 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const groupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
+          attachmentReferenceAccess: group?.type === "family_private"
+            ? "all"
+            : group?.type === "external"
+              ? {
+                  images: externalAllowlist?.has("inspect_workspace_image") === true,
+                  readableText: externalAllowlist?.has("import_telegram_attachment") === true,
+                }
+              : "none",
           currentEntryId: inboundTimeline.entryId,
           currentSenderDisplayName: telegramProfileName(message),
           currentSenderUsername: sender.username ?? null,
           currentSequence: inboundTimeline.sequenceId,
           ...(group ? {} : { conversationId: conversation.id }),
           groupId: group?.groupId ?? null,
-          includeAttachmentReferences: group?.type === "family_private" ||
-            externalAllowlist?.has("inspect_workspace_image") === true,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
           replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
