@@ -96,6 +96,7 @@ describe("model-facing memory tool results", () => {
       kind: "preference" as const,
       scope: "personal" as const,
       sensitivity: "sensitive" as const,
+      subject: { kind: "current_author" as const },
     };
 
     await remember.execute(input, context);
@@ -113,6 +114,7 @@ describe("model-facing memory tool results", () => {
       kind: "fact",
       scope: "personal",
       sensitivity: "normal",
+      subject: { kind: "current_author" },
       thread: {
         action: "create",
         purpose: "Сохранять цели и результаты",
@@ -122,13 +124,15 @@ describe("model-facing memory tool results", () => {
     };
 
     expect(schema.safeParse(input).success).toBe(true);
+    expect(schema.safeParse({ ...input, subject: undefined }).success).toBe(false);
     const personalProject = schema.safeParse({
       ...input,
+      subject: { kind: "none" },
       thread: { ...input.thread, identity: "project" },
     });
     const freeLabelThread = schema.safeParse({
       ...input,
-      subjectLabel: "Пух",
+      subject: { kind: "label", label: "Пух" },
       thread: { ...input.thread, identity: "subject" },
     });
     expect(personalProject.success).toBe(false);
@@ -152,7 +156,10 @@ describe("model-facing memory tool results", () => {
       kind: "preference",
       scope: "personal",
       sensitivity: "normal",
-      subjectRef: "subj_11111111111111111111111111111111",
+      subject: {
+        kind: "verified_ref",
+        subjectRef: "subj_11111111111111111111111111111111",
+      },
       thread: {
         action: "create",
         identity: "subject",
@@ -182,7 +189,10 @@ describe("model-facing memory tool results", () => {
         confirmation: "model_high",
         explicitSource: {
           conversationId: "conversation-1",
-          subjectRef: "subj_11111111111111111111111111111111",
+          subject: {
+            kind: "verified_ref",
+            subjectRef: "subj_11111111111111111111111111111111",
+          },
           timelineEntryId: "timeline-entry-1",
         },
         thread: {

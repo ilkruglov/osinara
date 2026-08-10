@@ -4,6 +4,7 @@
  * Key constructs:
  * - `V0101_LEDGER`: exact production v0.10.1 migration names through release number 048.
  * - `MEMORY_RELEASE_MIGRATIONS`: memory migrations through the main-agent ownership cutover.
+ * - `POST_V0101_MIGRATIONS`: every current migration the production-ledger fixture must apply.
  * - `runMigrationRunner`: executes the real migration entrypoint against an isolated test schema.
  * - Upgrade scenario: verifies ledger delta, unique migration purposes, and representative R0-R7 DB objects.
  */
@@ -90,6 +91,13 @@ const MEMORY_RELEASE_MIGRATIONS = [
   "061_private_memory_thread_notices.sql",
 ] as const;
 
+const POST_V0101_MIGRATIONS = [
+  ...MEMORY_RELEASE_MIGRATIONS,
+  "062_external_agent_schedule_scopes.sql",
+  "063_external_group_agent_schedules.sql",
+  "064_turn_bound_memory_subjects.sql",
+] as const;
+
 const EXPECTED_R0_R7_TABLES = [
   "memory_item_refs",
   "application_conversations",
@@ -168,7 +176,7 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         .sort();
       const migrationPurposes = migrationNames.map((name) => name.replace(/^\d{3}_/u, ""));
       expect(new Set(migrationPurposes).size).toBe(migrationPurposes.length);
-      expect(migrationNames.filter((name) => name >= "049_"))
+      expect(migrationNames.filter((name) => name >= "049_" && name < "062_"))
         .toEqual(MEMORY_RELEASE_MIGRATIONS);
 
       const before = await client.query<{ name: string }>(
@@ -177,7 +185,7 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
       expect(before.rows.map(({ name }) => name)).toEqual(V0101_LEDGER);
       const namesBefore = new Set(before.rows.map(({ name }) => name));
       expect(migrationNames.filter((name) => !namesBefore.has(name)))
-        .toEqual(MEMORY_RELEASE_MIGRATIONS);
+        .toEqual(POST_V0101_MIGRATIONS);
 
       await runMigrationRunner();
 
@@ -186,8 +194,8 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         "SELECT name FROM schema_migrations ORDER BY name",
       );
       expect(after.rows.map(({ name }) => name).filter((name) => !namesBefore.has(name)))
-        .toEqual(MEMORY_RELEASE_MIGRATIONS);
-      expect(after.rows).toHaveLength(V0101_LEDGER.length + MEMORY_RELEASE_MIGRATIONS.length);
+        .toEqual(POST_V0101_MIGRATIONS);
+      expect(after.rows).toHaveLength(V0101_LEDGER.length + POST_V0101_MIGRATIONS.length);
 
       // Representative authoritative and projection objects prove every R0-R7 migration took effect.
       for (const table of EXPECTED_R0_R7_TABLES) {

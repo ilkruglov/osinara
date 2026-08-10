@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 
 import type { MemoryScope } from "./memory-context.js";
 import type { ModelMemoryEvidence } from "./model-memory.js";
+import type { RememberInput } from "./remember-contract.js";
 
 export type MemoryKind = "episode" | "fact" | "family_shared" | "preference" | "profile";
 export type MemoryConfirmation = "model_high" | "user_confirmed";
@@ -91,8 +92,7 @@ export interface CreateMemoryInput {
 
 export interface CreateMemoryExplicitSourceInput {
   conversationId: string;
-  subjectLabel?: string;
-  subjectRef?: string;
+  subject: RememberInput["subject"];
   timelineEntryId: string;
 }
 

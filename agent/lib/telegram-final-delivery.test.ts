@@ -7,6 +7,7 @@
  * - A crash after provider acceptance but before chunk persistence becomes terminal ambiguity.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 const repository = vi.hoisted(() => ({
   complete: vi.fn(),
@@ -29,6 +30,10 @@ const base = {
   markdown: "Готово",
 };
 
+function hash(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
 describe("Telegram final delivery", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -47,7 +52,15 @@ describe("Telegram final delivery", () => {
       chunkCount: 1,
       eveSessionId: base.eveSessionId,
       eveTurnId: base.eveTurnId,
-      outputHash: expect.any(String),
+      legacyChunkCount: 1,
+      legacyOutputHash: hash({
+        chunks: [hash(base.markdown)],
+        deliveryIdentity: base.deliveryIdentity,
+      }),
+      outputHash: hash({
+        chunks: [hash(base.markdown)],
+        deliveryIdentity: base.deliveryIdentity,
+      }),
     });
     expect(sendChunk).not.toHaveBeenCalled();
   });
@@ -76,6 +89,7 @@ describe("Telegram final delivery", () => {
     await expect(deliverTelegramFinalOutput({ ...base, sendChunk }))
       .rejects.toThrowError("database disconnected after Telegram accepted");
     expect(sendChunk).toHaveBeenCalledTimes(1);
+    expect(sendChunk).toHaveBeenCalledWith({ format: "plain", text: "Готово" }, 0);
     expect(repository.fail).toHaveBeenCalledWith(
       "00000000-0000-4000-8000-000000000002",
       "00000000-0000-4000-8000-000000000003",

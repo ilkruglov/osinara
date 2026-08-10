@@ -8,7 +8,7 @@
  */
 import { createHash } from "node:crypto";
 
-export type AgentScheduleScope = "family" | "personal";
+export type AgentScheduleScope = "family" | "group" | "personal";
 export type AgentScheduleStatus = "active" | "completed" | "failed" | "leased" | "paused";
 export type AgentScheduleRecurrenceKind = "daily" | "once" | "weekly";
 
@@ -19,6 +19,7 @@ export type AgentScheduleRecurrence =
 
 export interface AgentScheduleRow {
   created_at: Date;
+  history_window_days: number | null;
   id: string;
   forum_topic_id: string | null;
   last_error_code: string | null;
@@ -32,6 +33,7 @@ export interface AgentScheduleRow {
   status: AgentScheduleStatus;
   timezone: string;
   title: string;
+  tool_allowlist: string[];
   updated_at: Date;
   user_request: string;
 }

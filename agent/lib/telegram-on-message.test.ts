@@ -205,7 +205,8 @@ describe("createTelegramMessageHandler", () => {
       scope: "personal",
     });
     expect(result?.context?.join("\n")).toContain("inbox/1/договор.pdf");
-    expect(result?.context?.join("\n")).toContain("safely supports Markdown tables");
+    expect(result?.context?.join("\n")).toContain("plain text by default");
+    expect(result?.context?.join("\n")).toContain("Rich Markdown only when formatting");
   });
 
   it("persists a captionless private photo and exposes its trusted workspace path", async () => {
@@ -259,6 +260,7 @@ describe("createTelegramMessageHandler", () => {
         familyId: "family-1",
         groupId: "group-1",
         messageMode: "addressed_only",
+        skillAllowlist: [],
         telegramChatId: "group-101",
         toolAllowlist: [],
         type: groupType,
@@ -296,6 +298,7 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
+      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: ["import_telegram_attachment"],
       type: "external",
@@ -343,6 +346,7 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
+      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",
@@ -379,6 +383,7 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
+      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",
@@ -417,6 +422,7 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
+      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",

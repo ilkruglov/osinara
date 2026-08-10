@@ -28,6 +28,14 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     run_now: "запустить агентное расписание сейчас",
     update: "изменить агентное расписание",
   },
+  manage_external_group_schedule: {
+    create: "создать автоматизацию внешней группы",
+    delete: "удалить автоматизацию внешней группы",
+    pause: "приостановить автоматизацию внешней группы",
+    resume: "возобновить автоматизацию внешней группы",
+    run_now: "запустить автоматизацию внешней группы сейчас",
+    update: "изменить автоматизацию внешней группы",
+  },
   manage_family_invitation: {
     approve: "добавить участника в семью",
     create: "создать приглашение в семейного агента",
@@ -209,6 +217,29 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...agentScheduleRecurrenceLines(input.recurrence),
         ...line("Сценарий", "scenarioPrompt"),
       ];
+    case "manage_external_group_schedule": {
+      const capabilities = Array.isArray(input.capabilityAllowlist)
+        ? input.capabilityAllowlist.filter((item): item is string => typeof item === "string").join(", ")
+        : null;
+      return [
+        ...line("ID", "id"),
+        ...line("Telegram chat ID", "telegramChatId"),
+        ...line("Название", "title"),
+        ...line("Назначение", "userRequest"),
+        ...line("Первый запуск", "firstRunAt"),
+        ...line("Следующий запуск", "nextRunAt"),
+        ...line("Часовой пояс", "timezone"),
+        ...(typeof input.historyWindowDays === "number"
+          ? [`Окно истории, дней: ${input.historyWindowDays}`]
+          : input.historyWindowDays === null ||
+              (input.action === "create" && input.historyWindowDays === undefined)
+            ? ["Окно истории: отключено"]
+            : []),
+        ...(capabilities === null ? [] : [`Разрешённые возможности: ${capabilities || "нет"}`]),
+        ...agentScheduleRecurrenceLines(input.recurrence),
+        ...line("Сценарий", "scenarioPrompt"),
+      ];
+    }
     case "manage_reminder":
       return [
         ...line("ID", "id"),

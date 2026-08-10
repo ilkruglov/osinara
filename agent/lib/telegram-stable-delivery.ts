@@ -76,12 +76,18 @@ export async function postTelegramMessageWithoutContinuationChange(
     ok?: unknown;
     result?: { message_id?: unknown };
   };
+  if (!response.ok || body.ok !== true) {
+    throw new AppError(
+      "AGENT_TELEGRAM_MESSAGE_DELIVERY_FAILED",
+      "Telegram не принял обычное сообщение. Попробуйте повторить запрос",
+    );
+  }
   const messageId = body.result?.message_id;
-  if (response.ok && body.ok === true && Number.isSafeInteger(messageId) && Number(messageId) > 0) {
+  if (Number.isSafeInteger(messageId) && Number(messageId) > 0) {
     return String(messageId);
   }
   throw new AppError(
-    "AGENT_TELEGRAM_DELIVERY_CONFIRMATION_INVALID",
-    "Telegram не подтвердил отправку служебного сообщения. Попробуйте повторить запрос",
+    "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
+    "Telegram принял запрос, но не подтвердил идентификатор обычного сообщения",
   );
 }

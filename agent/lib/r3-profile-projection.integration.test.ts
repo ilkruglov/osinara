@@ -21,6 +21,11 @@ import { profileViewRepository } from "./profile-view-repository.js";
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
   ? describe
   : describe.skip;
+const PROFILE_SESSION_ID = "r3-profile-session";
+
+function profileProvenance(turnId: string) {
+  return { sessionId: PROFILE_SESSION_ID, turnId };
+}
 
 interface Fixture {
   externalAConversationId: string;
@@ -210,6 +215,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("personal-default"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -235,6 +241,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("personal-pending-notice"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -254,6 +261,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("personal-enabled"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -286,6 +294,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("external-a"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -307,6 +316,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("after-departure"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -322,7 +332,8 @@ describeWithDatabase("R3 profile projections", () => {
     await expect(profileViewRepository.create(fixture.ownerAuth, {
       conversationId: fixture.personalConversationId,
       currentTelegramUserId: "9301", explicitMentionTelegramUserIds: [],
-      now: new Date(), replyTelegramUserId: null, retrievalClaimIds: [],
+      now: new Date(), provenance: profileProvenance("membership-revoked"),
+      replyTelegramUserId: null, retrievalClaimIds: [],
     })).rejects.toThrowError(/AGENT_PROFILE_VIEW_MEMBERSHIP_REVOKED/u);
   });
 
@@ -359,6 +370,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("conflict"),
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
@@ -403,6 +415,7 @@ describeWithDatabase("R3 profile projections", () => {
       currentTelegramUserId: "9301",
       explicitMentionTelegramUserIds: [],
       now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance("retrieval-related"),
       replyTelegramUserId: null,
       retrievalClaimIds: [claim.rows[0]!.memory_item_id],
     });

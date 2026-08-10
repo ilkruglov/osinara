@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `loadCurrentExternalGroupCapabilities`: family-scoped, external-only registration lookup.
- * - Missing, retyped, and malformed registrations resolve to deny-all.
+ * - Missing, retyped, and malformed registrations fail closed distinctly from an empty allowlist.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -33,11 +33,21 @@ describe("current external-group capability policy", () => {
   });
 
   it.each([
-    ["deleted registration", []],
-    ["retyped registration excluded by the query", []],
-    ["malformed persisted allowlist", [{ tool_allowlist: ["unknown_tool"] }]],
-  ])("denies all for a %s", async (_scenario, rows) => {
+    ["deleted registration", [], "AGENT_GROUP_REGISTRATION_INVALID"],
+    ["retyped registration excluded by the query", [], "AGENT_GROUP_REGISTRATION_INVALID"],
+    [
+      "malformed persisted allowlist",
+      [{ tool_allowlist: ["unknown_tool"] }],
+      "AGENT_GROUP_TOOL_POLICY_INVALID",
+    ],
+  ])("fails closed for a %s", async (_scenario, rows, code) => {
     query.mockResolvedValue({ rows });
+
+    await expect(loadCurrentExternalGroupCapabilities(IDENTITY)).rejects.toMatchObject({ code });
+  });
+
+  it("preserves a valid current registration with an empty allowlist", async () => {
+    query.mockResolvedValue({ rows: [{ tool_allowlist: [] }] });
 
     await expect(loadCurrentExternalGroupCapabilities(IDENTITY)).resolves.toEqual(new Set());
   });

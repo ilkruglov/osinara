@@ -102,7 +102,7 @@ describeWithDatabase("Telegram group journal repositories", () => {
       type: "external",
     });
 
-    await expect(telegramRepository.findGroup("-1001")).resolves.toMatchObject({
+    await expect(telegramRepository.findGroup("-1001", "supergroup")).resolves.toMatchObject({
       familyId,
       messageMode: "all",
       telegramChatId: "-1001",

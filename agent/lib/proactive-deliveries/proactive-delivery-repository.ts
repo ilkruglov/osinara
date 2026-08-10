@@ -34,7 +34,7 @@ export interface ProactiveDeliveryAuthorization {
   groupId: string | null;
   messageThreadId: string | null;
   ownerUserId: string | null;
-  scope: "family" | "personal";
+  scope: "family" | "group" | "personal";
   telegramChatId: string;
 }
 
@@ -80,7 +80,9 @@ function requireAuthorization(input: ProactiveDeliveryAuthorization): void {
     input.groupId === null && input.messageThreadId === null;
   const validFamily = input.scope === "family" && input.ownerUserId === null &&
     input.groupId !== null;
-  if (!validPersonal && !validFamily) {
+  const validGroup = input.scope === "group" && input.ownerUserId === null &&
+    input.groupId !== null && input.messageThreadId === null;
+  if (!validPersonal && !validFamily && !validGroup) {
     throw new AppError(
       "AGENT_PROACTIVE_DELIVERY_SCOPE_INVALID",
       "Не удалось определить область истории уведомлений",

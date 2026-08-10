@@ -5,6 +5,7 @@
  * - Eve retains a previous turn's block when a resolver throws, so resolvers must never throw.
  * - An unresolvable environment produces an explicit fail-closed block, not a stale one.
  * - A failed external capability lookup degrades to an empty allowlist, matching execution policy.
+ * - Scheduled-history instructions require the same successful application-core policy lookup.
  * - Unavailable memory is disclosed instead of looking like an empty result set.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
@@ -19,6 +20,7 @@ import {
 } from "./turn-blocks.js";
 
 const createProfile = vi.fn();
+const TEST_TURN_ID = "turn-1";
 
 function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   return {
@@ -81,6 +83,40 @@ describe("mode block resolution", () => {
     expect(markdown).not.toContain("`remember`");
   });
 
+  it("omits scheduled-history instructions when application-core policy lookup fails", async () => {
+    const current = auth({
+      ...externalAuth.current!.attributes,
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+    });
+    const scheduledAuth = { ...current, initiator: current.current };
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn().mockRejectedValue(new Error("database unavailable")),
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
+
+    const markdown = await resolve(context(scheduledAuth));
+
+    expect(markdown).not.toContain("read_scheduled_group_history");
+  });
+
+  it("includes scheduled-history instructions after application-core policy resolves", async () => {
+    const current = auth({
+      ...externalAuth.current!.attributes,
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+    });
+    const scheduledAuth = { ...current, initiator: current.current };
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn().mockResolvedValue(new Set()),
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
+
+    const markdown = await resolve(context(scheduledAuth));
+
+    expect(markdown).toContain("read_scheduled_group_history");
+  });
+
   it("omits a capability revoked from the current database policy", async () => {
     const loadCapabilities = vi.fn().mockResolvedValue(new Set<ExternalGroupToolName>());
     const resolve = createModeBlockResolver({ loadCapabilities, loadSkills: vi.fn().mockResolvedValue(new Set()) });
@@ -140,6 +176,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("активный pipeline текущей реализации");
@@ -149,7 +186,7 @@ describe("memory block resolution", () => {
     const retrieve = vi.fn();
     const resolve = createMemoryBlockResolver({ authorize: () => authorization, createProfile, retrieve });
 
-    expect(await resolve(context(privateAuth))).toBeNull();
+    expect(await resolve(context(privateAuth), TEST_TURN_ID)).toBeNull();
     expect(retrieve).not.toHaveBeenCalled();
   });
 
@@ -164,6 +201,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
@@ -179,6 +217,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
@@ -219,6 +258,7 @@ describe("memory block resolution", () => {
 
     const markdown = await resolve(
       context(telegramAuth, [{ content: "что любит Пётр?", role: "user" }] as ModelMessage[]),
+      TEST_TURN_ID,
     );
 
     expect(profile).toHaveBeenCalledWith(authorization, {
@@ -226,6 +266,7 @@ describe("memory block resolution", () => {
       currentTelegramUserId: "101",
       explicitMentionTelegramUserIds: ["202"],
       now: new Date("2026-08-08T10:00:00.000Z"),
+      provenance: { sessionId: "session-1", turnId: TEST_TURN_ID },
       replyTelegramUserId: "203",
       replyTimelineSequence: "44",
       retrievalClaimIds: ["claim-related"],

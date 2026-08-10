@@ -5,6 +5,7 @@
  * - Root sessions receive bounded delegation criteria and a self-contained task-envelope contract.
  * - Durable-memory decisions stay with the root even when other trust-zone tools are inherited.
  * - Child copies receive no root-only orchestration guidance.
+ * - Scheduled runs receive no delegation guidance because their native `agent` tool is denied.
  */
 import { describe, expect, it } from "vitest";
 
@@ -62,5 +63,9 @@ describe("native delegation prompt", () => {
     expect(resolveDelegation("telegram", external)).toMatchObject({
       markdown: ORCHESTRATOR_DELEGATION_RULES,
     });
+    expect(resolveDelegation("telegram", {
+      ...external,
+      scheduledRunId: "9c0a1516-5900-47bc-83df-ec4762a5583a",
+    })).toBeNull();
   });
 });

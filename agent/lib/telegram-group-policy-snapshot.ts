@@ -14,7 +14,9 @@ export function sameTelegramGroupPolicy(
   if (
     left.familyId !== right.familyId || left.groupId !== right.groupId ||
     left.messageMode !== right.messageMode || left.telegramChatId !== right.telegramChatId ||
-    left.type !== right.type || left.toolAllowlist.length !== right.toolAllowlist.length
+    left.type !== right.type || left.toolAllowlist.length !== right.toolAllowlist.length ||
+    left.skillAllowlist.length !== right.skillAllowlist.length
   ) return false;
-  return left.toolAllowlist.every((capability, index) => capability === right.toolAllowlist[index]);
+  return left.toolAllowlist.every((capability, index) => capability === right.toolAllowlist[index]) &&
+    left.skillAllowlist.every((skill, index) => skill === right.skillAllowlist[index]);
 }

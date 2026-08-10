@@ -367,7 +367,7 @@ export const memoryRepository = {
       const explicitPrepared = await prepareExplicitClaimEvidence(client, auth, {
         confirmation: "user_confirmed",
         content: input.content,
-        explicitSource: input.source,
+        explicitSource: { ...input.source, subject: { kind: "none" } },
         kind: correctionKind,
         operationKey: input.operationKey,
         scope: memory.scope,

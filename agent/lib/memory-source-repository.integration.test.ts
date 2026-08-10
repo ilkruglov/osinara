@@ -55,11 +55,6 @@ describeWithDatabase("R3 memory source lookup", () => {
       [conversation.id, family.rows[0]!.id, group.rows[0]!.id, user.rows[0]!.id],
     );
     expect(participant.rows[0]).toBeDefined();
-    const subject = await database().query<{ subject_ref: string }>(
-      `SELECT subject_ref FROM profile_subjects
-       WHERE conversation_id = $1 AND subject_participant_id = $2`,
-      [conversation.id, participant.rows[0]!.id],
-    );
     const entry = await database().query<{ id: string }>(
       `INSERT INTO telegram_group_messages
          (group_id, conversation_id, telegram_message_id, sequence_id, actor_kind, actor_id,
@@ -81,7 +76,7 @@ describeWithDatabase("R3 memory source lookup", () => {
       content: "Анна предпочитает утренние встречи.",
       explicitSource: {
         conversationId: conversation.id,
-        subjectRef: subject.rows[0]!.subject_ref,
+        subject: { kind: "current_author" },
         timelineEntryId: entry.rows[0]!.id,
       },
       kind: "preference",

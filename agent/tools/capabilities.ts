@@ -14,6 +14,8 @@ import { defineDynamic } from "eve/tools";
 
 import { resolveConversationEnvironment } from "../lib/conversation-environment.js";
 import { selectGroupSafeSkillDefinitions } from "../lib/group-skills/group-skill-definitions.js";
+import { scheduledGroupHistoryAccess } from "../lib/agent-schedules/scheduled-group-history-context.js";
+import { isScheduledSession } from "../lib/agent-schedules/scheduled-session.js";
 import { loadCurrentExternalGroupCapabilities } from "../lib/tool-policy/external-group-live-policy.js";
 import {
   resolveExternalGroupPolicyIdentity,
@@ -87,6 +89,8 @@ export default defineDynamic({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),
         environment: "external",
         includeApplicationCore,
+        scheduledHistory: includeApplicationCore && scheduledGroupHistoryAccess(auth) !== null,
+        scheduledRun: isScheduledSession(ctx),
         skills,
       });
     },

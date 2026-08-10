@@ -47,11 +47,15 @@ import {
   resolveExternalGroupPolicyIdentity,
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
+import { scheduledGroupHistoryAccess } from "../agent-schedules/scheduled-group-history-context.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
   readonly messages: readonly ModelMessage[];
-  readonly session: { readonly auth: SessionAuth; readonly id: string };
+  readonly session: {
+    readonly auth: SessionAuth;
+    readonly id: string;
+  };
 }
 
 type CapabilityLoader = (identity: {
@@ -59,6 +63,11 @@ type CapabilityLoader = (identity: {
   groupId: string;
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
 type SkillLoader = (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>;
+
+interface EffectiveExternalCapabilities {
+  capabilities: ReadonlySet<ExternalGroupToolName>;
+  includeApplicationCore: boolean;
+}
 
 const MODE_UNAVAILABLE_BLOCK = `
 <current_conversation_environment>
@@ -87,11 +96,11 @@ function logBlockFailure(code: string, error: unknown): void {
 async function effectiveExternalCapabilities(
   auth: SessionAuth,
   loadCapabilities: CapabilityLoader,
-): Promise<ReadonlySet<ExternalGroupToolName>> {
+): Promise<EffectiveExternalCapabilities> {
   const policy = resolveExternalGroupToolPolicy(auth);
-  if (!policy.restricted) return new Set();
+  if (!policy.restricted) return { capabilities: new Set(), includeApplicationCore: false };
   const identity = resolveExternalGroupPolicyIdentity(auth);
-  if (!identity) return new Set();
+  if (!identity) return { capabilities: new Set(), includeApplicationCore: false };
 
   // An unavailable policy lookup must describe no capability at all, matching the fail-closed
   // execution boundary, instead of leaving the previous turn's wider guidance in place.
@@ -100,9 +109,12 @@ async function effectiveExternalCapabilities(
     current = await loadCapabilities(identity);
   } catch (error) {
     logBlockFailure("AGENT_GROUP_CAPABILITY_LOOKUP_FAILED", error);
-    return new Set();
+    return { capabilities: new Set(), includeApplicationCore: false };
   }
-  return new Set([...policy.allowed].filter((capability) => current.has(capability)));
+  return {
+    capabilities: new Set([...policy.allowed].filter((capability) => current.has(capability))),
+    includeApplicationCore: true,
+  };
 }
 
 export function createModeBlockResolver(dependencies: {
@@ -119,7 +131,7 @@ export function createModeBlockResolver(dependencies: {
     }
     if (environment !== "external") return modeInstructions({ environment });
 
-    const capabilities = await effectiveExternalCapabilities(
+    const effective = await effectiveExternalCapabilities(
       ctx.session.auth,
       dependencies.loadCapabilities,
     );
@@ -132,7 +144,13 @@ export function createModeBlockResolver(dependencies: {
         logBlockFailure("AGENT_GROUP_SKILL_LOOKUP_FAILED", error);
       }
     }
-    return modeInstructions({ capabilities, environment: "external", skills });
+    return modeInstructions({
+      capabilities: effective.capabilities,
+      environment: "external",
+      scheduledHistory: effective.includeApplicationCore &&
+        scheduledGroupHistoryAccess(ctx.session.auth) !== null,
+      skills,
+    });
   };
 }
 
@@ -145,7 +163,7 @@ export function createMemoryBlockResolver(dependencies: {
     skillHints: readonly string[],
   ) => Promise<MemoryTurnContext>;
 }) {
-  return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
+  return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<string | null> {
     try {
       const authorization = dependencies.authorize(ctx);
       const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
@@ -155,7 +173,7 @@ export function createMemoryBlockResolver(dependencies: {
         query,
         applicationThreadSkillHints(ctx.messages),
       );
-      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds);
+      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds, turnId);
       const profile = profileInput === null
         ? null
         : await dependencies.createProfile(authorization, profileInput);
@@ -173,6 +191,7 @@ export function createMemoryBlockResolver(dependencies: {
 function telegramProfileInput(
   ctx: TurnBlockContext,
   retrievalClaimIds: readonly string[],
+  turnId: string,
 ): CreateProfileViewInput | null {
   const attributes = ctx.session.auth.current?.attributes;
   const conversationId = attributes?.telegramConversationId;
@@ -204,6 +223,7 @@ function telegramProfileInput(
     currentTelegramUserId,
     explicitMentionTelegramUserIds: mentions === undefined ? [] : [...mentions],
     now,
+    provenance: { sessionId: ctx.session.id, turnId },
     replyTelegramUserId: replyTelegramUserId ?? null,
     ...(replyTimelineSequence === undefined ? {} : { replyTimelineSequence }),
     retrievalClaimIds: [...retrievalClaimIds],

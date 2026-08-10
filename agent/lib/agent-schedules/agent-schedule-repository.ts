@@ -7,8 +7,6 @@
  */
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
-import { decodeDateUuidCursor, encodeDateUuidCursor } from "../keyset-pagination.js";
-import { AGENT_SCHEDULE_LIST_MAX_LIMIT } from "./agent-schedule-config.js";
 import type { AgentScheduleAuthorization } from "./agent-schedule-context.js";
 import {
   type AgentScheduleRecord,
@@ -19,8 +17,13 @@ import {
   rowToAgentSchedule,
 } from "./agent-schedule-record.js";
 import {
+  findAgentScheduleById,
+  listAgentSchedules,
+} from "./agent-schedule-query-repository.js";
+import {
   AGENT_SCHEDULE_COLUMNS,
   findAgentScheduleOperation,
+  lockAgentScheduleOperation,
   requireAgentScheduleMutationAccess,
   requireAgentScheduleTimezone,
   requireCurrentScheduleMembership,
@@ -34,23 +37,31 @@ import {
   requireAgentScheduleTitle,
   requireAgentScheduleUserRequest,
 } from "./agent-schedule-validation.js";
+import {
+  type ExternalScheduleCapability,
+  requireExternalScheduleHistoryWindowDays,
+  requireUpdatedExternalScheduleCapabilities,
+} from "./external-agent-schedule-policy.js";
 
 export interface AgentScheduleCreateInput {
   firstRunAt: Date;
   operationKey: string;
   recurrence: AgentScheduleInputRecurrence;
   scenarioPrompt: string;
-  scope: AgentScheduleScope;
+  scope: Exclude<AgentScheduleScope, "group">;
   timezone: string;
   title: string;
   userRequest: string;
 }
 
 export interface AgentScheduleUpdateInput {
+  capabilityAllowlist?: ExternalScheduleCapability[];
   enabled?: boolean;
+  historyWindowDays?: number | null;
   nextRunAt?: Date;
   operationKey: string;
   recurrence?: AgentScheduleInputRecurrence;
+  requiredScope?: AgentScheduleScope;
   scenarioPrompt?: string;
   title?: string;
   userRequest?: string;
@@ -111,6 +122,7 @@ export const agentScheduleRepository = {
     try {
       await client.query("BEGIN");
       await requireCurrentScheduleMembership(client, auth);
+      await lockAgentScheduleOperation(client, auth, input.operationKey);
       const replay = await findAgentScheduleOperation(
         client,
         auth,
@@ -196,60 +208,14 @@ export const agentScheduleRepository = {
     auth: AgentScheduleAuthorization,
     options: { cursor?: string; limit: number },
   ): Promise<{ items: AgentScheduleRecord[]; nextCursor: string | null }> {
-    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > AGENT_SCHEDULE_LIST_MAX_LIMIT) {
-      throw new AppError("AGENT_SCHEDULE_LIMIT_INVALID", "Некорректный размер страницы расписаний");
-    }
-    const cursor = decodeDateUuidCursor(
-      options.cursor,
-      "AGENT_SCHEDULE_CURSOR_INVALID",
-      "Не удалось продолжить просмотр агентных расписаний",
-    );
-    const result = await database().query<AgentScheduleRow>(
-      `SELECT ${AGENT_SCHEDULE_COLUMNS}
-       FROM agent_schedules AS schedule
-       WHERE schedule.family_id = $1
-         AND EXISTS (
-           SELECT 1 FROM family_memberships
-           WHERE family_id = $1 AND user_id = $2
-         )
-          AND (
-             (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
-             schedule.scope = 'family'
-           )
-          AND ($3::timestamptz IS NULL OR (schedule.created_at, schedule.id) < ($3, $4::uuid))
-        ORDER BY schedule.created_at DESC, schedule.id DESC
-        LIMIT $5`,
-      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
-    );
-    const hasNext = result.rows.length > options.limit;
-    const rows = result.rows.slice(0, options.limit);
-    const last = rows.at(-1);
-    return {
-      items: rows.map(rowToAgentSchedule),
-      nextCursor: hasNext && last ? encodeDateUuidCursor(last.created_at, last.id) : null,
-    };
+    return await listAgentSchedules(auth, options);
   },
 
   async findById(
     auth: AgentScheduleAuthorization,
     id: string,
   ): Promise<AgentScheduleRecord | null> {
-    const result = await database().query<AgentScheduleRow>(
-      `SELECT ${AGENT_SCHEDULE_COLUMNS}
-         FROM agent_schedules AS schedule
-        WHERE schedule.id = $3
-          AND schedule.family_id = $1
-          AND EXISTS (
-            SELECT 1 FROM family_memberships
-             WHERE family_id = $1 AND user_id = $2
-          )
-          AND (
-            (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
-            schedule.scope = 'family'
-          )`,
-      [auth.familyId, auth.userId, id],
-    );
-    return result.rows[0] ? rowToAgentSchedule(result.rows[0]) : null;
+    return await findAgentScheduleById(auth, id);
   },
 
   async update(
@@ -258,7 +224,9 @@ export const agentScheduleRepository = {
     input: AgentScheduleUpdateInput,
   ): Promise<AgentScheduleRecord> {
     if (
+      input.capabilityAllowlist === undefined &&
       input.enabled === undefined &&
+      input.historyWindowDays === undefined &&
       input.nextRunAt === undefined &&
       input.recurrence === undefined &&
       input.scenarioPrompt === undefined &&
@@ -280,10 +248,12 @@ export const agentScheduleRepository = {
     const recurrence = input.recurrence === undefined
       ? undefined
       : requireAgentScheduleRecurrence(input.recurrence);
+    const historyWindowDays = requireExternalScheduleHistoryWindowDays(input.historyWindowDays);
     const inputHash = agentScheduleOperationHash({
       ...input,
       nextRunAt: nextRunAt?.toISOString(),
       recurrence,
+      historyWindowDays,
       scenarioPrompt,
       title,
       userRequest,
@@ -291,6 +261,7 @@ export const agentScheduleRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      await lockAgentScheduleOperation(client, auth, input.operationKey);
       const replay = await findAgentScheduleOperation(client, auth, input.operationKey, "update", inputHash);
       if (replay) {
         const existing = await selectAgentSchedule(client, auth.familyId, replay);
@@ -298,9 +269,24 @@ export const agentScheduleRepository = {
         await client.query("COMMIT");
         return rowToAgentSchedule(existing);
       }
-      const schedule = await selectAgentSchedule(client, auth.familyId, id, true);
+      let schedule = await selectAgentSchedule(client, auth.familyId, id);
+      if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      if (schedule.scope === "group" && schedule.group_id !== null) {
+        // Group administration locks the trust-zone row before cascading schedules; use the same order.
+        await client.query("SELECT 1 FROM telegram_groups WHERE id = $1 FOR SHARE", [schedule.group_id]);
+      }
+      schedule = await selectAgentSchedule(client, auth.familyId, id, true);
       if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
+      if (input.requiredScope !== undefined && schedule.scope !== input.requiredScope) {
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      }
+      if (input.historyWindowDays !== undefined && schedule.scope !== "group") {
+        throw new AppError(
+          "AGENT_EXTERNAL_SCHEDULE_HISTORY_WINDOW_INVALID",
+          "Окно истории доступно только для автоматизации внешней группы",
+        );
+      }
       if (schedule.status === "leased") {
         throw new AppError(
           "AGENT_SCHEDULE_RUN_IN_PROGRESS",
@@ -315,6 +301,11 @@ export const agentScheduleRepository = {
         kind: schedule.recurrence_kind,
       } as AgentScheduleRecurrence;
       const recurrenceValue = recurrenceValues(nextRecurrence);
+      const capabilityAllowlist = await requireUpdatedExternalScheduleCapabilities(
+        client,
+        schedule,
+        input.capabilityAllowlist,
+      );
       const scheduleChanged = nextRunAt !== undefined || recurrence !== undefined;
       const updated = await client.query<AgentScheduleRow>(
         `UPDATE agent_schedules
@@ -329,9 +320,11 @@ export const agentScheduleRepository = {
              next_run_at = CASE WHEN $8 THEN $9 ELSE next_run_at END,
              status = CASE WHEN $10 = false THEN 'paused'::agent_schedule_status
                            WHEN $10 = true THEN 'active'::agent_schedule_status ELSE status END,
-             attempts = CASE WHEN $8 OR $10 = true THEN 0 ELSE attempts END,
-             last_error_code = CASE WHEN $8 OR $10 = true THEN NULL ELSE last_error_code END,
-             updated_at = now()
+              attempts = CASE WHEN $8 OR $10 = true THEN 0 ELSE attempts END,
+              last_error_code = CASE WHEN $8 OR $10 = true THEN NULL ELSE last_error_code END,
+              history_window_days = $11,
+              tool_allowlist = $12,
+              updated_at = now()
          WHERE id = $1
          RETURNING ${AGENT_SCHEDULE_COLUMNS}`,
         [
@@ -345,6 +338,8 @@ export const agentScheduleRepository = {
           scheduleChanged,
           nextRunAt ?? schedule.next_run_at,
           input.enabled ?? null,
+          historyWindowDays === undefined ? schedule.history_window_days : historyWindowDays,
+          capabilityAllowlist ?? schedule.tool_allowlist,
         ],
       );
       await client.query(
@@ -368,11 +363,17 @@ export const agentScheduleRepository = {
     }
   },
 
-  async delete(auth: AgentScheduleAuthorization, id: string, operationKey: string): Promise<boolean> {
+  async delete(
+    auth: AgentScheduleAuthorization,
+    id: string,
+    operationKey: string,
+    requiredScope?: AgentScheduleScope,
+  ): Promise<boolean> {
     const inputHash = agentScheduleOperationHash({ id });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      await lockAgentScheduleOperation(client, auth, operationKey);
       const replay = await findAgentScheduleOperation(client, auth, operationKey, "delete", inputHash);
       if (replay !== undefined) {
         await client.query("COMMIT");
@@ -381,6 +382,9 @@ export const agentScheduleRepository = {
       const schedule = await selectAgentSchedule(client, auth.familyId, id, true);
       if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
+      if (requiredScope !== undefined && schedule.scope !== requiredScope) {
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      }
       if (schedule.status === "leased") {
         throw new AppError(
           "AGENT_SCHEDULE_RUN_IN_PROGRESS",
@@ -409,11 +413,17 @@ export const agentScheduleRepository = {
     }
   },
 
-  async runNow(auth: AgentScheduleAuthorization, id: string, operationKey: string): Promise<AgentScheduleRecord> {
+  async runNow(
+    auth: AgentScheduleAuthorization,
+    id: string,
+    operationKey: string,
+    requiredScope?: AgentScheduleScope,
+  ): Promise<AgentScheduleRecord> {
     const inputHash = agentScheduleOperationHash({ id });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      await lockAgentScheduleOperation(client, auth, operationKey);
       const replay = await findAgentScheduleOperation(client, auth, operationKey, "run_now", inputHash);
       if (replay) {
         const existing = await selectAgentSchedule(client, auth.familyId, replay);
@@ -424,6 +434,9 @@ export const agentScheduleRepository = {
       const schedule = await selectAgentSchedule(client, auth.familyId, id, true);
       if (!schedule) throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       await requireAgentScheduleMutationAccess(client, auth, schedule);
+      if (requiredScope !== undefined && schedule.scope !== requiredScope) {
+        throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+      }
       if (schedule.status === "leased") {
         throw new AppError(
           "AGENT_SCHEDULE_RUN_IN_PROGRESS",

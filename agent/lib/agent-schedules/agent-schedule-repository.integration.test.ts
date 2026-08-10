@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Scoped CRUD and destination authorization.
+ * - Group-only history configuration is rejected by the domain boundary before SQL mutation.
  * - Handoff-only leases, atomic delivered completion, recurrence, and ambiguous recovery.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -148,6 +149,33 @@ describeWithDatabase("agent schedule repositories", () => {
     })).resolves.toMatchObject({ scope: "family" });
   });
 
+  it("rejects history configuration for a non-group schedule before SQL mutation", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    const schedule = await agentScheduleRepository.create(auth, {
+      firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
+      operationKey: "create-personal-without-history",
+      recurrence: { interval: 1, kind: "daily" },
+      scenarioPrompt: "Собрать личную сводку.",
+      scope: "personal",
+      timezone: "Europe/Moscow",
+      title: "Личная сводка",
+      userRequest: "Присылай личную сводку",
+    });
+
+    await expect(agentScheduleRepository.update(auth, schedule.id, {
+      historyWindowDays: 7,
+      operationKey: "invalid-personal-history",
+    })).rejects.toMatchObject({
+      code: "AGENT_EXTERNAL_SCHEDULE_HISTORY_WINDOW_INVALID",
+    });
+    const persisted = await database().query<{ history_window_days: number | null }>(
+      "SELECT history_window_days FROM agent_schedules WHERE id = $1",
+      [schedule.id],
+    );
+    expect(persisted.rows[0]?.history_window_days).toBeNull();
+  });
+
   it("claims a weekday schedule once and advances it after Eve completion", async () => {
     const fixture = await createFixture();
     const auth = privateAuth(fixture, "member");
@@ -174,7 +202,6 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:02.000Z"),
     })).resolves.toEqual([]);
 
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:test-run",
       kind: "scheduled",
@@ -184,6 +211,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:01.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
     });
     await agentScheduleDispatchRepository.markRunning(claimed!, {
       applicationSessionId: prepared.id,
@@ -266,7 +296,6 @@ describeWithDatabase("agent schedule repositories", () => {
     expect(reclaimed).toMatchObject({ runId: claimed!.runId, title: "Восстановимый запуск" });
     expect(reclaimed!.leaseToken).not.toBe(claimed!.leaseToken);
 
-    await agentScheduleDispatchRepository.markDispatchStarted(reclaimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:recoverable-run",
       kind: "scheduled",
@@ -276,6 +305,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:02.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(reclaimed!, {
+      applicationSessionId: prepared.id,
     });
     await agentScheduleDispatchRepository.markRunning(reclaimed!, {
       applicationSessionId: prepared.id,
@@ -321,7 +353,6 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:00.000Z"),
     });
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
     const prepared = await sessionRepository.prepareTurn({
       baseContinuationToken: "schedule-member::schedule:long-running",
       kind: "scheduled",
@@ -331,6 +362,9 @@ describeWithDatabase("agent schedule repositories", () => {
       now: new Date("2026-07-17T09:00:00.000Z"),
       scope: "personal",
       userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
     });
 
     await agentScheduleDispatchRepository.markRunning(claimed!, {
@@ -370,7 +404,19 @@ describeWithDatabase("agent schedule repositories", () => {
       limit: 1,
       now: new Date("2026-07-17T09:00:00.000Z"),
     });
-    await agentScheduleDispatchRepository.markDispatchStarted(claimed!);
+    const prepared = await sessionRepository.prepareTurn({
+      baseContinuationToken: "schedule-member::schedule:ambiguous",
+      familyId: fixture.familyId,
+      groupId: null,
+      kind: "scheduled",
+      now: new Date("2026-07-17T09:00:00.000Z"),
+      scope: "personal",
+      telegramForumTopicId: null,
+      userId: fixture.memberId,
+    });
+    await agentScheduleDispatchRepository.markDispatchStarted(claimed!, {
+      applicationSessionId: prepared.id,
+    });
 
     await expect(agentScheduleDispatchRepository.claimDue({
       leaseMilliseconds: 1_000,

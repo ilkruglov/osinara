@@ -79,10 +79,12 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     }
 
     // Registered group policy is required before passive messages may be persisted.
-    const group =
-      message.chat.type === "private"
-        ? null
-        : await repositories.telegram.findGroup(message.chat.id);
+    const groupChatType = message.chat.type === "group" || message.chat.type === "supergroup"
+      ? message.chat.type
+      : null;
+    const group = groupChatType === null
+      ? null
+      : await repositories.telegram.findGroup(message.chat.id, groupChatType);
     const forumTopicId = group ? telegramForumTopicId(message) : null;
     const mediaKind = classifyTelegramInboundMedia(message);
     const externalAllowlist = group?.type !== "family_private"
@@ -145,7 +147,10 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // Group policy and identity are separate DB records. Re-reading the group establishes a
     // fail-closed authorization boundary if owner-only mode, type, or capabilities changed while
     // the incoming message was journaled and participant identity was resolved.
-    if (group && !sameTelegramGroupPolicy(group, await repositories.telegram.findGroup(message.chat.id))) {
+    if (group && groupChatType !== null && !sameTelegramGroupPolicy(
+      group,
+      await repositories.telegram.findGroup(message.chat.id, groupChatType),
+    )) {
       return null;
     }
 

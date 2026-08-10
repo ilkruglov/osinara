@@ -38,6 +38,7 @@ export interface PreparedClaimEvidence {
   scopePartitionKey: string;
   sources: PreparedEvidenceSource[];
   subjectConversationId: string | null;
+  subjectKind: "current_author" | "label" | "none" | "verified_ref";
   subjectLabel: string | null;
   subjectParticipantId: string | null;
   subjectUserId: string | null;

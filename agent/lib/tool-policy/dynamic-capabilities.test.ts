@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `capabilities`: one turn-scoped map per verified mode instead of static descriptors.
  * - An unresolvable mode or failed policy lookup retains only fail-closed baseline wrappers.
+ * - Scheduled history is visible only with a successfully resolved application-core policy.
  * - Live policy changes affect visibility on the next turn and execution checks enforce revocation.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +23,10 @@ import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
 } from "./group-tool-catalog.js";
 
-function resolve(attributes: Record<string, unknown> | null) {
+function resolve(
+  attributes: Record<string, unknown> | null,
+  initiatorAttributes: Record<string, unknown> | null = null,
+) {
   return capabilities.events["turn.started"]?.({} as never, {
     channel: { kind: "telegram" },
     messages: [],
@@ -34,7 +38,12 @@ function resolve(attributes: Record<string, unknown> | null) {
           principalId: "telegram:101",
           principalType: "user",
         },
-        initiator: null,
+        initiator: initiatorAttributes === null ? null : {
+          attributes: initiatorAttributes,
+          authenticator: "telegram",
+          principalId: "telegram:101",
+          principalType: "user",
+        },
       },
       id: "session-1",
     },
@@ -147,6 +156,42 @@ describe("dynamic capability resolver", () => {
       expect.stringContaining("AGENT_GROUP_TOOL_POLICY_LOOKUP_FAILED"),
     );
     consoleError.mockRestore();
+  });
+
+  it("omits scheduled history when the application-core policy lookup fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    loadCurrentExternalGroupCapabilities.mockRejectedValue(new Error("database unavailable"));
+
+    const attributes = {
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+      telegramChatType: "supergroup",
+      toolAllowlist: [],
+    };
+    const surface = await resolve(attributes, attributes);
+
+    expect(surface).not.toHaveProperty("read_scheduled_group_history");
+    consoleError.mockRestore();
+  });
+
+  it("emits scheduled history after the application-core policy resolves", async () => {
+    const attributes = {
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+      telegramChatType: "supergroup",
+      toolAllowlist: [],
+    };
+    const surface = await resolve(attributes, attributes);
+
+    expect(surface).toHaveProperty("read_scheduled_group_history");
   });
 
   it("emits no application tool when the conversation mode cannot be proven", async () => {

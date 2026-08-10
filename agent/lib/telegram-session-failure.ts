@@ -10,6 +10,8 @@ import { formatTelegramSessionFailure } from "./telegram-interface.js";
 import { AppError } from "./app-error.js";
 import type { SessionEventResult } from "./sessions/session-eve-event.js";
 import type { sessionRepository } from "./sessions/session-repository.js";
+import { scheduledRunIdFromContinuationToken } from "./agent-schedules/scheduled-session.js";
+import type { agentScheduleDispatchRepository } from "./agent-schedules/agent-schedule-dispatch-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "./telegram-stable-delivery.js";
 
 interface SessionFailureData {
@@ -22,6 +24,10 @@ interface SessionFailureData {
 type SessionFailureRepository = Pick<
   typeof sessionRepository,
   "recordSessionFailedByContinuationToken"
+>;
+type ScheduleFailureRepository = Pick<
+  typeof agentScheduleDispatchRepository,
+  "failRunByIdentityForNotification"
 >;
 
 const TELEGRAM_CONTINUATION_NAMESPACE = "telegram";
@@ -50,15 +56,26 @@ export async function handleTelegramSessionFailure(
   data: SessionFailureData,
   channel: TelegramEventContext,
   repository: SessionFailureRepository,
+  scheduleRepository: ScheduleFailureRepository,
 ): Promise<void> {
   // A competing root loses hook ownership by design; the existing owner is healthy and must not
   // be rotated or shown a terminal failure produced by the rejected competitor.
   if (isHookConflictFailure(data)) return;
+  const scheduledRunId = scheduledRunIdFromContinuationToken(channel.continuationToken);
+  const notifyScheduledFailure = scheduledRunId === null
+    ? true
+    : await scheduleRepository.failRunByIdentityForNotification(
+        scheduledRunId,
+        data.sessionId,
+        data.code,
+        new Date(),
+      );
   const failedContinuationToken = rawTelegramContinuationToken(channel.continuationToken);
   const result = await repository.recordSessionFailedByContinuationToken(
     failedContinuationToken,
     data.sessionId,
   ) as SessionEventResult;
   if (result === "stale") return;
+  if (!notifyScheduledFailure) return;
   await postTelegramMessageWithoutContinuationChange(channel, formatTelegramSessionFailure(data));
 }

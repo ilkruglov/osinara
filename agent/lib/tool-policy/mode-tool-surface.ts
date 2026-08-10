@@ -18,6 +18,8 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { authorizeAgentScheduleDelivery } from "../agent-schedules/agent-schedule-delivery-authorization.js";
+import { scheduledDeliveryMetadata } from "../agent-schedules/scheduled-session.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
 import { isGroupSafeSkillName, type GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import {
@@ -26,6 +28,7 @@ import {
   THREAD_HISTORY_PAGE_MAX_ENTRIES,
 } from "../memory-config.js";
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
+import { externalRememberInputSchema } from "../remember-contract.js";
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import exportMemory from "../tools/export_memory.js";
 import getCurrentTime from "../tools/get_current_time.js";
@@ -42,6 +45,7 @@ import listReminders from "../tools/list_reminders.js";
 import listTelegramAttachments from "../tools/list_telegram_attachments.js";
 import manageAgentSchedule from "../tools/manage_agent_schedule.js";
 import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
+import manageExternalGroupSchedule from "../tools/manage_external_group_schedule.js";
 import manageFamilyInvitation from "../tools/manage_family_invitation.js";
 import manageGoogleWorkspaceConnection from "../tools/manage_google_workspace_connection.js";
 import manageMemory from "../tools/manage_memory.js";
@@ -53,6 +57,7 @@ import manageTelegramGroup from "../tools/manage_telegram_group.js";
 import notificationSettings from "../tools/notification_settings.js";
 import remember from "../tools/remember.js";
 import readMemoryThread from "../tools/read_memory_thread.js";
+import readScheduledGroupHistory from "../tools/read_scheduled_group_history.js";
 import readProfileView from "../tools/read_profile_view.js";
 import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
@@ -63,6 +68,7 @@ import { controlledWebFetchTool } from "./controlled-web-fetch.js";
 import { EXTERNAL_GROUP_FILE_TOOLS } from "./external-group-file-tools.js";
 import { authorizeCurrentExternalGroupCapability } from "./external-group-live-policy.js";
 import { resolveExternalGroupPolicyIdentity } from "./external-group-policy.js";
+import { scheduledExternalTool } from "./scheduled-external-tool.js";
 import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
   isExternalGroupToolName,
@@ -78,6 +84,8 @@ export type ModeToolSurfaceInput =
       capabilities: ReadonlySet<ExternalGroupToolName>;
       environment: "external";
       includeApplicationCore?: boolean;
+      scheduledHistory?: boolean;
+      scheduledRun?: boolean;
       skills: Readonly<Partial<Record<GroupSafeSkillName, SkillDefinition>>>;
     };
 
@@ -116,6 +124,7 @@ export const PRIVATE_ONLY_TOOLS: ToolMap = {
   get_memory_source: getMemorySource as unknown as AnyToolDefinition,
   list_pending_family_invitations: listPendingFamilyInvitations as unknown as AnyToolDefinition,
   manage_family_invitation: manageFamilyInvitation as unknown as AnyToolDefinition,
+  manage_external_group_schedule: manageExternalGroupSchedule as unknown as AnyToolDefinition,
   manage_telegram_group: manageTelegramGroup as unknown as AnyToolDefinition,
   manage_profile_projection: manageProfileProjection as unknown as AnyToolDefinition,
   notification_settings: notificationSettings as unknown as AnyToolDefinition,
@@ -140,12 +149,6 @@ type DirectExternalToolName = Exclude<
 const EXTERNAL_IMAGE_PATH_MAX_LENGTH = 512;
 const EXTERNAL_MODEL_TEXT_MAX_LENGTH = 4_000;
 const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
-const EXTERNAL_SUBJECT_LABEL_MAX_LENGTH = 200;
-const EXTERNAL_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
-const EXTERNAL_THREAD_REF_PATTERN = /^thread_[0-9a-f]{32}$/u;
-const EXTERNAL_THREAD_ROLE = z.enum([
-  "goal", "constraint", "method", "decision", "episode", "outcome", "lesson", "open_loop",
-]);
 
 // Shared executors remain unchanged, while external descriptors expose only their executable group
 // contract. This prevents the model from planning calls that external authorization must reject.
@@ -192,36 +195,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
   },
   remember: {
     description: "Сохранить одну устойчивую запись в память текущей внешней группы.",
-    inputSchema: z.object({
-      basis: z.enum(["agent_inferred", "user_requested"]),
-      content: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
-      kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
-      scope: z.literal("group").describe("Память текущей внешней группы"),
-      sensitivity: z.enum(["normal", "sensitive"]),
-      subjectLabel: z.string().trim().min(1).max(EXTERNAL_SUBJECT_LABEL_MAX_LENGTH).optional(),
-      subjectRef: z.string().regex(EXTERNAL_SUBJECT_REF_PATTERN).optional(),
-      thread: z.discriminatedUnion("action", [
-        z.object({
-          action: z.literal("attach"),
-          role: EXTERNAL_THREAD_ROLE,
-          threadRef: z.string().regex(EXTERNAL_THREAD_REF_PATTERN),
-        }).strict(),
-        z.object({
-          action: z.literal("create"),
-          identity: z.enum(["subject", "project"]).optional(),
-          parentThreadRef: z.string().regex(EXTERNAL_THREAD_REF_PATTERN).optional(),
-          purpose: z.string().trim().min(1).max(500),
-          role: EXTERNAL_THREAD_ROLE,
-          title: z.string().trim().min(1).max(120),
-        }).strict().refine(
-          (input) => input.parentThreadRef === undefined || input.identity === undefined,
-          { message: "Для subthread identity определяется проверенной родительской нитью" },
-        ),
-      ]).optional(),
-    }).strict().refine(
-      (input) => input.subjectLabel === undefined || input.subjectRef === undefined,
-      { message: "Передайте subjectRef или subjectLabel, но не оба поля" },
-    ),
+    inputSchema: externalRememberInputSchema,
   },
   send_workspace_file: {
     description:
@@ -265,6 +239,22 @@ async function withExternalGroupCapability<T>(
 ): Promise<T> {
   const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
   if (!identity) throw groupToolForbidden();
+
+  // Scheduled file delivery is an owner-approved side effect, so revalidate the exact root run.
+  const scheduledDelivery = scheduledDeliveryMetadata(ctx);
+  if (capability === "send_workspace_file" && scheduledDelivery) {
+    await authorizeAgentScheduleDelivery({
+      applicationSessionId: scheduledDelivery.applicationSessionId,
+      eveSessionId: ctx.session.id,
+      familyId: scheduledDelivery.familyId,
+      groupId: scheduledDelivery.groupId,
+      messageThreadId: scheduledDelivery.messageThreadId,
+      ownerUserId: scheduledDelivery.ownerUserId,
+      runId: scheduledDelivery.runId,
+      scope: scheduledDelivery.scope,
+      telegramChatId: scheduledDelivery.telegramChatId,
+    });
+  }
 
   // Committing this final live check is the operation's authorization linearization point. The DB
   // connection is released before repositories run so concurrent tools cannot exhaust the pool by
@@ -345,6 +335,8 @@ function allowedMemoryThreadTool(): AnyToolDefinition {
 function buildExternalToolSurface(
   allowed: ReadonlySet<ExternalGroupToolName>,
   includeApplicationCore: boolean,
+  scheduledHistory: boolean,
+  scheduledRun: boolean,
   skills: Readonly<Partial<Record<GroupSafeSkillName, SkillDefinition>>>,
 ): ToolMap {
   const surface: Record<string, AnyToolDefinition> = {
@@ -355,6 +347,9 @@ function buildExternalToolSurface(
   };
   if (includeApplicationCore) {
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
+    if (scheduledHistory) {
+      surface.read_scheduled_group_history = readScheduledGroupHistory as unknown as AnyToolDefinition;
+    }
   }
   // Eve's native descriptor is useful only when this exact turn has a loadable dynamic skill. The
   // wrapper still independently enforces the latest database grant at execution time.
@@ -385,7 +380,12 @@ function buildExternalToolSurface(
     // Provider-native web_search has no local execution hook, so it is never grantable externally.
     surface[toolName] = deniedTool(toolName);
   }
-  return surface;
+  // A scheduled run stays in its root context so each provider/tool boundary remains reauthorizable.
+  if (scheduledRun) surface.agent = deniedTool("agent");
+  if (!scheduledRun) return surface;
+  return Object.fromEntries(
+    Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]),
+  );
 }
 
 function allowlistKey(allowed: ReadonlySet<ExternalGroupToolName>): string {
@@ -407,17 +407,27 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
     ? new Set<ExternalGroupToolName>()
     : input.capabilities;
   const includeApplicationCore = input.includeApplicationCore !== false;
+  const scheduledHistory = input.scheduledHistory === true;
+  const scheduledRun = input.scheduledRun === true || scheduledHistory;
   const skills = Object.keys(input.skills).some((name) => !isGroupSafeSkillName(name))
     ? {}
     : input.skills;
   const key = [
     includeApplicationCore ? "core" : "failed",
+    scheduledHistory ? "history" : "ordinary",
+    scheduledRun ? "scheduled" : "interactive",
     allowlistKey(allowed),
     Object.keys(skills).sort().join(","),
   ].join("|");
   const cached = EXTERNAL_SURFACES.get(key);
   if (cached) return cached;
-  const surface = buildExternalToolSurface(allowed, includeApplicationCore, skills);
+  const surface = buildExternalToolSurface(
+    allowed,
+    includeApplicationCore,
+    scheduledHistory,
+    scheduledRun,
+    skills,
+  );
   EXTERNAL_SURFACES.set(key, surface);
   return surface;
 }

@@ -2,8 +2,8 @@
  * PostgreSQL helpers for agent schedule CRUD and dispatcher repositories.
  *
  * Exports:
- * - Shared column projections and mutable row types.
- * - Membership, timezone, replay, row-lock, and mutation authorization helpers.
+ * - `agentScheduleColumns` and `AGENT_SCHEDULE_COLUMNS`: qualified and plain row projections.
+ * - Membership, timezone, replay, idempotency-lock, row-lock, and mutation authorization helpers.
  */
 import type { PoolClient } from "pg";
 
@@ -22,10 +22,15 @@ export interface MutableAgentScheduleRow extends AgentScheduleRow {
   telegram_chat_type: "group" | "private" | "supergroup";
 }
 
-export const AGENT_SCHEDULE_COLUMNS = `id, scope, title, user_request, scenario_prompt,
-  timezone, recurrence_kind, recurrence_interval, recurrence_days_of_week,
-  next_run_at, status, message_thread_id::text, forum_topic_id::text,
-  last_error_code, created_at, updated_at`;
+export function agentScheduleColumns(qualifier?: string): string {
+  const column = (name: string) => qualifier === undefined ? name : `${qualifier}.${name}`;
+  return `${column("id")}, ${column("scope")}, ${column("title")}, ${column("user_request")}, ${column("scenario_prompt")},
+  ${column("timezone")}, ${column("recurrence_kind")}, ${column("recurrence_interval")}, ${column("recurrence_days_of_week")},
+  ${column("next_run_at")}, ${column("status")}, ${column("message_thread_id")}::text, ${column("forum_topic_id")}::text,
+  ${column("history_window_days")}, ${column("tool_allowlist")}, ${column("last_error_code")}, ${column("created_at")}, ${column("updated_at")}`;
+}
+
+export const AGENT_SCHEDULE_COLUMNS = agentScheduleColumns();
 
 export async function requireCurrentScheduleMembership(
   client: PoolClient,
@@ -86,6 +91,18 @@ export async function findAgentScheduleOperation(
   return operation.schedule_id;
 }
 
+export async function lockAgentScheduleOperation(
+  client: PoolClient,
+  auth: AgentScheduleAuthorization,
+  operationKey: string,
+): Promise<void> {
+  // PostgreSQL row locks cannot serialize a not-yet-created operation row.
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0))",
+    [auth.familyId, operationKey],
+  );
+}
+
 export async function selectAgentSchedule(
   client: PoolClient,
   familyId: string,
@@ -110,7 +127,9 @@ export async function requireAgentScheduleMutationAccess(
   const role = await requireCurrentScheduleMembership(client, auth);
   const allowed = schedule.scope === "personal"
     ? schedule.author_user_id === auth.userId
-    : schedule.author_user_id === auth.userId || role === "owner";
+    : schedule.scope === "family"
+      ? schedule.author_user_id === auth.userId || role === "owner"
+      : role === "owner" && auth.telegramChatType === "private";
   if (!allowed) {
     throw new AppError(
       "AGENT_SCHEDULE_MUTATION_DENIED",

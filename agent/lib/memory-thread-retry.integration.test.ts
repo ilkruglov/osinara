@@ -43,6 +43,7 @@ async function createRetryScenario() {
     content: `Отдельная тема здоровья: ${title}`,
     explicitSource: {
       conversationId: fixture.conversationId,
+      subject: { kind: "current_author" },
       timelineEntryId: retrySource.rows[0]!.id,
     },
     kind: "fact",
@@ -63,6 +64,7 @@ async function createRetryScenario() {
     content: "Здоровье относится к выбранной существующей теме",
     explicitSource: {
       conversationId: fixture.conversationId,
+      subject: { kind: "current_author" },
       timelineEntryId: retrySource.rows[0]!.id,
     },
     kind: "fact",
@@ -79,6 +81,7 @@ async function createRetryScenario() {
     content: "Начата инвестиционная тема",
     explicitSource: {
       conversationId: fixture.conversationId,
+      subject: { kind: "current_author" },
       timelineEntryId: fixture.timelineEntryId,
     },
     kind: "fact",

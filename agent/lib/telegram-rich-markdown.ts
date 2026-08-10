@@ -4,6 +4,7 @@
  * Exports:
  * - `sanitizeTelegramRichMarkdown`: preserves text-rich structure and neutralizes active content.
  * - `formatTelegramRichMessages`: produces complete blocks within Telegram's rich text limit.
+ * - `hasTelegramRichDetailsBlock`: recognizes an actual supported details container outside code.
  *
  * Key constructs:
  * - A narrow HTML allowlist for details and inline text formatting.
@@ -12,6 +13,11 @@
  * - Explicit rejection of over-wide tables, excessive nesting, and indivisible long blocks.
  */
 import { AppError } from "./app-error.js";
+import {
+  estimateTelegramRichBlocks,
+  splitTelegramRichBlockByCount,
+  TELEGRAM_RICH_MESSAGE_MAX_BLOCKS,
+} from "./telegram-rich-block-limits.js";
 
 const TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS = 32_768;
 const TELEGRAM_RICH_MESSAGE_MAX_TABLE_COLUMNS = 20;
@@ -192,11 +198,51 @@ function protectMarkdownCode(markdown: string): {
   };
 }
 
+export function hasTelegramRichDetailsBlock(markdown: string): boolean {
+  const protectedCode = protectMarkdownCode(markdown).protectedMarkdown;
+  const stack: Array<{ hasSummary: boolean; name: "details" | "summary" }> = [];
+  let foundDetails = false;
+  for (const match of protectedCode.matchAll(/<[^>\n]*>/gu)) {
+    const canonical = canonicalAllowedTag(match[0]);
+    const rawName = /^<\/?([a-z]+)/iu.exec(match[0])?.[1]?.toLowerCase();
+    if ((rawName === "details" || rawName === "summary") && canonical === null) return false;
+    if (canonical === null) continue;
+    const { closing, name } = htmlTagName(canonical);
+    if (name !== "details" && name !== "summary") continue;
+    if (!closing && name === "details") {
+      stack.push({ hasSummary: false, name });
+      foundDetails = true;
+      continue;
+    }
+    if (!closing && name === "summary") {
+      const parent = stack.at(-1);
+      if (parent?.name !== "details" || parent.hasSummary) return false;
+      parent.hasSummary = true;
+      stack.push({ hasSummary: false, name });
+      continue;
+    }
+    const current = stack.pop();
+    if (current?.name !== name || (name === "details" && !current.hasSummary)) return false;
+  }
+  return foundDetails && stack.length === 0;
+}
+
 function validateTableWidths(markdown: string): void {
-  for (const line of markdown.split("\n")) {
+  const lines = markdown.split("\n");
+  const tableRows = new Set<number>();
+  const delimiter = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/u;
+  for (const [index, line] of lines.entries()) {
+    if (!delimiter.test(line)) continue;
+    if (index > 0 && lines[index - 1]!.includes("|")) tableRows.add(index - 1);
+    for (let cursor = index; cursor < lines.length && lines[cursor]!.includes("|"); cursor += 1) {
+      tableRows.add(cursor);
+    }
+  }
+  for (const [index, line] of lines.entries()) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) continue;
-    const columns = trimmed.slice(1, -1).split("|").length;
+    const outerTableRow = trimmed.startsWith("|") && trimmed.endsWith("|");
+    if (!outerTableRow && !tableRows.has(index)) continue;
+    const columns = trimmed.replace(/^\|/u, "").replace(/\|$/u, "").split("|").length;
     if (columns > TELEGRAM_RICH_MESSAGE_MAX_TABLE_COLUMNS) {
       throw new AppError(
         "AGENT_TELEGRAM_RICH_TABLE_TOO_WIDE",
@@ -337,14 +383,18 @@ function splitOversizedDetailsBlock(block: string): string[] | null {
 
   const overhead = characterLength(`${opening}\n\n\n\n</details>`);
   const bodyLimit = TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS - overhead;
-  const bodyBlocks = completeMarkdownBlocks(body).flatMap((item) => splitBodyBlock(item, bodyLimit));
+  const bodyBlockLimit = TELEGRAM_RICH_MESSAGE_MAX_BLOCKS - 3;
+  const bodyBlocks = completeMarkdownBlocks(body)
+    .flatMap((item) => splitTelegramRichBlockByCount(item, bodyBlockLimit))
+    .flatMap((item) => splitBodyBlock(item, bodyLimit));
   if (bodyBlocks.length === 0) return null;
 
   const bodyChunks: string[] = [];
   let current = "";
   for (const bodyBlock of bodyBlocks) {
     const candidate = current ? `${current}\n\n${bodyBlock}` : bodyBlock;
-    if (characterLength(candidate) <= bodyLimit) {
+    if (characterLength(candidate) <= bodyLimit &&
+      estimateTelegramRichBlocks(candidate) <= bodyBlockLimit) {
       current = candidate;
       continue;
     }
@@ -358,24 +408,33 @@ function splitOversizedDetailsBlock(block: string): string[] | null {
 export function formatTelegramRichMessages(markdown: string): string[] {
   const sanitized = sanitizeTelegramRichMarkdown(markdown).trim();
   if (!sanitized) return [];
-  if (characterLength(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) return [sanitized];
+  if (characterLength(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+    estimateTelegramRichBlocks(sanitized) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) return [sanitized];
 
   // Split only between complete Markdown blocks so every independently parsed message stays valid.
   const blocks = completeMarkdownBlocks(sanitized).flatMap((block) => {
-    if (characterLength(block) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) return [block];
-    return splitOversizedDetailsBlock(block) ?? [block];
+    if (characterLength(block) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+      estimateTelegramRichBlocks(block) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) return [block];
+    return splitOversizedDetailsBlock(block) ?? (
+      estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS &&
+        !hasTelegramRichDetailsBlock(block)
+        ? splitTelegramRichBlockByCount(block, TELEGRAM_RICH_MESSAGE_MAX_BLOCKS)
+        : [block]
+    );
   });
   const chunks: string[] = [];
   let chunk = "";
   for (const block of blocks) {
-    if (characterLength(block) > TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) {
+    if (characterLength(block) > TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS ||
+      estimateTelegramRichBlocks(block) > TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) {
       throw new AppError(
         "AGENT_TELEGRAM_RICH_BLOCK_TOO_LONG",
-        "Один блок ответа превышает допустимый размер Telegram. Сократите его или разделите на части",
+        "Один блок ответа превышает допустимый размер или число блоков Telegram",
       );
     }
     const candidate = chunk ? `${chunk}\n\n${block}` : block;
-    if (characterLength(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS) {
+    if (characterLength(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_CHARACTERS &&
+      estimateTelegramRichBlocks(candidate) <= TELEGRAM_RICH_MESSAGE_MAX_BLOCKS) {
       chunk = candidate;
       continue;
     }
