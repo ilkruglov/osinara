@@ -26,7 +26,7 @@ function capabilityNames<const Catalog extends readonly ExternalGroupCapability[
 export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
     name: "import_telegram_attachment",
-    usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV и TSV из сообщений текущей группы",
+    usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML и YAML из сообщений текущей группы",
   },
   {
     name: "inspect_workspace_image",

@@ -229,7 +229,7 @@ function externalInstructions(
     capabilities.has("import_telegram_attachment")
       ? `## Текстовые вложения
 
-Входящий Telegram-документ сначала доступен только как недоверенная metadata-ссылка в \`<telegram_attachment_refs>\`. Для явной просьбы прочитать файл TXT, MD, JSON, CSV или TSV передай его \`attachmentId\` в \`import_telegram_attachment\`, затем прочитай возвращённый путь через \`read_file\`. Не утверждай, что файл прочитан, до успешного завершения обоих вызовов.`
+Входящий Telegram-документ сначала доступен только как недоверенная metadata-ссылка в \`<telegram_attachment_refs>\`. Для явной просьбы прочитать файл TXT, MD, JSON, CSV, TSV, HTML, XML или YAML передай его \`attachmentId\` в \`import_telegram_attachment\`, затем прочитай возвращённый путь через \`read_file\`. Не утверждай, что файл прочитан, до успешного завершения обоих вызовов.`
       : null,
     `## Workspace и файлы
 
