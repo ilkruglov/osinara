@@ -83,21 +83,25 @@ describe("validateAttachmentContent", () => {
 
 describe("validateReadableTextAttachmentContent", () => {
   it.each([
-    ["notes.txt", "text/plain"],
-    ["README.md", "text/markdown"],
-    ["payload.json", "application/json"],
-    ["report.csv", "text/csv"],
-    ["report.tsv", "text/tab-separated-values"],
-  ])("accepts strict UTF-8 %s as %s", async (fileName, mediaType) => {
+    ["notes.txt", "text/plain", "Обычная заметка\n"],
+    ["README.md", "text/markdown", "# Решение\n\nВыпустить безопасно.\n"],
+    ["payload.json", "application/json", '{"ключ":"значение"}\n'],
+    ["report.csv", "text/csv", "ключ,значение\nчай,2\n"],
+    ["report.tsv", "text/tab-separated-values", "ключ\tзначение\nчай\t2\n"],
+    ["page.HTML", "text/html", "<!doctype html><html><body>Текст</body></html>\n"],
+    ["feed.Xml", "application/xml", '<?xml version="1.0"?><root>Текст</root>\n'],
+    ["settings.YAML", "application/yaml", "ключ: значение\n"],
+    ["config.yml", "application/yaml", "enabled: true\n"],
+  ])("accepts strict UTF-8 %s as %s", async (fileName, mediaType, text) => {
     await expect(validateReadableTextAttachmentContent({
-      bytes: Buffer.from("ключ,значение\nчай,2\n", "utf8"),
+      bytes: Buffer.from(text, "utf8"),
       declaredMediaType: "application/octet-stream",
       fileName,
       kind: "document",
     })).resolves.toEqual({ fileName, mediaType });
   });
 
-  it.each(["page.html", "settings.yaml", "document.pdf"])(
+  it.each(["document.pdf", "document.docx", "archive.zip"])(
     "rejects unsupported external document %s",
     async (fileName) => {
       await expect(validateReadableTextAttachmentContent({
@@ -127,6 +131,14 @@ describe("validateReadableTextAttachmentContent", () => {
   it("rejects detected binary magic under a readable extension", async () => {
     await expect(validateReadableTextAttachmentContent({
       bytes: Buffer.from("504b0506000000000000000000000000000000000000", "hex"),
+      fileName: "notes.txt",
+      kind: "document",
+    })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);
+  });
+
+  it("rejects a detected text format hidden under another allowlisted extension", async () => {
+    await expect(validateReadableTextAttachmentContent({
+      bytes: Buffer.from('<?xml version="1.0"?><root>text</root>', "utf8"),
       fileName: "notes.txt",
       kind: "document",
     })).rejects.toThrowError(/AGENT_ATTACHMENT_TEXT_REQUIRED/u);

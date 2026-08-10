@@ -29,10 +29,14 @@ const TEXT_EXTENSION_MEDIA_TYPES: Readonly<Record<string, string>> = {
 
 const EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES: Readonly<Record<string, string>> = {
   ".csv": "text/csv",
+  ".html": "text/html",
   ".json": "application/json",
   ".md": "text/markdown",
   ".txt": "text/plain",
   ".tsv": "text/tab-separated-values",
+  ".xml": "application/xml",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
 };
 
 export interface ValidatedAttachmentContent {
@@ -53,7 +57,7 @@ export function isReadableTextDocumentCandidate(input: {
 function textRequired(): AppError {
   return new AppError(
     "AGENT_ATTACHMENT_TEXT_REQUIRED",
-    "В этой группе можно импортировать только UTF-8 файлы TXT, Markdown, JSON, CSV или TSV",
+    "В этой группе можно импортировать только UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML или YAML",
   );
 }
 
@@ -69,7 +73,11 @@ export async function validateReadableTextAttachmentContent(input: {
     kind: input.kind,
     ...(input.declaredMediaType ? { mediaType: input.declaredMediaType } : {}),
   })) throw textRequired();
-  if (await fileTypeFromBuffer(input.bytes)) throw textRequired();
+  const expectedMediaType = EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES[extname(fileName).toLowerCase()]!;
+  const detected = await fileTypeFromBuffer(input.bytes);
+  // `file-type` recognizes XML despite its textual payload. Accept only an exact allowlisted match;
+  // every binary format or text format hidden under a different extension remains rejected.
+  if (detected && detected.mime !== expectedMediaType) throw textRequired();
 
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(input.bytes);
@@ -81,7 +89,7 @@ export async function validateReadableTextAttachmentContent(input: {
   }
   return {
     fileName,
-    mediaType: EXTERNAL_TEXT_EXTENSION_MEDIA_TYPES[extname(fileName).toLowerCase()]!,
+    mediaType: expectedMediaType,
   };
 }
 

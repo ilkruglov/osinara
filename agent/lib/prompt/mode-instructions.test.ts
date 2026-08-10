@@ -101,7 +101,7 @@ describe("mode instruction isolation", () => {
     expect(granted).toContain("<telegram_attachment_refs>");
     expect(granted).toContain("import_telegram_attachment");
     expect(granted).toContain("read_file");
-    expect(granted).toMatch(/TXT.*MD.*JSON.*CSV.*TSV/u);
+    expect(granted).toMatch(/TXT.*MD.*JSON.*CSV.*TSV.*HTML.*XML.*YAML/u);
     expect(external()).not.toContain("<telegram_attachment_refs>");
     expect(external()).not.toContain("import_telegram_attachment");
   });

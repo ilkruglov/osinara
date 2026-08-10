@@ -231,6 +231,10 @@ describe("classifyTelegramInboundMedia", () => {
     ["application/json", "payload.json"],
     ["text/csv", "report.csv"],
     ["text/tab-separated-values", "report.tsv"],
+    ["text/html", "PAGE.HTML"],
+    ["application/xml", "feed.Xml"],
+    ["application/yaml", "settings.YAML"],
+    ["application/yaml", "config.yml"],
   ])("classifies a supported text document declared as %s named %s", (mediaType, fileName) => {
     expect(classifyTelegramInboundMedia({
       attachments: [{ fileId: "text-document", fileName, kind: "document", mediaType }],
@@ -262,7 +266,7 @@ describe("classifyTelegramInboundMedia", () => {
     })).toBe("text_document_candidate");
   });
 
-  it.each(["report.pdf", "page.html", "settings.yaml", "archive.zip"])(
+  it.each(["report.pdf", "document.docx", "archive.zip"])(
     "does not classify unsupported document %s as readable text",
     (fileName) => {
       expect(classifyTelegramInboundMedia({
