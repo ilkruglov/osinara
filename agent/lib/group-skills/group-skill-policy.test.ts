@@ -12,6 +12,7 @@ import {
   GROUP_SAFE_SKILL_NAMES,
   parseGroupSkillAllowlist,
 } from "./group-skill-catalog.js";
+import { GROUP_SAFE_SKILL_DEFINITIONS } from "./group-skill-definitions.js";
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES } from "./trusted-google-workspace-skills.js";
 import { createConversationSkillResolver } from "./group-skill-resolver.js";
 
@@ -77,10 +78,8 @@ describe("group skill policy", () => {
     }
   });
 
-  it("keeps every authored part of a grantable external skill free of artificial punctuation", async () => {
-    const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist: vi.fn() });
-    const skills = await resolve(auth("external", ["pohuy"]));
-    const skill = skills.pohuy as unknown as {
+  it("keeps every source file of a grantable external skill free of artificial punctuation", () => {
+    const skill = GROUP_SAFE_SKILL_DEFINITIONS.pohuy as unknown as {
       description: string;
       files: Readonly<Record<string, string>>;
       markdown: string;
