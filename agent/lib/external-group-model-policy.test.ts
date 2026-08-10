@@ -82,6 +82,9 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
     );
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/кавычки-ёлочки/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("—");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("–");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("«");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("»");
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/корпоративные ИИ-формулировки/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/ритуальные вступления/iu);
   });

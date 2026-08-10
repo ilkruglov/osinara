@@ -18,4 +18,10 @@ describe("simplifyExternalAuthoredPunctuation", () => {
   it("preserves authored line boundaries around a standalone dash", () => {
     expect(simplifyExternalAuthoredPunctuation("До\n—\nПосле")).toBe("До\n-\nПосле");
   });
+
+  it("preserves indentation when a typographic dash is a Markdown list marker", () => {
+    expect(simplifyExternalAuthoredPunctuation(
+      "  — пункт\nТекст — пояснение",
+    )).toBe("  - пункт\nТекст: пояснение");
+  });
 });
