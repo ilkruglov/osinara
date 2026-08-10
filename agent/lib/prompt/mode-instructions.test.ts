@@ -220,6 +220,12 @@ describe("mode instruction anchors", () => {
     expect(markdown).toContain("send_workspace_file");
   });
 
+  it("keeps the complete authored external mode free of artificial punctuation", () => {
+    const markdown = external(...EXTERNAL_GROUP_TOOL_NAMES);
+
+    expect(markdown).not.toMatch(/[—–«»]/u);
+  });
+
   it("routes a persistent style wish only into the typed preference set", () => {
     for (const markdown of [privateMode, familyMode]) {
       expect(markdown).toContain("manage_behavior_preference");

@@ -76,4 +76,17 @@ describe("group skill policy", () => {
       expect(skills).not.toHaveProperty(name);
     }
   });
+
+  it("keeps every authored part of a grantable external skill free of artificial punctuation", async () => {
+    const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist: vi.fn() });
+    const skills = await resolve(auth("external", ["pohuy"]));
+    const skill = skills.pohuy as unknown as {
+      description: string;
+      files: Readonly<Record<string, string>>;
+      markdown: string;
+    };
+    const authoredText = [skill.description, skill.markdown, ...Object.values(skill.files)].join("\n");
+
+    expect(authoredText).not.toMatch(/[—–«»]/u);
+  });
 });

@@ -236,7 +236,7 @@ describe("Telegram rich presentation instructions", () => {
     const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
 
     // Telegram Rich Markdown follows GFM, so legacy Telegram Markdown habits render incorrectly.
-    expect(instructions).toContain("Одна звёздочка — курсив, две — жирный");
+    expect(instructions).toContain("Одна звёздочка означает курсив, две означают жирный текст");
     expect(instructions).toContain("Не экранируй разметку вручную");
     for (const syntax of ["`**жирный**`", "`~~зачёркнутый~~`", "`==выделенный==`", "`||спойлер||`"]) {
       expect(instructions, `rich syntax ${syntax} must be documented`).toContain(syntax);
@@ -252,7 +252,7 @@ describe("Telegram rich presentation instructions", () => {
     expect(instructions).toContain("`</details>`");
     expect(instructions).toContain("`<details open>`");
     // The lead must stay outside the accordion, and short answers must not be hidden at all.
-    expect(instructions).toMatch(/одна–три строки|одну–три строки/u);
+    expect(instructions).toMatch(/от одной до трёх строк|одну, две или три строки/u);
     expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
     expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
     expect(instructions).toContain("Если в текущем групповом сообщении упомянули твоё имя");

@@ -1,6 +1,6 @@
 ---
 name: t-invest
-description: Access to the user's Т-Инвестиции / Tinkoff (T-Invest) brokerage account via the T-Invest API — portfolio, positions, cash, quotes and prices, operations, dividends, commissions, yield/returns, bonds, stocks, funds, screeners, and trades on explicit command. Data and analytics, not investment advice. Use whenever the user asks about their own portfolio, account, securities, a quote or price, operations, dividends, returns or trading, or mentions Т-Инвестиции / Тинькофф / T-Invest or a ticker (SBER, GAZP). Data comes from the T-Invest API via the bundled CLI — do not answer from memory.
+description: Access to the user's Т-Инвестиции / Tinkoff (T-Invest) brokerage account via the T-Invest API for portfolio, positions, cash, quotes and prices, operations, dividends, commissions, yield/returns, bonds, stocks, funds, screeners, and trades on explicit command. Data and analytics, not investment advice. Use whenever the user asks about their own portfolio, account, securities, a quote or price, operations, dividends, returns or trading, or mentions Т-Инвестиции / Тинькофф / T-Invest or a ticker (SBER, GAZP). Data comes from the T-Invest API via the bundled CLI. Do not answer from memory.
 ---
 
 <!-- t-invest · версия 1.1.0 · https://github.com/nyxandro/t-invest-skill · CHANGELOG в репозитории -->

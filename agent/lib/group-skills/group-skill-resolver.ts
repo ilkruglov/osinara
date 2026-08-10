@@ -11,7 +11,10 @@ import type { SkillDefinition } from "eve/skills";
 import { AppError } from "../app-error.js";
 import { resolveConversationEnvironment } from "../conversation-environment.js";
 import { resolveExternalGroupSkillPolicy } from "../tool-policy/external-group-policy.js";
-import { selectGroupSafeSkillDefinitions } from "./group-skill-definitions.js";
+import {
+  selectExternalGroupSafeSkillDefinitions,
+  selectGroupSafeSkillDefinitions,
+} from "./group-skill-definitions.js";
 import type { GroupSafeSkillName } from "./group-skill-catalog.js";
 import { groupSkillPolicyRepository } from "./group-skill-repository.js";
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS } from "./trusted-google-workspace-skills.js";
@@ -33,7 +36,7 @@ export function createConversationSkillResolver(
     }
 
     if (environment === "external") {
-      return selectGroupSafeSkillDefinitions(resolveExternalGroupSkillPolicy(auth));
+      return selectExternalGroupSafeSkillDefinitions(resolveExternalGroupSkillPolicy(auth));
     }
 
     const groupId = auth.current?.attributes.groupId;
