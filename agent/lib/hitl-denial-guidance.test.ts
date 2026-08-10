@@ -16,7 +16,7 @@ describe("agent HITL denial guidance", () => {
   it("treats denial as terminal instead of searching for another side effect", async () => {
     const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
 
-    expect(instructions).toContain("Отказ в HITL — терминальное решение");
+    expect(instructions).toContain("Отказ в HITL является терминальным решением");
     expect(instructions).toContain("не вызывай повторно тот же инструмент");
     expect(instructions).toContain("не предлагай и не запускай альтернативное действие");
     expect(instructions).toContain("задай один короткий вопрос о причине отмены и остановись");

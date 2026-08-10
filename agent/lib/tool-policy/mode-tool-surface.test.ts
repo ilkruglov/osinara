@@ -256,6 +256,17 @@ describe("external group tool surface", () => {
     })).toContain("import_telegram_attachment");
   });
 
+  it("keeps external tool descriptions free of artificial punctuation", () => {
+    const surface = buildModeToolSurface({
+      capabilities: new Set(EXTERNAL_GROUP_TOOL_NAMES),
+      environment: "external",
+      skills: { pohuy: POHUY_SKILL },
+    });
+    const descriptions = Object.values(surface).map(({ description }) => description).join("\n");
+
+    expect(descriptions).not.toMatch(/[—–«»]/u);
+  });
+
   it("denies Telegram attachment import after its external capability is revoked", async () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["import_telegram_attachment"]),

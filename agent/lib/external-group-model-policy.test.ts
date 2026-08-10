@@ -77,8 +77,14 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/слегка подстраивай/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/не копируй оскорбления и не усиливай конфликт/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/обычный участник разговора/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/Не используй длинное тире/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(
+      /Не используй длинное или короткое типографское тире/iu,
+    );
+    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/кавычки-ёлочки/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("—");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("–");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("«");
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("»");
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/корпоративные ИИ-формулировки/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/ритуальные вступления/iu);
   });

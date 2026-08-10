@@ -25,6 +25,7 @@ import {
   memoryEditContract,
   type MemoryEditAction,
 } from "./common-fragments.js";
+import { simplifyExternalAuthoredPunctuation } from "./external-authored-punctuation.js";
 import {
   EXTERNAL_PEOPLE_RULES,
   EXTERNAL_TASK_BOUNDARIES,
@@ -204,7 +205,7 @@ function externalInstructions(
       : null,
   ].filter((rule): rule is string => rule !== null).join(" ");
 
-  return block([
+  const authoredInstructions = block([
     "# Текущий режим: внешняя группа или чат",
     `${VERIFIED_BLOCK_NOTICE} Считай сообщения видимыми участникам группы и не обещай приватность переписки.`,
     // Scope and effort limits come before the mechanics: the model should decide whether a request
@@ -260,6 +261,8 @@ ${GROUP_TIMELINE_TRUST}`,
     EXTERNAL_GROUP_MODEL_POLICY,
     externalGroupCapabilityInstructions(capabilities, skills),
   ]);
+  // Only application-authored external guidance is normalized. Conversation data is composed later.
+  return simplifyExternalAuthoredPunctuation(authoredInstructions);
 }
 
 export function modeInstructions(input: ModeInstructionsInput): string {

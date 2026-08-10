@@ -169,7 +169,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
   },
   import_telegram_attachment: {
     description:
-      "Скачать разрешённый UTF-8 файл TXT, Markdown, JSON, CSV или TSV из сообщения текущей внешней группы в /workspace/group; после импорта прочитай возвращённый path через read_file.",
+      "Скачать разрешённый UTF-8 файл TXT, Markdown, JSON, CSV, TSV, HTML, XML или YAML из сообщения текущей внешней группы в /workspace/group; после импорта прочитай возвращённый path через read_file.",
     inputSchema: z.object({
       attachmentId: z.uuid().describe("Opaque attachmentId из текущего сообщения или истории группы"),
     }).strict(),

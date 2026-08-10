@@ -62,7 +62,7 @@ describe("permanent instructions", () => {
     expect(instructions).toContain("# Безопасность и авторизация");
     expect(instructions).toContain("<current_conversation_environment>");
     expect(instructions).toContain("AGENT_CONVERSATION_ENVIRONMENT_INVALID");
-    expect(instructions).toContain("Отказ в HITL — терминальное решение");
+    expect(instructions).toContain("Отказ в HITL является терминальным решением");
     expect(instructions).toContain("<current_time>");
     expect(instructions).toContain("# Rich Telegram presentation");
     expect(instructions).toContain("<telegram-reaction>");
@@ -124,6 +124,12 @@ describe("permanent instructions", () => {
     expect(instructions).toMatch(/ответ со строчной буквы/u);
     expect(instructions).toMatch(/Не превращай простой вопрос в мини-статью/u);
     expect(instructions).toMatch(/не добавляй.*встречный вопрос.*без необходимости/u);
+  });
+
+  it("does not prime external turns with typographic dashes or guillemets", async () => {
+    const instructions = await permanentInstructions();
+
+    expect(instructions).not.toMatch(/[—–«»]/u);
   });
 
   it("stays materially smaller than the mode-agnostic plus mode-specific whole", async () => {
