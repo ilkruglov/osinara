@@ -7,6 +7,7 @@
  * Key constructs:
  * - Destination group identity and chat type are resolved from PostgreSQL, never model input.
  * - Each schedule persists an explicit safe capability subset and optional retained-history window.
+ * - Approval and execution share one non-throwing parser; only execution rethrows invalid input.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
@@ -64,70 +65,127 @@ const toolSchema = z.object({
 
 type ToolInput = z.infer<typeof toolSchema>;
 type ToolAction = ToolInput["action"];
+type Recurrence = z.infer<typeof recurrenceSchema>;
+type ParseFailure = { error: AppError; success: false };
+type ParseResult<T> = ParseFailure | { data: T; success: true };
+type ParsedInput =
+  | { action: "status"; telegramChatId: string | null }
+  | {
+      action: "create";
+      capabilityAllowlist: ExternalScheduleCapability[];
+      firstRunAt: Date;
+      historyWindowDays?: number;
+      recurrence: Recurrence;
+      scenarioPrompt: string;
+      telegramChatId: string;
+      timezone: string;
+      title: string;
+      userRequest: string;
+    }
+  | {
+      action: "update";
+      changes: {
+        capabilityAllowlist?: ExternalScheduleCapability[];
+        historyWindowDays?: number | null;
+        nextRunAt?: Date;
+        recurrence?: Recurrence;
+        scenarioPrompt?: string;
+        title?: string;
+        userRequest?: string;
+      };
+      id: string;
+    }
+  | { action: "delete" | "pause" | "resume" | "run_now"; id: string };
 
-function inputError(message: string): never {
-  throw new AppError("AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID", message);
+const INPUT_ERROR_CODE = "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID";
+
+function invalidInput(message: string): ParseFailure {
+  return { error: new AppError(INPUT_ERROR_CODE, message), success: false };
 }
 
-function exactFields(input: ToolInput, allowed: readonly (keyof ToolInput)[], action: ToolAction): void {
+function parsed<T>(data: T): ParseResult<T> {
+  return { data, success: true };
+}
+
+function exactFields(
+  input: ToolInput,
+  allowed: readonly (keyof ToolInput)[],
+  action: ToolAction,
+): ParseFailure | null {
   const allowlist = new Set<keyof ToolInput>(allowed);
   const extra = Object.keys(input).filter((key) => !allowlist.has(key as keyof ToolInput));
   if (extra.length > 0) {
-    inputError(`Для action=${action} не передавайте поля: ${extra.join(", ")}`);
+    return invalidInput(`Для action=${action} не передавайте поля: ${extra.join(", ")}`);
   }
+  return null;
 }
 
-function requiredString<K extends keyof ToolInput>(input: ToolInput, key: K): string {
+function requiredString<K extends keyof ToolInput>(input: ToolInput, key: K): ParseResult<string> {
   const value = input[key];
   if (typeof value !== "string" || value.trim() === "") {
-    inputError(`Для action=${input.action} обязательно непустое поле ${String(key)}`);
+    return invalidInput(`Для action=${input.action} обязательно непустое поле ${String(key)}`);
   }
-  return value;
+  return parsed(value);
 }
 
-function requiredDate(input: ToolInput, key: "firstRunAt" | "nextRunAt"): Date {
+function requiredDate(input: ToolInput, key: "firstRunAt" | "nextRunAt"): ParseResult<Date> {
   const value = requiredString(input, key);
-  if (!ISO_OFFSET_PATTERN.test(value)) {
-    inputError(`${key} должен быть ISO datetime с UTC offset, например 2026-08-17T09:00:00+03:00`);
+  if (!value.success) return value;
+  if (!ISO_OFFSET_PATTERN.test(value.data)) {
+    return invalidInput(
+      `${key} должен быть ISO datetime с UTC offset, например 2026-08-17T09:00:00+03:00`,
+    );
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) inputError(`${key} содержит некорректную дату`);
-  return date;
+  const date = new Date(value.data);
+  if (Number.isNaN(date.getTime())) return invalidInput(`${key} содержит некорректную дату`);
+  return parsed(date);
 }
 
-function requiredChatId(input: ToolInput): string {
+function requiredChatId(input: ToolInput): ParseResult<string> {
   const value = requiredString(input, "telegramChatId");
-  if (!TELEGRAM_CHAT_ID_PATTERN.test(value)) {
-    inputError("telegramChatId должен быть точным ID зарегистрированной Telegram-группы из status");
+  if (!value.success) return value;
+  if (!TELEGRAM_CHAT_ID_PATTERN.test(value.data)) {
+    return invalidInput(
+      "telegramChatId должен быть точным ID зарегистрированной Telegram-группы из status",
+    );
   }
   return value;
 }
 
-function requiredId(input: ToolInput): string {
+function requiredId(input: ToolInput): ParseResult<string> {
   const value = requiredString(input, "id");
-  if (!UUID_PATTERN.test(value)) inputError("id должен быть UUID расписания из action=status");
+  if (!value.success) return value;
+  if (!UUID_PATTERN.test(value.data)) {
+    return invalidInput("id должен быть UUID расписания из action=status");
+  }
   return value;
 }
 
-function capabilityAllowlist(input: ToolInput): ExternalScheduleCapability[] {
+function capabilityAllowlist(input: ToolInput): ParseResult<ExternalScheduleCapability[]> {
   const capabilities = input.capabilityAllowlist;
-  if (!capabilities) inputError("Для action=create обязательно поле capabilityAllowlist");
+  if (!capabilities) return invalidInput("Для action=create обязательно поле capabilityAllowlist");
   if (new Set(capabilities).size !== capabilities.length) {
-    inputError("capabilityAllowlist не должен содержать повторы");
+    return invalidInput("capabilityAllowlist не должен содержать повторы");
   }
-  return [...capabilities];
+  return parsed([...capabilities]);
 }
 
-function parseInput(input: ToolInput) {
+function parseSemanticInput(input: ToolInput): ParseResult<ParsedInput> {
   if (input.action === "status") {
-    exactFields(input, ["action", "telegramChatId"], input.action);
-    return {
+    const fieldsError = exactFields(input, ["action", "telegramChatId"], input.action);
+    if (fieldsError) return fieldsError;
+    if (input.telegramChatId === undefined) {
+      return parsed({ action: input.action, telegramChatId: null });
+    }
+    const telegramChatId = requiredChatId(input);
+    if (!telegramChatId.success) return telegramChatId;
+    return parsed({
       action: input.action,
-      telegramChatId: input.telegramChatId === undefined ? null : requiredChatId(input),
-    } as const;
+      telegramChatId: telegramChatId.data,
+    });
   }
   if (input.action === "create") {
-    exactFields(input, [
+    const fieldsError = exactFields(input, [
       "action",
       "capabilityAllowlist",
       "firstRunAt",
@@ -139,26 +197,41 @@ function parseInput(input: ToolInput) {
       "title",
       "userRequest",
     ], input.action);
-    if (!input.recurrence) inputError("Для action=create обязательно поле recurrence");
+    if (fieldsError) return fieldsError;
+    if (!input.recurrence) return invalidInput("Для action=create обязательно поле recurrence");
     const historyWindowDays = input.historyWindowDays;
     if (historyWindowDays === null) {
-      inputError("Для отключённого history snapshot не передавайте historyWindowDays");
+      return invalidInput("Для отключённого history snapshot не передавайте historyWindowDays");
     }
-    return {
+    const capabilities = capabilityAllowlist(input);
+    if (!capabilities.success) return capabilities;
+    const firstRunAt = requiredDate(input, "firstRunAt");
+    if (!firstRunAt.success) return firstRunAt;
+    const scenarioPrompt = requiredString(input, "scenarioPrompt");
+    if (!scenarioPrompt.success) return scenarioPrompt;
+    const telegramChatId = requiredChatId(input);
+    if (!telegramChatId.success) return telegramChatId;
+    const timezone = requiredString(input, "timezone");
+    if (!timezone.success) return timezone;
+    const title = requiredString(input, "title");
+    if (!title.success) return title;
+    const userRequest = requiredString(input, "userRequest");
+    if (!userRequest.success) return userRequest;
+    return parsed({
       action: input.action,
-      capabilityAllowlist: capabilityAllowlist(input),
-      firstRunAt: requiredDate(input, "firstRunAt"),
+      capabilityAllowlist: capabilities.data,
+      firstRunAt: firstRunAt.data,
       historyWindowDays,
       recurrence: input.recurrence,
-      scenarioPrompt: requiredString(input, "scenarioPrompt"),
-      telegramChatId: requiredChatId(input),
-      timezone: requiredString(input, "timezone"),
-      title: requiredString(input, "title"),
-      userRequest: requiredString(input, "userRequest"),
-    } as const;
+      scenarioPrompt: scenarioPrompt.data,
+      telegramChatId: telegramChatId.data,
+      timezone: timezone.data,
+      title: title.data,
+      userRequest: userRequest.data,
+    });
   }
   if (input.action === "update") {
-    exactFields(input, [
+    const fieldsError = exactFields(input, [
       "action",
       "capabilityAllowlist",
       "historyWindowDays",
@@ -169,26 +242,53 @@ function parseInput(input: ToolInput) {
       "title",
       "userRequest",
     ], input.action);
+    if (fieldsError) return fieldsError;
+    const nextRunAt = input.nextRunAt === undefined
+      ? parsed<Date | undefined>(undefined)
+      : requiredDate(input, "nextRunAt");
+    if (!nextRunAt.success) return nextRunAt;
     const changes = {
       capabilityAllowlist: input.capabilityAllowlist,
       historyWindowDays: input.historyWindowDays,
-      nextRunAt: input.nextRunAt === undefined ? undefined : requiredDate(input, "nextRunAt"),
+      nextRunAt: nextRunAt.data,
       recurrence: input.recurrence,
       scenarioPrompt: input.scenarioPrompt,
       title: input.title,
       userRequest: input.userRequest,
     };
     if (Object.values(changes).every((value) => value === undefined)) {
-      inputError("Для action=update передайте хотя бы одно поле изменения");
+      return invalidInput("Для action=update передайте хотя бы одно поле изменения");
     }
     if (input.capabilityAllowlist && new Set(input.capabilityAllowlist).size !== input.capabilityAllowlist.length) {
-      inputError("capabilityAllowlist не должен содержать повторы");
+      return invalidInput("capabilityAllowlist не должен содержать повторы");
     }
-    return { action: input.action, changes, id: requiredId(input) } as const;
+    const id = requiredId(input);
+    if (!id.success) return id;
+    return parsed({ action: input.action, changes, id: id.data });
   }
 
-  exactFields(input, ["action", "id"], input.action);
-  return { action: input.action, id: requiredId(input) } as const;
+  const fieldsError = exactFields(input, ["action", "id"], input.action);
+  if (fieldsError) return fieldsError;
+  const id = requiredId(input);
+  if (!id.success) return id;
+  return parsed({ action: input.action, id: id.data });
+}
+
+function parseInput(input: unknown): ParseResult<ParsedInput> {
+  // Schema errors and action-level semantic errors share the same stable application error.
+  const schema = toolSchema.safeParse(input);
+  if (!schema.success) {
+    return invalidInput(
+      "Входные данные не соответствуют схеме manage_external_group_schedule. Проверьте обязательные поля и их типы",
+    );
+  }
+  return parseSemanticInput(schema.data);
+}
+
+function requireParsedInput(input: unknown): ParsedInput {
+  const result = parseInput(input);
+  if (!result.success) throw result.error;
+  return result.data;
 }
 
 const TOOL_DESCRIPTION = [
@@ -203,13 +303,15 @@ const TOOL_DESCRIPTION = [
 
 export default defineTool({
   approval: ({ toolInput }) => {
-    const parsed = parseInput(toolSchema.parse(toolInput));
-    return parsed.action === "status" ? "not-applicable" : "user-approval";
+    const result = parseInput(toolInput);
+    if (!result.success) return { reason: result.error.message, type: "denied" };
+    return result.data.action === "status" ? "not-applicable" : "user-approval";
   },
   description: TOOL_DESCRIPTION,
   inputSchema: toolSchema,
   async execute(input, ctx) {
-    const parsed = parseInput(input);
+    // Execution preserves the original AppError and cannot cross authorization on invalid input.
+    const parsed = requireParsedInput(input);
     const owner = requirePrivateTelegramOwner(ctx);
     const authorization = { familyId: owner.familyId, requestedBy: owner.userId };
     if (parsed.action === "status") {

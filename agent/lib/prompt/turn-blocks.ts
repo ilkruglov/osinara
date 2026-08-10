@@ -64,6 +64,11 @@ type CapabilityLoader = (identity: {
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
 type SkillLoader = (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>;
 
+interface EffectiveExternalCapabilities {
+  capabilities: ReadonlySet<ExternalGroupToolName>;
+  includeApplicationCore: boolean;
+}
+
 const MODE_UNAVAILABLE_BLOCK = `
 <current_conversation_environment>
 # Режим текущего чата не определён
@@ -91,11 +96,11 @@ function logBlockFailure(code: string, error: unknown): void {
 async function effectiveExternalCapabilities(
   auth: SessionAuth,
   loadCapabilities: CapabilityLoader,
-): Promise<ReadonlySet<ExternalGroupToolName>> {
+): Promise<EffectiveExternalCapabilities> {
   const policy = resolveExternalGroupToolPolicy(auth);
-  if (!policy.restricted) return new Set();
+  if (!policy.restricted) return { capabilities: new Set(), includeApplicationCore: false };
   const identity = resolveExternalGroupPolicyIdentity(auth);
-  if (!identity) return new Set();
+  if (!identity) return { capabilities: new Set(), includeApplicationCore: false };
 
   // An unavailable policy lookup must describe no capability at all, matching the fail-closed
   // execution boundary, instead of leaving the previous turn's wider guidance in place.
@@ -104,9 +109,12 @@ async function effectiveExternalCapabilities(
     current = await loadCapabilities(identity);
   } catch (error) {
     logBlockFailure("AGENT_GROUP_CAPABILITY_LOOKUP_FAILED", error);
-    return new Set();
+    return { capabilities: new Set(), includeApplicationCore: false };
   }
-  return new Set([...policy.allowed].filter((capability) => current.has(capability)));
+  return {
+    capabilities: new Set([...policy.allowed].filter((capability) => current.has(capability))),
+    includeApplicationCore: true,
+  };
 }
 
 export function createModeBlockResolver(dependencies: {
@@ -123,7 +131,7 @@ export function createModeBlockResolver(dependencies: {
     }
     if (environment !== "external") return modeInstructions({ environment });
 
-    const capabilities = await effectiveExternalCapabilities(
+    const effective = await effectiveExternalCapabilities(
       ctx.session.auth,
       dependencies.loadCapabilities,
     );
@@ -137,9 +145,10 @@ export function createModeBlockResolver(dependencies: {
       }
     }
     return modeInstructions({
-      capabilities,
+      capabilities: effective.capabilities,
       environment: "external",
-      scheduledHistory: scheduledGroupHistoryAccess(ctx.session.auth) !== null,
+      scheduledHistory: effective.includeApplicationCore &&
+        scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       skills,
     });
   };

@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Scoped CRUD and destination authorization.
+ * - Group-only history configuration is rejected by the domain boundary before SQL mutation.
  * - Handoff-only leases, atomic delivered completion, recurrence, and ambiguous recovery.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -146,6 +147,33 @@ describeWithDatabase("agent schedule repositories", () => {
       title: "Семейная сводка",
       userRequest: "Присылай семье сводку",
     })).resolves.toMatchObject({ scope: "family" });
+  });
+
+  it("rejects history configuration for a non-group schedule before SQL mutation", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    const schedule = await agentScheduleRepository.create(auth, {
+      firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
+      operationKey: "create-personal-without-history",
+      recurrence: { interval: 1, kind: "daily" },
+      scenarioPrompt: "Собрать личную сводку.",
+      scope: "personal",
+      timezone: "Europe/Moscow",
+      title: "Личная сводка",
+      userRequest: "Присылай личную сводку",
+    });
+
+    await expect(agentScheduleRepository.update(auth, schedule.id, {
+      historyWindowDays: 7,
+      operationKey: "invalid-personal-history",
+    })).rejects.toMatchObject({
+      code: "AGENT_EXTERNAL_SCHEDULE_HISTORY_WINDOW_INVALID",
+    });
+    const persisted = await database().query<{ history_window_days: number | null }>(
+      "SELECT history_window_days FROM agent_schedules WHERE id = $1",
+      [schedule.id],
+    );
+    expect(persisted.rows[0]?.history_window_days).toBeNull();
   });
 
   it("claims a weekday schedule once and advances it after Eve completion", async () => {

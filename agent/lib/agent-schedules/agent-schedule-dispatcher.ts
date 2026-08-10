@@ -199,7 +199,18 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
 
     // Sequential handoff bounds model-start pressure and keeps lease diagnostics ordered.
     for (const job of jobs) {
-      await dispatchOne(dependencies, job, now);
+      try {
+        await dispatchOne(dependencies, job, now);
+      } catch (error) {
+        // One claimed job owns its lease and cleanup lifecycle; its failure must not strand the
+        // remaining already-claimed jobs in this batch until their leases expire.
+        console.error(JSON.stringify({
+          code: "AGENT_SCHEDULE_DISPATCH_FAILED",
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          runId: job.runId,
+          scheduleId: job.id,
+        }));
+      }
     }
     return jobs.length;
   };

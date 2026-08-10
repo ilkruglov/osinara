@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Read-only status does not require approval and lists only owner-managed external schedules.
  * - Create requires approval and forwards an explicit destination, capability subset, and history window.
+ * - Invalid schema and action semantics become model-readable denials before execution.
  * - Mutations use opaque schedule IDs and never accept model-selected family or group IDs.
  */
 import type { ToolContext } from "eve/tools";
@@ -88,6 +89,45 @@ describe("manage_external_group_schedule", () => {
         timezone: "Europe/Moscow",
       }),
     );
+  });
+
+  it("returns a structured denial for schema-invalid approval input", () => {
+    expect(manageExternalGroupSchedule.approval?.({ toolInput: undefined } as never)).toEqual({
+      reason:
+        "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Входные данные не соответствуют схеме manage_external_group_schedule. Проверьте обязательные поля и их типы",
+      type: "denied",
+    });
+  });
+
+  it("returns a structured denial for semantically incomplete approval input", () => {
+    expect(manageExternalGroupSchedule.approval?.({
+      toolInput: { action: "create" },
+    } as never)).toEqual({
+      reason: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
+      type: "denied",
+    });
+  });
+
+  it.each([
+    [
+      "schema-invalid",
+      {} as never,
+      "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Входные данные не соответствуют схеме manage_external_group_schedule. Проверьте обязательные поля и их типы",
+    ],
+    [
+      "semantic-invalid",
+      { action: "create" } as never,
+      "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
+    ],
+  ])("rejects %s execution before authorization or repository access", async (_case, input, message) => {
+    await expect(manageExternalGroupSchedule.execute(input, context)).rejects.toMatchObject({
+      code: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID",
+      message,
+      name: "AppError",
+    });
+    expect(dependencies.owner).not.toHaveBeenCalled();
+    expect(dependencies.create).not.toHaveBeenCalled();
+    expect(dependencies.list).not.toHaveBeenCalled();
   });
 
   it("publishes no model-selectable familyId, groupId, or Telegram chat type", () => {

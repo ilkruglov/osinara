@@ -89,7 +89,7 @@ export default defineDynamic({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),
         environment: "external",
         includeApplicationCore,
-        scheduledHistory: scheduledGroupHistoryAccess(auth) !== null,
+        scheduledHistory: includeApplicationCore && scheduledGroupHistoryAccess(auth) !== null,
         scheduledRun: isScheduledSession(ctx),
         skills,
       });

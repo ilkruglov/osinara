@@ -281,6 +281,12 @@ export const agentScheduleRepository = {
       if (input.requiredScope !== undefined && schedule.scope !== input.requiredScope) {
         throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
       }
+      if (input.historyWindowDays !== undefined && schedule.scope !== "group") {
+        throw new AppError(
+          "AGENT_EXTERNAL_SCHEDULE_HISTORY_WINDOW_INVALID",
+          "Окно истории доступно только для автоматизации внешней группы",
+        );
+      }
       if (schedule.status === "leased") {
         throw new AppError(
           "AGENT_SCHEDULE_RUN_IN_PROGRESS",

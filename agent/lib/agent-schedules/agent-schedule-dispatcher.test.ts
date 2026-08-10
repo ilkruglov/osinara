@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `createAgentScheduleDispatcher`: prepares isolated Telegram receive target and trusted auth.
+ * - A failed claimed job, including failed session cleanup, cannot block the remaining batch.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -200,5 +201,88 @@ describe("agent schedule dispatcher", () => {
     expect(repository.failClaim).toHaveBeenCalledWith(job, "AGENT_SCHEDULE_HANDOFF_FAILED");
     expect(discardSession).toHaveBeenCalledWith("failed-handoff-session-1");
     expect(repository.markRunning).not.toHaveBeenCalled();
+  });
+
+  it("continues the claimed batch when one dispatch marker fails", async () => {
+    const secondJob = {
+      ...job,
+      id: "schedule-2",
+      leaseToken: "lease-2",
+      runId: "run-2",
+    };
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue([job, secondJob]),
+      failClaim: vi.fn(),
+      markDispatchStarted: vi.fn()
+        .mockRejectedValueOnce(new Error("marker unavailable"))
+        .mockResolvedValueOnce(true),
+      markRunning: vi.fn(),
+    };
+    const receive = vi.fn().mockResolvedValue({ id: "eve-session-2" });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const dispatched = await createAgentScheduleDispatcher({
+      discardSession: vi.fn(),
+      prepareHistory: vi.fn(),
+      prepareSession: vi.fn().mockImplementation(async (claimedJob: ClaimedAgentSchedule) => ({
+        continuationToken: `101::schedule:${claimedJob.runId}`,
+        generation: 0,
+        id: `app-${claimedJob.runId}`,
+        rotated: false,
+        sandboxSessionId: `sandbox-${claimedJob.runId}`,
+      })),
+      receive,
+      repository,
+    })(new Date("2026-07-17T06:00:00.000Z"));
+
+    expect(dispatched).toBe(2);
+    expect(receive).toHaveBeenCalledTimes(1);
+    expect(repository.markRunning).toHaveBeenCalledWith(secondJob, {
+      applicationSessionId: "app-run-2",
+      eveSessionId: "eve-session-2",
+    });
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"));
+    consoleError.mockRestore();
+  });
+
+  it("continues the claimed batch when rejected authorization cleanup fails", async () => {
+    const secondJob = {
+      ...job,
+      id: "schedule-2",
+      leaseToken: "lease-2",
+      runId: "run-2",
+    };
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue([job, secondJob]),
+      failClaim: vi.fn(),
+      markDispatchStarted: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
+      markRunning: vi.fn(),
+    };
+    const discardSession = vi.fn().mockRejectedValueOnce(new Error("cleanup unavailable"));
+    const receive = vi.fn().mockResolvedValue({ id: "eve-session-2" });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await createAgentScheduleDispatcher({
+      discardSession,
+      prepareHistory: vi.fn(),
+      prepareSession: vi.fn().mockImplementation(async (claimedJob: ClaimedAgentSchedule) => ({
+        continuationToken: `101::schedule:${claimedJob.runId}`,
+        generation: 0,
+        id: `app-${claimedJob.runId}`,
+        rotated: false,
+        sandboxSessionId: `sandbox-${claimedJob.runId}`,
+      })),
+      receive,
+      repository,
+    })(new Date("2026-07-17T06:00:00.000Z"));
+
+    expect(discardSession).toHaveBeenCalledWith("app-run-1");
+    expect(receive).toHaveBeenCalledTimes(1);
+    expect(repository.markRunning).toHaveBeenCalledWith(secondJob, {
+      applicationSessionId: "app-run-2",
+      eveSessionId: "eve-session-2",
+    });
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("AGENT_SCHEDULE_DISPATCH_FAILED"));
+    consoleError.mockRestore();
   });
 });

@@ -5,6 +5,7 @@
  * - Eve retains a previous turn's block when a resolver throws, so resolvers must never throw.
  * - An unresolvable environment produces an explicit fail-closed block, not a stale one.
  * - A failed external capability lookup degrades to an empty allowlist, matching execution policy.
+ * - Scheduled-history instructions require the same successful application-core policy lookup.
  * - Unavailable memory is disclosed instead of looking like an empty result set.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
@@ -80,6 +81,40 @@ describe("mode block resolution", () => {
 
     expect(markdown).toContain("<external_group_capabilities>");
     expect(markdown).not.toContain("`remember`");
+  });
+
+  it("omits scheduled-history instructions when application-core policy lookup fails", async () => {
+    const current = auth({
+      ...externalAuth.current!.attributes,
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+    });
+    const scheduledAuth = { ...current, initiator: current.current };
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn().mockRejectedValue(new Error("database unavailable")),
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
+
+    const markdown = await resolve(context(scheduledAuth));
+
+    expect(markdown).not.toContain("read_scheduled_group_history");
+  });
+
+  it("includes scheduled-history instructions after application-core policy resolves", async () => {
+    const current = auth({
+      ...externalAuth.current!.attributes,
+      scheduledGroupHistory: "enabled",
+      scheduledRunId: "run-1",
+    });
+    const scheduledAuth = { ...current, initiator: current.current };
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn().mockResolvedValue(new Set()),
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
+
+    const markdown = await resolve(context(scheduledAuth));
+
+    expect(markdown).toContain("read_scheduled_group_history");
   });
 
   it("omits a capability revoked from the current database policy", async () => {

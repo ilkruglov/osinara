@@ -34,7 +34,7 @@ function access(principal: SessionAuth["current"]): ScheduledGroupHistoryAccess 
 export function scheduledGroupHistoryAccess(auth: SessionAuth): ScheduledGroupHistoryAccess | null {
   const current = access(auth.current);
   const initiator = access(auth.initiator);
-  if (!current) return initiator;
-  if (!initiator) return current;
+  // A current caller must independently prove the same scheduled run as its durable initiator.
+  if (!current || !initiator) return null;
   return current.groupId === initiator.groupId && current.runId === initiator.runId ? current : null;
 }

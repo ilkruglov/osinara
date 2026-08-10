@@ -24,10 +24,22 @@ export async function loadCurrentExternalGroupCapabilities(input: {
         AND type = 'external'`,
     [input.groupId, input.familyId],
   );
-  const allowed = parseExternalGroupToolAllowlist(result.rows[0]?.tool_allowlist);
+  const registration = result.rows[0];
+  if (!registration) {
+    throw new AppError(
+      "AGENT_GROUP_REGISTRATION_INVALID",
+      "Текущая регистрация внешней группы больше не действует",
+    );
+  }
+  const allowed = parseExternalGroupToolAllowlist(registration.tool_allowlist);
+  if (!allowed) {
+    throw new AppError(
+      "AGENT_GROUP_TOOL_POLICY_INVALID",
+      "Политика инструментов внешней группы повреждена. Обратитесь к владельцу агента",
+    );
+  }
 
-  // Missing, replaced, or malformed persisted policy always becomes deny-all.
-  return allowed ?? new Set();
+  return allowed;
 }
 
 export async function authorizeCurrentExternalGroupCapability(

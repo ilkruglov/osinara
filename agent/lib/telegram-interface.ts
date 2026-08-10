@@ -231,7 +231,10 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...line("Часовой пояс", "timezone"),
         ...(typeof input.historyWindowDays === "number"
           ? [`Окно истории, дней: ${input.historyWindowDays}`]
-          : input.historyWindowDays === null ? ["Окно истории: отключено"] : []),
+          : input.historyWindowDays === null ||
+              (input.action === "create" && input.historyWindowDays === undefined)
+            ? ["Окно истории: отключено"]
+            : []),
         ...(capabilities === null ? [] : [`Разрешённые возможности: ${capabilities || "нет"}`]),
         ...agentScheduleRecurrenceLines(input.recurrence),
         ...line("Сценарий", "scenarioPrompt"),
