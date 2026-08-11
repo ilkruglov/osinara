@@ -270,16 +270,20 @@ describeWithDatabase("workspace repository", () => {
 
     // External groups retain the family role for owner-only administration, but filesystem access
     // is authorized by the current external trust zone rather than by that administrative role.
-    await expect(repository.externalGroupRoot({
+    const resolvedRoot = await repository.externalGroupRoot({
       familyId: f.familyId,
       groupId: f.externalGroupId,
       groupType: "external",
       role: "owner",
       telegramChatType: "supergroup",
       userId: f.ownerId,
-    })).resolves.toMatch(
-      new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/`, "u"),
+    });
+    const workspace = await database().query<{ id: string }>(
+      "SELECT id FROM workspaces WHERE group_id = $1 AND scope = 'group'",
+      [f.externalGroupId],
     );
+
+    expect(resolvedRoot).toBe(join(root, workspace.rows[0]!.id));
   });
 
   it.each(["deleted", "retyped"] as const)(
