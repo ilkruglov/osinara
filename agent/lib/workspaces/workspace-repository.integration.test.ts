@@ -5,6 +5,7 @@
  * - Personal, family, and external-group isolation.
  * - Delegated trusted roots are re-authorized after membership revocation.
  * - External file-operation authorization is recalculated after trust-zone changes.
+ * - Family owners retain external-group workspace access while keeping their administrative role.
  * - Filesystem-first discovery, binary persistence, explicit cross-scope move, and deletion.
  */
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -259,6 +260,26 @@ describeWithDatabase("workspace repository", () => {
     await writeWorkspaceFile(root, groupMount.workspaceId, "project/data.txt", Buffer.from("данные проекта"));
     await repository.deleteFile(external, "group", "project/data.txt", "delete-group");
     await expect(listWorkspaceStoredFiles(root, groupMount.workspaceId)).resolves.toEqual([]);
+  });
+
+  it("allows a family owner to use the workspace of the current external group", async () => {
+    const f = await fixture();
+    const root = await mkdtemp(join(tmpdir(), "osinara-workspace-"));
+    roots.push(root);
+    const repository = createWorkspaceRepository(root);
+
+    // External groups retain the family role for owner-only administration, but filesystem access
+    // is authorized by the current external trust zone rather than by that administrative role.
+    await expect(repository.externalGroupRoot({
+      familyId: f.familyId,
+      groupId: f.externalGroupId,
+      groupType: "external",
+      role: "owner",
+      telegramChatType: "supergroup",
+      userId: f.ownerId,
+    })).resolves.toMatch(
+      new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/`, "u"),
+    );
   });
 
   it.each(["deleted", "retyped"] as const)(
