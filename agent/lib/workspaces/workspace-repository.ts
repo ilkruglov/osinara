@@ -153,9 +153,10 @@ async function saveOperation(
 export function createWorkspaceRepository(root: string) {
   return {
     async externalGroupRoot(auth: WorkspaceAuthorization): Promise<string> {
+      // A family member keeps their administrative role inside an external group. Workspace access
+      // follows the external trust zone and exact live group registration, not that family role.
       if (
         auth.groupType !== "external" ||
-        auth.role !== "external" ||
         auth.telegramChatType === "private"
       ) {
         throw new AppError(
