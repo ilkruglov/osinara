@@ -4,7 +4,8 @@
  * Exports:
  * - `GWS_VERSION`: exact npm package and release version.
  * - `resolveGoogleWorkspaceCliArtifact`: Linux architecture to official artifact/checksum mapping.
- * - `installGoogleWorkspaceCli`: verified mirror download and package-local extraction.
+ * - `resolveGoogleWorkspaceCliDownloadUrl`: official GitHub release URL for a pinned artifact.
+ * - `installGoogleWorkspaceCli`: verified official download and package-local extraction.
  */
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -18,23 +19,25 @@ export const GWS_VERSION = "0.22.5";
 
 const DOWNLOAD_TIMEOUT_MILLISECONDS = 120_000;
 const GWS_PACKAGE_DIRECTORY = resolve("node_modules/@googleworkspace/cli");
-const GWS_RELEASE_BASE_URL =
-  `https://github.com/googleworkspace/cli/releases/download/v${GWS_VERSION}`;
-const GWS_VERIFIED_MIRROR_PREFIX = "https://ghproxy.net/";
+const GWS_RELEASE_ASSET_API_BASE_URL =
+  "https://api.github.com/repos/googleworkspace/cli/releases/assets";
 const execFileAsync = promisify(execFile);
 
 interface GoogleWorkspaceCliArtifact {
   archiveName: string;
+  releaseAssetId: number;
   sha256: string;
 }
 
 const LINUX_ARTIFACTS: Readonly<Record<string, GoogleWorkspaceCliArtifact>> = {
   arm64: {
     archiveName: "google-workspace-cli-aarch64-unknown-linux-musl.tar.gz",
+    releaseAssetId: 385726968,
     sha256: "e700fe63524932b10ec2130b47ece90aa850e66005fe52ccfc4cf8767bf9919a",
   },
   x64: {
     archiveName: "google-workspace-cli-x86_64-unknown-linux-musl.tar.gz",
+    releaseAssetId: 385726987,
     sha256: "4db473dde4b1ab872e4ff35d769b0d4af1f1a6441a605e79d5cf8ada9c87e920",
   },
 };
@@ -52,14 +55,23 @@ export function resolveGoogleWorkspaceCliArtifact(
   return artifact;
 }
 
+export function resolveGoogleWorkspaceCliDownloadUrl(
+  artifact: GoogleWorkspaceCliArtifact,
+): string {
+  return `${GWS_RELEASE_ASSET_API_BASE_URL}/${artifact.releaseAssetId}`;
+}
+
 async function downloadVerifiedArchive(artifact: GoogleWorkspaceCliArtifact): Promise<Buffer> {
-  const officialUrl = `${GWS_RELEASE_BASE_URL}/${artifact.archiveName}`;
-  const response = await fetch(`${GWS_VERIFIED_MIRROR_PREFIX}${officialUrl}`, {
+  const response = await fetch(resolveGoogleWorkspaceCliDownloadUrl(artifact), {
+    headers: {
+      Accept: "application/octet-stream",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
     signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MILLISECONDS),
   });
   if (!response.ok) {
     throw new Error(
-      `AGENT_GWS_DOWNLOAD_FAILED: Mirror returned HTTP ${response.status} for gws ${GWS_VERSION}`,
+      `AGENT_GWS_DOWNLOAD_FAILED: Official release returned HTTP ${response.status} for gws ${GWS_VERSION}`,
     );
   }
   const archive = Buffer.from(await response.arrayBuffer());
