@@ -179,6 +179,45 @@ describe("Telegram group turn context", () => {
     expect(result.durableMessage).not.toContain("replyToSequenceId");
   });
 
+  it("uses a verified nested Telegram snapshot when the target is absent from the journal", async () => {
+    const deps = dependencies("100");
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({
+      ...input,
+      currentSequence: "101",
+      replyTargetSnapshot: {
+        contentText: "У меня настроен vless, ссылочку кинул в streisand",
+        quotedText: "streisand",
+        senderDisplayName: "nlp_daily",
+        senderUsername: "nlp_daily",
+      },
+      replyTargetUnavailable: true,
+    });
+
+    expect(result.durableMessage).toContain('"replyTargetSnapshot":{');
+    expect(result.durableMessage).toContain('"quotedText":"streisand"');
+    expect(result.durableMessage).toContain("У меня настроен vless");
+    expect(result.durableMessage).not.toContain('"replyTargetUnavailable":true');
+    expect(result.durableMessage).not.toContain("replyToSequenceId");
+  });
+
+  it("rejects conflicting database and nested reply targets", async () => {
+    const prepare = createTelegramGroupTurnContextPreparer(dependencies("100"));
+
+    await expect(prepare({
+      ...input,
+      currentSequence: "101",
+      replyTargetSnapshot: {
+        contentText: "Вложенная цель",
+        senderDisplayName: "Канал",
+        senderUsername: null,
+      },
+      replyTargetUnavailable: false,
+      replyToSequenceId: "99",
+    })).rejects.toMatchObject({ code: "AGENT_TELEGRAM_TURN_MESSAGE_INVALID" });
+  });
+
   it("retains the current reply target when unrelated recent context exceeds the character budget", async () => {
     const deps = dependencies("7");
     deps.journal.listIncremental.mockResolvedValue({

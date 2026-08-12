@@ -47,6 +47,7 @@ import {
   telegramReplyContinuationTokens,
 } from "./telegram-reply-routing.js";
 import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
+import { telegramReplyTargetSnapshot } from "./telegram-reply-target-snapshot.js";
 import {
   productionTelegramMessageRepositories,
   type TelegramMessageRepositories,
@@ -401,6 +402,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         now: turnStartedAt,
       })
       : null;
+    const replyTargetSnapshot = inboundTimeline?.replyTargetUnavailable
+      ? telegramReplyTargetSnapshot(message)
+      : null;
     const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
@@ -420,6 +424,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           groupId: group?.groupId ?? null,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
+          ...(replyTargetSnapshot === null ? {} : { replyTargetSnapshot }),
           replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
           replyToSequenceId: inboundTimeline.replyToSequenceId,
         })

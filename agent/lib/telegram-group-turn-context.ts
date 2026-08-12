@@ -24,6 +24,7 @@ import {
   telegramGroupJournalRepository,
   type TelegramGroupJournalRepository,
 } from "./telegram-group-journal-repository.js";
+import type { TelegramReplyTargetSnapshot } from "./telegram-reply-target-snapshot.js";
 
 interface PrepareTelegramGroupTurnContextInput {
   applicationSessionId: string;
@@ -36,6 +37,7 @@ interface PrepareTelegramGroupTurnContextInput {
   groupId: string | null;
   messageText: string;
   messageThreadId: string | null;
+  replyTargetSnapshot?: TelegramReplyTargetSnapshot | null;
   replyTargetUnavailable: boolean;
   replyToSequenceId: string | null;
 }
@@ -84,11 +86,15 @@ function durableTurnMessage(
     | "currentSenderDisplayName"
     | "currentSenderUsername"
     | "messageText"
+    | "replyTargetSnapshot"
     | "replyTargetUnavailable"
     | "replyToSequenceId"
   >,
 ): string {
-  if (input.replyTargetUnavailable && input.replyToSequenceId !== null) {
+  const snapshotConflict = input.replyTargetSnapshot !== null &&
+    input.replyTargetSnapshot !== undefined &&
+    (!input.replyTargetUnavailable || input.replyToSequenceId !== null);
+  if ((input.replyTargetUnavailable && input.replyToSequenceId !== null) || snapshotConflict) {
     throw turnMessageError("reply_metadata_conflict");
   }
   // The durable envelope retains speaker attribution without exposing Telegram identifiers.
@@ -96,7 +102,11 @@ function durableTurnMessage(
   const currentMessage = escapeUntrustedContextJson({
     senderDisplayName: input.currentSenderDisplayName,
     senderUsername: input.currentSenderUsername,
-    ...(input.replyTargetUnavailable ? { replyTargetUnavailable: true } : {}),
+    ...(input.replyTargetSnapshot
+      ? { replyTargetSnapshot: input.replyTargetSnapshot }
+      : input.replyTargetUnavailable
+        ? { replyTargetUnavailable: true }
+        : {}),
     ...(input.replyToSequenceId === null ? {} : { replyToSequenceId: input.replyToSequenceId }),
     text: input.messageText,
   });
