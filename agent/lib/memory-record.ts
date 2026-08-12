@@ -87,6 +87,7 @@ export interface CreateMemoryInput {
   sensitivity: MemorySensitivity;
   source: string;
   sourceEventId?: string;
+  systemActor?: boolean;
   thread?: CreateMemoryThreadInput;
 }
 

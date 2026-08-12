@@ -18,7 +18,7 @@ published releases whose API metadata does not report `immutable: true`.
 the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` references;
 - `compose.production.yaml` contains no build context or application source bind mount.
 
-The app image contains the authored `agent/` tree because Eve `0.22.5` still bundles those modules
+The app image contains the authored `agent/` tree because Eve `0.32.0` bundles those modules
 when `eve start` serves the built `.output`. The server receives no checkout: the source is confined
 to the immutable app image selected by digest.
 
@@ -40,9 +40,10 @@ the same `CI and release` workflow manually with `gh workflow run "CI and releas
 The manual path still runs the production-equivalent test job first and publishes only from the
 current canonical `main` ref; it does not permit a branch build or bypass release validation.
 
-Before each non-initial deployment it also prunes older Osinara deployment backups, retaining the
-initial migration backup while clearing the timestamped slot for the pending snapshot; after
-successful backup creation exactly one previous-release backup remains. After a successful health
+Before each non-initial deployment it also prunes older Osinara deployment backups. The rolling
+snapshot supersedes and removes the historical initial migration backup while clearing the
+timestamped slot for the pending snapshot; after successful backup creation exactly one
+previous-release backup remains. After a successful health
 check and terminal success record it removes local first-party Osinara image references older than
 the current and previous release; this never prunes non-Osinara projects on the same server.
 
@@ -51,6 +52,12 @@ network names, a one-shot migration gate, and a loopback-only edge port. Only sa
 the Docker socket. The agent has no Docker socket and reaches the runner only over the internal
 control network. Every service uses bounded Docker `json-file` logging (`20m` by `5` files), and
 the deployment validator rejects releases that remove this bound.
+
+Eve `0.32.0` mounts its local world at `/app/.eve/.workflow-data` from the logical
+`eve-workflow-data` volume. Its physical production name is
+`osinara-production-eve-workflow-data-v032`; the incompatible legacy
+`osinara-production-workflow-data` volume is never mounted by the new release. During the one-time
+cutover it is retained through archive validation and candidate health, then removed after promotion.
 
 ## Server files
 
@@ -176,10 +183,24 @@ health check to pass; failed recovery becomes `ambiguous`. Once candidate migrat
 failure is `ambiguous` and no automatic rollback is attempted. Operators inspect the stored stable
 result code, logs, and timestamp, then approve a later version explicitly.
 
-Before every non-initial update the script verifies durable volumes and free space, writes and
+An absent candidate-only durable volume is recorded when this deployment attempt creates it. On a
+pre-migration failure the controller first restores and validates the current release, then removes
+only those exact recorded volumes; a failed removal makes the result `ambiguous`. No candidate volume
+is removed after migration starts, and pre-existing candidate-only bytes remain a fail-closed error.
+
+Before every non-initial update the script derives the backup set from the current immutable Compose,
+verifies those durable volumes and free space, writes and
 validates a logical PostgreSQL dump, stops application writers, archives
-`google-workspace-credentials`, `tool-environments`, `workflow-data`, and `workspace-data`, then
-validates each archive. Reconstructible embedding model and sandbox cache volumes are omitted.
+`google-workspace-credentials`, `tool-environments`, the current Eve workflow store, and
+`workspace-data`, then validates each archive. On the one-time Eve `0.32.0` cutover this archives
+`osinara-production-workflow-data` before candidate writers start and creates the absent versioned
+Eve `0.32` volume. After the candidate is healthy and promoted, the controller removes that exact
+archived legacy volume; failure is terminally ambiguous. The single rolling pre-migration archive
+remains available under the normal backup policy. Later backups select the new active volume instead.
+Any other current-owned durable volume missing from the candidate is forbidden. A missing
+current-owned volume or a pre-existing candidate-only volume fails closed, so deploy never creates
+an empty replacement for active data or silently reuses bytes of unknown provenance. Reconstructible
+embedding model and sandbox cache volumes are omitted.
 Candidate release files remain in a unique temporary directory and become `releases/vVERSION` only
 after health succeeds.
 

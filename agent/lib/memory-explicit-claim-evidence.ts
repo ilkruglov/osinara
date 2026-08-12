@@ -26,6 +26,7 @@ interface ExplicitTimelineSourceRow {
   scope_partition_key: string;
   sent_at: Date;
   telegram_group_id: string | null;
+  telegram_user_id: string;
   telegram_message_id: string;
   timeline_sequence: string;
 }
@@ -65,16 +66,49 @@ export async function prepareExplicitClaimEvidence(
             conversation.telegram_group_id, conversation.label AS conversation_label,
             message.content_text, message.sent_at, message.sequence_id AS timeline_sequence,
             message.telegram_message_id::text, message.message_thread_id,
-            participant.id AS author_participant_id, participant.linked_user_id AS author_user_id,
+            message.telegram_user_id, participant.id AS author_participant_id,
+            participant.linked_user_id AS author_user_id,
             participant.display_name_snapshot AS author_label
      FROM telegram_group_messages AS message
      JOIN application_conversations AS conversation ON conversation.id = message.conversation_id
      JOIN conversation_participants AS participant
        ON participant.conversation_id = conversation.id
-      AND participant.telegram_user_id = message.telegram_user_id
-     WHERE message.id = $1 AND message.conversation_id = $2
-       AND message.actor_kind = 'user' AND message.telegram_user_id = $3`,
-    [source.timelineEntryId, source.conversationId, auth.telegramUserId],
+       AND participant.telegram_user_id = message.telegram_user_id
+      WHERE message.id = $1 AND message.conversation_id = $2 AND message.actor_kind = 'user'
+        AND (
+          conversation.scope = 'group' OR EXISTS (
+            SELECT 1 FROM family_memberships AS membership
+            WHERE membership.family_id = conversation.family_id
+              AND membership.user_id = participant.linked_user_id
+          )
+        )
+        AND (
+           message.telegram_user_id = $3 OR EXISTS (
+            SELECT 1
+            FROM memory_turn_sources AS turn_source
+            JOIN memory_turn_source_sets AS source_set
+              ON source_set.eve_session_id = turn_source.eve_session_id
+             AND source_set.eve_turn_id = turn_source.eve_turn_id
+            WHERE turn_source.timeline_entry_id = message.id
+              AND turn_source.conversation_id = message.conversation_id
+              AND source_set.eve_session_id = $4
+              AND source_set.eve_turn_id = $5
+              AND source_set.invoking_telegram_user_id = $3
+           ) OR EXISTS (
+             SELECT 1
+             FROM memory_turn_sources AS turn_source
+             JOIN memory_turn_source_sets AS source_set
+               ON source_set.eve_session_id = turn_source.eve_session_id
+              AND source_set.eve_turn_id = turn_source.eve_turn_id
+             WHERE turn_source.timeline_entry_id = message.id
+               AND turn_source.conversation_id = message.conversation_id
+               AND source_set.eve_session_id = $4
+               AND source_set.eve_turn_id = $5
+               AND source_set.memory_review_batch_id IS NOT NULL
+           )
+        )`,
+    [source.timelineEntryId, source.conversationId, auth.telegramUserId,
+      input.provenance?.sessionId ?? null, input.provenance?.turnId ?? null],
   );
   const row = result.rows[0];
   const expectedPartition = input.scope === "group"
@@ -100,10 +134,12 @@ export async function prepareExplicitClaimEvidence(
       subjectParticipantId = row.author_participant_id;
       subjectConversationId = source.conversationId;
     } else {
-      if (!row.author_user_id || row.author_user_id !== auth.userId) {
+      const invalidAuthor = !row.author_user_id ||
+        (input.scope === "personal" && row.author_user_id !== auth.userId);
+      if (invalidAuthor) {
         throw new AppError(
           "AGENT_MEMORY_SUBJECT_CURRENT_AUTHOR_INVALID",
-          "Не удалось подтвердить семейную identity текущего автора. Повторите запрос после обновления чата",
+          "Не удалось подтвердить identity автора выбранного сообщения. Повторите запрос после обновления чата",
         );
       }
       subjectUserId = row.author_user_id;
@@ -158,14 +194,14 @@ export async function prepareExplicitClaimEvidence(
     conversationLabelSnapshot: row.conversation_label,
     evidenceKind,
     familyId: auth.familyId,
-    primaryAuthorTelegramUserId: auth.telegramUserId,
+    primaryAuthorTelegramUserId: row.telegram_user_id,
     primaryAuthorUserId: row.author_user_id,
     scope: input.scope,
     scopePartitionKey: row.scope_partition_key,
     sources: [{
       authorLabelSnapshot: row.author_label,
       authorParticipantId: row.author_participant_id,
-      authorTelegramUserId: auth.telegramUserId,
+      authorTelegramUserId: row.telegram_user_id,
       authorUserId: row.author_user_id,
       evidenceSnippet: evidenceSnippet(row.content_text),
       messageThreadId: row.message_thread_id,

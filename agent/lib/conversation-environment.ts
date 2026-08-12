@@ -35,7 +35,7 @@ export function resolveConversationEnvironment(auth: SessionAuth): ConversationE
   const attributes = caller?.attributes;
   if (
     caller?.principalType !== "user" ||
-    caller.authenticator !== "telegram" ||
+    (caller.authenticator !== "telegram" && caller.authenticator !== "memory-review") ||
     !attributes
   ) {
     throw environmentError();
@@ -45,6 +45,7 @@ export function resolveConversationEnvironment(auth: SessionAuth): ConversationE
   const chatType = attributes.telegramChatType;
   const groupType = attributes.groupType;
   const memoryScopes = attributes.memoryScopes;
+  const memoryReview = caller.authenticator === "memory-review";
   if (
     chatType === "private" &&
     groupType === undefined &&
@@ -54,12 +55,12 @@ export function resolveConversationEnvironment(auth: SessionAuth): ConversationE
   }
 
   // Registered Telegram groups are distinguished by their persisted trust-zone type.
-  if (GROUP_CHAT_TYPES.has(String(chatType)) && groupType === "family_private") {
+  if ((memoryReview || GROUP_CHAT_TYPES.has(String(chatType))) && groupType === "family_private") {
     if (scopesEqual(memoryScopes, ["family"])) return "family";
     throw environmentError();
   }
   if (
-    GROUP_CHAT_TYPES.has(String(chatType)) &&
+    (memoryReview || GROUP_CHAT_TYPES.has(String(chatType))) &&
     groupType === "external"
   ) {
     if (scopesEqual(memoryScopes, ["group"])) return "external";

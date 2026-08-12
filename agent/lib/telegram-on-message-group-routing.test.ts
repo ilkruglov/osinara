@@ -141,6 +141,10 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await expect(handler(telegramContext().context, groupMessage("обычная реплика"))).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledTimes(1);
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
@@ -160,6 +164,7 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
@@ -244,6 +249,60 @@ describe("createTelegramMessageHandler group routing", () => {
       currentSequence: "13",
       replyTargetUnavailable: false,
       replyToSequenceId: "8",
+    }));
+  });
+
+  it("passes a verified raw reply snapshot when the target was not journaled", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      skillAllowlist: [],
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000013",
+      replyToAgent: false,
+      replyTargetUnavailable: true,
+      replyToSequenceId: null,
+      sequenceId: "13",
+      status: "inserted",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage(`@${BOT_USERNAME} а чо это`),
+      messageId: "51002",
+      raw: {
+        date: 1_786_542_434,
+        quote: { text: "streisand" },
+        reply_to_message: {
+          chat: { id: "group-101", title: "Группа", type: "group" },
+          message_id: 51_001,
+          sender_chat: { id: -1001, title: "nlp_daily", type: "channel", username: "nlp_daily" },
+          text: "У меня настроен vless, ссылочку кинул в streisand",
+        },
+      },
+      replyToMessage: {
+        chat: { id: "group-101", title: "Группа", type: "group" as const },
+        from: { firstName: "Channel", id: "telegram-channel", isBot: true },
+        messageId: "51001",
+      },
+    };
+
+    await handler(telegramContext().context, message);
+
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
+      replyTargetSnapshot: {
+        contentText: "У меня настроен vless, ссылочку кинул в streisand",
+        quotedText: "streisand",
+        senderDisplayName: "nlp_daily",
+        senderUsername: "nlp_daily",
+      },
+      replyTargetUnavailable: true,
+      replyToSequenceId: null,
     }));
   });
 

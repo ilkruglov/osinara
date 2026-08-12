@@ -4,8 +4,9 @@
  * Constructs covered:
  * - Former root-union tools reject malformed model payloads with stable actionable errors.
  * - Invalid input stops before authorization, repository writes, or external model calls.
+ * - `executeInvalidToolInput`: invokes heterogeneous tool signatures through a safe `never` input.
  */
-import type { ToolContext } from "eve/tools";
+import type { ToolContext, ToolDefinition } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const toolCalls = vi.hoisted(() => ({
@@ -94,6 +95,15 @@ import notificationSettings from "./tools/notification_settings.js";
 
 const context = { callId: "call-1" } as ToolContext;
 
+function executeInvalidToolInput(
+  tool: Pick<ToolDefinition<never, unknown>, "execute">,
+  input: never,
+  toolContext: ToolContext,
+) {
+  // `never` is the shared safe input for this table because every case intentionally bypasses its schema.
+  return tool.execute(input, toolContext);
+}
+
 describe("model-facing tool input hardening", () => {
   beforeEach(() => {
     for (const call of Object.values(toolCalls)) call.mockReset();
@@ -133,7 +143,7 @@ describe("model-facing tool input hardening", () => {
       /AGENT_WORKSPACE_IMAGE_INPUT_INVALID: Для inspect_workspace_image передайте ровно один источник/,
     ],
   ] as const)("%s returns an actionable input error for an empty payload", async (_name, tool, message) => {
-    await expect(tool.execute({} as never, context)).rejects.toThrowError(message);
+    await expect(executeInvalidToolInput(tool, {} as never, context)).rejects.toThrowError(message);
   });
 
   it("explains the exact reminder recurrence shape when interval is missing", async () => {

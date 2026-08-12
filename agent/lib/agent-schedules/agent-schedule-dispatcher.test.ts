@@ -2,7 +2,7 @@
  * Agent schedule dispatcher unit tests.
  *
  * Constructs covered:
- * - `createAgentScheduleDispatcher`: prepares isolated Telegram receive target and trusted auth.
+ * - `createAgentScheduleDispatcher`: hands an isolated target to Eve's native channel source.
  * - A failed claimed job, including failed session cleanup, cannot block the remaining batch.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -49,18 +49,19 @@ describe("agent schedule dispatcher", () => {
       rotated: false,
       sandboxSessionId: "sandbox-1",
     });
-    const receive = vi.fn().mockResolvedValue({
+    const send = vi.fn().mockResolvedValue({
       continuationToken: "101::schedule:run-1",
       getEventStream: vi.fn(),
       id: "eve-session-1",
     });
+    const to = vi.fn().mockReturnValue({ send });
 
     const dispatched = await createAgentScheduleDispatcher({
       discardSession: vi.fn(),
       prepareHistory: vi.fn(),
       prepareSession,
-      receive,
       repository,
+      to,
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(dispatched).toBe(1);
@@ -69,7 +70,11 @@ describe("agent schedule dispatcher", () => {
       "101::schedule:run-1",
       new Date("2026-07-17T06:00:00.000Z"),
     );
-    expect(receive).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+    expect(to).toHaveBeenCalledWith(expect.any(Object), {
+      chatId: "101",
+      conversationId: "schedule:run-1",
+    });
+    expect(send).toHaveBeenCalledWith(expect.stringContaining("<scheduled_agent_run>"), {
       auth: expect.objectContaining({
         attributes: expect.objectContaining({
           applicationSessionId: "app-session-1",
@@ -81,9 +86,7 @@ describe("agent schedule dispatcher", () => {
         authenticator: "telegram",
         principalId: "user-1",
       }),
-      message: expect.stringContaining("<scheduled_agent_run>"),
-      target: { chatId: "101", conversationId: "schedule:run-1" },
-    }));
+    });
     expect(repository.markDispatchStarted).toHaveBeenCalledWith(job, {
       applicationSessionId: "app-session-1",
     });
@@ -117,14 +120,15 @@ describe("agent schedule dispatcher", () => {
       rotated: false,
       sandboxSessionId: "group-sandbox-1",
     });
-    const receive = vi.fn().mockResolvedValue({ id: "group-eve-session-1" });
+    const send = vi.fn().mockResolvedValue({ id: "group-eve-session-1" });
+    const to = vi.fn().mockReturnValue({ send });
 
     await createAgentScheduleDispatcher({
       discardSession: vi.fn(),
       prepareHistory,
       prepareSession,
-      receive,
       repository,
+      to,
     } as never)(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(prepareHistory).toHaveBeenCalledWith(groupJob);
@@ -132,7 +136,11 @@ describe("agent schedule dispatcher", () => {
       .toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
     expect(prepareSession.mock.invocationCallOrder[0])
       .toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
-    expect(receive).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+    expect(to).toHaveBeenCalledWith(expect.any(Object), {
+      chatId: "-1001234567890",
+      conversationId: "schedule:run-1",
+    });
+    expect(send).toHaveBeenCalledWith(expect.any(String), {
       auth: expect.objectContaining({
         attributes: expect.objectContaining({
           groupId: "group-1",
@@ -142,8 +150,7 @@ describe("agent schedule dispatcher", () => {
           toolAllowlist: ["send_workspace_file"],
         }),
       }),
-      target: { chatId: "-1001234567890", conversationId: "schedule:run-1" },
-    }));
+    });
   });
 
   it("retires a prepared session when live authorization rejects the pre-handoff transition", async () => {
@@ -154,7 +161,7 @@ describe("agent schedule dispatcher", () => {
       markRunning: vi.fn(),
     };
     const discardSession = vi.fn();
-    const receive = vi.fn();
+    const send = vi.fn();
 
     await createAgentScheduleDispatcher({
       discardSession,
@@ -166,12 +173,12 @@ describe("agent schedule dispatcher", () => {
         rotated: false,
         sandboxSessionId: "revoked-sandbox-1",
       }),
-      receive,
       repository,
+      to: vi.fn().mockReturnValue({ send }),
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(discardSession).toHaveBeenCalledWith("revoked-session-1");
-    expect(receive).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     expect(repository.markRunning).not.toHaveBeenCalled();
   });
 
@@ -194,8 +201,10 @@ describe("agent schedule dispatcher", () => {
         rotated: false,
         sandboxSessionId: "failed-handoff-sandbox-1",
       }),
-      receive: vi.fn().mockRejectedValue(new Error("handoff failed")),
       repository,
+      to: vi.fn().mockReturnValue({
+        send: vi.fn().mockRejectedValue(new Error("handoff failed")),
+      }),
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(repository.failClaim).toHaveBeenCalledWith(job, "AGENT_SCHEDULE_HANDOFF_FAILED");
@@ -218,7 +227,7 @@ describe("agent schedule dispatcher", () => {
         .mockResolvedValueOnce(true),
       markRunning: vi.fn(),
     };
-    const receive = vi.fn().mockResolvedValue({ id: "eve-session-2" });
+    const send = vi.fn().mockResolvedValue({ id: "eve-session-2" });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const dispatched = await createAgentScheduleDispatcher({
@@ -231,12 +240,12 @@ describe("agent schedule dispatcher", () => {
         rotated: false,
         sandboxSessionId: `sandbox-${claimedJob.runId}`,
       })),
-      receive,
       repository,
+      to: vi.fn().mockReturnValue({ send }),
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(dispatched).toBe(2);
-    expect(receive).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(repository.markRunning).toHaveBeenCalledWith(secondJob, {
       applicationSessionId: "app-run-2",
       eveSessionId: "eve-session-2",
@@ -259,7 +268,7 @@ describe("agent schedule dispatcher", () => {
       markRunning: vi.fn(),
     };
     const discardSession = vi.fn().mockRejectedValueOnce(new Error("cleanup unavailable"));
-    const receive = vi.fn().mockResolvedValue({ id: "eve-session-2" });
+    const send = vi.fn().mockResolvedValue({ id: "eve-session-2" });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await createAgentScheduleDispatcher({
@@ -272,12 +281,12 @@ describe("agent schedule dispatcher", () => {
         rotated: false,
         sandboxSessionId: `sandbox-${claimedJob.runId}`,
       })),
-      receive,
       repository,
+      to: vi.fn().mockReturnValue({ send }),
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(discardSession).toHaveBeenCalledWith("app-run-1");
-    expect(receive).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(repository.markRunning).toHaveBeenCalledWith(secondJob, {
       applicationSessionId: "app-run-2",
       eveSessionId: "eve-session-2",

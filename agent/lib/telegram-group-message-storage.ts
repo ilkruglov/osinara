@@ -128,10 +128,13 @@ export async function pruneTelegramGroupJournal(
        WHERE group_id = $1
        ORDER BY sequence_id DESC
        OFFSET $2
-      ) AND NOT EXISTS (
-        SELECT 1 FROM memory_extraction_retention_holds AS hold
-        WHERE hold.timeline_entry_id = telegram_group_messages.id
-      )`,
+        ) AND NOT EXISTS (
+          SELECT 1 FROM memory_review_batch_sources AS source
+          WHERE source.timeline_entry_id = telegram_group_messages.id
+        ) AND NOT EXISTS (
+         SELECT 1 FROM memory_turn_sources AS source
+         WHERE source.timeline_entry_id = telegram_group_messages.id
+       )`,
     [groupId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
   );
 }

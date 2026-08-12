@@ -9,7 +9,7 @@
   <a href="https://github.com/nyxandro/osinara/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/nyxandro/osinara?style=for-the-badge&label=Release"></a>
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white">
-  <img alt="Eve" src="https://img.shields.io/badge/Eve-0.22.5-111827?style=for-the-badge">
+  <img alt="Eve" src="https://img.shields.io/badge/Eve-0.32.0-111827?style=for-the-badge">
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 ## Что Это
 
-Osinara — приватный семейный Telegram-агент на TypeScript, Eve `0.22.5`, PostgreSQL, Groq Whisper, Docker Compose и нативных skills. Проект делает упор не на «чат-бота вообще», а на строгие границы между личным, семейным и внешним групповым контекстом.
+Osinara — приватный семейный Telegram-агент на TypeScript, Eve `0.32.0`, PostgreSQL, Groq Whisper, Docker Compose и нативных skills. Проект делает упор не на «чат-бота вообще», а на строгие границы между личным, семейным и внешним групповым контекстом.
 
 Главная идея: пользователь может доверять агенту бытовые задачи, файлы, память, расписания и интеграции, при этом приложение не принимает идентичность, роли или область доступа из текста модели. Источники доверия — Telegram update, session auth и PostgreSQL.
 
@@ -168,13 +168,13 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 
 | Путь | Назначение |
 | --- | --- |
-| `agent/agent.ts` | Root Eve agent: model, compaction, delegation limits. |
+| `agent/agent.ts` | Root Eve agent: model и compaction; native child tool в Eve 0.32 доступен только root runtime node. |
 | `agent/channels/telegram.ts` | Telegram channel, durable ingress, HITL, rich delivery. |
 | `agent/tools/` | Единственный discovered application tool: dynamic capability surface текущего режима. |
 | `agent/lib/tools/` | Реализации model-facing typed tools. Не класть сюда tests. |
 | `agent/instructions/` | Turn-scoped dynamic блоки промта: режим, стиль, память. |
 | `agent/lib/prompt/` | Фрагменты промта и композиция блоков по режимам. |
-| `agent/skills/` | Native Eve skills, включая Google Workspace, docs, PDF, XLSX и browser. |
+| `agent/skills/` | Static native Eve skills и turn-scoped dynamic skill resolver. |
 | `agent/lib/` | Application logic, repositories, policies и colocated tests. |
 | `agent/schedules/` | Nitro/Eve schedules: reminders, agent schedules, software update checks. |
 | `services/sandbox-runner/` | Docker-backed sandbox lifecycle, mounts, process execution, policy versions. |
@@ -199,7 +199,7 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 
 ## Skills
 
-Active skills are committed under `agent/skills` and loaded by Eve on demand. Runtime sessions do not mutate the skill catalog or install new production skills.
+Static skills are committed under `agent/skills` and loaded by Eve on demand. Code-reviewed grantable skills are resolved natively on `turn.started`, materialized with supporting files in the sandbox and become visible according to the verified conversation policy. Eve `0.32.0` does not add an arbitrary folder written during a turn to the current dynamic manifest; a resolver change applies from the next turn.
 
 Highlighted skill groups:
 

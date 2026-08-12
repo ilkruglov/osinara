@@ -113,6 +113,48 @@ describeWithDatabase("main-agent memory write", () => {
     }] });
   });
 
+  it("records review thread writes as system actions while preserving Eve provenance", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const memory = await memoryRepository.create(fixture.auth, {
+      confirmation: "model_high",
+      content: "Анна готовится к марафону системно",
+      explicitSource: {
+        conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
+        timelineEntryId: fixture.timelineEntryId,
+      },
+      kind: "episode",
+      operationKey: "agent-memory-system-thread",
+      provenance: { sessionId: "eve-review-session", turnId: "eve-review-turn" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:eve-review-session:eve-review-turn",
+      systemActor: true,
+      thread: {
+        action: "create",
+        identity: "subject",
+        purpose: "Сохранять системно выявленные этапы подготовки",
+        role: "goal",
+        title: "Системная подготовка к марафону",
+      },
+    });
+
+    await expect(database().query(
+      `SELECT audit.actor_user_id, operation.actor_user_id AS operation_actor_user_id,
+              operation.actor_telegram_user_id, operation.eve_session_id, operation.eve_turn_id
+         FROM audit_events AS audit
+         JOIN memory_mutation_operations AS operation ON operation.memory_item_id = audit.subject_id
+        WHERE audit.subject_id = $1 AND audit.event_type = 'memory.thread_created'`,
+      [memory.id],
+    )).resolves.toMatchObject({ rows: [{
+      actor_telegram_user_id: null,
+      actor_user_id: null,
+      eve_session_id: "eve-review-session",
+      eve_turn_id: "eve-review-turn",
+      operation_actor_user_id: null,
+    }] });
+  });
+
   it("keeps exact reinforcement isolated between semantically distinct project identities", async () => {
     const fixture = await createMainAgentMemoryFixture();
     vi.mocked(embedMemoryPassages)

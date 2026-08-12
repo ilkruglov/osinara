@@ -8,6 +8,7 @@
  * - Reconnect metadata recreates disposable compute without rerunning `onSession`.
  * - Automatic trusted/restricted classification from workspace scopes.
  * - Shell and binary file delegation with workspace mutation indexing.
+ * - Authored stop and server shutdown independently stop reattachable compute.
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
@@ -118,6 +119,11 @@ describe("scopedWorkspaceRunner", () => {
       }],
     });
     expect(handle.session.id).toBe(SANDBOX_SESSION_ID);
+    await handle.stop();
+    expect(engine.stopSession).toHaveBeenCalledWith(SANDBOX_SESSION_ID);
+    vi.mocked(engine.stopSession).mockClear();
+
+    // Shutdown remains authoritative even when an authored callback stopped compute earlier.
     await handle.shutdown();
     expect(engine.stopSession).toHaveBeenCalledWith(SANDBOX_SESSION_ID);
   });

@@ -18,7 +18,9 @@ import {
   IMAGE_INSPECTION_CONTRACT,
   MEMORY_DEEPENING_PROTOCOL,
   MEMORY_EXACT_DUPLICATE_HANDLING,
+  GROUP_MEMORY_DELTA_CONTRACT,
   MEMORY_WRITE_CONTRACT,
+  PRIVATE_MEMORY_SOURCE_CONTRACT,
   SEND_WORKSPACE_FILE_RULES,
   UNTRUSTED_FILE_CONTENT_RULES,
   WORKSPACE_ARTIFACT_LOOKUP,
@@ -82,6 +84,7 @@ const PRIVATE_INSTRUCTIONS = block([
 
 Экспорт личной памяти выполняй только через \`export_memory\`; не пересказывай весь экспорт через модель.`,
   MEMORY_WRITE_CONTRACT,
+  PRIVATE_MEMORY_SOURCE_CONTRACT,
   memoryEditContract(new Set<MemoryEditAction>(["delete", "edit", "undo"])),
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
@@ -130,6 +133,7 @@ const FAMILY_INSTRUCTIONS = block([
 
 ${GROUP_ADDRESSING}`,
   MEMORY_WRITE_CONTRACT,
+  GROUP_MEMORY_DELTA_CONTRACT,
   memoryEditContract(new Set<MemoryEditAction>(["delete", "edit", "undo"])),
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
@@ -214,6 +218,7 @@ function externalInstructions(
     EXTERNAL_PEOPLE_RULES,
     externalMemorySection(capabilities),
     capabilities.has("remember") ? MEMORY_WRITE_CONTRACT : null,
+    capabilities.has("remember") ? GROUP_MEMORY_DELTA_CONTRACT : null,
     memoryEditContract(editActions),
     searchable ? MEMORY_DEEPENING_PROTOCOL : null,
     searchable && editActions.has("delete") ? MEMORY_EXACT_DUPLICATE_HANDLING : null,

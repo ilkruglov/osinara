@@ -27,10 +27,33 @@ import {
   buildModeToolSurface,
   buildSubagentToolSurface,
 } from "../lib/tool-policy/mode-tool-surface.js";
+import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
+import { buildMemoryReviewToolSurface } from "../lib/memory-review/memory-review-tool-surface.js";
 
 export default defineDynamic({
   events: {
     "turn.started": async (_event, ctx) => {
+      if (isMemoryReviewSession(ctx)) {
+        if (ctx.session.auth.current?.attributes.groupType !== "external") {
+          return buildMemoryReviewToolSurface();
+        }
+        const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
+        const snapshot = resolveExternalGroupToolPolicy(ctx.session.auth);
+        if (!identity || !snapshot.restricted) return buildMemoryReviewToolSurface(new Set());
+        try {
+          const current = await loadCurrentExternalGroupCapabilities(identity);
+          return buildMemoryReviewToolSurface(new Set(
+            [...snapshot.allowed].filter((name) => current.has(name)),
+          ));
+        } catch (error) {
+          console.error(JSON.stringify({
+            code: "AGENT_MEMORY_REVIEW_TOOL_POLICY_LOOKUP_FAILED",
+            error: error instanceof Error ? error.message : String(error),
+            groupId: identity.groupId,
+          }));
+          return buildMemoryReviewToolSurface(new Set());
+        }
+      }
       const auth = ctx.session.auth;
       const buildSurface = ctx.channel.kind === "subagent"
         ? buildSubagentToolSurface

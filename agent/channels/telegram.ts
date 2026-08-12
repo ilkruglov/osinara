@@ -31,7 +31,9 @@ import { groupTimelineCursorRepository } from "../lib/sessions/group-timeline-cu
 import { authorizeTelegramHitlCallback } from "../lib/telegram-hitl/callback-authorization.js";
 import { handleTelegramInputRequested } from "../lib/telegram-hitl/input-request.js";
 import { telegramHitlApprovalRepository } from "../lib/telegram-hitl/approval-repository.js";
-import { handleTelegramSessionFailure } from "../lib/telegram-session-failure.js";
+import {
+  handleTelegramSessionFailure,
+} from "../lib/telegram-session-failure.js";
 import { telegramTurnReplyParameters } from "../lib/telegram-reply.js";
 import { agentScheduleDispatchRepository } from "../lib/agent-schedules/agent-schedule-dispatch-repository.js";
 import {
@@ -49,6 +51,13 @@ import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-st
 import { AppError } from "../lib/app-error.js";
 import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
+import {
+  bindMemoryTurnSources,
+  releaseMemoryTurnSources,
+} from "../lib/memory-turn-source.js";
+import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.js";
+import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
+import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -192,17 +201,45 @@ export default telegramChannel({
       }
     },
     async "session.failed"(data, channel) {
+      const failureRepository = {
+        async recordSessionFailedByContinuationToken(
+          continuationToken: string,
+          eveSessionId: string,
+        ) {
+          return await memoryReviewDispatchRepository.markInteractiveSessionAmbiguous({
+            continuationToken,
+            diagnosticCode: "AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS",
+            eveSessionId,
+          }) ?? await sessionRepository.recordSessionFailedByContinuationToken(
+            continuationToken,
+            eveSessionId,
+          );
+        },
+      };
       await handleTelegramSessionFailure(
         data,
         channel,
-        sessionRepository,
+        failureRepository,
         agentScheduleDispatchRepository,
       );
     },
     async "turn.failed"(data, channel, ctx) {
+      // Terminal failure releases the temporary timeline retention after all tool writes have stopped.
+      await releaseMemoryTurnSources(ctx);
+      const reviewBatchId = memoryReviewBatchId(ctx);
+      let reviewFailureReplayed = false;
+      if (reviewBatchId) {
+        const terminal = await memoryReviewRepository.failRunning({
+          batchId: reviewBatchId,
+          diagnosticCode: data.code,
+          eveSessionId: ctx.session.id,
+        });
+        reviewFailureReplayed = terminal === "replayed";
+      }
       const sessionId = applicationSessionId(ctx);
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
-      let notifyFailure = true;
+      // The durable terminal replay still performs cleanup, but never duplicates a user message.
+      let notifyFailure = !reviewFailureReplayed;
       if (scheduledDelivery) {
         const failedAt = new Date();
         if (!scheduledTelegramTargetMatches(channel.telegram, scheduledDelivery)) {
@@ -259,12 +296,23 @@ export default telegramChannel({
           await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);
         }
       }
-      await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
+      if (!reviewBatchId) await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
     },
     async "turn.started"(_data, _channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
+      const reviewBatchId = memoryReviewBatchId(ctx);
+      if (reviewBatchId) {
+        await memoryReviewRepository.bindEveTurn({
+          applicationSessionId: sessionId,
+          batchId: reviewBatchId,
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+        });
+      }
+      // This immutable snapshot survives every later model/tool/HITL step in the same durable turn.
+      await bindMemoryTurnSources(ctx);
       const attributes = ctx.session.auth.current?.attributes;
       const timelineSequence = attributes?.telegramTimelineSequence;
       if (typeof timelineSequence === "string") {
@@ -285,6 +333,19 @@ export default telegramChannel({
     async "turn.completed"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
+      if (!awaitingApproval) {
+        // Evidence is durable at the terminal boundary; a parked HITL turn retains its source set.
+        await releaseMemoryTurnSources(ctx);
+        const reviewBatchId = memoryReviewBatchId(ctx);
+        if (reviewBatchId) {
+          await memoryReviewRepository.completeBatch({
+            batchId: reviewBatchId,
+            completedAt: new Date(),
+            eveSessionId: ctx.session.id,
+            eveTurnId: ctx.session.turn.id,
+          });
+        }
+      }
       if (isScheduledSession(ctx) && !awaitingApproval) {
         // Successful scheduled runs are completed atomically with Telegram delivery above.
         await agentScheduleDispatchRepository.failRun(
@@ -294,7 +355,9 @@ export default telegramChannel({
           new Date(),
         );
       }
-      await sessionRepository.recordTurnCompleted(sessionId, ctx.session.id, awaitingApproval);
+      if (!memoryReviewBatchId(ctx)) {
+        await sessionRepository.recordTurnCompleted(sessionId, ctx.session.id, awaitingApproval);
+      }
       if (!awaitingApproval) {
         await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
       }

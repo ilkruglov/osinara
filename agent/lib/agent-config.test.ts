@@ -2,27 +2,26 @@
  * Root Eve agent configuration tests.
  *
  * Constructs:
- * - Delegation depth one lets the root use a fresh-context native child.
- * - The delegated copy cannot recursively create another child session.
+ * - Eve's implicit native agent tool is available only on the root runtime node.
+ * - Root configuration does not use the removed delegation-depth limit.
  */
 import { describe, expect, it } from "vitest";
 import agent from "../agent.js";
-import { resolveSubagentDelegationLimit } from "../../node_modules/eve/dist/src/harness/subagent-depth.js";
+import { isImplicitAgentToolAvailable } from "../../node_modules/eve/dist/src/runtime/framework-tools/agent.js";
+import { ROOT_RUNTIME_AGENT_NODE_ID } from "../../node_modules/eve/dist/src/runtime/graph.js";
 
 describe("root agent configuration", () => {
-  it("allows exactly one subagent level", () => {
-    expect(agent.limits?.maxSubagentDepth).toBe(1);
-    expect(resolveSubagentDelegationLimit({ subagentMaxDepth: 1 })).toEqual({
-      currentDepth: 0,
-      maxDepth: 1,
-      nextChildDepth: 1,
-      reached: false,
-    });
-    expect(resolveSubagentDelegationLimit({ subagentDepth: 1, subagentMaxDepth: 1 })).toEqual({
-      currentDepth: 1,
-      maxDepth: 1,
-      nextChildDepth: 2,
-      reached: true,
-    });
+  it("relies on Eve's root-only native agent tool", () => {
+    expect("limits" in agent).toBe(false);
+    expect(isImplicitAgentToolAvailable({
+      disabledFrameworkTools: [],
+      hasAuthoredAgentTool: false,
+      nodeId: ROOT_RUNTIME_AGENT_NODE_ID,
+    })).toBe(true);
+    expect(isImplicitAgentToolAvailable({
+      disabledFrameworkTools: [],
+      hasAuthoredAgentTool: false,
+      nodeId: "declared-child",
+    })).toBe(false);
   });
 });

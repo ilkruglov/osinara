@@ -78,9 +78,33 @@ describe("agent memory guidance", () => {
     expect(instructions).not.toMatch(/backend extraction|извлекает backend/iu);
   });
 
+  it.each([
+    modeInstructions({ environment: "family" }),
+    modeInstructions({
+      capabilities: new Set(["remember"]),
+      environment: "external",
+      skills: new Set(),
+    }),
+  ])("reviews visible group delta and creates threads only on strong signals", (instructions) => {
+    expect(instructions).toContain("sourceSequence");
+    expect(instructions).toContain("не более 50 пользовательских сообщений");
+    expect(instructions).toContain("автора выбранного сообщения");
+    expect(instructions).toContain("прямо попросил создать нить");
+    expect(instructions).toContain("будущие обновления");
+    expect(instructions).toContain("многошаговый проект");
+    expect(instructions).toContain("сохрани как факт без нити");
+  });
+
+  it("does not offer historical source selection in a private chat", () => {
+    const instructions = modeInstructions({ environment: "private" });
+
+    expect(instructions).toContain("В личном чате сохраняй только текущее сообщение");
+    expect(instructions).not.toContain("не более 50 пользовательских сообщений");
+  });
+
   it("describes automatic source-backed memory and atomic thread writes", () => {
     expect(remember.description).toContain("сама определила");
-    expect(remember.description).toContain("текущего сообщения");
+    expect(remember.description).toContain("проверенного сообщения текущего хода");
     expect(remember.description).toContain("нить");
     expect(remember.description).not.toMatch(/только когда пользователь прямо попросил/iu);
   });

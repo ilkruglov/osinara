@@ -18,6 +18,8 @@ import { THREAD_REF_PATTERN } from "./memory-thread-query-repository.js";
 
 const MEMORY_CONTENT_MAX_CHARACTERS = 4_000;
 const SUBJECT_LABEL_MAX_CHARACTERS = 200;
+const TIMELINE_SEQUENCE_PATTERN = /^[1-9]\d*$/u;
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 export const MEMORY_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
 
 export const memorySubjectSchema = z.discriminatedUnion("kind", [
@@ -63,6 +65,12 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
     kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
     scope,
     sensitivity: z.enum(["normal", "sensitive"]),
+    sourceSequence: z.string().regex(TIMELINE_SEQUENCE_PATTERN).refine(
+      (value) => BigInt(value) <= POSTGRES_BIGINT_MAX,
+      "Номер сообщения выходит за допустимые границы",
+    ).optional().describe(
+      "Только для группы: номер #sequence одного сообщения из видимой дельты текущего хода; без поля источником является текущее сообщение",
+    ),
     subject: memorySubjectSchema,
     thread: memoryThreadSchema.optional(),
   }).strict().superRefine((input, context) => {
@@ -86,6 +94,14 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
         code: "custom",
         message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи",
         path: ["thread", "identity"],
+      });
+    }
+    if (input.sourceSequence !== undefined && input.sensitivity === "sensitive") {
+      context.addIssue({
+        code: "custom",
+        message:
+          "AGENT_MEMORY_INPUT_INVALID: Чувствительное сведение можно сохранить только из текущего сообщения его автора",
+        path: ["sourceSequence"],
       });
     }
   });

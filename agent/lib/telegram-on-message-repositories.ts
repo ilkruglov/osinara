@@ -44,6 +44,7 @@ import type {
   WorkspaceAuthorization,
   WorkspaceScope,
 } from "./workspaces/workspace-repository.js";
+import { memoryReviewRepository } from "./memory-review/memory-review-repository.js";
 
 export interface TelegramMessageRepositories {
   attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
@@ -69,6 +70,10 @@ export interface TelegramMessageRepositories {
   groupContext: { prepare: TelegramGroupTurnContextPreparer };
   hitl: Pick<TelegramHitlApprovalRepository, "authorizeReply">;
   journal: Pick<TelegramGroupJournalRepository, "record">;
+  memoryReview: Pick<
+    typeof memoryReviewRepository,
+    "failInteractivePreparation" | "observePassiveMessage" | "prepareInteractiveTurn"
+  >;
   proactiveDeliveries: Pick<typeof proactiveDeliveryRepository, "listPendingContext">;
   session: Pick<typeof sessionRepository, "hasRoute" | "prepareTurn">;
   telegram: TelegramRepository;
@@ -88,6 +93,7 @@ export const productionTelegramMessageRepositories = {
   groupContext: { prepare: telegramGroupTurnContextPreparer },
   hitl: telegramHitlApprovalRepository,
   journal: telegramGroupJournalRepository,
+  memoryReview: memoryReviewRepository,
   proactiveDeliveries: proactiveDeliveryRepository,
   session: sessionRepository,
   telegram: telegramRepository,

@@ -301,6 +301,42 @@ describeWithDatabase("memoryRepository", () => {
       reinforcement_count: 1,
     })]);
   });
+  it("records a system-authored exact reinforcement without the sponsor as audit actor", async () => {
+    const family = await createFamily("system-exact");
+    await memoryRepository.create(
+      family.owner,
+      createInput("personal", "system-exact-first", "Анна любит улун"),
+    );
+    await memoryRepository.create(family.owner, {
+      ...createInput("personal", "system-exact-second", "Анна любит улун"),
+      systemActor: true,
+    });
+
+    await expect(database().query(
+      `SELECT audit.actor_user_id, operation.actor_user_id AS operation_actor_user_id,
+              operation.actor_telegram_user_id, operation.eve_session_id, operation.eve_turn_id
+         FROM audit_events AS audit
+         JOIN memory_mutation_operations AS operation ON operation.memory_item_id = audit.subject_id
+          AND operation.operation_key = 'system-exact-second'
+        WHERE audit.family_id = $1 AND audit.event_type = 'memory.reinforced'`,
+      [family.familyId],
+    )).resolves.toMatchObject({ rows: [{
+      actor_telegram_user_id: null,
+      actor_user_id: null,
+      eve_session_id: "session-current",
+      eve_turn_id: "turn-current",
+      operation_actor_user_id: null,
+    }] });
+  });
+  it("rejects a system-authored memory mutation without Eve provenance", async () => {
+    const family = await createFamily("system-no-provenance");
+
+    await expect(memoryRepository.create(family.owner, {
+      ...createInput("personal", "system-no-provenance"),
+      provenance: undefined,
+      systemActor: true,
+    })).rejects.toThrowError(/AGENT_MEMORY_SYSTEM_PROVENANCE_REQUIRED/u);
+  });
   it("resolves opaque refs only inside the authorized scope", async () => {
     const family = await createFamily("ref-scope");
     const personal = await memoryRepository.create(

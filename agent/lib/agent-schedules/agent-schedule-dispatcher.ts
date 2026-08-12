@@ -6,7 +6,7 @@
  * - `dispatchDueAgentSchedules`: production dispatcher used by the Eve minute schedule.
  */
 import { telegramContinuationToken } from "eve/channels/telegram";
-import type { ScheduleHandlerArgs } from "eve/schedules";
+import type { ScheduleToFn } from "eve/schedules";
 
 import telegram from "../../channels/telegram.js";
 import {
@@ -20,8 +20,6 @@ import {
 import { scheduledGroupHistorySnapshotRepository } from "./scheduled-group-history-snapshot-repository.js";
 import { numericMessageThreadId } from "./agent-schedule-validation.js";
 import { sessionRepository, type PreparedSession } from "../sessions/session-repository.js";
-
-type ReceiveFn = ScheduleHandlerArgs["receive"];
 
 interface AgentScheduleDispatcherRepository {
   claimDue(options: {
@@ -41,8 +39,8 @@ interface AgentScheduleDispatcherDependencies {
   discardSession(applicationSessionId: string): Promise<void>;
   prepareHistory(job: ClaimedAgentSchedule): Promise<unknown>;
   prepareSession(job: ClaimedAgentSchedule, baseContinuationToken: string, now: Date): Promise<PreparedSession>;
-  receive: ReceiveFn;
   repository: AgentScheduleDispatcherRepository;
+  to: ScheduleToFn;
 }
 
 function memoryScopes(job: ClaimedAgentSchedule): Array<"family" | "group" | "personal"> {
@@ -162,17 +160,14 @@ async function dispatchOne(
     return;
   }
   try {
-    const session = await dependencies.receive(telegram, {
-      auth: scheduledAuth(job, prepared),
-      message: scheduledRunPrompt(job),
-      target: {
-        chatId: job.telegramChatId,
-        conversationId: scheduledConversationId(job),
-        ...(job.messageThreadId === null
-          ? {}
-          : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
-      },
-    });
+    // `to(...).send(...)` keeps channel selection and receive execution inside Eve's native source.
+    const session = await dependencies.to(telegram, {
+      chatId: job.telegramChatId,
+      conversationId: scheduledConversationId(job),
+      ...(job.messageThreadId === null
+        ? {}
+        : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
+    }).send(scheduledRunPrompt(job), { auth: scheduledAuth(job, prepared) });
     await dependencies.repository.markRunning(job, {
       applicationSessionId: prepared.id,
       eveSessionId: session.id,
@@ -216,7 +211,7 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
   };
 }
 
-export function dispatchDueAgentSchedules(receive: ReceiveFn, now = new Date()): Promise<number> {
+export function dispatchDueAgentSchedules(to: ScheduleToFn, now = new Date()): Promise<number> {
   return createAgentScheduleDispatcher({
     discardSession: (applicationSessionId) =>
       sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
@@ -237,7 +232,7 @@ export function dispatchDueAgentSchedules(receive: ReceiveFn, now = new Date()):
         : numericMessageThreadId(job.forumTopicId)!,
       userId: job.scope === "personal" ? job.authorUserId : null,
     }),
-    receive,
     repository: agentScheduleDispatchRepository,
+    to,
   })();
 }

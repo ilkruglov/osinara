@@ -6,6 +6,7 @@
  * - Token deltas and tool-loop events never trigger draft API calls.
  * - Scheduled Telegram delivery is reauthorized before send and confirmed before timeline persistence.
  * - Turn start never launches a second semantic pass over the conversation.
+ * - Turn-bound memory sources survive HITL and release only at a terminal turn boundary.
  */
 import { readFile } from "node:fs/promises";
 
@@ -43,5 +44,13 @@ describe("Telegram channel draft policy", () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
 
     expect(source).not.toContain("createTurnExtractionBatch");
+  });
+
+  it("retains turn-bound memory sources while HITL is parked", async () => {
+    const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+
+    expect(source).toContain("await bindMemoryTurnSources(ctx)");
+    expect(source).toContain("await releaseMemoryTurnSources(ctx)");
+    expect(source).toMatch(/if \(!awaitingApproval\) \{\s*\/\/ Evidence[\s\S]*?releaseMemoryTurnSources/u);
   });
 });

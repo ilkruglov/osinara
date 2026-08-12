@@ -139,10 +139,13 @@ async function prune(client: PoolClient, conversationId: string): Promise<void> 
      `DELETE FROM telegram_group_messages WHERE id IN (
        SELECT id FROM telegram_group_messages WHERE conversation_id = $1
        ORDER BY sequence_id DESC OFFSET $2
-      ) AND NOT EXISTS (
-        SELECT 1 FROM memory_extraction_retention_holds AS hold
-        WHERE hold.timeline_entry_id = telegram_group_messages.id
-      )`,
+        ) AND NOT EXISTS (
+          SELECT 1 FROM memory_review_batch_sources AS source
+          WHERE source.timeline_entry_id = telegram_group_messages.id
+        ) AND NOT EXISTS (
+         SELECT 1 FROM memory_turn_sources AS source
+         WHERE source.timeline_entry_id = telegram_group_messages.id
+       )`,
     [conversationId, TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES],
   );
 }

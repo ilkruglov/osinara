@@ -204,6 +204,8 @@ describe("mode instruction anchors", () => {
     expect(markdown).toContain("<external_group_capabilities>");
     expect(markdown).toContain("/workspace/group");
     expect(markdown).toContain("<untrusted_telegram_group_timeline>");
+    expect(markdown).toContain("replyTargetSnapshot");
+    expect(markdown).toContain("quotedText");
     expect(markdown).toContain("replyTargetUnavailable");
     expect(markdown).toContain("не угадывай");
   });
