@@ -16,7 +16,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { telegramChannel, type TelegramInboundResult } from "eve/channels/telegram";
+import {
+  parseTelegramUpdate,
+  telegramChannel,
+  type TelegramInboundResult,
+} from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
 import { callAdapterEventHandler } from "../../node_modules/eve/dist/src/channel/adapter.js";
@@ -27,6 +31,13 @@ interface HttpRoute {
 
 const execFileAsync = promisify(execFile);
 const patchCommand = ["--experimental-strip-types", "scripts/apply-eve-patches.ts"];
+
+function createChannelSource(session: Record<string, unknown> = { id: "session-test" }) {
+  const send = vi.fn().mockResolvedValue(session);
+  const respond = vi.fn().mockResolvedValue(session);
+  const from = vi.fn(() => ({ respond, send }));
+  return { from, respond, send };
+}
 
 describe("Eve Telegram verified ingress patch", () => {
   it("can be applied repeatedly without changing its reviewed anchors", async () => {
@@ -45,8 +56,8 @@ describe("Eve Telegram verified ingress patch", () => {
       "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
       "utf8",
     );
-    const toolLoopRuntime = await readFile(
-      "node_modules/eve/dist/src/harness/tool-loop.js",
+    const inputRequestsRuntime = await readFile(
+      "node_modules/eve/dist/src/harness/input-requests.js",
       "utf8",
     );
     const types = await readFile(
@@ -66,13 +77,13 @@ describe("Eve Telegram verified ingress patch", () => {
     // @ts-expect-error The pinned seam deliberately permits no other handling modes.
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
-    expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.22.5";');
+    expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.32.0";');
     expect(runtime.match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
     expect(runtime.match(/i\.acknowledgementText\?\?`Answer received\.`/g)).toHaveLength(1);
-    expect(runtime.match(/message:r\.message\?\?a/g)).toHaveLength(1);
-    expect(
-      toolLoopRuntime.match(/\(S\.input\?\.inputResponses\?\.length\?\?0\)===0/g),
-    ).toHaveLength(1);
+    expect(runtime.match(/n\.send\(r\.message\?\?a/g)).toHaveLength(1);
+    // Eve 0.32 natively defers callback context until after the isolated approval step.
+    expect(inputRequestsRuntime).toContain("deferredContext");
+    expect(inputRequestsRuntime).toContain("queueDeferredStepInput");
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
     expect(valid).toMatchObject({ replyHandling: "message" });
@@ -80,8 +91,31 @@ describe("Eve Telegram verified ingress patch", () => {
     expect(callbackResult.acknowledgementText).toBe("Решение сохранено");
   });
 
+  it("never exposes an update to the durable hook before webhook authentication", async () => {
+    const onVerifiedUpdate = vi.fn();
+    const channel = telegramChannel({
+      credentials: { webhookSecretToken: "webhook-secret" },
+      onVerifiedUpdate,
+    });
+    const route = channel.routes[0] as unknown as HttpRoute;
+
+    const response = await route.handler(new Request("https://agent.example/eve/v1/telegram", {
+      body: JSON.stringify({ update_id: 1000 }),
+      headers: { "x-telegram-bot-api-secret-token": "wrong-secret" },
+      method: "POST",
+    }), {
+      from: vi.fn(),
+      params: {},
+      requestIp: null,
+      waitUntil: vi.fn(),
+    });
+
+    expect(response.status).toBe(401);
+    expect(onVerifiedUpdate).not.toHaveBeenCalled();
+  });
+
   it("sends an application-authored durable message override", async () => {
-    const send = vi.fn().mockResolvedValue({ id: "session-context" });
+    const source = createChannelSource({ id: "session-context" });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
       onMessage: async () => ({ auth: null, message: "durable context\n\nПривет" }),
@@ -105,14 +139,14 @@ describe("Eve Telegram verified ingress patch", () => {
     }), {
       params: {},
       requestIp: null,
-      send,
+      from: source.from,
       waitUntil(task: Promise<unknown>) {
         backgroundTask = task;
       },
     });
     await backgroundTask;
 
-    expect(send.mock.calls[0]?.[0]?.message).toBe("durable context\n\nПривет");
+    expect(source.send.mock.calls[0]?.[0]).toBe("durable context\n\nПривет");
   });
 
   it("fails fast when the pinned Telegram runtime artifact does not match", async () => {
@@ -141,6 +175,26 @@ describe("Eve Telegram verified ingress patch", () => {
     }
   }, 15_000);
 
+  it("fails fast when the installed Eve version does not match", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-eve-version-mismatch-"));
+    const eveTarget = join(root, "node_modules/eve");
+    const packagePath = join(eveTarget, "package.json");
+    try {
+      await cp(resolve("node_modules/eve"), eveTarget, { recursive: true });
+      const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as Record<string, unknown>;
+      await writeFile(packagePath, `${JSON.stringify({ ...packageJson, version: "0.31.0" })}\n`);
+
+      await expect(execFileAsync(process.execPath, [
+        "--experimental-strip-types",
+        resolve("scripts/apply-eve-patches.ts"),
+      ], { cwd: root })).rejects.toMatchObject({
+        stderr: expect.stringContaining("AGENT_EVE_PATCH_VERSION_UNSUPPORTED"),
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  }, 15_000);
+
   it("propagates input.requested handler failures instead of parking an unbound approval", async () => {
     const error = new Error("AGENT_APPROVAL_STORAGE_FAILED");
     const adapter = {
@@ -156,14 +210,17 @@ describe("Eve Telegram verified ingress patch", () => {
   });
 
   it("acknowledges through the hook and dispatches with the native channel adapter", async () => {
-    const send = vi.fn().mockResolvedValue({
+    const source = createChannelSource({
       continuationToken: "101::",
       getEventStream: vi.fn(),
       id: "session-1",
     });
     let backgroundTask: Promise<unknown> | undefined;
+    let dispatchedSession: unknown;
     const onVerifiedUpdate = vi.fn((context) => {
-      context.waitUntil(context.dispatch(context.update));
+      context.waitUntil(context.dispatch(context.update).then((session: unknown) => {
+        dispatchedSession = session;
+      }));
       return new Response("queued", { status: 202 });
     });
     const channel = telegramChannel({
@@ -191,7 +248,7 @@ describe("Eve Telegram verified ingress patch", () => {
     const response = await route.handler(request, {
       params: {},
       requestIp: null,
-      send,
+      from: source.from,
       waitUntil(task: Promise<unknown>) {
         backgroundTask = task;
       },
@@ -200,11 +257,12 @@ describe("Eve Telegram verified ingress patch", () => {
 
     expect(response.status).toBe(202);
     expect(onVerifiedUpdate).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(source.send).toHaveBeenCalledTimes(1);
+    expect(dispatchedSession).toMatchObject({ id: "session-1" });
   });
 
   it("uses the application continuation token returned by the authorized message handler", async () => {
-    const send = vi.fn().mockResolvedValue({ id: "session-rotated" });
+    const source = createChannelSource({ id: "session-rotated" });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
       onMessage: async () => ({ auth: null, continuationToken: "101:::osinara:2" }),
@@ -228,20 +286,18 @@ describe("Eve Telegram verified ingress patch", () => {
     }), {
       params: {},
       requestIp: null,
-      send,
+      from: source.from,
       waitUntil(task: Promise<unknown>) {
         backgroundTask = task;
       },
     });
     await backgroundTask;
 
-    expect(send.mock.calls[0]?.[1]).toMatchObject({
-      continuationToken: "101:::osinara:2",
-    });
+    expect(source.from).toHaveBeenCalledWith("101:::osinara:2");
   });
 
   it("dispatches a timeline reply as a message when the handler opts out of HITL synthesis", async () => {
-    const send = vi.fn().mockResolvedValue({ id: "session-fresh-reply" });
+    const source = createChannelSource({ id: "session-fresh-reply" });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
       onMessage: async () => ({
@@ -276,19 +332,17 @@ describe("Eve Telegram verified ingress patch", () => {
     }), {
       params: {},
       requestIp: null,
-      send,
+      from: source.from,
       waitUntil(task: Promise<unknown>) {
         backgroundTask = task;
       },
     });
     await backgroundTask;
 
-    expect(send.mock.calls[0]?.[0]).toMatchObject({
-      message: expect.anything(),
-    });
-    expect(send.mock.calls[0]?.[0]?.inputResponses).toBeUndefined();
-    expect(send.mock.calls[0]?.[1]).toMatchObject({
-      continuationToken: "-100::340:osinara:2",
+    expect(source.send.mock.calls[0]?.[0]).toEqual(expect.anything());
+    expect(source.respond).not.toHaveBeenCalled();
+    expect(source.from).toHaveBeenCalledWith("-100::340:osinara:2");
+    expect(source.send.mock.calls[0]?.[1]).toMatchObject({
       state: {
         chatId: "-100",
         conversationId: "340",
@@ -297,7 +351,7 @@ describe("Eve Telegram verified ingress patch", () => {
   });
 
   it("preserves native synthetic HITL reply handling when the opt-out is absent", async () => {
-    const send = vi.fn().mockResolvedValue({ id: "session-hitl-reply" });
+    const source = createChannelSource({ id: "session-hitl-reply" });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
       onMessage: async () => ({ auth: null }),
@@ -328,27 +382,43 @@ describe("Eve Telegram verified ingress patch", () => {
     }), {
       params: {},
       requestIp: null,
-      send,
+      from: source.from,
       waitUntil(task: Promise<unknown>) {
         backgroundTask = task;
       },
     });
     await backgroundTask;
 
-    expect(send.mock.calls[0]?.[0]?.inputResponses).toEqual([{
+    expect(source.respond.mock.calls[0]?.[0]).toEqual([{
       requestId: "telegram_reply:341",
       text: "Да",
     }]);
   });
 
   it("exposes an authenticated private drain route on the same adapter", async () => {
-    const onDrain = vi.fn(() => new Response("drained"));
+    const source = createChannelSource({ id: "session-drain" });
+    const update = parseTelegramUpdate({
+      message: {
+        chat: { id: 101, type: "private" },
+        date: 1_700_000_000,
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        message_id: 79,
+        text: "Из очереди",
+      },
+      update_id: 1008,
+    });
+    if (update === null) throw new Error("TEST_TELEGRAM_UPDATE_INVALID");
+    const onDrain = vi.fn((context) => {
+      context.waitUntil(context.dispatch(update));
+      return new Response("drained");
+    });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
       drainRoute: "/eve/v1/telegram-drain",
       onDrain,
     });
     const route = channel.routes[1] as unknown as HttpRoute;
+    let backgroundTask: Promise<unknown> | undefined;
     const response = await route.handler(
       new Request("http://agent:3000/eve/v1/telegram-drain", {
         body: "{}",
@@ -358,13 +428,17 @@ describe("Eve Telegram verified ingress patch", () => {
       {
         params: {},
         requestIp: null,
-        send: vi.fn(),
-        waitUntil: vi.fn(),
+        from: source.from,
+        waitUntil(task: Promise<unknown>) {
+          backgroundTask = task;
+        },
       },
     );
+    await backgroundTask;
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("drained");
     expect(onDrain).toHaveBeenCalledTimes(1);
+    expect(source.send).toHaveBeenCalledTimes(1);
   });
 });

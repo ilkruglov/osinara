@@ -72,7 +72,7 @@ services:
     volumes:
       - google-workspace-credentials:/app/google-workspace-credentials
       - sandbox-data:/app/.eve/sandbox-cache
-      - workflow-data:/app/.workflow-data
+      - eve-workflow-data:/app/.eve/.workflow-data
       - workspace-data:/app/workspaces
 
   sandbox-runtime-image:
@@ -222,7 +222,7 @@ volumes:
   memory-embedding-model-e5:
   sandbox-data:
   tool-environments:
-  workflow-data:
+  eve-workflow-data:
   workspace-data:
 
 networks:

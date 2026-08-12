@@ -5,7 +5,7 @@
  * - `TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES`: exact dynamic skill identifiers.
  * - `TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS`: packages available only in trusted modes.
  *
- * Static Eve discovery cannot filter authored skills by session in 0.22.5. These packages therefore
+ * Static Eve discovery cannot filter authored skills by session. These packages therefore
  * keep their source outside `agent/skills`, then enter Eve only via the trusted dynamic resolver.
  */
 import { readFileSync } from "node:fs";

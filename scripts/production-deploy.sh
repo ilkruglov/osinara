@@ -69,6 +69,15 @@ handle_failure() {
     fi
   fi
 
+  # Candidate-only volumes are recoverable only while the current release is confirmed healthy.
+  if [[ "$MIGRATION_STARTED" -eq 0 && "$CURRENT_SERVICES_STOPPED" -eq 0 ]]; then
+    if ! cleanup_created_candidate_volumes; then
+      status="ambiguous"
+      code="DEPLOY_CANDIDATE_VOLUME_CLEANUP_FAILED"
+      message="Deployment failed and an attempt-created candidate volume could not be removed"
+    fi
+  fi
+
   cleanup_incomplete_backup
   log_event "$code" "$message"
   if [[ -n "$PROPOSAL_ID" && "$TERMINAL_RECORDED" -eq 0 ]]; then
@@ -150,7 +159,9 @@ main() {
   MIGRATION_STARTED=1
   start_candidate_release
   wait_for_health
+  CANDIDATE_HEALTH_VALIDATED=1
   promote_candidate_release
+  remove_retired_cutover_volume
   if [[ "$INITIAL_MODE" -eq 1 ]]; then
     resolve_initial_owner_chat
   fi

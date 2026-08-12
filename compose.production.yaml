@@ -119,7 +119,7 @@ services:
       - /opt/osinara/model-providers.json:/app/config/model-providers.json:ro
       - google-workspace-credentials:/app/google-workspace-credentials
       - sandbox-data:/app/.eve/sandbox-cache
-      - workflow-data:/app/.workflow-data
+      - eve-workflow-data:/app/.eve/.workflow-data
       - workspace-data:/app/workspaces
 
   migrate:
@@ -264,8 +264,8 @@ volumes:
     name: osinara-production-sandbox-data
   tool-environments:
     name: osinara-production-tool-environments
-  workflow-data:
-    name: osinara-production-workflow-data
+  eve-workflow-data:
+    name: osinara-production-eve-workflow-data-v032
   workspace-data:
     name: osinara-production-workspace-data
 

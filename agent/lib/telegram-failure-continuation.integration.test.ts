@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - Installed Eve `channel.telegram.post`: re-anchors group state after an outbound failure reply.
- * - `handleTelegramSessionFailure`: normalizes Eve's channel namespace before recording a failure.
+ * - `handleTelegramSessionFailure`: records Eve's required channel-local continuation address.
  * - Hook ownership conflicts do not mutate or notify the healthy session owner.
  */
 import {
@@ -20,8 +20,10 @@ interface EveTelegramAdapter {
   createAdapterContext(input: {
     ctx: Record<string, never>;
     session: {
-      continuationToken: string;
-      setContinuationToken(token: string): void;
+      continuation: {
+        rekey(token: string): void;
+        token: string;
+      };
     };
     state: TelegramChannelState;
   }): TelegramEventContext;
@@ -60,20 +62,20 @@ describe("Eve Telegram failure continuation", () => {
       chatType: "supergroup",
       conversationId: "166",
     };
-    const setContinuationToken = vi.fn();
+    const rekey = vi.fn();
     const context = adapter.createAdapterContext({
       ctx: {},
-      session: { continuationToken: "-1001::166", setContinuationToken },
+      session: { continuation: { rekey, token: "-1001::166" } },
       state,
     });
 
     await adapter["session.failed"]({ code: "AGENT_SESSION_FAILED" }, context);
 
     expect(state.conversationId).toBe("172");
-    expect(setContinuationToken).toHaveBeenCalledWith("-1001::172");
+    expect(rekey).toHaveBeenCalledWith("-1001::172");
   });
 
-  it("records the raw Telegram route from Eve's namespaced channel token", async () => {
+  it("records Eve's channel-local Telegram continuation token", async () => {
     const recordSessionFailedByContinuationToken = vi.fn();
     const request = vi.fn().mockResolvedValue({
       body: { ok: true, result: { message_id: 172 } },
@@ -81,7 +83,7 @@ describe("Eve Telegram failure continuation", () => {
       status: 200,
     });
     const channel = {
-      continuationToken: "telegram:-1001::166",
+      continuation: { token: "-1001::166" },
       state: { chatId: "-1001", messageThreadId: null },
       telegram: {
         request,
@@ -102,7 +104,7 @@ describe("Eve Telegram failure continuation", () => {
     expect(recordSessionFailedByContinuationToken.mock.invocationCallOrder[0]).toBeLessThan(
       request.mock.invocationCallOrder[0]!,
     );
-    expect(channel.continuationToken).toBe("telegram:-1001::166");
+    expect(channel.continuation.token).toBe("-1001::166");
   });
 
   it("does not notify or rotate when the terminal event belongs to a stale Eve root", async () => {
@@ -112,7 +114,7 @@ describe("Eve Telegram failure continuation", () => {
     await handleTelegramSessionFailure(
       { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_old" },
       {
-        continuationToken: "telegram:-1001::166",
+        continuation: { token: "-1001::166" },
         state: { chatId: "-1001", messageThreadId: null },
         telegram: { request },
       } as never,
@@ -139,7 +141,7 @@ describe("Eve Telegram failure continuation", () => {
         sessionId: "wrun_competing",
       },
       {
-        continuationToken: "telegram:-1001::166",
+        continuation: { token: "-1001::166" },
         state: { chatId: "-1001", messageThreadId: null },
         telegram: { request },
       } as never,
@@ -160,7 +162,7 @@ describe("Eve Telegram failure continuation", () => {
     await handleTelegramSessionFailure(
       { code: "MODEL_SESSION_FAILED", message: "failed", sessionId: "wrun_scheduled" },
       {
-        continuationToken: `telegram:-1001::schedule:${runId}`,
+        continuation: { token: `-1001::schedule:${runId}` },
         state: { chatId: "-1001", messageThreadId: null },
         telegram: { request },
       } as never,
@@ -181,14 +183,13 @@ describe("Eve Telegram failure continuation", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("rejects a continuation token outside the Telegram channel namespace", async () => {
+  it("fails fast when Eve does not expose a continuation address", async () => {
     const recordSessionFailedByContinuationToken = vi.fn();
     const request = vi.fn();
 
     await expect(handleTelegramSessionFailure(
       { code: "AGENT_SESSION_FAILED", message: "failed", sessionId: "wrun_failed" },
       {
-        continuationToken: "-1001::166",
         state: { chatId: "-1001", messageThreadId: null },
         telegram: { request },
       } as never,

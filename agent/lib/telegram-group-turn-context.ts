@@ -51,6 +51,8 @@ export interface PreparedTelegramGroupTurnContext {
   durableMessage: string;
   omittedBeforeSequence: string | null;
   visibleEntryIds: string[];
+  memoryReviewBatchId?: string;
+  memoryReviewSourceEntryIds?: string[];
 }
 
 export type TelegramGroupTurnContextPreparer = (

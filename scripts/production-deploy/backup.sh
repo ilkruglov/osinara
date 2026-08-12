@@ -7,12 +7,21 @@ readonly RETAINED_DEPLOY_BACKUP_COUNT=1
 readonly PRE_DEPLOY_RETAINED_BACKUP_COUNT=$((RETAINED_DEPLOY_BACKUP_COUNT - 1))
 readonly LEGACY_INITIAL_MIGRATION_BACKUP_NAME="initial-migration-v0.1.1"
 readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-readonly DURABLE_VOLUMES=(
-  osinara-production-google-workspace-credentials
-  osinara-production-tool-environments
-  osinara-production-workflow-data
-  osinara-production-workspace-data
+readonly LEGACY_EVE_VOLUME="osinara-production-workflow-data"
+readonly LEGACY_EVE_LOGICAL_VOLUME="workflow-data"
+readonly CURRENT_EVE_LOGICAL_VOLUME="eve-workflow-data"
+readonly DURABLE_VOLUME_BINDINGS=(
+  "osinara-production-google-workspace-credentials|google-workspace-credentials"
+  "osinara-production-tool-environments|tool-environments"
+  "osinara-production-workflow-data|workflow-data"
+  "osinara-production-eve-workflow-data-v032|eve-workflow-data"
+  "osinara-production-workspace-data|workspace-data"
 )
+BACKUP_DURABLE_VOLUMES=()
+CREATED_CANDIDATE_VOLUMES=()
+RETIRED_CUTOVER_VOLUME=""
+RETIRED_CUTOVER_ARCHIVED=0
+CANDIDATE_HEALTH_VALIDATED=0
 
 prune_old_deploy_backups() {
   [[ -d "$BACKUPS_DIR" ]] || return 0
@@ -21,7 +30,7 @@ prune_old_deploy_backups() {
   shopt -q nullglob && nullglob_was_enabled=1
   shopt -s nullglob
 
-  # Timestamped deployment backups sort lexicographically; initial migration snapshots are retained.
+  # Timestamped deployment backups sort lexicographically; the bootstrap snapshot is pruned below.
   for path in "$BACKUPS_DIR"/*; do
     [[ -d "$path" ]] || continue
     name="${path##*/}"
@@ -47,25 +56,99 @@ prune_old_deploy_backups() {
   fi
 }
 
+compose_declares_volume() {
+  local compose_path="$1"
+  local logical_volume="$2"
+  if [[ ! "$logical_volume" =~ ^[a-z0-9-]+$ ]]; then
+    fail "DEPLOY_VOLUME_NAME_INVALID" "Logical durable volume name is invalid"
+    return 1
+  fi
+  if [[ ! -f "$compose_path" ]]; then
+    fail "DEPLOY_COMPOSE_OWNERSHIP_UNKNOWN" "Compose file is absent: ${compose_path}"
+    return 1
+  fi
+  grep -Eq "^  ${logical_volume}:([[:space:]]*\\{\\})?[[:space:]]*$" "$compose_path"
+}
+
 ensure_durable_volume() {
   local volume="$1"
+  local logical_volume="$2"
+  local current_owns=0 candidate_owns=0
+  compose_declares_volume "$CURRENT_COMPOSE" "$logical_volume" && current_owns=1
+  compose_declares_volume "$CANDIDATE_COMPOSE" "$logical_volume" && candidate_owns=1
+
+  # Existing bytes are trusted only after the current immutable release has owned the volume.
   if docker volume inspect "$volume" >/dev/null 2>&1; then
-    return 0
+    [[ "$current_owns" -eq 1 ]] && return 0
+    [[ "$candidate_owns" -eq 1 ]] &&
+      fail "DEPLOY_CANDIDATE_VOLUME_OWNERSHIP_AMBIGUOUS" \
+        "Candidate durable volume already exists without current release ownership: ${volume}"
+    fail "DEPLOY_VOLUME_OWNERSHIP_INVALID" "Durable volume has no Compose owner: ${volume}"
   fi
 
-  # The Google profile store is introduced after v0.2.10. Create it only when the current
-  # release never referenced it; once a release owns it, absence is a data-loss signal.
-  [[ -f "$CURRENT_COMPOSE" ]] ||
-    fail "DEPLOY_CURRENT_COMPOSE_MISSING" "Current release Compose file is absent"
-  local current_compose_text
-  current_compose_text="$(<"$CURRENT_COMPOSE")"
-  if [[ "$volume" == "osinara-production-google-workspace-credentials" &&
-        "$current_compose_text" != *"google-workspace-credentials"* ]]; then
-    docker volume create "$volume" >/dev/null
+  # Missing current-owned bytes signal data loss. Only an absent, newly declared candidate is created.
+  [[ "$current_owns" -eq 0 ]] ||
+    fail "DEPLOY_BACKUP_VOLUME_MISSING" "Required durable volume is absent: ${volume}"
+  if [[ "$candidate_owns" -eq 1 ]]; then
+    if ! docker volume create "$volume" >/dev/null; then
+      fail "DEPLOY_CANDIDATE_VOLUME_CREATE_FAILED" \
+        "Could not create candidate durable volume: ${volume}"
+      return 1
+    fi
+    CREATED_CANDIDATE_VOLUMES+=("$volume")
     return 0
   fi
+  fail "DEPLOY_VOLUME_OWNERSHIP_INVALID" "Durable volume has no Compose owner: ${volume}"
+}
 
-  fail "DEPLOY_BACKUP_VOLUME_MISSING" "Required durable volume is absent: ${volume}"
+cleanup_created_candidate_volumes() {
+  [[ "$MIGRATION_STARTED" -eq 0 ]] || return 0
+  local volume
+  for volume in "${CREATED_CANDIDATE_VOLUMES[@]}"; do
+    # Only names recorded after this attempt's successful `docker volume create` are eligible.
+    if ! docker volume rm "$volume" >/dev/null; then
+      fail "DEPLOY_CANDIDATE_VOLUME_CLEANUP_FAILED" \
+        "Could not remove attempt-created candidate volume: ${volume}"
+      return 1
+    fi
+    log_event "DEPLOY_CANDIDATE_VOLUME_CLEANED" \
+      "Removed attempt-created candidate volume: ${volume}"
+  done
+  CREATED_CANDIDATE_VOLUMES=()
+}
+
+select_durable_volumes() {
+  local binding volume logical_volume current_owns candidate_owns
+  BACKUP_DURABLE_VOLUMES=()
+  RETIRED_CUTOVER_VOLUME=""
+  RETIRED_CUTOVER_ARCHIVED=0
+  for binding in "${DURABLE_VOLUME_BINDINGS[@]}"; do
+    IFS='|' read -r volume logical_volume <<<"$binding"
+    current_owns=0
+    candidate_owns=0
+    compose_declares_volume "$CURRENT_COMPOSE" "$logical_volume" && current_owns=1
+    compose_declares_volume "$CANDIDATE_COMPOSE" "$logical_volume" && candidate_owns=1
+    [[ "$current_owns" -eq 1 || "$candidate_owns" -eq 1 ]] || continue
+
+    # Only the documented Eve 0.32 storage cutover may remove a current-owned durable mount.
+    if [[ "$current_owns" -eq 1 && "$candidate_owns" -eq 0 ]]; then
+      if [[ "$volume" == "$LEGACY_EVE_VOLUME" &&
+            "$logical_volume" == "$LEGACY_EVE_LOGICAL_VOLUME" ]] &&
+        compose_declares_volume "$CANDIDATE_COMPOSE" "$CURRENT_EVE_LOGICAL_VOLUME"; then
+        RETIRED_CUTOVER_VOLUME="$volume"
+      else
+        fail "DEPLOY_CANDIDATE_DURABLE_VOLUME_REMOVED" \
+          "Candidate release removes a current-owned durable volume: ${volume}"
+        return 1
+      fi
+    fi
+
+    # Current ownership selects backup input; candidate-only ownership permits one clean bootstrap.
+    ensure_durable_volume "$volume" "$logical_volume"
+    [[ "$current_owns" -eq 0 ]] || BACKUP_DURABLE_VOLUMES+=("$volume")
+  done
+  ((${#BACKUP_DURABLE_VOLUMES[@]} > 0)) ||
+    fail "DEPLOY_BACKUP_VOLUME_SET_EMPTY" "Current release owns no durable backup volumes"
 }
 
 volume_size_bytes() {
@@ -82,8 +165,8 @@ volume_size_bytes() {
 preflight_backup() {
   local volume volume_bytes
   local required_bytes=0
-  for volume in "${DURABLE_VOLUMES[@]}"; do
-    ensure_durable_volume "$volume"
+  select_durable_volumes
+  for volume in "${BACKUP_DURABLE_VOLUMES[@]}"; do
     volume_bytes="$(volume_size_bytes "$volume")"
     required_bytes=$((required_bytes + volume_bytes))
   done
@@ -127,8 +210,13 @@ backup_volume() {
 
 snapshot_durable_volumes() {
   local volume
-  for volume in "${DURABLE_VOLUMES[@]}"; do
+  ((${#BACKUP_DURABLE_VOLUMES[@]} > 0)) ||
+    fail "DEPLOY_BACKUP_VOLUME_SET_EMPTY" "Preflight did not select durable backup volumes"
+  for volume in "${BACKUP_DURABLE_VOLUMES[@]}"; do
     backup_volume "$volume"
+    if [[ -n "$RETIRED_CUTOVER_VOLUME" && "$volume" == "$RETIRED_CUTOVER_VOLUME" ]]; then
+      RETIRED_CUTOVER_ARCHIVED=1
+    fi
   done
   sha256sum "${BACKUP_TEMP_DIR}"/* > "${BACKUP_TEMP_DIR}/SHA256SUMS"
   local timestamp final_dir
@@ -138,6 +226,26 @@ snapshot_durable_volumes() {
     fail "DEPLOY_BACKUP_DIR_EXISTS" "Final backup directory already exists"
   mv "$BACKUP_TEMP_DIR" "$final_dir"
   BACKUP_TEMP_DIR=""
+}
+
+remove_retired_cutover_volume() {
+  [[ -n "$RETIRED_CUTOVER_VOLUME" ]] || return 0
+  if [[ "$RETIRED_CUTOVER_VOLUME" != "$LEGACY_EVE_VOLUME" ||
+        "$RETIRED_CUTOVER_ARCHIVED" -ne 1 || "$CANDIDATE_HEALTH_VALIDATED" -ne 1 ]]; then
+    fail "DEPLOY_RETIRED_VOLUME_BOUNDARY_INVALID" \
+      "Legacy Eve volume retirement requires its validated archive and a healthy candidate"
+    return 1
+  fi
+
+  # This exact one-time cutover volume is retired only at the post-health success boundary.
+  if ! docker volume rm "$RETIRED_CUTOVER_VOLUME" >/dev/null; then
+    fail "DEPLOY_RETIRED_VOLUME_REMOVAL_FAILED" \
+      "Could not remove the archived legacy Eve volume: ${RETIRED_CUTOVER_VOLUME}"
+    return 1
+  fi
+  log_event "DEPLOY_RETIRED_VOLUME_REMOVED" \
+    "Removed archived legacy Eve volume: ${RETIRED_CUTOVER_VOLUME}"
+  RETIRED_CUTOVER_VOLUME=""
 }
 
 cleanup_incomplete_backup() {

@@ -194,7 +194,8 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
     }).strict(),
   },
   remember: {
-    description: "Сохранить одну устойчивую запись в память текущей внешней группы.",
+    description:
+      "Сохранить одну устойчивую запись из текущего сообщения или одного проверенного sourceSequence видимой дельты в память текущей внешней группы.",
     inputSchema: externalRememberInputSchema,
   },
   send_workspace_file: {

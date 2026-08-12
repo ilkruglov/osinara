@@ -96,6 +96,9 @@ const POST_V0101_MIGRATIONS = [
   "062_external_agent_schedule_scopes.sql",
   "063_external_group_agent_schedules.sql",
   "064_turn_bound_memory_subjects.sql",
+  "065_eve_032_session_storage_cutover.sql",
+  "066_turn_bound_memory_delta_sources.sql",
+  "067_durable_memory_review_batches.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -112,6 +115,11 @@ const EXPECTED_R0_R7_TABLES = [
   "memory_projects",
   "memory_threads",
   "memory_thread_entries",
+  "memory_turn_source_sets",
+  "memory_turn_sources",
+  "memory_review_lanes",
+  "memory_review_batches",
+  "memory_review_batch_sources",
   "memory_thread_briefs",
   "memory_extraction_retention_holds",
   "memory_extraction_gaps",

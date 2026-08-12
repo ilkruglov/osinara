@@ -148,10 +148,10 @@ async function insertCreateOperation(
         thread_id, thread_action)
      VALUES ($1, $2, 'create', $3, $4, $5, $6, $7, $8, $9, $10)`,
     [auth.familyId, input.operationKey, inputHash, memoryItemId,
-      input.provenance ? auth.userId : null,
-      input.provenance ? auth.telegramUserId : null,
-      input.provenance?.sessionId ?? null,
-      input.provenance?.turnId ?? null,
+      input.provenance && !input.systemActor ? auth.userId : null,
+      input.provenance && !input.systemActor ? auth.telegramUserId : null,
+       input.provenance?.sessionId ?? null,
+       input.provenance?.turnId ?? null,
       thread?.threadId ?? null,
       thread?.result.action ?? null],
   );
@@ -229,6 +229,13 @@ export async function createMemoryClaim(
   auth: MemoryAuthorization,
   input: CreateMemoryInput,
 ): Promise<ReferencedMemoryItem> {
+  if (input.systemActor &&
+    (!input.provenance?.sessionId || !input.provenance.turnId)) {
+    throw new AppError(
+      "AGENT_MEMORY_SYSTEM_PROVENANCE_REQUIRED",
+      "Системная запись памяти требует проверенный контекст выполнения Eve",
+    );
+  }
   requireScope(auth, input.scope);
   const inputHash = memoryOperationHash(input);
   let reservation: MemoryThreadCreationReservation | null = null;
@@ -316,9 +323,18 @@ export async function createMemoryClaim(
       subjectLabel: prepared?.subjectLabel ?? null,
       subjectParticipantId: prepared?.subjectParticipantId ?? null,
       subjectUserId: prepared?.subjectUserId ?? null,
+      systemActor: input.systemActor === true,
     });
     if (reinforced) {
-      if (threadWrite) await materializeMemoryThreadWrite(client, auth, reinforced.id, threadWrite);
+      if (threadWrite) {
+        await materializeMemoryThreadWrite(
+          client,
+          auth,
+          reinforced.id,
+          threadWrite,
+          input.systemActor === true,
+        );
+      }
       await insertCreateOperation(client, auth, input, inputHash, reinforced.id, threadWrite);
       await completeThreadOutcome(client, auth, input, reservation, resolvingCandidate);
       await client.query("COMMIT");
@@ -361,7 +377,9 @@ export async function createMemoryClaim(
     const row = result.rows[0];
     if (!row) throw new AppError("AGENT_MEMORY_WRITE_FAILED", "Не удалось сохранить запись памяти");
     if (prepared !== null) await insertClaimEvidence(client, row.id, prepared);
-    if (threadWrite) await materializeMemoryThreadWrite(client, auth, row.id, threadWrite);
+    if (threadWrite) {
+      await materializeMemoryThreadWrite(client, auth, row.id, threadWrite, input.systemActor === true);
+    }
 
     const reference = await client.query<{ memory_ref: string }>(
       "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
@@ -380,7 +398,7 @@ export async function createMemoryClaim(
       `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
        VALUES ($1, $2, 'memory.created', $3,
                jsonb_build_object('scope', $4::text, 'kind', $5::text, 'sensitivity', $6::text))`,
-      [auth.familyId, prepared?.auditActorUserId ?? auth.userId, row.id,
+       [auth.familyId, input.systemActor ? null : prepared?.auditActorUserId ?? auth.userId, row.id,
         input.scope, input.kind, input.sensitivity],
     );
     await completeThreadOutcome(client, auth, input, reservation, resolvingCandidate);

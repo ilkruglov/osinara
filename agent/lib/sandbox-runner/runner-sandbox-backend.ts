@@ -348,6 +348,10 @@ function workspaceRunner(
         ensure: ensureRunner,
         id: runnerSessionId,
       });
+      const stopRunner = async (): Promise<void> => {
+        // Both lifecycle boundaries preserve metadata; the runner operation is intentionally idempotent.
+        if (request) await client.stop(request.sandboxSessionId);
+      };
       return {
         session,
         async useSessionFn(useOptions) {
@@ -384,9 +388,8 @@ function workspaceRunner(
             sessionKey: input.sessionKey,
           };
         },
-        async shutdown() {
-          if (request) await client.stop(request.sandboxSessionId);
-        },
+        shutdown: stopRunner,
+        stop: stopRunner,
       };
     },
   };

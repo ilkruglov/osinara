@@ -4,7 +4,7 @@
  * Exports:
  * - `PreparedSession`: application session selected for an inbound turn.
  * - Session role and park input types used by channel lifecycle boundaries.
- * - `sessionRepository`: canonical/task preparation, rotation, routes, events, and retention.
+ * - `sessionRepository`: canonical/task/review preparation, rotation, routes, events, and retention.
  */
 import type { PoolClient } from "pg";
 

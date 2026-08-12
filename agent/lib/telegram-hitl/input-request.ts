@@ -10,6 +10,7 @@ import {
   renderTelegramInputRequest,
   type TelegramEventContext,
 } from "eve/channels/telegram";
+import type { InputRequestKind } from "eve/client";
 import type { SessionContext } from "eve/context";
 
 import {
@@ -35,7 +36,7 @@ import {
 } from "./approval-presentation.js";
 
 interface InputRequestedData {
-  requests: readonly TelegramInputRequest[];
+  requests: ReadonlyArray<TelegramInputRequest & { kind: InputRequestKind }>;
 }
 
 interface InputRequestDependencies {
@@ -165,9 +166,15 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
     }
 
     // Resolve trusted semantic subjects before parking so presentation failures remain recoverable.
-    const localizedRequests = [];
+    const localizedRequests: Array<{
+      kind: InputRequestKind;
+      request: TelegramInputRequest;
+    }> = [];
     for (const request of data.requests) {
-      localizedRequests.push(await dependencies.present(request, ctx));
+      localizedRequests.push({
+        kind: request.kind,
+        request: await dependencies.present(request, ctx),
+      });
     }
     await dependencies.parkSession({
       applicationSessionId: appSessionId,
@@ -175,11 +182,12 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       requesterTelegramUserId: telegramUserId,
       requesterUserId: UUID_PATTERN.test(caller.principalId) ? caller.principalId : null,
     });
-    for (const localizedRequest of localizedRequests) {
+    for (const { kind, request: localizedRequest } of localizedRequests) {
       const promptChunks = splitPrompt(localizedRequest.prompt);
       const finalChunkIndex = promptChunks.length - 1;
       const rendered = renderTelegramInputRequest({
         ...localizedRequest,
+        kind,
         prompt: numberedPromptChunk(
           promptChunks[finalChunkIndex]!,
           finalChunkIndex,

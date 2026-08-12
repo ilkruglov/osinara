@@ -76,7 +76,7 @@ describe("production container contract", () => {
       "FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
     );
 
-    // Eve 0.22.5 serves built output but still bundles authored modules during `eve start`.
+    // Eve 0.32.0 serves built output but still bundles authored modules during `eve start`.
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
     expect(runtime).toContain("COPY --from=build /app/.runtime ./.runtime");
     expect(runtime).toContain("COPY --from=build /app/agent ./agent");
@@ -173,12 +173,13 @@ describe("production container contract", () => {
       "google-workspace-credentials",
       "sandbox-data",
       "tool-environments",
-      "workflow-data",
+      "eve-workflow-data",
       "workspace-data",
     ]) {
-      expect(compose).toMatch(
-        new RegExp(`  ${volume}:\\n    name: osinara-production-${volume}\\n`),
-      );
+      const physicalName = volume === "eve-workflow-data"
+        ? "osinara-production-eve-workflow-data-v032"
+        : `osinara-production-${volume}`;
+      expect(compose).toMatch(new RegExp(`  ${volume}:\\n    name: ${physicalName}\\n`));
     }
     for (const network of ["app-network", "sandbox-control", "sandbox-egress"]) {
       expect(compose).toMatch(
@@ -204,6 +205,8 @@ describe("production container contract", () => {
     expect(compose.match(/\/var\/run\/docker\.sock/g)).toHaveLength(2);
     expect(agent).not.toContain("/var/run/docker.sock");
     expect(agent).toContain("google-workspace-credentials:/app/google-workspace-credentials");
+    expect(agent).toContain("eve-workflow-data:/app/.eve/.workflow-data");
+    expect(agent).not.toContain("workflow-data:/app/.workflow-data");
     expect(runner).toContain("/var/run/docker.sock:/var/run/docker.sock");
     expect(runner).not.toContain("google-workspace-credentials");
     expect(runner).toContain("      - sandbox-control");

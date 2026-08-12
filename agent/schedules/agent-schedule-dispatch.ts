@@ -10,7 +10,8 @@ import { dispatchDueAgentSchedules } from "../lib/agent-schedules/agent-schedule
 
 export default defineSchedule({
   cron: "* * * * *",
-  run({ receive, waitUntil }) {
-    waitUntil(dispatchDueAgentSchedules(receive));
+  run({ to, waitUntil }) {
+    // Keep the cron task alive while Eve's channel source starts every claimed session.
+    waitUntil(dispatchDueAgentSchedules(to));
   },
 });

@@ -12,7 +12,8 @@ import type { SessionContext } from "eve/context";
 
 import { AppError } from "../app-error.js";
 
-const SCHEDULED_CONTINUATION_PATTERN = /^telegram:[^:]+:[^:]*:schedule:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+// Eve event contexts expose a channel-local Telegram address without the runtime namespace.
+const SCHEDULED_CONTINUATION_PATTERN = /^[^:]+:[^:]*:schedule:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
 export interface ScheduledDeliveryMetadata {
   applicationSessionId: string;

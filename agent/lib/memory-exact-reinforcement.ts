@@ -23,6 +23,7 @@ interface ExactClaimIdentity {
   subjectLabel: string | null;
   subjectParticipantId: string | null;
   subjectUserId: string | null;
+  systemActor: boolean;
 }
 
 export async function reinforceExactClaim(
@@ -75,7 +76,8 @@ export async function reinforceExactClaim(
   await client.query(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
      VALUES ($1, $2, 'memory.reinforced', $3, jsonb_build_object('scope', $4::text))`,
-    [auth.familyId, prepared?.auditActorUserId ?? auth.userId, existing.id, identity.scope],
+    [auth.familyId, identity.systemActor ? null : prepared?.auditActorUserId ?? auth.userId,
+      existing.id, identity.scope],
   );
   return existing;
 }

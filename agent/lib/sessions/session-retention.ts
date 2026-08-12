@@ -1,5 +1,5 @@
 /**
- * Session retention job boundary.
+ * Eve 0.32.0 session retention job boundary.
  *
  * Export:
  * - `deleteExpiredSessions`: leases and physically deletes retired Eve sessions.
@@ -10,7 +10,7 @@ import { isAppError } from "../app-error.js";
 import { deleteLocalEveSession } from "./eve-session-storage.js";
 import { sessionRepository } from "./session-repository.js";
 
-const WORKFLOW_DATA_ROOT = resolve(".workflow-data");
+const WORKFLOW_DATA_ROOT = resolve(".eve", ".workflow-data");
 
 export async function deleteExpiredSessions(): Promise<number> {
   // The existing minute lifecycle hook bounds abandoned task rows before physical Eve deletion.

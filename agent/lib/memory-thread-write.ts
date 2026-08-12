@@ -399,6 +399,7 @@ export async function materializeMemoryThreadWrite(
   auth: MemoryAuthorization,
   claimId: string,
   prepared: PreparedMemoryThreadWrite,
+  systemActor: boolean,
 ): Promise<void> {
   await client.query(
     `INSERT INTO memory_thread_entries
@@ -426,7 +427,7 @@ export async function materializeMemoryThreadWrite(
     `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
      VALUES ($1, $2, $3, $4,
              jsonb_build_object('threadRef', $5::text, 'role', $6::text))`,
-    [auth.familyId, auth.userId,
+    [auth.familyId, systemActor ? null : auth.userId,
       prepared.result.action === "created" ? "memory.thread_created" : "memory.thread_attached",
       claimId, prepared.result.threadRef, prepared.role],
   );

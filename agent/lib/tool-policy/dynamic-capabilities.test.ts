@@ -26,6 +26,7 @@ import {
 function resolve(
   attributes: Record<string, unknown> | null,
   initiatorAttributes: Record<string, unknown> | null = null,
+  authenticator = "telegram",
 ) {
   return capabilities.events["turn.started"]?.({} as never, {
     channel: { kind: "telegram" },
@@ -34,7 +35,7 @@ function resolve(
       auth: {
         current: attributes === null ? null : {
           attributes,
-          authenticator: "telegram",
+          authenticator,
           principalId: "telegram:101",
           principalType: "user",
         },
@@ -99,6 +100,29 @@ describe("dynamic capability resolver", () => {
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
       ].sort(),
     );
+    expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
+      familyId: "family-1",
+      groupId: "group-1",
+    });
+  });
+
+  it("emits only snapshot-and-live memory grants for an external background review", async () => {
+    loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember", "search_memories"]));
+
+    const surface = await resolve({
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryReviewBatchId: "batch-1",
+      memoryReviewMode: "background",
+      memoryScopes: ["group"],
+      telegramChatType: "supergroup",
+      toolAllowlist: ["remember"],
+    }, null, "memory-review");
+
+    expect(Object.keys(surface ?? {})).toContain("remember");
+    expect(Object.keys(surface ?? {})).not.toContain("search_memories");
+    expect(Object.keys(surface ?? {})).toContain("bash");
     expect(loadCurrentExternalGroupCapabilities).toHaveBeenCalledWith({
       familyId: "family-1",
       groupId: "group-1",

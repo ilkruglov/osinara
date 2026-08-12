@@ -90,6 +90,15 @@ export function buildTelegramTurnResult(input: {
         telegramTimelineEntryId: input.timelineEntryId,
         telegramTimelineSequence: input.turnContext.cursorSequence,
         telegramTimelineVisibleEntryIds: input.turnContext.visibleEntryIds,
+        ...(input.turnContext.memoryReviewBatchId === undefined
+          ? {}
+          : { memoryReviewBatchId: input.turnContext.memoryReviewBatchId }),
+        ...(input.turnContext.memoryReviewBatchId === undefined
+          ? {}
+          : { memoryReviewMode: "interactive" }),
+        ...(input.turnContext.memoryReviewSourceEntryIds === undefined
+          ? {}
+          : { memoryReviewSourceEntryIds: input.turnContext.memoryReviewSourceEntryIds }),
         telegramUserId: sender.id,
         ...(input.group && input.group.type !== "family_private"
           ? { toolAllowlist: input.group.toolAllowlist }

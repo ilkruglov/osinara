@@ -14,3 +14,7 @@ dist
 client_secret_*.json
 __pycache__/
 *.py[cod]
+
+# Материалы курса из экспорта Telegram (не часть проекта)
+course/
+result-chat.json

@@ -51,6 +51,7 @@ import {
   productionTelegramMessageRepositories,
   type TelegramMessageRepositories,
 } from "./telegram-on-message-repositories.js";
+import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -137,7 +138,15 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         );
       }
       // Authorized family attachment references are retained without waking the model.
-      if (!addressed && !hasLazyGroupAttachment) return null;
+      if (!addressed && !hasLazyGroupAttachment) {
+        if (inboundTimeline.status === "inserted") {
+          await repositories.memoryReview.observePassiveMessage({
+            groupId: group.groupId,
+            timelineEntryId: inboundTimeline.entryId,
+          });
+        }
+        return null;
+      }
     } else if (!addressed) {
       return null;
     }
@@ -270,7 +279,15 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       )
       : null;
     const lazyAttachment = currentAttachment ?? replyAttachment;
-    if (!addressed || journalDuplicate) return null;
+    if (!addressed || journalDuplicate) {
+      if (!addressed && !journalDuplicate && group && inboundTimeline) {
+        await repositories.memoryReview.observePassiveMessage({
+          groupId: group.groupId,
+          timelineEntryId: inboundTimeline.entryId,
+        });
+      }
+      return null;
+    }
 
     // The accepted verified message reactivates exactly its participant identity before profile
     // selection. This does not enumerate or inject every participant in the conversation.
@@ -384,7 +401,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         now: turnStartedAt,
       })
       : null;
-    const groupTurnContext = inboundTimeline
+    const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
           attachmentReferenceAccess: group?.type === "family_private"
@@ -407,9 +424,29 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           replyToSequenceId: inboundTimeline.replyToSequenceId,
         })
       : null;
-    if (!groupTurnContext) {
+    if (!preparedGroupTurnContext) {
       throw new Error(
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
+      );
+    }
+    const groupTurnContext = group
+      ? await prepareTelegramMemoryReviewTurn({
+          applicationSessionId: appSession.id,
+          conversationId: conversation.id,
+          currentEntryId: inboundTimeline.entryId,
+          groupId: group.groupId,
+          preparedContext: preparedGroupTurnContext,
+          repositories: {
+            memoryReview: repositories.memoryReview,
+            syncParticipants: (conversationId, entryIds) =>
+              repositories.conversations.syncTimelineParticipants(conversationId, entryIds),
+          },
+        })
+      : preparedGroupTurnContext;
+    if (!group) {
+      await repositories.conversations.syncTimelineParticipants(
+        conversation.id,
+        groupTurnContext.visibleEntryIds,
       );
     }
     const turnResult = buildTelegramTurnResult({

@@ -141,6 +141,10 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await expect(handler(telegramContext().context, groupMessage("обычная реплика"))).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledTimes(1);
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
@@ -160,6 +164,7 @@ describe("createTelegramMessageHandler group routing", () => {
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
     expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 

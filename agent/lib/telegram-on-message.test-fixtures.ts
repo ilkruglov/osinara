@@ -121,6 +121,11 @@ export function repositories() {
         status: "inserted",
       }),
     },
+    memoryReview: {
+      failInteractivePreparation: vi.fn().mockResolvedValue(undefined),
+      observePassiveMessage: vi.fn().mockResolvedValue(null),
+      prepareInteractiveTurn: vi.fn().mockResolvedValue(null),
+    },
     proactiveDeliveries: {
       listPendingContext: vi.fn().mockResolvedValue(null),
     },

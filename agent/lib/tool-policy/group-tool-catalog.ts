@@ -102,7 +102,7 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
 );
 
 // Application tools are emitted per mode, so an external group never sees a descriptor it cannot
-// use. Eve 0.22.5 allows same-name overrides but not per-mode removal, so forbidden built-ins still
+// use. Eve 0.32.0 allows same-name overrides but not per-mode removal, so forbidden built-ins still
 // receive explicit denial definitions while file built-ins receive guarded same-name wrappers.
 // `web_fetch` is conditionally denied because a local controlled override is grantable.
 // Provider-native `web_search` has no execution hook and therefore stays unconditionally denied.

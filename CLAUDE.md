@@ -2,7 +2,7 @@
 
 ## Что это за проект
 
-Osinara — семейный Telegram-агент на TypeScript, Eve `0.22.5`, PostgreSQL и Groq.
+Osinara — семейный Telegram-агент на TypeScript, Eve `0.32.0`, PostgreSQL и Groq.
 Он обслуживает личные чаты, закрытые семейные группы и изолированные внешние группы.
 Главная задача приложения — сохранять строгие границы между пользователями, семьями и группами.
 
@@ -10,12 +10,9 @@ Osinara — семейный Telegram-агент на TypeScript, Eve `0.22.5`, 
 личные, семейные и групповые контексты с отдельной политикой доступа;
 durable Telegram ingress, Groq Whisper, HITL, Eve tools, skills и sandbox.
 
-Полная продуктовая спецификация: `SPECIFICATION.md`.
-Текущий архитектурный статус: начало `docs/plan.md`.
-
 ## Framework
 
-Проект закреплён на Eve `0.22.5`; не обновлять версию как побочный рефакторинг.
+Проект закреплён на Eve `0.32.0`; не обновлять версию как побочный рефакторинг.
 Eve — filesystem-first framework для durable backend agents.
 Расположение файла определяет его роль и, как правило, runtime-имя.
 
@@ -93,16 +90,16 @@ Owner-only операции разрешены только в личном Tele
 Статических дескрипторов у приложения нет: инструмент, недоступный текущему режиму, не имеет дескриптора вообще, а не заменяется заглушкой.
 Реализации инструментов лежат в `agent/lib/tools/`; в `agent/tools/` остаётся только dynamic resolver, иначе дескриптор станет виден во всех режимах.
 Матрица режимов и внешний allowlist собираются в `agent/lib/tool-policy/mode-tool-surface.ts`; сбой резолвера или недоказанный режим означает отсутствие прикладных инструментов.
-Нативные контракты `glob`, `grep`, `read_file` и `write_file` во внешней группе перекрываются same-name dynamic wrappers: каждый execute повторно проверяет актуальную external registration, принимает только канонический путь внутри точного `/workspace/group` и запрещает symlink-компоненты до вызова Eve default executor. В trusted private/family режимах wrappers не выдаются, поэтому исходные Eve built-ins сохраняют personal/family mounts и tools environment.
-Eve `0.22.5` не умеет скрывать собственные built-ins, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
-Eve `0.22.5` всегда перечисляет статические authored skills в system prompt и не позволяет фильтровать их по сессии. Grantable `pohuy` поэтому вынесен из static discovery и выдаётся turn-scoped dynamic resolver только разрешённым группам; при обновлении Eve проверить, появился ли нативный механизм фильтрации.
+Нативные контракты `glob`, `grep`, `read_file` и `write_file` во внешней группе перекрываются same-name dynamic wrappers: каждый execute повторно проверяет актуальную external registration, принимает только канонический путь внутри точного `/workspace/group` и запрещает symlink-компоненты до вызова Eve default executor. Единственное read-only исключение: `read_file` после live-проверки skill grant канонизирует supporting file видимого code-reviewed dynamic skill в `$HOME/.agents/skills`; `glob`, `grep` и `write_file` такого доступа не получают. В trusted private/family режимах wrappers не выдаются, поэтому исходные Eve built-ins сохраняют personal/family mounts и tools environment.
+Eve `0.32.0` не умеет скрывать собственные built-ins per-session, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
+Eve `0.32.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Grantable `pohuy` остаётся вне static discovery и выдаётся turn-scoped resolver только разрешённым группам; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
-Нативный Eve `agent` используется для сложной работы, которой полезен свежий контекст. Child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember`. Поэтому durable-memory решение остаётся у основного чат-агента, trusted child сохраняет остальные trusted доступы, а external child остаётся внутри restricted group boundary. Глубина ограничена одним child-уровнем через `maxSubagentDepth: 1`; child не получает orchestration prompt для рекурсивной делегации.
+Нативный Eve `agent` используется для сложной работы, которой полезен свежий контекст. Child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember`. В Eve `0.32.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен.
 
 ## Структура проекта
 
-`agent/agent.ts` — модель, compaction и реальные framework limits.
+`agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.
 `agent/instructions.md` — постоянное mode-agnostic ядро промта, не authorization layer.
 `agent/instructions/` — четыре turn-scoped dynamic блока; порядок задан именами файлов: режим, делегация, стиль, память.
 `agent/channels/telegram.ts` — Telegram channel, events и durable ingress hooks.
@@ -121,10 +118,12 @@ Eve discovery воспримет такой файл как production tool ил
 
 ## Локальный патч Eve
 
-Eve `0.22.5` не предоставляет seam для durable Telegram ingress, не допускает zero-depth delegation limit
-и ограничивает ожидание первого production startup 60 секундами.
-`scripts/apply-eve-patches.ts` добавляет verified-update/drain hooks, возврат Session,
-`maxSubagentDepth: 0` и пятиминутное ограниченное ожидание health при холодном старте.
+Eve `0.32.0` не предоставляет application seam для durable Telegram ingress и по умолчанию
+повторяет некоторые model calls на уровне Eve. `scripts/apply-eve-patches.ts` добавляет
+verified-update/drain hooks, возврат Session, application routing/HITL contracts, exact-once model
+policy, fail-closed `input.requested` и пятиминутное ожидание health при холодном старте.
+AI SDK transport retries, queue namespace, pure HITL context ordering и root-only delegation
+используют штатное поведение Eve `0.32.0` и локально не патчатся.
 Патч применяется автоматически через `postinstall` после каждого `npm ci`.
 Он идемпотентен, проверяет точную версию и ожидаемые artifacts; несовпадение должно останавливать сборку.
 
@@ -153,15 +152,14 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 
 Migrations выполнять только внутри backend/test container через `npm run migrate`.
 После Eve-facing изменений обязательно проверять чистый `npm ci` и `eve build`.
-После tool/channel edits проверять `.eve/compile/compiled-agent-manifest.json`.
+После tool/channel edits проверять `.eve/discovery/agent-discovery-manifest.json` и результат `eve build`.
+`.eve/compile/compiled-agent-manifest.json` относится к Eve `0.22.5` и не является актуальным artifact.
 Production image собирается только из canonical repository state через CI/CD.
 Не запускать ручной production build и не менять production database в рамках обычной задачи.
 
 ## Перед началом любой новой сессии
 
 1. Прочитать этот файл.
-2. Прочитать релевантный раздел `SPECIFICATION.md`.
-3. Проверить начало `docs/plan.md`; нижняя часть хранит исходный audit context.
-4. Найти существующий модуль, repository и тест до создания нового файла.
-5. Для Eve API открыть локальный guide и установленный `.d.ts`.
-6. Не трогать память, deployment или persisted contract без явного scope задачи.
+2. Найти существующий модуль, repository и тест до создания нового файла.
+3. Для Eve API открыть локальный guide и установленный `.d.ts`.
+4. Не трогать память, deployment или persisted contract без явного scope задачи.
