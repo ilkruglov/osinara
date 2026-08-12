@@ -3,11 +3,15 @@
  *
  * Constructs covered:
  * - Supported Docker architectures resolve exact official artifacts and SHA-256 digests.
+ * - Release downloads use the official GitHub origin without a third-party proxy.
  * - Unsupported platforms fail before any download occurs.
  */
 import { describe, expect, it } from "vitest";
 
-import { resolveGoogleWorkspaceCliArtifact } from "./install-google-workspace-cli.js";
+import {
+  resolveGoogleWorkspaceCliArtifact,
+  resolveGoogleWorkspaceCliDownloadUrl,
+} from "./install-google-workspace-cli.js";
 
 describe("Google Workspace CLI installer", () => {
   it("pins the exact x64 and arm64 release artifacts", () => {
@@ -19,6 +23,15 @@ describe("Google Workspace CLI installer", () => {
       archiveName: "google-workspace-cli-aarch64-unknown-linux-musl.tar.gz",
       sha256: "e700fe63524932b10ec2130b47ece90aa850e66005fe52ccfc4cf8767bf9919a",
     });
+  });
+
+  it("downloads a pinned artifact directly from the official GitHub release", () => {
+    const artifact = resolveGoogleWorkspaceCliArtifact("linux", "x64");
+
+    expect(resolveGoogleWorkspaceCliDownloadUrl(artifact)).toBe(
+      "https://github.com/googleworkspace/cli/releases/download/v0.22.5/" +
+        "google-workspace-cli-x86_64-unknown-linux-musl.tar.gz",
+    );
   });
 
   it("rejects non-Linux and unsupported CPU targets", () => {
