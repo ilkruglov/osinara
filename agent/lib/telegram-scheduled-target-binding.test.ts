@@ -17,6 +17,7 @@ const dependencies = vi.hoisted(() => ({
   failRunForNotification: vi.fn(),
   postStableMessage: vi.fn(),
   recordTurnFailed: vi.fn(),
+  releaseMemoryTurnSources: vi.fn(),
   scheduledDelivery: {
     applicationSessionId: "application-session-1",
     familyId: "family-1",
@@ -83,6 +84,10 @@ vi.mock("./telegram-group-journal-repository.js", () => ({
 }));
 vi.mock("./conversation-timeline-repository.js", () => ({
   conversationTimelineRepository: { recordAgentResponse: vi.fn() },
+}));
+vi.mock("./memory-turn-source.js", () => ({
+  bindMemoryTurnSources: vi.fn(),
+  releaseMemoryTurnSources: dependencies.releaseMemoryTurnSources,
 }));
 
 await import("../channels/telegram.js");
@@ -194,5 +199,6 @@ describe("scheduled Telegram target binding", () => {
       "application-session-1",
       "eve-session-1",
     );
+    expect(dependencies.releaseMemoryTurnSources).toHaveBeenCalledWith(context);
   });
 });

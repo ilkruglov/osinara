@@ -1,13 +1,15 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
+  "provider": "deepseek",
   "agent": {
     "transport": {
       "protocol": "openai-chat-completions",
       "baseUrl": "https://api.deepseek.com",
       "providerName": "deepseek",
-      "thinking": {
-        "type": "enabled",
-        "effort": "high"
+      "reasoning": {
+        "type": "effort",
+        "effort": "high",
+        "format": "deepseek"
       }
     },
     "models": {
@@ -22,6 +24,7 @@
     }
   },
   "voice": {
+    "enabled": true,
     "transcriptionModelId": "whisper-large-v3-turbo"
   }
 }

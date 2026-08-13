@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `formatTelegramGroupJournalContext`: marks stored messages as untrusted JSON data.
+ * - `selectTelegramGroupJournalContext`: preserves explicit ancestry and favors recent suffixes.
  * - Oldest messages are discarded first to satisfy the explicit character budget.
  * - Telegram identifiers that are not needed for conversation context stay private.
  */
@@ -10,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatTelegramGroupJournalContext,
+  selectTelegramGroupJournalContext,
   type TelegramGroupJournalEntry,
 } from "./telegram-group-journal-context.js";
 
@@ -80,6 +82,40 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(context).toContain("пропущена");
     expect(context).toContain("list_group_history");
     expect(context.length).toBeLessThanOrEqual(newestOnly.length + 150);
+  });
+
+  it("keeps the recent coherent suffix of a 51-message reply chain", () => {
+    const chain = Array.from({ length: 51 }, (_, index) => {
+      const sequenceId = String(index + 1);
+      return {
+        ...entry(sequenceId, `цепочка-${sequenceId}`),
+        replyToSequenceId: index === 0 ? null : String(index),
+      };
+    });
+
+    const selected = selectTelegramGroupJournalContext(chain, 12_000, null, null, 49);
+
+    expect(selected.entries.map((item) => item.sequenceId)).toEqual(
+      Array.from({ length: 49 }, (_, index) => String(index + 3)),
+    );
+    expect(selected.entries).toHaveLength(49);
+    expect(selected.context).toContain("#51 [user]");
+    expect(selected.context).not.toContain("#1 [user]");
+  });
+
+  it("keeps ancestry nearest the current reply when ancestry alone exceeds the entry budget", () => {
+    const chain = Array.from({ length: 3 }, (_, index) => {
+      const sequenceId = String(index + 1);
+      return {
+        ...entry(sequenceId, `ancestor-${sequenceId}`),
+        replyToSequenceId: index === 0 ? null : String(index),
+      };
+    });
+
+    const selected = selectTelegramGroupJournalContext(chain, 12_000, null, "3", 2);
+
+    expect(selected.entries.map((item) => item.sequenceId)).toEqual(["2", "3"]);
+    expect(selected.entries).toHaveLength(2);
   });
 
   it("returns null when there are no messages within the budget", () => {

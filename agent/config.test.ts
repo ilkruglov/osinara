@@ -2,14 +2,14 @@
  * Runtime environment validation tests.
  *
  * Constructs covered:
- * - `requireRuntimeEnvironment`: requires independent agent-model and Groq voice credentials.
+ * - `requireRuntimeEnvironment`: requires the agent-model credential and permits optional voice.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { requireRuntimeEnvironment } from "./config.js";
 
 function stubRequiredEnvironment(): void {
-  vi.stubEnv("MODEL_UPSTREAM_API_KEY", "agent-model-test-key");
+  vi.stubEnv("MODEL_API_KEY", "agent-model-test-key");
   vi.stubEnv("DATABASE_URL", "postgresql://test:test@postgres:5432/osinara_test");
   vi.stubEnv("GROQ_API_KEY", "groq-test-key");
   vi.stubEnv("INVITATION_SIGNING_SECRET", "12345678901234567890123456789012");
@@ -27,22 +27,22 @@ describe("requireRuntimeEnvironment", () => {
     stubRequiredEnvironment();
 
     expect(requireRuntimeEnvironment()).toMatchObject({
-      MODEL_UPSTREAM_API_KEY: "agent-model-test-key",
+      MODEL_API_KEY: "agent-model-test-key",
       GROQ_API_KEY: "groq-test-key",
     });
   });
 
-  it("rejects missing credentials for the active Groq route", () => {
+  it("allows voice transcription to remain unconfigured", () => {
     stubRequiredEnvironment();
     vi.stubEnv("GROQ_API_KEY", "");
 
-    expect(() => requireRuntimeEnvironment()).toThrowError(/GROQ_API_KEY/);
+    expect(requireRuntimeEnvironment().GROQ_API_KEY).toBeUndefined();
   });
 
   it("rejects missing credentials for the active agent model route", () => {
     stubRequiredEnvironment();
-    vi.stubEnv("MODEL_UPSTREAM_API_KEY", "");
+    vi.stubEnv("MODEL_API_KEY", "");
 
-    expect(() => requireRuntimeEnvironment()).toThrowError(/MODEL_UPSTREAM_API_KEY/);
+    expect(() => requireRuntimeEnvironment()).toThrowError(/MODEL_API_KEY/);
   });
 });

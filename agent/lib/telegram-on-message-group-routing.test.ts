@@ -182,8 +182,11 @@ describe("createTelegramMessageHandler group routing", () => {
     repository.groupContext.prepare.mockResolvedValue({
       cursorSequence: "1",
       durableMessage: "предыдущая реплика\n\nподведи итог",
+      currentMessageEnvelope: "подведи итог",
       omittedBeforeSequence: null,
+      timelineOmission: null,
       visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
+      visibleTimelineEntries: [],
     });
     const handler = createTelegramMessageHandler(repository);
     const message = {

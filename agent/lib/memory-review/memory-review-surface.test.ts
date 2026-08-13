@@ -95,9 +95,10 @@ describe("memory review model surface", () => {
   });
 
   it("states the exact silent and source-backed review contract", () => {
-    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("ровно 50 сообщений");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("не более 50");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("<memory_review_source_selection>");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("sourceSequence");
-    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("не отправляй ответ в Telegram");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Не отправляй ответ в Telegram");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("sensitivity: normal");
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toMatch(/[—–«»]/u);
   });

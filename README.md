@@ -86,6 +86,30 @@ flowchart LR
 
 ## Быстрый Старт
 
+### Self-hosted установка
+
+Для чистого GNU/Linux x86_64 сервера на glibc с Docker Engine и Compose v2 загрузите `install.sh`
+из immutable GitHub Release и передайте ему URL CLI asset и SHA-256 из того же release. Текущий
+`osinara-linux-x64` собирается из glibc-варианта Node.js SEA и не поддерживает musl/Alpine Linux:
+
+```bash
+sudo ./install.sh \
+  https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-linux-x64 \
+  <SHA-256 из osinara-linux-x64.sha256>
+```
+
+Установщик потребует свободные порты `80`, `443` и `8082`, проверит чистое состояние
+`/opt/osinara` и production Docker resources, предложит `sslip.io` или собственный домен,
+проверит Telegram и модель, затем запустит digest-pinned images, HTTPS и webhook. После успеха
+проверенный CLI устанавливается как `/usr/local/bin/osinara` до изменения application state, поэтому
+остаётся доступен для диагностики даже при неоднозначном завершении первичной установки.
+Если установка дошла до webhook, но не показала ссылку владельца, после `osinara doctor` выполните
+`sudo osinara owner-bootstrap`: предыдущий активный код будет отозван, новый действует 15 минут.
+
+Bridge-релиз `v0.15.2` не включает новый пятиобразный auto-update controller для fresh install.
+Он будет добавлен отдельным cutover-релизом; до него обновление новой установки выполняется только
+через явно проверенный release CLI.
+
 ### Требования
 
 | Runtime | Версия |
@@ -111,17 +135,14 @@ npm ci
 
 ```dotenv
 POSTGRES_PASSWORD=
-CLI_PROXY_API_KEY=
-DEEPSEEK_API_KEY=
-MODEL_UPSTREAM_API_KEY=
-GROQ_API_KEY=
+MODEL_API_KEY=
 INVITATION_SIGNING_SECRET=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
 TELEGRAM_WEBHOOK_SECRET_TOKEN=
 ```
 
-`DEEPSEEK_API_KEY` используется активным `deepseek-v4-flash` transport. Отдельный
+`MODEL_API_KEY` используется выбранным прямым provider transport. Отдельный
 `MODEL_UPSTREAM_API_KEY` пока требуется только сохранённому MiniMax CLI proxy compatibility
 service и не используется agent loop.
 

@@ -2,7 +2,7 @@
 set -eu
 
 # Fail before migrations or network listeners when required runtime configuration is absent.
-for name in DATABASE_URL GROQ_API_KEY INVITATION_SIGNING_SECRET MODEL_UPSTREAM_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET_TOKEN TELEGRAM_BOT_USERNAME; do
+for name in DATABASE_URL INVITATION_SIGNING_SECRET MODEL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET_TOKEN TELEGRAM_BOT_USERNAME; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     printf '%s\n' "AGENT_REQUIRED_CONFIG_MISSING: Не задана обязательная настройка $name" >&2

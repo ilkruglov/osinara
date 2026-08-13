@@ -33,7 +33,7 @@ bootstrap_require_metadata "/opt/osinara" "0:0:750"
 bootstrap_require_metadata "/opt/osinara/bin" "0:0:750"
 bootstrap_require_metadata "$ENTRYPOINT_PATH" "0:0:750"
 bootstrap_require_metadata "$MODULE_DIR" "0:0:750"
-for module in common database release backup; do
+for module in common database release bridge backup; do
   bootstrap_require_metadata "${MODULE_DIR}/${module}.sh" "0:0:640"
 done
 
@@ -44,6 +44,8 @@ source "${MODULE_DIR}/common.sh"
 source "${MODULE_DIR}/database.sh"
 # shellcheck source=scripts/production-deploy/release.sh
 source "${MODULE_DIR}/release.sh"
+# shellcheck source=scripts/production-deploy/bridge.sh
+source "${MODULE_DIR}/bridge.sh"
 # shellcheck source=scripts/production-deploy/backup.sh
 source "${MODULE_DIR}/backup.sh"
 
@@ -146,6 +148,10 @@ main() {
   fi
 
   download_and_validate_release "$REQUESTED_VERSION"
+  if [[ "$INITIAL_MODE" -eq 0 ]]; then
+    recheck_claim_owner
+  fi
+  provision_v0152_model_bridge
   prepare_candidate_release
   pull_release_images
   if [[ "$INITIAL_MODE" -eq 0 ]]; then

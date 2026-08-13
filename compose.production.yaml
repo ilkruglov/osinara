@@ -95,11 +95,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET-}
-      GROQ_API_KEY: ${GROQ_API_KEY:?GROQ_API_KEY is required}
+      GROQ_API_KEY: ${GROQ_API_KEY-}
       INTEGRATION_TOKEN_ENCRYPTION_KEY: ${INTEGRATION_TOKEN_ENCRYPTION_KEY-}
       INVITATION_SIGNING_SECRET: ${INVITATION_SIGNING_SECRET:?INVITATION_SIGNING_SECRET is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
-      MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
@@ -116,7 +116,7 @@ services:
     restart: unless-stopped
     logging: *bounded-json-logs
     volumes:
-      - /opt/osinara/model-providers.json:/app/config/model-providers.json:ro
+      - /opt/osinara/agent-model-providers.json:/app/config/agent-model-providers.json:ro
       - google-workspace-credentials:/app/google-workspace-credentials
       - sandbox-data:/app/.eve/sandbox-cache
       - eve-workflow-data:/app/.eve/.workflow-data
@@ -192,6 +192,7 @@ services:
       retries: 20
     networks:
       - app-network
+      - edge-frontend
     ports:
       - "127.0.0.1:8082:80"
     restart: unless-stopped
@@ -272,6 +273,8 @@ volumes:
 networks:
   app-network:
     name: osinara-production-app-network
+  edge-frontend:
+    name: osinara-production-edge-frontend
   sandbox-control:
     internal: true
     name: osinara-production-sandbox-control

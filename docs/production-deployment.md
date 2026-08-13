@@ -4,7 +4,7 @@
 
 GitHub-hosted CI runs the complete `compose.test.yaml` suite for pull requests and pushes to
 `develop` or `main`. A successful `main` run requires a new stable version in `package.json`,
-builds six container-only images, publishes immutable tags to GHCR, records artifact attestations,
+builds six container-only images, publishes immutable tags to GHCR, records image and file artifact attestations,
 and prepares `vVERSION` as a draft. CI uploads and byte-verifies every asset before publishing the
 draft as the latest release. A failed rerun may resume only a draft whose tag still resolves to the
 same commit; a published release or unrelated tag requires a package version bump.
@@ -17,6 +17,8 @@ published releases whose API metadata does not report `immutable: true`.
 - `osinara-deployment.json` contains schema version 1, commit SHA, release version, the SHA-256 of
 the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` references;
 - `compose.production.yaml` contains no build context or application source bind mount.
+- `agent-model-providers.json` is the exact reviewed v0.15.2 bridge config; its release bytes are
+  independently attested and checked by the bridge against the pinned SHA-256 before installation.
 
 The app image contains the authored `agent/` tree because Eve `0.32.0` bundles those modules
 when `eve start` serves the built `.output`. The server receives no checkout: the source is confined
@@ -27,6 +29,15 @@ OIDC, and attestation writes only to the release job. This follows GitHub's curr
 [automatic token permissions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication),
 [publishing to GHCR](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry),
 and [container attestations](https://docs.github.com/en/actions/how-tos/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds).
+
+The standalone CLI, installation bundle, `install.sh`, CLI checksum sidecar, and bridge model config
+are each attested with `subject-path`. Verify downloaded bootstrap assets before use:
+
+```bash
+gh attestation verify install.sh -R nyxandro/osinara
+gh attestation verify osinara-linux-x64.sha256 -R nyxandro/osinara
+sha256sum --check osinara-linux-x64.sha256
+```
 
 The server does not clone the repository and never builds an image. The root-owned systemd timer
 runs `/opt/osinara/bin/production-deploy.sh` once per minute. The script takes an exclusive lock,
@@ -53,6 +64,11 @@ the Docker socket. The agent has no Docker socket and reaches the runner only ov
 control network. Every service uses bounded Docker `json-file` logging (`20m` by `5` files), and
 the deployment validator rejects releases that remove this bound.
 
+Fresh installation additionally creates `osinara-production-edge-frontend`. Only the application
+`edge` service and the separate Caddy project join this frontend network. Caddy never joins
+`osinara-production-app-network`, so TLS termination cannot directly address PostgreSQL, the agent,
+embedding, workers, or sandbox egress services.
+
 Eve `0.32.0` mounts its local world at `/app/.eve/.workflow-data` from the logical
 `eve-workflow-data` volume. Its physical production name is
 `osinara-production-eve-workflow-data-v032`; the incompatible legacy
@@ -61,14 +77,19 @@ cutover it is retained through archive validation and candidate health, then rem
 
 ## Server files
 
-Initial provisioning remains manual until the first production deployment has been verified; this
-document intentionally does not provide a one-command installer. Prepare these root-owned files:
+Release `v0.15.2` adds a checksum-bound standalone installer for clean GNU/Linux x86_64 hosts using
+glibc. The current `osinara-linux-x64` is a glibc Node.js SEA executable and does not support
+musl-based distributions such as Alpine Linux. Existing
+production upgrades still use the root-owned bridge controller below. Fresh installations do not
+receive the five-image update controller until the planned cutover release; do not copy the legacy
+six-image controller into the fresh layout. Existing bridge servers prepare these root-owned files:
 
 
 | Path                                         | Mode   | Purpose                                                          |
 | -------------------------------------------- | ------ | ---------------------------------------------------------------- |
 | `/opt/osinara/.env`                          | `0600` | Production secrets and environment-specific URLs.                |
 | `/opt/osinara/model-providers.json`          | `0644` | Schema-v1 deployment compatibility config retained for rollback. |
+| `/opt/osinara/agent-model-providers.json`    | `0644` | Exact attested v0.15.2 direct-provider config.                    |
 | `/opt/osinara/bin/production-deploy.sh`      | `0750` | Server deployment entrypoint.                                    |
 | `/opt/osinara/bin/production-deploy/`        | `0750` | Root-owned deployment module directory.                          |
 | `/opt/osinara/bin/production-deploy/*.sh`    | `0640` | Fixed source modules checked before execution.                   |
@@ -81,16 +102,28 @@ entrypoint must be `root:root 0750`. The script rejects symlinks or different me
 sources a module. It creates `/opt/osinara/releases`, `/opt/osinara/backups`, and the atomic
 `/opt/osinara/release.env`.
 
-`/opt/osinara/.env` must be exactly `root:root 0600`. It contains `POSTGRES_PASSWORD`, the required
-internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`, `DEEPSEEK_API_KEY`,
+`/opt/osinara/.env` must be exactly `root:root 0600`. Before v0.15.2 it contains the required
+`DEEPSEEK_API_KEY`; during the v0.15.2 bridge it gains `MODEL_API_KEY` with the exact same credential
+token while retaining `DEEPSEEK_API_KEY` for the rollback window. It also contains
+`POSTGRES_PASSWORD`, the required internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`,
 `MODEL_UPSTREAM_API_KEY`, `GROQ_API_KEY`,
 Telegram secrets, and environment-specific integration
 settings. It must never contain or export any of the six `OSINARA_*_IMAGE` variables or
 `SANDBOX_RUNTIME_IMAGE`; those values exist only in a validated per-release `release.env`.
 
+The one-time bridge runs only for an owner-approved transition from exact v0.15.1 to v0.15.2. The
+root controller first claims the approved proposal, verifies immutable GitHub release metadata,
+manifest, tag commit and Compose hash, then repeats the current-owner check. Before the first
+candidate `docker compose config`, it downloads `agent-model-providers.json`, verifies its pinned
+SHA-256, installs it atomically as `root:root 0644`, and atomically appends `MODEL_API_KEY` derived
+from the single validated `DEEPSEEK_API_KEY` assignment. It never removes or rewrites the legacy
+assignment. Existing `MODEL_API_KEY` or config bytes are accepted only when they match exactly;
+duplicates, unsupported dotenv syntax, another source version, or conflicting bytes fail closed.
+This makes a pre-migration retry idempotent without inventing a model, endpoint, or credential.
+
 `/opt/osinara/model-providers.json` remains a schema-v1 deployment compatibility file so an older
 release can restart during recovery. Active model selection is immutable in each app image at
-`config/agent-model-providers.json`: schema v3 selects a protocol-native transport, explicit output
+`config/agent-model-providers.json`: schema v4 selects a protocol-native transport, explicit output
 and context limits, and a discriminated image-input capability. A supported vision route requires
 its own model ID and output limit; an unsupported route cannot construct a fake vision model.
 Changing active model selection therefore requires a reviewed release and rolls back atomically
@@ -131,7 +164,8 @@ migration; it must not be coupled to a model-provider switch.
 
 Any release that changes the exact production service, image, mount, port, logging, dependency, or
 host-capability allowlist is also a two-phase controller migration. After canonical merge and before
-owner approval, stop only `osinara-deploy.timer`, compare the installed root-owned controller modules
+owner approval, stop only `osinara-deploy.timer`, compare the installed root-owned controller modules,
+including the v0.15.2-only `bridge.sh`,
 with the exact canonical release commit, and atomically install only the changed modules. Verify the
 source checksum, shell syntax, `root:root` ownership, required `0750`/`0640` modes, then restart the
 timer. The running application and database remain untouched during this controller phase. Only

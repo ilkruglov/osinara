@@ -146,6 +146,12 @@ export const transcribeTelegramVoice = createTelegramVoiceTranscriber({
   },
   maxBytes: TELEGRAM_VOICE_MAX_BYTES,
   transcribe: async (audio) => {
+    if (voiceTranscriptionModel === null) {
+      throw new AppError(
+        "AGENT_VOICE_NOT_CONFIGURED",
+        "Распознавание голосовых сообщений пока не подключено. Владелец может добавить ключ Groq в настройках",
+      );
+    }
     const result = await transcribe({
       abortSignal: AbortSignal.timeout(GROQ_TRANSCRIPTION_TIMEOUT_MS),
       audio,

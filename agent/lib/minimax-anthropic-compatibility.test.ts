@@ -365,7 +365,7 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
         baseUrl: "https://api.minimax.io/anthropic/v1",
         compatibility: "minimax-anthropic",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 
@@ -441,7 +441,7 @@ describe("createMiniMaxAnthropicCompatibilityFetch", () => {
         baseUrl: "https://api.minimax.io/anthropic/v1",
         compatibility: "minimax-anthropic",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 

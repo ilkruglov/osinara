@@ -4,10 +4,12 @@
  * Constructs:
  * - Invalidates an earlier active code.
  * - Persists only a SHA-256 hash and prints plaintext once.
+ * - `serializeBootstrapCodeOutput`: emits the strict installer executor JSON contract.
  */
 import pg from "pg";
 
 import { createBootstrapCode } from "../agent/lib/bootstrap-code.ts";
+import { serializeBootstrapCodeOutput } from "./create-bootstrap-code-output.ts";
 
 const { Client } = pg;
 const databaseUrl = process.env.DATABASE_URL;
@@ -42,9 +44,10 @@ try {
     throw error;
   }
 
-  process.stdout.write(
-    `Одноразовый код владельца (действует 15 минут):\n${generated.code}\n`,
-  );
+  process.stdout.write(serializeBootstrapCodeOutput({
+    code: generated.code,
+    expiresAt: generated.record.expiresAt,
+  }));
 } finally {
   await client.end();
 }

@@ -15,6 +15,7 @@ readonly POSTGRES_IMAGE="pgvector/pgvector:pg17@sha256:d2ef61f42ef767baa5a147539
 readonly TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07"
 readonly RETAINED_LOCAL_RELEASE_IMAGE_COUNT=2
 readonly RELEASE_DIRECTORY_NAME_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+readonly V0152_MODEL_CONFIG_ASSET="agent-model-providers.json"
 
 curl_github() {
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
@@ -149,6 +150,7 @@ download_and_validate_release() {
   local tag_json="${WORK_DIR}/tag.json"
   local manifest="${WORK_DIR}/osinara-deployment.json"
   local compose="${WORK_DIR}/compose.production.yaml"
+  local model_config="${WORK_DIR}/${V0152_MODEL_CONFIG_ASSET}"
 
   curl_github --output "$release_json" "${GITHUB_API}/releases/tags/${tag}"
   jq -e --arg tag "$tag" --arg base "${GITHUB_RELEASES}/${tag}" '
@@ -156,11 +158,18 @@ download_and_validate_release() {
     ([.assets[] | select(.name == "osinara-deployment.json" and
       .browser_download_url == ($base + "/osinara-deployment.json"))] | length == 1) and
     ([.assets[] | select(.name == "compose.production.yaml" and
-      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1)
+      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1) and
+    ($tag != "v0.15.2" or
+      ([.assets[] | select(.name == "agent-model-providers.json" and
+        .browser_download_url == ($base + "/agent-model-providers.json"))] | length == 1))
   ' "$release_json" >/dev/null ||
     fail "DEPLOY_RELEASE_METADATA_INVALID" "Public release metadata is invalid"
   curl_github --output "$manifest" "${GITHUB_RELEASES}/${tag}/osinara-deployment.json"
   curl_github --output "$compose" "${GITHUB_RELEASES}/${tag}/compose.production.yaml"
+  if [[ "$version" == "0.15.2" ]]; then
+    curl_github --output "$model_config" \
+      "${GITHUB_RELEASES}/${tag}/${V0152_MODEL_CONFIG_ASSET}"
+  fi
   validate_manifest "$manifest" "$version"
   verify_compose_hash "$compose"
 
@@ -225,9 +234,12 @@ validate_resolved_compose_security() {
     .services["memory-extraction-worker"].network_mode == "none" and
     ((.services["memory-extraction-worker"].environment // {}) | length) == 0 and
     ((.services["memory-extraction-worker"].volumes // []) | length) == 0 and
+    ((.services.edge.networks // {}) | keys) == ["app-network", "edge-frontend"] and
+    ([.services | to_entries[] |
+      select((.value.networks // {}) | has("edge-frontend")) | .key] | sort) == ["edge"] and
     any(.services.agent.volumes[];
-      .source == "/opt/osinara/model-providers.json" and
-      .target == "/app/config/model-providers.json" and .read_only == true) and
+      .source == "/opt/osinara/agent-model-providers.json" and
+      .target == "/app/config/agent-model-providers.json" and .read_only == true) and
     any(.services["cli-proxy-api"].volumes[];
       .source == "/opt/osinara/model-providers.json" and
       .target == "/config/model-providers.json" and .read_only == true) and
@@ -238,7 +250,7 @@ validate_resolved_compose_security() {
         {service: "agent", type: "volume", source: "google-workspace-credentials", target: "/app/google-workspace-credentials"},
         {service: "agent", type: "volume", source: "eve-workflow-data", target: "/app/.eve/.workflow-data"},
         {service: "agent", type: "volume", source: "workspace-data", target: "/app/workspaces"},
-        {service: "agent", type: "bind", source: "/opt/osinara/model-providers.json", target: "/app/config/model-providers.json"},
+        {service: "agent", type: "bind", source: "/opt/osinara/agent-model-providers.json", target: "/app/config/agent-model-providers.json"},
         {service: "cli-proxy-api", type: "bind", source: "/opt/osinara/model-providers.json", target: "/config/model-providers.json"},
         {service: "memory-embedding", type: "volume", source: "memory-embedding-model-e5", target: "/data"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
