@@ -6,6 +6,7 @@
  * - Exact application tool-module allowlist after CRUD consolidation.
  * - Exact static package directories plus the single dynamic policy resolver.
  * - The opt-in tone skill lives outside static Eve discovery.
+ * - The compiled dynamic resolver stays step-scoped and avoids durable helper-closure replay.
  */
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -127,5 +128,12 @@ describe("agent capability surface", () => {
         expect(files).toContain("SKILL.md");
       }),
     );
+  });
+
+  it("authors the whole dynamic tool surface at step scope", async () => {
+    const source = await readFile(`${AGENT_ROOT}/tools/capabilities.ts`, "utf8");
+
+    expect(source).toContain('"step.started": async');
+    expect(source).not.toContain('"turn.started"');
   });
 });
