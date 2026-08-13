@@ -10,7 +10,7 @@
  * - Native skill package assets are shipped in the production agent image.
  * - Production agent runtime includes system CA roots for native integration binaries.
  * - Node application services explicitly select the production runtime image stage.
- * - Agent containers map the active DeepSeek secret into the provider-neutral runtime boundary.
+ * - Agent containers map one selected-provider secret into the provider-neutral runtime boundary.
  * - The controller-compatible retired memory worker exposes stabilized readiness without work.
  * - Nginx re-resolves the agent service after Docker replaces its container IP.
  */
@@ -40,7 +40,7 @@ const REMOVED_ANTIVIRUS_PATHS = [
 ] as const;
 
 describe("Docker Compose runtime wiring", () => {
-  it("requires the DeepSeek key for the active agent without changing CLI proxy compatibility", () => {
+  it("requires one provider-neutral model key without changing rollback proxy compatibility", () => {
     const localCompose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
     const productionCompose = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
     for (const compose of [localCompose, productionCompose]) {
@@ -49,11 +49,15 @@ describe("Docker Compose runtime wiring", () => {
         compose.indexOf("\n  sandbox-runtime-image:\n"),
       );
       expect(agent).toContain(
-        "      MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}\n",
+        "      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}\n",
       );
+      expect(agent).toContain("      GROQ_API_KEY: ${GROQ_API_KEY-}\n");
     }
     expect(localCompose).toContain(
       "      MODEL_UPSTREAM_API_KEY: ${MODEL_UPSTREAM_API_KEY:?MODEL_UPSTREAM_API_KEY is required}\n",
+    );
+    expect(productionCompose).toContain(
+      "- /opt/osinara/agent-model-providers.json:/app/config/agent-model-providers.json:ro",
     );
   });
 

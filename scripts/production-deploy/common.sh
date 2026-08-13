@@ -6,6 +6,7 @@ readonly BASE_DIR="/opt/osinara"
 readonly BIN_DIR="${BASE_DIR}/bin"
 readonly SERVER_ENV="${BASE_DIR}/.env"
 readonly MODEL_PROVIDER_CONFIG="${BASE_DIR}/model-providers.json"
+readonly AGENT_MODEL_PROVIDER_CONFIG="${BASE_DIR}/agent-model-providers.json"
 readonly RELEASES_DIR="${BASE_DIR}/releases"
 readonly BACKUPS_DIR="${BASE_DIR}/backups"
 readonly GLOBAL_RELEASE_ENV="${BASE_DIR}/release.env"
@@ -84,8 +85,8 @@ require_server_boundary() {
   install -d -o root -g root -m 0750 "$RELEASES_DIR" "$BACKUPS_DIR"
 
   local command
-  for command in cmp curl df docker find flock install jq mktemp readlink \
-    sha256sum sort stat tar; do
+  for command in cmp curl df docker find flock install jq mktemp mv readlink \
+    sha256sum sort stat tail tar; do
     command -v "$command" >/dev/null ||
       fail "DEPLOY_COMMAND_MISSING" "Required command is unavailable: ${command}"
   done

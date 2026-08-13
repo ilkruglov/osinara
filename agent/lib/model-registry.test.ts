@@ -23,10 +23,12 @@ describe("model registry", () => {
     expect(visionModel).toBeNull();
   });
 
-  it("selects the explicit Groq Whisper model for voice transcription", () => {
-    expect(voiceTranscriptionModel.modelId).toBe(
-      modelProviderConfig.voice.transcriptionModelId,
-    );
-    expect(voiceTranscriptionModel.provider).toBe("groq.transcription");
+  it("constructs voice transcription only when both config and credential enable it", () => {
+    if (!process.env.GROQ_API_KEY || !modelProviderConfig.voice.enabled) {
+      expect(voiceTranscriptionModel).toBeNull();
+      return;
+    }
+    expect(voiceTranscriptionModel?.modelId).toBe(modelProviderConfig.voice.transcriptionModelId);
+    expect(voiceTranscriptionModel?.provider).toBe("groq.transcription");
   });
 });

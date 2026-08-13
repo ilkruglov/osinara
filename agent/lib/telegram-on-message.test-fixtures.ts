@@ -90,8 +90,11 @@ export function repositories() {
       prepare: vi.fn().mockResolvedValue({
         cursorSequence: "1",
         durableMessage: "<current_telegram_message>test</current_telegram_message>",
+        currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
         omittedBeforeSequence: null,
+        timelineOmission: null,
         visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
+        visibleTimelineEntries: [],
       }),
     },
     hitl: {

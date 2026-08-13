@@ -275,7 +275,78 @@ jobs:
             --arg sandboxRunner "${RUNNER_IMAGE}@${RUNNER_DIGEST}" \
             --arg sandboxRuntime "${RUNTIME_IMAGE}@${RUNTIME_DIGEST}" \
             '{schemaVersion: 1, version: $version, commitSha: $commitSha, composeSha256: $composeSha256, images: {app: $app, cliProxy: $cliProxy, edge: $edge, sandboxEgressProxy: $sandboxEgressProxy, sandboxRunner: $sandboxRunner, sandboxRuntime: $sandboxRuntime}}' \
-            > osinara-deployment.json
+             > osinara-deployment.json
+
+      - name: Build immutable installation bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f compose.production.yaml config --no-interpolate --format json \
+            | jq 'del(.services["cli-proxy-api"])' > compose.installation.json
+          jq -e '
+            (.services | has("cli-proxy-api") | not) and
+            (.services | keys) == [
+              "agent", "edge", "memory-embedding", "memory-embedding-worker",
+              "memory-extraction-worker", "migrate", "postgres", "sandbox-egress-proxy",
+              "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
+            ]
+          ' compose.installation.json >/dev/null
+          bash scripts/provider-installer/build-installation-bundle.sh \
+            "${GITHUB_WORKSPACE}/osinara-installation.tar.gz" \
+            "${GITHUB_WORKSPACE}/osinara-deployment.json" \
+            "${GITHUB_WORKSPACE}/compose.installation.json"
+          INSTALLATION_ARCHIVE_SHA256="$(sha256sum osinara-installation.tar.gz | cut -d ' ' -f1)"
+          if [[ ! "$INSTALLATION_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            printf '%s\n' "RELEASE_INSTALLATION_ARCHIVE_DIGEST_INVALID: archive hash is malformed" >&2
+            exit 1
+          fi
+          printf '%s' "$INSTALLATION_ARCHIVE_SHA256" > installation-archive.sha256
+
+      - name: Build and verify standalone installer CLI
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSTALLATION_ARCHIVE_SHA256="$(cat installation-archive.sha256)"
+          ARTIFACT_DIR="$(mktemp -d)"
+          EMPTY_PATH="$(mktemp -d)"
+          trap 'rm -rf "$ARTIFACT_DIR" "$EMPTY_PATH"' EXIT
+          docker buildx build --target installer-cli-artifact \
+            --build-arg "INSTALLATION_ARCHIVE_SHA256=${INSTALLATION_ARCHIVE_SHA256}" \
+            --build-arg "INSTALLATION_RELEASE_VERSION=${RELEASE_VERSION}" \
+            --output "type=local,dest=${ARTIFACT_DIR}" .
+          install -m 0755 "${ARTIFACT_DIR}/osinara-linux-x64" osinara-linux-x64
+          install -m 0755 scripts/provider-installer/bootstrap.sh install.sh
+          install -m 0644 config/agent-model-providers.json agent-model-providers.json
+          sha256sum osinara-linux-x64 > osinara-linux-x64.sha256
+          sha256sum --check osinara-linux-x64.sha256
+          PATH="$EMPTY_PATH" ./osinara-linux-x64 --help | grep --fixed-strings "osinara install"
+
+      - name: Attest standalone installer CLI
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-path: osinara-linux-x64
+
+      - name: Attest installation bundle
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-path: osinara-installation.tar.gz
+
+      - name: Attest installer bootstrap
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-path: install.sh
+
+      - name: Attest installer checksum
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-path: osinara-linux-x64.sha256
+
+      - name: Attest bridge model config
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-path: agent-model-providers.json
 
       - name: Create or resume draft and upload exact assets
         env:
@@ -292,18 +363,28 @@ jobs:
               --title "Osinara ${TAG}" --notes-file "$RELEASE_NOTES_FILE"
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            osinara-deployment.json compose.production.yaml
+            agent-model-providers.json osinara-deployment.json compose.production.yaml install.sh osinara-installation.tar.gz \
+            osinara-linux-x64 osinara-linux-x64.sha256
 
           VERIFY_DIR="$(mktemp -d)"
           trap 'rm -rf "$VERIFY_DIR"' EXIT
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$VERIFY_DIR" \
-            --pattern osinara-deployment.json --pattern compose.production.yaml
+            --pattern osinara-deployment.json --pattern compose.production.yaml \
+            --pattern agent-model-providers.json \
+            --pattern install.sh \
+            --pattern osinara-installation.tar.gz \
+            --pattern osinara-linux-x64 --pattern osinara-linux-x64.sha256
           cmp --silent osinara-deployment.json "$VERIFY_DIR/osinara-deployment.json"
           cmp --silent compose.production.yaml "$VERIFY_DIR/compose.production.yaml"
+          cmp --silent agent-model-providers.json "$VERIFY_DIR/agent-model-providers.json"
+          cmp --silent install.sh "$VERIFY_DIR/install.sh"
+          cmp --silent osinara-installation.tar.gz "$VERIFY_DIR/osinara-installation.tar.gz"
+          cmp --silent osinara-linux-x64 "$VERIFY_DIR/osinara-linux-x64"
+          cmp --silent osinara-linux-x64.sha256 "$VERIFY_DIR/osinara-linux-x64.sha256"
           ASSETS_JSON="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,targetCommitish)"
           jq -e --arg sha "$GITHUB_SHA" '
             .isDraft == true and .targetCommitish == $sha and
-            ([.assets[].name] | sort) == ["compose.production.yaml", "osinara-deployment.json"]
+            ([.assets[].name] | sort) == ["agent-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]
           ' <<<"$ASSETS_JSON" >/dev/null
 
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

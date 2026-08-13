@@ -23,6 +23,7 @@ import { isAppError } from "./app-error.js";
 import { bindTelegramConversationTimeline } from "./telegram-conversation-timeline.js";
 import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
+import { handleTelegramEnrollmentBoundary } from "./telegram-enrollment-boundary.js";
 import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
   classifyTelegramInboundMedia,
@@ -174,57 +175,13 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       )
     ) return null;
 
-    // Invitation secrets never become ordinary turns, including when opened by an existing member.
-    if (identity && invitationCode) {
-      await ctx.telegram.sendMessage(
-        "AGENT_INVITATION_NOT_APPLICABLE: Вы уже подключены к семейному агенту.",
-      );
-      return null;
-    }
-
-    if (!identity && message.chat.type === "private") {
-      const ownerConfigured = await repositories.telegram.hasOwner();
-
-      // Bootstrap plaintext is consumed entirely at the channel boundary and never reaches Eve.
-      if (!ownerConfigured) {
-        const code = message.text.trim();
-        const claim = code
-          ? await repositories.telegram.claimFirstOwner(code, {
-              displayName: telegramProfileName(message),
-              telegramUserId: sender.id,
-              ...(sender.username ? { username: sender.username } : {}),
-            })
-          : "invalid";
-        if (claim === "claimed") {
-          await ctx.telegram.sendMessage("Владелец создан. Семейный агент готов к настройке.");
-          return null;
-        }
-        await ctx.telegram.sendMessage(
-          "AGENT_BOOTSTRAP_CODE_INVALID: Код недействителен или истек. Создайте новый код на сервере.",
-        );
-        return null;
-      }
-
-      // Only a strict Telegram deep-link command can enter the invitation verifier.
-      if (invitationCode) {
-        const claim = await repositories.family.claimInvitation(invitationCode, {
-          displayName: telegramProfileName(message),
-          telegramUserId: sender.id,
-          ...(sender.username ? { username: sender.username } : {}),
-        });
-        if (claim === "pending") {
-          await ctx.telegram.sendMessage(
-            "AGENT_INVITATION_PENDING: Заявка отправлена владельцу. Доступ появится после подтверждения.",
-          );
-          return null;
-        }
-      }
-
-      await ctx.telegram.sendMessage(
-        "AGENT_ACCESS_DENIED: У вас нет доступа. Попросите владельца отправить приглашение.",
-      );
-      return null;
-    }
+    if (await handleTelegramEnrollmentBoundary({
+      ctx,
+      identity,
+      invitationCode,
+      message,
+      repositories,
+    })) return null;
 
     // Auth attributes carry only values derived from the verified webhook and persisted policy.
     const decision = evaluateConversationAccess({

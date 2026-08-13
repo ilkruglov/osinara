@@ -5,14 +5,19 @@
  * - `parseModelProviderConfig`: validates protocol-native agent transports and model IDs.
  * - Anthropic Messages and OpenAI Chat Completions remain provider-name independent.
  * - Required endpoint, authentication, thinking, capability, and context metadata fail fast.
- * - MiniMax Anthropic wire compatibility is explicit and rejects unknown modes.
- * - Active schema remains separate from the host-mounted deployment compatibility file.
+ * - MiniMax and OpenCode Go transports enforce their exact protocol-native cross-field contracts.
+ * - Voice-enabled startup requires an explicit Groq credential.
+ * - Canonical runtime output limits reject values above the application-tested cap.
+ * - Active schema is the host-mounted provider selection contract.
  */
 import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { parseModelProviderConfig } from "./model-provider-config.js";
+import {
+  parseModelProviderConfig,
+  validateModelProviderRuntimeEnvironment,
+} from "./model-provider-config-schema.js";
 
 const validConfig = {
   agent: {
@@ -23,50 +28,136 @@ const validConfig = {
     transport: {
       authentication: "bearer",
       baseUrl: "https://api.minimax.io/anthropic/v1",
+      compatibility: "minimax-anthropic",
       protocol: "anthropic-messages",
-      thinking: { type: "adaptive" },
+      reasoning: { mode: "adaptive", type: "enabled" },
     },
   },
-  schemaVersion: 3,
-  voice: { transcriptionModelId: "whisper-large-v3-turbo" },
+  provider: "minimax",
+  schemaVersion: 4,
+  voice: { enabled: true, transcriptionModelId: "whisper-large-v3-turbo" },
 } as const;
 
 describe("parseModelProviderConfig", () => {
-  it("keeps the active transport config separate from deployment compatibility", async () => {
+  it("loads the same active schema that production mounts for the agent", async () => {
     const active = JSON.parse(await readFile("config/agent-model-providers.json", "utf8"));
-    const compatibility = JSON.parse(await readFile("config/model-providers.json", "utf8"));
 
     expect(parseModelProviderConfig(active)).toEqual(active);
-    expect(compatibility).toMatchObject({ schemaVersion: 1 });
-    expect(() => parseModelProviderConfig(compatibility)).toThrow(
-      "AGENT_MODEL_PROVIDER_CONFIG_INVALID",
-    );
   });
 
   it("accepts protocol-native primary, vision, and voice model selection", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
   });
 
-  it("accepts only the explicit MiniMax Anthropic compatibility mode", () => {
-    const config = {
+  it("accepts only the exact MiniMax Anthropic transport contract", () => {
+    expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
+    expect(() => parseModelProviderConfig({
       ...validConfig,
       agent: {
         ...validConfig.agent,
         transport: {
           ...validConfig.agent.transport,
-          compatibility: "minimax-anthropic",
+          authentication: "api-key",
+        },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...validConfig,
+      agent: {
+        ...validConfig.agent,
+        transport: {
+          authentication: "bearer",
+          baseUrl: "https://api.minimax.io/anthropic/v1",
+          protocol: "anthropic-messages",
+          reasoning: { mode: "adaptive", type: "enabled" },
+        },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+  });
+
+  it("accepts both OpenCode Go protocols only with their exact auth and reasoning format", () => {
+    const openAi = {
+      ...validConfig,
+      agent: {
+        models: {
+          primary: {
+            contextWindowTokens: 1_000_000,
+            id: "deepseek-v4-flash",
+            maxOutputTokens: 128_000,
+          },
+          vision: { supportsImageInput: false },
+        },
+        transport: {
+          baseUrl: "https://opencode.ai/zen/go/v1",
+          protocol: "openai-chat-completions",
+          providerName: "opencode-go",
+          reasoning: { effort: "high", format: "reasoning-effort", type: "effort" },
+        },
+      },
+      provider: "opencode-go",
+    } as const;
+    const anthropic = {
+      ...openAi,
+      agent: {
+        models: {
+          primary: {
+            contextWindowTokens: 1_000_000,
+            id: "minimax-m3",
+            maxOutputTokens: 128_000,
+          },
+          vision: { supportsImageInput: false },
+        },
+        transport: {
+          authentication: "bearer",
+          baseUrl: "https://opencode.ai/zen/go/v1",
+          protocol: "anthropic-messages",
+          reasoning: { mode: "adaptive", type: "enabled" },
         },
       },
     } as const;
 
-    expect(parseModelProviderConfig(config)).toEqual(config);
+    expect(parseModelProviderConfig(openAi)).toEqual(openAi);
+    expect(parseModelProviderConfig(anthropic)).toEqual(anthropic);
     expect(() => parseModelProviderConfig({
-      ...config,
+      ...openAi,
       agent: {
-        ...config.agent,
-        transport: { ...config.agent.transport, compatibility: "unknown" },
+        ...openAi.agent,
+        transport: { ...openAi.agent.transport, providerName: "openrouter" },
       },
     })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...openAi,
+      agent: {
+        ...openAi.agent,
+        transport: {
+          ...openAi.agent.transport,
+          reasoning: { effort: "high", format: "reasoning-object", type: "effort" },
+        },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...anthropic,
+      agent: {
+        ...anthropic.agent,
+        transport: { ...anthropic.agent.transport, authentication: "api-key" },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+  });
+
+  it("requires GROQ_API_KEY at startup only when voice is enabled", () => {
+    expect(() => validateModelProviderRuntimeEnvironment(validConfig, {})).toThrow(
+      "AGENT_GROQ_API_KEY_REQUIRED: Для включённого распознавания голосовых сообщений задайте GROQ_API_KEY",
+    );
+    expect(() => validateModelProviderRuntimeEnvironment(validConfig, {
+      GROQ_API_KEY: "   ",
+    })).toThrow("AGENT_GROQ_API_KEY_REQUIRED");
+    expect(validateModelProviderRuntimeEnvironment(validConfig, {
+      GROQ_API_KEY: "groq-secret",
+    })).toEqual({ GROQ_API_KEY: "groq-secret" });
+    expect(validateModelProviderRuntimeEnvironment({
+      ...validConfig,
+      voice: { enabled: false },
+    }, {})).toEqual({ GROQ_API_KEY: undefined });
   });
 
   it("accepts a generic OpenAI-compatible transport without provider branching", () => {
@@ -78,8 +169,10 @@ describe("parseModelProviderConfig", () => {
           baseUrl: "https://openrouter.ai/api/v1",
           protocol: "openai-chat-completions",
           providerName: "openrouter",
+          reasoning: { effort: "high", format: "reasoning-object", type: "effort" },
         },
       },
+      provider: "openrouter",
     };
 
     expect(parseModelProviderConfig(config)).toEqual(config);
@@ -101,16 +194,17 @@ describe("parseModelProviderConfig", () => {
           baseUrl: "https://api.deepseek.com",
           protocol: "openai-chat-completions",
           providerName: "deepseek",
-          thinking: { effort: "high", type: "enabled" },
+          reasoning: { effort: "high", format: "deepseek", type: "effort" },
         },
       },
+      provider: "deepseek",
     } as const;
 
     expect(parseModelProviderConfig(config)).toEqual(config);
   });
 
   it.each([
-    { ...validConfig, schemaVersion: 2 },
+    { ...validConfig, schemaVersion: 3 },
     {
       ...validConfig,
       agent: {
@@ -167,7 +261,18 @@ describe("parseModelProviderConfig", () => {
       },
     },
     { ...validConfig, agent: { ...validConfig.agent, unexpected: true } },
-    { ...validConfig, voice: { transcriptionModelId: "" } },
+    { ...validConfig, provider: "unknown" },
+    { ...validConfig, voice: { enabled: true, transcriptionModelId: "" } },
+    {
+      ...validConfig,
+      agent: {
+        ...validConfig.agent,
+        models: {
+          ...validConfig.agent.models,
+          primary: { ...validConfig.agent.models.primary, maxOutputTokens: 128_001 },
+        },
+      },
+    },
   ])("rejects invalid or ambiguous required config %#", (input) => {
     expect(() => parseModelProviderConfig(input)).toThrow(
       "AGENT_MODEL_PROVIDER_CONFIG_INVALID",

@@ -74,6 +74,7 @@ function configuredProviderOptions(
   transport: AgentModelTransport,
 ): SharedV4ProviderOptions {
   if (transport.protocol === "anthropic-messages") {
+    if (transport.reasoning == null || transport.reasoning.type === "none") return {};
     return {
       anthropic: {
         ...existing?.anthropic,
@@ -81,14 +82,31 @@ function configuredProviderOptions(
       },
     };
   }
-  if (transport.thinking === undefined) return {};
+  if (transport.reasoning == null) return {};
+  const reasoning = transport.reasoning;
+  if (reasoning.format === "reasoning-object") {
+    return {
+      [transport.providerName]: {
+        ...existing?.[transport.providerName],
+        reasoning: reasoning.type === "none" ? { effort: "none" } : { effort: reasoning.effort },
+      },
+    };
+  }
+  if (reasoning.format === "reasoning-effort") {
+    return {
+      [transport.providerName]: {
+        ...existing?.[transport.providerName],
+        reasoningEffort: reasoning.type === "effort" ? reasoning.effort : "none",
+      },
+    };
+  }
   return {
     [transport.providerName]: {
       ...existing?.[transport.providerName],
-      ...(transport.thinking.type === "enabled"
-        ? { reasoningEffort: transport.thinking.effort }
+      ...(reasoning.type === "effort"
+        ? { reasoningEffort: reasoning.effort }
         : {}),
-      thinking: { type: transport.thinking.type },
+      thinking: { type: reasoning.type === "effort" ? "enabled" : "disabled" },
     },
   };
 }

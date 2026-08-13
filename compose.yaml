@@ -48,13 +48,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://osinara:${POSTGRES_PASSWORD}@postgres:5432/osinara
-      GROQ_API_KEY: ${GROQ_API_KEY:?GROQ_API_KEY is required}
+      GROQ_API_KEY: ${GROQ_API_KEY-}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET-}
       INTEGRATION_TOKEN_ENCRYPTION_KEY: ${INTEGRATION_TOKEN_ENCRYPTION_KEY-}
       INVITATION_SIGNING_SECRET: ${INVITATION_SIGNING_SECRET:?INVITATION_SIGNING_SECRET is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
-      MODEL_UPSTREAM_API_KEY: ${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}
+      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
@@ -70,6 +70,7 @@ services:
       - default
       - sandbox-control
     volumes:
+      - ./config/agent-model-providers.json:/app/config/agent-model-providers.json:ro
       - google-workspace-credentials:/app/google-workspace-credentials
       - sandbox-data:/app/.eve/sandbox-cache
       - eve-workflow-data:/app/.eve/.workflow-data

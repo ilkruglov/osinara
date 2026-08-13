@@ -11,8 +11,8 @@ import { createGroq } from "@ai-sdk/groq";
 import { modelProviderConfig } from "./model-provider-config.js";
 import { createConfiguredLanguageModel } from "./model-transport.js";
 
-const agentModelApiKey = process.env.MODEL_UPSTREAM_API_KEY as string;
-const groq = createGroq({ apiKey: process.env.GROQ_API_KEY as string });
+const agentModelApiKey = process.env.MODEL_API_KEY as string;
+const groqApiKey = process.env.GROQ_API_KEY;
 
 export const primaryModel = createConfiguredLanguageModel({
   apiKey: agentModelApiKey,
@@ -30,7 +30,9 @@ export const visionModel = visionConfig.supportsImageInput
     })
   : null;
 
-// Voice remains isolated on Groq and never falls back to the agent transport.
-export const voiceTranscriptionModel = groq.transcription(
-  modelProviderConfig.voice.transcriptionModelId,
-);
+// Voice is an explicit optional capability and never falls back to the agent transport.
+export const voiceTranscriptionModel = modelProviderConfig.voice.enabled && groqApiKey
+  ? createGroq({ apiKey: groqApiKey }).transcription(
+      modelProviderConfig.voice.transcriptionModelId,
+    )
+  : null;

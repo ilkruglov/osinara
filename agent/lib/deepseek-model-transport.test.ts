@@ -49,7 +49,7 @@ function deepSeekModel(fetch: typeof globalThis.fetch) {
       baseUrl: "https://api.deepseek.com",
       protocol: "openai-chat-completions",
       providerName: "deepseek",
-      thinking: { effort: "high", type: "enabled" },
+      reasoning: { effort: "high", format: "deepseek", type: "effort" },
     },
   });
 }
@@ -110,7 +110,7 @@ describe("DeepSeek model transport", () => {
         baseUrl: "https://api.deepseek.com",
         protocol: "openai-chat-completions",
         providerName: "deepseek",
-        thinking: { type: "disabled" },
+        reasoning: { format: "deepseek", type: "none" },
       },
     });
 

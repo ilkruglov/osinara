@@ -260,7 +260,7 @@ describe("release workflow contract", () => {
     ]) {
       expect(workflow).toContain(`ghcr.io/nyxandro/${image}`);
     }
-    expect(workflow.match(/actions\/attest@/g)).toHaveLength(6);
+    expect(workflow.match(/actions\/attest@/g)).toHaveLength(11);
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("attestations: write");
     expect(workflow).toContain("id-token: write");
@@ -291,6 +291,28 @@ describe("release workflow contract", () => {
     expect(workflow).toContain(".immutable == true");
     expect(workflow).not.toContain("git push origin");
     expect(workflow).not.toContain("ssh");
+  });
+
+  it("publishes and verifies the standalone installer CLI with its SHA-256 sidecar", () => {
+    const workflow = readProjectFile(".github/workflows/ci-release.yaml");
+    const dockerfile = readProjectFile("Dockerfile");
+
+    expect(dockerfile).toContain("build-provider-installer-cli.sh");
+    expect(dockerfile).toContain("AS installer-cli-artifact");
+    expect(workflow).toContain("--target installer-cli-artifact");
+    expect(workflow).toContain('--output "type=local,dest=${ARTIFACT_DIR}"');
+    expect(workflow).toContain("osinara-linux-x64");
+    expect(workflow).toContain("osinara-linux-x64.sha256");
+    expect(workflow).toContain("osinara-installation.tar.gz");
+    expect(workflow).toContain("install.sh");
+    expect(workflow).toContain("INSTALLATION_ARCHIVE_SHA256");
+    expect(workflow).toContain("sha256sum --check osinara-linux-x64.sha256");
+    expect(workflow).toMatch(
+      /gh release upload[\s\S]*?osinara-linux-x64[\s\S]*?osinara-linux-x64\.sha256/u,
+    );
+    expect(workflow).toContain(
+      '["agent-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]',
+    );
   });
 });
 
@@ -369,6 +391,7 @@ describe("server deployment contract", () => {
     expect(script).toContain("network_mode");
     expect(script).toContain("logging.driver");
     expect(script).toContain("/var/run/docker.sock");
+    expect(script).toContain("/opt/osinara/agent-model-providers.json");
     expect(script).toContain("/opt/osinara/model-providers.json");
     expect(script).toContain(".read_only == true");
   });
@@ -389,6 +412,7 @@ describe("server deployment contract", () => {
       source: "/", target: "/host", type: "bind",
     }];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
+
   });
 
   it("rejects environment image injection, downgrade, and unsafe initial reuse", () => {

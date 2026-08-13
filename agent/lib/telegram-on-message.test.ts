@@ -27,7 +27,6 @@ import {
   telegramContext,
 } from "./telegram-on-message.test-fixtures.js";
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
-
 describe("createTelegramMessageHandler", () => {
   it("adds one trusted UTC snapshot and reuses it across turn preparation", async () => {
     vi.useFakeTimers();
@@ -39,7 +38,6 @@ describe("createTelegramMessageHandler", () => {
       userId: "user-1",
     });
     const handler = createTelegramMessageHandler(repository);
-
     try {
       const result = await handler(telegramContext().context, privateMessage("Который час?"));
 
@@ -97,8 +95,8 @@ describe("createTelegramMessageHandler", () => {
     repository.telegram.claimFirstOwner.mockResolvedValue("claimed");
     const handler = createTelegramMessageHandler(repository);
     const { context, sendMessage } = telegramContext();
-
-    const result = await handler(context, privateMessage("bootstrap-secret"));
+    const code = "a".repeat(43);
+    const result = await handler(context, privateMessage(`/start ${code}`));
 
     expect(result).toBeNull();
     expect(sendMessage).toHaveBeenCalledWith(
@@ -106,6 +104,24 @@ describe("createTelegramMessageHandler", () => {
     );
     expect(repository.telegram.findIdentity).toHaveBeenCalledTimes(1);
     expect(repository.family.claimInvitation).not.toHaveBeenCalled();
+    expect(repository.telegram.claimFirstOwner).toHaveBeenCalledWith(code, expect.objectContaining({
+      telegramUserId: "telegram-101",
+    }));
+  });
+
+  it("does not spend bootstrap attempts on an ordinary private message", async () => {
+    const repository = repositories();
+    repository.telegram.hasOwner.mockResolvedValue(false);
+    const handler = createTelegramMessageHandler(repository);
+    const { context, sendMessage } = telegramContext();
+
+    const result = await handler(context, privateMessage("привет"));
+
+    expect(result).toBeNull();
+    expect(repository.telegram.claimFirstOwner).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      "AGENT_BOOTSTRAP_COMMAND_INVALID: Откройте одноразовую ссылку владельца, полученную на сервере.",
+    );
   });
 
   it("creates a pending candidate and terminates the invitation message", async () => {

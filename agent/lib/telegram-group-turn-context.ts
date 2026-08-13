@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `TelegramGroupTurnContextPreparer`: injectable bootstrap/incremental context contract.
+ * - `composeTelegramTurnMessage`: joins a controlled timeline and exact current envelope.
  * - `createTelegramGroupTurnContextPreparer`: composes timeline and session cursor repositories.
  * - `telegramGroupTurnContextPreparer`: production context preparer.
  * - `currentTelegramMessageText`: reads the addressed message back out of the durable envelope.
@@ -19,7 +20,11 @@ import {
   type TelegramAttachmentReferenceAccess,
   visibleTelegramTimelineEntry,
 } from "./telegram-attachment-reference-access.js";
-import { selectTelegramGroupJournalContext } from "./telegram-group-journal-context.js";
+import {
+  selectTelegramGroupJournalContext,
+  type TelegramGroupJournalEntry,
+  type TelegramTimelineOmission,
+} from "./telegram-group-journal-context.js";
 import {
   telegramGroupJournalRepository,
   type TelegramGroupJournalRepository,
@@ -53,6 +58,9 @@ export interface PreparedTelegramGroupTurnContext {
   durableMessage: string;
   omittedBeforeSequence: string | null;
   visibleEntryIds: string[];
+  visibleTimelineEntries: TelegramGroupJournalEntry[];
+  currentMessageEnvelope: string;
+  timelineOmission: TelegramTimelineOmission | null;
   memoryReviewBatchId?: string;
   memoryReviewSourceEntryIds?: string[];
 }
@@ -79,12 +87,12 @@ function turnMessageError(reason: string, detail?: string): AppError {
   );
 }
 
-function durableTurnMessage(
-  timeline: string | null,
+function currentTelegramMessageEnvelope(
   input: Pick<
     PrepareTelegramGroupTurnContextInput,
     | "currentSenderDisplayName"
     | "currentSenderUsername"
+    | "currentSequence"
     | "messageText"
     | "replyTargetSnapshot"
     | "replyTargetUnavailable"
@@ -97,9 +105,9 @@ function durableTurnMessage(
   if ((input.replyTargetUnavailable && input.replyToSequenceId !== null) || snapshotConflict) {
     throw turnMessageError("reply_metadata_conflict");
   }
-  // The durable envelope retains speaker attribution without exposing Telegram identifiers.
-  const timelinePrefix = timeline === null ? "" : `${timeline}\n\n`;
+  // The exact envelope is retained as trusted composition metadata without Telegram identifiers.
   const currentMessage = escapeUntrustedContextJson({
+    sourceSequence: input.currentSequence,
     senderDisplayName: input.currentSenderDisplayName,
     senderUsername: input.currentSenderUsername,
     ...(input.replyTargetSnapshot
@@ -110,7 +118,14 @@ function durableTurnMessage(
     ...(input.replyToSequenceId === null ? {} : { replyToSequenceId: input.replyToSequenceId }),
     text: input.messageText,
   });
-  return `${timelinePrefix}${CURRENT_MESSAGE_OPEN_TAG}\n${currentMessage}\n${CURRENT_MESSAGE_CLOSE_TAG}`;
+  return `${CURRENT_MESSAGE_OPEN_TAG}\n${currentMessage}\n${CURRENT_MESSAGE_CLOSE_TAG}`;
+}
+
+export function composeTelegramTurnMessage(
+  timeline: string | null,
+  currentMessageEnvelope: string,
+): string {
+  return timeline === null ? currentMessageEnvelope : `${timeline}\n\n${currentMessageEnvelope}`;
 }
 
 /**
@@ -191,7 +206,8 @@ export function createTelegramGroupTurnContextPreparer(
     const visibleEntries = page.entries.map((entry) =>
       visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess)
     );
-    const currentMessageCharacters = durableTurnMessage(null, input).length;
+    const currentMessageEnvelope = currentTelegramMessageEnvelope(input);
+    const currentMessageCharacters = currentMessageEnvelope.length;
     const timelineCharacterBudget = TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS -
       currentMessageCharacters - 2;
     if (timelineCharacterBudget <= 0) {
@@ -205,6 +221,7 @@ export function createTelegramGroupTurnContextPreparer(
       timelineCharacterBudget,
       page.omittedBeforeSequence,
       input.replyToSequenceId,
+      TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
     );
     const timeline = selected.context;
     // A DB-resolved reply is usable only when its protected target survived model-context bounds.
@@ -212,11 +229,12 @@ export function createTelegramGroupTurnContextPreparer(
       timeline?.includes(`\n#${input.replyToSequenceId} [`) === true;
     const replyToSequenceId = replyTargetIncluded ? input.replyToSequenceId : null;
     const replyTargetUnavailable = input.replyTargetUnavailable || !replyTargetIncluded;
-    const durableMessage = durableTurnMessage(timeline, {
+    const resolvedCurrentMessageEnvelope = currentTelegramMessageEnvelope({
       ...input,
       replyTargetUnavailable,
       replyToSequenceId,
     });
+    const durableMessage = composeTelegramTurnMessage(timeline, resolvedCurrentMessageEnvelope);
     if (durableMessage.length > TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS) {
       throw new AppError(
         "AGENT_TELEGRAM_TURN_CONTEXT_TOO_LARGE",
@@ -226,11 +244,14 @@ export function createTelegramGroupTurnContextPreparer(
     return {
       cursorSequence: input.currentSequence,
       durableMessage,
+      currentMessageEnvelope: resolvedCurrentMessageEnvelope,
       omittedBeforeSequence: page.omittedBeforeSequence,
+      timelineOmission: selected.omission,
       visibleEntryIds: [
         ...selected.entries.flatMap((entry) => entry.entryId ? [entry.entryId] : []),
         input.currentEntryId,
       ],
+      visibleTimelineEntries: selected.entries,
     };
   };
 }

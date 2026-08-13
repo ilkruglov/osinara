@@ -52,9 +52,12 @@ export const VISION_MAX_FILE_BYTES = 10_000_000;
 const runtimeEnvironmentSchema = z
   .object({
     DATABASE_URL: z.string().min(1),
-    GROQ_API_KEY: z.string().min(1),
+    GROQ_API_KEY: z.preprocess(
+      (value) => value === "" ? undefined : value,
+      z.string().min(1).optional(),
+    ),
     INVITATION_SIGNING_SECRET: z.string().min(32),
-    MODEL_UPSTREAM_API_KEY: z.string().regex(/^\S+$/u),
+    MODEL_API_KEY: z.string().regex(/^\S+$/u),
     TELEGRAM_BOT_TOKEN: z.string().min(1),
     TELEGRAM_BOT_USERNAME: z.string().min(1),
     TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(1),

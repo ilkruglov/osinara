@@ -91,7 +91,7 @@ describe("createConfiguredLanguageModel", () => {
         authentication: "bearer",
         baseUrl: "https://api.minimax.io/anthropic/v1",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 
@@ -126,6 +126,7 @@ describe("createConfiguredLanguageModel", () => {
         baseUrl: "https://openrouter.ai/api/v1",
         protocol: "openai-chat-completions",
         providerName: "openrouter",
+        reasoning: { effort: "high", format: "reasoning-object", type: "effort" },
       },
     });
 
@@ -137,7 +138,11 @@ describe("createConfiguredLanguageModel", () => {
     expect(model.modelId).toBe("provider/model-name");
     expect(model.provider).toBe("openrouter.chat");
     expect(request).toMatchObject({
-      body: { max_tokens: 32_000, model: "provider/model-name" },
+      body: {
+        max_tokens: 32_000,
+        model: "provider/model-name",
+        reasoning: { effort: "high" },
+      },
       url: "https://openrouter.ai/api/v1/chat/completions",
     });
     expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
@@ -166,7 +171,7 @@ describe("createConfiguredLanguageModel", () => {
         authentication: "api-key",
         baseUrl: "https://example-provider.test/v1",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 
@@ -201,7 +206,7 @@ describe("createConfiguredLanguageModel", () => {
         authentication: "bearer",
         baseUrl: "https://example-provider.test/v1",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 
@@ -239,6 +244,7 @@ describe("createConfiguredLanguageModel", () => {
         baseUrl: "https://example-provider.test/v1",
         protocol: "openai-chat-completions",
         providerName: "compatible-provider",
+        reasoning: null,
       },
     });
     const { stream } = await model.doStream({
@@ -302,7 +308,7 @@ describe("createConfiguredLanguageModel", () => {
         authentication: "bearer",
         baseUrl: "https://api.minimax.io/anthropic/v1",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 
@@ -381,7 +387,7 @@ describe("createConfiguredLanguageModel", () => {
         authentication: "bearer",
         baseUrl: "https://api.minimax.io/anthropic/v1",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 

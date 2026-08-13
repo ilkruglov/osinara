@@ -23,6 +23,16 @@ FROM dependencies AS build
 COPY . .
 RUN npm run typecheck && npm run build && npm run build:runtime
 
+# Release-only artifact stage: output is one SEA executable, never a deployable container image.
+FROM build AS installer-cli-build
+ARG INSTALLATION_ARCHIVE_SHA256
+ARG INSTALLATION_RELEASE_VERSION
+RUN bash scripts/provider-installer/build-provider-installer-cli.sh \
+    /tmp/osinara-linux-x64 "$INSTALLATION_RELEASE_VERSION" "$INSTALLATION_ARCHIVE_SHA256"
+
+FROM scratch AS installer-cli-artifact
+COPY --from=installer-cli-build /tmp/osinara-linux-x64 /osinara-linux-x64
+
 FROM dependencies AS test
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes jq \

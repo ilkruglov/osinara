@@ -33,7 +33,7 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
           volume("google-workspace-credentials", "/app/google-workspace-credentials"),
           volume("eve-workflow-data", "/app/.eve/.workflow-data"),
           volume("workspace-data", "/app/workspaces"),
-          volume("/opt/osinara/model-providers.json", "/app/config/model-providers.json", "bind", true),
+          volume("/opt/osinara/agent-model-providers.json", "/app/config/agent-model-providers.json", "bind", true),
         ],
       }),
       "cli-proxy-api": service({
@@ -41,7 +41,10 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
           volume("/opt/osinara/model-providers.json", "/config/model-providers.json", "bind", true),
         ],
       }),
-      edge: service({ ports: [{ host_ip: "127.0.0.1", published: "8082", target: 80 }] }),
+      edge: service({
+        networks: { "app-network": null, "edge-frontend": null },
+        ports: [{ host_ip: "127.0.0.1", published: "8082", target: 80 }],
+      }),
       "memory-embedding": service({
         volumes: [volume("memory-embedding-model-e5", "/data")],
       }),

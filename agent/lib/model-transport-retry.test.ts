@@ -64,7 +64,7 @@ describe("model transport retry policy", () => {
         // The mock accepts this deliberately malformed provider URL so the log must redact its query.
         baseUrl: "https://api.minimax.io/anthropic/v1?api_key=provider-secret",
         protocol: "anthropic-messages",
-        thinking: { type: "adaptive" },
+        reasoning: { mode: "adaptive", type: "enabled" },
       },
     });
 

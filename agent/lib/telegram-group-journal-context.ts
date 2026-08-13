@@ -4,8 +4,11 @@
  * Exports:
  * - `TelegramGroupJournalEntry`: normalized unified timeline projection.
  * - `TelegramGroupAttachmentSummary`: model-safe lazy attachment reference metadata.
+ * - `TelegramTimelineOmission`: trusted rendering metadata for an omitted history prefix.
+ * - `renderTelegramGroupJournalContext`: exact safe serialization of a selected entry set.
  * - `formatTelegramGroupJournalContext`: bounded, untrusted JSON context serialization.
  * - `selectTelegramGroupJournalContext`: exact entries retained by character bounds.
+ * - Entry-count bounds preserve current reply ancestry and favor the most recent coherent suffix.
  */
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 
@@ -37,6 +40,10 @@ export interface TelegramGroupAttachmentSummary {
   size?: number;
 }
 
+export interface TelegramTimelineOmission {
+  beforeSequence: string | null;
+}
+
 const JOURNAL_OPEN_TAG = "<untrusted_telegram_group_timeline>";
 const JOURNAL_CLOSE_TAG = "</untrusted_telegram_group_timeline>";
 const JOURNAL_NOTICE =
@@ -54,18 +61,16 @@ function renderEntry(entry: TelegramGroupJournalEntry): string {
   return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${entry.sentAt} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
 }
 
-function renderContext(
+export function renderTelegramGroupJournalContext(
   entries: readonly TelegramGroupJournalEntry[],
-  omittedBeforeSequence: string | null,
-  truncated: boolean,
+  omission: TelegramTimelineOmission | null = null,
 ): string {
-  const hasGap = omittedBeforeSequence !== null || truncated;
-  const gap = !hasGap
+  const gap = omission === null
     ? ""
-    : omittedBeforeSequence === null
+    : omission.beforeSequence === null
     ? "\nЧасть истории пропущена; при необходимости вызови list_group_history, если инструмент доступен."
-    : `\nЧасть истории пропущена перед #${omittedBeforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
-  const notice = hasGap ? JOURNAL_TRUNCATED_NOTICE : JOURNAL_NOTICE;
+    : `\nЧасть истории пропущена перед #${omission.beforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
+  const notice = omission === null ? JOURNAL_NOTICE : JOURNAL_TRUNCATED_NOTICE;
   return `${JOURNAL_OPEN_TAG}\n${notice}\n${entries.map(renderEntry).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
 }
 
@@ -86,17 +91,33 @@ function protectedReplyAncestry(
   return protectedSequences;
 }
 
+function terminalReplyTargets(entries: readonly TelegramGroupJournalEntry[]): Set<string> {
+  const referencedSequences = new Set(entries.flatMap((entry) =>
+    entry.replyToSequenceId === null ? [] : [entry.replyToSequenceId]
+  ));
+
+  // A terminal reply and its direct target form useful local context. Unlike every recursively
+  // referenced entry, this does not pin the oldest prefix of a long reply chain.
+  return new Set(entries.flatMap((entry) =>
+    entry.replyToSequenceId !== null && !referencedSequences.has(entry.sequenceId)
+      ? [entry.replyToSequenceId]
+      : []
+  ));
+}
+
 export function formatTelegramGroupJournalContext(
   entries: readonly TelegramGroupJournalEntry[],
   maxCharacters: number,
   omittedBeforeSequence: string | null = null,
   protectedReplyRootSequenceId: string | null = null,
+  maxEntries: number | null = null,
 ): string | null {
   return selectTelegramGroupJournalContext(
     entries,
     maxCharacters,
     omittedBeforeSequence,
     protectedReplyRootSequenceId,
+    maxEntries,
   ).context;
 }
 
@@ -105,10 +126,20 @@ export function selectTelegramGroupJournalContext(
   maxCharacters: number,
   omittedBeforeSequence: string | null = null,
   protectedReplyRootSequenceId: string | null = null,
-): { context: string | null; entries: TelegramGroupJournalEntry[] } {
+  maxEntries: number | null = null,
+): {
+  context: string | null;
+  entries: TelegramGroupJournalEntry[];
+  omission: TelegramTimelineOmission | null;
+} {
   if (!Number.isSafeInteger(maxCharacters) || maxCharacters <= 0) {
     throw new Error(
       "AGENT_TELEGRAM_JOURNAL_LIMIT_INVALID: Лимит контекста журнала должен быть положительным целым числом",
+    );
+  }
+  if (maxEntries !== null && (!Number.isSafeInteger(maxEntries) || maxEntries < 0)) {
+    throw new Error(
+      "AGENT_TELEGRAM_JOURNAL_ENTRY_LIMIT_INVALID: Лимит записей должен быть неотрицательным целым числом",
     );
   }
 
@@ -119,29 +150,41 @@ export function selectTelegramGroupJournalContext(
 
   // Inputs are chronological; removing from the front preserves the most recent useful context.
   while (messages.length > 0) {
-    const context = renderContext(messages, omittedBeforeSequence, truncated);
-    if (context.length <= maxCharacters) return { context, entries: messages };
+    const omission = omittedBeforeSequence !== null || truncated
+      ? { beforeSequence: omittedBeforeSequence }
+      : null;
+    const context = renderTelegramGroupJournalContext(messages, omission);
+    if (context.length <= maxCharacters && (maxEntries === null || messages.length <= maxEntries)) {
+      return { context, entries: messages, omission };
+    }
     // Preserve a coherent reply/target pair when the gap marker alone would evict conversation
     // content from an exceptionally tight budget. The normal production budget retains both.
     if ((truncated || omittedBeforeSequence !== null) &&
-      renderContext(messages, null, false).length <= maxCharacters) {
-      return { context: renderContext(messages, null, false), entries: messages };
+      renderTelegramGroupJournalContext(messages).length <= maxCharacters &&
+      (maxEntries === null || messages.length <= maxEntries)) {
+      return {
+        context: renderTelegramGroupJournalContext(messages),
+        entries: messages,
+        omission: null,
+      };
     }
-    const referenced = new Set(messages.flatMap((entry) =>
-      entry.replyToSequenceId === null ? [] : [entry.replyToSequenceId]
-    ));
+    const terminalTargets = terminalReplyTargets(messages);
     const removableIndex = messages.findIndex((entry) =>
-      !referenced.has(entry.sequenceId) && !protectedSequences.has(entry.sequenceId)
+      !terminalTargets.has(entry.sequenceId) && !protectedSequences.has(entry.sequenceId)
     );
-    const unprotectedIndex = messages.findIndex((entry) =>
-      !protectedSequences.has(entry.sequenceId)
-    );
-    messages.splice(removableIndex >= 0 ? removableIndex : Math.max(unprotectedIndex, 0), 1);
+    // If explicit ancestry alone exceeds the budget, chronological input makes its oldest entry
+    // the farthest ancestor. Dropping it preserves the suffix nearest the current reply root.
+    messages.splice(Math.max(removableIndex, 0), 1);
     truncated = true;
   }
   if (truncated || omittedBeforeSequence !== null) {
-    const gapOnly = renderContext([], omittedBeforeSequence, truncated);
-    return { context: gapOnly.length <= maxCharacters ? gapOnly : null, entries: [] };
+    const omission = { beforeSequence: omittedBeforeSequence };
+    const gapOnly = renderTelegramGroupJournalContext([], omission);
+    return {
+      context: gapOnly.length <= maxCharacters ? gapOnly : null,
+      entries: [],
+      omission: gapOnly.length <= maxCharacters ? omission : null,
+    };
   }
-  return { context: null, entries: [] };
+  return { context: null, entries: [], omission: null };
 }
