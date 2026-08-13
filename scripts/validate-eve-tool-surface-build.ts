@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 
 const CAPABILITIES_REGION = "#region agent/tools/capabilities.ts";
 const REGION_END = "//#endregion";
+const DYNAMIC_EVENTS_PATTERN = /defineDynamic\s*\(\s*\{\s*events\s*:\s*\{\s*"([^"]+)"\s*:/gu;
+const REPLAY_PRONE_EVENT_KEY_PATTERN = /"(?:session|turn)\.started"\s*:/u;
 
 function buildContractError(reason: string): Error {
   return new Error(
@@ -29,10 +31,11 @@ export function validateCompiledDynamicToolSurface(compiledServer: string): void
 
   // Helper-created definitions are intentionally rebuilt at every step. A turn-scoped resolver
   // would require AST-generated replay metadata that helper modules cannot provide.
-  if (!region.includes('"step.started"')) {
+  const dynamicEvents = [...region.matchAll(DYNAMIC_EVENTS_PATTERN)];
+  if (dynamicEvents.length !== 1 || dynamicEvents[0]?.[1] !== "step.started") {
     throw buildContractError("отсутствует step.started resolver");
   }
-  if (region.includes('"turn.started"') || region.includes('"session.started"')) {
+  if (REPLAY_PRONE_EVENT_KEY_PATTERN.test(region)) {
     throw buildContractError("обнаружен replay-prone session/turn resolver");
   }
 }

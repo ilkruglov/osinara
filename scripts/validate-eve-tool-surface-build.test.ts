@@ -33,6 +33,21 @@ describe("compiled Eve dynamic tool surface", () => {
     },
   );
 
+  it("rejects a stray step marker beside an incorrect resolver key", () => {
+    const incorrectResolver = [
+      "prefix",
+      "#region agent/tools/capabilities.ts",
+      `const marker = '"step.started"';`,
+      `defineDynamic({ events: { "message.created": async () => ({}) } });`,
+      "//#endregion",
+      "suffix",
+    ].join("\n");
+
+    expect(() => validateCompiledDynamicToolSurface(incorrectResolver)).toThrow(
+      "AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID",
+    );
+  });
+
   it("rejects absent and unterminated capabilities regions", () => {
     expect(() => validateCompiledDynamicToolSurface("no capabilities"))
       .toThrow("AGENT_EVE_DYNAMIC_TOOL_BUILD_INVALID");
