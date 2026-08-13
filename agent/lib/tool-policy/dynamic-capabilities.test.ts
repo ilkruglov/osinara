@@ -2,10 +2,11 @@
  * Eve dynamic capability resolver tests.
  *
  * Constructs covered:
- * - `capabilities`: one turn-scoped map per verified mode instead of static descriptors.
+ * - `capabilities`: one step-scoped map per verified mode instead of replayed helper closures.
  * - An unresolvable mode or failed policy lookup retains only fail-closed baseline wrappers.
  * - Scheduled history is visible only with a successfully resolved application-core policy.
  * - Live policy changes affect visibility on the next turn and execution checks enforce revocation.
+ * - Every returned entry carries Eve's `defineTool` brand required by the runtime lifecycle.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,12 +24,14 @@ import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
 } from "./group-tool-catalog.js";
 
+const EVE_TOOL_BRAND = Symbol.for("eve:tool-brand");
+
 function resolve(
   attributes: Record<string, unknown> | null,
   initiatorAttributes: Record<string, unknown> | null = null,
   authenticator = "telegram",
 ) {
-  return capabilities.events["turn.started"]?.({} as never, {
+  return capabilities.events["step.started"]?.({} as never, {
     channel: { kind: "telegram" },
     messages: [],
     session: {
@@ -55,6 +58,11 @@ describe("dynamic capability resolver", () => {
   beforeEach(() => {
     loadCurrentExternalGroupCapabilities.mockReset();
     loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set());
+  });
+
+  it("resolves tools only at step scope so helper closures are rebuilt before every model call", () => {
+    expect(capabilities.events["step.started"]).toBeTypeOf("function");
+    expect(capabilities.events["turn.started"]).toBeUndefined();
   });
 
   it("emits the private surface for a verified private chat", async () => {
@@ -127,6 +135,12 @@ describe("dynamic capability resolver", () => {
       familyId: "family-1",
       groupId: "group-1",
     });
+    for (const [toolName, definition] of Object.entries(surface ?? {})) {
+      expect(
+        (definition as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND],
+        `${toolName} review tool must be created through defineTool()`,
+      ).toBe(true);
+    }
   });
 
   it("emits load_skill only when the external group has a current skill grant", async () => {
@@ -141,6 +155,47 @@ describe("dynamic capability resolver", () => {
     });
 
     expect(surface).toHaveProperty("load_skill");
+  });
+
+  it.each([
+    ["private", {
+      memoryScopes: ["personal", "family"],
+      telegramChatType: "private",
+    }],
+    ["family", {
+      groupType: "family_private",
+      memoryScopes: ["family"],
+      telegramChatType: "supergroup",
+    }],
+    ["external denied skill", {
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      telegramChatType: "supergroup",
+      toolAllowlist: ["remember"],
+    }],
+    ["external granted skill", {
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      skillAllowlist: ["pohuy"],
+      telegramChatType: "supergroup",
+      toolAllowlist: ["remember"],
+    }],
+  ] as const)("returns only Eve-branded tools for %s mode", async (_name, attributes) => {
+    loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember"]));
+
+    const surface = await resolve(attributes as unknown as Record<string, unknown>);
+
+    expect(Object.keys(surface ?? {}).length).toBeGreaterThan(0);
+    for (const [toolName, definition] of Object.entries(surface ?? {})) {
+      expect(
+        (definition as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND],
+        `${toolName} must be created through defineTool()`,
+      ).toBe(true);
+    }
   });
 
   it("revokes a capability that is absent from the current database policy", async () => {

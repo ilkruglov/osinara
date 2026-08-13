@@ -7,7 +7,9 @@
  * Key constructs:
  * - One resolver owns the whole application surface: two resolvers emitting the same tool name is
  *   an ambiguity Eve rejects, and a single map keeps mode and capability policy consistent.
- * - Tool and skill visibility share one turn boundary; execution still rechecks live revocation.
+ * - Step-scoped resolution rebuilds helper-defined tools before every model call, so Eve never
+ *   needs to replay non-inline helper closures from turn metadata.
+ * - Tool and skill policy share verified auth; execution still rechecks live revocation.
  * - Each independent policy lookup fails closed for its own application capability class.
  */
 import { defineDynamic } from "eve/tools";
@@ -32,7 +34,7 @@ import { buildMemoryReviewToolSurface } from "../lib/memory-review/memory-review
 
 export default defineDynamic({
   events: {
-    "turn.started": async (_event, ctx) => {
+    "step.started": async (_event, ctx) => {
       if (isMemoryReviewSession(ctx)) {
         if (ctx.session.auth.current?.attributes.groupType !== "external") {
           return buildMemoryReviewToolSurface();

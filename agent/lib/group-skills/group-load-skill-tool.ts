@@ -2,10 +2,10 @@
  * Live-authorized Eve `load_skill` wrapper for external Telegram groups.
  *
  * Exports:
- * - `createExternalGroupLoadSkillTool`: injectable wrapper for isolated authorization tests.
- * - `externalGroupLoadSkillTool`: production wrapper over Eve's native skill loader.
+ * - `createExternalGroupLoadSkillTool`: injectable Eve-branded wrapper for authorization tests.
+ * - `externalGroupLoadSkillTool`: production `defineTool` wrapper over Eve's native skill loader.
  */
-import { type ToolContext, type ToolDefinition } from "eve/tools";
+import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { loadSkill } from "eve/tools/defaults";
 
 import { AppError } from "../app-error.js";
@@ -29,7 +29,7 @@ function forbidden(): AppError {
 export function createExternalGroupLoadSkillTool(
   dependencies: ExternalGroupLoadSkillDependencies,
 ): AnyToolDefinition {
-  return {
+  return defineTool({
     ...(loadSkill as AnyToolDefinition),
     async execute(input, ctx) {
       const skill = (input as { skill?: unknown } | null)?.skill;
@@ -47,7 +47,7 @@ export function createExternalGroupLoadSkillTool(
       if (!allowed.has(skill)) throw forbidden();
       return await dependencies.executeNative(input, ctx);
     },
-  };
+  });
 }
 
 const nativeLoadSkill = loadSkill as AnyToolDefinition;
