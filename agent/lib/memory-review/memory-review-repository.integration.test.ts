@@ -328,9 +328,14 @@ describeWithDatabase("memory review repository", () => {
       }],
     });
     await expect(database().query(
-      "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
+      `SELECT count(source.timeline_entry_id)::integer AS source_count,
+              alert.status::text AS alert_status
+         FROM memory_review_batches AS batch
+         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+        WHERE batch.id = $1 GROUP BY batch.id, alert.id`,
       [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    )).resolves.toMatchObject({ rows: [{ alert_status: "pending", source_count: 2 }] });
   });
 
 });

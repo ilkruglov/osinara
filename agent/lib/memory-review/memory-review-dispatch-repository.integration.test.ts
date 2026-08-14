@@ -2,13 +2,14 @@
  * Memory-review dispatch crash-recovery PostgreSQL integration tests.
  *
  * Constructs covered:
- * - Pre-handoff sessions, stale dispatch markers, exact Eve-root ownership, and session failures.
+ * - Bounded pre-handoff recovery, owner alerts, stale markers, and exact Eve-root ownership.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { createMainAgentMemoryFixture } from "../memory-agent-write.integration-fixtures.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
+import { memoryReviewOwnerAlertRepository } from "./memory-review-owner-alert-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewSessionRepository } from "./memory-review-session-repository.js";
 
@@ -72,11 +73,145 @@ describeWithDatabase("memory review dispatch repository", () => {
     );
 
     await expect(database().query(
-      "SELECT task_state::text, retired_at FROM conversation_sessions WHERE id = $1",
+      `SELECT app_session.task_state::text, app_session.retired_at,
+              count(source.timeline_entry_id)::integer AS source_count,
+              alert.status::text AS alert_status
+         FROM conversation_sessions AS app_session
+         JOIN memory_review_batches AS batch ON batch.application_session_id = app_session.id
+         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+        WHERE app_session.id = $1
+        GROUP BY app_session.id, alert.id`,
       [session.id],
     )).resolves.toMatchObject({
-      rows: [{ task_state: "failed", retired_at: expect.any(Date) }],
+      rows: [{
+        alert_status: "pending",
+        retired_at: expect.any(Date),
+        source_count: 50,
+        task_state: "failed",
+      }],
     });
+  });
+
+  it("retries one pre-handoff failure, then blocks and alerts without releasing sources", async () => {
+    const { claim } = await claimBackgroundBatch();
+
+    await expect(memoryReviewDispatchRepository.failClaim(
+      claim,
+      "AGENT_MEMORY_REVIEW_SESSION_PREPARATION_FAILED",
+    )).resolves.toBe("retry_scheduled");
+    await expect(database().query(
+      `SELECT batch.status::text, batch.recovery_attempts,
+              batch.last_recovery_diagnostic_code,
+              count(source.timeline_entry_id)::integer AS source_count,
+              count(alert.id)::integer AS alert_count,
+              (SELECT metadata->>'recoveryAttempt' FROM audit_events
+                WHERE event_type = 'memory_review.retry_scheduled' AND subject_id = batch.id
+                ORDER BY created_at DESC LIMIT 1) AS audited_recovery_attempt
+         FROM memory_review_batches AS batch
+         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+        WHERE batch.id = $1 GROUP BY batch.id`,
+      [claim.batchId],
+    )).resolves.toMatchObject({ rows: [{
+      alert_count: 0,
+      audited_recovery_attempt: "1",
+      last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SESSION_PREPARATION_FAILED",
+      recovery_attempts: 1,
+      source_count: 50,
+      status: "pending",
+    }] });
+
+    const [retried] = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date("2026-08-12T10:01:00.000Z"),
+    });
+    await expect(memoryReviewDispatchRepository.failClaim(
+      retried!,
+      "AGENT_MEMORY_REVIEW_SESSION_PREPARATION_FAILED",
+    )).resolves.toBe("failed");
+    await expect(database().query(
+      `SELECT batch.status::text, count(source.timeline_entry_id)::integer AS source_count,
+              alert.status::text AS alert_status
+         FROM memory_review_batches AS batch
+         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+        WHERE batch.id = $1 GROUP BY batch.id, alert.id`,
+      [claim.batchId],
+    )).resolves.toMatchObject({ rows: [{
+      alert_status: "pending",
+      source_count: 50,
+      status: "failed",
+    }] });
+  });
+
+  it("leases a terminal alert to the current owner and records one-shot delivery", async () => {
+    const { claim } = await claimBackgroundBatch();
+    const session = await memoryReviewSessionRepository.prepare(claim, new Date());
+    await memoryReviewDispatchRepository.markAmbiguous(
+      claim,
+      "AGENT_MEMORY_REVIEW_HANDOFF_AMBIGUOUS",
+      session.id,
+    );
+
+    const [alert] = await memoryReviewOwnerAlertRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date("2026-08-12T10:01:00.000Z"),
+    });
+    expect(alert).toMatchObject({
+      batchId: claim.batchId,
+      diagnosticCode: "AGENT_MEMORY_REVIEW_HANDOFF_AMBIGUOUS",
+      groupTitle: "Семья",
+      ownerTelegramUserId: "agent-memory-author",
+    });
+    await memoryReviewOwnerAlertRepository.markDelivered(alert!);
+
+    await expect(memoryReviewOwnerAlertRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date("2026-08-12T10:02:00.000Z"),
+    })).resolves.toEqual([]);
+    await expect(database().query(
+      "SELECT status::text, completed_at FROM memory_review_owner_alerts WHERE id = $1",
+      [alert!.alertId],
+    )).resolves.toMatchObject({
+      rows: [{ completed_at: expect.any(Date), status: "delivered" }],
+    });
+  });
+
+  it("terminalizes an ownerless alert without blocking other claims", async () => {
+    const { claim, fixture } = await claimBackgroundBatch();
+    const session = await memoryReviewSessionRepository.prepare(claim, new Date());
+    await memoryReviewDispatchRepository.markAmbiguous(
+      claim,
+      "AGENT_MEMORY_REVIEW_HANDOFF_AMBIGUOUS",
+      session.id,
+    );
+    await database().query(
+      "DELETE FROM family_memberships WHERE family_id = $1 AND role = 'owner'",
+      [fixture.familyId],
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(memoryReviewOwnerAlertRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date("2026-08-12T10:01:00.000Z"),
+    })).resolves.toEqual([]);
+    await expect(database().query(
+      `SELECT status::text, delivery_diagnostic_code
+         FROM memory_review_owner_alerts WHERE batch_id = $1`,
+      [claim.batchId],
+    )).resolves.toMatchObject({ rows: [{
+      delivery_diagnostic_code: "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+      status: "failed",
+    }] });
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining(
+      "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+    ));
+    consoleError.mockRestore();
   });
 
   it("reuses an unstarted application session after a pre-marker process crash", async () => {
@@ -146,7 +281,7 @@ describeWithDatabase("memory review dispatch repository", () => {
     )).resolves.toMatchObject({ rows: [{ source_count: 50, status: "running" }] });
   });
 
-  it("atomically marks an interactive session failure and releases its sources", async () => {
+  it("atomically marks an interactive session failure and retains its sources for repair", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
@@ -184,14 +319,17 @@ describeWithDatabase("memory review dispatch repository", () => {
     })).resolves.toBe("recorded");
     await expect(database().query(
       `SELECT batch.status::text, app_session.rotation_requested_at,
-              count(source.timeline_entry_id)::integer AS source_count
+              count(source.timeline_entry_id)::integer AS source_count,
+              alert.status::text AS alert_status
          FROM memory_review_batches AS batch
          JOIN conversation_sessions AS app_session ON app_session.id = batch.application_session_id
          LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
-        WHERE batch.id = $1 GROUP BY batch.id, app_session.id`,
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+         WHERE batch.id = $1 GROUP BY batch.id, app_session.id, alert.id`,
       [batch!.batchId],
     )).resolves.toMatchObject({ rows: [{
-      rotation_requested_at: expect.any(Date), source_count: 0, status: "ambiguous",
+      alert_status: "pending",
+      rotation_requested_at: expect.any(Date), source_count: 2, status: "ambiguous",
     }] });
   });
 });

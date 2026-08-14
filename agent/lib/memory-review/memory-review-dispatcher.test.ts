@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - `createMemoryReviewDispatcher`: one claimed 50-message batch starts one internal Eve task turn.
- * - Failed pre-handoff work is terminal and a possibly-started handoff becomes ambiguous.
+ * - Failed pre-handoff work schedules repository-owned bounded recovery.
+ * - A possibly-started handoff becomes ambiguous and is never retried automatically.
  * - One broken claim cannot block the remaining already-claimed reviews.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -147,7 +148,7 @@ describe("memory review dispatcher", () => {
     expect(fixture.send).not.toHaveBeenCalled();
   });
 
-  it("fails before handoff and continues with another already-claimed batch", async () => {
+  it("schedules bounded recovery before handoff and continues with another claimed batch", async () => {
     const second = { ...batch, batchId: "00000000-0000-4000-8000-000000000051" };
     const fixture = dependencies({
       claimPending: vi.fn().mockResolvedValue([batch, second]),
