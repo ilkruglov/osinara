@@ -100,6 +100,7 @@ const POST_V0101_MIGRATIONS = [
   "066_turn_bound_memory_delta_sources.sql",
   "067_durable_memory_review_batches.sql",
   "068_memory_review_recovery.sql",
+  "069_memory_review_sandbox_recovery.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

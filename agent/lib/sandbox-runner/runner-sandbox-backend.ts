@@ -29,6 +29,7 @@ import type {
 import {
   parseCreateSandboxRequest,
   parseSandboxEveSessionId,
+  parseWorkspaceSandboxUseOptions,
   sandboxSeedDigest,
 } from "./sandbox-runner-contract.js";
 import { SandboxRunnerClient } from "./runner-client.js";
@@ -38,6 +39,7 @@ import {
   ROOT_RUNNER_PROFILE,
   sandboxHome,
 } from "./runner-sandbox-profile.js";
+import { parseStoredSandboxMetadata } from "./runner-sandbox-state.js";
 
 const TEMPLATE_SCHEMA_VERSION = 1;
 
@@ -48,37 +50,6 @@ interface BackendOptions {
 interface StoredTemplate {
   files: Array<{ contentBase64: string; path: string }>;
   version: number;
-}
-
-interface StoredBackendMetadata {
-  access: SandboxAccess;
-  mounts: WorkspaceSandboxMount[];
-  sandboxSessionId: string;
-  version: number;
-}
-
-function parseBackendMetadata(
-  value: Record<string, unknown> | undefined,
-  eveSessionId: string,
-  profile: BackendProfile,
-): StoredBackendMetadata | null {
-  if (!value) return null;
-  if (value.version !== profile.stateSchemaVersion) {
-    throw new Error("AGENT_SANDBOX_RUNNER_STATE_INVALID: Reconnect schema mismatch");
-  }
-  const request = parseCreateSandboxRequest({
-    access: value.access,
-    eveSessionId,
-    mounts: value.mounts,
-    sandboxSessionId: value.sandboxSessionId,
-    seedDigest: sandboxSeedDigest([]),
-  });
-  return {
-    access: request.access,
-    mounts: request.mounts,
-    sandboxSessionId: request.sandboxSessionId,
-    version: profile.stateSchemaVersion,
-  };
 }
 
 function templatePath(appRoot: string, cacheDirectory: string, templateKey: string): string {
@@ -310,8 +281,12 @@ function workspaceRunner(
         : await loadTemplate(input.runtimeContext.appRoot, input.templateKey, profile);
       // A thread ID survives normal context rotation while a trust-zone replacement gets a new ID.
       const eveSessionId = parseSandboxEveSessionId(input.tags?.sessionId);
-      const restored = parseBackendMetadata(input.existingMetadata, eveSessionId, profile);
-      let request: SandboxRunnerCreateRequest | null = restored
+      const restored = parseStoredSandboxMetadata(
+        input.existingMetadata,
+        eveSessionId,
+        profile.stateSchemaVersion,
+      );
+      let request: SandboxRunnerCreateRequest | null = restored && !restored.disabled
         ? parseCreateSandboxRequest({
           access: restored.access,
           eveSessionId,
@@ -320,7 +295,15 @@ function workspaceRunner(
           ...seedManifest(template, restored.access, restored.mounts),
         })
         : null;
+      let disabledSandboxSessionId = restored?.disabled
+        ? restored.sandboxSessionId
+        : null;
       const requireRequest = (): SandboxRunnerCreateRequest => {
+        if (disabledSandboxSessionId) {
+          throw new Error(
+            "AGENT_SANDBOX_RUNNER_SESSION_DISABLED: Sandbox access is disabled for this session",
+          );
+        }
         if (!request) {
           throw new Error(
             "AGENT_SANDBOX_RUNNER_SESSION_MISSING: Sandbox session is not mounted",
@@ -329,6 +312,7 @@ function workspaceRunner(
         return request;
       };
       const runnerSessionId = () => {
+        if (disabledSandboxSessionId) return disabledSandboxSessionId;
         return requireRequest().sandboxSessionId;
       };
       const ensureRunner = async (): Promise<string> => {
@@ -356,26 +340,50 @@ function workspaceRunner(
         session,
         async useSessionFn(useOptions) {
           if (!useOptions) throw new Error("AGENT_SANDBOX_RUNNER_MOUNTS_MISSING: Mounts are required");
+          const parsedOptions = parseWorkspaceSandboxUseOptions(useOptions);
+          if (parsedOptions.mounts.length === 0) {
+            if (request || (disabledSandboxSessionId &&
+                disabledSandboxSessionId !== parsedOptions.sandboxSessionId)) {
+              throw new Error("AGENT_SANDBOX_RUNNER_REMOUNT_DENIED: Session mounts are immutable");
+            }
+            disabledSandboxSessionId = parsedOptions.sandboxSessionId;
+            return session;
+          }
+          if (disabledSandboxSessionId) {
+            throw new Error("AGENT_SANDBOX_RUNNER_REMOUNT_DENIED: Session mounts are immutable");
+          }
           if (request) {
             if (
-              request.sandboxSessionId !== useOptions.sandboxSessionId ||
-              JSON.stringify(request.mounts) !== JSON.stringify(useOptions.mounts)
+              request.sandboxSessionId !== parsedOptions.sandboxSessionId ||
+              JSON.stringify(request.mounts) !== JSON.stringify(parsedOptions.mounts)
             ) {
               throw new Error("AGENT_SANDBOX_RUNNER_REMOUNT_DENIED: Session mounts are immutable");
             }
             return session;
           }
-          const access = accessForMounts(useOptions.mounts);
+          const access = accessForMounts(parsedOptions.mounts);
           request = parseCreateSandboxRequest({
             access,
             eveSessionId,
-            mounts: useOptions.mounts,
-            sandboxSessionId: useOptions.sandboxSessionId,
-            ...seedManifest(template, access, useOptions.mounts),
+            mounts: parsedOptions.mounts,
+            sandboxSessionId: parsedOptions.sandboxSessionId,
+            ...seedManifest(template, access, parsedOptions.mounts),
           });
           return session;
         },
         async captureState() {
+          if (disabledSandboxSessionId) {
+            return {
+              backendName: profile.name,
+              metadata: {
+                disabled: true,
+                mounts: [],
+                sandboxSessionId: disabledSandboxSessionId,
+                version: profile.stateSchemaVersion,
+              },
+              sessionKey: input.sessionKey,
+            };
+          }
           const current = requireRequest();
           return {
             backendName: profile.name,

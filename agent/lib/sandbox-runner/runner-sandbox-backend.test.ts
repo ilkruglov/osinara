@@ -7,6 +7,7 @@
  * - Stable thread-scoped compute identity across changing Eve workflow roots.
  * - Reconnect metadata recreates disposable compute without rerunning `onSession`.
  * - Automatic trusted/restricted classification from workspace scopes.
+ * - Disabled internal sessions persist no mounts and cannot start sandbox compute.
  * - Shell and binary file delegation with workspace mutation indexing.
  * - Authored stop and server shutdown independently stop reattachable compute.
  */
@@ -74,6 +75,51 @@ afterEach(async () => {
 });
 
 describe("scopedWorkspaceRunner", () => {
+  it("persists a disabled session without creating sandbox compute", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
+    roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const initial = await backend.create({
+      runtimeContext: { appRoot },
+      sessionKey: BACKEND_SESSION_ID,
+      templateKey: null,
+      tags: { sessionId: SESSION_ID },
+    });
+
+    await initial.useSessionFn({ mounts: [], sandboxSessionId: SANDBOX_SESSION_ID });
+    const captured = await initial.captureState();
+
+    expect(captured.metadata).toEqual({
+      disabled: true,
+      mounts: [],
+      sandboxSessionId: SANDBOX_SESSION_ID,
+      version: 3,
+    });
+    expect(initial.session.id).toBe(SANDBOX_SESSION_ID);
+    await expect(initial.session.run({ command: "true" })).rejects.toThrowError(
+      /AGENT_SANDBOX_RUNNER_SESSION_DISABLED/,
+    );
+    await initial.stop();
+    await initial.shutdown();
+    expect(engine.createSession).not.toHaveBeenCalled();
+    expect(engine.stopSession).not.toHaveBeenCalled();
+
+    // Reconnect keeps the same disabled state and still cannot reach the runner.
+    const restored = await backend.create({
+      existingMetadata: captured.metadata,
+      runtimeContext: { appRoot },
+      sessionKey: BACKEND_SESSION_ID,
+      templateKey: null,
+      tags: { sessionId: SESSION_ID },
+    });
+    expect(restored.session.id).toBe(SANDBOX_SESSION_ID);
+    await expect(restored.session.readTextFile({ path: "note.txt" })).rejects.toThrowError(
+      /AGENT_SANDBOX_RUNNER_SESSION_DISABLED/,
+    );
+    expect(engine.createSession).not.toHaveBeenCalled();
+  });
+
   it("delegates a trusted persistent workspace after mounts are known", async () => {
     const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
     roots.push(appRoot);

@@ -30,19 +30,22 @@ export async function enqueueMemoryReviewOwnerAlert(
   const result = await client.query(
     `INSERT INTO memory_review_owner_alerts
        (batch_id, family_id, group_id, group_title_snapshot, from_sequence,
-        through_sequence, batch_diagnostic_code)
+         through_sequence, batch_diagnostic_code, recovery_generation)
      SELECT batch.id, conversation.family_id, telegram_group.id, telegram_group.title,
-            batch.from_sequence, batch.through_sequence, $2
+             batch.from_sequence, batch.through_sequence, $2, batch.recovery_attempts
        FROM memory_review_batches AS batch
        JOIN application_conversations AS conversation ON conversation.id = batch.conversation_id
        JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
       WHERE batch.id = $1 AND batch.status IN ('failed', 'ambiguous')
-     ON CONFLICT (batch_id) DO NOTHING`,
+     ON CONFLICT (batch_id, recovery_generation) DO NOTHING`,
     [batchId, diagnosticCode],
   );
   if (result.rowCount !== 1) {
     const existing = await client.query(
-      "SELECT 1 FROM memory_review_owner_alerts WHERE batch_id = $1",
+      `SELECT 1 FROM memory_review_owner_alerts AS alert
+        JOIN memory_review_batches AS batch ON batch.id = alert.batch_id
+       WHERE alert.batch_id = $1
+         AND alert.recovery_generation = batch.recovery_attempts`,
       [batchId],
     );
     if (!existing.rows[0]) throw new AppError(
