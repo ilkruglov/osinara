@@ -2,9 +2,9 @@
  * Telegram group turn entry-bound tests.
  *
  * Constructs covered:
- * - Production context admits at most 49 historical entries plus the current message.
+ * - Production context preserves histories below the 99-entry history limit.
  * - Explicit current-reply ancestry survives unrelated expanded repository history.
- * - A long reply chain is reduced to its most recent coherent suffix.
+ * - A reply chain below the configured limit remains complete.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -54,7 +54,7 @@ const input = {
 };
 
 describe("Telegram group turn context entry bounds", () => {
-  it("preserves current reply ancestry within the 49-history plus current contract", async () => {
+  it("preserves current reply ancestry when history remains below the 99-entry limit", async () => {
     const expandedHistory = Array.from({ length: 83 }, (_, index) => {
       const sequenceId = String(index + 1);
       return {
@@ -69,7 +69,7 @@ describe("Telegram group turn context entry bounds", () => {
       replyToSequenceId: "2",
     });
 
-    expect(result.visibleEntryIds).toHaveLength(50);
+    expect(result.visibleEntryIds).toHaveLength(84);
     expect(result.visibleEntryIds).toContain("00000000-0000-4000-8000-000000000001");
     expect(result.visibleEntryIds).toContain("00000000-0000-4000-8000-000000000002");
     expect(result.visibleEntryIds).toContain("00000000-0000-4000-8000-000000000083");
@@ -78,7 +78,7 @@ describe("Telegram group turn context entry bounds", () => {
     expect(result.durableMessage).toContain("#2 [user]");
   });
 
-  it("uses the recent 49-message suffix from a 51-message reply chain", async () => {
+  it("keeps a complete 51-message reply chain below the history limit", async () => {
     const expandedChain = Array.from({ length: 51 }, (_, index) => {
       const sequenceId = String(index + 1);
       return {
@@ -89,14 +89,14 @@ describe("Telegram group turn context entry bounds", () => {
 
     const result = await preparer(expandedChain)({ ...input, currentSequence: "52" });
 
-    expect(result.visibleEntryIds).toHaveLength(50);
+    expect(result.visibleEntryIds).toHaveLength(52);
     expect(result.visibleEntryIds.slice(0, 2)).toEqual([
-      "00000000-0000-4000-8000-000000000003",
-      "00000000-0000-4000-8000-000000000004",
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
     ]);
     expect(result.visibleEntryIds.at(-2)).toBe("00000000-0000-4000-8000-000000000051");
     expect(result.visibleEntryIds.at(-1)).toBe(input.currentEntryId);
     expect(result.durableMessage).toContain("#51 [user]");
-    expect(result.durableMessage).not.toContain("#1 [user]");
+    expect(result.durableMessage).toContain("#1 [user]");
   });
 });
