@@ -7,12 +7,14 @@
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { PoolClient } from "pg";
-import { SESSION_RETENTION_DAYS } from "../../config.js";
 import type { TelegramGroupJournalEntry } from "../telegram-group-journal-context.js";
 import {
   MEMORY_REVIEW_BATCH_SIZE,
-  MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
 } from "./memory-review-config.js";
+import {
+  memoryReviewDispatchTerminalRepository,
+  terminalizeStaleMemoryReviewBatches,
+} from "./memory-review-dispatch-terminal-repository.js";
 import { formatMemoryReviewBatchPrompt } from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
 
@@ -96,54 +98,8 @@ async function materializeReadyBatches(client: PoolClient): Promise<void> {
   }
 }
 
-async function terminalizeStaleInteractiveBatches(client: PoolClient, now: Date): Promise<void> {
-  // A committed batch without an Eve session may have crossed an ambiguous process-crash boundary.
-  const stale = await client.query<{ id: string }>(
-    `UPDATE memory_review_batches
-        SET status = 'ambiguous',
-            diagnostic_code = 'AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS',
-            completed_at = $1, updated_at = $1
-      WHERE batch_kind = 'interactive' AND status = 'running' AND eve_session_id IS NULL
-        AND started_at <= $1::timestamptz - $2::double precision * interval '1 millisecond'
-      RETURNING id`,
-    [now, MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS],
-  );
-  if (stale.rows.length === 0) return;
-  await client.query(
-    "DELETE FROM memory_review_batch_sources WHERE batch_id = ANY($1::uuid[])",
-    [stale.rows.map((row) => row.id)],
-  );
-}
-
-async function terminalizeStaleDispatchingBatches(client: PoolClient, now: Date): Promise<void> {
-  // A handoff that outlives its lease may already have reached Eve, so it is terminally ambiguous.
-  const stale = await client.query<{ application_session_id: string; id: string }>(
-    `UPDATE memory_review_batches
-        SET status = 'ambiguous',
-            diagnostic_code = 'AGENT_MEMORY_REVIEW_DISPATCH_TIMEOUT_AMBIGUOUS',
-            completed_at = $1, updated_at = $1, lease_token = NULL, lease_expires_at = NULL
-      WHERE batch_kind = 'background' AND status = 'dispatching' AND lease_expires_at <= $1
-      RETURNING id, application_session_id`,
-    [now],
-  );
-  for (const batch of stale.rows) {
-    await client.query(
-      `UPDATE conversation_sessions
-          SET pending_operation = false, task_state = 'failed', retired_at = $2::timestamptz,
-              delete_after = $2::timestamptz + $3 * interval '1 day'
-        WHERE id = $1 AND retired_at IS NULL AND kind = 'proactive'
-          AND memory_review_batch_id = $4`,
-      [batch.application_session_id, now, SESSION_RETENTION_DAYS, batch.id],
-    );
-  }
-  if (stale.rows.length === 0) return;
-  await client.query(
-    "DELETE FROM memory_review_batch_sources WHERE batch_id = ANY($1::uuid[])",
-    [stale.rows.map((row) => row.id)],
-  );
-}
-
 export const memoryReviewDispatchRepository = {
+  ...memoryReviewDispatchTerminalRepository,
   async claimPending(input: {
     leaseMilliseconds: number;
     limit: number;
@@ -152,8 +108,7 @@ export const memoryReviewDispatchRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await terminalizeStaleInteractiveBatches(client, input.now);
-      await terminalizeStaleDispatchingBatches(client, input.now);
+      await terminalizeStaleMemoryReviewBatches(client, input.now);
       await materializeReadyBatches(client);
       const claimed = await client.query<{
         conversation_id: string; family_id: string; group_id: string;
@@ -265,191 +220,4 @@ export const memoryReviewDispatchRepository = {
     );
   },
 
-  async failClaim(batch: MemoryReviewClaim, diagnosticCode: string): Promise<void> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const result = await client.query(
-        `UPDATE memory_review_batches SET status = 'failed', diagnostic_code = $3,
-                completed_at = now(), updated_at = now(), lease_token = NULL, lease_expires_at = NULL
-          WHERE id = $1 AND status = 'leased' AND lease_token = $2`,
-        [batch.batchId, batch.leaseToken, diagnosticCode],
-      );
-      if (result.rowCount !== 1) throw new AppError(
-        "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID", "Не удалось сохранить ошибку проверки памяти",
-      );
-      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [batch.batchId]);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async markAmbiguous(
-    batch: MemoryReviewClaim,
-    diagnosticCode: string,
-    applicationSessionId: string,
-  ): Promise<void> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      const result = await client.query(
-        `UPDATE memory_review_batches SET status = 'ambiguous', diagnostic_code = $3,
-                 application_session_id = coalesce(application_session_id, $4),
-                 completed_at = now(), updated_at = now(), lease_token = NULL, lease_expires_at = NULL
-           WHERE id = $1 AND status IN ('leased', 'dispatching') AND lease_token = $2
-             AND (application_session_id IS NULL OR application_session_id = $4)`,
-        [batch.batchId, batch.leaseToken, diagnosticCode, applicationSessionId],
-      );
-      if (result.rowCount !== 1) throw new AppError(
-        "AGENT_MEMORY_REVIEW_AMBIGUOUS_STATE_INVALID",
-        "Не удалось сохранить неоднозначный результат проверки памяти",
-      );
-      // Handoff ambiguity is terminal for the one-shot application session as well as its batch.
-      await client.query(
-        `UPDATE conversation_sessions
-            SET pending_operation = false, task_state = 'failed', retired_at = now(),
-                delete_after = now() + $2 * interval '1 day'
-          WHERE id = $1 AND retired_at IS NULL AND kind = 'proactive'
-            AND memory_review_batch_id = $3`,
-        [applicationSessionId, SESSION_RETENTION_DAYS, batch.batchId],
-      );
-      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [batch.batchId]);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async markSessionAmbiguous(input: {
-    batchId: string;
-    diagnosticCode: string;
-    eveSessionId: string;
-  }): Promise<void> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      // Lock the application root before the batch so concurrent Eve binding cannot change owner.
-      const session = await client.query<{ id: string }>(
-        `SELECT app_session.id
-           FROM conversation_sessions AS app_session
-          WHERE app_session.id = (
-            SELECT application_session_id FROM memory_review_batches WHERE id = $1
-          )
-            AND (app_session.eve_session_id IS NULL OR app_session.eve_session_id = $2)
-          FOR UPDATE`,
-        [input.batchId, input.eveSessionId],
-      );
-      if (!session.rows[0]) {
-        await client.query("ROLLBACK");
-        return;
-      }
-      const batch = await client.query<{ application_session_id: string }>(
-        `UPDATE memory_review_batches AS batch
-            SET status = 'ambiguous', eve_session_id = coalesce(batch.eve_session_id, $2),
-                diagnostic_code = $3, completed_at = now(), updated_at = now(),
-                lease_token = NULL, lease_expires_at = NULL
-          WHERE batch.id = $1 AND batch.batch_kind = 'background'
-            AND batch.application_session_id = $4
-            AND batch.status IN ('dispatching', 'running')
-            AND (batch.eve_session_id IS NULL OR batch.eve_session_id = $2)
-          RETURNING batch.application_session_id`,
-        [input.batchId, input.eveSessionId, input.diagnosticCode, session.rows[0].id],
-      );
-      const applicationSessionId = batch.rows[0]?.application_session_id;
-      if (!applicationSessionId) {
-        await client.query("ROLLBACK");
-        return;
-      }
-      await client.query(
-        `UPDATE conversation_sessions
-            SET pending_operation = false, task_state = 'failed', eve_session_id = $2,
-                retired_at = now(), delete_after = now() + $3 * interval '1 day'
-          WHERE id = $1 AND retired_at IS NULL AND kind = 'proactive'
-            AND memory_review_batch_id = $4`,
-        [applicationSessionId, input.eveSessionId, SESSION_RETENTION_DAYS, input.batchId],
-      );
-      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [input.batchId]);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async markInteractiveSessionAmbiguous(input: {
-    continuationToken: string;
-    diagnosticCode: string;
-    eveSessionId: string;
-  }): Promise<"recorded" | "stale" | null> {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-      // Serialize exact-root classification with every bind/rotation of the canonical session.
-      const session = await client.query<{
-        eve_session_id: string | null;
-        id: string;
-        retired_at: Date | null;
-      }>(
-        `SELECT id, eve_session_id, retired_at FROM conversation_sessions
-          WHERE continuation_token = $1 FOR UPDATE`,
-        [input.continuationToken],
-      );
-      const current = session.rows[0];
-      if (!current) {
-        await client.query("ROLLBACK");
-        return null;
-      }
-      if (current.eve_session_id !== input.eveSessionId) {
-        await client.query("ROLLBACK");
-        return "stale";
-      }
-      const result = await client.query<{ batch_id: string }>(
-        `UPDATE memory_review_batches AS batch
-             SET status = 'ambiguous', diagnostic_code = $2, completed_at = now(), updated_at = now()
-           WHERE batch.application_session_id = $3 AND batch.eve_session_id = $1
-             AND batch.batch_kind = 'interactive' AND batch.status = 'running'
-           RETURNING batch.id AS batch_id`,
-        [input.eveSessionId, input.diagnosticCode, current.id],
-      );
-      if (result.rowCount === 0) {
-        const review = await client.query(
-          `SELECT 1 FROM memory_review_batches
-            WHERE application_session_id = $1 AND batch_kind = 'interactive'`,
-          [current.id],
-        );
-        if (!review.rows[0]) {
-          await client.query("ROLLBACK");
-          return null;
-        }
-      }
-      await client.query(
-        `UPDATE conversation_sessions
-            SET pending_operation = false, rotation_requested_at = now()
-          WHERE id = $1 AND eve_session_id = $2 AND retired_at IS NULL`,
-        [current.id, input.eveSessionId],
-      );
-      if (result.rows[0]) {
-        await client.query(
-          "DELETE FROM memory_review_batch_sources WHERE batch_id = $1",
-          [result.rows[0].batch_id],
-        );
-      }
-      await client.query("COMMIT");
-      return "recorded";
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
 };

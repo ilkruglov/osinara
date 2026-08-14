@@ -2,7 +2,8 @@
  * Versioned synthetic PostgreSQL/E5 retrieval quality evaluation.
  *
  * Constructs covered:
- * - R1 acceptance gates compare positive recall, irrelevant-query abstention, and duplicate pollution.
+ * - R1 gates compare positive recall, irrelevant-query abstention, and duplicate pollution.
+ * - V2 reports production-derived identity hard negatives without pre-implementing semantic gating.
  * - Russian morphology, exact tokens, mixed-language text, semantic paraphrases, and one typo are exercised.
  * - The pinned multilingual E5 model embeds the synthetic corpus and every eval query.
  */
@@ -25,6 +26,11 @@ import {
   MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1,
   type MemoryRetrievalEvalQuery,
 } from "./memory-retrieval-eval-fixture.v1.js";
+import {
+  MEMORY_RETRIEVAL_EVAL_QUERIES_V2,
+  MEMORY_RETRIEVAL_EVAL_RECORDS_V2,
+  MEMORY_RETRIEVAL_R1_BASELINE_V2,
+} from "./memory-retrieval-eval-fixture.v2.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 
@@ -35,6 +41,10 @@ if (enabled && (!databaseUrl || !new URL(databaseUrl).pathname.endsWith("_test")
 }
 const describeEval = enabled ? describe : describe.skip;
 const EVAL_RESULT_LIMIT = 5;
+const EVAL_RECORDS = [
+  ...MEMORY_RETRIEVAL_EVAL_RECORDS_V1,
+  ...MEMORY_RETRIEVAL_EVAL_RECORDS_V2,
+] as const;
 
 interface EvaluatedQuery {
   duplicateCount: number;
@@ -55,7 +65,7 @@ function requireFixtureKey(contentToKey: ReadonlyMap<string, string>, content: s
 describeEval("memory retrieval eval v1", () => {
   let auth: MemoryAuthorization;
   const contentToKey = new Map(
-    MEMORY_RETRIEVAL_EVAL_RECORDS_V1.map((record) => [record.content, record.key]),
+    EVAL_RECORDS.map((record) => [record.content, record.key]),
   );
 
   beforeAll(async () => {
@@ -86,18 +96,18 @@ describeEval("memory retrieval eval v1", () => {
     const embeddings: number[][] = [];
     for (
       let offset = 0;
-      offset < MEMORY_RETRIEVAL_EVAL_RECORDS_V1.length;
+      offset < EVAL_RECORDS.length;
       offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE
     ) {
       embeddings.push(...await embedMemoryPassages(
-        MEMORY_RETRIEVAL_EVAL_RECORDS_V1
+        EVAL_RECORDS
           .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
           .map((record) => record.content),
       ));
     }
 
     // Each synthetic row receives one source-aligned chunk, which isolates retrieval quality from chunking.
-    for (const [index, record] of MEMORY_RETRIEVAL_EVAL_RECORDS_V1.entries()) {
+    for (const [index, record] of EVAL_RECORDS.entries()) {
       const inserted = await database().query<{ id: string }>(
         `INSERT INTO memory_items
            (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
@@ -218,5 +228,49 @@ describeEval("memory retrieval eval v1", () => {
       ?.resultAttributions.find((result) => result.key === "backup-location")?.branches)
       .toContain("semantic");
     expect(metrics.typoRecovered).toBe(true);
+  }, 120_000);
+
+  it("measures identity hard-negative abstention while preserving exact controls", async () => {
+    const evaluated: EvaluatedQuery[] = [];
+    for (const query of MEMORY_RETRIEVAL_EVAL_QUERIES_V2) {
+      const results = await memoryRetrievalRepository.search(
+        auth,
+        query.text,
+        await embedMemoryQuery(query.text),
+        EVAL_RESULT_LIMIT,
+      );
+      const resultKeys = results.map((result) =>
+        requireFixtureKey(contentToKey, result.memory.content)
+      );
+      evaluated.push({
+        duplicateCount: 0,
+        hit: query.expectedKeys.length === 0
+          ? results.length === 0
+          : query.expectedKeys.some((key) => resultKeys.includes(key)),
+        query,
+        resultAttributions: results.map((result, index) => ({
+          branches: [
+            result.evidence.simpleLexicalRank === null ? null : "simple",
+            result.evidence.russianMorphologyRank === null ? null : "russian",
+            result.evidence.semanticSimilarity === null ? null : "semantic",
+          ].filter((branch): branch is string => branch !== null),
+          key: resultKeys[index]!,
+        })),
+        resultKeys,
+      });
+    }
+
+    // V2 records the known quality gap without silently changing the separately scoped search policy.
+    const controls = evaluated.filter((entry) => entry.query.category !== "negative");
+    const hardNegatives = evaluated.filter((entry) => entry.query.category === "negative");
+    const metrics = {
+      hardNegativeEmptyRate: hardNegatives.filter((entry) => entry.hit).length /
+        hardNegatives.length,
+      hardNegativeQueries: hardNegatives.length,
+      identityControlRecallAt5: controls.filter((entry) => entry.hit).length / controls.length,
+    };
+    console.info("MEMORY_RETRIEVAL_EVAL_V2_IDENTITY", JSON.stringify({ evaluated, metrics }));
+
+    expect(metrics).toEqual(MEMORY_RETRIEVAL_R1_BASELINE_V2);
   }, 120_000);
 });

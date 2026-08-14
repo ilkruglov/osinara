@@ -9,6 +9,7 @@ import type { PoolClient } from "pg";
 import { SESSION_RETENTION_DAYS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 
 export type MemoryReviewTerminalResult = "recorded" | "replayed";
 
@@ -175,7 +176,8 @@ export const memoryReviewTerminalRepository = {
         eveSessionId: input.eveSessionId,
         outcome: "failed",
       });
-      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [input.batchId]);
+      // Terminal failures retain exact sources so an operator can prove and perform a later repair.
+      await enqueueMemoryReviewOwnerAlert(client, input.batchId, input.diagnosticCode);
       await client.query("COMMIT");
       return "recorded";
     } catch (error) {
@@ -198,7 +200,7 @@ export const memoryReviewTerminalRepository = {
         [batchId, diagnosticCode],
       );
       if (result.rowCount === 1) {
-        await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [batchId]);
+        await enqueueMemoryReviewOwnerAlert(client, batchId, diagnosticCode);
       }
       await client.query("COMMIT");
     } catch (error) {

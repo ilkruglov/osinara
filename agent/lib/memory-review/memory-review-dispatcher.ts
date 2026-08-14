@@ -33,7 +33,10 @@ interface MemoryReviewDispatcherDependencies {
     batch: ClaimedMemoryReviewBatch,
     applicationSessionId: string,
   ): Promise<void>;
-  failClaim(batch: ClaimedMemoryReviewBatch, diagnosticCode: string): Promise<void>;
+  failClaim(
+    batch: ClaimedMemoryReviewBatch,
+    diagnosticCode: string,
+  ): Promise<"failed" | "retry_scheduled">;
   markAmbiguous(
     batch: ClaimedMemoryReviewBatch,
     diagnosticCode: string,

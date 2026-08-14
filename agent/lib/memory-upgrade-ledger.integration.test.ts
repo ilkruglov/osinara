@@ -6,7 +6,7 @@
  * - `MEMORY_RELEASE_MIGRATIONS`: memory migrations through the main-agent ownership cutover.
  * - `POST_V0101_MIGRATIONS`: every current migration the production-ledger fixture must apply.
  * - `runMigrationRunner`: executes the real migration entrypoint against an isolated test schema.
- * - Upgrade scenario: verifies ledger delta, unique migration purposes, and representative R0-R7 DB objects.
+ * - Upgrade scenario: verifies ledger delta, unique purposes, R0-R7 objects, and review recovery.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -99,6 +99,7 @@ const POST_V0101_MIGRATIONS = [
   "065_eve_032_session_storage_cutover.sql",
   "066_turn_bound_memory_delta_sources.sql",
   "067_durable_memory_review_batches.sql",
+  "068_memory_review_recovery.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -120,6 +121,7 @@ const EXPECTED_R0_R7_TABLES = [
   "memory_review_lanes",
   "memory_review_batches",
   "memory_review_batch_sources",
+  "memory_review_owner_alerts",
   "memory_thread_briefs",
   "memory_extraction_retention_holds",
   "memory_extraction_gaps",
@@ -218,6 +220,10 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
       )).resolves.toBeDefined();
       await expect(client.query(
         `SELECT delivery_status FROM external_profile_projection_notices LIMIT 0`,
+      )).resolves.toBeDefined();
+      await expect(client.query(
+        `SELECT recovery_attempts, last_recovery_diagnostic_code, last_recovered_at
+           FROM memory_review_batches LIMIT 0`,
       )).resolves.toBeDefined();
     } finally {
       try {
