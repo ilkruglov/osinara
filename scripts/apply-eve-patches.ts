@@ -5,6 +5,7 @@
  * - `replaceExact`: fail-fast, count-checked, idempotent artifact replacement.
  * - Production startup health wait: permits bounded first-run sandbox preparation.
  * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
+ * - Memory review delegation policy: hides only the implicit root agent from verified reviews.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
  * - Telegram durable ingress: verified-update and authenticated internal-drain hooks.
  * - Telegram dispatch extensions: Session return, message/token override, reply routing, and HITL auth.
@@ -99,6 +100,14 @@ await replaceExact(
   runtimePaths.toolLoop,
   "async function attemptUnsupportedProviderToolRecovery(e){let t=extractUnsupportedProviderToolTypes(e.error);if(t.length===0)return{outcome:`skipped`};let n=[];for(let e of t){let t=resolveFrameworkToolFromUpstreamType(e);t!==null&&!n.includes(t)&&n.push(t)}if(n.length===0)return{outcome:`skipped`};log.warn(`disabling unsupported provider tool(s); retrying step once`,{disabled:n,sessionId:e.sessionId,turnId:e.turnId,upstreamTypes:t});let r={disabledProviderTools:new Set(n),extraSystemNote:buildDisabledToolNote(n)};try{return{outcome:`recovered`,result:await e.runOneModelCall({...r,suppressStepStartedEmission:!0})}}catch(e){return{outcome:`failed`,error:e,retryCallOptions:r}}}",
   "async function attemptUnsupportedProviderToolRecovery(e){return{outcome:`skipped`}}",
+);
+
+// The internal review channel is a root session, but it must not inherit delegation. Match the
+// complete implicit-agent fingerprint so authored tools and declared subagents remain untouched.
+await replaceExact(
+  runtimePaths.toolLoop,
+  "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;",
+  "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;let r=t.get(AuthKey),i=n.get(`agent`);r?.authenticator===`memory-review`&&r.attributes.memoryReviewMode===`background`&&i?.runtimeAction?.kind===`subagent-call`&&i.runtimeAction.nodeId===`__root__`&&i.runtimeAction.subagentName===`agent`&&n.delete(`agent`);",
 );
 
 // Compaction may shrink the local recent window, but it may not buy another summary model call.
