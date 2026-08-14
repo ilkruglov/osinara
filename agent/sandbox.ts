@@ -8,6 +8,7 @@
 import { defineSandbox } from "eve/sandbox";
 
 import { scopedWorkspaceRunner } from "./lib/sandbox-runner/runner-sandbox-backend.js";
+import { isMemoryReviewSession } from "./lib/memory-review/memory-review-session.js";
 import { sandboxSessionId } from "./lib/sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "./lib/workspaces/workspace-context.js";
 import { workspaceRepository } from "./lib/workspaces/workspace-repository.js";
@@ -15,7 +16,15 @@ import { workspaceRepository } from "./lib/workspaces/workspace-repository.js";
 export default defineSandbox({
   backend: scopedWorkspaceRunner(),
   async onSession({ ctx, use }) {
+    const sessionId = sandboxSessionId(ctx);
+    if (isMemoryReviewSession(ctx)) {
+      // Silent review has no file tools or skills. Keep a durable Eve sandbox state without
+      // materializing any workspace capability in the isolated runner.
+      await use({ mounts: [], sandboxSessionId: sessionId });
+      return;
+    }
+
     const mounts = await workspaceRepository.mounts(requireWorkspaceAuthorization(ctx));
-    await use({ mounts, sandboxSessionId: sandboxSessionId(ctx) });
+    await use({ mounts, sandboxSessionId: sessionId });
   },
 });

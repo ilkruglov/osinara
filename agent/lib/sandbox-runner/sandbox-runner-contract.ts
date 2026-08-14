@@ -5,6 +5,7 @@
  * - Runner request/response types for sessions, atomic seed bundles, processes, files, and GWS.
  * - `sandboxSeedDigest`: canonical content identity used by both agent and runner policy checks.
  * - `parseCreateSandboxRequest`: enforces the trusted/restricted scope boundary.
+ * - `parseWorkspaceSandboxUseOptions`: validates mounted or explicitly disabled Eve session state.
  * - Other `parse*` helpers: validate every untrusted HTTP payload fail-closed.
  * - Runner endpoint, execution-limit, and transport-timeout constants.
  */
@@ -32,6 +33,15 @@ const mountPointSchema = z.enum(["family", "group", "personal"]);
 const workspaceMountSchema = z.strictObject({
   mountPoint: mountPointSchema,
   workspaceId: workspaceIdSchema,
+});
+const workspaceSandboxUseOptionsSchema = z.strictObject({
+  mounts: z.array(workspaceMountSchema).max(2),
+  sandboxSessionId: sessionIdSchema,
+}).superRefine((options, context) => {
+  const points = options.mounts.map((mount) => mount.mountPoint);
+  if (new Set(points).size !== points.length) {
+    context.addIssue({ code: "custom", message: "Duplicate mount point", path: ["mounts"] });
+  }
 });
 const seedFileSchema = z.strictObject({
   contentBase64: z.base64().max(Math.ceil(SANDBOX_RUNNER_SEED_FILE_MAX_BYTES * 4 / 3) + 4),
@@ -169,6 +179,14 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, code: string): T 
 
 export function parseCreateSandboxRequest(value: unknown): SandboxRunnerCreateRequest {
   return parseOrThrow(createSandboxRequestSchema, value, "AGENT_SANDBOX_RUNNER_SCOPE_INVALID");
+}
+
+export function parseWorkspaceSandboxUseOptions(value: unknown): WorkspaceSandboxUseOptions {
+  return parseOrThrow(
+    workspaceSandboxUseOptionsSchema,
+    value,
+    "AGENT_SANDBOX_RUNNER_SESSION_OPTIONS_INVALID",
+  );
 }
 
 export function parseGoogleWorkspaceExecutionRequest(
