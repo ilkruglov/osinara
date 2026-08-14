@@ -65,6 +65,26 @@ async function terminalizeStaleDeliveries(client: PoolClient, now: Date): Promis
   );
 }
 
+async function terminalizeOwnerlessAlerts(
+  client: PoolClient,
+  now: Date,
+): Promise<Array<{ batch_id: string; id: string }>> {
+  // A broken family invariant cannot poison alerts that still have a valid current owner.
+  const result = await client.query<{ batch_id: string; id: string }>(
+    `UPDATE memory_review_owner_alerts AS alert
+        SET status = 'failed',
+            delivery_diagnostic_code = 'AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING',
+            completed_at = $1, updated_at = $1
+      WHERE alert.status = 'pending' AND NOT EXISTS (
+        SELECT 1 FROM family_memberships AS membership
+         WHERE membership.family_id = alert.family_id AND membership.role = 'owner'
+      )
+      RETURNING alert.id, alert.batch_id`,
+    [now],
+  );
+  return result.rows;
+}
+
 export const memoryReviewOwnerAlertRepository = {
   async claimPending(input: {
     leaseMilliseconds: number;
@@ -75,19 +95,7 @@ export const memoryReviewOwnerAlertRepository = {
     try {
       await client.query("BEGIN");
       await terminalizeStaleDeliveries(client, input.now);
-      const ownerMissing = await client.query(
-        `SELECT 1
-           FROM memory_review_owner_alerts AS alert
-          WHERE alert.status = 'pending' AND NOT EXISTS (
-            SELECT 1 FROM family_memberships AS membership
-             WHERE membership.family_id = alert.family_id AND membership.role = 'owner'
-          )
-          LIMIT 1`,
-      );
-      if (ownerMissing.rows[0]) throw new AppError(
-        "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
-        "Не найден действующий владелец для уведомления о сбое проверки памяти",
-      );
+      const ownerless = await terminalizeOwnerlessAlerts(client, input.now);
       const result = await client.query<{
         batch_id: string;
         batch_diagnostic_code: string;
@@ -123,6 +131,13 @@ export const memoryReviewOwnerAlertRepository = {
         [input.now, input.limit, input.leaseMilliseconds],
       );
       await client.query("COMMIT");
+      for (const alert of ownerless) {
+        console.error(JSON.stringify({
+          alertId: alert.id,
+          batchId: alert.batch_id,
+          code: "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+        }));
+      }
       return result.rows.map((row) => ({
         alertId: row.id,
         batchId: row.batch_id,

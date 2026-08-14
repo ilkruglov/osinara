@@ -62,7 +62,6 @@ SELECT batch.id AS batch_id,
    AND NOT EXISTS (
      SELECT 1 FROM memory_mutation_operations AS operation
       WHERE operation.eve_session_id = batch.eve_session_id
-        AND (batch.eve_turn_id IS NULL OR operation.eve_turn_id = batch.eve_turn_id)
    )
    AND (
      SELECT count(*)

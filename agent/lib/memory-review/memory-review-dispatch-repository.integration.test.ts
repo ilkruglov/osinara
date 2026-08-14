@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Bounded pre-handoff recovery, owner alerts, stale markers, and exact Eve-root ownership.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { createMainAgentMemoryFixture } from "../memory-agent-write.integration-fixtures.js";
@@ -104,7 +104,10 @@ describeWithDatabase("memory review dispatch repository", () => {
       `SELECT batch.status::text, batch.recovery_attempts,
               batch.last_recovery_diagnostic_code,
               count(source.timeline_entry_id)::integer AS source_count,
-              count(alert.id)::integer AS alert_count
+              count(alert.id)::integer AS alert_count,
+              (SELECT metadata->>'recoveryAttempt' FROM audit_events
+                WHERE event_type = 'memory_review.retry_scheduled' AND subject_id = batch.id
+                ORDER BY created_at DESC LIMIT 1) AS audited_recovery_attempt
          FROM memory_review_batches AS batch
          LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
          LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
@@ -112,6 +115,7 @@ describeWithDatabase("memory review dispatch repository", () => {
       [claim.batchId],
     )).resolves.toMatchObject({ rows: [{
       alert_count: 0,
+      audited_recovery_attempt: "1",
       last_recovery_diagnostic_code: "AGENT_MEMORY_REVIEW_SESSION_PREPARATION_FAILED",
       recovery_attempts: 1,
       source_count: 50,
@@ -175,6 +179,39 @@ describeWithDatabase("memory review dispatch repository", () => {
     )).resolves.toMatchObject({
       rows: [{ completed_at: expect.any(Date), status: "delivered" }],
     });
+  });
+
+  it("terminalizes an ownerless alert without blocking other claims", async () => {
+    const { claim, fixture } = await claimBackgroundBatch();
+    const session = await memoryReviewSessionRepository.prepare(claim, new Date());
+    await memoryReviewDispatchRepository.markAmbiguous(
+      claim,
+      "AGENT_MEMORY_REVIEW_HANDOFF_AMBIGUOUS",
+      session.id,
+    );
+    await database().query(
+      "DELETE FROM family_memberships WHERE family_id = $1 AND role = 'owner'",
+      [fixture.familyId],
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(memoryReviewOwnerAlertRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 1,
+      now: new Date("2026-08-12T10:01:00.000Z"),
+    })).resolves.toEqual([]);
+    await expect(database().query(
+      `SELECT status::text, delivery_diagnostic_code
+         FROM memory_review_owner_alerts WHERE batch_id = $1`,
+      [claim.batchId],
+    )).resolves.toMatchObject({ rows: [{
+      delivery_diagnostic_code: "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+      status: "failed",
+    }] });
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining(
+      "AGENT_MEMORY_REVIEW_OWNER_ALERT_OWNER_MISSING",
+    ));
+    consoleError.mockRestore();
   });
 
   it("reuses an unstarted application session after a pre-marker process crash", async () => {

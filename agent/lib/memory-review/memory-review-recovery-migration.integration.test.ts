@@ -36,7 +36,7 @@ async function insertAmbiguousBatch(
     groupId: string;
     messageThreadId: number | null;
     sequenceStart: number;
-    withOperation: boolean;
+    operationTurnId: string | null;
   },
 ): Promise<{ batchId: string; sessionId: string }> {
   const sequenceEnd = input.sequenceStart + 49;
@@ -87,14 +87,14 @@ async function insertAmbiguousBatch(
   );
 
   // A system-owned operation proves that the old Eve turn crossed the side-effect boundary.
-  if (input.withOperation) {
+  if (input.operationTurnId) {
     await client.query(
       `INSERT INTO memory_mutation_operations
          (family_id, operation_key, mutation_kind, input_hash, actor_user_id,
           actor_telegram_user_id, eve_session_id, eve_turn_id)
        VALUES ($1, $2, 'create', $3, NULL, NULL, $4, $5)`,
       [input.familyId, `recovery-operation-${input.sequenceStart}`, "a".repeat(64),
-        `eve-recovery-${input.sequenceStart}`, `turn-recovery-${input.sequenceStart}`],
+        `eve-recovery-${input.sequenceStart}`, input.operationTurnId],
     );
   }
   return { batchId: batch.rows[0]!.id, sessionId: session.rows[0]!.id };
@@ -138,7 +138,7 @@ describeWithDatabase("068 memory review recovery migration", () => {
         groupId: group.rows[0]!.id,
         messageThreadId: null,
         sequenceStart: 5540,
-        withOperation: false,
+        operationTurnId: null,
       });
       const unsafe = await insertAmbiguousBatch(client, {
         conversationId: conversation.rows[0]!.id,
@@ -146,7 +146,7 @@ describeWithDatabase("068 memory review recovery migration", () => {
         groupId: group.rows[0]!.id,
         messageThreadId: 42,
         sequenceStart: 6000,
-        withOperation: true,
+        operationTurnId: "turn-from-another-root-step",
       });
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));

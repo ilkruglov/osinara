@@ -75,7 +75,10 @@ export const memoryReviewDispatchTerminalRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const result = await client.query<{ status: "failed" | "pending" }>(
+      const result = await client.query<{
+        recovery_attempts: number;
+        status: "failed" | "pending";
+      }>(
         `UPDATE memory_review_batches
             SET status = CASE
                   WHEN recovery_attempts < $4 THEN 'pending'::memory_review_batch_status
@@ -97,29 +100,28 @@ export const memoryReviewDispatchTerminalRepository = {
                 completed_at = CASE WHEN recovery_attempts < $4 THEN NULL ELSE now() END,
                 updated_at = now(), lease_token = NULL, lease_expires_at = NULL
           WHERE id = $1 AND status = 'leased' AND lease_token = $2
-          RETURNING status::text`,
+          RETURNING status::text, recovery_attempts`,
         [batch.batchId, batch.leaseToken, diagnosticCode,
           MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS],
       );
-      const status = result.rows[0]?.status;
-      if (!status) throw new AppError(
+      const transition = result.rows[0];
+      if (!transition) throw new AppError(
         "AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID",
         "Не удалось сохранить ошибку проверки памяти",
       );
-      if (status === "pending") {
+      if (transition.status === "pending") {
         // The only retry happens before Eve handoff and is explicit in both batch state and audit.
         await client.query(
           `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
            VALUES ($1, 'memory_review.retry_scheduled', $2,
                    jsonb_build_object('diagnosticCode', $3::text, 'recoveryAttempt', $4::integer))`,
-          [batch.familyId, batch.batchId, diagnosticCode,
-            MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS],
+          [batch.familyId, batch.batchId, diagnosticCode, transition.recovery_attempts],
         );
       } else {
         await enqueueMemoryReviewOwnerAlert(client, batch.batchId, diagnosticCode);
       }
       await client.query("COMMIT");
-      return status === "pending" ? "retry_scheduled" : "failed";
+      return transition.status === "pending" ? "retry_scheduled" : "failed";
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
