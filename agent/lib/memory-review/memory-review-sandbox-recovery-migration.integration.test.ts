@@ -18,17 +18,30 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 const MIGRATION_NAME = "069_memory_review_sandbox_recovery.sql";
+const MIGRATION_ORDINAL = 69;
 const TEST_SCHEMA = "test_memory_review_sandbox_recovery";
 const BATCH_ID = "18329b3e-9563-4762-bc77-11641e8cbac1";
 const ORIGINAL_APPLICATION_SESSION_ID = "61b08325-2147-4047-9cb1-01d8210b89b4";
 const RECOVERY_APPLICATION_SESSION_ID = "26942f0e-76a7-4240-b241-ff866fc084b4";
 const ORIGINAL_EVE_SESSION_ID = "wrun_01KZWTTV5XAJY71V8DW3E7EM4X";
 const RECOVERY_EVE_SESSION_ID = "wrun_01KZZN63ATNDJSP336AVRKE1XW";
+const MIGRATION_NAME_PATTERN = /^(\d+)_.*\.sql$/u;
+
+function migrationOrdinal(name: string): number | null {
+  const match = MIGRATION_NAME_PATTERN.exec(name);
+  return match ? Number.parseInt(match[1]!, 10) : null;
+}
 
 async function applyMigrationsBefore069(client: import("pg").PoolClient): Promise<void> {
   const names = (await readdir(resolve("migrations")))
-    .filter((name) => name.endsWith(".sql") && name < MIGRATION_NAME)
-    .sort();
+    .filter((name) => {
+      const ordinal = migrationOrdinal(name);
+      return ordinal !== null && ordinal < MIGRATION_ORDINAL;
+    })
+    .sort((left, right) => {
+      const difference = migrationOrdinal(left)! - migrationOrdinal(right)!;
+      return difference || left.localeCompare(right);
+    });
   for (const name of names) {
     await client.query(await readFile(resolve("migrations", name), "utf8"));
   }
@@ -182,6 +195,7 @@ describeWithDatabase("069 memory review sandbox recovery migration", () => {
       ] });
     } finally {
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+      await client.query("RESET search_path");
       client.release();
     }
   });

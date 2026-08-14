@@ -44,15 +44,20 @@ BEGIN
   END IF;
 
   -- Every durable identity must match the operator-inspected Eve traces before state is reopened.
-  IF incident.batch_kind <> 'background' OR incident.status <> 'ambiguous'
-    OR incident.predecessor_sequence <> 5539 OR incident.from_sequence <> 5540
-    OR incident.through_sequence <> 5589 OR incident.source_count <> 50
-    OR incident.recovery_attempts <> 1
-    OR incident.diagnostic_code <> 'AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS'
-    OR incident.last_recovery_diagnostic_code <> 'AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS'
-    OR incident.application_session_id <> recovery_application_session_id
-    OR incident.eve_session_id <> recovery_eve_session_id
-    OR incident.eve_turn_id <> 'turn_0' THEN
+  IF incident.batch_kind IS DISTINCT FROM 'background'
+    OR incident.status IS DISTINCT FROM 'ambiguous'
+    OR incident.predecessor_sequence IS DISTINCT FROM 5539
+    OR incident.from_sequence IS DISTINCT FROM 5540
+    OR incident.through_sequence IS DISTINCT FROM 5589
+    OR incident.source_count IS DISTINCT FROM 50
+    OR incident.recovery_attempts IS DISTINCT FROM 1
+    OR incident.diagnostic_code
+      IS DISTINCT FROM 'AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS'
+    OR incident.last_recovery_diagnostic_code
+      IS DISTINCT FROM 'AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS'
+    OR incident.application_session_id IS DISTINCT FROM recovery_application_session_id
+    OR incident.eve_session_id IS DISTINCT FROM recovery_eve_session_id
+    OR incident.eve_turn_id IS DISTINCT FROM 'turn_0' THEN
     RAISE EXCEPTION
       'AGENT_MEMORY_REVIEW_SANDBOX_RECOVERY_STATE_INVALID: Incident batch state changed';
   END IF;

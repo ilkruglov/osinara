@@ -42,7 +42,10 @@ export async function enqueueMemoryReviewOwnerAlert(
   );
   if (result.rowCount !== 1) {
     const existing = await client.query(
-      "SELECT 1 FROM memory_review_owner_alerts WHERE batch_id = $1",
+      `SELECT 1 FROM memory_review_owner_alerts AS alert
+        JOIN memory_review_batches AS batch ON batch.id = alert.batch_id
+       WHERE alert.batch_id = $1
+         AND alert.recovery_generation = batch.recovery_attempts`,
       [batchId],
     );
     if (!existing.rows[0]) throw new AppError(
