@@ -82,7 +82,7 @@ describe("Telegram group turn context", () => {
     expect(timeline.listRecent).toHaveBeenCalledWith({
       beforeSequence: "100",
       conversationId: "conversation-personal-1",
-      limit: 49,
+      limit: 99,
     });
     expect(result.durableMessage).toContain("Личный контекст");
     expect(result.durableMessage.length).toBeLessThanOrEqual(12_000);
@@ -103,7 +103,7 @@ describe("Telegram group turn context", () => {
       anchorEntryId: input.currentEntryId,
       beforeSequence: input.currentSequence,
       groupId: input.groupId,
-      limit: 49,
+      limit: 99,
       messageThreadId: null,
     });
     expect(deps.journal.listIncremental).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe("Telegram group turn context", () => {
       applicationSessionId: "session-1",
       beforeSequence: "105",
       groupId: "group-1",
-      limit: 49,
+      limit: 99,
       messageThreadId: null,
     });
     expect(deps.journal.listRecent).not.toHaveBeenCalled();

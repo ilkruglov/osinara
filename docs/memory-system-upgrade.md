@@ -85,12 +85,13 @@ retrieval ranking, границы model context или retention policy.
 
 ### Проблема
 
-Текущий лимит в 1000 timeline messages ограничивает recovery и исторический поиск. Простое увеличение
-лимита переносит проблему и бесконтрольно увеличивает PostgreSQL storage.
+Промежуточный production-лимит увеличен с 1000 до 10 000 timeline messages. Это расширяет окно
+recovery и исторического поиска, но не заменяет измеряемую долгосрочную retention/archive policy.
+Активный чат всё равно может исчерпать 10 000 сообщений, а PostgreSQL storage требует наблюдения.
 
 ### Варианты для решения
 
-1. Увеличить per-conversation retention с измеряемым storage budget и pruning watermark.
+1. Подтвердить достаточность лимита 10 000 через storage budget и pruning watermark.
 2. Ввести холодный immutable archive, недоступный модели напрямую и читаемый только scoped repository.
 3. Сохранять только durable review source sets сверх обычного retention до terminal/operator resolution.
 
