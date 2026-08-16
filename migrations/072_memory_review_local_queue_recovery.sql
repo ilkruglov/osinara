@@ -91,7 +91,9 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM memory_turn_source_sets WHERE memory_review_batch_id = incident_batch_id
   ) OR EXISTS (
-    SELECT 1 FROM memory_mutation_operations WHERE eve_session_id = successor_eve_session_id
+    SELECT 1 FROM memory_mutation_operations
+     WHERE eve_session_id = successor_eve_session_id
+       AND eve_turn_id = successor.eve_turn_id
   ) OR EXISTS (
     SELECT 1 FROM claim_evidence
      WHERE origin_conversation_id = incident.conversation_id
