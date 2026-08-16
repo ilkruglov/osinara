@@ -5,6 +5,8 @@
  * - Only the exact side-effect-free production batch is converted to a recoverable background batch.
  * - The active canonical chat session remains untouched.
  * - The retained source expands to 50 exact user entries without duplicating a completed successor.
+ * - Only a same-family mutation from the successor turn blocks recovery.
+ * - Later turns and operations owned by another family do not block the incident repair.
  * - Changed incident identity or overlapping source ownership aborts the migration atomically.
  */
 import { readFile, readdir } from "node:fs/promises";
@@ -72,6 +74,9 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
       // Reconstruct the inspected production trust zone and the 50 exact user sources.
       const family = await client.query<{ id: string }>(
         "INSERT INTO families (name) VALUES ('Local queue recovery') RETURNING id",
+      );
+      const otherFamily = await client.query<{ id: string }>(
+        "INSERT INTO families (name) VALUES ('Unrelated family') RETURNING id",
       );
       const owner = await client.query<{ id: string }>(
         `INSERT INTO users (telegram_user_id, display_name)
@@ -184,6 +189,30 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
             SET diagnostic_code = 'AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS'
           WHERE id = $1`,
         [INCIDENT_BATCH_ID],
+      );
+
+      // The durable session continued after the inspected successor. Only an operation from its exact
+      // turn proves a side effect; a later ordinary turn must not permanently block incident repair.
+      await client.query(
+        `INSERT INTO memory_mutation_operations
+           (family_id, operation_key, mutation_kind, input_hash, eve_session_id, eve_turn_id)
+         VALUES ($1, 'successor-turn-operation', 'create', $2, $3, 'turn_0'),
+                ($1, 'later-session-operation', 'create', $2, $3, 'turn_15')`,
+        [family.rows[0]!.id, "a".repeat(64), SUCCESSOR_EVE_SESSION_ID],
+      );
+      await client.query(
+        `INSERT INTO memory_mutation_operations
+           (family_id, operation_key, mutation_kind, input_hash, eve_session_id, eve_turn_id)
+         VALUES ($1, 'cross-family-turn-operation', 'create', $2, $3, 'turn_0')`,
+        [otherFamily.rows[0]!.id, "b".repeat(64), SUCCESSOR_EVE_SESSION_ID],
+      );
+      await expect(client.query(migration)).rejects.toThrow(
+        "AGENT_MEMORY_REVIEW_LOCAL_QUEUE_RECOVERY_SIDE_EFFECT_FOUND",
+      );
+      await client.query(
+        `DELETE FROM memory_mutation_operations
+          WHERE family_id = $1 AND operation_key = 'successor-turn-operation'`,
+        [family.rows[0]!.id],
       );
 
       await client.query(migration);
