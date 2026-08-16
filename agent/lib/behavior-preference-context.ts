@@ -84,7 +84,15 @@ export function requireBehaviorPreferenceReadAuthorization(
   const scheduled = scheduledDeliveryMetadata(ctx);
   if (scheduled) {
     const caller = resolveSessionCaller(ctx);
-    if (!caller || caller.principalType !== "user" || caller.authenticator !== "telegram") {
+    const callerScheduledRunId = caller?.attributes?.scheduledRunId;
+
+    // Never combine a normal current caller with delivery metadata inherited from another principal.
+    if (
+      !caller ||
+      caller.principalType !== "user" ||
+      caller.authenticator !== "telegram" ||
+      callerScheduledRunId !== scheduled.runId
+    ) {
       throw contextError();
     }
     return {

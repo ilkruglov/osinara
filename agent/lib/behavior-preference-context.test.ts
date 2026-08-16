@@ -11,7 +11,11 @@ import { describe, expect, it } from "vitest";
 import { requireBehaviorPreferenceAuthorization } from "./behavior-preference-context.js";
 import { requireBehaviorPreferenceReadAuthorization } from "./behavior-preference-context.js";
 
-function context(attributes: Record<string, unknown>, authenticator = "telegram"): ToolContext {
+function context(
+  attributes: Record<string, unknown>,
+  authenticator = "telegram",
+  initiatorAttributes?: Record<string, unknown>,
+): ToolContext {
   return {
     session: {
       auth: {
@@ -21,6 +25,14 @@ function context(attributes: Record<string, unknown>, authenticator = "telegram"
           principalId: "user-1",
           principalType: "user",
         },
+        initiator: initiatorAttributes
+          ? {
+              attributes: initiatorAttributes,
+              authenticator: "telegram",
+              principalId: "user-1",
+              principalType: "user",
+            }
+          : undefined,
       },
       id: "session-1",
       turn: { id: "turn-1" },
@@ -58,7 +70,7 @@ describe("requireBehaviorPreferenceAuthorization", () => {
   });
 
   it("projects a scheduled chat as read-only authorization without a timeline source", () => {
-    const scheduled = context({
+    const scheduledAttributes = {
       applicationSessionId: "application-session-1",
       familyId: "family-1",
       memoryScopes: ["family"],
@@ -68,7 +80,8 @@ describe("requireBehaviorPreferenceAuthorization", () => {
       scheduleTitle: "Сводка",
       scheduledRunId: "run-1",
       telegramChatId: "-1001",
-    });
+    };
+    const scheduled = context(scheduledAttributes);
 
     expect(requireBehaviorPreferenceReadAuthorization(scheduled)).toEqual({
       actorUserId: "user-1",
@@ -81,5 +94,10 @@ describe("requireBehaviorPreferenceAuthorization", () => {
     expect(() => requireBehaviorPreferenceAuthorization(scheduled)).toThrowError(
       /AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID/u,
     );
+
+    // Metadata from a scheduled initiator cannot be combined with an ordinary current caller.
+    expect(() => requireBehaviorPreferenceReadAuthorization(
+      context(validAttributes, "telegram", scheduledAttributes),
+    )).toThrowError(/AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID/u);
   });
 });
