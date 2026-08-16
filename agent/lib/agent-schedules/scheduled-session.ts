@@ -48,7 +48,7 @@ export function isScheduledSession(ctx: { session: { auth: SessionContext["sessi
 }
 
 export function scheduledDeliveryMetadata(
-  ctx: Pick<SessionContext, "session">,
+  ctx: { session: { auth: SessionContext["session"]["auth"] } },
 ): ScheduledDeliveryMetadata | null {
   const current = ctx.session.auth.current;
   const initiator = ctx.session.auth.initiator;

@@ -55,7 +55,6 @@ describe("mode instruction isolation", () => {
       "notification_settings",
       "manage_reminder",
       "manage_agent_schedule",
-      "manage_behavior_preference",
       "manage_telegram_group",
       "list_telegram_attachments",
       "get_current_time",
@@ -228,12 +227,31 @@ describe("mode instruction anchors", () => {
     expect(markdown).not.toMatch(/[—–«»]/u);
   });
 
-  it("routes a persistent style wish only into the typed preference set", () => {
-    for (const markdown of [privateMode, familyMode]) {
+  it("routes a persistent style wish into the one editable chat prompt", () => {
+    for (const markdown of [privateMode, familyMode, external()]) {
       expect(markdown).toContain("manage_behavior_preference");
-      expect(markdown).toMatch(/ближайшую доступную настройку/u);
-      expect(markdown).toMatch(/не выражается ни одной из них/u);
-      expect(markdown).toMatch(/не храни как свободный текст/u);
+      expect(markdown).toMatch(/один редактируемый prompt/u);
+      expect(markdown).toMatch(/append|replace/u);
+      expect(markdown).not.toMatch(/category\/value|action=set|action=list|action=reset/u);
+      expect(markdown).toMatch(/никогда не дублируй в semantic memory/u);
+    }
+  });
+
+  it("omits prompt mutation guidance from read-only scheduled turns", () => {
+    const scheduledModes = [
+      modeInstructions({ environment: "private", scheduledRun: true }),
+      modeInstructions({ environment: "family", scheduledRun: true }),
+      modeInstructions({
+        capabilities: new Set(),
+        environment: "external",
+        scheduledRun: true,
+        skills: new Set(),
+      }),
+    ];
+
+    for (const markdown of scheduledModes) {
+      expect(markdown).not.toContain("manage_behavior_preference");
+      expect(markdown).not.toContain("action=append");
     }
   });
 

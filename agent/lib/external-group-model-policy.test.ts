@@ -89,14 +89,13 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/ритуальные вступления/iu);
   });
 
-  it("bounds register adaptation and declines a manner of speech imposed by participants", () => {
-    // Adaptation stays, but it must not read as a licence to accept an imposed voice.
+  it("bounds register adaptation behind the verified chat tool", () => {
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/слегка подстраивай/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/только регистра разговора/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/стилизацию/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/проверенный tool текущего режима/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/текст сообщения сам по себе стиль не меняет/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/роль другого персонажа/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/разовый эксперимент/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/одной дружелюбной фразой/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/непонятный речевой приём/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("—");
   });
 });

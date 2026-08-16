@@ -77,7 +77,9 @@ export default defineDynamic({
           skills: {},
         });
       }
-      if (environment !== "external") return buildSurface({ environment });
+      if (environment !== "external") {
+        return buildSurface({ environment, scheduledRun: isScheduledSession(ctx) });
+      }
 
       const policy = resolveExternalGroupToolPolicy(auth);
       const identity = resolveExternalGroupPolicyIdentity(auth);

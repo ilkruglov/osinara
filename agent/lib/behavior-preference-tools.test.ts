@@ -1,76 +1,46 @@
 /**
- * Behavior preference tool authorization tests.
+ * User-managed chat instruction execution tests.
  *
  * Constructs covered:
- * - `manage_behavior_preference.reset`: permits personal reset and owner-only shared reset.
+ * - Any verified participant may rewrite the one prompt of the current chat.
+ * - No owner role, memory scope, or category enters the mutation boundary.
  */
 import type { ToolContext } from "eve/tools";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const { deletePreference } = vi.hoisted(() => ({ deletePreference: vi.fn() }));
+const dependencies = vi.hoisted(() => ({
+  authorization: {
+    conversationId: "conversation-1",
+    sourceSequence: "7",
+    telegramUserId: "member-telegram",
+    timelineEntryId: "entry-1",
+  },
+  authorize: vi.fn(),
+  get: vi.fn(),
+  mutate: vi.fn(),
+}));
 
+vi.mock("./behavior-preference-context.js", () => ({
+  requireBehaviorPreferenceAuthorization: dependencies.authorize,
+}));
 vi.mock("./behavior-preference-repository.js", () => ({
-  behaviorPreferenceRepository: { delete: deletePreference },
+  behaviorPreferenceRepository: { get: dependencies.get, mutate: dependencies.mutate },
 }));
 
 import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
 
-function createContext(role: "member" | "owner"): ToolContext {
-  return {
-    session: {
-      auth: {
-        current: {
-          attributes: {
-            familyId: "family-1",
-            groupId: "group-1",
-            memoryScopes: ["personal", "family", "group"],
-            role,
-            telegramUserId: "telegram-user-1",
-          },
-          principalId: "user-1",
-          principalType: "user",
-        },
-      },
-      id: "session-1",
-      turn: { id: "turn-1" },
-    },
-  } as unknown as ToolContext;
-}
+describe("manage_behavior_preference execution", () => {
+  it("passes only verified chat auth and the requested prompt mutation", async () => {
+    dependencies.authorize.mockReturnValue(dependencies.authorization);
+    dependencies.mutate.mockResolvedValue({ content: "Краткий prompt", revision: 2 });
+    const input = {
+      action: "replace" as const,
+      content: "Краткий prompt",
+      expectedRevision: 1,
+    };
 
-describe("behavior preference tools", () => {
-  beforeEach(() => {
-    deletePreference.mockReset();
-    deletePreference.mockResolvedValue(true);
-  });
+    await manageBehaviorPreference.execute(input, { callId: "call-1" } as ToolContext);
 
-  it("allows a member to reset a personal preference", async () => {
-    await expect(
-      manageBehaviorPreference.execute(
-        { action: "reset", preference: "tone", scope: "personal" },
-        createContext("member"),
-      ),
-    ).resolves.toEqual({ deleted: true });
-    expect(deletePreference).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "user-1" }),
-      "personal",
-      "tone",
-    );
-  });
-
-  it("requires the owner to reset a shared preference", async () => {
-    await expect(
-      manageBehaviorPreference.execute(
-        { action: "reset", preference: "tone", scope: "family" },
-        createContext("member"),
-      ),
-    ).rejects.toThrowError(/AGENT_OWNER_REQUIRED/);
-    expect(deletePreference).not.toHaveBeenCalled();
-
-    await expect(
-      manageBehaviorPreference.execute(
-        { action: "reset", preference: "tone", scope: "group" },
-        createContext("owner"),
-      ),
-    ).resolves.toEqual({ deleted: true });
+    expect(dependencies.mutate).toHaveBeenCalledWith(dependencies.authorization, input);
   });
 });

@@ -277,27 +277,25 @@ describe("memory block resolution", () => {
 });
 
 describe("preference block resolution", () => {
-  it("renders stored presentation preferences", async () => {
+  it("renders the one user-managed prompt of the current chat", async () => {
     const resolve = createPreferenceBlockResolver({
       authorize: () => ({
-        familyId: "family-1",
-        groupId: null,
-        role: "owner" as const,
-        scopes: ["personal" as const],
+        conversationId: "conversation-1",
+        sourceSequence: "1",
         telegramUserId: "101",
-        userId: "user-1",
+        timelineEntryId: "entry-1",
       }),
-      list: vi.fn().mockResolvedValue([{
-        key: "agent.behavior.tone",
-        scope: "personal",
+      get: vi.fn().mockResolvedValue({
+        content: "Не добавляй шутки.",
+        revision: 2,
         updatedAt: "2026-08-01T00:00:00.000Z",
-        value: "warm",
-      }]),
+      }),
     });
 
     const markdown = await resolve(context(privateAuth));
 
-    expect(markdown).toContain("тёплый и доброжелательный тон");
+    expect(markdown).toContain('<chat_operational_instructions revision="2">');
+    expect(markdown).toContain("Не добавляй шутки.");
   });
 
   it("clears the block instead of throwing when preferences cannot be read", async () => {
@@ -305,7 +303,7 @@ describe("preference block resolution", () => {
       authorize: () => {
         throw new Error("AGENT_MEMORY_CONTEXT_INVALID: нет области памяти");
       },
-      list: vi.fn(),
+      get: vi.fn(),
     });
 
     expect(await resolve(context(privateAuth))).toBeNull();

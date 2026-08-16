@@ -1,28 +1,35 @@
 /**
- * Behavior preference model-input contract tests.
+ * User-managed chat instruction tool contract tests.
  *
  * Constructs covered:
- * - Machine-visible action, scope, preference, and value enums.
- * - Shared semantic validation before approval and execution.
- * - Explicit safe handling of MiniMax sibling-field materialization.
- * - Complete payload and bounded-correction guidance in the tool description.
+ * - get, append, replace, and clear operate without model-selected identity or categories.
+ * - Mutations use the visible prompt revision to prevent lost concurrent edits.
+ * - Prompt text is bounded but receives no semantic classification in backend code.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const { deletePreference, setPreference } = vi.hoisted(() => ({
-  deletePreference: vi.fn(),
-  setPreference: vi.fn(),
+const dependencies = vi.hoisted(() => ({
+  authorization: {
+    conversationId: "conversation-1",
+    sourceSequence: "12",
+    telegramUserId: "telegram-user-1",
+    timelineEntryId: "entry-1",
+  },
+  authorize: vi.fn(),
+  get: vi.fn(),
+  mutate: vi.fn(),
 }));
 
-vi.mock("./behavior-preference-repository.js", () => ({
-  behaviorPreferenceRepository: { delete: deletePreference, set: setPreference },
+vi.mock("./behavior-preference-context.js", () => ({
+  requireBehaviorPreferenceAuthorization: dependencies.authorize,
 }));
-vi.mock("./family-context.js", () => ({ requireOwner: vi.fn() }));
-vi.mock("./memory-context.js", () => ({
-  requireMemoryAuthorization: vi.fn(() => ({ familyId: "family-1", scopes: ["personal"] })),
-  requireWritableScope: vi.fn((_: unknown, scope: string) => scope),
+vi.mock("./behavior-preference-repository.js", () => ({
+  behaviorPreferenceRepository: {
+    get: dependencies.get,
+    mutate: dependencies.mutate,
+  },
 }));
 
 import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
@@ -35,88 +42,61 @@ function approvalFor(input: Record<string, unknown>) {
 
 describe("manage_behavior_preference model input", () => {
   beforeEach(() => {
-    deletePreference.mockReset();
-    deletePreference.mockResolvedValue(true);
-    setPreference.mockReset();
+    dependencies.authorize.mockReset().mockReturnValue(dependencies.authorization);
+    dependencies.get.mockReset().mockResolvedValue({ content: "", revision: 0, updatedAt: null });
+    dependencies.mutate.mockReset().mockResolvedValue({ content: "Новый prompt", revision: 2 });
   });
 
-  it("publishes required common fields and every enum in an object schema", () => {
+  it("publishes four simple actions and no category, scope, or identity", () => {
     const schema = z.toJSONSchema(manageBehaviorPreference.inputSchema as z.ZodType) as {
       properties: Record<string, { enum?: string[] }>;
-      required?: string[];
       type?: string;
     };
 
     expect(schema.type).toBe("object");
-    expect(schema.required).toEqual(expect.arrayContaining(["action", "preference", "scope"]));
-    expect(schema.properties.action?.enum).toEqual(["set", "reset"]);
-    expect(schema.properties.scope?.enum).toEqual(["personal", "family", "group"]);
-    expect(schema.properties.preference?.enum).toEqual([
-      "answer_structure",
-      "language",
-      "response_length",
-      "status_updates",
-      "tone",
-    ]);
-    expect(schema.properties.value?.enum).toEqual([
-      "prose",
-      "structured",
-      "match_user",
-      "russian",
-      "balanced",
-      "concise",
-      "detailed",
-      "milestones",
-      "minimal",
-      "formal",
-      "neutral",
-      "warm",
-    ]);
+    expect(schema.properties.action?.enum).toEqual(["get", "append", "replace", "clear"]);
+    for (const forbidden of ["preference", "value", "rules", "scope", "chatId", "userId"]) {
+      expect(schema.properties).not.toHaveProperty(forbidden);
+    }
   });
 
-  it("rejects the same invalid reset before HITL and execution", async () => {
-    const invalid = { action: "reset", scope: "personal" };
+  it.each(["append", "replace"] as const)("routes action=%s with complete text and revision", async (action) => {
+    const input = { action, content: "Отвечай без шуток.", expectedRevision: 1 };
 
-    expect(() => approvalFor(invalid)).toThrowError(
-      /AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID.*preference/u,
+    expect(approvalFor(input)).toBe("not-applicable");
+    await manageBehaviorPreference.execute(input, context);
+    expect(dependencies.mutate).toHaveBeenCalledWith(
+      dependencies.authorization,
+      input,
     );
-    await expect(manageBehaviorPreference.execute(invalid as never, context)).rejects.toThrowError(
-      /AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID.*preference/u,
-    );
-    expect(deletePreference).not.toHaveBeenCalled();
   });
 
-  it("ignores only the known set-only value when MiniMax materializes it for reset", async () => {
-    const input = { action: "reset", preference: "tone", scope: "personal", value: "warm" } as const;
+  it("gets the current prompt without mutation", async () => {
+    await manageBehaviorPreference.execute({ action: "get" }, context);
 
-    expect(approvalFor(input)).toBe("user-approval");
-    await expect(manageBehaviorPreference.execute(input, context)).resolves.toEqual({ deleted: true });
-    expect(deletePreference).toHaveBeenCalledWith(expect.anything(), "personal", "tone");
+    expect(dependencies.get).toHaveBeenCalledWith(dependencies.authorization);
+    expect(dependencies.mutate).not.toHaveBeenCalled();
   });
 
-  it("rejects unpublished fields before approval", () => {
-    expect(() => approvalFor({
-      action: "reset",
-      preference: "tone",
-      scope: "personal",
-      unexpected: true,
-    })).toThrowError(/AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID.*unexpected/u);
+  it("clears the whole prompt by its visible revision", async () => {
+    const input = { action: "clear" as const, expectedRevision: 5 };
+
+    expect(approvalFor(input)).toBe("not-applicable");
+    await manageBehaviorPreference.execute(input, context);
+    expect(dependencies.mutate).toHaveBeenCalledWith(dependencies.authorization, input);
   });
 
-  it("documents all action contracts, enums, and one bounded correction without defaults", () => {
-    const description = manageBehaviorPreference.description;
-
-    for (const fragment of [
-      "action=set",
-      "action=reset",
-      "personal | family | group",
-      "answer_structure",
-      "match_user",
-      "balanced",
-      "milestones",
-      "formal",
-      "не более одного раза",
-      "Не угадывай",
-    ]) expect(description).toContain(fragment);
+  it("rejects missing revisions, empty text, and obsolete category fields", async () => {
+    for (const input of [
+      { action: "replace", content: "Новый prompt" },
+      { action: "append", content: "   ", expectedRevision: 1 },
+      { action: "clear" },
+      { action: "replace", content: "Текст", expectedRevision: 1, preference: "tone" },
+    ]) {
+      await expect(manageBehaviorPreference.execute(input as never, context)).rejects.toThrowError(
+        /AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID/u,
+      );
+    }
+    expect(dependencies.mutate).not.toHaveBeenCalled();
   });
 });

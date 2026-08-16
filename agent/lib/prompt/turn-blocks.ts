@@ -5,7 +5,7 @@
  * - `TurnBlockContext`: the minimal Eve resolve context a block resolver reads.
  * - `createModeBlockResolver` / `resolveModeBlock`: verified mode rulebook for the current turn.
  * - `createMemoryBlockResolver` / `resolveMemoryBlock`: authorized long-term memory records.
- * - `createPreferenceBlockResolver` / `resolvePreferenceBlock`: typed presentation preferences.
+ * - `createPreferenceBlockResolver` / `resolvePreferenceBlock`: one editable chat prompt.
  *
  * Key constructs:
  * - Eve keeps a previous turn's block when a dynamic resolver throws, and never clears the durable
@@ -15,11 +15,15 @@
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 
-import { buildBehaviorPreferenceInstructions } from "../behavior-preferences.js";
 import {
-  behaviorPreferenceRepository,
-  type BehaviorPreferenceItem,
-} from "../behavior-preference-repository.js";
+  requireBehaviorPreferenceReadAuthorization,
+  type BehaviorPreferenceReadAuthorization,
+} from "../behavior-preference-context.js";
+import {
+  buildBehaviorPreferenceInstructions,
+  type ChatOperationalPrompt,
+} from "../behavior-preferences.js";
+import { behaviorPreferenceRepository } from "../behavior-preference-repository.js";
 import { resolveConversationEnvironment } from "../conversation-environment.js";
 import {
   requireMemoryAuthorization,
@@ -48,6 +52,7 @@ import {
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
 import { scheduledGroupHistoryAccess } from "../agent-schedules/scheduled-group-history-context.js";
+import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
@@ -129,7 +134,8 @@ export function createModeBlockResolver(dependencies: {
       logBlockFailure("AGENT_CONVERSATION_ENVIRONMENT_INVALID", error);
       return MODE_UNAVAILABLE_BLOCK;
     }
-    if (environment !== "external") return modeInstructions({ environment });
+    const scheduledRun = isScheduledSession(ctx);
+    if (environment !== "external") return modeInstructions({ environment, scheduledRun });
 
     const effective = await effectiveExternalCapabilities(
       ctx.session.auth,
@@ -147,8 +153,10 @@ export function createModeBlockResolver(dependencies: {
     return modeInstructions({
       capabilities: effective.capabilities,
       environment: "external",
+      includeApplicationCore: effective.includeApplicationCore,
       scheduledHistory: effective.includeApplicationCore &&
         scheduledGroupHistoryAccess(ctx.session.auth) !== null,
+      scheduledRun,
       skills,
     });
   };
@@ -231,15 +239,15 @@ function telegramProfileInput(
 }
 
 export function createPreferenceBlockResolver(dependencies: {
-  authorize: (ctx: TurnBlockContext) => MemoryAuthorization;
-  list: (auth: MemoryAuthorization) => Promise<BehaviorPreferenceItem[]>;
+  authorize: (ctx: TurnBlockContext) => BehaviorPreferenceReadAuthorization;
+  get: (auth: BehaviorPreferenceReadAuthorization) => Promise<ChatOperationalPrompt>;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
     try {
       const authorization = dependencies.authorize(ctx);
-      return buildBehaviorPreferenceInstructions(await dependencies.list(authorization));
+      return buildBehaviorPreferenceInstructions(await dependencies.get(authorization));
     } catch (error) {
-      // Presentation preferences only shape style, so an absent block is safe on failure.
+      // The editable prompt only shapes presentation, so an absent block is safe on failure.
       logBlockFailure("AGENT_BEHAVIOR_PREFERENCE_UNAVAILABLE", error);
       return null;
     }
@@ -258,6 +266,6 @@ export const resolveMemoryBlock = createMemoryBlockResolver({
 });
 
 export const resolvePreferenceBlock = createPreferenceBlockResolver({
-  authorize: requireMemoryAuthorization,
-  list: behaviorPreferenceRepository.list,
+  authorize: requireBehaviorPreferenceReadAuthorization,
+  get: behaviorPreferenceRepository.get,
 });
