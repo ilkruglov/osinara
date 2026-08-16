@@ -239,7 +239,8 @@ describeWithDatabase("canonical group session repository", () => {
 
     await expect(database().query(
       `SELECT 1 FROM conversation_sessions
-        WHERE id = $1 AND retired_at IS NOT NULL AND delete_after IS NOT NULL
+        WHERE id = $1 AND retired_at IS NOT NULL
+          AND delete_after = retired_at + interval '1 day'
           AND task_state = $2`,
       [canonical.id, failed ? "failed" : "completed"],
     )).resolves.toMatchObject({ rowCount: 1 });

@@ -104,6 +104,7 @@ const POST_V0101_MIGRATIONS = [
   "070_memory_review_agent_collision_recovery.sql",
   "071_chat_communication_preferences.sql",
   "072_memory_review_local_queue_recovery.sql",
+  "073_eve_terminal_stream_retention.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
