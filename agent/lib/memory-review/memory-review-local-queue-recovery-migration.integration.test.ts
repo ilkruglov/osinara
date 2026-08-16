@@ -14,9 +14,21 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
+const integrationDatabaseUrl = process.env.DATABASE_URL;
+
+// Migration tests destroy an isolated schema and must never run against a production database.
+if (integrationTestsEnabled) {
+  if (!integrationDatabaseUrl) {
+    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+  }
+  if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
+    throw new Error(
+      "AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test",
+    );
+  }
+}
+const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
 const MIGRATION_NAME = "072_memory_review_local_queue_recovery.sql";
 const MIGRATION_ORDINAL = 72;
 const TEST_SCHEMA = "test_memory_review_local_queue_recovery";

@@ -92,18 +92,44 @@ WHERE content IS NOT NULL;
 
 -- Unknown or unmapped old values must stop the migration instead of disappearing silently.
 DO $$
+DECLARE
+  invalid_rows text;
+  unmapped_rows text;
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM behavior_preferences_legacy_071 AS legacy
+  SELECT string_agg(
+           format(
+             '[family_id=%s scope=%s owner_user_id=%s group_id=%s preference=%s value=%s]',
+             legacy.family_id, legacy.scope, coalesce(legacy.owner_user_id::text, '<null>'),
+             coalesce(legacy.group_id::text, '<null>'), legacy.preference, legacy.value
+           ),
+           ', ' ORDER BY legacy.family_id, legacy.scope, legacy.owner_user_id NULLS FIRST,
+                          legacy.group_id NULLS FIRST, legacy.preference
+         )
+    INTO invalid_rows
+    FROM behavior_preferences_legacy_071 AS legacy
     WHERE NOT (
       (legacy.preference = 'answer_structure' AND legacy.value IN ('prose', 'structured')) OR
       (legacy.preference = 'language' AND legacy.value IN ('match_user', 'russian')) OR
       (legacy.preference = 'response_length' AND legacy.value IN ('balanced', 'concise', 'detailed')) OR
       (legacy.preference = 'status_updates' AND legacy.value IN ('milestones', 'minimal')) OR
       (legacy.preference = 'tone' AND legacy.value IN ('formal', 'neutral', 'warm'))
-    )
-  ) OR EXISTS (
-    SELECT 1 FROM behavior_preferences_legacy_071 AS legacy
+    );
+  IF invalid_rows IS NOT NULL THEN
+    RAISE EXCEPTION
+      'AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED: invalid legacy rows: %', invalid_rows;
+  END IF;
+
+  SELECT string_agg(
+           format(
+             '[family_id=%s scope=%s owner_user_id=%s group_id=%s preference=%s value=%s]',
+             legacy.family_id, legacy.scope, coalesce(legacy.owner_user_id::text, '<null>'),
+             coalesce(legacy.group_id::text, '<null>'), legacy.preference, legacy.value
+           ),
+           ', ' ORDER BY legacy.family_id, legacy.scope, legacy.owner_user_id NULLS FIRST,
+                          legacy.group_id NULLS FIRST, legacy.preference
+         )
+    INTO unmapped_rows
+    FROM behavior_preferences_legacy_071 AS legacy
     WHERE NOT EXISTS (
       SELECT 1 FROM application_conversations AS conversation
       WHERE conversation.family_id = legacy.family_id
@@ -114,9 +140,11 @@ BEGIN
           (legacy.scope = 'group' AND conversation.scope = 'group'
             AND conversation.telegram_group_id = legacy.group_id)
         )
-    )
-  ) THEN
-    RAISE EXCEPTION 'AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED: legacy preference cannot be projected to one chat prompt';
+    );
+  IF unmapped_rows IS NOT NULL THEN
+    RAISE EXCEPTION
+      'AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED: legacy rows have no target conversation: %',
+      unmapped_rows;
   END IF;
 END
 $$;

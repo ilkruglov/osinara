@@ -13,9 +13,21 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 
-const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
-  ? describe
-  : describe.skip;
+const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
+const integrationDatabaseUrl = process.env.DATABASE_URL;
+
+// Migration tests destroy an isolated schema and must never run against a production database.
+if (integrationTestsEnabled) {
+  if (!integrationDatabaseUrl) {
+    throw new Error("AGENT_TEST_DATABASE_CONFIG_MISSING: Для integration-тестов не задан DATABASE_URL");
+  }
+  if (!new URL(integrationDatabaseUrl).pathname.slice(1).endsWith("_test")) {
+    throw new Error(
+      "AGENT_TEST_DATABASE_UNSAFE: Integration-тесты разрешены только для БД с суффиксом _test",
+    );
+  }
+}
+const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
 const MIGRATION_NAME = "071_chat_communication_preferences.sql";
 const MIGRATION_ORDINAL = 71;
 const TEST_SCHEMA = "test_chat_communication_preferences";
@@ -159,6 +171,38 @@ describeWithDatabase("071 chat communication preferences migration", () => {
         [TEST_SCHEMA],
       );
       expect(legacyColumn.rowCount).toBe(1);
+    } finally {
+      await client.query("SET search_path TO public");
+      await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+      client.release();
+    }
+  });
+
+  it("identifies a legacy preference that has no target conversation", async () => {
+    const client = await database().connect();
+    try {
+      await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
+      await client.query(`CREATE SCHEMA ${TEST_SCHEMA}`);
+      await client.query(`SET search_path TO ${TEST_SCHEMA}, public`);
+      await applyMigrationsBefore071(client);
+      const family = await client.query<{ id: string }>(
+        "INSERT INTO families (name) VALUES ('Unmapped preference migration') RETURNING id",
+      );
+      await client.query(
+        `INSERT INTO behavior_preferences
+           (family_id, owner_user_id, group_id, scope, preference, value)
+         VALUES ($1, NULL, NULL, 'family', 'tone', 'neutral')`,
+        [family.rows[0]!.id],
+      );
+
+      await expect(client.query(
+        await readFile(resolve("migrations", MIGRATION_NAME), "utf8"),
+      )).rejects.toThrowError(
+        new RegExp(
+          `AGENT_BEHAVIOR_PREFERENCE_MIGRATION_UNMAPPED:.*${family.rows[0]!.id}.*family.*tone`,
+          "u",
+        ),
+      );
     } finally {
       await client.query("SET search_path TO public");
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
