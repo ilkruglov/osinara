@@ -323,7 +323,7 @@ describeWithDatabase("session repository", () => {
     )).resolves.toMatchObject({ rowCount: 1 });
   });
 
-  it("leases only retired sessions whose 90-day retention has elapsed", async () => {
+  it("leases only retired sessions whose one-day retention has elapsed", async () => {
     const f = await fixture();
     const current = await sessionRepository.prepareTurn({
       baseContinuationToken: "103::",
@@ -347,13 +347,18 @@ describeWithDatabase("session repository", () => {
       scope: "personal",
       userId: f.userId,
     });
-    await database().query(
-      "UPDATE conversation_sessions SET delete_after = '2026-04-02T00:00:00.000Z' WHERE id = $1",
+    await expect(database().query(
+      `SELECT retired_at, delete_after FROM conversation_sessions WHERE id = $1
+         AND delete_after = retired_at + interval '1 day'`,
       [current.id],
-    );
+    )).resolves.toMatchObject({ rowCount: 1 });
+
+    await expect(sessionRepository.claimExpiredForDeletion(
+      new Date("2026-01-02T23:59:59.000Z"),
+    )).resolves.toBeNull();
 
     const claim = await sessionRepository.claimExpiredForDeletion(
-      new Date("2026-04-02T00:00:01.000Z"),
+      new Date("2026-01-03T00:00:01.000Z"),
     );
     expect(claim).toMatchObject({ eveSessionId: "wrun_expired", id: current.id });
     await sessionRepository.completeDeletion(claim!.id, claim!.leaseToken);
