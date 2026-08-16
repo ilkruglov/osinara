@@ -98,9 +98,24 @@ describeWithDatabase("073 terminal Eve stream retention", () => {
             '2026-10-30T02:00:00Z', true),
            (gen_random_uuid(), 0, $1, $2, 'family', 'canonical', NULL,
             'active-canonical', 'active-canonical', 'wrun_01KXB4EA5APPDAASE4GKT76XQS',
-            '2026-08-01T00:00:00Z', '2026-08-01T03:00:00Z', NULL, NULL, false)
+            '2026-08-01T00:00:00Z', '2026-08-01T03:00:00Z', NULL, NULL, false),
+           (gen_random_uuid(), 0, $1, $2, 'family', 'task', 'running',
+            'active-task', 'active-task', 'wrun_01KXB5EA5APPDAASE4GKT76XQS',
+            '2026-08-01T00:00:00Z', '2026-08-01T04:00:00Z', NULL, NULL, false)
          RETURNING id, conversation_key`,
         [family.rows[0]!.id, group.rows[0]!.id],
+      );
+      const activeTask = sessions.rows.find((row) => row.conversation_key === "active-task")!;
+      await client.query(
+        `UPDATE conversation_sessions
+            SET group_timeline_cursor = 42, telegram_forum_topic_id = 100
+          WHERE id = $1`,
+        [activeTask.id],
+      );
+      await client.query(
+        `INSERT INTO conversation_session_routes (base_continuation_token, session_id)
+         VALUES ('-100-stream-retention:100:42', $1)`,
+        [activeTask.id],
       );
 
       await client.query(await readFile(resolve("migrations", MIGRATION_NAME), "utf8"));
@@ -112,6 +127,7 @@ describeWithDatabase("073 terminal Eve stream retention", () => {
         [sessions.rows.map((row) => row.id)],
       )).resolves.toMatchObject({ rows: [
         { conversation_key: "active-canonical", retention_hold: false, retention_seconds: null },
+        { conversation_key: "active-task", retention_hold: false, retention_seconds: null },
         { conversation_key: "retired-completed", retention_hold: false, retention_seconds: 86_400 },
         { conversation_key: "retired-held", retention_hold: true, retention_seconds: 86_400 },
       ] });
@@ -119,9 +135,32 @@ describeWithDatabase("073 terminal Eve stream retention", () => {
       // The rewritten trust-zone trigger must use the same policy for future retirements.
       await client.query("DELETE FROM telegram_groups WHERE id = $1", [group.rows[0]!.id]);
       await expect(client.query(
-        `SELECT extract(epoch FROM (delete_after - retired_at))::integer AS retention_seconds
-           FROM conversation_sessions WHERE conversation_key = 'active-canonical'`,
-      )).resolves.toMatchObject({ rows: [{ retention_seconds: 86_400 }] });
+        `SELECT conversation_key, group_timeline_cursor, telegram_forum_topic_id,
+                task_state::text,
+                extract(epoch FROM (delete_after - retired_at))::integer AS retention_seconds
+           FROM conversation_sessions
+          WHERE conversation_key IN ('active-canonical', 'active-task')
+          ORDER BY conversation_key`,
+      )).resolves.toMatchObject({ rows: [
+        {
+          conversation_key: "active-canonical",
+          group_timeline_cursor: null,
+          retention_seconds: 86_400,
+          task_state: null,
+          telegram_forum_topic_id: null,
+        },
+        {
+          conversation_key: "active-task",
+          group_timeline_cursor: null,
+          retention_seconds: 86_400,
+          task_state: "failed",
+          telegram_forum_topic_id: null,
+        },
+      ] });
+      await expect(client.query(
+        "SELECT 1 FROM conversation_session_routes WHERE session_id = $1",
+        [activeTask.id],
+      )).resolves.toMatchObject({ rowCount: 0 });
     } finally {
       await client.query("SET search_path TO public");
       await client.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`);
