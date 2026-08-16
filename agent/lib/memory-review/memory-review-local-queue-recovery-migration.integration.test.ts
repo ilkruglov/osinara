@@ -5,7 +5,7 @@
  * - Only the exact side-effect-free production batch is converted to a recoverable background batch.
  * - The active canonical chat session remains untouched.
  * - The retained source expands to 50 exact user entries without duplicating a completed successor.
- * - Any changed incident identity aborts the migration atomically.
+ * - Changed incident identity or overlapping source ownership aborts the migration atomically.
  */
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -138,6 +138,26 @@ describeWithDatabase("072 local Workflow queue recovery", () => {
         [INCIDENT_BATCH_ID, family.rows[0]!.id, group.rows[0]!.id],
       );
       const migration = await readFile(resolve("migrations", MIGRATION_NAME), "utf8");
+
+      // A completed successor normally releases its sources. Any unexpected retained ownership must
+      // block the repair rather than silently scheduling an overlapping review.
+      await client.query(
+        `INSERT INTO memory_review_batch_sources
+           (batch_id, conversation_id, timeline_entry_id, timeline_sequence)
+         SELECT $1, conversation_id, id, sequence_id FROM telegram_group_messages
+          WHERE conversation_id = $2 AND sequence_id BETWEEN 7610 AND 7619`,
+        [SUCCESSOR_BATCH_ID, conversation.rows[0]!.id],
+      );
+      await expect(client.query(migration)).rejects.toThrow(
+        "AGENT_MEMORY_REVIEW_LOCAL_QUEUE_RECOVERY_SOURCE_OWNED",
+      );
+      await expect(client.query(
+        "SELECT count(*)::integer AS count FROM memory_review_batch_sources WHERE batch_id = $1",
+        [INCIDENT_BATCH_ID],
+      )).resolves.toMatchObject({ rows: [{ count: 1 }] });
+      await client.query("DELETE FROM memory_review_batch_sources WHERE batch_id = $1", [
+        SUCCESSOR_BATCH_ID,
+      ]);
 
       // A changed terminal diagnostic must roll back every attempted repair.
       await client.query(
