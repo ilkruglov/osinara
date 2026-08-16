@@ -17,9 +17,6 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
   manage_google_workspace_connection: {
     disconnect: "отключить Google Workspace от текущей области",
   },
-  manage_behavior_preference: {
-    reset: "сбросить настройку поведения агента",
-  },
   manage_agent_schedule: {
     create: "создать агентное расписание",
     delete: "удалить агентное расписание",
@@ -134,7 +131,6 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
     const candidate = value(key);
     return candidate ? [`${label}: ${candidate}`] : [];
   };
-
   switch (toolName) {
     case "manage_telegram_group": {
       if (input.action === "remove") return line("Telegram chat ID", "telegramChatId");
@@ -203,8 +199,6 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...line("Содержимое", "content"),
         ...line("Чувствительность", "sensitivity"),
       ];
-    case "manage_behavior_preference":
-      return [...line("Настройка", "preference"), ...line("Область", "scope")];
     case "manage_agent_schedule":
       return [
         ...line("ID", "id"),

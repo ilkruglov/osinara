@@ -103,6 +103,7 @@ describe("dynamic capability resolver", () => {
       [
         ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
         "load_skill",
+        "manage_behavior_preference",
         "read_profile_view",
         "remember",
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,

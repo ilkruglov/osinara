@@ -1,8 +1,8 @@
 /**
- * Turn-scoped presentation preference instructions.
+ * Turn-scoped user-managed operational instructions for the exact Telegram chat.
  *
  * Export:
- * - Eve dynamic instructions built only from fixed safe preference mappings.
+ * - Eve dynamic instructions built from the live-authorized, XML-escaped chat prompt.
  */
 import { defineDynamic, defineInstructions } from "eve/instructions";
 

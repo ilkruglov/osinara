@@ -5,7 +5,7 @@
  * - `ModeToolSurfaceInput`: verified facts a tool surface may be built from.
  * - `TRUSTED_MODE_TOOL_NAMES`, `PRIVATE_ONLY_TOOL_NAMES`, `FAMILY_ONLY_TOOL_NAMES`: the matrix.
  * - `buildModeToolSurface`: the exact root-agent tool map for one verified turn.
- * - `buildSubagentToolSurface`: the same trust zone without root-owned durable-memory writes.
+ * - `buildSubagentToolSurface`: the same trust zone without root-owned durable writes.
  *
  * Key constructs:
  * - Application tools are emitted per mode instead of authored statically, so a tool that cannot
@@ -79,7 +79,7 @@ type AnyToolDefinition = ToolDefinition<any, any>;
 type ToolMap = Readonly<Record<string, AnyToolDefinition>>;
 
 export type ModeToolSurfaceInput =
-  | { environment: "family" | "private" }
+  | { environment: "family" | "private"; scheduledRun?: boolean }
   | {
       capabilities: ReadonlySet<ExternalGroupToolName>;
       environment: "external";
@@ -348,6 +348,9 @@ function buildExternalToolSurface(
   };
   if (includeApplicationCore) {
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
+    if (!scheduledRun) {
+      surface.manage_behavior_preference = manageBehaviorPreference as unknown as AnyToolDefinition;
+    }
     if (scheduledHistory) {
       surface.read_scheduled_group_history = readScheduledGroupHistory as unknown as AnyToolDefinition;
     }
@@ -398,10 +401,21 @@ const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
   private: { ...TRUSTED_MODE_TOOLS, ...PRIVATE_ONLY_TOOLS },
 };
 
+const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> =
+  Object.fromEntries(Object.entries(TRUSTED_SURFACES).map(([environment, surface]) => {
+    // A scheduled turn can read chat instructions but has no user source that may edit them.
+    const { manage_behavior_preference: _manageBehaviorPreference, ...readOnlyPromptSurface } = surface;
+    return [environment, readOnlyPromptSurface];
+  })) as Record<"family" | "private", ToolMap>;
+
 const EXTERNAL_SURFACES = new Map<string, ToolMap>();
 
 export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
-  if (input.environment !== "external") return TRUSTED_SURFACES[input.environment];
+  if (input.environment !== "external") {
+    return input.scheduledRun === true
+      ? TRUSTED_SCHEDULED_SURFACES[input.environment]
+      : TRUSTED_SURFACES[input.environment];
+  }
 
   // A malformed allowlist value means the trusted snapshot is corrupt, so deny every capability.
   const allowed = [...input.capabilities].some((name) => !isExternalGroupToolName(name))
@@ -434,6 +448,10 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
 }
 
 export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
-  const { remember: _remember, ...surface } = buildModeToolSurface(input);
+  const {
+    manage_behavior_preference: _manageBehaviorPreference,
+    remember: _remember,
+    ...surface
+  } = buildModeToolSurface(input);
   return surface;
 }

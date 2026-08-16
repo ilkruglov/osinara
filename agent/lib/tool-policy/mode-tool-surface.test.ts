@@ -147,14 +147,20 @@ describe("trusted mode tool surfaces", () => {
     }
   });
 
-  it("keeps remember exclusively on the root chat agent", () => {
+  it("keeps root-owned durable writes off subagents", () => {
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("remember");
     expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("remember");
+    expect(buildModeToolSurface({ environment: "private" }))
+      .toHaveProperty("manage_behavior_preference");
+    expect(buildSubagentToolSurface({ environment: "private" }))
+      .not.toHaveProperty("manage_behavior_preference");
     expect(buildSubagentToolSurface({
       capabilities: new Set(["remember"]),
       environment: "external",
       skills: {},
     })).not.toHaveProperty("remember");
+    expect(buildModeToolSurface({ environment: "private", scheduledRun: true }))
+      .not.toHaveProperty("manage_behavior_preference");
   });
 });
 
@@ -177,6 +183,7 @@ describe("external group tool surface", () => {
         ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
         "load_skill",
+        "manage_behavior_preference",
         "read_profile_view",
       ].sort(),
     );
@@ -221,7 +228,7 @@ describe("external group tool surface", () => {
     const grantable = new Set<string>([
       ...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, "")),
     ]);
-    const alwaysExternal = new Set(["read_profile_view"]);
+    const alwaysExternal = new Set(["manage_behavior_preference", "read_profile_view"]);
 
     for (const emitted of names({ capabilities: new Set(), environment: "external", skills: {} })) {
       expect(
@@ -385,6 +392,7 @@ describe("external group tool surface", () => {
       ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
       ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
       "load_skill",
+      "manage_behavior_preference",
       "read_profile_view",
     ].sort());
   });

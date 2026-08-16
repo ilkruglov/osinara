@@ -142,9 +142,9 @@ describe("consolidated tool action schemas", () => {
 
   it("accepts behavior, invitation, and group management actions", () => {
     expect(schemaOf(manageBehaviorPreference).safeParse({
-      action: "reset",
-      preference: "tone",
-      scope: "personal",
+      action: "replace",
+      content: "Отвечай без шуток.",
+      expectedRevision: 0,
     }).success).toBe(true);
     expect(schemaOf(manageFamilyInvitation).safeParse({ action: "create" }).success).toBe(true);
     expect(schemaOf(manageFamilyInvitation).safeParse({

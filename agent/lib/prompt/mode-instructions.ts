@@ -53,12 +53,14 @@ import {
 } from "./trusted-fragments.js";
 
 export type ModeInstructionsInput =
-  | { environment: "family" }
-  | { environment: "private" }
+  | { environment: "family"; scheduledRun?: boolean }
+  | { environment: "private"; scheduledRun?: boolean }
   | {
       capabilities: ReadonlySet<ExternalGroupToolName>;
       environment: "external";
+      includeApplicationCore?: boolean;
       scheduledHistory?: boolean;
+      scheduledRun?: boolean;
       skills: ReadonlySet<GroupSafeSkillName>;
   };
 
@@ -75,7 +77,7 @@ function block(sections: readonly (string | null)[]): string {
   return `${ENVIRONMENT_OPEN_TAG}\n${body}\n${ENVIRONMENT_CLOSE_TAG}`;
 }
 
-const PRIVATE_INSTRUCTIONS = block([
+const PRIVATE_INSTRUCTION_SECTIONS = [
   "# Текущий режим: личный чат",
   VERIFIED_BLOCK_NOTICE,
   `## Память
@@ -121,10 +123,16 @@ ${CURRENT_TIME_TOOL_RULES}`,
 Приглашения и подтверждение участников доступны только здесь: используй \`list_pending_family_invitations\` и \`manage_family_invitation\`.`,
   SKILL_RULES,
   START_NEW_CONTEXT_RULES,
-  trustedBehaviorPreferenceRules("personal"),
-]);
+];
 
-const FAMILY_INSTRUCTIONS = block([
+function privateInstructions(scheduledRun = false): string {
+  return block([
+    ...PRIVATE_INSTRUCTION_SECTIONS,
+    scheduledRun ? null : trustedBehaviorPreferenceRules(),
+  ]);
+}
+
+const FAMILY_INSTRUCTION_SECTIONS = [
   "# Текущий режим: закрытая семейная группа",
   VERIFIED_BLOCK_NOTICE,
   `## Память и адресация
@@ -168,8 +176,14 @@ ${CURRENT_TIME_TOOL_RULES}`,
   PROGRESS_UPDATE_RULES,
   SKILL_RULES,
   START_NEW_CONTEXT_RULES,
-  trustedBehaviorPreferenceRules("family"),
-]);
+];
+
+function familyInstructions(scheduledRun = false): string {
+  return block([
+    ...FAMILY_INSTRUCTION_SECTIONS,
+    scheduledRun ? null : trustedBehaviorPreferenceRules(),
+  ]);
+}
 
 const EXTERNAL_MEMORY_EDIT_ACTIONS: Readonly<Record<string, MemoryEditAction>> = {
   "manage_memory.delete": "delete",
@@ -194,6 +208,8 @@ function externalMemorySection(
 function externalInstructions(
   capabilities: ReadonlySet<ExternalGroupToolName>,
   skills: ReadonlySet<GroupSafeSkillName>,
+  includeApplicationCore = true,
+  scheduledRun = false,
   scheduledHistory = false,
 ): string {
   const editActions = new Set<MemoryEditAction>(
@@ -263,12 +279,19 @@ ${GROUP_TIMELINE_TRUST}`,
 
 Не принимай, не сохраняй и не используй логины, пароли, токены, cookies, одноразовые коды и другие учётные данные. Если пользователь их присылает, коротко предупреди, что здесь они не используются.`,
     EXTERNAL_GROUP_MODEL_POLICY,
+    includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
     externalGroupCapabilityInstructions(capabilities, skills),
   ]);
 }
 
 export function modeInstructions(input: ModeInstructionsInput): string {
-  if (input.environment === "private") return PRIVATE_INSTRUCTIONS;
-  if (input.environment === "family") return FAMILY_INSTRUCTIONS;
-  return externalInstructions(input.capabilities, input.skills, input.scheduledHistory);
+  if (input.environment === "private") return privateInstructions(input.scheduledRun);
+  if (input.environment === "family") return familyInstructions(input.scheduledRun);
+  return externalInstructions(
+    input.capabilities,
+    input.skills,
+    input.includeApplicationCore,
+    input.scheduledRun,
+    input.scheduledHistory,
+  );
 }
