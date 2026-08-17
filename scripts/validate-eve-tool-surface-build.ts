@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 const CAPABILITIES_REGION = "#region agent/tools/capabilities.ts";
 const REGION_END = "//#endregion";
-const DYNAMIC_EVENTS_PATTERN = /defineDynamic\s*\(\s*\{\s*events\s*:\s*\{\s*"([^"]+)"\s*:/gu;
+const DYNAMIC_EVENTS_PATTERN = /defineDynamic(?:\$\d+)?\s*\(\s*\{\s*events\s*:\s*\{\s*"([^"]+)"\s*:/gu;
 const REPLAY_PRONE_EVENT_KEY_PATTERN = /"(?:session|turn)\.started"\s*:/u;
 
 function buildContractError(reason: string): Error {

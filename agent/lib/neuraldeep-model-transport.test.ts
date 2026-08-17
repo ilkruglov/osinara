@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `createConfiguredLanguageModel`: targets NeuralDeep's exact chat-completions endpoint.
- * - NeuralDeep receives Bearer authentication and the audited Qwen request output limit.
+ * - NeuralDeep receives Bearer authentication, session-sticky routing, and the audited output limit.
  * - Undocumented provider-specific reasoning controls are omitted from request payloads.
  */
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
@@ -40,6 +40,7 @@ describe("NeuralDeep model transport", () => {
 
     await model.doGenerate({
       prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+      providerOptions: { neuraldeep: { user: "session_01CACHE" } },
     } as LanguageModelV4CallOptions);
 
     expect(fetch).toHaveBeenCalledWith(
@@ -49,7 +50,11 @@ describe("NeuralDeep model transport", () => {
         method: "POST",
       }),
     );
-    expect(body).toMatchObject({ max_tokens: 16_384, model: "qwen3.8-27b" });
+    expect(body).toMatchObject({
+      max_tokens: 16_384,
+      model: "qwen3.8-27b",
+      user: "session_01CACHE",
+    });
     expect(body).not.toHaveProperty("reasoning_effort");
     expect(body).not.toHaveProperty("thinking");
   });
