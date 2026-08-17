@@ -192,7 +192,11 @@ describe("external Telegram native photos", () => {
       createTelegramMessageHandler(repository)(telegramContext().context, message),
     ).resolves.toBeNull();
 
-    expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
+    );
     expect(repository.attachments.persist).not.toHaveBeenCalled();
     expect(repository.attachmentReferences.record).toHaveBeenCalledWith("group-1", message);
   });
@@ -219,7 +223,11 @@ describe("external Telegram native photos", () => {
       createTelegramMessageHandler(repository)(telegramContext().context, message),
     ).resolves.toBeNull();
 
-    expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
+    );
     expect(repository.attachments.persist).not.toHaveBeenCalled();
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });

@@ -142,11 +142,11 @@ describeWithDatabase("070 memory review agent collision recovery migration", () 
         [BATCH_ID, conversation.rows[0]!.id],
       );
       await client.query(
-        `INSERT INTO memory_turn_source_sets
-           (eve_session_id, eve_turn_id, application_session_id, conversation_id,
-            current_timeline_entry_id, invoking_telegram_user_id, binding_hash,
-            memory_review_batch_id)
-         VALUES ($1, 'turn_0', $2, $3, NULL, 'agent-collision-owner', $4, $5)`,
+         `INSERT INTO memory_turn_source_sets
+            (eve_session_id, eve_turn_id, application_session_id, conversation_id,
+             current_timeline_entry_id, invoking_telegram_user_id, binding_hash,
+             memory_review_batch_id)
+          VALUES ($1, 'turn_0', $2, $3, NULL, 'agent-collision-owner', $4, $5)`,
         [COLLISION_EVE_SESSION_ID, COLLISION_APPLICATION_SESSION_ID,
           conversation.rows[0]!.id, "a".repeat(64), BATCH_ID],
       );

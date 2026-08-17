@@ -28,7 +28,6 @@ import { groupCanonicalContinuationToken } from "./sessions/group-canonical-toke
 import {
   classifyTelegramInboundMedia,
   isMessageAddressedToBot,
-  isReplyToBot,
 } from "./telegram-message-policy.js";
 import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
 import { telegramForumTopicId } from "./telegram-group-message-storage.js";
@@ -47,6 +46,7 @@ import {
   telegramBaseContinuationToken,
   telegramReplyContinuationTokens,
 } from "./telegram-reply-routing.js";
+import { authorizeTelegramReply } from "./telegram-reply-authorization.js";
 import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
 import { telegramReplyTargetSnapshot } from "./telegram-reply-target-snapshot.js";
 import {
@@ -54,14 +54,15 @@ import {
   type TelegramMessageRepositories,
 } from "./telegram-on-message-repositories.js";
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
+import { telegramInboundActor } from "./telegram-inbound-actor.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
     ctx: TelegramContext,
     message: TelegramMessage,
   ): Promise<TelegramInboundResult> {
-    const sender = message.from;
-    if (!sender || sender.isBot || message.chat.type === "channel") return null;
+    const actor = telegramInboundActor(message);
+    if (!actor || message.chat.type === "channel") return null;
 
     // Resolve invocation from verified channel data before any identity or model work.
     const botUsername = ctx.telegram.botUsername;
@@ -73,7 +74,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     let verifiedReplyRoute: string | undefined;
     let exactReplyRoute: string | undefined;
     let hasResumableReplyRoute = false;
-    let resumesPendingTask = false;
 
     const invitationCode = parseInvitationStartCommand(message.text);
     if (invitationCode && message.chat.type !== "private") {
@@ -88,6 +88,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const group = groupChatType === null
       ? null
       : await repositories.telegram.findGroup(message.chat.id, groupChatType);
+    if (actor.kind === "telegram_channel" &&
+      (group?.type !== "external" || group.messageMode === "owner_only")) return null;
     const forumTopicId = group ? telegramForumTopicId(message) : null;
     const mediaKind = classifyTelegramInboundMedia(message);
     const externalAllowlist = group?.type !== "family_private"
@@ -112,7 +114,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         return null;
       }
       // Every registered group shares one timeline independently of whether this message starts a turn.
-      inboundTimeline = await repositories.journal.record(group.groupId, message);
+      inboundTimeline = await repositories.journal.record(group.groupId, message, actor);
       if (inboundTimeline.status === "duplicate") {
         journalDuplicate = true;
         if (!hasLazyGroupAttachment) return null;
@@ -142,7 +144,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       // Authorized family attachment references are retained without waking the model.
       if (!addressed && !hasLazyGroupAttachment) {
         if (inboundTimeline.status === "inserted") {
-          await repositories.memoryReview.observePassiveMessage({
+          if (actor.kind === "telegram_user") await repositories.memoryReview.observePassiveMessage({
             groupId: group.groupId,
             timelineEntryId: inboundTimeline.entryId,
           });
@@ -153,7 +155,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       return null;
     }
 
-    const identity = await repositories.telegram.findIdentity(sender.id);
+    const identity = actor.kind === "telegram_user"
+      ? await repositories.telegram.findIdentity(actor.id)
+      : null;
 
     // Group policy and identity are separate DB records. Re-reading the group establishes a
     // fail-closed authorization boundary if owner-only mode, type, or capabilities changed while
@@ -175,7 +179,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       )
     ) return null;
 
-    if (await handleTelegramEnrollmentBoundary({
+    if (actor.kind === "telegram_user" && await handleTelegramEnrollmentBoundary({
       ctx,
       identity,
       invitationCode,
@@ -185,6 +189,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
 
     // Auth attributes carry only values derived from the verified webhook and persisted policy.
     const decision = evaluateConversationAccess({
+      actorKind: actor.kind,
       chat: { id: message.chat.id, type: message.chat.type },
       identity,
       registeredGroup: group,
@@ -238,7 +243,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       : null;
     const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) {
-      if (!addressed && !journalDuplicate && group && inboundTimeline) {
+      if (!addressed && !journalDuplicate && group && inboundTimeline &&
+        actor.kind === "telegram_user") {
         await repositories.memoryReview.observePassiveMessage({
           groupId: group.groupId,
           timelineEntryId: inboundTimeline.entryId,
@@ -250,59 +256,43 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     // The accepted verified message reactivates exactly its participant identity before profile
     // selection. This does not enumerate or inject every participant in the conversation.
     await repositories.conversations.syncTimelineParticipants(conversation.id, [inboundTimeline.entryId]);
-    const memoryAuthorization = {
-      familyId: access.familyId,
-      groupId: access.groupId,
-      role: access.role,
-      scopes: access.memoryScopes,
-      telegramUserId: sender.id,
-      userId: access.userId,
-    };
-    let replyHandling: "message" | undefined;
     // A persisted agent timeline anchor is trusted even when Telegram omits compact sender metadata.
-    const trustedAgentReply = inboundTimeline?.replyToAgent === true;
-    const replyTarget = message.replyToMessage;
-    if (replyTarget?.from?.isBot === true || trustedAgentReply) {
-      if (!replyTarget) {
-        throw new Error(
-          "AGENT_TELEGRAM_REPLY_TARGET_MISSING: Для проверки ответа отсутствует Telegram-сообщение назначения",
-        );
-      }
-      const replyAuthorization = await repositories.hitl.authorizeReply({
-        baseContinuationToken: telegramBaseContinuationToken(
-          message,
-          verifiedReplyRoute ?? (trustedAgentReply ? exactReplyRoute : undefined),
-        ),
-        telegramChatId: message.chat.id,
-        telegramMessageId: replyTarget.messageId,
-        telegramUserId: sender.id,
-      });
-      if (replyAuthorization === "forbidden" || replyAuthorization === "expired") {
-        const error = replyAuthorization === "forbidden"
-          ? "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил."
-          : "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.";
-        await ctx.telegram.sendMessage(error);
-        return null;
-      }
-      // DB authorization, not a pre-rotation route snapshot, decides whether this is synthetic HITL.
-      // Tool-delivered photos/documents are not projected by the final text-delivery event. The
-      // verified Telegram sender still proves that this is an ordinary reply to Osinara, not HITL.
-      const ordinaryAgentReply = trustedAgentReply ||
-        message.chat.type === "private" ||
-        isReplyToBot(message, botUsername);
-      if (replyAuthorization === "not_applicable" && ordinaryAgentReply) {
-        if (!hasResumableReplyRoute) verifiedReplyRoute = exactReplyRoute;
-        replyHandling = "message";
-      }
-      if (replyAuthorization === "authorized") resumesPendingTask = true;
-    }
+    const replyAuthorization = await authorizeTelegramReply({
+      actor,
+      botUsername,
+      exactReplyRoute,
+      hasResumableReplyRoute,
+      hitl: repositories.hitl,
+      message,
+      replyToAgent: inboundTimeline?.replyToAgent === true,
+      sendMessage: (text) => ctx.telegram.sendMessage(text),
+      verifiedReplyRoute,
+    });
+    if (!replyAuthorization.accepted) return null;
+    const replyHandling = replyAuthorization.replyHandling;
+    const resumesPendingTask = replyAuthorization.resumesPendingTask;
+    verifiedReplyRoute = replyAuthorization.verifiedReplyRoute;
 
     // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
     // proved that this accepted message will continue into an agent turn.
-    const profileSignals = verifiedTelegramProfileSignals(message);
+    const profileSignals = actor.kind === "telegram_user"
+      ? verifiedTelegramProfileSignals(message)
+      : { explicitMentionTelegramUserIds: [], replyTelegramUserId: null };
     // Thread lifecycle is silent in shared chats; only a verified private turn may consume notices.
     if (message.chat.type === "private") {
-      await deliverPendingMemoryThreadNotice(memoryAuthorization, conversation.id,
+      if (actor.kind !== "telegram_user") {
+        throw new Error("AGENT_TELEGRAM_ACTOR_INVALID: Личный чат требует Telegram user identity");
+      }
+      await deliverPendingMemoryThreadNotice({
+        familyId: access.familyId,
+        groupId: access.groupId,
+        role: access.role,
+        scopes: access.memoryScopes,
+        telegramActorId: actor.id,
+        telegramActorKind: actor.kind,
+        telegramUserId: actor.id,
+        userId: access.userId,
+      }, conversation.id,
         repositories.threadNotices, (text) => ctx.telegram.sendMessage(text));
     }
     if (group) {
@@ -374,8 +364,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
                 }
               : "none",
           currentEntryId: inboundTimeline.entryId,
-          currentSenderDisplayName: telegramProfileName(message),
-          currentSenderUsername: sender.username ?? null,
+          currentSenderDisplayName: actor.displayName ?? telegramProfileName(message),
+          currentSenderUsername: actor.username,
           currentSequence: inboundTimeline.sequenceId,
           ...(group ? {} : { conversationId: conversation.id }),
           groupId: group?.groupId ?? null,
@@ -391,7 +381,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
       );
     }
-    const groupTurnContext = group
+    const groupTurnContext = group && actor.kind === "telegram_user"
       ? await prepareTelegramMemoryReviewTurn({
           applicationSessionId: appSession.id,
           conversationId: conversation.id,
@@ -413,6 +403,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     }
     const turnResult = buildTelegramTurnResult({
       access,
+      actor,
       appSession,
       conversation,
       forumTopicId,

@@ -102,6 +102,8 @@ async function createFixture(): Promise<Fixture> {
       groupId: null,
       role: "owner",
       scopes: ["personal", "family"],
+      telegramActorId: "9701",
+      telegramActorKind: "telegram_user",
       telegramUserId: "9701",
       userId: owner.id,
     },

@@ -29,7 +29,10 @@ function auth(
         ? ["personal", "family"]
         : [environment === "external" ? "group" : "family"],
       ...(group ? { skillAllowlist } : {}),
+      telegramActorId: "101",
+      telegramActorKind: "telegram_user",
       telegramChatType: group ? "group" : "private",
+      telegramUserId: "101",
     },
     authenticator: "telegram",
     principalId: "user-1",

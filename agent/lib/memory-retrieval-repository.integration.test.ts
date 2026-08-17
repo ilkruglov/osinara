@@ -56,6 +56,8 @@ describeWithDatabase("memoryRetrievalRepository", () => {
       groupId: null,
       role: "owner",
       scopes: ["personal", "family"],
+      telegramActorId: "search-owner",
+      telegramActorKind: "telegram_user",
       telegramUserId: "search-owner",
       userId: owner.id,
     };
@@ -83,8 +85,8 @@ describeWithDatabase("memoryRetrievalRepository", () => {
         );
       }
     };
-    await insert(auth.userId!, auth.telegramUserId, "Пользователь не ест орехи", [vector(0, 1), vector(1, 0)], "visible");
-    await insert(auth.userId!, auth.telegramUserId, "Любимый транспорт — поезд", [vector(0, 1)], "irrelevant");
+    await insert(auth.userId!, auth.telegramActorId, "Пользователь не ест орехи", [vector(0, 1), vector(1, 0)], "visible");
+    await insert(auth.userId!, auth.telegramActorId, "Любимый транспорт — поезд", [vector(0, 1)], "irrelevant");
     await insert(otherUserId, "search-other", "Скрытая аллергия на орехи", [vector(1, 0)], "hidden");
 
     const results = await memoryRetrievalRepository.search(

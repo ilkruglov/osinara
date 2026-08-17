@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import type { TelegramActorKind, TelegramTimelineActorKind } from "./telegram-inbound-actor.js";
 
 export interface BindMemoryTurnSourcesInput {
   applicationSessionId: string;
@@ -17,7 +18,8 @@ export interface BindMemoryTurnSourcesInput {
   currentTimelineEntryId: string;
   eveSessionId: string;
   eveTurnId: string;
-  invokingTelegramUserId: string;
+  invokingActorId: string;
+  invokingActorKind: TelegramActorKind;
   memoryReviewBatchId?: string;
   memoryReviewSourceEntryIds?: readonly string[];
   visibleTimelineEntryIds: readonly string[];
@@ -25,7 +27,8 @@ export interface BindMemoryTurnSourcesInput {
 
 export interface ResolvedMemoryTurnSource {
   conversationId: string;
-  invokingTelegramUserId: string;
+  invokingActorId: string;
+  invokingActorKind: TelegramActorKind;
   isCurrent: boolean;
   isReview: boolean;
   messageThreadId: string | null;
@@ -37,7 +40,8 @@ export interface ResolvedMemoryTurnSource {
 
 interface SourceRow {
   conversation_id: string;
-  invoking_telegram_user_id: string;
+  invoking_actor_id: string;
+  invoking_actor_kind: TelegramActorKind;
   is_current: boolean;
   is_review: boolean;
   message_thread_id: string | null;
@@ -75,7 +79,8 @@ function bindingHash(input: BindMemoryTurnSourcesInput, entryIds: readonly strin
     currentTimelineEntryId: input.currentTimelineEntryId,
     eveSessionId: input.eveSessionId,
     eveTurnId: input.eveTurnId,
-    invokingTelegramUserId: input.invokingTelegramUserId,
+    invokingActorId: input.invokingActorId,
+    invokingActorKind: input.invokingActorKind,
     memoryReviewBatchId: input.memoryReviewBatchId ?? null,
     visibleTimelineEntryIds: entryIds,
   })).digest("hex");
@@ -133,20 +138,27 @@ export const memoryTurnSourceRepository = {
 
       // The full set is verified in one query before any binding row becomes durable.
       const entries = await client.query<{
-        actor_kind: "agent_self" | "user";
+        actor_kind: TelegramTimelineActorKind;
         id: string;
         sequence_id: string;
+        telegram_sender_chat_id: string | null;
         telegram_user_id: string | null;
       }>(
-        `SELECT id, sequence_id::text, actor_kind, telegram_user_id
+        `SELECT id, sequence_id::text, actor_kind, telegram_user_id, telegram_sender_chat_id
          FROM telegram_group_messages
          WHERE conversation_id = $1 AND id = ANY($2::uuid[])
          ORDER BY sequence_id`,
         [input.conversationId, entryIds],
       );
-       const current = entries.rows.find((entry) => entry.id === input.currentTimelineEntryId);
-      if (entries.rows.length !== entryIds.length || current?.actor_kind !== "user" ||
-        current.telegram_user_id !== input.invokingTelegramUserId) {
+      const current = entries.rows.find((entry) => entry.id === input.currentTimelineEntryId);
+      const currentActorId = input.invokingActorKind === "telegram_user"
+        ? current?.telegram_user_id
+        : current?.telegram_sender_chat_id;
+      const expectedActorKind = input.invokingActorKind === "telegram_user"
+        ? "user"
+        : "telegram_channel";
+      if (entries.rows.length !== entryIds.length || current?.actor_kind !== expectedActorKind ||
+        currentActorId !== input.invokingActorId) {
         throw new AppError(
           "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
           "Сообщения текущего хода не принадлежат проверенному разговору или автору",
@@ -171,11 +183,11 @@ export const memoryTurnSourceRepository = {
       await client.query(
         `INSERT INTO memory_turn_source_sets
            (eve_session_id, eve_turn_id, application_session_id, conversation_id,
-             current_timeline_entry_id, invoking_telegram_user_id, binding_hash,
-             memory_review_batch_id)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              current_timeline_entry_id, invoking_actor_kind, invoking_actor_id, binding_hash,
+              memory_review_batch_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [input.eveSessionId, input.eveTurnId, input.applicationSessionId, input.conversationId,
-          input.currentTimelineEntryId, input.invokingTelegramUserId, hash,
+          input.currentTimelineEntryId, input.invokingActorKind, input.invokingActorId, hash,
           input.memoryReviewBatchId ?? null],
       );
       for (const entry of entries.rows) {
@@ -202,7 +214,8 @@ export const memoryTurnSourceRepository = {
     conversationId: string;
     eveSessionId: string;
     eveTurnId: string;
-    invokingTelegramUserId: string;
+    invokingActorId: string;
+    invokingActorKind: TelegramActorKind;
     memoryReviewBatchId: string;
     sourceEntryIds: readonly string[];
   }): Promise<void> {
@@ -261,13 +274,14 @@ export const memoryTurnSourceRepository = {
         "Источники проверки памяти не совпадают с пакетным снимком",
       );
       await client.query(
-        `INSERT INTO memory_turn_source_sets
+         `INSERT INTO memory_turn_source_sets
            (eve_session_id, eve_turn_id, application_session_id, conversation_id,
-            current_timeline_entry_id, invoking_telegram_user_id, binding_hash,
-            memory_review_batch_id)
-         VALUES ($1, $2, $3, $4, NULL, $5, $6, $7)`,
+             current_timeline_entry_id, invoking_actor_kind, invoking_actor_id, binding_hash,
+             memory_review_batch_id)
+          VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)`,
         [input.eveSessionId, input.eveTurnId, input.applicationSessionId,
-          input.conversationId, input.invokingTelegramUserId, hash, input.memoryReviewBatchId],
+          input.conversationId, input.invokingActorKind, input.invokingActorId, hash,
+          input.memoryReviewBatchId],
       );
       for (const entry of entries.rows) {
         await client.query(
@@ -296,7 +310,8 @@ export const memoryTurnSourceRepository = {
     const result = await database().query<SourceRow>(
       `SELECT source.conversation_id, source.timeline_entry_id, source.is_current,
               (review_batch.batch_kind = 'background') AS is_review,
-              source_set.invoking_telegram_user_id, conversation.scope::text,
+               source_set.invoking_actor_kind, source_set.invoking_actor_id,
+               conversation.scope::text,
               conversation.scope_partition_key::text,
               message.telegram_message_id::text AS source_message_id,
               message.message_thread_id::text
@@ -316,7 +331,8 @@ export const memoryTurnSourceRepository = {
     const row = result.rows[0];
     return row ? {
       conversationId: row.conversation_id,
-      invokingTelegramUserId: row.invoking_telegram_user_id,
+      invokingActorId: row.invoking_actor_id,
+      invokingActorKind: row.invoking_actor_kind,
       isCurrent: row.is_current,
       isReview: row.is_review,
       messageThreadId: row.message_thread_id,

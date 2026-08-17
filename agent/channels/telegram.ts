@@ -48,6 +48,7 @@ import {
 import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proactive-delivery-repository.js";
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
+import { shouldNotifyTelegramFailure } from "../lib/telegram-failure-notification.js";
 import { AppError } from "../lib/app-error.js";
 import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
@@ -58,6 +59,7 @@ import {
 import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
+import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -68,7 +70,15 @@ export default telegramChannel({
   },
   drainRoute: "/eve/v1/telegram-drain",
   events: {
-    "input.requested": handleTelegramInputRequested,
+    async "input.requested"(data, channel, ctx) {
+      if (isTelegramChannelSession(ctx.session.auth)) {
+        throw new AppError(
+          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
+          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
+        );
+      }
+      return await handleTelegramInputRequested(data, channel, ctx);
+    },
     async "message.completed"(data, channel, ctx) {
       // Model-authored pre-tool text is a user-visible progress update, not technical tool noise.
       if (isScheduledSession(ctx) && data.finishReason !== "stop") return;
@@ -278,6 +288,8 @@ export default telegramChannel({
           );
         }
       }
+      // Terminal diagnostics are private-only even when the failed turn belonged to a shared chat.
+      notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel);
       // A final send that started may already be visible; never append a second failure message.
       const finalDeliveryMayBeVisible = notifyFailure &&
         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
@@ -363,6 +375,12 @@ export default telegramChannel({
       }
     },
     async "authorization.required"(_data, _channel, ctx) {
+      if (isTelegramChannelSession(ctx.session.auth)) {
+        throw new AppError(
+          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
+          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
+        );
+      }
       const sessionId = applicationSessionId(ctx);
       const auth = ctx.session.auth.current;
       const telegramUserId = auth?.attributes.telegramUserId;

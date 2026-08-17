@@ -214,6 +214,8 @@ async function createExternalGroupFixture(suffix: string): Promise<ReadFixture> 
       groupId,
       role: "external",
       scopes: ["group"],
+      telegramActorId: `live-group-${suffix}`,
+      telegramActorKind: "telegram_user",
       telegramUserId: `live-group-${suffix}`,
       userId: null,
     },

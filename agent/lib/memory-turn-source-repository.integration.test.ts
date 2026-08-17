@@ -64,7 +64,8 @@ describeWithDatabase("turn-bound memory source repository", () => {
       currentTimelineEntryId: fixture.timelineEntryId,
       eveSessionId: "eve-source-session",
       eveTurnId: "eve-source-turn",
-      invokingTelegramUserId: "agent-memory-author",
+      invokingActorId: "agent-memory-author",
+      invokingActorKind: "telegram_user" as const,
       visibleTimelineEntryIds: [delta.rows[0]!.id, fixture.timelineEntryId],
     };
     await memoryTurnSourceRepository.bind(binding);
@@ -75,7 +76,8 @@ describeWithDatabase("turn-bound memory source repository", () => {
       sourceSequence: "2",
     })).resolves.toMatchObject({
       conversationId: fixture.conversationId,
-      invokingTelegramUserId: "agent-memory-author",
+      invokingActorId: "agent-memory-author",
+      invokingActorKind: "telegram_user",
       isCurrent: false,
       scope: "family",
       timelineEntryId: delta.rows[0]!.id,

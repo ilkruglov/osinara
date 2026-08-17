@@ -106,6 +106,7 @@ const POST_V0101_MIGRATIONS = [
   "072_memory_review_local_queue_recovery.sql",
   "073_eve_terminal_stream_retention.sql",
   "074_memory_review_empty_response_recovery.sql",
+  "075_telegram_channel_senders.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

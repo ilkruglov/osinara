@@ -359,6 +359,8 @@ describeWithDatabase("complete R6 trust-zone cascade", () => {
         groupId: null,
         role: "owner",
         scopes: ["family"],
+        telegramActorId: "r6-all-owner",
+        telegramActorKind: "telegram_user",
         telegramUserId: "r6-all-owner",
         userId: user.rows[0]!.id,
       },

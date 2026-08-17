@@ -10,6 +10,7 @@
  * - `resolveConversationAccess`: rejects unknown callers before model execution.
  */
 import { AppError } from "./app-error.js";
+import type { TelegramActorKind } from "./telegram-inbound-actor.js";
 
 export type FamilyRole = "member" | "owner" | "recovery_owner";
 export type RegisteredGroupType = "external" | "family_private";
@@ -50,6 +51,7 @@ export interface ConversationAccess {
 }
 
 export interface ResolveConversationAccessInput {
+  actorKind: TelegramActorKind;
   chat: {
     id: string;
     type: "group" | "private" | "supergroup";
@@ -67,7 +69,7 @@ export function evaluateConversationAccess(
 ): ConversationAccessDecision {
   // Private chats require a registered family identity and expose only that caller's scopes.
   if (input.chat.type === "private") {
-    if (!input.identity) {
+    if (input.actorKind !== "telegram_user" || !input.identity) {
       return {
         allowed: false,
         error: new AppError(
@@ -100,7 +102,8 @@ export function evaluateConversationAccess(
 
   // A family group is private to active members of the same family.
   if (group.type === "family_private") {
-    if (!input.identity || input.identity.familyId !== group.familyId) {
+    if (input.actorKind !== "telegram_user" || !input.identity ||
+      input.identity.familyId !== group.familyId) {
       return {
         allowed: false,
         error: new AppError(
@@ -122,8 +125,20 @@ export function evaluateConversationAccess(
     };
   }
 
+  // A channel proves only its visible Telegram chat identity. It can participate in an external
+  // group, but can never inherit the human owner behind that channel or satisfy owner-only mode.
+  if (input.actorKind === "telegram_channel" && group.messageMode === "owner_only") {
+    return {
+      allowed: false,
+      error: new AppError(
+        "AGENT_TELEGRAM_CHANNEL_OWNER_REQUIRED",
+        "Сообщения от имени канала недоступны в режиме только для владельца",
+      ),
+    };
+  }
+
   // External groups remain group-only, but a same-family identity is retained for owner administration.
-  const familyIdentity =
+  const familyIdentity = input.actorKind === "telegram_user" &&
     input.identity?.familyId === group.familyId ? input.identity : null;
   return {
     access: {

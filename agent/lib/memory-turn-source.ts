@@ -11,6 +11,7 @@ import type { SessionContext } from "eve/context";
 import { AppError } from "./app-error.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryTurnSourceRepository } from "./memory-turn-source-repository.js";
+import { resolveTelegramSessionActor } from "./telegram-session-actor.js";
 
 const POSITIVE_SEQUENCE_PATTERN = /^[1-9]\d*$/u;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
@@ -33,18 +34,18 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
   const applicationSessionId = attributes?.applicationSessionId;
   const conversationId = attributes?.telegramConversationId;
   const currentTimelineEntryId = attributes?.telegramTimelineEntryId;
-  const invokingTelegramUserId = attributes?.telegramUserId;
+  const invokingActor = resolveTelegramSessionActor(ctx.session.auth);
   const memoryReviewBatchId = attributes?.memoryReviewBatchId;
   const memoryReviewSourceEntryIds = attributes?.memoryReviewSourceEntryIds;
   const visibleTimelineEntryIds = attributes?.telegramTimelineVisibleEntryIds;
   const internalReview = memoryReviewBatchId !== undefined && currentTimelineEntryId === undefined;
   const present = [applicationSessionId, conversationId, currentTimelineEntryId,
-    invokingTelegramUserId, visibleTimelineEntryIds, memoryReviewBatchId,
+    invokingActor, visibleTimelineEntryIds, memoryReviewBatchId,
     memoryReviewSourceEntryIds].filter((value) => value !== undefined).length;
   if (present === 0) return;
   if (internalReview) {
     if (typeof applicationSessionId !== "string" || typeof conversationId !== "string" ||
-      typeof invokingTelegramUserId !== "string" || typeof memoryReviewBatchId !== "string" ||
+      invokingActor === null || typeof memoryReviewBatchId !== "string" ||
       !Array.isArray(memoryReviewSourceEntryIds) ||
       !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string") ||
       visibleTimelineEntryIds !== undefined) {
@@ -55,14 +56,15 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
       conversationId,
       eveSessionId: ctx.session.id,
       eveTurnId: ctx.session.turn.id,
-      invokingTelegramUserId,
+      invokingActorId: invokingActor.id,
+      invokingActorKind: invokingActor.kind,
       memoryReviewBatchId,
       sourceEntryIds: memoryReviewSourceEntryIds,
     });
     return;
   }
   if (typeof applicationSessionId !== "string" || typeof conversationId !== "string" ||
-    typeof currentTimelineEntryId !== "string" || typeof invokingTelegramUserId !== "string" ||
+    typeof currentTimelineEntryId !== "string" || invokingActor === null ||
     !Array.isArray(visibleTimelineEntryIds) ||
     !visibleTimelineEntryIds.every((entryId) => typeof entryId === "string") ||
     ((memoryReviewBatchId === undefined) !== (memoryReviewSourceEntryIds === undefined)) ||
@@ -76,7 +78,8 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
     currentTimelineEntryId,
     eveSessionId: ctx.session.id,
     eveTurnId: ctx.session.turn.id,
-    invokingTelegramUserId,
+    invokingActorId: invokingActor.id,
+    invokingActorKind: invokingActor.kind,
     ...(typeof memoryReviewBatchId === "string" ? { memoryReviewBatchId } : {}),
     ...(Array.isArray(memoryReviewSourceEntryIds) ? {
       memoryReviewSourceEntryIds: memoryReviewSourceEntryIds as string[],
@@ -116,7 +119,10 @@ export async function resolveMemoryTurnSource(
     : source.scope === "personal"
       ? auth.userId
       : auth.familyId;
-  if ((!source.isReview && source.invokingTelegramUserId !== auth.telegramUserId) ||
+  if ((!source.isReview && (
+    source.invokingActorId !== auth.telegramActorId ||
+    source.invokingActorKind !== auth.telegramActorKind
+  )) ||
     source.scopePartitionKey !== expectedPartition || !auth.scopes.includes(source.scope)) {
     throw sourceError("source_authorization_mismatch");
   }

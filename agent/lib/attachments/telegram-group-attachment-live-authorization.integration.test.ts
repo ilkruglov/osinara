@@ -10,7 +10,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { database, closeDatabase } from "../database.js";
 import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
-import { telegramGroupJournalRepository } from "../telegram-group-journal-repository.js";
+import { recordVerifiedHumanTelegramMessage } from "../telegram-group-journal.integration-fixtures.js";
 import { telegramGroupAttachmentRepository } from "./telegram-group-attachment-repository.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
@@ -77,7 +77,7 @@ async function createReference(input: {
     type: input.type,
   });
   const message = photoMessage("43", input.telegramChatId);
-  await telegramGroupJournalRepository.record(group.groupId, message);
+  await recordVerifiedHumanTelegramMessage(group.groupId, message);
   const reference = await telegramGroupAttachmentRepository.record(group.groupId, message);
   return { attachmentId: reference.attachmentId, groupId: group.groupId };
 }

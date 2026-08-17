@@ -13,7 +13,8 @@ import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { telegramGroupAttachmentRepository } from "./attachments/telegram-group-attachment-repository.js";
 import { closeDatabase, database } from "./database.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
-import { telegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+import { telegramGroupJournalRepository as productionTelegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+import { recordVerifiedHumanTelegramMessage } from "./telegram-group-journal.integration-fixtures.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const integrationDatabaseUrl = process.env.DATABASE_URL;
@@ -33,6 +34,13 @@ if (integrationTestsEnabled) {
 }
 
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
+
+// Existing journal tests use only verified human fixtures; retain the complete repository surface
+// while routing inbound writes through the actor-validating test boundary.
+const telegramGroupJournalRepository = {
+  ...productionTelegramGroupJournalRepository,
+  record: recordVerifiedHumanTelegramMessage,
+};
 
 async function createOwnedFamily(suffix: string): Promise<{ familyId: string; ownerId: string }> {
   const family = await database().query<{ id: string }>(

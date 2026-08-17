@@ -37,13 +37,23 @@ function resolve(
     session: {
       auth: {
         current: attributes === null ? null : {
-          attributes,
+          attributes: {
+            telegramActorId: "101",
+            telegramActorKind: "telegram_user",
+            telegramUserId: "101",
+            ...attributes,
+          },
           authenticator,
           principalId: "telegram:101",
           principalType: "user",
         },
         initiator: initiatorAttributes === null ? null : {
-          attributes: initiatorAttributes,
+          attributes: {
+            telegramActorId: "101",
+            telegramActorKind: "telegram_user",
+            telegramUserId: "101",
+            ...initiatorAttributes,
+          },
           authenticator: "telegram",
           principalId: "telegram:101",
           principalType: "user",

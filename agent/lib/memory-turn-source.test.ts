@@ -22,6 +22,8 @@ const groupAuthorization: MemoryAuthorization = {
   groupId: "group-1",
   role: "external",
   scopes: ["group"],
+  telegramActorId: "caller-1",
+  telegramActorKind: "telegram_user",
   telegramUserId: "caller-1",
   userId: null,
 };
@@ -37,8 +39,10 @@ describe("turn-bound memory source selection", () => {
   it("selects a visible group-delta source by rendered sequence", async () => {
     resolve.mockResolvedValueOnce({
       conversationId: "conversation-1",
-      invokingTelegramUserId: "caller-1",
+      invokingActorId: "caller-1",
+      invokingActorKind: "telegram_user",
       isCurrent: false,
+      isReview: false,
       messageThreadId: null,
       scope: "group",
       scopePartitionKey: "group-1",
@@ -49,6 +53,7 @@ describe("turn-bound memory source selection", () => {
     await expect(resolveMemoryTurnSource(context, groupAuthorization, "42")).resolves.toEqual({
       conversationId: "conversation-1",
       isCurrent: false,
+      isReview: false,
       messageThreadId: null,
       sourceMessageId: "420",
       timelineEntryId: "entry-42",
@@ -76,8 +81,10 @@ describe("turn-bound memory source selection", () => {
   it("rejects a source bound to another invoking Telegram caller", async () => {
     resolve.mockResolvedValueOnce({
       conversationId: "conversation-1",
-      invokingTelegramUserId: "caller-2",
+      invokingActorId: "caller-2",
+      invokingActorKind: "telegram_user",
       isCurrent: false,
+      isReview: false,
       messageThreadId: null,
       scope: "group",
       scopePartitionKey: "group-1",

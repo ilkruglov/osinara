@@ -11,13 +11,14 @@
  * - Entry-count bounds preserve current reply ancestry and favor the most recent coherent suffix.
  */
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
+import type { TelegramTimelineActorKind } from "./telegram-inbound-actor.js";
 
 export interface TelegramGroupJournalEntry {
   attachment?: TelegramGroupAttachmentSummary;
   /** Internal selection identity; the formatter never renders it to the model. */
   entryId?: string;
   actorId: string;
-  actorKind: "agent_self" | "user";
+  actorKind: TelegramTimelineActorKind;
   contentText: string | null;
   messageKind: string;
   messageThreadId: string | null;
@@ -29,6 +30,7 @@ export interface TelegramGroupJournalEntry {
   sentAt: string;
   senderIsBot?: boolean;
   telegramMessageId?: string;
+  telegramSenderChatId?: string | null;
   telegramUserId?: string | null;
 }
 
@@ -52,7 +54,11 @@ const JOURNAL_TRUNCATED_NOTICE = "Недоверенная история; [agen
 const REPLY_ANCESTRY_DEPTH = 2;
 
 function renderEntry(entry: TelegramGroupJournalEntry): string {
-  const actor = entry.actorKind === "agent_self" ? "agent:self" : "user";
+  const actor = entry.actorKind === "agent_self"
+    ? "agent:self"
+    : entry.actorKind === "telegram_channel"
+      ? "telegram:channel"
+      : "user";
   const name = entry.senderDisplayName ?? entry.senderUsername ?? actor;
   const reply = entry.replyToSequenceId === null ? "" : ` reply:#${entry.replyToSequenceId}`;
   const attachment = entry.attachment === undefined
