@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Exact step-scoped capabilities region is accepted.
+ * - Bundler-generated aliases for `defineDynamic` preserve the same resolver contract.
  * - Missing, unterminated, and replay-prone resolver regions fail with a stable error code.
  */
 import { describe, expect, it } from "vitest";
@@ -22,6 +23,12 @@ function compiled(event: "session.started" | "step.started" | "turn.started"): s
 describe("compiled Eve dynamic tool surface", () => {
   it("accepts the step-scoped resolver", () => {
     expect(() => validateCompiledDynamicToolSurface(compiled("step.started"))).not.toThrow();
+  });
+
+  it("accepts a bundler-generated defineDynamic alias", () => {
+    const aliasedResolver = compiled("step.started").replace("defineDynamic(", "defineDynamic$1(");
+
+    expect(() => validateCompiledDynamicToolSurface(aliasedResolver)).not.toThrow();
   });
 
   it.each(["session.started", "turn.started"] as const)(
