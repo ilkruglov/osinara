@@ -61,7 +61,7 @@ export async function authorizeTelegramReply(input: {
       const error = authorization === "forbidden"
         ? "AGENT_APPROVAL_FORBIDDEN: Подтвердить действие может только пользователь, который его запросил."
         : "AGENT_APPROVAL_EXPIRED: Это подтверждение уже использовано или больше не действует.";
-      await input.sendMessage(error);
+      if (input.message.chat.type === "private") await input.sendMessage(error);
       return { accepted: false, replyHandling, resumesPendingTask, verifiedReplyRoute };
     }
 
