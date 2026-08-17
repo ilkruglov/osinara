@@ -14,7 +14,12 @@ import { resolveConversationEnvironment } from "./conversation-environment.js";
 
 function caller(attributes: SessionAuthContext["attributes"]): SessionAuthContext {
   return {
-    attributes,
+    attributes: {
+      telegramActorId: "101",
+      telegramActorKind: "telegram_user",
+      telegramUserId: "101",
+      ...attributes,
+    },
     authenticator: "telegram",
     principalId: "user-1",
     principalType: "user",

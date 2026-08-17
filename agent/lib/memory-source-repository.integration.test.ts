@@ -68,6 +68,8 @@ describeWithDatabase("R3 memory source lookup", () => {
       groupId: group.rows[0]!.id,
       role: "external",
       scopes: ["group"],
+      telegramActorId: "9501",
+      telegramActorKind: "telegram_user",
       telegramUserId: "9501",
       userId: null,
     };
@@ -92,6 +94,8 @@ describeWithDatabase("R3 memory source lookup", () => {
       groupId: null,
       role: "owner",
       scopes: ["personal", "family"],
+      telegramActorId: "9501",
+      telegramActorKind: "telegram_user",
       telegramUserId: "9501",
       userId: user.rows[0]!.id,
     };

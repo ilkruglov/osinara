@@ -43,6 +43,7 @@ import {
   profileViewRepository,
 } from "../profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
+import { isTelegramChannelSession } from "../telegram-session-actor.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
@@ -137,6 +138,18 @@ export function createModeBlockResolver(dependencies: {
     const scheduledRun = isScheduledSession(ctx);
     if (environment !== "external") return modeInstructions({ environment, scheduledRun });
 
+    // Channel-authored turns can receive text only. Keep prompt instructions aligned with the
+    // descriptor-absent execution surface without consulting grants owned by human participants.
+    if (isTelegramChannelSession(ctx.session.auth)) {
+      return modeInstructions({
+        capabilities: new Set(),
+        environment: "external",
+        includeApplicationCore: false,
+        scheduledRun,
+        skills: new Set(),
+      });
+    }
+
     const effective = await effectiveExternalCapabilities(
       ctx.session.auth,
       dependencies.loadCapabilities,
@@ -201,6 +214,7 @@ function telegramProfileInput(
   retrievalClaimIds: readonly string[],
   turnId: string,
 ): CreateProfileViewInput | null {
+  if (isTelegramChannelSession(ctx.session.auth)) return null;
   const attributes = ctx.session.auth.current?.attributes;
   const conversationId = attributes?.telegramConversationId;
   if (typeof conversationId !== "string") return null;

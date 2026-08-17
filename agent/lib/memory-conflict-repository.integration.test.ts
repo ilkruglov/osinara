@@ -47,12 +47,15 @@ describeWithDatabase("memory conflict repository", () => {
       groupId: null,
       role: "owner",
       scopes: ["family"],
+      telegramActorId: owner.telegram_user_id,
+      telegramActorKind: "telegram_user",
       telegramUserId: owner.telegram_user_id,
       userId: owner.id,
     };
     const memberAuth: MemoryAuthorization = {
       ...ownerAuth,
       role: "member",
+      telegramActorId: member.telegram_user_id,
       telegramUserId: member.telegram_user_id,
       userId: member.id,
     };

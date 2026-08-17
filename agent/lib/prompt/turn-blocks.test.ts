@@ -40,7 +40,10 @@ function context(sessionAuth: SessionAuth, messages: readonly ModelMessage[] = [
 
 const privateAuth = auth({
   memoryScopes: ["personal", "family"],
+  telegramActorId: "101",
+  telegramActorKind: "telegram_user",
   telegramChatType: "private",
+  telegramUserId: "101",
 });
 
 const externalAuth = auth({
@@ -49,10 +52,33 @@ const externalAuth = auth({
   groupType: "external",
   memoryScopes: ["group"],
   role: "external",
+  telegramActorId: "101",
+  telegramActorKind: "telegram_user",
   telegramChatType: "supergroup",
   telegramUserId: "101",
   toolAllowlist: ["remember"],
 });
+
+const channelAuth: SessionAuth = {
+  current: {
+    attributes: {
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      role: "external",
+      skillAllowlist: ["pohuy"],
+      telegramActorId: "-1001783384254",
+      telegramActorKind: "telegram_channel",
+      telegramChatType: "supergroup",
+      toolAllowlist: ["remember"],
+    },
+    authenticator: "telegram",
+    principalId: "telegram-channel:-1001783384254",
+    principalType: "service",
+  },
+  initiator: null,
+};
 
 describe("mode block resolution", () => {
   it("resolves the verified profile for a trusted conversation", async () => {
@@ -151,6 +177,19 @@ describe("mode block resolution", () => {
     expect(loadSkills).toHaveBeenCalledWith("group-1");
     expect(markdown).toContain("`load_skill` с `skill=pohuy`");
   });
+
+  it("does not describe human capabilities or skills to a channel actor", async () => {
+    const loadCapabilities = vi.fn().mockResolvedValue(new Set(["remember"]));
+    const loadSkills = vi.fn().mockResolvedValue(new Set(["pohuy"]));
+    const resolve = createModeBlockResolver({ loadCapabilities, loadSkills });
+
+    const markdown = await resolve(context(channelAuth));
+
+    expect(loadCapabilities).not.toHaveBeenCalled();
+    expect(loadSkills).not.toHaveBeenCalled();
+    expect(markdown).not.toContain("`remember`");
+    expect(markdown).not.toContain("`load_skill`");
+  });
 });
 
 describe("memory block resolution", () => {
@@ -159,6 +198,8 @@ describe("memory block resolution", () => {
     groupId: null,
     role: "owner" as const,
     scopes: ["personal" as const, "family" as const],
+    telegramActorId: "101",
+    telegramActorKind: "telegram_user" as const,
     telegramUserId: "101",
     userId: "user-1",
   };

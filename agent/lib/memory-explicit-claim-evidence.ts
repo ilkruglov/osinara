@@ -93,7 +93,8 @@ export async function prepareExplicitClaimEvidence(
               AND turn_source.conversation_id = message.conversation_id
               AND source_set.eve_session_id = $4
               AND source_set.eve_turn_id = $5
-              AND source_set.invoking_telegram_user_id = $3
+               AND source_set.invoking_actor_kind = 'telegram_user'
+               AND source_set.invoking_actor_id = $3
            ) OR EXISTS (
              SELECT 1
              FROM memory_turn_sources AS turn_source

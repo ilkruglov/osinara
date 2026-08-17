@@ -47,6 +47,8 @@ function sessionContext(input: {
     telegramConversationId: input.conversationId,
     telegramTimelineEntryId: input.timelineEntryId,
     telegramTimelineVisibleEntryIds: [input.timelineEntryId],
+    telegramActorId: "external-memory-author",
+    telegramActorKind: "telegram_user",
     telegramUserId: "external-memory-author",
     toolAllowlist: ["remember"],
   };
@@ -95,6 +97,8 @@ function reviewContext(input: {
             memoryReviewSourceEntryIds: input.sourceEntryIds,
             memoryScopes: ["family"],
             role: "owner",
+            telegramActorId: "agent-memory-author",
+            telegramActorKind: "telegram_user",
             telegramChatType: "supergroup",
             telegramConversationId: input.conversationId,
             telegramUserId: "agent-memory-author",
@@ -231,6 +235,8 @@ describeWithDatabase("critical main-agent memory paths", () => {
       groupId: group.rows[0]!.id,
       role: "external",
       scopes: ["group"],
+      telegramActorId: "external-memory-author",
+      telegramActorKind: "telegram_user",
       telegramUserId: "external-memory-author",
       userId: null,
     })).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });

@@ -88,6 +88,8 @@ describeEval("memory retrieval eval v1", () => {
       groupId: null,
       role: "owner",
       scopes: ["personal", "family"],
+      telegramActorId: "retrieval-eval-v1",
+      telegramActorKind: "telegram_user",
       telegramUserId: "retrieval-eval-v1",
       userId: user.rows[0]!.id,
     };

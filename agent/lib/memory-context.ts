@@ -11,6 +11,8 @@ import type { DynamicResolveContext } from "eve/instructions";
 
 import { AppError } from "./app-error.js";
 import { resolveSessionCaller } from "./session-auth.js";
+import type { TelegramActorKind } from "./telegram-inbound-actor.js";
+import { resolveTelegramSessionActor } from "./telegram-session-actor.js";
 
 export type MemoryScope = "family" | "group" | "personal";
 export type MemoryRole = "external" | "member" | "owner" | "recovery_owner";
@@ -20,7 +22,9 @@ export interface MemoryAuthorization {
   groupId: string | null;
   role: MemoryRole;
   scopes: MemoryScope[];
-  telegramUserId: string;
+  telegramActorId: string;
+  telegramActorKind: TelegramActorKind;
+  telegramUserId: string | null;
   userId: string | null;
 }
 
@@ -34,11 +38,11 @@ export function requireMemoryAuthorization(ctx: MemoryContext): MemoryAuthorizat
   const memoryScopes = attributes?.memoryScopes;
   const role = attributes?.role;
   const telegramUserId = attributes?.telegramUserId;
+  const actor = resolveTelegramSessionActor(ctx.session.auth);
 
   if (
-    caller?.principalType !== "user" ||
+    actor === null ||
     typeof familyId !== "string" ||
-    typeof telegramUserId !== "string" ||
     !["external", "member", "owner", "recovery_owner"].includes(String(role)) ||
     !Array.isArray(memoryScopes) ||
     !memoryScopes.every((scope) => ["family", "group", "personal"].includes(String(scope)))
@@ -48,14 +52,28 @@ export function requireMemoryAuthorization(ctx: MemoryContext): MemoryAuthorizat
       "Не удалось определить разрешенную область памяти",
     );
   }
+  const groupIdValue = typeof groupId === "string" ? groupId : null;
+  const channelShapeValid = actor.kind !== "telegram_channel" || (
+    caller?.principalType === "service" && role === "external" && groupIdValue !== null &&
+    memoryScopes.length === 1 && memoryScopes[0] === "group" && telegramUserId === undefined
+  );
+  const userShapeValid = actor.kind !== "telegram_user" || typeof telegramUserId === "string";
+  if (!channelShapeValid || !userShapeValid) {
+    throw new AppError(
+      "AGENT_MEMORY_CONTEXT_INVALID",
+      "Не удалось определить разрешенную область памяти",
+    );
+  }
 
   return {
     familyId,
-    groupId: typeof groupId === "string" ? groupId : null,
+    groupId: groupIdValue,
     role: role as MemoryRole,
     scopes: memoryScopes as MemoryScope[],
-    telegramUserId,
-    userId: role === "external" ? null : caller.principalId,
+    telegramActorId: actor.id,
+    telegramActorKind: actor.kind,
+    telegramUserId: typeof telegramUserId === "string" ? telegramUserId : null,
+    userId: role === "external" ? null : caller!.principalId,
   };
 }
 

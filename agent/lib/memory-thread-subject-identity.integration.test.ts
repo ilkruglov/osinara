@@ -81,6 +81,8 @@ describeWithDatabase("memory thread subject identity", () => {
       groupId: fixture.groupId,
       role: "member",
       scopes: ["family"],
+      telegramActorId: "memory-reporter",
+      telegramActorKind: "telegram_user",
       telegramUserId: "memory-reporter",
       userId: reporter.rows[0]!.id,
     };

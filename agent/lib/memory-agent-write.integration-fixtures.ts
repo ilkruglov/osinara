@@ -48,6 +48,8 @@ export async function createMainAgentMemoryFixture() {
     groupId: group.rows[0]!.id,
     role: "owner",
     scopes: ["family"],
+    telegramActorId: "agent-memory-author",
+    telegramActorKind: "telegram_user",
     telegramUserId: "agent-memory-author",
     userId: user.rows[0]!.id,
   };
@@ -96,6 +98,8 @@ export async function createMainAgentPrivateMemoryFixture() {
     groupId: null,
     role: "owner",
     scopes: ["personal", "family"],
+    telegramActorId: "private-memory-author",
+    telegramActorKind: "telegram_user",
     telegramUserId: "private-memory-author",
     userId: user.rows[0]!.id,
   };

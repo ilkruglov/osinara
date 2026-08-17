@@ -27,8 +27,11 @@ import {
   telegramMessageContent,
   telegramMessageKind,
   telegramMessageSentAt,
-  telegramSenderDisplayName,
 } from "./telegram-group-message-storage.js";
+import type {
+  TelegramInboundActor,
+  TelegramTimelineActorKind,
+} from "./telegram-inbound-actor.js";
 
 const HISTORY_MAX_LIMIT = 100;
 
@@ -70,7 +73,11 @@ export interface TelegramGroupJournalRepository {
     messageThreadId: string | null;
   }): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }>;
   listRecent(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]>;
-  record(groupId: string, message: TelegramMessage): Promise<TimelineRecordResult>;
+  record(
+    groupId: string,
+    message: TelegramMessage,
+    actor: TelegramInboundActor,
+  ): Promise<TimelineRecordResult>;
   recordAgentResponse(input: RecordTelegramAgentResponseInput): Promise<{ entryId: string; sequenceId: string }>;
   search(input: TelegramGroupHistorySearchInput): Promise<{
     entries: TelegramGroupJournalEntry[];
@@ -80,7 +87,7 @@ export interface TelegramGroupJournalRepository {
 
 interface TimelineRow {
   actor_id: string;
-  actor_kind: "agent_self" | "user";
+  actor_kind: TelegramTimelineActorKind;
   attachment_file_name: string | null;
   attachment_kind: "document" | "photo" | null;
   attachment_media_type: string | null;
@@ -97,6 +104,7 @@ interface TimelineRow {
   sent_at: Date;
   sequence_id: string;
   telegram_message_id: string;
+  telegram_sender_chat_id: string | null;
   telegram_user_id: string | null;
   selected_boundary?: string;
   selected_count?: string;
@@ -105,7 +113,8 @@ interface TimelineRow {
 
 const TIMELINE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
   message.actor_id, message.telegram_message_id::text, message.message_thread_id::text,
-  message.telegram_user_id, message.sender_username, message.sender_display_name,
+  message.telegram_user_id, message.telegram_sender_chat_id,
+  message.sender_username, message.sender_display_name,
   message.sender_is_bot, message.message_kind, message.content_text,
   message.reply_to_message_id::text, message.reply_to_sequence_id::text,
   message.sent_at, message.attachment_file_name, message.attachment_media_type,
@@ -140,6 +149,7 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
     sentAt: row.sent_at.toISOString(),
     sequenceId: row.sequence_id,
     telegramMessageId: row.telegram_message_id,
+    telegramSenderChatId: row.telegram_sender_chat_id,
     telegramUserId: row.telegram_user_id,
   };
 }
@@ -249,12 +259,8 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
     };
   },
 
-  async record(groupId, message) {
+  async record(groupId, message, actor) {
     const messageId = requireTelegramPositiveBigint(message.messageId, "message_id");
-    const sender = message.from;
-    if (!sender) {
-      throw new Error("AGENT_TELEGRAM_MESSAGE_INVALID: Telegram не передал отправителя группового сообщения");
-    }
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -295,7 +301,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       const replyTarget = replyId === null
         ? null
         : (await client.query<{
-          actor_kind: "agent_self" | "user";
+          actor_kind: TelegramTimelineActorKind;
           entry_id: string;
           sequence_id: string;
         }>(
@@ -306,17 +312,19 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
           [groupId, replyId],
         )).rows[0] ?? null;
       const inserted = await client.query<{ id: string }>(
-        `INSERT INTO telegram_group_messages
+         `INSERT INTO telegram_group_messages
            (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
-            message_thread_id, telegram_user_id, sender_username, sender_display_name,
-            sender_is_bot, message_kind, content_text, reply_to_message_id,
-            reply_to_entry_id, reply_to_sequence_id, sent_at)
-         VALUES ($1, $2, 'user', $3, $4, $5, $6, $7, $8, false, $9, $10, $11, $12, $13, $14)
-         RETURNING id`,
-        [groupId, sequenceId, `telegram:${sender.id}`, messageId, telegramForumTopicId(message),
-          sender.id, sender.username ?? null, telegramSenderDisplayName(message), telegramMessageKind(message),
-          telegramMessageContent(message), replyId, replyTarget?.entry_id ?? null,
-          replyTarget?.sequence_id ?? null, telegramMessageSentAt(message)],
+             message_thread_id, telegram_user_id, telegram_sender_chat_id, sender_username,
+             sender_display_name, sender_is_bot, message_kind, content_text,
+             reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15, $16)
+          RETURNING id`,
+        [groupId, sequenceId, actor.timelineKind, actor.actorId, messageId,
+          telegramForumTopicId(message), actor.kind === "telegram_user" ? actor.id : null,
+          actor.kind === "telegram_channel" ? actor.id : null, actor.username, actor.displayName,
+          telegramMessageKind(message), telegramMessageContent(message), replyId,
+          replyTarget?.entry_id ?? null, replyTarget?.sequence_id ?? null,
+          telegramMessageSentAt(message)],
       );
       const entryId = inserted.rows[0]!.id;
       await client.query(

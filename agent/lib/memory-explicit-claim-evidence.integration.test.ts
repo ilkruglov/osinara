@@ -88,6 +88,8 @@ describeWithDatabase("explicit claim evidence", () => {
       groupId: group.rows[0]!.id,
       role: "owner",
       scopes: ["family"],
+      telegramActorId: "explicit-author",
+      telegramActorKind: "telegram_user",
       telegramUserId: "explicit-author",
       userId: author.id,
     };

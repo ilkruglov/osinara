@@ -22,6 +22,7 @@ export function createTelegramVoiceAuthorizer(
     if (message.chat.type === "private") {
       const identity = await repository.findIdentity(sender.id);
       return evaluateConversationAccess({
+        actorKind: "telegram_user",
         chat: { id: message.chat.id, type: message.chat.type },
         identity,
         registeredGroup: null,
@@ -33,6 +34,7 @@ export function createTelegramVoiceAuthorizer(
     if (!registeredGroup || registeredGroup.type !== "family_private") return false;
     const identity = await repository.findIdentity(sender.id);
     return evaluateConversationAccess({
+      actorKind: "telegram_user",
       chat: { id: message.chat.id, type: message.chat.type },
       identity,
       registeredGroup,

@@ -146,6 +146,8 @@ async function createCompletionFixture(): Promise<CompletionFixture> {
       groupId: null,
       role: "owner",
       scopes: ["family"],
+      telegramActorId: "completion-owner",
+      telegramActorKind: "telegram_user",
       telegramUserId: "completion-owner",
       userId: user.rows[0]!.id,
     },

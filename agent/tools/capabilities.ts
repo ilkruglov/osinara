@@ -31,6 +31,7 @@ import {
 } from "../lib/tool-policy/mode-tool-surface.js";
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
 import { buildMemoryReviewToolSurface } from "../lib/memory-review/memory-review-tool-surface.js";
+import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 
 export default defineDynamic({
   events: {
@@ -79,6 +80,17 @@ export default defineDynamic({
       }
       if (environment !== "external") {
         return buildSurface({ environment, scheduledRun: isScheduledSession(ctx) });
+      }
+
+      // A visible channel is not a human authority. It may receive a text response in the external
+      // group, while every application capability stays descriptor-absent for this turn.
+      if (isTelegramChannelSession(auth)) {
+        return buildSurface({
+          capabilities: new Set(),
+          environment: "external",
+          includeApplicationCore: false,
+          skills: {},
+        });
       }
 
       const policy = resolveExternalGroupToolPolicy(auth);

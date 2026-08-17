@@ -57,6 +57,8 @@ describe("retrieval diagnostics boundary", () => {
       groupId: null,
       role: "owner",
       scopes: ["personal"],
+      telegramActorId: "synthetic-telegram-id",
+      telegramActorKind: "telegram_user",
       telegramUserId: "synthetic-telegram-id",
       userId: "00000000-0000-4000-8000-000000000001",
     }, "синтетический запрос");

@@ -89,6 +89,8 @@ export async function createThreadRepositoryFixture(): Promise<ThreadRepositoryF
       groupId: null,
       role: "owner",
       scopes: ["family"],
+      telegramActorId: "thread-owner",
+      telegramActorKind: "telegram_user",
       telegramUserId: "thread-owner",
       userId: user.rows[0]!.id,
     },

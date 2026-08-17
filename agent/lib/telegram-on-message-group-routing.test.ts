@@ -163,7 +163,11 @@ describe("createTelegramMessageHandler group routing", () => {
     const message = groupMessage("контекст для будущего обращения");
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
-    expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
+    );
     expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
@@ -350,7 +354,11 @@ describe("createTelegramMessageHandler group routing", () => {
     const message = groupMessage(`@${BOT_USERNAME} открой семейную память`);
 
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
-    expect(repository.journal.record).toHaveBeenCalledWith("group-1", message);
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
+    );
     expect(repository.groupContext.prepare).not.toHaveBeenCalled();
     expect(repository.session.prepareTurn).not.toHaveBeenCalled();
   });

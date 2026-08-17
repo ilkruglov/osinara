@@ -11,12 +11,20 @@ import type { TelegramMessage } from "eve/channels/telegram";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
-import { telegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+import { telegramGroupJournalRepository as productionTelegramGroupJournalRepository } from "./telegram-group-journal-repository.js";
+import { recordVerifiedHumanTelegramMessage } from "./telegram-group-journal.integration-fixtures.js";
 import { sessionRepository } from "./sessions/session-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
   ? describe
   : describe.skip;
+
+// Existing timeline tests use only verified human fixtures; retain agent-response operations while
+// routing inbound writes through the actor-validating test boundary.
+const telegramGroupJournalRepository = {
+  ...productionTelegramGroupJournalRepository,
+  record: recordVerifiedHumanTelegramMessage,
+};
 
 function message(id: string, replyToMessageId?: string): TelegramMessage {
   return {

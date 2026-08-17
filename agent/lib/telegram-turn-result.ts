@@ -13,6 +13,7 @@ import type { ConversationAccess, RegisteredGroup } from "./family-access.js";
 import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-context.js";
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
 import type { PreparedSession } from "./sessions/session-repository.js";
+import type { TelegramInboundActor } from "./telegram-inbound-actor.js";
 import {
   formatStoredTelegramAttachments,
   formatTelegramAttachmentReferences,
@@ -20,6 +21,7 @@ import {
 
 export function buildTelegramTurnResult(input: {
   access: ConversationAccess;
+  actor: TelegramInboundActor;
   appSession: PreparedSession;
   conversation: ApplicationConversation;
   forumTopicId: string | null;
@@ -38,11 +40,10 @@ export function buildTelegramTurnResult(input: {
   turnContext: PreparedTelegramGroupTurnContext;
   turnStartedAt: Date;
 }): TelegramInboundResult {
-  const sender = input.message.from;
-  if (!sender) throw new Error("AGENT_TELEGRAM_MESSAGE_INVALID: Telegram не передал отправителя");
   const context = [
     `Verified conversation scope: ${input.access.memoryScopes.join(", ")}.`,
     `Verified role: ${input.access.role}.`,
+    `Verified Telegram actor kind: ${input.actor.kind}.`,
     "Verified Telegram delivery: reply in concise plain text by default; use supported Rich Markdown only when formatting materially improves the answer.",
     formatCurrentTimeContext(input.turnStartedAt),
   ];
@@ -99,14 +100,16 @@ export function buildTelegramTurnResult(input: {
         ...(input.turnContext.memoryReviewSourceEntryIds === undefined
           ? {}
           : { memoryReviewSourceEntryIds: input.turnContext.memoryReviewSourceEntryIds }),
-        telegramUserId: sender.id,
+        telegramActorId: input.actor.id,
+        telegramActorKind: input.actor.kind,
+        ...(input.actor.kind === "telegram_user" ? { telegramUserId: input.actor.id } : {}),
         ...(input.group && input.group.type !== "family_private"
           ? { toolAllowlist: input.group.toolAllowlist }
           : {}),
       },
       authenticator: "telegram",
-      principalId: input.access.userId ?? `telegram:${sender.id}`,
-      principalType: "user",
+      principalId: input.access.userId ?? input.actor.actorId,
+      principalType: input.actor.kind === "telegram_user" ? "user" : "service",
     },
     context,
     continuationToken: input.appSession.continuationToken,

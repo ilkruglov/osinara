@@ -13,6 +13,7 @@ import { resolveConversationAccess } from "./family-access.js";
 describe("resolveConversationAccess", () => {
   it("allows a family member to use personal and family memory in a private chat", () => {
     const access = resolveConversationAccess({
+      actorKind: "telegram_user",
       chat: { id: "101", type: "private" },
       identity: { familyId: "family-1", role: "member", userId: "user-1" },
       registeredGroup: null,
@@ -29,6 +30,7 @@ describe("resolveConversationAccess", () => {
 
   it("allows only family memory in a family group", () => {
     const access = resolveConversationAccess({
+      actorKind: "telegram_user",
       chat: { id: "-1001", type: "supergroup" },
       identity: { familyId: "family-1", role: "member", userId: "user-1" },
       registeredGroup: {
@@ -49,6 +51,7 @@ describe("resolveConversationAccess", () => {
   it("rejects a non-family caller in a family group", () => {
     expect(() =>
       resolveConversationAccess({
+        actorKind: "telegram_user",
         chat: { id: "-1001", type: "group" },
         identity: null,
         registeredGroup: {
@@ -66,6 +69,7 @@ describe("resolveConversationAccess", () => {
 
   it("isolates an external group from personal and family memory", () => {
     const access = resolveConversationAccess({
+      actorKind: "telegram_user",
       chat: { id: "-2001", type: "group" },
       identity: null,
       registeredGroup: {
@@ -91,6 +95,7 @@ describe("resolveConversationAccess", () => {
   it("rejects an unregistered group before model execution", () => {
     expect(() =>
       resolveConversationAccess({
+        actorKind: "telegram_user",
         chat: { id: "-3001", type: "group" },
         identity: null,
         registeredGroup: null,
