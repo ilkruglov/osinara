@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `classifyGoogleWorkspaceCommand`: code-reviewed read/mutation classification.
- * - Unknown, auth, and malformed commands fail closed before credentialed execution.
+ * - Unknown, auth, malformed, and flag-smuggling commands fail closed before credentialed execution.
  */
 import { describe, expect, it } from "vitest";
 
@@ -45,6 +45,17 @@ describe("classifyGoogleWorkspaceCommand", () => {
     }
   });
 
+  it("explains malformed dotted API routes without misdiagnosing OAuth access", () => {
+    expect(() => classifyGoogleWorkspaceCommand([
+      "gmail",
+      "users.messages.trash",
+      "--params",
+      '{"userId":"me","id":"message-id"}',
+    ])).toThrowError(
+      /resource и method.*отдельными argv.*read-only OAuth/u,
+    );
+  });
+
   it("accepts only documented flags for reviewed helper routes", () => {
     expect(classifyGoogleWorkspaceCommand([
       "calendar",
@@ -63,6 +74,22 @@ describe("classifyGoogleWorkspaceCommand", () => {
       "--summary-file",
       "/proc/self/environ",
     ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+  });
+
+  it("requires bounded one-shot Gmail watch execution", () => {
+    expect(classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+watch",
+      "--subscription",
+      "projects/p/subscriptions/inbox",
+      "--once",
+    ])).toBe("mutation");
+    expect(() => classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+watch",
+      "--subscription",
+      "projects/p/subscriptions/inbox",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*(?:60.*--once|--once.*60)/u);
   });
 
   it("rejects trailing command segments instead of inheriting an allowlisted prefix", () => {
@@ -90,6 +117,46 @@ describe("classifyGoogleWorkspaceCommand", () => {
         /AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u,
       );
     }
+  });
+
+  it.each(
+    ["--format", "--json", "--page-delay", "--page-limit", "--params"].flatMap((valueFlag) =>
+      ["--attach=/proc/self/environ", "--output=/proc/self/environ", "--upload=/proc/self/environ"]
+        .flatMap((fileFlag) => [
+          [valueFlag, fileFlag],
+          [`${valueFlag}=${fileFlag}`],
+        ]),
+    ),
+  )("rejects a file flag smuggled as an API value: %j", (...suffix) => {
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      ...suffix,
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+  });
+
+  it("keeps dry-run route-specific and rejects sanitize when no exact skill grants it", () => {
+    expect(classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+read",
+      "--id",
+      "message-id",
+      "--dry-run",
+    ])).toBe("read");
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      "--dry-run",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      "--sanitize",
+      "template-id",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
   });
 
   it("applies the Telegram presentation limit only to mutations", () => {

@@ -4,7 +4,7 @@
  * Exports:
  * - `BindMemoryTurnSourcesInput`: verified Telegram and Eve turn coordinates.
  * - `ResolvedMemoryTurnSource`: exact source and authorization partition projection.
- * - `memoryTurnSourceRepository`: replay-safe binding and sequence-based source resolution.
+ * - `memoryTurnSourceRepository`: replay-safe binding, HITL resume verification, and source resolution.
  */
 import { createHash } from "node:crypto";
 
@@ -53,40 +53,51 @@ interface SourceRow {
 
 function canonicalEntryIds(input: BindMemoryTurnSourcesInput): string[] {
   const reviewIds = input.memoryReviewSourceEntryIds ?? [];
-  if (new Set(input.visibleTimelineEntryIds).size !== input.visibleTimelineEntryIds.length ||
-    new Set(reviewIds).size !== reviewIds.length) {
-    throw new AppError(
-      "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-      "Набор сообщений текущего хода содержит повторяющиеся источники",
-    );
+  if (new Set(input.visibleTimelineEntryIds).size !== input.visibleTimelineEntryIds.length || new Set(reviewIds).size !== reviewIds.length) {
+    throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Набор сообщений текущего хода содержит повторяющиеся источники");
   }
   const combined = [...input.visibleTimelineEntryIds, ...reviewIds];
   const unique = [...new Set(combined)];
-  if (unique.length === 0 ||
-    !unique.includes(input.currentTimelineEntryId)) {
-    throw new AppError(
-      "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-      "Не удалось подтвердить набор сообщений текущего хода",
-    );
+  if (unique.length === 0 || !unique.includes(input.currentTimelineEntryId)) {
+    throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Не удалось подтвердить набор сообщений текущего хода");
   }
   return unique.sort();
 }
 
 function bindingHash(input: BindMemoryTurnSourcesInput, entryIds: readonly string[]): string {
-  return createHash("sha256").update(JSON.stringify({
-    applicationSessionId: input.applicationSessionId,
-    conversationId: input.conversationId,
-    currentTimelineEntryId: input.currentTimelineEntryId,
-    eveSessionId: input.eveSessionId,
-    eveTurnId: input.eveTurnId,
-    invokingActorId: input.invokingActorId,
-    invokingActorKind: input.invokingActorKind,
-    memoryReviewBatchId: input.memoryReviewBatchId ?? null,
-    visibleTimelineEntryIds: entryIds,
-  })).digest("hex");
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        applicationSessionId: input.applicationSessionId,
+        conversationId: input.conversationId,
+        currentTimelineEntryId: input.currentTimelineEntryId,
+        eveSessionId: input.eveSessionId,
+        eveTurnId: input.eveTurnId,
+        invokingActorId: input.invokingActorId,
+        invokingActorKind: input.invokingActorKind,
+        memoryReviewBatchId: input.memoryReviewBatchId ?? null,
+        visibleTimelineEntryIds: entryIds,
+      }),
+    )
+    .digest("hex");
 }
 
 export const memoryTurnSourceRepository = {
+  async verifyBoundResume(input: { applicationSessionId: string; eveSessionId: string; eveTurnId: string; invokingActorId: string; invokingActorKind: TelegramActorKind }): Promise<boolean> {
+    // HITL resumes omit the original message attributes, so only the exact retained source-set may
+    // authorize the same durable turn and actor to continue.
+    const result = await database().query<{ matches: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM memory_turn_source_sets
+          WHERE eve_session_id = $1 AND eve_turn_id = $2
+            AND application_session_id = $3
+            AND invoking_actor_id = $4 AND invoking_actor_kind = $5
+       ) AS matches`,
+      [input.eveSessionId, input.eveTurnId, input.applicationSessionId, input.invokingActorId, input.invokingActorKind],
+    );
+    return result.rows[0]?.matches === true;
+  },
+
   async bind(input: BindMemoryTurnSourcesInput): Promise<void> {
     const entryIds = canonicalEntryIds(input);
     const hash = bindingHash(input, entryIds);
@@ -100,10 +111,7 @@ export const memoryTurnSourceRepository = {
       );
       if (existing.rows[0]) {
         if (existing.rows[0].binding_hash !== hash) {
-          throw new AppError(
-            "AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH",
-            "Повторная привязка источников хода не совпадает с исходной",
-          );
+          throw new AppError("AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH", "Повторная привязка источников хода не совпадает с исходной");
         }
         await client.query("COMMIT");
         return;
@@ -130,10 +138,7 @@ export const memoryTurnSourceRepository = {
         [input.applicationSessionId, input.conversationId],
       );
       if (!boundary.rowCount) {
-        throw new AppError(
-          "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-          "Контекст хода не соответствует проверенному разговору",
-        );
+        throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Контекст хода не соответствует проверенному разговору");
       }
 
       // The full set is verified in one query before any binding row becomes durable.
@@ -151,18 +156,10 @@ export const memoryTurnSourceRepository = {
         [input.conversationId, entryIds],
       );
       const current = entries.rows.find((entry) => entry.id === input.currentTimelineEntryId);
-      const currentActorId = input.invokingActorKind === "telegram_user"
-        ? current?.telegram_user_id
-        : current?.telegram_sender_chat_id;
-      const expectedActorKind = input.invokingActorKind === "telegram_user"
-        ? "user"
-        : "telegram_channel";
-      if (entries.rows.length !== entryIds.length || current?.actor_kind !== expectedActorKind ||
-        currentActorId !== input.invokingActorId) {
-        throw new AppError(
-          "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-          "Сообщения текущего хода не принадлежат проверенному разговору или автору",
-        );
+      const currentActorId = input.invokingActorKind === "telegram_user" ? current?.telegram_user_id : current?.telegram_sender_chat_id;
+      const expectedActorKind = input.invokingActorKind === "telegram_user" ? "user" : "telegram_channel";
+      if (entries.rows.length !== entryIds.length || current?.actor_kind !== expectedActorKind || currentActorId !== input.invokingActorId) {
+        throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Сообщения текущего хода не принадлежат проверенному разговору или автору");
       }
       if (input.memoryReviewBatchId !== undefined) {
         const review = await client.query<{ timeline_entry_id: string }>(
@@ -171,13 +168,15 @@ export const memoryTurnSourceRepository = {
           [input.memoryReviewBatchId, input.conversationId],
         );
         const expected = [...(input.memoryReviewSourceEntryIds ?? [])].sort();
-        if (expected.length === 0 || review.rows.length !== expected.length ||
-          review.rows.map((row) => row.timeline_entry_id).sort()
-          .some((entryId, index) => entryId !== expected[index])) {
-          throw new AppError(
-            "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-            "Источники обычного хода не совпадают с пакетом проверки памяти",
-          );
+        if (
+          expected.length === 0 ||
+          review.rows.length !== expected.length ||
+          review.rows
+            .map((row) => row.timeline_entry_id)
+            .sort()
+            .some((entryId, index) => entryId !== expected[index])
+        ) {
+          throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Источники обычного хода не совпадают с пакетом проверки памяти");
         }
       }
       await client.query(
@@ -186,9 +185,7 @@ export const memoryTurnSourceRepository = {
               current_timeline_entry_id, invoking_actor_kind, invoking_actor_id, binding_hash,
               memory_review_batch_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [input.eveSessionId, input.eveTurnId, input.applicationSessionId, input.conversationId,
-          input.currentTimelineEntryId, input.invokingActorKind, input.invokingActorId, hash,
-          input.memoryReviewBatchId ?? null],
+        [input.eveSessionId, input.eveTurnId, input.applicationSessionId, input.conversationId, input.currentTimelineEntryId, input.invokingActorKind, input.invokingActorId, hash, input.memoryReviewBatchId ?? null],
       );
       for (const entry of entries.rows) {
         await client.query(
@@ -196,8 +193,7 @@ export const memoryTurnSourceRepository = {
              (eve_session_id, eve_turn_id, conversation_id, timeline_entry_id,
               timeline_sequence, is_current)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [input.eveSessionId, input.eveTurnId, input.conversationId, entry.id,
-            entry.sequence_id, entry.id === input.currentTimelineEntryId],
+          [input.eveSessionId, input.eveTurnId, input.conversationId, entry.id, entry.sequence_id, entry.id === input.currentTimelineEntryId],
         );
       }
       await client.query("COMMIT");
@@ -221,15 +217,16 @@ export const memoryTurnSourceRepository = {
   }): Promise<void> {
     const entryIds = [...new Set(input.sourceEntryIds)].sort();
     if (entryIds.length !== input.sourceEntryIds.length || entryIds.length === 0) {
-      throw new AppError(
-        "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-        "Не удалось подтвердить набор сообщений проверки памяти",
-      );
+      throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Не удалось подтвердить набор сообщений проверки памяти");
     }
-    const hash = createHash("sha256").update(JSON.stringify({
-      ...input,
-      sourceEntryIds: entryIds,
-    })).digest("hex");
+    const hash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          ...input,
+          sourceEntryIds: entryIds,
+        }),
+      )
+      .digest("hex");
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -239,10 +236,7 @@ export const memoryTurnSourceRepository = {
         [input.eveSessionId, input.eveTurnId],
       );
       if (existing.rows[0]) {
-        if (existing.rows[0].binding_hash !== hash) throw new AppError(
-          "AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH",
-          "Повторная привязка источников проверки не совпадает с исходной",
-        );
+        if (existing.rows[0].binding_hash !== hash) throw new AppError("AGENT_MEMORY_TURN_SOURCE_REPLAY_MISMATCH", "Повторная привязка источников проверки не совпадает с исходной");
         await client.query("COMMIT");
         return;
       }
@@ -256,10 +250,7 @@ export const memoryTurnSourceRepository = {
              AND batch.application_session_id = app_session.id`,
         [input.memoryReviewBatchId, input.applicationSessionId, input.conversationId],
       );
-      if (!boundary.rowCount) throw new AppError(
-        "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-        "Проверка памяти не соответствует текущему контексту",
-      );
+      if (!boundary.rowCount) throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Проверка памяти не соответствует текущему контексту");
       const entries = await client.query<{ id: string; sequence_id: string }>(
         `SELECT message.id, message.sequence_id::text
            FROM memory_review_batch_sources AS source
@@ -269,19 +260,14 @@ export const memoryTurnSourceRepository = {
           ORDER BY message.sequence_id`,
         [input.memoryReviewBatchId, input.conversationId, entryIds],
       );
-      if (entries.rows.length !== entryIds.length) throw new AppError(
-        "AGENT_MEMORY_TURN_SOURCE_SET_INVALID",
-        "Источники проверки памяти не совпадают с пакетным снимком",
-      );
+      if (entries.rows.length !== entryIds.length) throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Источники проверки памяти не совпадают с пакетным снимком");
       await client.query(
-         `INSERT INTO memory_turn_source_sets
+        `INSERT INTO memory_turn_source_sets
            (eve_session_id, eve_turn_id, application_session_id, conversation_id,
              current_timeline_entry_id, invoking_actor_kind, invoking_actor_id, binding_hash,
              memory_review_batch_id)
           VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8)`,
-        [input.eveSessionId, input.eveTurnId, input.applicationSessionId,
-          input.conversationId, input.invokingActorKind, input.invokingActorId, hash,
-          input.memoryReviewBatchId],
+        [input.eveSessionId, input.eveTurnId, input.applicationSessionId, input.conversationId, input.invokingActorKind, input.invokingActorId, hash, input.memoryReviewBatchId],
       );
       for (const entry of entries.rows) {
         await client.query(
@@ -289,8 +275,7 @@ export const memoryTurnSourceRepository = {
              (eve_session_id, eve_turn_id, conversation_id, timeline_entry_id,
               timeline_sequence, is_current)
            VALUES ($1, $2, $3, $4, $5, false)`,
-          [input.eveSessionId, input.eveTurnId, input.conversationId,
-            entry.id, entry.sequence_id],
+          [input.eveSessionId, input.eveTurnId, input.conversationId, entry.id, entry.sequence_id],
         );
       }
       await client.query("COMMIT");
@@ -302,11 +287,7 @@ export const memoryTurnSourceRepository = {
     }
   },
 
-  async resolve(input: {
-    eveSessionId: string;
-    eveTurnId: string;
-    sourceSequence: string | null;
-  }): Promise<ResolvedMemoryTurnSource | null> {
+  async resolve(input: { eveSessionId: string; eveTurnId: string; sourceSequence: string | null }): Promise<ResolvedMemoryTurnSource | null> {
     const result = await database().query<SourceRow>(
       `SELECT source.conversation_id, source.timeline_entry_id, source.is_current,
               (review_batch.batch_kind = 'background') AS is_review,
@@ -329,18 +310,20 @@ export const memoryTurnSourceRepository = {
       [input.eveSessionId, input.eveTurnId, input.sourceSequence],
     );
     const row = result.rows[0];
-    return row ? {
-      conversationId: row.conversation_id,
-      invokingActorId: row.invoking_actor_id,
-      invokingActorKind: row.invoking_actor_kind,
-      isCurrent: row.is_current,
-      isReview: row.is_review,
-      messageThreadId: row.message_thread_id,
-      scope: row.scope,
-      scopePartitionKey: row.scope_partition_key,
-      sourceMessageId: row.source_message_id,
-      timelineEntryId: row.timeline_entry_id,
-    } : null;
+    return row
+      ? {
+          conversationId: row.conversation_id,
+          invokingActorId: row.invoking_actor_id,
+          invokingActorKind: row.invoking_actor_kind,
+          isCurrent: row.is_current,
+          isReview: row.is_review,
+          messageThreadId: row.message_thread_id,
+          scope: row.scope,
+          scopePartitionKey: row.scope_partition_key,
+          sourceMessageId: row.source_message_id,
+          timelineEntryId: row.timeline_entry_id,
+        }
+      : null;
   },
 
   async release(eveSessionId: string, eveTurnId: string): Promise<void> {

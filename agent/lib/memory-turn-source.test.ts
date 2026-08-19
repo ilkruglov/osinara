@@ -2,20 +2,33 @@
  * Turn-bound memory source selection tests.
  *
  * Constructs covered:
+ * - `bindMemoryTurnSources`: accepts only an exact durable HITL resume and ignores scheduled runs.
  * - `resolveMemoryTurnSource`: current source default and visible group-delta sequence selection.
  * - Personal turns reject historical source selection even if a sequence is supplied.
  * - A selected source must remain bound to the same verified caller and memory partition.
  */
 import { describe, expect, it, vi } from "vitest";
 
-const { resolve } = vi.hoisted(() => ({ resolve: vi.fn() }));
+const { bind, bindReview, release, resolve, verifyBoundResume } = vi.hoisted(() => ({
+  bind: vi.fn(),
+  bindReview: vi.fn(),
+  release: vi.fn(),
+  resolve: vi.fn(),
+  verifyBoundResume: vi.fn(),
+}));
 
 vi.mock("./memory-turn-source-repository.js", () => ({
-  memoryTurnSourceRepository: { resolve },
+  memoryTurnSourceRepository: {
+    bind,
+    bindReview,
+    release,
+    resolve,
+    verifyBoundResume,
+  },
 }));
 
 import type { MemoryAuthorization } from "./memory-context.js";
-import { resolveMemoryTurnSource } from "./memory-turn-source.js";
+import { bindMemoryTurnSources, resolveMemoryTurnSource } from "./memory-turn-source.js";
 
 const groupAuthorization: MemoryAuthorization = {
   familyId: "family-1",
@@ -36,6 +49,63 @@ const context = {
 } as never;
 
 describe("turn-bound memory source selection", () => {
+  it("accepts an HITL resume only when its durable source binding matches", async () => {
+    verifyBoundResume.mockResolvedValueOnce(true);
+    const resumed = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "application-session-1",
+              telegramActorId: "caller-1",
+              telegramActorKind: "telegram_user",
+              telegramUserId: "caller-1",
+            },
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "eve-session-1",
+        turn: { id: "eve-turn-1", sequence: 0 },
+      },
+    } as never;
+
+    await expect(bindMemoryTurnSources(resumed)).resolves.toBeUndefined();
+    expect(verifyBoundResume).toHaveBeenCalledWith({
+      applicationSessionId: "application-session-1",
+      eveSessionId: "eve-session-1",
+      eveTurnId: "eve-turn-1",
+      invokingActorId: "caller-1",
+      invokingActorKind: "telegram_user",
+    });
+    expect(bind).not.toHaveBeenCalled();
+  });
+
+  it("does not require a Telegram source binding for a scheduled run", async () => {
+    verifyBoundResume.mockClear();
+    const scheduled = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "scheduled-session-1",
+              scheduledRunId: "scheduled-run-1",
+            },
+          },
+          initiator: null,
+        },
+        id: "scheduled-eve-session-1",
+        turn: { id: "scheduled-eve-turn-1", sequence: 0 },
+      },
+    } as never;
+
+    await expect(bindMemoryTurnSources(scheduled)).resolves.toBeUndefined();
+    expect(verifyBoundResume).not.toHaveBeenCalled();
+    expect(bind).not.toHaveBeenCalled();
+  });
+
   it("selects a visible group-delta source by rendered sequence", async () => {
     resolve.mockResolvedValueOnce({
       conversationId: "conversation-1",
@@ -73,8 +143,7 @@ describe("turn-bound memory source selection", () => {
       scopes: ["personal"],
     };
 
-    await expect(resolveMemoryTurnSource(context, personal, "42"))
-      .rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
+    await expect(resolveMemoryTurnSource(context, personal, "42")).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
     expect(resolve).not.toHaveBeenCalled();
   });
 
@@ -92,7 +161,6 @@ describe("turn-bound memory source selection", () => {
       timelineEntryId: "entry-42",
     });
 
-    await expect(resolveMemoryTurnSource(context, groupAuthorization, "42"))
-      .rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
+    await expect(resolveMemoryTurnSource(context, groupAuthorization, "42")).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
   });
 });

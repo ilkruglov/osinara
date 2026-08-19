@@ -9,7 +9,7 @@ metadata:
 
 # docs +write
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 Append text to a document
 
@@ -38,7 +38,7 @@ gws docs +write --document DOC_ID --text 'Hello, world!'
 - For rich formatting, use the raw batchUpdate API instead.
 
 > [!CAUTION]
-> This is a **write** command — confirm with the user before executing.
+> This is a **write** command. Execute it once; `execute_google_workspace` provides the only required Eve HITL confirmation.
 
 ## See Also
 

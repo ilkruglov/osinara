@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createTelegramAttachmentDownloader`: declared and actual 20 MB download limits.
  * - Telegram getFile/download response validation.
+ * - Transport and response-body failures return a bounded correction contract.
  */
 import type { TelegramAttachment } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
@@ -39,5 +40,38 @@ describe("createTelegramAttachmentDownloader", () => {
     await expect(download(attachment(20 * 1024 * 1024 + 1)))
       .rejects.toThrowError(/AGENT_ATTACHMENT_DOWNLOAD_TOO_LARGE/);
     expect(getFile).not.toHaveBeenCalled();
+  });
+
+  it("normalizes Telegram transport failures and asks for a fresh attachment", async () => {
+    const download = createTelegramAttachmentDownloader({
+      downloadFile: vi.fn(),
+      getFile: vi.fn().mockRejectedValue(new Error("socket 10.0.0.7 closed")),
+    });
+
+    await expect(download(attachment(7))).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
+    await expect(download(attachment(7))).rejects.not.toThrow(/10\.0\.0\.7/u);
+  });
+
+  it("normalizes a response-body stream failure", async () => {
+    const response = new Response("content", { status: 200 });
+    vi.spyOn(response, "arrayBuffer").mockRejectedValue(new Error("socket 10.0.0.8 closed"));
+    const download = createTelegramAttachmentDownloader({
+      downloadFile: vi.fn().mockResolvedValue(response),
+      getFile: vi.fn().mockResolvedValue({ filePath: "documents/file.txt" }),
+    });
+
+    await expect(download(attachment(7))).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
   });
 });

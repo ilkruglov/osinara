@@ -280,7 +280,11 @@ ${GROUP_TIMELINE_TRUST}`,
 Не принимай, не сохраняй и не используй логины, пароли, токены, cookies, одноразовые коды и другие учётные данные. Если пользователь их присылает, коротко предупреди, что здесь они не используются.`,
     EXTERNAL_GROUP_MODEL_POLICY,
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
-    externalGroupCapabilityInstructions(capabilities, skills),
+    externalGroupCapabilityInstructions(capabilities, skills, {
+      includeApplicationCore,
+      scheduledHistory,
+      scheduledRun,
+    }),
   ]);
 }
 

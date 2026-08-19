@@ -6,6 +6,7 @@
  * - `embedMemoryQuery`: embeds retrieval queries with the E5 query protocol.
  */
 import { AppError } from "./app-error.js";
+import { ModelFacingError } from "./model-facing-error.js";
 import { chunkMemoryQuery } from "./memory-embedding-chunks.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
@@ -63,23 +64,55 @@ async function embedMemoryTexts(
     );
   }
   const endpoint = new URL("/v1/embeddings", requireEmbeddingBaseUrl()).toString();
-  const response = await fetchImplementation(endpoint, {
-    body: JSON.stringify({
-      encoding_format: "float",
-      input: texts,
-      model: MEMORY_EMBEDDING_MODEL,
-    }),
-    headers: { "content-type": "application/json" },
-    method: "POST",
-    signal: AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MILLISECONDS),
-  });
+  let response: Response;
+  try {
+    response = await fetchImplementation(endpoint, {
+      body: JSON.stringify({
+        encoding_format: "float",
+        input: texts,
+        model: MEMORY_EMBEDDING_MODEL,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MILLISECONDS),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      code: "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw new ModelFacingError({
+      category: "dependency",
+      code: "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
+      correction: "Не повторяйте поиск автоматически. Сообщите, что поиск памяти временно недоступен.",
+      reason: "Локальный сервис поиска памяти недоступен.",
+      retryable: false,
+      sideEffectStatus: "not_started",
+    });
+  }
   if (!response.ok) {
     throw new AppError(
       "AGENT_MEMORY_EMBEDDING_PROVIDER_FAILED",
       "Локальный сервис памяти не смог обработать текст. Повторите попытку позже",
     );
   }
-  const payload = (await response.json()) as EmbeddingResponse;
+  let payload: EmbeddingResponse;
+  try {
+    payload = (await response.json()) as EmbeddingResponse;
+  } catch (error) {
+    console.error(JSON.stringify({
+      code: "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw new ModelFacingError({
+      category: "dependency",
+      code: "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
+      correction: "Не повторяйте поиск автоматически. Сообщите, что сервис памяти вернул повреждённый ответ.",
+      reason: "Локальный сервис памяти вернул ответ, который невозможно прочитать.",
+      retryable: false,
+      sideEffectStatus: "not_started",
+    });
+  }
   if (payload.model !== MEMORY_EMBEDDING_MODEL) {
     throw new AppError(
       "AGENT_MEMORY_EMBEDDING_MODEL_MISMATCH",

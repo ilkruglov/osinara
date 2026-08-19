@@ -9,6 +9,7 @@ import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { wrapModelFacingToolMap } from "../model-facing-tool.js";
 import listMemories from "../tools/list_memories.js";
 import listMemoryThreads from "../tools/list_memory_threads.js";
 import readMemoryThread from "../tools/read_memory_thread.js";
@@ -137,5 +138,5 @@ export function buildMemoryReviewToolSurface(
     );
   }
   for (const name of MEMORY_REVIEW_DENIED_TOOL_NAMES) surface[name] = deniedTool(name);
-  return surface;
+  return wrapModelFacingToolMap(surface);
 }

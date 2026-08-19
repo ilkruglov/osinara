@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - One immutable Eve turn snapshot binds the current message and visible group delta.
+ * - HITL resume verification accepts only the same application session, turn, and Telegram actor.
  * - Sequence resolution returns only a source captured for that exact Eve session and turn.
  * - Rebinding the same turn with a different visible set fails instead of widening access.
  */
@@ -69,6 +70,21 @@ describeWithDatabase("turn-bound memory source repository", () => {
       visibleTimelineEntryIds: [delta.rows[0]!.id, fixture.timelineEntryId],
     };
     await memoryTurnSourceRepository.bind(binding);
+
+    await expect(memoryTurnSourceRepository.verifyBoundResume({
+      applicationSessionId: binding.applicationSessionId,
+      eveSessionId: binding.eveSessionId,
+      eveTurnId: binding.eveTurnId,
+      invokingActorId: binding.invokingActorId,
+      invokingActorKind: binding.invokingActorKind,
+    })).resolves.toBe(true);
+    await expect(memoryTurnSourceRepository.verifyBoundResume({
+      applicationSessionId: binding.applicationSessionId,
+      eveSessionId: binding.eveSessionId,
+      eveTurnId: binding.eveTurnId,
+      invokingActorId: "another-telegram-actor",
+      invokingActorKind: binding.invokingActorKind,
+    })).resolves.toBe(false);
 
     await expect(memoryTurnSourceRepository.resolve({
       eveSessionId: binding.eveSessionId,

@@ -8,12 +8,14 @@
  * The allowlist is pinned to the installed gws 0.22.5 command tree. Command meaning is never
  * inferred from model prose, JSON bodies, flag names, or substrings in user-controlled values.
  */
-import { AppError } from "../app-error.js";
+import {
+  googleWorkspaceArgumentsTooLarge,
+  googleWorkspaceCommandForbidden as forbidden,
+  validateGoogleWorkspaceArgv,
+} from "./google-workspace-command-errors.js";
 
 export type GoogleWorkspaceCommandKind = "mutation" | "read";
 
-const MAX_ARGUMENT_COUNT = 128;
-const MAX_ARGUMENT_LENGTH = 64 * 1024;
 const MAX_APPROVABLE_ARGUMENTS_LENGTH = 3_000;
 
 const READ_ROUTES = [
@@ -265,14 +267,12 @@ const FILE_PATH_FLAGS = new Set([
 type FlagArity = "boolean" | "value";
 
 const API_FLAGS: Readonly<Record<string, FlagArity>> = {
-  "--dry-run": "boolean",
   "--format": "value",
   "--json": "value",
   "--page-all": "boolean",
   "--page-delay": "value",
   "--page-limit": "value",
   "--params": "value",
-  "--sanitize": "value",
 };
 
 const HELPER_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagArity>>>> = {
@@ -323,29 +323,6 @@ const HELPER_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagArity>>>
   "sheets +read": { "--range": "value", "--spreadsheet": "value" },
 };
 
-function forbidden(): AppError {
-  return new AppError(
-    "AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN",
-    "Эта команда Google Workspace не разрешена. Используйте поддерживаемую команду из trusted skill",
-  );
-}
-
-function argumentsTooLarge(): AppError {
-  return new AppError(
-    "AGENT_GOOGLE_WORKSPACE_ARGUMENTS_TOO_LARGE",
-    "Параметры изменения Google Workspace слишком велики для полного показа перед подтверждением",
-  );
-}
-
-function validateArguments(argv: readonly string[]): void {
-  if (argv.length === 0 || argv.length > MAX_ARGUMENT_COUNT) throw forbidden();
-  for (const argument of argv) {
-    if (!argument || argument.length > MAX_ARGUMENT_LENGTH || argument.includes("\0")) {
-      throw forbidden();
-    }
-  }
-}
-
 function classifyRoute(route: string): GoogleWorkspaceCommandKind {
   if (READ_ROUTE_SET.has(route)) return "read";
   if (MUTATION_ROUTE_SET.has(route)) return "mutation";
@@ -366,7 +343,15 @@ function resolveReviewedRoute(argv: readonly string[]): {
   const match = REVIEWED_ROUTES.find(({ segments }) =>
     segments.every((segment, index) => argv[index] === segment)
   );
-  if (!match) throw forbidden();
+  if (!match) {
+    const dotted = argv.some((argument) => argument.includes("."));
+    throw forbidden(
+      dotted
+        ? "API resource и method объединены через точку или route не существует."
+        : "Route не найден в проверенном allowlist.",
+      "Передайте service, resource, optional sub-resource и method отдельными argv элементами. Точка допустима только во втором аргументе top-level schema; отказ не означает read-only OAuth.",
+    );
+  }
   return {
     argumentOffset: match.segments.length,
     kind: classifyRoute(match.route),
@@ -380,18 +365,44 @@ function validateRouteArguments(route: string, argv: readonly string[]): void {
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]!;
-    if (isFilePathFlag(argument)) throw forbidden();
+    if (isFilePathFlag(argument)) {
+      throw forbidden(
+        `Файловый flag ${argument.split("=", 1)[0]} запрещён в credentialed runner.`,
+        "Удалите файловый flag и используйте только non-file API поля или отдельный application tool.",
+      );
+    }
     const separator = argument.indexOf("=");
     const flag = separator === -1 ? argument : argument.slice(0, separator);
     const arity = flags[flag];
-    if (!arity || !flag.startsWith("--")) throw forbidden();
+    if (!arity || !flag.startsWith("--")) {
+      throw forbidden(
+        `Flag или positional argument ${flag} не разрешён для route ${route}.`,
+        "Сверьте flags в exact trusted skill этого route; не применяйте flags из другого helper.",
+      );
+    }
     if (separator !== -1) {
-      if (arity !== "value" || separator === argument.length - 1) throw forbidden();
+      if (arity !== "value" || separator === argument.length - 1) {
+        throw forbidden(`Flag ${flag} получил неверную inline-форму.`, "Передайте непустое значение отдельным argv элементом.");
+      }
+      if (argument.slice(separator + 1).startsWith("-")) {
+        throw forbidden(
+          `Значение flag ${flag} похоже на отдельный flag.`,
+          `Передайте корректное значение ${flag}; не скрывайте другой flag внутри его значения.`,
+        );
+      }
       continue;
     }
     if (arity === "boolean") continue;
     const value = argv[index + 1];
-    if (value === undefined) throw forbidden();
+    if (value === undefined) {
+      throw forbidden(`Для flag ${flag} отсутствует значение.`, `Добавьте значение сразу после ${flag}.`);
+    }
+    if (value.startsWith("-")) {
+      throw forbidden(
+        `Значение flag ${flag} похоже на отдельный flag.`,
+        `Передайте корректное значение ${flag}; не скрывайте другой flag внутри его значения.`,
+      );
+    }
     index += 1;
   }
 }
@@ -399,7 +410,7 @@ function validateRouteArguments(route: string, argv: readonly string[]): void {
 export function classifyGoogleWorkspaceCommand(
   argv: readonly string[],
 ): GoogleWorkspaceCommandKind {
-  validateArguments(argv);
+  validateGoogleWorkspaceArgv(argv);
 
   // Service-level help and reviewed schema discovery are local reads and never need credentials.
   if (argv.length === 2 && SERVICE_NAMES.has(argv[0]!) && argv[1] === "--help") return "read";
@@ -423,15 +434,24 @@ export function classifyGoogleWorkspaceCommand(
   // stay unavailable until files can be copied into a credential-free staging mount; otherwise a
   // model could upload `/proc/self/environ` and exfiltrate the live OAuth token.
   if (argumentsAfterRoute[0] !== undefined && !argumentsAfterRoute[0].startsWith("-")) {
-    throw forbidden();
+    throw forbidden(
+      `После route передан positional argument ${argumentsAfterRoute[0]}.`,
+      "После точного route используйте только документированные flags и их значения.",
+    );
   }
   validateRouteArguments(reviewed.route, argumentsAfterRoute);
+  if (reviewed.route === "gmail +watch" && !argumentsAfterRoute.includes("--once")) {
+    throw forbidden(
+      "gmail +watch без --once является долгоживущей командой, которую one-shot runner остановит через 60 секунд.",
+      "Добавьте --once. После timeout не повторяйте setup вслепую: сначала проверьте фактические Pub/Sub resources.",
+    );
+  }
   // Telegram must be able to show every material mutation argument before approval.
   if (
     reviewed.kind === "mutation" &&
     JSON.stringify(argv).length > MAX_APPROVABLE_ARGUMENTS_LENGTH
   ) {
-    throw argumentsTooLarge();
+    throw googleWorkspaceArgumentsTooLarge();
   }
   return reviewed.kind;
 }

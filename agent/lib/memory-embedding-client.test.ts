@@ -4,6 +4,7 @@
  * Constructs covered:
  * - E5 query and passage requests use distinct required prefixes and pinned model identity.
  * - Missing configuration, provider failures, malformed output, and wrong dimensions fail explicitly.
+ * - Network and JSON decoding failures use a safe structured provider contract.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -135,5 +136,21 @@ describe("memory embedding client", () => {
         })),
       ),
     ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_MODEL_MISMATCH/);
+  });
+
+  it.each([
+    ["network", vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5"))],
+    ["json", vi.fn().mockResolvedValue(new Response("not-json", { status: 200 }))],
+  ])("normalizes a %s boundary failure without leaking transport details", async (_case, fetchMock) => {
+    process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
+
+    await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.toMatchObject({
+      contract: {
+        category: "dependency",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
+    await expect(embedMemoryPassages(["текст"], fetchMock)).rejects.not.toThrow(/10\.0\.0\.5/u);
   });
 });

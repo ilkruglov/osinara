@@ -9,7 +9,7 @@ metadata:
 
 # sheets +append
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 Append a row to a spreadsheet
 
@@ -43,7 +43,7 @@ gws sheets +append --spreadsheet ID --range "Sheet2!A1" --values 'Alice,100'
 - Use --range to append to a specific sheet tab (default: A1, i.e. first sheet).
 
 > [!CAUTION]
-> This is a **write** command — confirm with the user before executing.
+> This is a **write** command. Execute it once; `execute_google_workspace` provides the only required Eve HITL confirmation.
 
 ## See Also
 

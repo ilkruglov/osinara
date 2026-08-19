@@ -3,6 +3,7 @@
  *
  * Export:
  * - `externalGroupCapabilityInstructions`: renders the exact effective model capability surface.
+ * - `ExternalGroupCapabilityInstructionOptions`: independently issued core capability switches.
  */
 import {
   EXTERNAL_GROUP_CAPABILITY_CATALOG,
@@ -13,22 +14,51 @@ import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js"
 
 function modelInvocation(name: ExternalGroupToolName | string): string {
   const memoryAction = /^manage_memory\.(edit|delete|undo)$/u.exec(name)?.[1];
-  return memoryAction ? `\`manage_memory\` с \`action=${memoryAction}\`` : `\`${name}\``;
+  if (memoryAction) return `\`manage_memory\` с \`action=${memoryAction}\``;
+  const threadAction = /^manage_memory_thread\.(complete|reactivate)$/u.exec(name)?.[1];
+  return threadAction
+    ? `\`manage_memory_thread\` с \`action=${threadAction}\``
+    : `\`${name}\``;
 }
+
+export interface ExternalGroupCapabilityInstructionOptions {
+  includeApplicationCore: boolean;
+  scheduledHistory: boolean;
+  scheduledRun: boolean;
+}
+
+const DEFAULT_INSTRUCTION_OPTIONS: ExternalGroupCapabilityInstructionOptions = {
+  includeApplicationCore: false,
+  scheduledHistory: false,
+  scheduledRun: false,
+};
 
 export function externalGroupCapabilityInstructions(
   allowed: ReadonlySet<ExternalGroupToolName>,
   skills: ReadonlySet<GroupSafeSkillName>,
+  options: ExternalGroupCapabilityInstructionOptions = DEFAULT_INSTRUCTION_OPTIONS,
 ): string {
   // Catalog order makes the prompt deterministic while the set keeps authorization exact.
   const effectiveCapabilities = [
     ...SANDBOX_FILE_CAPABILITY_CATALOG,
     ...EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(({ name }) => allowed.has(name)),
   ];
-  const usage = effectiveCapabilities
+  const applicationCore = options.includeApplicationCore
+    ? [
+      { name: "read_profile_view", usage: "прочитать выданный текущему чату снимок профиля по profileViewRef" },
+      ...(options.scheduledRun
+        ? []
+        : [{ name: "manage_behavior_preference", usage: "прочитать или изменить стиль ответов текущего чата по явной просьбе" }]),
+      ...(options.scheduledHistory
+        ? [{ name: "read_scheduled_group_history", usage: "последовательно прочитать разрешённый snapshot истории scheduled run" }]
+        : []),
+    ]
+    : [];
+  const completeSurface = [...effectiveCapabilities, ...applicationCore];
+  const usage = completeSurface
     .map(({ name, usage: description }) => `- ${modelInvocation(name)}: ${description}.`)
     .join("\n");
-  const effectiveAllowlist = effectiveCapabilities.map(({ name }) => `\`${name}\``).join(", ");
+  const effectiveAllowlist = completeSurface.map(({ name }) => modelInvocation(name)).join(", ");
   const skillUsage = [...skills]
     .map((name) => `- \`load_skill\` с \`skill=${name}\`: загрузить инструкции разрешённого skill \`${name}\`.`)
     .join("\n");
@@ -50,7 +80,7 @@ ${usage}
 
 ${skills.size === 0 ? "" : `Effective skill allowlist: ${skillAllowlist}.\n\n${skillUsage}`}
 
-Используй capabilities только для указанного usage. Даже если в tool schema видны другие инструменты, не вызывай, не предлагай и не утверждай, что можешь использовать другие видимые static descriptors.${memoryActions}
+Используй capabilities только для указанного usage. Не вызывай, не предлагай и не утверждай, что можешь использовать инструменты, не перечисленные выше.${memoryActions}
 
 Trusted-only skills Google Workspace не доступны во внешней группе: не предлагай и не используй их, даже если устаревший static descriptor оказался виден.
 </external_group_capabilities>

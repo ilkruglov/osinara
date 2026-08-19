@@ -9,7 +9,7 @@ metadata:
 
 # gmail +read
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 Read a message and extract its body or headers
 
@@ -34,7 +34,7 @@ gws gmail +read --id <ID>
 ```bash
 gws gmail +read --id 18f1a2b3c4d
 gws gmail +read --id 18f1a2b3c4d --headers
-gws gmail +read --id 18f1a2b3c4d --format json | jq '.body'
+gws gmail +read --id 18f1a2b3c4d --format json
 ```
 
 ## Tips

@@ -33,6 +33,10 @@ function approval(argv: string[]) {
   }).approval({ toolInput: { argv } });
 }
 
+function toolDescription(): string {
+  return (executeGoogleWorkspace as unknown as { description: string }).description;
+}
+
 function dependencies(auth: GoogleIntegrationAuthorization = personalAuth) {
   return {
     resolveAuthorization: vi.fn().mockResolvedValue(auth),
@@ -53,6 +57,11 @@ describe("execute_google_workspace approval", () => {
       "user-approval",
     );
     expect(approval(["auth", "export"])).toMatchObject({ type: "denied" });
+  });
+
+  it("tells the model to keep API route segments in separate argv entries", () => {
+    expect(toolDescription()).toContain('"gmail", "users", "messages", "trash"');
+    expect(toolDescription()).toContain("не объединяйте их через точку");
   });
 });
 
@@ -78,6 +87,7 @@ describe("createGoogleWorkspaceExecutor", () => {
     expect(deps.withAuthorizedExecution).toHaveBeenCalledWith(auth, expect.any(Function));
     expect(deps.run).toHaveBeenCalledWith(
       ["calendar", "events", "list", "--params", "{}"],
+      "read",
       auth,
       "live-access-token",
       expect.anything(),

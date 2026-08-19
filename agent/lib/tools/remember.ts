@@ -25,8 +25,12 @@ export default defineTool({
       ? "user-approval"
       : "not-applicable";
   },
-  description:
-    "Сохранить одну устойчивую запись, которую ты сама определила из проверенного сообщения текущего хода; в группе sourceSequence выбирает одно сообщение из видимой дельты, optional thread атомарно создаёт нить или прикрепляет запись. Не сохраняй предположения и одноразовые запросы.",
+  description: [
+    "Сохранить одну устойчивую запись, которую ты сама определила только из проверенного сообщения текущего хода; не сохраняй предположения и одноразовые запросы.",
+    "Обычный payload: {\"basis\":\"user_requested\",\"content\":\"...\",\"kind\":\"fact\",\"scope\":\"personal\",\"sensitivity\":\"normal\",\"subject\":{\"kind\":\"current_author\"}}.",
+    "В группе sourceSequence выбирает ровно одно сообщение видимой дельты. Для существующей нити используй thread.action=attach и threadRef только из list/search/read_memory_thread; thread.action=create создаёт нить атомарно.",
+    "Sensitive и запись из private в family автоматически требуют Eve HITL. Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
+  ].join(" "),
   inputSchema: rememberInputSchema,
   async execute(input, ctx) {
     const authorization = requireMemoryAuthorization(ctx);

@@ -8,6 +8,7 @@
  * - Revoked live attachment access stops before Telegram download and vision analysis.
  * - Unsupported model capability returns a stable tool result before file or provider access.
  * - Non-image and provider-oversized files fail before a paid model call.
+ * - Provider failures are normalized for persisted and ephemeral Telegram images.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -330,5 +331,75 @@ describe("createWorkspaceImageInspector", () => {
       question: "Что изображено?",
       scope: "group",
     })).rejects.toBe(denied);
+  });
+
+  it("normalizes a raw vision provider failure without exposing provider internals", async () => {
+    const inspect = createWorkspaceImageInspector({
+      analyze: vi.fn().mockRejectedValue(new Error("upstream API key invalid")),
+      authorizeScope: vi.fn(async () => undefined),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: Buffer.from("image"),
+        file: { mediaType: "image/png", path: "image.png", scope: "personal" },
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+      supportsImageInput: true,
+    });
+
+    await expect(inspect(auth, {
+      path: "image.png",
+      question: "Что изображено?",
+      scope: "personal",
+    })).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
+  });
+
+  it("normalizes a vision provider failure for an opaque Telegram attachment", async () => {
+    const inspect = createWorkspaceImageInspector({
+      analyze: vi.fn().mockRejectedValue(new Error("upstream API key invalid")),
+      authorizeScope: vi.fn(async () => undefined),
+      downloadTelegramAttachment: vi.fn().mockResolvedValue(
+        Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
+      ),
+      findTelegramAttachment: vi.fn().mockResolvedValue({
+        attachment: {
+          fileId: "secret-file-id",
+          fileName: "scheme.png",
+          kind: "document",
+          mediaType: "image/png",
+          size: 16,
+        },
+        chatId: "-1001",
+        messageId: "41",
+      }),
+      readBinary: vi.fn(),
+      readTelegramInboxAttachment: vi.fn(),
+      supportsImageInput: true,
+    });
+
+    await expect(inspect({
+      ...auth,
+      groupId: "group-1",
+      groupType: "external",
+      role: "external",
+      telegramChatType: "supergroup",
+      userId: null,
+    }, {
+      attachmentId: "00000000-0000-4000-8000-000000000041",
+      question: "Что изображено?",
+      scope: "group",
+    })).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
   });
 });

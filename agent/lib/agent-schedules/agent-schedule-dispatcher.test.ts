@@ -65,11 +65,7 @@ describe("agent schedule dispatcher", () => {
     })(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(dispatched).toBe(1);
-    expect(prepareSession).toHaveBeenCalledWith(
-      job,
-      "101::schedule:run-1",
-      new Date("2026-07-17T06:00:00.000Z"),
-    );
+    expect(prepareSession).toHaveBeenCalledWith(job, "101::schedule:run-1", new Date("2026-07-17T06:00:00.000Z"));
     expect(to).toHaveBeenCalledWith(expect.any(Object), {
       chatId: "101",
       conversationId: "schedule:run-1",
@@ -82,6 +78,8 @@ describe("agent schedule dispatcher", () => {
           scheduleScheduledFor: "2026-07-17T06:00:00.000Z",
           scheduleTitle: "Новости ИИ",
           scheduledRunId: "run-1",
+          telegramActorId: "telegram-101",
+          telegramActorKind: "telegram_user",
         }),
         authenticator: "telegram",
         principalId: "user-1",
@@ -132,10 +130,8 @@ describe("agent schedule dispatcher", () => {
     } as never)(new Date("2026-07-17T06:00:00.000Z"));
 
     expect(prepareHistory).toHaveBeenCalledWith(groupJob);
-    expect(prepareHistory.mock.invocationCallOrder[0])
-      .toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
-    expect(prepareSession.mock.invocationCallOrder[0])
-      .toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
+    expect(prepareHistory.mock.invocationCallOrder[0]).toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
+    expect(prepareSession.mock.invocationCallOrder[0]).toBeLessThan(repository.markDispatchStarted.mock.invocationCallOrder[0]!);
     expect(to).toHaveBeenCalledWith(expect.any(Object), {
       chatId: "-1001234567890",
       conversationId: "schedule:run-1",
@@ -222,9 +218,7 @@ describe("agent schedule dispatcher", () => {
     const repository = {
       claimDue: vi.fn().mockResolvedValue([job, secondJob]),
       failClaim: vi.fn(),
-      markDispatchStarted: vi.fn()
-        .mockRejectedValueOnce(new Error("marker unavailable"))
-        .mockResolvedValueOnce(true),
+      markDispatchStarted: vi.fn().mockRejectedValueOnce(new Error("marker unavailable")).mockResolvedValueOnce(true),
       markRunning: vi.fn(),
     };
     const send = vi.fn().mockResolvedValue({ id: "eve-session-2" });
