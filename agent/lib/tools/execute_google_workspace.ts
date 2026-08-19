@@ -24,7 +24,7 @@ import { googleWorkspaceProfileStore } from "../google-workspace/google-workspac
 
 const commandSchema = z.object({
   argv: z.array(z.string().min(1).max(64 * 1024)).min(1).max(128).describe(
-    "Точные аргументы gws без имени бинарника и без shell quoting",
+    "Точные аргументы gws без имени бинарника и shell quoting; API resource и method передаются отдельными элементами",
   ),
 }).strict();
 
@@ -59,6 +59,7 @@ interface GoogleWorkspaceExecutorDependencies {
   resolveAuthorization(ctx: ToolContext): Promise<GoogleIntegrationAuthorization>;
   run(
     argv: readonly string[],
+    kind: "mutation" | "read",
     auth: GoogleIntegrationAuthorization,
     accessToken: string,
     ctx: ToolContext,
@@ -106,7 +107,7 @@ export function createGoogleWorkspaceExecutor(dependencies: GoogleWorkspaceExecu
 
     // This DB/profile check intentionally occurs after a potentially long HITL pause.
     return await dependencies.withAuthorizedExecution(auth, async (accessToken) => {
-      const result = await dependencies.run(input.argv, auth, accessToken, ctx);
+      const result = await dependencies.run(input.argv, kind, auth, accessToken, ctx);
       return { kind, scope: auth.scope, ...modelFacingOutput(kind, result) };
     });
   };
@@ -114,8 +115,8 @@ export function createGoogleWorkspaceExecutor(dependencies: GoogleWorkspaceExecu
 
 const executeGoogleWorkspace = createGoogleWorkspaceExecutor({
   resolveAuthorization: resolveGoogleWorkspaceAuthorization,
-  run: (argv, auth, accessToken, ctx) =>
-    runGoogleWorkspaceCommand(argv, auth, accessToken, ctx),
+  run: (argv, kind, auth, accessToken, ctx) =>
+    runGoogleWorkspaceCommand(argv, kind, auth, accessToken, ctx),
   withAuthorizedExecution: withAuthorizedGoogleWorkspaceExecution,
 });
 
@@ -135,7 +136,7 @@ export default defineTool({
     }
   },
   description:
-    "Выполнить разрешённую команду Google Workspace в текущем personal/family профиле. Передайте точный argv без `gws`; mutation автоматически требует подтверждения Eve со всеми аргументами и должна занимать не более 3000 символов в JSON-представлении. Файловые аргументы недоступны.",
+    "Выполнить разрешённую команду Google Workspace в текущем personal/family профиле. Передайте точный argv без `gws`. API resource и method всегда передавайте отдельными элементами, не объединяйте их через точку: например, `\"gmail\", \"users\", \"messages\", \"trash\"`. Для schema используйте top-level argv `\"schema\", \"gmail.users.messages.trash\"`. Mutation автоматически требует подтверждения Eve со всеми аргументами и должна занимать не более 3000 символов в JSON-представлении. Файловые аргументы недоступны.",
   inputSchema: commandSchema,
   async execute(input, ctx) {
     return await executeGoogleWorkspace(input, ctx);

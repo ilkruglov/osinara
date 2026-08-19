@@ -31,7 +31,7 @@ async function parseTelegramSendResponse(response: Response): Promise<TelegramSe
       errorName: error instanceof Error ? error.name : "UnknownError",
     }));
     throw new AppError(
-      "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
+      "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
       "Telegram не подтвердил отправку файла. Проверьте чат перед повторным запросом",
     );
   }
@@ -118,8 +118,12 @@ export async function deliverWorkspaceFile(
   const payload = await parseTelegramSendResponse(response);
   const messageId = payload.result?.message_id;
   if (payload.ok !== true || !Number.isSafeInteger(messageId)) {
+    console.error(JSON.stringify({
+      code: "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
+      providerAcknowledged: payload.ok === true,
+    }));
     throw new AppError(
-      "AGENT_WORKSPACE_FILE_DELIVERY_RESPONSE_INVALID",
+      "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
       "Telegram не подтвердил отправку файла. Проверьте чат перед повторным запросом",
     );
   }

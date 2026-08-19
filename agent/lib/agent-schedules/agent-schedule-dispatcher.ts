@@ -9,30 +9,17 @@ import { telegramContinuationToken } from "eve/channels/telegram";
 import type { ScheduleToFn } from "eve/schedules";
 
 import telegram from "../../channels/telegram.js";
-import {
-  AGENT_SCHEDULE_DISPATCH_BATCH_SIZE,
-  AGENT_SCHEDULE_DISPATCH_LEASE_MILLISECONDS,
-} from "./agent-schedule-config.js";
-import {
-  type ClaimedAgentSchedule,
-  agentScheduleDispatchRepository,
-} from "./agent-schedule-dispatch-repository.js";
+import { AGENT_SCHEDULE_DISPATCH_BATCH_SIZE, AGENT_SCHEDULE_DISPATCH_LEASE_MILLISECONDS } from "./agent-schedule-config.js";
+import { type ClaimedAgentSchedule, agentScheduleDispatchRepository } from "./agent-schedule-dispatch-repository.js";
 import { scheduledGroupHistorySnapshotRepository } from "./scheduled-group-history-snapshot-repository.js";
 import { numericMessageThreadId } from "./agent-schedule-validation.js";
 import { sessionRepository, type PreparedSession } from "../sessions/session-repository.js";
 
 interface AgentScheduleDispatcherRepository {
-  claimDue(options: {
-    leaseMilliseconds: number;
-    limit: number;
-    now: Date;
-  }): Promise<ClaimedAgentSchedule[]>;
+  claimDue(options: { leaseMilliseconds: number; limit: number; now: Date }): Promise<ClaimedAgentSchedule[]>;
   failClaim(job: ClaimedAgentSchedule, errorCode: string): Promise<void>;
   markDispatchStarted(job: ClaimedAgentSchedule, input: { applicationSessionId: string }): Promise<boolean>;
-  markRunning(
-    job: ClaimedAgentSchedule,
-    input: { applicationSessionId: string; eveSessionId: string },
-  ): Promise<void>;
+  markRunning(job: ClaimedAgentSchedule, input: { applicationSessionId: string; eveSessionId: string }): Promise<void>;
 }
 
 interface AgentScheduleDispatcherDependencies {
@@ -56,9 +43,7 @@ function baseContinuationToken(job: ClaimedAgentSchedule): string {
   return telegramContinuationToken({
     chatId: job.telegramChatId,
     conversationId: scheduledConversationId(job),
-    ...(job.messageThreadId === null
-      ? {}
-      : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
+    ...(job.messageThreadId === null ? {} : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
   });
 }
 
@@ -96,6 +81,8 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
       scheduledRunId: job.runId,
       telegramChatId: job.telegramChatId,
       telegramChatType: job.telegramChatType,
+      telegramActorId: job.telegramUserId,
+      telegramActorKind: "telegram_user",
       ...(job.messageThreadId === null ? {} : { telegramMessageThreadId: job.messageThreadId }),
       ...(job.forumTopicId === null ? {} : { telegramForumTopicId: job.forumTopicId }),
       telegramUserId: job.telegramUserId,
@@ -119,21 +106,19 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
   };
 }
 
-async function dispatchOne(
-  dependencies: AgentScheduleDispatcherDependencies,
-  job: ClaimedAgentSchedule,
-  now: Date,
-): Promise<void> {
+async function dispatchOne(dependencies: AgentScheduleDispatcherDependencies, job: ClaimedAgentSchedule, now: Date): Promise<void> {
   if (job.scope === "group" && job.historyWindowDays !== null) {
     try {
       await dependencies.prepareHistory(job);
     } catch (error) {
-      console.error(JSON.stringify({
-        code: "AGENT_SCHEDULE_HISTORY_PREPARATION_FAILED",
-        errorName: error instanceof Error ? error.name : "UnknownError",
-        runId: job.runId,
-        scheduleId: job.id,
-      }));
+      console.error(
+        JSON.stringify({
+          code: "AGENT_SCHEDULE_HISTORY_PREPARATION_FAILED",
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          runId: job.runId,
+          scheduleId: job.id,
+        }),
+      );
       await dependencies.repository.failClaim(job, "AGENT_SCHEDULE_HISTORY_PREPARATION_FAILED");
       return;
     }
@@ -146,12 +131,14 @@ async function dispatchOne(
       applicationSessionId: prepared.id,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_SCHEDULE_DISPATCH_MARKER_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      runId: job.runId,
-      scheduleId: job.id,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_SCHEDULE_DISPATCH_MARKER_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        runId: job.runId,
+        scheduleId: job.id,
+      }),
+    );
     await dependencies.discardSession(prepared.id);
     throw error;
   }
@@ -161,24 +148,26 @@ async function dispatchOne(
   }
   try {
     // `to(...).send(...)` keeps channel selection and receive execution inside Eve's native source.
-    const session = await dependencies.to(telegram, {
-      chatId: job.telegramChatId,
-      conversationId: scheduledConversationId(job),
-      ...(job.messageThreadId === null
-        ? {}
-        : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
-    }).send(scheduledRunPrompt(job), { auth: scheduledAuth(job, prepared) });
+    const session = await dependencies
+      .to(telegram, {
+        chatId: job.telegramChatId,
+        conversationId: scheduledConversationId(job),
+        ...(job.messageThreadId === null ? {} : { messageThreadId: numericMessageThreadId(job.messageThreadId) }),
+      })
+      .send(scheduledRunPrompt(job), { auth: scheduledAuth(job, prepared) });
     await dependencies.repository.markRunning(job, {
       applicationSessionId: prepared.id,
       eveSessionId: session.id,
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      code: "AGENT_SCHEDULE_HANDOFF_FAILED",
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      scheduleId: job.id,
-      runId: job.runId,
-    }));
+    console.error(
+      JSON.stringify({
+        code: "AGENT_SCHEDULE_HANDOFF_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        scheduleId: job.id,
+        runId: job.runId,
+      }),
+    );
     await dependencies.repository.failClaim(job, "AGENT_SCHEDULE_HANDOFF_FAILED");
     await dependencies.discardSession(prepared.id);
   }
@@ -199,12 +188,14 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
       } catch (error) {
         // One claimed job owns its lease and cleanup lifecycle; its failure must not strand the
         // remaining already-claimed jobs in this batch until their leases expire.
-        console.error(JSON.stringify({
-          code: "AGENT_SCHEDULE_DISPATCH_FAILED",
-          errorName: error instanceof Error ? error.name : "UnknownError",
-          runId: job.runId,
-          scheduleId: job.id,
-        }));
+        console.error(
+          JSON.stringify({
+            code: "AGENT_SCHEDULE_DISPATCH_FAILED",
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            runId: job.runId,
+            scheduleId: job.id,
+          }),
+        );
       }
     }
     return jobs.length;
@@ -213,25 +204,24 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
 
 export function dispatchDueAgentSchedules(to: ScheduleToFn, now = new Date()): Promise<number> {
   return createAgentScheduleDispatcher({
-    discardSession: (applicationSessionId) =>
-      sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
-    prepareHistory: (job) => scheduledGroupHistorySnapshotRepository.prepare({
-      groupId: job.groupId!,
-      runId: job.runId,
-      scheduleId: job.id,
-    }),
-    prepareSession: (job, continuationToken, currentTime) => sessionRepository.prepareTurn({
-      baseContinuationToken: continuationToken,
-      familyId: job.familyId,
-      groupId: job.groupId,
-      kind: "scheduled",
-      now: currentTime,
-      scope: job.scope,
-      telegramForumTopicId: job.forumTopicId === null
-        ? null
-        : numericMessageThreadId(job.forumTopicId)!,
-      userId: job.scope === "personal" ? job.authorUserId : null,
-    }),
+    discardSession: (applicationSessionId) => sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
+    prepareHistory: (job) =>
+      scheduledGroupHistorySnapshotRepository.prepare({
+        groupId: job.groupId!,
+        runId: job.runId,
+        scheduleId: job.id,
+      }),
+    prepareSession: (job, continuationToken, currentTime) =>
+      sessionRepository.prepareTurn({
+        baseContinuationToken: continuationToken,
+        familyId: job.familyId,
+        groupId: job.groupId,
+        kind: "scheduled",
+        now: currentTime,
+        scope: job.scope,
+        telegramForumTopicId: job.forumTopicId === null ? null : numericMessageThreadId(job.forumTopicId)!,
+        userId: job.scope === "personal" ? job.authorUserId : null,
+      }),
     repository: agentScheduleDispatchRepository,
     to,
   })();

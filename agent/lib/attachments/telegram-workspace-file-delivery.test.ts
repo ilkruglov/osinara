@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `deliverWorkspaceFile`: explicit photo/document multipart uploads to the current chat/topic.
- * - Ambiguous transport failures never claim that the file was delivered.
+ * - Transport and unparseable success responses remain ambiguous after delivery begins.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -73,5 +73,24 @@ describe("deliverWorkspaceFile", () => {
       presentation: "document",
     }, vi.fn().mockRejectedValue(new Error("socket closed"))))
       .rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/);
+  });
+
+  it.each([
+    ["unparseable", new Response("not-json", { status: 200 })],
+    ["missing receipt", new Response(JSON.stringify({ ok: true, result: {} }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    })],
+  ])("marks a %s success response as ambiguous", async (_case, response) => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
+
+    await expect(deliverWorkspaceFile({
+      bytes: Buffer.from("document"),
+      chatId: "101",
+      fileName: "notes.txt",
+      mediaType: "text/plain",
+      presentation: "document",
+    }, vi.fn().mockResolvedValue(response)))
+      .rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
   });
 });

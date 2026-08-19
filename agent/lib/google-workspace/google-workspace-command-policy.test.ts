@@ -45,6 +45,17 @@ describe("classifyGoogleWorkspaceCommand", () => {
     }
   });
 
+  it("explains malformed dotted API routes without misdiagnosing OAuth access", () => {
+    expect(() => classifyGoogleWorkspaceCommand([
+      "gmail",
+      "users.messages.trash",
+      "--params",
+      '{"userId":"me","id":"message-id"}',
+    ])).toThrowError(
+      /resource и method.*отдельными argv.*read-only OAuth/u,
+    );
+  });
+
   it("accepts only documented flags for reviewed helper routes", () => {
     expect(classifyGoogleWorkspaceCommand([
       "calendar",
@@ -63,6 +74,22 @@ describe("classifyGoogleWorkspaceCommand", () => {
       "--summary-file",
       "/proc/self/environ",
     ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+  });
+
+  it("requires bounded one-shot Gmail watch execution", () => {
+    expect(classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+watch",
+      "--subscription",
+      "projects/p/subscriptions/inbox",
+      "--once",
+    ])).toBe("mutation");
+    expect(() => classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+watch",
+      "--subscription",
+      "projects/p/subscriptions/inbox",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*(?:60.*--once|--once.*60)/u);
   });
 
   it("rejects trailing command segments instead of inheriting an allowlisted prefix", () => {

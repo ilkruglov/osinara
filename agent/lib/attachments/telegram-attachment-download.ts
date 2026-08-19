@@ -12,7 +12,8 @@ import {
 } from "eve/channels/telegram";
 
 import { TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES } from "../../config.js";
-import { AppError } from "../app-error.js";
+import { AppError, isAppError } from "../app-error.js";
+import { ModelFacingError } from "../model-facing-error.js";
 
 interface TelegramAttachmentDownloadAdapter {
   downloadFile(filePath: string): Promise<Response>;
@@ -31,8 +32,25 @@ function assertDownloadSize(size: number): void {
 export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDownloadAdapter) {
   return async (attachment: TelegramAttachment): Promise<Buffer> => {
     if (attachment.size !== undefined) assertDownloadSize(attachment.size);
-    const metadata = await adapter.getFile(attachment.fileId);
-    const response = await adapter.downloadFile(metadata.filePath);
+    let response: Response;
+    try {
+      const metadata = await adapter.getFile(attachment.fileId);
+      response = await adapter.downloadFile(metadata.filePath);
+    } catch (error) {
+      if (isAppError(error)) throw error;
+      console.error(JSON.stringify({
+        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw new ModelFacingError({
+        category: "dependency",
+        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+        correction: "Не повторяйте скачивание автоматически. Попросите пользователя отправить файл ещё раз.",
+        reason: "Не удалось получить файл из Telegram из-за транспортного сбоя.",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      });
+    }
     if (!response.ok) {
       console.error(JSON.stringify({
         code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",

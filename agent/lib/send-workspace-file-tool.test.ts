@@ -4,9 +4,13 @@
  * Constructs covered:
  * - A confirmed group file delivery is projected into the timeline with session ownership.
  * - The exact Telegram media message receives a reply continuation route.
+ * - Projection failures after confirmed delivery never invite a duplicate send.
+ * - Delivery-journal failures after Telegram confirmation preserve completed side-effect semantics.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AppError } from "./app-error.js";
 
 const mocks = vi.hoisted(() => ({
   begin: vi.fn(),
@@ -135,5 +139,74 @@ describe("send_workspace_file group projection", () => {
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.recordAgentResponse).toHaveBeenCalled();
     expect(mocks.registerTelegramMessageRoutes).toHaveBeenCalled();
+  });
+
+  it("returns confirmed delivery with an explicit projection warning instead of throwing", async () => {
+    mocks.recordAgentResponse.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(sendWorkspaceFile.execute({
+      caption: "Фасад ресторана",
+      path: "screens/facade.png",
+      presentation: "photo",
+      scope: "family",
+    }, context())).resolves.toMatchObject({
+      delivered: true,
+      projectionCompleted: false,
+      retryable: false,
+      sideEffectStatus: "completed",
+    });
+
+    expect(mocks.deliver).toHaveBeenCalledTimes(1);
+    expect(mocks.registerTelegramMessageRoutes).not.toHaveBeenCalled();
+  });
+
+  it("does not retry Telegram when durable completion fails after confirmed delivery", async () => {
+    mocks.complete.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(sendWorkspaceFile.execute({
+      path: "screens/facade.png",
+      presentation: "photo",
+      scope: "family",
+    }, context())).resolves.toMatchObject({
+      delivered: true,
+      persistenceCompleted: false,
+      retryable: false,
+      sideEffectStatus: "completed",
+      telegramMessageId: "446",
+    });
+
+    expect(mocks.deliver).toHaveBeenCalledTimes(1);
+    expect(mocks.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an ambiguous Telegram delivery reserved for explicit recovery", async () => {
+    mocks.deliver.mockRejectedValueOnce(new AppError(
+      "AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
+      "Telegram не подтвердил отправку файла",
+    ));
+
+    await expect(sendWorkspaceFile.execute({
+      path: "screens/facade.png",
+      presentation: "photo",
+      scope: "family",
+    }, context())).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
+
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.fail).not.toHaveBeenCalled();
+  });
+
+  it("validates the forum topic before starting an external delivery", async () => {
+    const invalidContext = context();
+    (invalidContext.session.auth.current!.attributes as Record<string, unknown>)
+      .telegramForumTopicId = "0";
+
+    await expect(sendWorkspaceFile.execute({
+      path: "screens/facade.png",
+      presentation: "photo",
+      scope: "family",
+    }, invalidContext)).rejects.toThrowError(/AGENT_TELEGRAM_FORUM_TOPIC_INVALID/u);
+
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.deliver).not.toHaveBeenCalled();
   });
 });

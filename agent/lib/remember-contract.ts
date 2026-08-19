@@ -7,6 +7,9 @@
  * - `rememberInputSchema`: trusted personal/family/group tool input.
  * - `externalRememberInputSchema`: exact external-group presentation contract.
  * - `RememberInput`: parsed trusted tool input type.
+ *
+ * Key constructs:
+ * - `modelFacingMemorySubjectSchema`: normalizes the active provider's serialized nested subject.
  */
 import { z } from "zod";
 
@@ -22,17 +25,47 @@ const TIMELINE_SEQUENCE_PATTERN = /^[1-9]\d*$/u;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 export const MEMORY_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
 
+/*
+ * The active OpenAI-compatible provider can emit a nested tool argument as a
+ * compact JSON string. Match the complete subject grammar before JSON.parse so
+ * malformed input remains a normal schema failure and parsing cannot throw.
+ */
+const JSON_WHITESPACE_PATTERN = String.raw`[ \t\r\n]*`;
+const JSON_STRING_PATTERN = String.raw`"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"`;
+const SERIALIZED_MEMORY_SUBJECT_VARIANTS = [
+  String.raw`"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"current_author"`,
+  String.raw`"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"none"`,
+  String.raw`"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"verified_ref"${JSON_WHITESPACE_PATTERN},${JSON_WHITESPACE_PATTERN}"subjectRef"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}${JSON_STRING_PATTERN}`,
+  String.raw`"subjectRef"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}${JSON_STRING_PATTERN}${JSON_WHITESPACE_PATTERN},${JSON_WHITESPACE_PATTERN}"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"verified_ref"`,
+  String.raw`"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"label"${JSON_WHITESPACE_PATTERN},${JSON_WHITESPACE_PATTERN}"label"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}${JSON_STRING_PATTERN}`,
+  String.raw`"label"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}${JSON_STRING_PATTERN}${JSON_WHITESPACE_PATTERN},${JSON_WHITESPACE_PATTERN}"kind"${JSON_WHITESPACE_PATTERN}:${JSON_WHITESPACE_PATTERN}"label"`,
+];
+const SERIALIZED_MEMORY_SUBJECT_PATTERN = new RegExp(
+  String.raw`^${JSON_WHITESPACE_PATTERN}\{${JSON_WHITESPACE_PATTERN}(?:${SERIALIZED_MEMORY_SUBJECT_VARIANTS.join("|")})${JSON_WHITESPACE_PATTERN}\}${JSON_WHITESPACE_PATTERN}$`,
+  "u",
+);
+
 export const memorySubjectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("current_author") }).strict(),
   z.object({
-    kind: z.literal("verified_ref"),
-    subjectRef: z.string().regex(MEMORY_SUBJECT_REF_PATTERN),
+    kind: z.literal("current_author").describe("Сведение относится к автору текущего сообщения"),
   }).strict(),
   z.object({
-    kind: z.literal("label"),
-    label: z.string().trim().min(1).max(SUBJECT_LABEL_MAX_CHARACTERS),
+    kind: z.literal("verified_ref").describe("Сведение относится к проверенному subjectRef из контекста"),
+    subjectRef: z.string().regex(MEMORY_SUBJECT_REF_PATTERN).describe("Opaque subjectRef только из текущего profile context"),
   }).strict(),
-  z.object({ kind: z.literal("none") }).strict(),
+  z.object({
+    kind: z.literal("label").describe("Текстовая тема без проверенной identity"),
+    label: z.string().trim().min(1).max(SUBJECT_LABEL_MAX_CHARACTERS).describe("Краткая нейтральная метка темы"),
+  }).strict(),
+  z.object({ kind: z.literal("none").describe("Запись не относится к человеку") }).strict(),
+]);
+
+const modelFacingMemorySubjectSchema = z.union([
+  memorySubjectSchema,
+  z.string()
+    .regex(SERIALIZED_MEMORY_SUBJECT_PATTERN)
+    .transform((value) => JSON.parse(value) as unknown)
+    .pipe(memorySubjectSchema),
 ]);
 
 const threadRoleSchema = z.enum([
@@ -41,17 +74,17 @@ const threadRoleSchema = z.enum([
 
 export const memoryThreadSchema = z.discriminatedUnion("action", [
   z.object({
-    action: z.literal("attach"),
-    role: threadRoleSchema,
-    threadRef: z.string().regex(THREAD_REF_PATTERN),
+    action: z.literal("attach").describe("Прикрепить запись к существующей нити"),
+    role: threadRoleSchema.describe("Роль новой записи внутри нити"),
+    threadRef: z.string().regex(THREAD_REF_PATTERN).describe("Opaque ref из list/search/read_memory_thread"),
   }).strict(),
   z.object({
-    action: z.literal("create"),
-    identity: z.enum(["subject", "project"]).optional(),
-    parentThreadRef: z.string().regex(THREAD_REF_PATTERN).optional(),
-    purpose: z.string().trim().min(1).max(THREAD_PURPOSE_MAX_CHARACTERS),
-    role: threadRoleSchema,
-    title: z.string().trim().min(1).max(THREAD_TITLE_MAX_CHARACTERS),
+    action: z.literal("create").describe("Атомарно создать нить вместе с записью"),
+    identity: z.enum(["subject", "project"]).optional().describe("Identity только для корневой нити"),
+    parentThreadRef: z.string().regex(THREAD_REF_PATTERN).optional().describe("Родительская нить только для subthread"),
+    purpose: z.string().trim().min(1).max(THREAD_PURPOSE_MAX_CHARACTERS).describe("Устойчивое назначение нити"),
+    role: threadRoleSchema.describe("Роль первой записи внутри нити"),
+    title: z.string().trim().min(1).max(THREAD_TITLE_MAX_CHARACTERS).describe("Краткое устойчивое название нити"),
   }).strict().refine(
     (input) => input.parentThreadRef === undefined || input.identity === undefined,
     { message: "Для subthread identity определяется только проверенной родительской нитью" },
@@ -60,19 +93,19 @@ export const memoryThreadSchema = z.discriminatedUnion("action", [
 
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
   return z.object({
-    basis: z.enum(["agent_inferred", "user_requested"]),
-    content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS),
-    kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]),
-    scope,
-    sensitivity: z.enum(["normal", "sensitive"]),
+    basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
+    content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
+    kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
+    scope: scope.describe("Разрешённая область памяти текущего trust zone"),
+    sensitivity: z.enum(["normal", "sensitive"]).describe("Sensitive всегда требует Eve HITL"),
     sourceSequence: z.string().regex(TIMELINE_SEQUENCE_PATTERN).refine(
       (value) => BigInt(value) <= POSTGRES_BIGINT_MAX,
       "Номер сообщения выходит за допустимые границы",
     ).optional().describe(
       "Только для группы: номер #sequence одного сообщения из видимой дельты текущего хода; без поля источником является текущее сообщение",
     ),
-    subject: memorySubjectSchema,
-    thread: memoryThreadSchema.optional(),
+    subject: modelFacingMemorySubjectSchema.describe("Кому или чему принадлежит утверждение"),
+    thread: memoryThreadSchema.optional().describe("Необязательное атомарное создание нити или attach"),
   }).strict().superRefine((input, context) => {
     const create = input.thread?.action === "create" ? input.thread : null;
     if (create?.identity === "project" && input.subject.kind !== "none") {

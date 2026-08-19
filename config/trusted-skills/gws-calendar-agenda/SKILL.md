@@ -9,7 +9,7 @@ metadata:
 
 # calendar +agenda
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 Show upcoming events across all calendars
 
@@ -35,7 +35,7 @@ gws calendar +agenda
 ```bash
 gws calendar +agenda
 gws calendar +agenda --today
-gws calendar +agenda --week --format table
+gws calendar +agenda --week
 gws calendar +agenda --days 3 --calendar 'Work'
 gws calendar +agenda --today --timezone America/New_York
 ```

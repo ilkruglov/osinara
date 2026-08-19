@@ -19,14 +19,13 @@ const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 type TurnContext = Pick<SessionContext, "session">;
 
 function sourceError(reason: string): AppError {
-  console.error(JSON.stringify({
-    code: "AGENT_MEMORY_TURN_SOURCE_INVALID",
-    reason,
-  }));
-  return new AppError(
-    "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID",
-    "Не удалось подтвердить сообщение для сохранения памяти. Отправьте запрос ещё раз",
+  console.error(
+    JSON.stringify({
+      code: "AGENT_MEMORY_TURN_SOURCE_INVALID",
+      reason,
+    }),
   );
+  return new AppError("AGENT_MEMORY_EXPLICIT_SOURCE_INVALID", "Не удалось подтвердить сообщение для сохранения памяти. Отправьте запрос ещё раз");
 }
 
 export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
@@ -38,17 +37,40 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
   const memoryReviewBatchId = attributes?.memoryReviewBatchId;
   const memoryReviewSourceEntryIds = attributes?.memoryReviewSourceEntryIds;
   const visibleTimelineEntryIds = attributes?.telegramTimelineVisibleEntryIds;
+  // Scheduled prompts have no verified Telegram message that could serve as memory evidence.
+  if (typeof attributes?.scheduledRunId === "string" && attributes.scheduledRunId) return;
+
+  // Eve resumes an approved tool in the same durable turn but supplies freshly revalidated callback
+  // auth without replaying the original message metadata. Accept only the exact retained binding.
+  const sourceAttributesAbsent =
+    conversationId === undefined && currentTimelineEntryId === undefined && visibleTimelineEntryIds === undefined && memoryReviewBatchId === undefined && memoryReviewSourceEntryIds === undefined;
+  if (
+    typeof applicationSessionId === "string" &&
+    invokingActor !== null &&
+    sourceAttributesAbsent &&
+    (await memoryTurnSourceRepository.verifyBoundResume({
+      applicationSessionId,
+      eveSessionId: ctx.session.id,
+      eveTurnId: ctx.session.turn.id,
+      invokingActorId: invokingActor.id,
+      invokingActorKind: invokingActor.kind,
+    }))
+  )
+    return;
+
   const internalReview = memoryReviewBatchId !== undefined && currentTimelineEntryId === undefined;
-  const present = [applicationSessionId, conversationId, currentTimelineEntryId,
-    invokingActor, visibleTimelineEntryIds, memoryReviewBatchId,
-    memoryReviewSourceEntryIds].filter((value) => value !== undefined).length;
+  const present = [applicationSessionId, conversationId, currentTimelineEntryId, invokingActor, visibleTimelineEntryIds, memoryReviewBatchId, memoryReviewSourceEntryIds].filter((value) => value !== undefined).length;
   if (present === 0) return;
   if (internalReview) {
-    if (typeof applicationSessionId !== "string" || typeof conversationId !== "string" ||
-      invokingActor === null || typeof memoryReviewBatchId !== "string" ||
+    if (
+      typeof applicationSessionId !== "string" ||
+      typeof conversationId !== "string" ||
+      invokingActor === null ||
+      typeof memoryReviewBatchId !== "string" ||
       !Array.isArray(memoryReviewSourceEntryIds) ||
       !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string") ||
-      visibleTimelineEntryIds !== undefined) {
+      visibleTimelineEntryIds !== undefined
+    ) {
       throw sourceError("review_turn_attributes_invalid");
     }
     await memoryTurnSourceRepository.bindReview({
@@ -63,13 +85,16 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
     });
     return;
   }
-  if (typeof applicationSessionId !== "string" || typeof conversationId !== "string" ||
-    typeof currentTimelineEntryId !== "string" || invokingActor === null ||
+  if (
+    typeof applicationSessionId !== "string" ||
+    typeof conversationId !== "string" ||
+    typeof currentTimelineEntryId !== "string" ||
+    invokingActor === null ||
     !Array.isArray(visibleTimelineEntryIds) ||
     !visibleTimelineEntryIds.every((entryId) => typeof entryId === "string") ||
-    ((memoryReviewBatchId === undefined) !== (memoryReviewSourceEntryIds === undefined)) ||
-    (memoryReviewSourceEntryIds !== undefined && (!Array.isArray(memoryReviewSourceEntryIds) ||
-      !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string")))) {
+    (memoryReviewBatchId === undefined) !== (memoryReviewSourceEntryIds === undefined) ||
+    (memoryReviewSourceEntryIds !== undefined && (!Array.isArray(memoryReviewSourceEntryIds) || !memoryReviewSourceEntryIds.every((entryId) => typeof entryId === "string")))
+  ) {
     throw sourceError("turn_attributes_invalid");
   }
   await memoryTurnSourceRepository.bind({
@@ -81,9 +106,11 @@ export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
     invokingActorId: invokingActor.id,
     invokingActorKind: invokingActor.kind,
     ...(typeof memoryReviewBatchId === "string" ? { memoryReviewBatchId } : {}),
-    ...(Array.isArray(memoryReviewSourceEntryIds) ? {
-      memoryReviewSourceEntryIds: memoryReviewSourceEntryIds as string[],
-    } : {}),
+    ...(Array.isArray(memoryReviewSourceEntryIds)
+      ? {
+          memoryReviewSourceEntryIds: memoryReviewSourceEntryIds as string[],
+        }
+      : {}),
     visibleTimelineEntryIds,
   });
 }
@@ -100,9 +127,7 @@ export async function resolveMemoryTurnSource(
   sourceMessageId: string;
   timelineEntryId: string;
 }> {
-  if (sourceSequence !== undefined && (
-    !POSITIVE_SEQUENCE_PATTERN.test(sourceSequence) || BigInt(sourceSequence) > POSTGRES_BIGINT_MAX
-  )) {
+  if (sourceSequence !== undefined && (!POSITIVE_SEQUENCE_PATTERN.test(sourceSequence) || BigInt(sourceSequence) > POSTGRES_BIGINT_MAX)) {
     throw sourceError("source_sequence_invalid");
   }
   if (sourceSequence !== undefined && auth.groupId === null) {
@@ -114,16 +139,12 @@ export async function resolveMemoryTurnSource(
     sourceSequence: sourceSequence ?? null,
   });
   if (!source) throw sourceError("source_not_bound_to_turn");
-  const expectedPartition = source.scope === "group"
-    ? auth.groupId
-    : source.scope === "personal"
-      ? auth.userId
-      : auth.familyId;
-  if ((!source.isReview && (
-    source.invokingActorId !== auth.telegramActorId ||
-    source.invokingActorKind !== auth.telegramActorKind
-  )) ||
-    source.scopePartitionKey !== expectedPartition || !auth.scopes.includes(source.scope)) {
+  const expectedPartition = source.scope === "group" ? auth.groupId : source.scope === "personal" ? auth.userId : auth.familyId;
+  if (
+    (!source.isReview && (source.invokingActorId !== auth.telegramActorId || source.invokingActorKind !== auth.telegramActorKind)) ||
+    source.scopePartitionKey !== expectedPartition ||
+    !auth.scopes.includes(source.scope)
+  ) {
     throw sourceError("source_authorization_mismatch");
   }
   return {

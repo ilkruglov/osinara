@@ -331,4 +331,31 @@ describe("createWorkspaceImageInspector", () => {
       scope: "group",
     })).rejects.toBe(denied);
   });
+
+  it("normalizes a raw vision provider failure without exposing provider internals", async () => {
+    const inspect = createWorkspaceImageInspector({
+      analyze: vi.fn().mockRejectedValue(new Error("upstream API key invalid")),
+      authorizeScope: vi.fn(async () => undefined),
+      downloadTelegramAttachment: vi.fn(),
+      findTelegramAttachment: vi.fn(),
+      readBinary: vi.fn().mockResolvedValue({
+        bytes: Buffer.from("image"),
+        file: { mediaType: "image/png", path: "image.png", scope: "personal" },
+      }),
+      readTelegramInboxAttachment: vi.fn(),
+      supportsImageInput: true,
+    });
+
+    await expect(inspect(auth, {
+      path: "image.png",
+      question: "Что изображено?",
+      scope: "personal",
+    })).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
+  });
 });

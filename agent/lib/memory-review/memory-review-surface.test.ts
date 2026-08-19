@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Internal review turns expose memory reads and `remember`, but override every unrelated built-in.
  * - Review instructions require all 50 sources, forbid sensitive writes, and suppress chat output.
+ * - Live authorization failures use the common structured model-facing error contract.
  */
 import type { SessionAuth } from "eve/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,12 +83,20 @@ describe("memory review model surface", () => {
     "search_memory_threads",
   ] as const)("re-checks live external authorization before executing %s", async (toolName) => {
     const surface = buildMemoryReviewToolSurface(new Set([toolName]));
-    const revoked = new Error("AGENT_GROUP_TOOL_FORBIDDEN");
-    authorizeCurrentExternalGroupCapability.mockRejectedValueOnce(revoked);
+    authorizeCurrentExternalGroupCapability.mockRejectedValueOnce(
+      new Error("AGENT_GROUP_TOOL_FORBIDDEN"),
+    );
 
     await expect(surface[toolName]!.execute({}, {
       session: { auth: externalAuth() },
-    } as never)).rejects.toBe(revoked);
+    } as never)).rejects.toMatchObject({
+      contract: {
+        category: "authorization",
+        code: "AGENT_GROUP_TOOL_FORBIDDEN",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      },
+    });
     expect(authorizeCurrentExternalGroupCapability).toHaveBeenCalledWith({
       familyId: "family-1",
       groupId: "group-1",

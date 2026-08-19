@@ -56,4 +56,14 @@ describe("integration tool usability contracts", () => {
     expect(sendWorkspaceFile.description).toMatch(/относительно корня выбранного scope/iu);
     expect(removeGroupFileTool.description).toMatch(/относительно корня group scope/iu);
   });
+
+  it("documents enough information to recover from each integration tool result", () => {
+    for (const tool of [inspectWorkspaceImage, importTelegramAttachment, sendWorkspaceFile]) {
+      expect(tool.description).toMatch(/Когда использовать:/u);
+      expect(tool.description).toMatch(/Не использовать:/u);
+      expect(tool.description).toMatch(/Вход:/u);
+      expect(tool.description).toMatch(/Результат:/u);
+      expect(tool.description).toMatch(/Ошибка:/u);
+    }
+  });
 });

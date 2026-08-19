@@ -81,10 +81,11 @@ function requireImageInput(input: Record<string, unknown>) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Открыть изображение из workspace либо Telegram по безопасной ссылке и ответить через vision-модель.",
-  "Для изображения в reply ancestry или <telegram_attachment_refs> передавай attachmentId: анализ скачивает bytes только в память и не сохраняет файл.",
-  "Для изображения из текущего Telegram-вложения используй payload {\"telegramMessageId\":\"773\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}; не копируй длинный untrusted filename.",
-  "Для уже известного файла передавай path относительно корня выбранного scope, без имени scope в начале: {\"path\":\"photos/image.png\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}. Передавай ровно один источник.",
+  "Когда использовать: ответить на конкретный вопрос об изображении из workspace или Telegram через vision-модель.",
+  "Не использовать: не передавай несколько источников и не используй tool для не-графических файлов.",
+  "Вход: для reply ancestry или <telegram_attachment_refs> передай attachmentId; для текущего Telegram-вложения используй {\"telegramMessageId\":\"773\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}; для файла используй относительный path {\"path\":\"photos/image.png\",\"scope\":\"personal\",\"question\":\"Что изображено?\"}. Передавай ровно один источник.",
+  "Результат: analysis, фактические path и scope; анализ не сохраняет Telegram bytes в workspace.",
+  "Ошибка: исправь источник или вопрос только если retryable=true; provider failure автоматически не повторяй.",
 ].join(" ");
 
 export default defineTool({

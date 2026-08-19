@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `externalGroupCapabilityInstructions`: renders exact model-visible effective capabilities.
  * - Action-level memory grants remain granular and do not imply sibling actions.
+ * - Application-core descriptors are included in the same exact effective surface.
  * - Skill loading is advertised only for the exact live group grants.
  */
 import { describe, expect, it } from "vitest";
@@ -24,18 +25,54 @@ describe("externalGroupCapabilityInstructions", () => {
     expect(markdown).toContain("`remember`");
     expect(markdown).toContain("`manage_memory` с `action=undo`");
     expect(markdown).toContain(
-      "Effective allowlist: `glob`, `grep`, `read_file`, `write_file`, `manage_memory.undo`, `remember`.",
+      "Effective allowlist: `glob`, `grep`, `read_file`, `write_file`, `manage_memory` с `action=undo`, `remember`.",
     );
     expect(markdown).not.toContain("`manage_memory` с `action=edit`");
     expect(markdown).not.toContain("`manage_memory` с `action=delete`");
     expect(markdown).not.toContain("`search_memories`");
   });
 
+  it("uses the executable manage_memory_thread name for action-level grants", () => {
+    const markdown = externalGroupCapabilityInstructions(
+      new Set(["manage_memory_thread.complete", "manage_memory_thread.reactivate"]),
+      new Set(),
+    );
+
+    expect(markdown).toContain("`manage_memory_thread` с `action=complete`");
+    expect(markdown).toContain("`manage_memory_thread` с `action=reactivate`");
+    expect(markdown).not.toContain("`manage_memory_thread.complete`");
+  });
+
+  it("includes independently issued application-core and scheduled-history tools", () => {
+    const markdown = externalGroupCapabilityInstructions(new Set(), new Set(), {
+      includeApplicationCore: true,
+      scheduledHistory: true,
+      scheduledRun: false,
+    });
+
+    expect(markdown).toContain("`read_profile_view`");
+    expect(markdown).toContain("`manage_behavior_preference`");
+    expect(markdown).toContain("`read_scheduled_group_history`");
+    expect(markdown).not.toMatch(/не вызывай.*другие видимые static descriptors/isu);
+  });
+
+  it("does not advertise interactive preferences during a scheduled run", () => {
+    const markdown = externalGroupCapabilityInstructions(new Set(), new Set(), {
+      includeApplicationCore: true,
+      scheduledHistory: true,
+      scheduledRun: true,
+    });
+
+    expect(markdown).toContain("`read_profile_view`");
+    expect(markdown).toContain("`read_scheduled_group_history`");
+    expect(markdown).not.toContain("`manage_behavior_preference`");
+  });
+
   it("forbids offering any other visible static descriptor", () => {
     const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
 
     expect(markdown).toMatch(
-      /не вызывай, не предлагай и не утверждай, что можешь использовать другие видимые static descriptors/iu,
+      /не вызывай, не предлагай и не утверждай, что можешь использовать инструменты, не перечисленные выше/iu,
     );
   });
 

@@ -10,7 +10,8 @@ import { generateText } from "ai";
 import { VISION_MAX_FILE_BYTES } from "../../config.js";
 import { visionModel } from "../model-registry.js";
 import { modelProviderConfig } from "../model-provider-config.js";
-import { AppError } from "../app-error.js";
+import { AppError, isAppError } from "../app-error.js";
+import { ModelFacingError } from "../model-facing-error.js";
 import { downloadTelegramAttachment } from "../attachments/telegram-attachment-download.js";
 import { telegramGroupAttachmentRepository } from "../attachments/telegram-group-attachment-repository.js";
 import { validateVisionImageBytes } from "../attachments/telegram-vision-attachment.js";
@@ -148,12 +149,29 @@ export function createWorkspaceImageInspector(
         "Vision-модель принимает изображение размером не более 10 МБ",
       );
     }
-    const analysis = await dependencies.analyze({
-      ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
-      bytes: binary.bytes,
-      mediaType: binary.file.mediaType,
-      question: input.question,
-    });
+    let analysis: string;
+    try {
+      analysis = await dependencies.analyze({
+        ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+        bytes: binary.bytes,
+        mediaType: binary.file.mediaType,
+        question: input.question,
+      });
+    } catch (error) {
+      if (isAppError(error)) throw error;
+      console.error(JSON.stringify({
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw new ModelFacingError({
+        category: "dependency",
+        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+        correction: "Не повторяйте анализ автоматически. Сообщите, что анализ изображения временно недоступен.",
+        reason: "Vision-модель завершила анализ с внутренней ошибкой.",
+        retryable: false,
+        sideEffectStatus: "not_started",
+      });
+    }
     if (!analysis.trim()) {
       throw new AppError(
         "AGENT_WORKSPACE_VISION_RESPONSE_EMPTY",

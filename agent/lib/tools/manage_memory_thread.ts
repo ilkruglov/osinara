@@ -15,11 +15,14 @@ import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.j
 
 const OUTCOME_REF_PATTERN = /^outcome_[0-9a-f]{32}$/u;
 const inputSchema = z.object({
-  action: z.enum(["complete", "reactivate"]),
-  authority: z.enum(["current_user_statement", "confirmed_outcome", "formal_goal_condition"]).optional(),
-  outcomeRef: z.string().regex(OUTCOME_REF_PATTERN).optional(),
-  sourceEntryRefs: z.array(z.string().regex(THREAD_ENTRY_REF_PATTERN)).min(1).max(20).optional(),
-  threadRef: z.string().regex(THREAD_REF_PATTERN),
+  action: z.enum(["complete", "reactivate"]).describe("Одна lifecycle-операция"),
+  authority: z.enum(["current_user_statement", "confirmed_outcome", "formal_goal_condition"]).optional()
+    .describe("Обязательно только для complete"),
+  outcomeRef: z.string().regex(OUTCOME_REF_PATTERN).optional()
+    .describe("Только подтверждённый ref из текущего outcome context; не нужен для current_user_statement"),
+  sourceEntryRefs: z.array(z.string().regex(THREAD_ENTRY_REF_PATTERN)).min(1).max(20).optional()
+    .describe("Для complete: refs доказательств только из read_memory_thread"),
+  threadRef: z.string().regex(THREAD_REF_PATTERN).describe("Opaque ref только из list/search/read_memory_thread"),
 }).strict();
 
 function verifiedTurn(ctx: Parameters<typeof requireMemoryAuthorization>[0]) {
@@ -41,6 +44,8 @@ export default defineTool({
     "Явно завершить или реактивировать нить памяти.",
     "complete разрешён только после проверенного текущего заявления пользователя, confirmed outcome или formal goal condition и требует sourceEntryRefs из read_memory_thread.",
     "reactivate используй только когда пользователь прямо просит продолжить именно завершённую нить; новая цель обычно создаёт новый subthread.",
+    "Payload reactivate: {\"action\":\"reactivate\",\"threadRef\":\"thread_...\"}. Payload complete с текущим заявлением: {\"action\":\"complete\",\"authority\":\"current_user_statement\",\"sourceEntryRefs\":[\"entry_...\"],\"threadRef\":\"thread_...\"}.",
+    "Обе операции требуют Eve HITL. Результат возвращает актуальное состояние нити; NOT_FOUND требует заново получить threadRef.",
   ].join(" "),
   inputSchema,
   async execute(input, ctx) {

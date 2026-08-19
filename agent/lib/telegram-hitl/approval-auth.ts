@@ -41,11 +41,7 @@ interface GroupRow {
   type: GroupType;
 }
 
-async function findIdentity(
-  client: PoolClient,
-  telegramUserId: string,
-  familyId: string,
-): Promise<IdentityRow | null> {
+async function findIdentity(client: PoolClient, telegramUserId: string, familyId: string): Promise<IdentityRow | null> {
   const result = await client.query<IdentityRow>(
     `SELECT fm.family_id, fm.role, fm.user_id
        FROM users u
@@ -57,10 +53,7 @@ async function findIdentity(
   return result.rows[0] ?? null;
 }
 
-export async function resolveCurrentApprovalAuth(
-  client: PoolClient,
-  row: ApprovalAuthRow,
-): Promise<SessionAuthContext | null> {
+export async function resolveCurrentApprovalAuth(client: PoolClient, row: ApprovalAuthRow): Promise<SessionAuthContext | null> {
   const identity = await findIdentity(client, row.expected_telegram_user_id, row.family_id);
   let group: GroupRow | null = null;
   let memoryScopes: MemoryScope[];
@@ -69,12 +62,7 @@ export async function resolveCurrentApprovalAuth(
 
   // Personal approvals remain bound to the current session owner and active family membership.
   if (row.scope === "personal") {
-    if (
-      !identity ||
-      identity.user_id !== row.owner_user_id ||
-      identity.family_id !== row.family_id ||
-      row.telegram_chat_type !== "private"
-    ) return null;
+    if (!identity || identity.user_id !== row.owner_user_id || identity.family_id !== row.family_id || row.telegram_chat_type !== "private") return null;
     memoryScopes = ["personal", "family"];
     role = identity.role;
     userId = identity.user_id;
@@ -115,14 +103,12 @@ export async function resolveCurrentApprovalAuth(
       telegramChatId: row.telegram_chat_id,
       telegramChatType: row.telegram_chat_type,
       telegramMessageId: row.telegram_message_id,
-      ...(row.telegram_message_thread_id === null
-        ? {}
-        : { telegramMessageThreadId: row.telegram_message_thread_id }),
+      telegramActorId: row.expected_telegram_user_id,
+      telegramActorKind: "telegram_user",
+      ...(row.telegram_message_thread_id === null ? {} : { telegramMessageThreadId: row.telegram_message_thread_id }),
       telegramUserId: row.expected_telegram_user_id,
       ...(group ? { groupId: group.id, groupType: group.type } : {}),
-      ...(group && group.type !== "family_private"
-        ? { toolAllowlist: group.tool_allowlist }
-        : {}),
+      ...(group && group.type !== "family_private" ? { toolAllowlist: group.tool_allowlist } : {}),
     },
     authenticator: "telegram",
     principalId: userId ?? `telegram:${row.expected_telegram_user_id}`,

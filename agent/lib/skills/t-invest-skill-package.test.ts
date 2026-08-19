@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Skill package frontmatter and trigger description copied from the canonical local skill.
  * - Bundled CLI and JSON field reference are present inside the skill package.
+ * - Every trade keeps explicit confirmation and idempotency requirements.
  */
 import { access, readFile } from "node:fs/promises";
 
@@ -55,5 +56,20 @@ describe("T-Invest skill package", () => {
     expect(skill).not.toContain("install.sh");
     expect(cli).not.toContain("updateAvailable");
     expect(cli).not.toContain("raw.githubusercontent.com/nyxandro/t-invest-skill");
+  });
+
+  it("never lets stonks mode bypass per-operation confirmation", async () => {
+    const skill = await readSkill();
+    const cli = await readFile(cliFile, "utf8");
+
+    expect(skill).toContain("`stonksMode` не отменяет это правило");
+    expect(skill).not.toContain("автономную торговлю без подтверждений");
+    expect(skill).toMatch(/order replace.*--order-id UUID.*\[--confirm\]/u);
+    expect(skill).toMatch(/stop-order set.*--order-id UUID.*\[--confirm\]/u);
+    expect(cli).not.toMatch(/if \(mode === "sandbox"\) \{\s*return;\s*\}/u);
+    expect(cli).not.toMatch(/if \(gate\.stonksMode\) \{\s*return;\s*\}/u);
+    expect(cli).toContain('code: "APP_TINVEST_CONFIRM_REQUIRED"');
+    expect(cli).toMatch(/var STONKS_WARNING = .*--confirm/u);
+    expect(cli).toMatch(/if \(gate\.stonksMode\) \{\s*return .*--confirm/u);
   });
 });

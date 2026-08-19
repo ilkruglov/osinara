@@ -9,7 +9,7 @@ metadata:
 
 # calendar +insert
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 create a new event
 
@@ -46,7 +46,7 @@ gws calendar +insert --summary 'Meet' --start ... --end ... --meet
 - The --meet flag automatically adds a Google Meet link to the event.
 
 > [!CAUTION]
-> This is a **write** command — confirm with the user before executing.
+> This is a **write** command. Execute it once; `execute_google_workspace` provides the only required Eve HITL confirmation.
 
 ## See Also
 

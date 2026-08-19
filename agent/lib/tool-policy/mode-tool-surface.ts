@@ -18,15 +18,12 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { wrapModelFacingToolMap } from "../model-facing-tool.js";
 import { authorizeAgentScheduleDelivery } from "../agent-schedules/agent-schedule-delivery-authorization.js";
 import { scheduledDeliveryMetadata } from "../agent-schedules/scheduled-session.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
 import { isGroupSafeSkillName, type GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
-import {
-  MEMORY_LIST_DEFAULT_LIMIT,
-  MEMORY_LIST_MAX_LIMIT,
-  THREAD_HISTORY_PAGE_MAX_ENTRIES,
-} from "../memory-config.js";
+import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT, THREAD_HISTORY_PAGE_MAX_ENTRIES } from "../memory-config.js";
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
 import { externalRememberInputSchema } from "../remember-contract.js";
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
@@ -103,8 +100,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   list_reminders: listReminders as unknown as AnyToolDefinition,
   manage_agent_schedule: manageAgentSchedule as unknown as AnyToolDefinition,
   manage_behavior_preference: manageBehaviorPreference as unknown as AnyToolDefinition,
-  manage_google_workspace_connection:
-    manageGoogleWorkspaceConnection as unknown as AnyToolDefinition,
+  manage_google_workspace_connection: manageGoogleWorkspaceConnection as unknown as AnyToolDefinition,
   manage_memory: manageMemory as unknown as AnyToolDefinition,
   manage_memory_conflict: manageMemoryConflict as unknown as AnyToolDefinition,
   manage_memory_thread: manageMemoryThread as unknown as AnyToolDefinition,
@@ -152,31 +148,37 @@ const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
 
 // Shared executors remain unchanged, while external descriptors expose only their executable group
 // contract. This prevents the model from planning calls that external authorization must reject.
-const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
-  DirectExternalToolName,
-  Pick<AnyToolDefinition, "description" | "inputSchema">
->>> = {
+const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
+  Partial<Record<DirectExternalToolName, Pick<AnyToolDefinition, "description" | "inputSchema">>>
+> = {
   inspect_workspace_image: {
-    description:
-      "Проанализировать изображение текущей внешней группы по одному источнику: attachmentId, path в group workspace или telegramMessageId.",
-    inputSchema: z.object({
-      attachmentId: z.uuid().optional(),
-      path: z.string().min(1).max(EXTERNAL_IMAGE_PATH_MAX_LENGTH).optional(),
-      question: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
-      scope: z.literal("group").describe("Область текущей внешней группы"),
-      telegramMessageId: z.string().regex(/^\d+$/u).optional(),
-    }).passthrough(),
+    description: [
+      "Проанализировать изображение текущей внешней группы по ровно одному источнику: attachmentId, telegramMessageId или path.",
+      "Для path передавай относительный путь внутри group scope, например photos/image.png, а не /workspace/group/photos/image.png.",
+      "Результат содержит analysis, path и scope; анализ не сохраняет Telegram bytes.",
+    ].join(" "),
+    inputSchema: z
+      .object({
+        attachmentId: z.uuid().optional(),
+        path: z.string().min(1).max(EXTERNAL_IMAGE_PATH_MAX_LENGTH).optional(),
+        question: z.string().min(1).max(EXTERNAL_MODEL_TEXT_MAX_LENGTH),
+        scope: z.literal("group").describe("Область текущей внешней группы"),
+        telegramMessageId: z.string().regex(/^\d+$/u).optional(),
+      })
+      .strict(),
   },
   import_telegram_attachment: {
     description:
       "Скачать разрешённый UTF-8 файл TXT, Markdown, JSON, CSV, TSV, HTML, XML или YAML из сообщения текущей внешней группы в /workspace/group; после импорта прочитай возвращённый path через read_file.",
-    inputSchema: z.object({
-      attachmentId: z.uuid().describe("Opaque attachmentId из текущего сообщения или истории группы"),
-    }).strict(),
+    inputSchema: z
+      .object({
+        attachmentId: z.uuid().describe("Opaque attachmentId из текущего сообщения или истории группы"),
+      })
+      .strict(),
   },
   list_memories: {
     description:
-      "Постранично показать записи долговременной памяти текущей внешней группы.",
+      "Постранично показать записи долговременной памяти текущей внешней группы. Результат: {items,nextCursor}; если nextCursor не null, передай его без изменений в следующий вызов.",
     inputSchema: z.object({
       cursor: z.string().optional(),
       limit: z.number().int().min(1).max(MEMORY_LIST_MAX_LIMIT).default(MEMORY_LIST_DEFAULT_LIMIT),
@@ -185,13 +187,15 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
   },
   list_memory_threads: {
     description:
-      "Постранично показать нити памяти текущей внешней группы без полной истории.",
-    inputSchema: z.object({
-      cursor: z.string().regex(THREAD_REF_PATTERN).optional(),
-      limit: z.number().int().min(1).max(THREAD_HISTORY_PAGE_MAX_ENTRIES).default(20),
-      scope: z.literal("group").optional(),
-      status: z.enum(["active", "completed"]).optional(),
-    }).strict(),
+      "Постранично показать нити памяти текущей внешней группы без полной истории. Результат: {items,nextCursor}; threadRef бери только из items, а nextCursor передавай без изменений.",
+    inputSchema: z
+      .object({
+        cursor: z.string().regex(THREAD_REF_PATTERN).optional(),
+        limit: z.number().int().min(1).max(THREAD_HISTORY_PAGE_MAX_ENTRIES).default(20),
+        scope: z.literal("group").optional(),
+        status: z.enum(["active", "completed"]).optional(),
+      })
+      .strict(),
   },
   remember: {
     description:
@@ -200,13 +204,19 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<Partial<Record<
   },
   send_workspace_file: {
     description:
-      "Отправить файл из group workspace в текущий Telegram-чат или тему внешней группы.",
-    inputSchema: z.object({
-      caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
-      path: z.string().min(1).max(EXTERNAL_IMAGE_PATH_MAX_LENGTH),
-      presentation: z.enum(["document", "photo"]),
-      scope: z.literal("group").describe("Workspace текущей внешней группы"),
-    }),
+      "Отправить существующий файл из group workspace в текущий Telegram-чат или тему внешней группы. path всегда относительный внутри group scope, например reports/result.pdf; не передавай /workspace/group. Результат delivered=true подтверждает отправку; при sideEffectStatus completed или unknown не отправляй повторно.",
+    inputSchema: z
+      .object({
+        caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
+        path: z
+          .string()
+          .min(1)
+          .max(EXTERNAL_IMAGE_PATH_MAX_LENGTH)
+          .describe("Относительный путь внутри group workspace, например reports/result.pdf"),
+        presentation: z.enum(["document", "photo"]),
+        scope: z.literal("group").describe("Workspace текущей внешней группы"),
+      })
+      .strict(),
   },
 };
 
@@ -274,19 +284,12 @@ function deniedTool(toolName: string): AnyToolDefinition {
   }) as unknown as AnyToolDefinition;
 }
 
-function allowedDirectTool(
-  capability: DirectExternalToolName,
-  definition: AnyToolDefinition,
-): AnyToolDefinition {
+function allowedDirectTool(capability: DirectExternalToolName, definition: AnyToolDefinition): AnyToolDefinition {
   return defineTool({
     ...definition,
     ...EXTERNAL_DIRECT_TOOL_PRESENTATION[capability],
     async execute(input, ctx) {
-      return await withExternalGroupCapability(
-        ctx,
-        capability,
-        async () => await definition.execute(input, ctx),
-      );
+      return await withExternalGroupCapability(ctx, capability, async () => await definition.execute(input, ctx));
     },
   });
 }
@@ -342,9 +345,7 @@ function buildExternalToolSurface(
 ): ToolMap {
   const surface: Record<string, AnyToolDefinition> = {
     ...EXTERNAL_GROUP_FILE_TOOLS,
-    load_skill: Object.keys(skills).length > 0
-      ? externalGroupLoadSkillTool
-      : deniedTool("load_skill"),
+    load_skill: Object.keys(skills).length > 0 ? externalGroupLoadSkillTool : deniedTool("load_skill"),
   };
   if (includeApplicationCore) {
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
@@ -355,11 +356,10 @@ function buildExternalToolSurface(
       surface.read_scheduled_group_history = readScheduledGroupHistory as unknown as AnyToolDefinition;
     }
   }
-  // Eve's native descriptor is useful only when this exact turn has a loadable dynamic skill. The
-  // wrapper still independently enforces the latest database grant at execution time.
-
   // Granted application capabilities are re-checked at execution against the live policy.
   for (const capability of allowed) {
+    // A scheduled prompt has no current user message that can back a new memory claim.
+    if (scheduledRun && capability === "remember") continue;
     if (capability.startsWith("manage_memory.")) continue;
     if (capability.startsWith("manage_memory_thread.")) continue;
     if (!isExternalGroupToolName(capability)) continue;
@@ -374,7 +374,7 @@ function buildExternalToolSurface(
     surface.manage_memory_thread = allowedMemoryThreadTool();
   }
 
-  // Eve always registers its own built-ins, and 0.22.5 cannot hide a framework descriptor, so the
+  // Eve always registers its own built-ins, and 0.32.0 cannot hide a framework descriptor, so the
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
     if (toolName === "web_fetch") {
@@ -386,27 +386,38 @@ function buildExternalToolSurface(
   }
   // A scheduled run stays in its root context so each provider/tool boundary remains reauthorizable.
   if (scheduledRun) surface.agent = deniedTool("agent");
-  if (!scheduledRun) return surface;
-  return Object.fromEntries(
-    Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]),
-  );
+  const effectiveSurface = scheduledRun
+    ? Object.fromEntries(Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]))
+    : surface;
+  return wrapModelFacingToolMap(effectiveSurface);
 }
 
 function allowlistKey(allowed: ReadonlySet<ExternalGroupToolName>): string {
-  return [...allowed].sort().join(" ");
+  return [...allowed].sort().join("\0");
 }
 
 const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
-  family: { ...TRUSTED_MODE_TOOLS, ...FAMILY_ONLY_TOOLS },
-  private: { ...TRUSTED_MODE_TOOLS, ...PRIVATE_ONLY_TOOLS },
+  family: wrapModelFacingToolMap({
+    ...TRUSTED_MODE_TOOLS,
+    ...FAMILY_ONLY_TOOLS,
+  }),
+  private: wrapModelFacingToolMap({
+    ...TRUSTED_MODE_TOOLS,
+    ...PRIVATE_ONLY_TOOLS,
+  }),
 };
 
-const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> =
-  Object.fromEntries(Object.entries(TRUSTED_SURFACES).map(([environment, surface]) => {
-    // A scheduled turn can read chat instructions but has no user source that may edit them.
-    const { manage_behavior_preference: _manageBehaviorPreference, ...readOnlyPromptSurface } = surface;
+const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = Object.fromEntries(
+  Object.entries(TRUSTED_SURFACES).map(([environment, surface]) => {
+    // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
+    const {
+      manage_behavior_preference: _manageBehaviorPreference,
+      remember: _remember,
+      ...readOnlyPromptSurface
+    } = surface;
     return [environment, readOnlyPromptSurface];
-  })) as Record<"family" | "private", ToolMap>;
+  }),
+) as Record<"family" | "private", ToolMap>;
 
 const EXTERNAL_SURFACES = new Map<string, ToolMap>();
 
@@ -424,9 +435,7 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const includeApplicationCore = input.includeApplicationCore !== false;
   const scheduledHistory = input.scheduledHistory === true;
   const scheduledRun = input.scheduledRun === true || scheduledHistory;
-  const skills = Object.keys(input.skills).some((name) => !isGroupSafeSkillName(name))
-    ? {}
-    : input.skills;
+  const skills = Object.keys(input.skills).some((name) => !isGroupSafeSkillName(name)) ? {} : input.skills;
   const key = [
     includeApplicationCore ? "core" : "failed",
     scheduledHistory ? "history" : "ordinary",
@@ -436,13 +445,7 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   ].join("|");
   const cached = EXTERNAL_SURFACES.get(key);
   if (cached) return cached;
-  const surface = buildExternalToolSurface(
-    allowed,
-    includeApplicationCore,
-    scheduledHistory,
-    scheduledRun,
-    skills,
-  );
+  const surface = buildExternalToolSurface(allowed, includeApplicationCore, scheduledHistory, scheduledRun, skills);
   EXTERNAL_SURFACES.set(key, surface);
   return surface;
 }

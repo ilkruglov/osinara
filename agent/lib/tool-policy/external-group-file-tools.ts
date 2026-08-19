@@ -146,14 +146,26 @@ export function createExternalGroupFileTools(
     forbiddenPath,
   });
   return {
-    ...workspaceTools,
+    glob: defineTool({
+      ...workspaceTools.glob,
+      description: "Найти файлы по glob-шаблону только внутри абсолютного path /workspace/group.",
+    }),
+    grep: defineTool({
+      ...workspaceTools.grep,
+      description: "Найти текст только внутри файлов под абсолютным path /workspace/group.",
+    }),
     read_file: defineTool({
       ...dependencies.defaults.read_file,
+      description: "Прочитать файл по абсолютному filePath внутри /workspace/group или supporting file уже разрешённого dynamic skill.",
       async execute(input, ctx) {
         const skillPath = parseSkillFilePath((input as { filePath?: unknown }).filePath);
         if (skillPath === null) return await workspaceTools.read_file.execute(input, ctx);
         return await readAuthorizedSkillFile(dependencies, skillPath, input, ctx);
       },
+    }),
+    write_file: defineTool({
+      ...workspaceTools.write_file,
+      description: "Создать или изменить файл только по абсолютному filePath внутри /workspace/group.",
     }),
   };
 }

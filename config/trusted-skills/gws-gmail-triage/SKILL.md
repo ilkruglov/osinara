@@ -9,7 +9,7 @@ metadata:
 
 # gmail +triage
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
 Show unread inbox summary (sender, subject, date)
 
@@ -32,7 +32,7 @@ gws gmail +triage
 ```bash
 gws gmail +triage
 gws gmail +triage --max 5 --query 'from:boss'
-gws gmail +triage --format json | jq '.[].subject'
+gws gmail +triage --max 10 --labels
 gws gmail +triage --labels
 ```
 

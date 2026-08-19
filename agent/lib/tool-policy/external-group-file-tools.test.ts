@@ -7,6 +7,7 @@
  * - Read-only dynamic skill files require a current code-reviewed group grant.
  * - Symlink components cannot redirect an operation outside the group workspace.
  * - Allowed paths retain Eve's native executor contracts.
+ * - Native filesystem failures become safe model-facing correction contracts.
  */
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -210,6 +211,21 @@ describe("external-group file tools", () => {
       /AGENT_WORKSPACE_ACCESS_DENIED/u,
     );
     expect(executors[name]).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a raw native reader failure without exposing the host path", async () => {
+    executors.read_file.mockRejectedValueOnce(new Error(`ENOENT: ${root}/secret.txt`));
+
+    await expect(tools().read_file!.execute(
+      { filePath: `${GROUP_ROOT}/docs/allowed.txt` },
+      context(),
+    )).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+        retryable: true,
+        sideEffectStatus: "not_started",
+      },
+    });
   });
 
   it.each([

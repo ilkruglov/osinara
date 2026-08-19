@@ -11,7 +11,8 @@ import { join, posix } from "node:path";
 import type { ToolContext, ToolDefinition } from "eve/tools";
 import { defineTool } from "eve/tools";
 
-import type { AppError } from "../app-error.js";
+import { isAppError, type AppError } from "../app-error.js";
+import { ModelFacingError } from "../model-facing-error.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
 
@@ -92,6 +93,7 @@ async function assertNoSymlinkComponent(
 async function withAuthorizedPath<T>(
   dependencies: ScopedFileToolDependencies,
   ctx: ToolContext,
+  toolName: ScopedFileToolName,
   modelPath: unknown,
   operation: (sandboxPath: string) => Promise<T>,
 ): Promise<T> {
@@ -103,8 +105,28 @@ async function withAuthorizedPath<T>(
     dependencies.defaultMountPoint,
     dependencies.forbiddenPath,
   );
-  await assertNoSymlinkComponent(path.hostRoot, path.relativePath, dependencies.forbiddenPath);
-  return await operation(path.sandboxPath);
+  try {
+    await assertNoSymlinkComponent(path.hostRoot, path.relativePath, dependencies.forbiddenPath);
+    return await operation(path.sandboxPath);
+  } catch (error) {
+    if (isAppError(error)) throw error;
+    const isWrite = toolName === "write_file";
+    console.error(JSON.stringify({
+      code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+      toolName,
+    }));
+    throw new ModelFacingError({
+      category: "dependency",
+      code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+      correction: isWrite
+        ? "Не повторяйте запись автоматически: состояние файла неизвестно. Сначала прочитайте файл или найдите его через glob."
+        : "Проверьте путь через glob и повторите read-only вызов один раз с существующим canonical path.",
+      reason: `Файловая операция ${toolName} завершилась с внутренней ошибкой.`,
+      retryable: !isWrite,
+      sideEffectStatus: isWrite ? "unknown" : "not_started",
+    });
+  }
 }
 
 export function createScopedFileTools(
@@ -117,6 +139,7 @@ export function createScopedFileTools(
         return await withAuthorizedPath(
           dependencies,
           ctx,
+          "glob",
           (input as { path?: unknown }).path,
           async (path) => await dependencies.defaults.glob.execute({ ...input, path }, ctx),
         );
@@ -128,6 +151,7 @@ export function createScopedFileTools(
         return await withAuthorizedPath(
           dependencies,
           ctx,
+          "grep",
           (input as { path?: unknown }).path,
           async (path) => await dependencies.defaults.grep.execute({ ...input, path }, ctx),
         );
@@ -139,6 +163,7 @@ export function createScopedFileTools(
         return await withAuthorizedPath(
           dependencies,
           ctx,
+          "read_file",
           (input as { filePath?: unknown }).filePath,
           async (filePath) => await dependencies.defaults.read_file.execute({ ...input, filePath }, ctx),
         );
@@ -150,6 +175,7 @@ export function createScopedFileTools(
         return await withAuthorizedPath(
           dependencies,
           ctx,
+          "write_file",
           (input as { filePath?: unknown }).filePath,
           async (filePath) => await dependencies.defaults.write_file.execute({ ...input, filePath }, ctx),
         );

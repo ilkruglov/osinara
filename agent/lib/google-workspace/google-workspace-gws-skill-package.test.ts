@@ -4,10 +4,13 @@
  * Constructs covered:
  * - Official `googleworkspace/cli` service skills are installed as Eve skill packages.
  * - Shared instructions adapt authentication to Osinara's workspace-bound credentials.
+ * - Authored examples stay executable through the exact argv allowlist and one-shot runner.
  */
 import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
+
+import { classifyGoogleWorkspaceCommand } from "./google-workspace-command-policy.js";
 
 const serviceSkills = [
   "gws-calendar",
@@ -44,6 +47,11 @@ async function readSkill(skillName: string): Promise<string> {
     new URL(`../../../config/trusted-skills/${skillName}/SKILL.md`, import.meta.url),
     "utf8",
   );
+}
+
+function exampleArgv(command: string): string[] {
+  return (command.match(/(?:[^\s'"]+|'[^']*'|"[^"]*")+/gu) ?? [])
+    .map((argument) => argument.replace(/^(['"])(.*)\1$/u, "$2"));
 }
 
 describe("Google Workspace gws skill packages", () => {
@@ -103,5 +111,62 @@ describe("Google Workspace gws skill packages", () => {
     expect(people).toContain("execute_google_workspace supplies mandatory Eve HITL");
     expect(people).toContain("Update a contact through mandatory Eve HITL");
     expect(people).toContain("metadata.sources.etag");
+  });
+
+  it("documents exact Gmail mutation argv and payload boundaries", async () => {
+    const gmail = await readSkill("gws-gmail");
+
+    // Resource and method names must remain separate argv entries for the reviewed route allowlist.
+    expect(gmail).toContain('["gmail", "users", "messages", "trash"');
+    expect(gmail).toContain('["gmail", "users", "messages", "delete"');
+    expect(gmail).toContain('["gmail", "users", "messages", "modify"');
+    expect(gmail).toContain('["schema", "gmail.users.messages.trash"]');
+    expect(gmail).toContain('\\"removeLabelIds\\":[\\"UNREAD\\"]');
+    expect(gmail).toMatch(/Do not combine resource and\s+method segments/u);
+  });
+
+  it("contains no runtime generation fallback, shell pipeline, or duplicate confirmation flow", async () => {
+    const skills = await Promise.all(serviceSkills.map(readSkill));
+    const joined = skills.join("\n");
+
+    expect(joined).not.toContain("gws generate-skills");
+    expect(joined).not.toMatch(/gws [^\n]+\|/u);
+    expect(joined).not.toContain("confirm with the user before executing");
+    expect(joined).toContain("provides the only required Eve HITL confirmation");
+  });
+
+  it("keeps helper examples within route flags and Gmail watch bounded", async () => {
+    const agenda = await readSkill("gws-calendar-agenda");
+    const triage = await readSkill("gws-gmail-triage");
+    const watch = await readSkill("gws-gmail-watch");
+
+    expect(agenda).not.toMatch(/\+agenda[^\n]*--format/u);
+    expect(triage).not.toMatch(/\+triage[^\n]*--format/u);
+    expect(watch).toContain("`--once` is mandatory");
+    const watchExamples = watch.split("\n").filter((line) => line.startsWith("gws gmail +watch "));
+    expect(watchExamples.every((line) => line.includes("--once"))).toBe(true);
+  });
+
+  it("keeps every self-contained gws example executable through the argv policy", async () => {
+    for (const skillName of serviceSkills) {
+      const lines = (await readSkill(skillName)).split("\n");
+      const examples = lines.filter((line) =>
+        line.startsWith("gws ") &&
+        !line.endsWith("\\") &&
+        !line.includes("|") &&
+        !line.startsWith("gws auth ") &&
+        !line.startsWith("gws <") &&
+        !line.startsWith("gws schema <") &&
+        !line.includes("<resource>") &&
+        !line.includes("<method>")
+      );
+
+      for (const example of examples) {
+        expect(
+          () => classifyGoogleWorkspaceCommand(exampleArgv(example.slice("gws ".length))),
+          `${skillName}: ${example}`,
+        ).not.toThrow();
+      }
+    }
   });
 });

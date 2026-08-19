@@ -1,6 +1,6 @@
 ---
 name: gws-gmail-watch
-description: "Gmail: Watch for new emails and stream them as NDJSON."
+description: "Gmail: Pull one bounded batch of new emails through an existing or reviewed Pub/Sub watch."
 metadata:
   version: "0.22.5"
   openclaw: "category=productivity;requires=bins:gws"
@@ -9,14 +9,14 @@ metadata:
 
 # gmail +watch
 
-> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, run `gws generate-skills` to create it.
+> **PREREQUISITE:** Read `../gws-shared/SKILL.md` for auth, global flags, and security rules. If missing, stop and report `AGENT_GOOGLE_WORKSPACE_SKILL_PACKAGE_INVALID`; never generate skills at runtime.
 
-Watch for new emails and stream them as NDJSON
+Pull one bounded batch of new emails. Osinara runs one-shot commands only.
 
 ## Usage
 
 ```bash
-gws gmail +watch
+gws gmail +watch --subscription <SUBSCRIPTION> --once
 ```
 
 ## Flags
@@ -36,16 +36,15 @@ gws gmail +watch
 ## Examples
 
 ```bash
-gws gmail +watch --project my-gcp-project
 gws gmail +watch --project my-project --label-ids INBOX --once
-gws gmail +watch --subscription projects/p/subscriptions/my-sub
+gws gmail +watch --subscription projects/p/subscriptions/my-sub --once
 ```
 
 ## Tips
 
-- Gmail watch expires after 7 days — re-run to renew.
-- Without --cleanup, Pub/Sub resources persist for reconnection.
-- Press Ctrl-C to stop gracefully.
+- `--once` is mandatory because the credentialed runner stops commands after 60 seconds.
+- A timeout after setup is ambiguous and may leave Pub/Sub resources; never retry blindly.
+- Gmail watch expires after 7 days; renew only through another reviewed one-shot command.
 
 ## See Also
 
