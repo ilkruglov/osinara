@@ -29,6 +29,22 @@ function assertDownloadSize(size: number): void {
   }
 }
 
+function throwDownloadFailure(error: unknown): never {
+  if (isAppError(error)) throw error;
+  console.error(JSON.stringify({
+    code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  throw new ModelFacingError({
+    category: "dependency",
+    code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
+    correction: "Не повторяйте скачивание автоматически. Попросите пользователя отправить файл ещё раз.",
+    reason: "Не удалось получить файл из Telegram из-за транспортного сбоя.",
+    retryable: false,
+    sideEffectStatus: "not_started",
+  });
+}
+
 export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDownloadAdapter) {
   return async (attachment: TelegramAttachment): Promise<Buffer> => {
     if (attachment.size !== undefined) assertDownloadSize(attachment.size);
@@ -37,19 +53,7 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
       const metadata = await adapter.getFile(attachment.fileId);
       response = await adapter.downloadFile(metadata.filePath);
     } catch (error) {
-      if (isAppError(error)) throw error;
-      console.error(JSON.stringify({
-        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      throw new ModelFacingError({
-        category: "dependency",
-        code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
-        correction: "Не повторяйте скачивание автоматически. Попросите пользователя отправить файл ещё раз.",
-        reason: "Не удалось получить файл из Telegram из-за транспортного сбоя.",
-        retryable: false,
-        sideEffectStatus: "not_started",
-      });
+      throwDownloadFailure(error);
     }
     if (!response.ok) {
       console.error(JSON.stringify({
@@ -72,7 +76,12 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
       }
       assertDownloadSize(length);
     }
-    const bytes = Buffer.from(await response.arrayBuffer());
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      throwDownloadFailure(error);
+    }
     assertDownloadSize(bytes.byteLength);
     return bytes;
   };

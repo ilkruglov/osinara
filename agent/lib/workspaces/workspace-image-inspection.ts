@@ -65,6 +65,29 @@ function assertAttachmentScope(auth: WorkspaceAuthorization, scope: WorkspaceSco
   }
 }
 
+async function analyzeImage(
+  dependencies: WorkspaceImageInspectorDependencies,
+  input: ImageAnalysisInput,
+): Promise<string> {
+  try {
+    return await dependencies.analyze(input);
+  } catch (error) {
+    if (isAppError(error)) throw error;
+    console.error(JSON.stringify({
+      code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    throw new ModelFacingError({
+      category: "dependency",
+      code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
+      correction: "Не повторяйте анализ автоматически. Сообщите, что анализ изображения временно недоступен.",
+      reason: "Vision-модель завершила анализ с внутренней ошибкой.",
+      retryable: false,
+      sideEffectStatus: "not_started",
+    });
+  }
+}
+
 export function createWorkspaceImageInspector(
   dependencies: WorkspaceImageInspectorDependencies,
 ) {
@@ -105,7 +128,7 @@ export function createWorkspaceImageInspector(
         );
       }
       const mediaType = await validateVisionImageBytes(bytes);
-      const analysis = await dependencies.analyze({
+      const analysis = await analyzeImage(dependencies, {
         ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
         bytes,
         mediaType,
@@ -149,29 +172,12 @@ export function createWorkspaceImageInspector(
         "Vision-модель принимает изображение размером не более 10 МБ",
       );
     }
-    let analysis: string;
-    try {
-      analysis = await dependencies.analyze({
-        ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
-        bytes: binary.bytes,
-        mediaType: binary.file.mediaType,
-        question: input.question,
-      });
-    } catch (error) {
-      if (isAppError(error)) throw error;
-      console.error(JSON.stringify({
-        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      throw new ModelFacingError({
-        category: "dependency",
-        code: "AGENT_WORKSPACE_VISION_PROVIDER_FAILED",
-        correction: "Не повторяйте анализ автоматически. Сообщите, что анализ изображения временно недоступен.",
-        reason: "Vision-модель завершила анализ с внутренней ошибкой.",
-        retryable: false,
-        sideEffectStatus: "not_started",
-      });
-    }
+    const analysis = await analyzeImage(dependencies, {
+      ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
+      bytes: binary.bytes,
+      mediaType: binary.file.mediaType,
+      question: input.question,
+    });
     if (!analysis.trim()) {
       throw new AppError(
         "AGENT_WORKSPACE_VISION_RESPONSE_EMPTY",

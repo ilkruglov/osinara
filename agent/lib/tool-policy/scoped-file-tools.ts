@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `ScopedFileToolName`, `ScopedWorkspaceRoot`: contracts for authorized mount roots.
+ * - `throwFileToolExecutionError`: shared safe normalization for native file failures.
  * - `createScopedFileTools`: same-name wrappers with live authorization and symlink confinement.
  */
 import { lstat } from "node:fs/promises";
@@ -90,6 +91,26 @@ async function assertNoSymlinkComponent(
   }
 }
 
+export function throwFileToolExecutionError(error: unknown, toolName: ScopedFileToolName): never {
+  if (isAppError(error)) throw error;
+  const isWrite = toolName === "write_file";
+  console.error(JSON.stringify({
+    code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+    error: error instanceof Error ? error.message : String(error),
+    toolName,
+  }));
+  throw new ModelFacingError({
+    category: "dependency",
+    code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+    correction: isWrite
+      ? "Не повторяйте запись автоматически: состояние файла неизвестно. Сначала прочитайте файл или найдите его через glob."
+      : "Проверьте путь через glob и повторите read-only вызов один раз с существующим canonical path.",
+    reason: `Файловая операция ${toolName} завершилась с внутренней ошибкой.`,
+    retryable: !isWrite,
+    sideEffectStatus: isWrite ? "unknown" : "not_started",
+  });
+}
+
 async function withAuthorizedPath<T>(
   dependencies: ScopedFileToolDependencies,
   ctx: ToolContext,
@@ -109,23 +130,7 @@ async function withAuthorizedPath<T>(
     await assertNoSymlinkComponent(path.hostRoot, path.relativePath, dependencies.forbiddenPath);
     return await operation(path.sandboxPath);
   } catch (error) {
-    if (isAppError(error)) throw error;
-    const isWrite = toolName === "write_file";
-    console.error(JSON.stringify({
-      code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
-      error: error instanceof Error ? error.message : String(error),
-      toolName,
-    }));
-    throw new ModelFacingError({
-      category: "dependency",
-      code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
-      correction: isWrite
-        ? "Не повторяйте запись автоматически: состояние файла неизвестно. Сначала прочитайте файл или найдите его через glob."
-        : "Проверьте путь через glob и повторите read-only вызов один раз с существующим canonical path.",
-      reason: `Файловая операция ${toolName} завершилась с внутренней ошибкой.`,
-      retryable: !isWrite,
-      sideEffectStatus: isWrite ? "unknown" : "not_started",
-    });
+    throwFileToolExecutionError(error, toolName);
   }
 }
 

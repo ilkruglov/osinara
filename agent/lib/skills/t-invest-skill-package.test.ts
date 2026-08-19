@@ -64,8 +64,12 @@ describe("T-Invest skill package", () => {
 
     expect(skill).toContain("`stonksMode` не отменяет это правило");
     expect(skill).not.toContain("автономную торговлю без подтверждений");
-    expect(skill).toMatch(/order replace.*--order-id UUID.*\[--confirm\]/u);
-    expect(skill).toMatch(/stop-order set.*--order-id UUID.*\[--confirm\]/u);
+    expect(skill).toMatch(/order buy\/sell.*--confirm --order-id UUID/u);
+    expect(skill).toMatch(/order cancel <id> --confirm/u);
+    expect(skill).toMatch(/order replace.*--order-id UUID --confirm/u);
+    expect(skill).toMatch(/stop-order set.*--order-id UUID --confirm/u);
+    expect(skill).toMatch(/stop-order cancel <id> --confirm/u);
+    expect(skill).not.toMatch(/--order-id (?:id|UUID)\]|\[--confirm\]/u);
     expect(cli).not.toMatch(/if \(mode === "sandbox"\) \{\s*return;\s*\}/u);
     expect(cli).not.toMatch(/if \(gate\.stonksMode\) \{\s*return;\s*\}/u);
     expect(cli).toContain('code: "APP_TINVEST_CONFIRM_REQUIRED"');

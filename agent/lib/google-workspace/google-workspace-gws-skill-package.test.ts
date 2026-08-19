@@ -137,11 +137,15 @@ describe("Google Workspace gws skill packages", () => {
 
   it("keeps helper examples within route flags and Gmail watch bounded", async () => {
     const agenda = await readSkill("gws-calendar-agenda");
+    const gmail = await readSkill("gws-gmail");
     const triage = await readSkill("gws-gmail-triage");
     const watch = await readSkill("gws-gmail-watch");
 
     expect(agenda).not.toMatch(/\+agenda[^\n]*--format/u);
     expect(triage).not.toMatch(/\+triage[^\n]*--format/u);
+    expect(gmail).toContain("Pull one bounded batch of new emails");
+    expect(gmail).not.toContain("stream them as NDJSON");
+    expect(watch).toMatch(/\| `--once` \| ✔ \|/u);
     expect(watch).toContain("`--once` is mandatory");
     const watchExamples = watch.split("\n").filter((line) => line.startsWith("gws gmail +watch "));
     expect(watchExamples.every((line) => line.includes("--once"))).toBe(true);

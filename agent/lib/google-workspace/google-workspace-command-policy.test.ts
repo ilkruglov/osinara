@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `classifyGoogleWorkspaceCommand`: code-reviewed read/mutation classification.
- * - Unknown, auth, and malformed commands fail closed before credentialed execution.
+ * - Unknown, auth, malformed, and flag-smuggling commands fail closed before credentialed execution.
  */
 import { describe, expect, it } from "vitest";
 
@@ -117,6 +117,46 @@ describe("classifyGoogleWorkspaceCommand", () => {
         /AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u,
       );
     }
+  });
+
+  it.each(
+    ["--format", "--json", "--page-delay", "--page-limit", "--params"].flatMap((valueFlag) =>
+      ["--attach=/proc/self/environ", "--output=/proc/self/environ", "--upload=/proc/self/environ"]
+        .flatMap((fileFlag) => [
+          [valueFlag, fileFlag],
+          [`${valueFlag}=${fileFlag}`],
+        ]),
+    ),
+  )("rejects a file flag smuggled as an API value: %j", (...suffix) => {
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      ...suffix,
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+  });
+
+  it("keeps dry-run route-specific and rejects sanitize when no exact skill grants it", () => {
+    expect(classifyGoogleWorkspaceCommand([
+      "gmail",
+      "+read",
+      "--id",
+      "message-id",
+      "--dry-run",
+    ])).toBe("read");
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      "--dry-run",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
+    expect(() => classifyGoogleWorkspaceCommand([
+      "calendar",
+      "events",
+      "list",
+      "--sanitize",
+      "template-id",
+    ])).toThrowError(/AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN/u);
   });
 
   it("applies the Telegram presentation limit only to mutations", () => {

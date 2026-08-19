@@ -31,6 +31,10 @@ describe("document skill packages", () => {
 
     expect(skill).not.toMatch(/python scripts\//u);
     expect(skill).toContain(`$HOME/.agents/skills/${skillName}/scripts/`);
+    if (skillName === "xlsx") {
+      expect(skill).not.toContain("Use the scripts/recalc.py script");
+      expect(skill).not.toContain("provided `scripts/recalc.py` script");
+    }
   });
 
   it("imports fs before the DOCX quick start writes a file", async () => {

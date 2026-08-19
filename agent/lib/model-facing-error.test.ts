@@ -56,4 +56,15 @@ describe("ModelFacingError", () => {
     expect(unknown.message).not.toContain("10.0.0.4");
     expect(unknown.contract.sideEffectStatus).toBe("unknown");
   });
+
+  it("preserves a generic AGENT code without exposing its untrusted message suffix", () => {
+    const normalized = normalizeModelFacingError(
+      new Error("AGENT_FAKE_PROVIDER_FAILED: /srv/private/token"),
+      { toolName: "external_dependency" },
+    );
+
+    expect(normalized.contract.code).toBe("AGENT_FAKE_PROVIDER_FAILED");
+    expect(normalized.contract.reason).not.toContain("/srv/private/token");
+    expect(normalized.message).not.toContain("/srv/private/token");
+  });
 });

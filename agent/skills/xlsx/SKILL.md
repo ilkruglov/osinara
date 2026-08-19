@@ -134,7 +134,7 @@ This applies to ALL calculations - totals, percentages, ratios, differences, etc
 2. **Create/Load**: Create new workbook or load existing file
 3. **Modify**: Add/edit data, formulas, and formatting
 4. **Save**: Write to file
-5. **Recalculate formulas (MANDATORY IF USING FORMULAS)**: Use the scripts/recalc.py script
+5. **Recalculate formulas (MANDATORY IF USING FORMULAS)**: Use the `$HOME/.agents/skills/xlsx/scripts/recalc.py` script
    ```bash
    python $HOME/.agents/skills/xlsx/scripts/recalc.py output.xlsx
    ```
@@ -206,7 +206,7 @@ wb.save('modified.xlsx')
 
 ## Recalculating formulas
 
-Excel files created or modified by openpyxl contain formulas as strings but not calculated values. Use the provided `scripts/recalc.py` script to recalculate formulas:
+Excel files created or modified by openpyxl contain formulas as strings but not calculated values. Use the provided `$HOME/.agents/skills/xlsx/scripts/recalc.py` script to recalculate formulas:
 
 ```bash
 python $HOME/.agents/skills/xlsx/scripts/recalc.py <excel_file> [timeout_seconds]

@@ -161,6 +161,21 @@ describe("external-group file tools", () => {
     expect(executors.read_file).not.toHaveBeenCalled();
   });
 
+  it("normalizes a native supporting-file read failure", async () => {
+    executors.read_file.mockRejectedValueOnce(new Error("ENOENT: /host/private/skill.md"));
+
+    await expect(tools().read_file!.execute(
+      { filePath: SKILL_REFERENCE },
+      context(),
+    )).rejects.toMatchObject({
+      contract: {
+        code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
+        retryable: true,
+        sideEffectStatus: "not_started",
+      },
+    });
+  });
+
   it("denies a skill file when the external registration is stale", async () => {
     authorize.mockRejectedValueOnce(
       new Error("AGENT_WORKSPACE_ACCESS_DENIED: Группа больше не зарегистрирована как external"),

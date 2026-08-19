@@ -272,10 +272,13 @@ node <каталог-скилла>/scripts/tinvest.cjs <команда> --json
 | Команда | Что делает |
 |---|---|
 | `order preview <тикер> -q <лоты> [--price P] [--direction buy\|sell]` | предпросмотр: оценка суммы, комиссия, доступные лоты; чтение — работает во всех режимах |
-| `order buy/sell <тикер> -q <лоты> [--price P] --confirm [--order-id id]` | заявка после явного согласия: рыночная (без --price) или лимитная; `-q` — ЛОТЫ, не штуки |
-| `order list` / `order status <id>` / `order cancel <id>` / `order replace <id> -q N --price P --order-id UUID [--confirm]` | активные заявки, статус, отмена, замена; replace требует заранее выбранный idempotency key |
-| `stop-order set <тикер> -q <лоты> --type take-profit\|stop-loss\|stop-limit --stop-price S [--price P] --order-id UUID [--confirm]` | стоп-заявка (бессрочная) с обязательным idempotency key |
-| `stop-order list` / `stop-order cancel <id>` | список и отмена стоп-заявок |
+| `order buy/sell <тикер> -q <лоты> [--price P] --confirm --order-id UUID` | заявка после явного согласия: рыночная (без --price) или лимитная; `-q` — ЛОТЫ, не штуки |
+| `order list` / `order status <id>` | список и статус активных заявок |
+| `order cancel <id> --confirm` | отмена конкретной активной заявки после явного согласия |
+| `order replace <id> -q N --price P --order-id UUID --confirm` | замена заявки с заранее выбранным idempotency key и явным подтверждением |
+| `stop-order set <тикер> -q <лоты> --type take-profit\|stop-loss\|stop-limit --stop-price S [--price P] --order-id UUID --confirm` | стоп-заявка (бессрочная) с обязательным idempotency key |
+| `stop-order list` | список активных стоп-заявок |
+| `stop-order cancel <id> --confirm` | отмена конкретной стоп-заявки после явного согласия |
 
 **Служебные:**
 

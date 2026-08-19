@@ -267,14 +267,12 @@ const FILE_PATH_FLAGS = new Set([
 type FlagArity = "boolean" | "value";
 
 const API_FLAGS: Readonly<Record<string, FlagArity>> = {
-  "--dry-run": "boolean",
   "--format": "value",
   "--json": "value",
   "--page-all": "boolean",
   "--page-delay": "value",
   "--page-limit": "value",
   "--params": "value",
-  "--sanitize": "value",
 };
 
 const HELPER_FLAGS: Readonly<Record<string, Readonly<Record<string, FlagArity>>>> = {
@@ -386,12 +384,24 @@ function validateRouteArguments(route: string, argv: readonly string[]): void {
       if (arity !== "value" || separator === argument.length - 1) {
         throw forbidden(`Flag ${flag} получил неверную inline-форму.`, "Передайте непустое значение отдельным argv элементом.");
       }
+      if (argument.slice(separator + 1).startsWith("-")) {
+        throw forbidden(
+          `Значение flag ${flag} похоже на отдельный flag.`,
+          `Передайте корректное значение ${flag}; не скрывайте другой flag внутри его значения.`,
+        );
+      }
       continue;
     }
     if (arity === "boolean") continue;
     const value = argv[index + 1];
     if (value === undefined) {
       throw forbidden(`Для flag ${flag} отсутствует значение.`, `Добавьте значение сразу после ${flag}.`);
+    }
+    if (value.startsWith("-")) {
+      throw forbidden(
+        `Значение flag ${flag} похоже на отдельный flag.`,
+        `Передайте корректное значение ${flag}; не скрывайте другой flag внутри его значения.`,
+      );
     }
     index += 1;
   }

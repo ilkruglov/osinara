@@ -30,7 +30,7 @@ gws gmail +watch --subscription <SUBSCRIPTION> --once
 | `--max-messages` | — | 10 | Max messages per pull batch |
 | `--poll-interval` | — | 5 | Seconds between pulls |
 | `--msg-format` | — | full | Gmail message format: full, metadata, minimal, raw |
-| `--once` | — | — | Pull once and exit |
+| `--once` | ✔ | — | Pull once and exit (mandatory under Osinara) |
 | `--cleanup` | — | — | Delete created Pub/Sub resources on exit |
 
 ## Examples

@@ -90,16 +90,17 @@ export function normalizeModelFacingError(
   context: NormalizeModelFacingErrorContext,
 ): ModelFacingError {
   if (error instanceof ModelFacingError) return error;
-  const codedError = error instanceof AppError
+  const applicationError = error instanceof AppError
     ? { code: error.code, reason: error.message.replace(new RegExp(`^${error.code}:\\s*`, "u"), "") }
-    : error instanceof Error
-      ? /^(AGENT_[A-Z0-9_]+)(?::\s*(.+))?$/su.exec(error.message)
-      : null;
-  if (codedError) {
-    const code = Array.isArray(codedError) ? codedError[1]! : codedError.code;
-    const reason = Array.isArray(codedError)
-      ? codedError[2] ?? "Инструмент отклонил операцию по проверяемому прикладному правилу."
-      : codedError.reason;
+    : null;
+  const genericCode = error instanceof Error
+    ? /^(AGENT_[A-Z0-9_]+)/u.exec(error.message)?.[1]
+    : undefined;
+  if (applicationError || genericCode) {
+    const code = applicationError?.code ?? genericCode!;
+    // Generic errors may carry host paths, addresses, or provider secrets after the stable code.
+    const reason = applicationError?.reason ??
+      "Инструмент отклонил операцию по проверяемому прикладному правилу.";
     const category = categoryForCode(code);
     const canCorrect = category === "input" || category === "not_found";
     return new ModelFacingError({

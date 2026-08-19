@@ -30,7 +30,10 @@ import {
   type WorkspaceAuthorization,
   workspaceRepository,
 } from "../workspaces/workspace-repository.js";
-import { createScopedFileTools } from "./scoped-file-tools.js";
+import {
+  createScopedFileTools,
+  throwFileToolExecutionError,
+} from "./scoped-file-tools.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ExternalGroupFileToolName = "glob" | "grep" | "read_file" | "write_file";
@@ -127,10 +130,14 @@ async function readAuthorizedSkillFile(
   if (!allowed.has(skillPath.skillName)) throw forbiddenSkill();
 
   // Eve resolves canonical `$HOME` and retains native pagination, output, and read stamps.
-  return await dependencies.defaults.read_file.execute(
-    { ...input as object, filePath: skillPath.canonicalPath },
-    ctx,
-  );
+  try {
+    return await dependencies.defaults.read_file.execute(
+      { ...input as object, filePath: skillPath.canonicalPath },
+      ctx,
+    );
+  } catch (error) {
+    throwFileToolExecutionError(error, "read_file");
+  }
 }
 
 export function createExternalGroupFileTools(
