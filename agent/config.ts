@@ -18,7 +18,9 @@ export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;
 export const SANDBOX_RUNNER_BASE_URL = "http://sandbox-runner:8080";
 export const SESSION_INACTIVITY_DAYS = 30;
 export const SESSION_GROUP_ROTATION_LOCK_HASH_SEED = 3;
-export const SESSION_MAX_COMPLETED_TURNS = 250;
+// The local Workflow world replays cumulative filesystem artifacts. Rotate with enough headroom
+// below the observed Eve 240-second replay failure at 118 completed production turns.
+export const SESSION_MAX_COMPLETED_TURNS = 50;
 export const SESSION_RETENTION_LEASE_MS = 15 * 60 * 1_000;
 export const SESSION_RETENTION_DAYS = 1;
 export const SESSION_TASK_ABANDONED_DAYS = 7;
