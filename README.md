@@ -136,15 +136,16 @@ npm ci
 ```dotenv
 POSTGRES_PASSWORD=
 MODEL_API_KEY=
+CLI_PROXY_API_KEY=
 INVITATION_SIGNING_SECRET=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_BOT_USERNAME=
 TELEGRAM_WEBHOOK_SECRET_TOKEN=
 ```
 
-`MODEL_API_KEY` используется выбранным прямым provider transport. Отдельный
-`MODEL_UPSTREAM_API_KEY` пока требуется только сохранённому MiniMax CLI proxy compatibility
-service и не используется agent loop.
+`MODEL_API_KEY` используется выбранным transport. Для прямого provider это внешний API key; для
+`codex-subscription` он должен в точности совпадать с внутренним `CLI_PROXY_API_KEY`. Codex OAuth
+хранится отдельно в persistent volume `cli-proxy-auth` и никогда не передаётся agent container.
 
 Для Google Workspace OAuth дополнительно нужны:
 
@@ -160,6 +161,9 @@ PUBLIC_BASE_URL=
 ```bash
 docker compose up --build
 ```
+
+Локальный Codex gateway включается отдельно профилем `codex-subscription` после заполнения
+`cli-proxy-auth` нативным OAuth record; default direct-provider запуск от него не зависит.
 
 Локальный edge слушает `http://localhost:8080` и публикует только разрешённые маршруты из `infra/nginx.conf`.
 

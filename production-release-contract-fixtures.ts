@@ -28,6 +28,10 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
   return {
     services: {
       agent: service({
+        depends_on: {
+          "cli-proxy-api": { condition: "service_healthy", required: true },
+          migrate: { condition: "service_completed_successfully", required: true },
+        },
         volumes: [
           volume("sandbox-data", "/app/.eve/sandbox-cache"),
           volume("google-workspace-credentials", "/app/google-workspace-credentials"),
@@ -38,7 +42,7 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
       }),
       "cli-proxy-api": service({
         volumes: [
-          volume("/opt/osinara/model-providers.json", "/config/model-providers.json", "bind", true),
+          volume("cli-proxy-auth", "/var/lib/cli-proxy-api/auth"),
         ],
       }),
       edge: service({

@@ -11,6 +11,7 @@ readonly LEGACY_EVE_VOLUME="osinara-production-workflow-data"
 readonly LEGACY_EVE_LOGICAL_VOLUME="workflow-data"
 readonly CURRENT_EVE_LOGICAL_VOLUME="eve-workflow-data"
 readonly DURABLE_VOLUME_BINDINGS=(
+  "osinara-production-cli-proxy-auth|cli-proxy-auth"
   "osinara-production-google-workspace-credentials|google-workspace-credentials"
   "osinara-production-tool-environments|tool-environments"
   "osinara-production-workflow-data|workflow-data"
@@ -195,7 +196,7 @@ create_postgres_backup() {
 
 stop_current_services() {
   CURRENT_SERVICES_STOPPED=1
-  compose_current stop memory-extraction-worker edge telegram-ingress-worker memory-embedding-worker agent \
+  compose_current stop memory-extraction-worker edge telegram-ingress-worker memory-embedding-worker agent cli-proxy-api \
     sandbox-runner sandbox-egress-proxy memory-embedding
 }
 

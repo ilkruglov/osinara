@@ -63,7 +63,6 @@ services:
     image: ${OSINARA_CLI_PROXY_IMAGE:?OSINARA_CLI_PROXY_IMAGE must be an exact digest reference}
     environment:
       CLI_PROXY_API_KEY: ${CLI_PROXY_API_KEY:?CLI_PROXY_API_KEY is required}
-      MODEL_UPSTREAM_API_KEY: ${MODEL_UPSTREAM_API_KEY:?MODEL_UPSTREAM_API_KEY is required}
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent --show-error --header \"Authorization: Bearer $${CLI_PROXY_API_KEY}\" http://127.0.0.1:8317/v1/models >/dev/null"]
       interval: 5s
@@ -79,12 +78,14 @@ services:
     tmpfs:
       - /run/cli-proxy-api:size=16m,mode=0700,uid=10001,gid=10001
     volumes:
-      - /opt/osinara/model-providers.json:/config/model-providers.json:ro
+      - cli-proxy-auth:/var/lib/cli-proxy-api/auth
 
   agent:
     image: ${OSINARA_APP_IMAGE:?OSINARA_APP_IMAGE must be an exact digest reference}
     command: ["start-after-migration"]
     depends_on:
+      cli-proxy-api:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       memory-embedding:
@@ -255,6 +256,8 @@ services:
       - /tmp:size=32m,mode=1777
 
 volumes:
+  cli-proxy-auth:
+    name: osinara-production-cli-proxy-auth
   postgres-data:
     name: osinara-production-postgres-data
   memory-embedding-model-e5:

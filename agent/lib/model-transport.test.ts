@@ -5,6 +5,7 @@
  * - `createConfiguredLanguageModel`: selects an AI SDK adapter by wire protocol.
  * - Anthropic Messages requests enable adaptive thinking and use configured authentication.
  * - Streaming thinking signatures survive the assistant/tool-result round trip unchanged.
+ * - Codex subscription requests carry the selected reasoning effort through Chat Completions.
  */
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
@@ -146,6 +147,50 @@ describe("createConfiguredLanguageModel", () => {
       url: "https://openrouter.ai/api/v1/chat/completions",
     });
     expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
+  });
+
+  it("sends medium reasoning to the internal Codex subscription gateway", async () => {
+    let request: { body: Record<string, unknown>; headers: Headers; url: string } | undefined;
+    const model = createConfiguredLanguageModel({
+      apiKey: "internal-proxy-secret",
+      fetch: async (input, init) => {
+        request = {
+          body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+          headers: new Headers(init?.headers),
+          url: String(input),
+        };
+        return jsonResponse({
+          choices: [{ finish_reason: "stop", index: 0, message: { content: "Готово", role: "assistant" } }],
+          created: 1,
+          id: "completion-codex-1",
+          model: "gpt-5.6-luna",
+          object: "chat.completion",
+          usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2 },
+        });
+      },
+      maxOutputTokens: 128_000,
+      modelId: "gpt-5.6-luna",
+      transport: {
+        baseUrl: "http://cli-proxy-api:8317/v1",
+        protocol: "openai-chat-completions",
+        providerName: "codex-subscription",
+        reasoning: { effort: "medium", format: "reasoning-effort", type: "effort" },
+      },
+    });
+
+    await model.doGenerate({
+      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+    } as LanguageModelV4CallOptions);
+
+    expect(request).toMatchObject({
+      body: {
+        max_tokens: 128_000,
+        model: "gpt-5.6-luna",
+        reasoning_effort: "medium",
+      },
+      url: "http://cli-proxy-api:8317/v1/chat/completions",
+    });
+    expect(request?.headers.get("authorization")).toBe("Bearer internal-proxy-secret");
   });
 
   it("uses x-api-key authentication when selected by Anthropic protocol config", async () => {

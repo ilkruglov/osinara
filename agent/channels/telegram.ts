@@ -49,7 +49,7 @@ import { proactiveDeliveryRepository } from "../lib/proactive-deliveries/proacti
 import { telegramGroupJournalRepository } from "../lib/telegram-group-journal-repository.js";
 import { postTelegramMessageWithoutContinuationChange } from "../lib/telegram-stable-delivery.js";
 import { shouldNotifyTelegramFailure } from "../lib/telegram-failure-notification.js";
-import { AppError } from "../lib/app-error.js";
+import { AppError, isAppError } from "../lib/app-error.js";
 import { conversationTimelineRepository } from "../lib/conversation-timeline-repository.js";
 import { setTelegramMessageReaction } from "../lib/telegram-message-reaction.js";
 import {
@@ -118,29 +118,61 @@ export default telegramChannel({
       const replyParameters = isScheduledSession(ctx)
         ? undefined
         : telegramTurnReplyParameters(channel.state, ctx);
-      const sentMessages = await deliverTelegramFinalOutput({
-        applicationSessionId: sessionId,
-        deliveryIdentity: {
-          chatId: channel.telegram.chatId,
-          messageThreadId: channel.telegram.messageThreadId ?? null,
-          replyParameters: replyParameters ?? null,
-        },
-        eveSessionId: ctx.session.id,
-        eveTurnId: ctx.session.turn.id,
-        markdown: message,
-        sendChunk: (chunk, ordinal) => chunk.format === "plain"
-          ? postTelegramPlainMessageChunk(
-              chunk.text,
-              channel,
-              ordinal === 0 ? replyParameters : undefined,
-            )
-          : postTelegramRichMessageChunk(
-              chunk.text,
-              channel.telegram,
-              channel.state,
-              ordinal === 0 ? replyParameters : undefined,
-            ),
-      });
+      let sentMessages: Awaited<ReturnType<typeof deliverTelegramFinalOutput>>;
+      try {
+        sentMessages = await deliverTelegramFinalOutput({
+          applicationSessionId: sessionId,
+          deliveryIdentity: {
+            chatId: channel.telegram.chatId,
+            messageThreadId: channel.telegram.messageThreadId ?? null,
+            replyParameters: replyParameters ?? null,
+          },
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+          markdown: message,
+          sendChunk: (chunk, ordinal) => chunk.format === "plain"
+            ? postTelegramPlainMessageChunk(
+                chunk.text,
+                channel,
+                ordinal === 0 ? replyParameters : undefined,
+              )
+            : postTelegramRichMessageChunk(
+                chunk.text,
+                channel.telegram,
+                channel.state,
+                ordinal === 0 ? replyParameters : undefined,
+              ),
+        });
+      } catch (error) {
+        if (scheduledDelivery) {
+          const errorCode = isAppError(error)
+            ? error.code
+            : "AGENT_TELEGRAM_FINAL_DELIVERY_FAILED";
+          console.error(JSON.stringify({
+            code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILED",
+            deliveryErrorCode: errorCode,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            runId: scheduledDelivery.runId,
+          }));
+          try {
+            await agentScheduleDispatchRepository.failRun(
+              sessionId,
+              ctx.session.id,
+              errorCode,
+              new Date(),
+            );
+          } catch (persistenceError) {
+            // Terminal persistence is secondary: log it without replacing the actionable delivery error.
+            console.error(JSON.stringify({
+              code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILURE_PERSISTENCE_FAILED",
+              deliveryErrorCode: errorCode,
+              errorName: persistenceError instanceof Error ? persistenceError.name : "UnknownError",
+              runId: scheduledDelivery.runId,
+            }));
+          }
+        }
+        throw error;
+      }
       const deliveredAt = new Date();
       const groupId = scheduledDelivery?.groupId ??
         (typeof currentAttributes?.groupId === "string" ? currentAttributes.groupId : null);
