@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - `continuationTokenForGeneration`: generation-zero compatibility and isolated successors.
- * - `sessionNeedsRotation`: inactivity, turn-limit, manual, and pending-operation rules.
+ * - `sessionNeedsRotation`: inactivity, replay-safe turn-limit, manual, and pending-operation rules.
  */
 import { describe, expect, it } from "vitest";
 
@@ -20,7 +20,7 @@ describe("session rotation policy", () => {
     expect(continuationTokenForGeneration("101::", 1)).toBe("101:::osinara:1");
   });
 
-  it("rotates after inactivity or the completed-turn limit", () => {
+  it("rotates after inactivity or before the Eve workflow journal becomes replay-unsafe", () => {
     expect(sessionNeedsRotation({
       completedTurns: 1,
       lastActivityAt: new Date("2026-06-12T11:59:59.999Z"),
@@ -29,7 +29,14 @@ describe("session rotation policy", () => {
       rotationRequestedAt: null,
     })).toBe(true);
     expect(sessionNeedsRotation({
-      completedTurns: 250,
+      completedTurns: 49,
+      lastActivityAt: NOW,
+      now: NOW,
+      pendingOperation: false,
+      rotationRequestedAt: null,
+    })).toBe(false);
+    expect(sessionNeedsRotation({
+      completedTurns: 50,
       lastActivityAt: NOW,
       now: NOW,
       pendingOperation: false,
@@ -39,7 +46,7 @@ describe("session rotation policy", () => {
 
   it("defers every rotation reason while a HITL or OAuth operation is pending", () => {
     expect(sessionNeedsRotation({
-      completedTurns: 250,
+      completedTurns: 50,
       lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
       now: NOW,
       pendingOperation: true,
