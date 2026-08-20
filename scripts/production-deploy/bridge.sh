@@ -7,7 +7,8 @@ readonly V0152_BRIDGE_TARGET_VERSION="0.15.2"
 readonly V0152_MODEL_CONFIG_SHA256="4125a909ad3a2cfab08df5158538d210e2bcb753b3faa3a79f7be8a81bcf55c8"
 readonly V0160_BRIDGE_SOURCE_VERSION="0.15.14"
 readonly V0160_BRIDGE_TARGET_VERSION="0.16.0"
-readonly V0160_SOURCE_MODEL_CONFIG_SHA256="4125a909ad3a2cfab08df5158538d210e2bcb753b3faa3a79f7be8a81bcf55c8"
+readonly V0160_UPDATE_SOURCE_MODEL_CONFIG_SHA256="3ebc69be3aec08cae7a08ce4024b6b8d8a00a797819a787aed391b8ee30937dd"
+readonly V0160_INITIAL_SOURCE_MODEL_CONFIG_SHA256="4125a909ad3a2cfab08df5158538d210e2bcb753b3faa3a79f7be8a81bcf55c8"
 readonly V0160_CODEX_MODEL_CONFIG_SHA256="68b349485a474c4426adb7f98b541d812fb6edaa7617010a0e8e942d94fa16b7"
 readonly V0160_CODEX_MODEL_CONFIG_ASSET="codex-subscription-model-providers.json"
 readonly CODEX_AUTH_SEED="${BASE_DIR}/codex-auth.json"
@@ -159,9 +160,6 @@ validate_v0160_environment() {
       fail "DEPLOY_V0160_MODEL_KEY_INVALID" \
         "Production update must contain one DeepSeek rollback credential"
     validate_bridge_credential_assignment "$V0160_LEGACY_VALUE"
-    [[ "$V0160_MODEL_VALUE" == "$V0160_LEGACY_VALUE" ]] ||
-      fail "DEPLOY_V0160_MODEL_KEY_CONFLICT" \
-        "Current MODEL_API_KEY does not match the approved v0.15.14 DeepSeek credential"
   fi
 }
 
@@ -176,11 +174,13 @@ validate_v0160_codex_inputs() {
     fail "DEPLOY_V0160_MODEL_CONFIG_HASH_MISMATCH" \
       "Canonical Codex model config does not match the reviewed bytes"
 
-  # The predecessor must still run the exact reviewed DeepSeek bytes before migration starts.
-  printf '%s  %s\n' "$V0160_SOURCE_MODEL_CONFIG_SHA256" "$AGENT_MODEL_PROVIDER_CONFIG" |
+  local source_config_sha256="$V0160_UPDATE_SOURCE_MODEL_CONFIG_SHA256"
+  [[ "$INITIAL_MODE" -eq 0 ]] || source_config_sha256="$V0160_INITIAL_SOURCE_MODEL_CONFIG_SHA256"
+  # Existing production uses reviewed NeuralDeep bytes; explicit initial mode starts from the release default.
+  printf '%s  %s\n' "$source_config_sha256" "$AGENT_MODEL_PROVIDER_CONFIG" |
     sha256sum --check --status - ||
     fail "DEPLOY_V0160_SOURCE_CONFIG_INVALID" \
-      "Current model config is not the expected v0.15.14 DeepSeek route"
+      "Current model config does not match the expected v0.16.0 bridge source"
   jq -e '
     type == "object" and
     keys == ["access_token", "account_id", "expired", "refresh_token", "type"] and

@@ -7,6 +7,7 @@
  * - Provisioning starts only after current data is backed up and the migration boundary is crossed.
  * - Promotion requires one real medium-reasoning Luna completion through the candidate gateway.
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,35 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const projectRoot = new URL("./", import.meta.url).pathname;
 const temporaryDirectories: string[] = [];
+const productionSourceConfig = Buffer.from(`{
+  "agent": {
+    "models": {
+      "primary": {
+        "contextWindowTokens": 262144,
+        "id": "qwen3.8-27b",
+        "maxOutputTokens": 16384
+      },
+      "vision": {
+        "id": "qwen3.8-27b",
+        "maxOutputTokens": 16384,
+        "supportsImageInput": true
+      }
+    },
+    "transport": {
+      "baseUrl": "https://api.neuraldeep.ru/v1",
+      "protocol": "openai-chat-completions",
+      "providerName": "neuraldeep",
+      "reasoning": null
+    }
+  },
+  "provider": "neuraldeep",
+  "schemaVersion": 4,
+  "voice": {
+    "enabled": true,
+    "transcriptionModelId": "whisper-large-v3-turbo"
+  }
+}
+`);
 
 function runBridge(directory: string, sourceVersion = "0.15.14", initialMode = false) {
   const current = join(directory, "current");
@@ -28,7 +58,9 @@ function runBridge(directory: string, sourceVersion = "0.15.14", initialMode = f
   writeFileSync(join(current, "osinara-deployment.json"), JSON.stringify({ version: sourceVersion }));
   writeFileSync(
     join(directory, "agent-model-providers.json"),
-    readFileSync(join(projectRoot, "config/agent-model-providers.json")),
+    initialMode
+      ? readFileSync(join(projectRoot, "config/agent-model-providers.json"))
+      : productionSourceConfig,
   );
   writeFileSync(
     join(work, "codex-subscription-model-providers.json"),
@@ -87,7 +119,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     temporaryDirectories.push(directory);
     writeFileSync(
       join(directory, ".env"),
-      "DEEPSEEK_API_KEY='legacy-key'\nMODEL_API_KEY='legacy-key'\nCLI_PROXY_API_KEY='internal-key'\n",
+      "DEEPSEEK_API_KEY='rollback-key'\nMODEL_API_KEY='active-neuraldeep-key'\nCLI_PROXY_API_KEY='internal-key'\n",
     );
     writeFileSync(join(directory, "codex-auth.json"), JSON.stringify({
       access_token: "access-token",
@@ -107,7 +139,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
       '"type":"codex"',
     );
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe(
-      "DEEPSEEK_API_KEY='legacy-key'\nMODEL_API_KEY='internal-key'\nCLI_PROXY_API_KEY='internal-key'\n",
+      "DEEPSEEK_API_KEY='rollback-key'\nMODEL_API_KEY='internal-key'\nCLI_PROXY_API_KEY='internal-key'\n",
     );
   });
 
@@ -116,7 +148,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     temporaryDirectories.push(directory);
     writeFileSync(
       join(directory, ".env"),
-      "DEEPSEEK_API_KEY=legacy-key\nMODEL_API_KEY=legacy-key\nCLI_PROXY_API_KEY=internal-key\n",
+      "DEEPSEEK_API_KEY=rollback-key\nMODEL_API_KEY=active-neuraldeep-key\nCLI_PROXY_API_KEY=internal-key\n",
     );
     writeFileSync(join(directory, "codex-auth.json"), JSON.stringify({ type: "codex" }), {
       mode: 0o600,
@@ -127,7 +159,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("DEPLOY_V0160_CODEX_AUTH_INVALID");
     expect(readFileSync(join(directory, "agent-model-providers.json"))).toEqual(
-      readFileSync(join(projectRoot, "config/agent-model-providers.json")),
+      productionSourceConfig,
     );
   });
 
@@ -169,7 +201,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     temporaryDirectories.push(directory);
     writeFileSync(
       join(directory, ".env"),
-      "DEEPSEEK_API_KEY=legacy-key\nMODEL_API_KEY=legacy-key\nCLI_PROXY_API_KEY=internal-key\n",
+      "DEEPSEEK_API_KEY=rollback-key\nMODEL_API_KEY=active-neuraldeep-key\nCLI_PROXY_API_KEY=internal-key\n",
     );
     writeFileSync(join(directory, "codex-auth.json"), JSON.stringify({
       access_token: "access-token",
@@ -213,5 +245,11 @@ describe("v0.16.0 Codex subscription bridge", () => {
 
     expect(bridge).toContain("chown 10001:10001 /auth");
     expect(bridge).toContain("chmod 0700 /auth");
+  });
+
+  it("pins the exact current production NeuralDeep source bytes", () => {
+    expect(createHash("sha256").update(productionSourceConfig).digest("hex")).toBe(
+      "3ebc69be3aec08cae7a08ce4024b6b8d8a00a797819a787aed391b8ee30937dd",
+    );
   });
 });

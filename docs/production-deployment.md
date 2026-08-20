@@ -137,7 +137,8 @@ OAuth remains inside `osinara-production-cli-proxy-auth` and is writable only by
 so refreshed access and refresh tokens survive container replacement.
 
 The one-time v0.16.0 bridge accepts only exact v0.15.14 source state. Before migration it validates
-the root-owned OAuth seed, the exact hashed DeepSeek config, the existing credential relationship, and
+the root-owned OAuth seed, the exact production NeuralDeep `qwen3.8-27b` config hash, the required
+model/proxy assignments and retained DeepSeek rollback credential, and
 the attested Codex config. Backup preflight creates the candidate-only auth volume; after writers are
 stopped and durable state is archived, the controller crosses `MIGRATION_STARTED`, seeds the empty
 volume, atomically installs the new model config, and replaces only `MODEL_API_KEY` with the existing
