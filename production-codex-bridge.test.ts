@@ -100,10 +100,13 @@ function runBridge(directory: string, sourceVersion = "0.15.14", initialMode = f
     APP_IMAGE=test-app-image
     CREATED_CANDIDATE_VOLUMES=()
     INITIAL_MODE=${initialMode ? 1 : 0}
+    PROCESS_MODEL_KEY_PATH=${JSON.stringify(join(directory, "process-model-key"))}
     REQUESTED_VERSION=0.16.0
+    export MODEL_API_KEY=stale-process-model-key
     source scripts/production-deploy/bridge.sh
     prepare_v0160_codex_volume
     provision_v0160_codex_bridge
+    printf %s "$MODEL_API_KEY" > "$PROCESS_MODEL_KEY_PATH"
   `], { cwd: projectRoot, encoding: "utf8" });
 }
 
@@ -141,6 +144,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe(
       "DEEPSEEK_API_KEY='rollback-key'\nMODEL_API_KEY='internal-key'\nCLI_PROXY_API_KEY='internal-key'\n",
     );
+    expect(readFileSync(join(directory, "process-model-key"), "utf8")).toBe("internal-key");
   });
 
   it("rejects malformed OAuth before changing model configuration", () => {
@@ -238,6 +242,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     expect(readFileSync(join(directory, ".env"), "utf8")).toBe(
       "MODEL_API_KEY='internal-key'\nCLI_PROXY_API_KEY='internal-key'\n",
     );
+    expect(readFileSync(join(directory, "process-model-key"), "utf8")).toBe("internal-key");
   });
 
   it("sets secure ownership and mode on the named volume root", () => {
