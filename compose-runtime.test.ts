@@ -40,7 +40,7 @@ const REMOVED_ANTIVIRUS_PATHS = [
 ] as const;
 
 describe("Docker Compose runtime wiring", () => {
-  it("requires one provider-neutral model key without changing rollback proxy compatibility", () => {
+  it("wires the agent to a healthy persistent Codex subscription gateway", () => {
     const localCompose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
     const productionCompose = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
     for (const compose of [localCompose, productionCompose]) {
@@ -53,12 +53,21 @@ describe("Docker Compose runtime wiring", () => {
       );
       expect(agent).toContain("      GROQ_API_KEY: ${GROQ_API_KEY-}\n");
     }
-    expect(localCompose).toContain(
-      "      MODEL_UPSTREAM_API_KEY: ${MODEL_UPSTREAM_API_KEY:?MODEL_UPSTREAM_API_KEY is required}\n",
+    expect(localCompose).not.toContain("MODEL_UPSTREAM_API_KEY");
+    expect(productionCompose).not.toContain("MODEL_UPSTREAM_API_KEY");
+    for (const compose of [localCompose, productionCompose]) {
+      expect(compose).toContain("cli-proxy-auth:/var/lib/cli-proxy-api/auth\n");
+    }
+    const productionAgent = productionCompose.slice(
+      productionCompose.indexOf("\n  agent:\n"),
+      productionCompose.indexOf("\n  sandbox-runtime-image:\n"),
     );
+    expect(productionAgent).toContain("cli-proxy-api:\n        condition: service_healthy");
+    expect(localCompose).toContain('    profiles: ["codex-subscription"]\n');
     expect(productionCompose).toContain(
       "- /opt/osinara/agent-model-providers.json:/app/config/agent-model-providers.json:ro",
     );
+    expect(productionCompose).not.toContain("/opt/osinara/model-providers.json");
   });
 
   it("provides Eve's derived queue namespace before workflow recovery starts", () => {

@@ -75,6 +75,9 @@ describe("production container contract", () => {
     expect(dockerfile).toContain(
       "FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
     );
+    expect(dockerfile).toContain(
+      "FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy",
+    );
 
     // Eve 0.32.0 serves built output but still bundles authored modules during `eve start`.
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
@@ -175,6 +178,7 @@ describe("production container contract", () => {
       "tool-environments",
       "eve-workflow-data",
       "workspace-data",
+      "cli-proxy-auth",
     ]) {
       const physicalName = volume === "eve-workflow-data"
         ? "osinara-production-eve-workflow-data-v032"
@@ -260,7 +264,7 @@ describe("release workflow contract", () => {
     ]) {
       expect(workflow).toContain(`ghcr.io/nyxandro/${image}`);
     }
-    expect(workflow.match(/actions\/attest@/g)).toHaveLength(11);
+    expect(workflow.match(/actions\/attest@/g)).toHaveLength(12);
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("attestations: write");
     expect(workflow).toContain("id-token: write");
@@ -311,7 +315,7 @@ describe("release workflow contract", () => {
       /gh release upload[\s\S]*?osinara-linux-x64[\s\S]*?osinara-linux-x64\.sha256/u,
     );
     expect(workflow).toContain(
-      '["agent-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]',
+      '["agent-model-providers.json", "codex-subscription-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]',
     );
   });
 });
@@ -392,7 +396,7 @@ describe("server deployment contract", () => {
     expect(script).toContain("logging.driver");
     expect(script).toContain("/var/run/docker.sock");
     expect(script).toContain("/opt/osinara/agent-model-providers.json");
-    expect(script).toContain("/opt/osinara/model-providers.json");
+    expect(script).toContain("osinara-production-cli-proxy-auth");
     expect(script).toContain(".read_only == true");
   });
 

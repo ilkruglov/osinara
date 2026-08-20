@@ -17,8 +17,10 @@ published releases whose API metadata does not report `immutable: true`.
 - `osinara-deployment.json` contains schema version 1, commit SHA, release version, the SHA-256 of
 the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` references;
 - `compose.production.yaml` contains no build context or application source bind mount.
-- `agent-model-providers.json` is the exact reviewed v0.15.2 bridge config; its release bytes are
-  independently attested and checked by the bridge against the pinned SHA-256 before installation.
+- `agent-model-providers.json` is the exact reviewed v0.15.2 direct-provider bridge config;
+- `codex-subscription-model-providers.json` is the exact reviewed v0.16.0 production cutover config.
+  Both release assets are independently attested and checked against pinned SHA-256 values before
+  installation by their release-specific bridges.
 
 The app image contains the authored `agent/` tree because Eve `0.32.0` bundles those modules
 when `eve start` serves the built `.output`. The server receives no checkout: the source is confined
@@ -88,8 +90,8 @@ six-image controller into the fresh layout. Existing bridge servers prepare thes
 | Path                                         | Mode   | Purpose                                                          |
 | -------------------------------------------- | ------ | ---------------------------------------------------------------- |
 | `/opt/osinara/.env`                          | `0600` | Production secrets and environment-specific URLs.                |
-| `/opt/osinara/model-providers.json`          | `0644` | Schema-v1 deployment compatibility config retained for rollback. |
-| `/opt/osinara/agent-model-providers.json`    | `0644` | Exact attested v0.15.2 direct-provider config.                    |
+| `/opt/osinara/agent-model-providers.json`    | `0644` | Active reviewed provider config mounted into the agent.           |
+| `/opt/osinara/codex-auth.json`               | `0600` | One-time root-owned OpenCode OAuth seed removed after cutover.    |
 | `/opt/osinara/bin/production-deploy.sh`      | `0750` | Server deployment entrypoint.                                    |
 | `/opt/osinara/bin/production-deploy/`        | `0750` | Root-owned deployment module directory.                          |
 | `/opt/osinara/bin/production-deploy/*.sh`    | `0640` | Fixed source modules checked before execution.                   |
@@ -106,7 +108,7 @@ sources a module. It creates `/opt/osinara/releases`, `/opt/osinara/backups`, an
 `DEEPSEEK_API_KEY`; during the v0.15.2 bridge it gains `MODEL_API_KEY` with the exact same credential
 token while retaining `DEEPSEEK_API_KEY` for the rollback window. It also contains
 `POSTGRES_PASSWORD`, the required internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`,
-`MODEL_UPSTREAM_API_KEY`, `GROQ_API_KEY`,
+`GROQ_API_KEY`,
 Telegram secrets, and environment-specific integration
 settings. It must never contain or export any of the six `OSINARA_*_IMAGE` variables or
 `SANDBOX_RUNTIME_IMAGE`; those values exist only in a validated per-release `release.env`.
@@ -121,20 +123,26 @@ assignment. Existing `MODEL_API_KEY` or config bytes are accepted only when they
 duplicates, unsupported dotenv syntax, another source version, or conflicting bytes fail closed.
 This makes a pre-migration retry idempotent without inventing a model, endpoint, or credential.
 
-`/opt/osinara/model-providers.json` remains a schema-v1 deployment compatibility file so an older
-release can restart during recovery. Active model selection is immutable in each app image at
-`config/agent-model-providers.json`: schema v4 selects a protocol-native transport, explicit output
-and context limits, and a discriminated image-input capability. A supported vision route requires
-its own model ID and output limit; an unsupported route cannot construct a fake vision model.
-Changing active model selection therefore requires a reviewed release and rolls back atomically
-with that image.
+Active model selection uses schema v4 at `/opt/osinara/agent-model-providers.json`: it selects a
+protocol-native transport, explicit output and context limits, and a discriminated image-input
+capability. A supported vision route requires its own model ID and output limit; an unsupported route
+cannot construct a fake vision model.
 
-The active `deepseek-v4-flash` route uses DeepSeek OpenAI Chat Completions with thinking explicitly
-enabled at `high` effort. The transport keeps `reasoning_content` separate from user-visible text
-and replays it after tool calls, as required by DeepSeek multi-round semantics. The application caps
-one response at 128,000 tokens even though the provider advertises a larger native maximum. DeepSeek
-does not accept image input, so `inspect_workspace_image` returns a stable unsupported-capability
-result before reading bytes or starting a paid model call.
+The v0.16.0 production route uses `gpt-5.6-luna` through CLIProxyAPI `v7.2.137` and OpenAI Chat
+Completions. The agent sends `reasoning_effort=medium` to the internal
+`http://cli-proxy-api:8317/v1` boundary, caps one response at 128,000 tokens, and declares the
+provider catalog's 372,000-token context. Text, image input, and tool calls use the same selected
+model. `MODEL_API_KEY` is only the internal bearer and exactly matches `CLI_PROXY_API_KEY`; OpenCode
+OAuth remains inside `osinara-production-cli-proxy-auth` and is writable only by CLIProxy uid 10001
+so refreshed access and refresh tokens survive container replacement.
+
+The one-time v0.16.0 bridge accepts only exact v0.15.14 source state. Before migration it validates
+the root-owned OAuth seed, the exact hashed DeepSeek config, the existing credential relationship, and
+the attested Codex config. Backup preflight creates the candidate-only auth volume; after writers are
+stopped and durable state is archived, the controller crosses `MIGRATION_STARTED`, seeds the empty
+volume, atomically installs the new model config, and replaces only `MODEL_API_KEY` with the existing
+internal proxy key. Candidate health requires both CLIProxy `/v1/models` and the agent. After
+promotion the root seed is removed; later releases archive the auth volume with other durable state.
 
 Long-term memory has no separate model route. The root Eve agent decides whether to call `remember`;
 PostgreSQL validates the current Telegram source and atomically writes optional thread state. Thread
@@ -156,16 +164,15 @@ exact result value for SDK parsing; history converts each matched provider pair 
 MiniMax emits the Anthropic field and accepts native provider-tool history, or when the AI SDK
 supports the complete MiniMax dialect natively.
 
-The `cli-proxy-api` service and sixth release image remain only because the installed production
-deployment controller validates manifest schema version 1 and its fixed six-image service graph.
-The agent does not call this service. Its isolated baked compatibility config is not part of active
-model selection. Removing that deployment slot requires a separately approved two-phase controller
-migration; it must not be coupled to a model-provider switch.
+The `cli-proxy-api` service is an active internal subscription gateway. Management routes, plugins,
+request retries, cooldown scheduling, and file logging are disabled; the service is reachable only on
+the application network and requires the internal bearer. Its startup fails closed when the persistent
+volume contains no complete `0600` Codex OAuth credential. The agent starts only after gateway health.
 
 Any release that changes the exact production service, image, mount, port, logging, dependency, or
 host-capability allowlist is also a two-phase controller migration. After canonical merge and before
 owner approval, stop only `osinara-deploy.timer`, compare the installed root-owned controller modules,
-including the v0.15.2-only `bridge.sh`,
+including release-specific bridges,
 with the exact canonical release commit, and atomically install only the changed modules. Verify the
 source checksum, shell syntax, `root:root` ownership, required `0750`/`0640` modes, then restart the
 timer. The running application and database remain untouched during this controller phase. Only

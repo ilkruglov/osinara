@@ -152,6 +152,7 @@ main() {
     recheck_claim_owner
   fi
   provision_v0152_model_bridge
+  validate_v0160_codex_bridge
   prepare_candidate_release
   pull_release_images
   if [[ "$INITIAL_MODE" -eq 0 ]]; then
@@ -163,10 +164,13 @@ main() {
   fi
 
   MIGRATION_STARTED=1
+  provision_v0160_codex_bridge
   start_candidate_release
   wait_for_health
+  validate_v0160_codex_model
   CANDIDATE_HEALTH_VALIDATED=1
   promote_candidate_release
+  complete_v0160_codex_bridge
   remove_retired_cutover_volume
   if [[ "$INITIAL_MODE" -eq 1 ]]; then
     resolve_initial_owner_chat

@@ -51,8 +51,8 @@ RUN npm ci --omit=dev --ignore-scripts \
     && npm run postinstall \
     && npm run install:gws
 
-# Retained until the production deployment controller migrates from six-image manifest v1.
-FROM eceasy/cli-proxy-api@sha256:0b27437917e45a22612ff43ede0fd6baf077c1898c622037a24a79399a9b3d0c AS cli-proxy
+# Codex subscription gateway stays digest-pinned and exposes no management surface.
+FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy
 ARG OCI_SOURCE
 ARG OCI_VERSION
 ARG OCI_REVISION
@@ -63,13 +63,12 @@ RUN apt-get update \
     && apt-get install --no-install-recommends --yes curl jq \
     && groupadd --gid 10001 cli-proxy \
     && useradd --gid cli-proxy --no-create-home --uid 10001 --shell /usr/sbin/nologin cli-proxy \
-    && install -d -o cli-proxy -g cli-proxy -m 0700 /config /run/cli-proxy-api \
+    && install -d -o cli-proxy -g cli-proxy -m 0700 /run/cli-proxy-api /var/lib/cli-proxy-api/auth \
     && rm -rf /var/lib/apt/lists/*
-COPY --chown=cli-proxy:cli-proxy config/cli-proxy-compatibility.json /config/cli-proxy-compatibility.json
 COPY --chown=root:root infra/cli-proxy-entrypoint.sh /usr/local/bin/osinara-cli-proxy-entrypoint
 RUN chmod 0555 /usr/local/bin/osinara-cli-proxy-entrypoint
 USER cli-proxy
-ENTRYPOINT ["osinara-cli-proxy-entrypoint", "/config/cli-proxy-compatibility.json", "/run/cli-proxy-api/config.json"]
+ENTRYPOINT ["osinara-cli-proxy-entrypoint", "/var/lib/cli-proxy-api/auth", "/run/cli-proxy-api/config.json"]
 CMD ["/CLIProxyAPI/CLIProxyAPI", "-config", "/run/cli-proxy-api/config.json"]
 
 FROM first-party-node AS sandbox-runtime

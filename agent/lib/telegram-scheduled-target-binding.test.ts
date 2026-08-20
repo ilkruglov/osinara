@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - `message.completed` rejects a channel target that differs from scheduled auth before delivery.
+ * - Scheduled final-delivery failures persist their primary stable code before terminal fallback.
  * - `turn.failed` terminalizes a mismatched run without notifying the unrelated active target.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +92,7 @@ vi.mock("./memory-turn-source.js", () => ({
 }));
 
 await import("../channels/telegram.js");
+const { AppError } = await import("./app-error.js");
 
 const context = {
   session: {
@@ -172,6 +174,27 @@ describe("scheduled Telegram target binding", () => {
 
     expect(dependencies.authorizeDelivery).toHaveBeenCalledOnce();
     expect(dependencies.deliverFinalOutput).toHaveBeenCalledOnce();
+  });
+
+  it("persists the primary scheduled delivery error before the terminal fallback runs", async () => {
+    const handler = dependencies.channelConfig?.events?.["message.completed"];
+    dependencies.deliverFinalOutput.mockRejectedValueOnce(new AppError(
+      "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
+      "Telegram не подтвердил доставку",
+    ));
+
+    await expect(handler(
+      { finishReason: "stop", message: "Секретная сводка" },
+      matchingChannel(),
+      context,
+    )).rejects.toMatchObject({ code: "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS" });
+
+    expect(dependencies.failRun).toHaveBeenCalledWith(
+      "application-session-1",
+      "eve-session-1",
+      "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
+      expect.any(Date),
+    );
   });
 
   it("fails a mismatched run without sending its failure notification to another chat", async () => {

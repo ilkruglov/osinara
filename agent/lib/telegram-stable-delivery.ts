@@ -2,10 +2,13 @@
  * Telegram delivery that preserves Eve's stable continuation hook.
  *
  * Exports:
+ * - `StableTelegramMessageReceipt`: provider-confirmed Telegram message identity.
+ * - `postTelegramMessageWithReceiptWithoutContinuationChange`: sends one message and returns its
+ *   provider-confirmed message id and chat type.
  * - `postTelegramMessageWithoutContinuationChange`: sends one short service message via the raw
  *   Bot API handle and returns its verified message ID without mutating channel anchor state.
  */
-import type { TelegramEventContext } from "eve/channels/telegram";
+import type { TelegramChatType, TelegramEventContext } from "eve/channels/telegram";
 
 import { AppError } from "./app-error.js";
 
@@ -22,6 +25,23 @@ interface StableTelegramMessage {
   readonly reply_parameters?: Readonly<Record<string, unknown>>;
   readonly text: string;
 }
+
+export interface StableTelegramMessageReceipt {
+  readonly chatType: TelegramChatType;
+  readonly messageId: string;
+}
+
+interface StableTelegramProviderResult {
+  readonly chat?: { readonly type?: unknown };
+  readonly message_id?: unknown;
+}
+
+const TELEGRAM_CHAT_TYPES = new Set<TelegramChatType>([
+  "channel",
+  "group",
+  "private",
+  "supergroup",
+]);
 
 function telegramJson(value: unknown): TelegramJsonValue {
   if (
@@ -40,10 +60,10 @@ function telegramJson(value: unknown): TelegramJsonValue {
   );
 }
 
-export async function postTelegramMessageWithoutContinuationChange(
+async function requestStableTelegramMessage(
   channel: TelegramEventContext,
   message: string | StableTelegramMessage,
-): Promise<string> {
+): Promise<StableTelegramProviderResult> {
   const chatId = channel.state.chatId;
   if (!chatId) {
     throw new AppError(
@@ -74,7 +94,7 @@ export async function postTelegramMessageWithoutContinuationChange(
   });
   const body = response.body as {
     ok?: unknown;
-    result?: { message_id?: unknown };
+    result?: StableTelegramProviderResult;
   };
   if (!response.ok || body.ok !== true) {
     throw new AppError(
@@ -82,12 +102,43 @@ export async function postTelegramMessageWithoutContinuationChange(
       "Telegram не принял обычное сообщение. Попробуйте повторить запрос",
     );
   }
-  const messageId = body.result?.message_id;
-  if (Number.isSafeInteger(messageId) && Number(messageId) > 0) {
-    return String(messageId);
+  return body.result ?? {};
+}
+
+function requireStableTelegramMessageId(result: StableTelegramProviderResult): string {
+  const messageId = result.message_id;
+  if (Number.isSafeInteger(messageId) && Number(messageId) > 0) return String(messageId);
+  throw new AppError(
+    "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
+    "Telegram принял запрос, но не подтвердил тип чата доставленного сообщения",
+  );
+}
+
+export async function postTelegramMessageWithReceiptWithoutContinuationChange(
+  channel: TelegramEventContext,
+  message: string | StableTelegramMessage,
+): Promise<StableTelegramMessageReceipt> {
+  const result = await requestStableTelegramMessage(channel, message);
+  const messageId = requireStableTelegramMessageId(result);
+  const chatType = result.chat?.type;
+  if (
+    typeof chatType === "string" &&
+    TELEGRAM_CHAT_TYPES.has(chatType as TelegramChatType)
+  ) {
+    return {
+      chatType: chatType as TelegramChatType,
+      messageId,
+    };
   }
   throw new AppError(
     "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
     "Telegram принял запрос, но не подтвердил идентификатор обычного сообщения",
   );
+}
+
+export async function postTelegramMessageWithoutContinuationChange(
+  channel: TelegramEventContext,
+  message: string | StableTelegramMessage,
+): Promise<string> {
+  return requireStableTelegramMessageId(await requestStableTelegramMessage(channel, message));
 }

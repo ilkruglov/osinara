@@ -13,7 +13,7 @@ import { postTelegramPlainMessageChunk } from "./telegram-plain-messages.js";
 describe("plain Telegram messages", () => {
   it("sends ordinary text without formatting fields", async () => {
     const request = vi.fn().mockResolvedValue({
-      body: { ok: true, result: { message_id: 71 } },
+      body: { ok: true, result: { chat: { type: "private" }, message_id: 71 } },
       ok: true,
       status: 200,
     });
@@ -34,6 +34,22 @@ describe("plain Telegram messages", () => {
     });
     expect(request.mock.calls[0]![1]).not.toHaveProperty("parse_mode");
     expect(request.mock.calls[0]![1]).not.toHaveProperty("rich_message");
+  });
+
+  it("uses the confirmed Telegram chat type when proactive state has no inbound chat type", async () => {
+    const request = vi.fn().mockResolvedValue({
+      body: { ok: true, result: { chat: { type: "private" }, message_id: 72 } },
+      ok: true,
+      status: 200,
+    });
+    const channel = {
+      state: { chatId: "101", chatType: null, messageThreadId: null },
+      telegram: { request },
+    } as unknown as TelegramEventContext;
+
+    await expect(postTelegramPlainMessageChunk("ответ расписания", channel))
+      .resolves.toEqual({ chatType: "private", messageId: "72" });
+    expect(request).toHaveBeenCalledOnce();
   });
 
   it("rejects a response without verified message identity", async () => {
