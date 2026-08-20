@@ -10,7 +10,7 @@ readonly V0160_BRIDGE_TARGET_VERSION="0.16.0"
 readonly V0160_UPDATE_SOURCE_MODEL_CONFIG_SHA256="3ebc69be3aec08cae7a08ce4024b6b8d8a00a797819a787aed391b8ee30937dd"
 readonly V0160_INITIAL_SOURCE_MODEL_CONFIG_SHA256="4125a909ad3a2cfab08df5158538d210e2bcb753b3faa3a79f7be8a81bcf55c8"
 readonly V0160_CODEX_MODEL_CONFIG_SHA256="68b349485a474c4426adb7f98b541d812fb6edaa7617010a0e8e942d94fa16b7"
-readonly V0160_CODEX_MODEL_CONFIG_ASSET="codex-subscription-model-providers.json"
+readonly V0160_BRIDGE_CODEX_MODEL_CONFIG_ASSET="codex-subscription-model-providers.json"
 readonly CODEX_AUTH_SEED="${BASE_DIR}/codex-auth.json"
 readonly CODEX_AUTH_VOLUME="osinara-production-cli-proxy-auth"
 
@@ -164,7 +164,7 @@ validate_v0160_environment() {
 }
 
 validate_v0160_codex_inputs() {
-  local released_config="${WORK_DIR}/${V0160_CODEX_MODEL_CONFIG_ASSET}"
+  local released_config="${WORK_DIR}/${V0160_BRIDGE_CODEX_MODEL_CONFIG_ASSET}"
   require_metadata "$CODEX_AUTH_SEED" "0:0:600"
   require_metadata "$AGENT_MODEL_PROVIDER_CONFIG" "0:0:644"
   [[ -f "$released_config" && ! -L "$released_config" ]] ||
@@ -196,7 +196,7 @@ validate_v0160_codex_inputs() {
 }
 
 install_v0160_environment_and_config() {
-  local released_config="${WORK_DIR}/${V0160_CODEX_MODEL_CONFIG_ASSET}"
+  local released_config="${WORK_DIR}/${V0160_BRIDGE_CODEX_MODEL_CONFIG_ASSET}"
   local environment_temp config_temp line
   environment_temp="$(mktemp "${WORK_DIR}/server-env.XXXXXX")"
   config_temp="$(mktemp "${WORK_DIR}/agent-model-providers.XXXXXX")"

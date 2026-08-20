@@ -9,6 +9,7 @@
  * - Root-owned systemd polling units and required production environment documentation.
  * - The exact production jq security predicate accepts only the intended resolved Compose surface.
  */
+import { execFileSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 
@@ -321,6 +322,17 @@ describe("release workflow contract", () => {
 });
 
 describe("server deployment contract", () => {
+  it("loads every controller module in production order without global collisions", () => {
+    expect(() => execFileSync("bash", ["-c", [
+      "set -euo pipefail",
+      "source scripts/production-deploy/common.sh",
+      "source scripts/production-deploy/database.sh",
+      "source scripts/production-deploy/release.sh",
+      "source scripts/production-deploy/bridge.sh",
+      "source scripts/production-deploy/backup.sh",
+    ].join("; ")], { cwd: projectRoot })).not.toThrow();
+  });
+
   it("is locked, source-independent, digest-strict, and backup-first", () => {
     const { combined: script, files } = readDeployScripts();
 
