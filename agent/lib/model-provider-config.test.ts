@@ -217,6 +217,26 @@ describe("parseModelProviderConfig", () => {
         },
       },
     })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...codexSubscription,
+      agent: {
+        ...codexSubscription.agent,
+        transport: {
+          ...codexSubscription.agent.transport,
+          reasoning: { effort: "low", format: "reasoning-effort", type: "effort" },
+        },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...codexSubscription,
+      agent: {
+        ...codexSubscription.agent,
+        transport: {
+          ...codexSubscription.agent.transport,
+          reasoning: { format: "reasoning-effort", type: "none" },
+        },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
   it("requires GROQ_API_KEY at startup only when voice is enabled", () => {

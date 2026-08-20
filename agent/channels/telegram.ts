@@ -154,12 +154,22 @@ export default telegramChannel({
             errorName: error instanceof Error ? error.name : "UnknownError",
             runId: scheduledDelivery.runId,
           }));
-          await agentScheduleDispatchRepository.failRun(
-            sessionId,
-            ctx.session.id,
-            errorCode,
-            new Date(),
-          );
+          try {
+            await agentScheduleDispatchRepository.failRun(
+              sessionId,
+              ctx.session.id,
+              errorCode,
+              new Date(),
+            );
+          } catch (persistenceError) {
+            // Terminal persistence is secondary: log it without replacing the actionable delivery error.
+            console.error(JSON.stringify({
+              code: "AGENT_SCHEDULE_FINAL_DELIVERY_FAILURE_PERSISTENCE_FAILED",
+              deliveryErrorCode: errorCode,
+              errorName: persistenceError instanceof Error ? persistenceError.name : "UnknownError",
+              runId: scheduledDelivery.runId,
+            }));
+          }
         }
         throw error;
       }

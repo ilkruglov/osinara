@@ -116,7 +116,10 @@ const modelProviderConfigSchema = z.object({
   if (config.provider === "codex-subscription" && (
     transport.protocol !== "openai-chat-completions" ||
     transport.providerName !== "codex-subscription" ||
-    transport.reasoning === null || transport.reasoning.format !== "reasoning-effort"
+    transport.reasoning === null ||
+    transport.reasoning.type !== "effort" ||
+    transport.reasoning.effort !== "medium" ||
+    transport.reasoning.format !== "reasoning-effort"
   )) {
     context.addIssue({
       code: "custom",

@@ -17,13 +17,14 @@ import { afterEach, describe, expect, it } from "vitest";
 const projectRoot = new URL("./", import.meta.url).pathname;
 const temporaryDirectories: string[] = [];
 
-function runBridge(directory: string, sourceVersion = "0.15.14") {
+function runBridge(directory: string, sourceVersion = "0.15.14", initialMode = false) {
   const current = join(directory, "current");
   const work = join(directory, "work");
   const authVolume = join(directory, "auth-volume");
   mkdirSync(current, { recursive: true });
   mkdirSync(work, { recursive: true });
   mkdirSync(authVolume, { recursive: true });
+  if (!initialMode) writeFileSync(join(authVolume, ".created"), "");
   writeFileSync(join(current, "osinara-deployment.json"), JSON.stringify({ version: sourceVersion }));
   writeFileSync(
     join(directory, "agent-model-providers.json"),
@@ -40,8 +41,16 @@ function runBridge(directory: string, sourceVersion = "0.15.14") {
     require_metadata() { return 0; }
     install() { command cp "\${@: -2}"; }
     docker() {
-      if [[ "$1 $2" == "volume inspect" ]]; then return 0; fi
+      if [[ "$1 $2" == "volume inspect" ]]; then
+        [[ -f "$AUTH_VOLUME_DIR/.created" ]]
+        return
+      fi
+      if [[ "$1 $2" == "volume create" ]]; then
+        command touch "$AUTH_VOLUME_DIR/.created"
+        return 0
+      fi
       if [[ "$1" == "run" ]]; then
+        command rm -f "$AUTH_VOLUME_DIR/.created"
         command cp "$CODEX_AUTH_SEED" "$AUTH_VOLUME_DIR/opencode-codex.json"
         command chmod 0600 "$AUTH_VOLUME_DIR/opencode-codex.json"
         return 0
@@ -57,9 +66,11 @@ function runBridge(directory: string, sourceVersion = "0.15.14") {
     CURRENT_LINK=${JSON.stringify(current)}
     WORK_DIR=${JSON.stringify(work)}
     APP_IMAGE=test-app-image
-    INITIAL_MODE=0
+    CREATED_CANDIDATE_VOLUMES=()
+    INITIAL_MODE=${initialMode ? 1 : 0}
     REQUESTED_VERSION=0.16.0
     source scripts/production-deploy/bridge.sh
+    prepare_v0160_codex_volume
     provision_v0160_codex_bridge
   `], { cwd: projectRoot, encoding: "utf8" });
 }
@@ -124,6 +135,7 @@ describe("v0.16.0 Codex subscription bridge", () => {
     const deployment = readFileSync(join(projectRoot, "scripts/production-deploy.sh"), "utf8");
     const validation = deployment.indexOf("validate_v0160_codex_bridge");
     const candidatePreparation = deployment.indexOf("prepare_candidate_release");
+    const volumePreparation = deployment.indexOf("prepare_v0160_codex_volume");
     const snapshot = deployment.indexOf("snapshot_durable_volumes");
     const migration = deployment.indexOf("MIGRATION_STARTED=1", snapshot);
     const provisioning = deployment.indexOf("provision_v0160_codex_bridge", migration);
@@ -133,6 +145,8 @@ describe("v0.16.0 Codex subscription bridge", () => {
 
     expect(validation).toBeGreaterThanOrEqual(0);
     expect(candidatePreparation).toBeGreaterThan(validation);
+    expect(volumePreparation).toBeGreaterThan(candidatePreparation);
+    expect(migration).toBeGreaterThan(volumePreparation);
     expect(snapshot).toBeGreaterThan(candidatePreparation);
     expect(migration).toBeGreaterThan(snapshot);
     expect(provisioning).toBeGreaterThan(migration);
@@ -169,5 +183,35 @@ describe("v0.16.0 Codex subscription bridge", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("DEPLOY_V0160_BRIDGE_SOURCE_INVALID");
+  });
+
+  it("provisions initial controller deployments without a legacy DeepSeek assignment", () => {
+    const directory = mkdtempSync(join(tmpdir(), "osinara-v0160-codex-initial-"));
+    temporaryDirectories.push(directory);
+    writeFileSync(
+      join(directory, ".env"),
+      "MODEL_API_KEY='direct-provider-key'\nCLI_PROXY_API_KEY='internal-key'\n",
+    );
+    writeFileSync(join(directory, "codex-auth.json"), JSON.stringify({
+      access_token: "access-token",
+      account_id: "00000000-0000-4000-8000-000000000001",
+      expired: "2026-08-28T05:59:46Z",
+      refresh_token: "refresh-token",
+      type: "codex",
+    }), { mode: 0o600 });
+
+    const result = runBridge(directory, "unused-for-initial", true);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(directory, ".env"), "utf8")).toBe(
+      "MODEL_API_KEY='internal-key'\nCLI_PROXY_API_KEY='internal-key'\n",
+    );
+  });
+
+  it("sets secure ownership and mode on the named volume root", () => {
+    const bridge = readFileSync(join(projectRoot, "scripts/production-deploy/bridge.sh"), "utf8");
+
+    expect(bridge).toContain("chown 10001:10001 /auth");
+    expect(bridge).toContain("chmod 0700 /auth");
   });
 });

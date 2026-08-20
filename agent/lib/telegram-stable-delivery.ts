@@ -110,7 +110,7 @@ function requireStableTelegramMessageId(result: StableTelegramProviderResult): s
   if (Number.isSafeInteger(messageId) && Number(messageId) > 0) return String(messageId);
   throw new AppError(
     "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
-    "Telegram принял запрос, но не подтвердил тип чата доставленного сообщения",
+    "Telegram принял запрос, но не подтвердил идентификатор обычного сообщения",
   );
 }
 
@@ -132,7 +132,7 @@ export async function postTelegramMessageWithReceiptWithoutContinuationChange(
   }
   throw new AppError(
     "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
-    "Telegram принял запрос, но не подтвердил идентификатор обычного сообщения",
+    "Telegram принял запрос, но не подтвердил тип чата доставленного сообщения",
   );
 }
 

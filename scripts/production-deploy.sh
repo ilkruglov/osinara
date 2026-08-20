@@ -155,6 +155,7 @@ main() {
   validate_v0160_codex_bridge
   prepare_candidate_release
   pull_release_images
+  prepare_v0160_codex_volume
   if [[ "$INITIAL_MODE" -eq 0 ]]; then
     recheck_claim_owner
     preflight_backup

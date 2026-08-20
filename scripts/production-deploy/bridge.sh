@@ -149,15 +149,20 @@ validate_v0160_environment() {
     esac
   done < "$SERVER_ENV"
 
-  [[ "$legacy_count" -eq 1 && "$model_count" -eq 1 && "$proxy_count" -eq 1 ]] ||
+  [[ "$model_count" -eq 1 && "$proxy_count" -eq 1 ]] ||
     fail "DEPLOY_V0160_MODEL_KEY_INVALID" \
-      "Environment must contain one DeepSeek, model, and CLIProxy credential"
-  validate_bridge_credential_assignment "$V0160_LEGACY_VALUE"
+      "Environment must contain one model and one CLIProxy credential"
   validate_bridge_credential_assignment "$V0160_MODEL_VALUE"
   validate_bridge_credential_assignment "$V0160_PROXY_VALUE"
-  [[ "$V0160_MODEL_VALUE" == "$V0160_LEGACY_VALUE" ]] ||
-    fail "DEPLOY_V0160_MODEL_KEY_CONFLICT" \
-      "Current MODEL_API_KEY does not match the approved v0.15.14 DeepSeek credential"
+  if [[ "$INITIAL_MODE" -eq 0 ]]; then
+    [[ "$legacy_count" -eq 1 ]] ||
+      fail "DEPLOY_V0160_MODEL_KEY_INVALID" \
+        "Production update must contain one DeepSeek rollback credential"
+    validate_bridge_credential_assignment "$V0160_LEGACY_VALUE"
+    [[ "$V0160_MODEL_VALUE" == "$V0160_LEGACY_VALUE" ]] ||
+      fail "DEPLOY_V0160_MODEL_KEY_CONFLICT" \
+        "Current MODEL_API_KEY does not match the approved v0.15.14 DeepSeek credential"
+  fi
 }
 
 validate_v0160_codex_inputs() {
@@ -213,7 +218,7 @@ install_v0160_environment_and_config() {
 }
 
 provision_v0160_codex_bridge() {
-  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" && "$INITIAL_MODE" -eq 0 ]] || return 0
+  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" ]] || return 0
   validate_v0160_codex_bridge
   docker volume inspect "$CODEX_AUTH_VOLUME" >/dev/null ||
     fail "DEPLOY_V0160_CODEX_VOLUME_MISSING" \
@@ -224,6 +229,8 @@ provision_v0160_codex_bridge() {
     --volume "${CODEX_AUTH_SEED}:/seed/opencode-codex.json:ro" \
     --volume "${CODEX_AUTH_VOLUME}:/auth" "$APP_IMAGE" -c '
       set -eu
+      chown 10001:10001 /auth
+      chmod 0700 /auth
       set -- /auth/*
       [ "$1" = "/auth/*" ] || exit 41
       install -o 10001 -g 10001 -m 0600 /seed/opencode-codex.json /auth/opencode-codex.json
@@ -233,26 +240,41 @@ provision_v0160_codex_bridge() {
 }
 
 validate_v0160_codex_bridge() {
-  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" && "$INITIAL_MODE" -eq 0 ]] || return 0
-  local source_version
-  source_version="$(jq -er '.version' "${CURRENT_LINK}/osinara-deployment.json")"
-  [[ "$source_version" == "$V0160_BRIDGE_SOURCE_VERSION" ]] ||
-    fail "DEPLOY_V0160_BRIDGE_SOURCE_INVALID" \
-      "Codex subscription bridge can run only from exact v0.15.14 production state"
+  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" ]] || return 0
+  if [[ "$INITIAL_MODE" -eq 0 ]]; then
+    local source_version
+    source_version="$(jq -er '.version' "${CURRENT_LINK}/osinara-deployment.json")"
+    [[ "$source_version" == "$V0160_BRIDGE_SOURCE_VERSION" ]] ||
+      fail "DEPLOY_V0160_BRIDGE_SOURCE_INVALID" \
+        "Codex subscription bridge can run only from exact v0.15.14 production state"
+  fi
 
   validate_v0160_environment
   validate_v0160_codex_inputs
 }
 
+prepare_v0160_codex_volume() {
+  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" && "$INITIAL_MODE" -eq 1 ]] || return 0
+  if docker volume inspect "$CODEX_AUTH_VOLUME" >/dev/null 2>&1; then
+    fail "DEPLOY_CANDIDATE_VOLUME_OWNERSHIP_AMBIGUOUS" \
+      "Initial Codex OAuth volume already exists without release ownership"
+    return 1
+  fi
+  docker volume create "$CODEX_AUTH_VOLUME" >/dev/null ||
+    fail "DEPLOY_CANDIDATE_VOLUME_CREATE_FAILED" \
+      "Could not create the initial Codex OAuth volume"
+  CREATED_CANDIDATE_VOLUMES+=("$CODEX_AUTH_VOLUME")
+}
+
 complete_v0160_codex_bridge() {
-  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" && "$INITIAL_MODE" -eq 0 ]] || return 0
+  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" ]] || return 0
   rm -f -- "$CODEX_AUTH_SEED" ||
     fail "DEPLOY_V0160_CODEX_SEED_CLEANUP_FAILED" \
       "Healthy Codex release was promoted but the staged OAuth seed could not be removed"
 }
 
 validate_v0160_codex_model() {
-  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" && "$INITIAL_MODE" -eq 0 ]] || return 0
+  [[ "$REQUESTED_VERSION" == "$V0160_BRIDGE_TARGET_VERSION" ]] || return 0
 
   # `/v1/models` is local metadata; one bounded completion proves OAuth and the selected model upstream.
   compose_candidate exec -T cli-proxy-api /bin/sh -c '

@@ -143,6 +143,11 @@ stopped and durable state is archived, the controller crosses `MIGRATION_STARTED
 volume, atomically installs the new model config, and replaces only `MODEL_API_KEY` with the existing
 internal proxy key. Candidate health requires both CLIProxy `/v1/models` and the agent. After
 promotion the root seed is removed; later releases archive the auth volume with other durable state.
+An explicit root-controller `--initial 0.16.0` deployment requires the same staged seed. It validates
+the initial direct-provider config and model/proxy assignments, creates an absent candidate volume,
+sets its root to `10001:10001 0700`, then follows the same irreversible provision and smoke boundary.
+The standalone fresh installer still removes CLIProxy from its generated Compose and stays on the
+selected direct provider, so it does not require this production-only OAuth seed.
 
 Long-term memory has no separate model route. The root Eve agent decides whether to call `remember`;
 PostgreSQL validates the current Telegram source and atomically writes optional thread state. Thread

@@ -197,6 +197,28 @@ describe("scheduled Telegram target binding", () => {
     );
   });
 
+  it("preserves the primary delivery error when terminal persistence also fails", async () => {
+    const handler = dependencies.channelConfig?.events?.["message.completed"];
+    const deliveryError = new AppError(
+      "AGENT_TELEGRAM_MESSAGE_DELIVERY_AMBIGUOUS",
+      "Telegram не подтвердил доставку",
+    );
+    dependencies.deliverFinalOutput.mockRejectedValueOnce(deliveryError);
+    dependencies.failRun.mockRejectedValueOnce(new Error("database unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(handler(
+      { finishReason: "stop", message: "Секретная сводка" },
+      matchingChannel(),
+      context,
+    )).rejects.toBe(deliveryError);
+
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining(
+      "AGENT_SCHEDULE_FINAL_DELIVERY_FAILURE_PERSISTENCE_FAILED",
+    ));
+    consoleError.mockRestore();
+  });
+
   it("fails a mismatched run without sending its failure notification to another chat", async () => {
     const handler = dependencies.channelConfig?.events?.["turn.failed"];
 
