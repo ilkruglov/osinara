@@ -195,6 +195,15 @@ validate_v0160_codex_inputs() {
       "Staged Codex OAuth credential is malformed; stage a fresh OpenCode token set"
 }
 
+dotenv_credential_runtime_value() {
+  local value="$1"
+  if [[ "$value" == \'*\' ]]; then
+    value="${value#\'}"
+    value="${value%\'}"
+  fi
+  printf '%s' "$value"
+}
+
 install_v0160_environment_and_config() {
   local released_config="${WORK_DIR}/${V0160_BRIDGE_CODEX_MODEL_CONFIG_ASSET}"
   local environment_temp config_temp line
@@ -213,6 +222,9 @@ install_v0160_environment_and_config() {
   install -o root -g root -m 0644 "$released_config" "$config_temp"
   mv -f "$environment_temp" "$SERVER_ENV"
   mv -f "$config_temp" "$AGENT_MODEL_PROVIDER_CONFIG"
+  # Shell environment outranks `--env-file`; update it before candidate Compose interpolation.
+  MODEL_API_KEY="$(dotenv_credential_runtime_value "$V0160_PROXY_VALUE")"
+  export MODEL_API_KEY
   require_metadata "$SERVER_ENV" "0:0:600"
   require_metadata "$AGENT_MODEL_PROVIDER_CONFIG" "0:0:644"
 }
