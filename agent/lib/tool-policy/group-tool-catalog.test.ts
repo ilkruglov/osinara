@@ -20,6 +20,7 @@ describe("external group tool catalog", () => {
   it("denies every framework built-in an external group must not reach", () => {
     // Application tools are emitted per mode, so only framework descriptors need an override.
     expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
+      "agent",
       "ask_question",
       "bash",
       "todo",
@@ -68,7 +69,7 @@ describe("external group tool catalog", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
-    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("agent");
   });
 
   it("describes external memory mutations through model-safe memoryRef values", () => {

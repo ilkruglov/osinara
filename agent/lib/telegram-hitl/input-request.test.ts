@@ -2,6 +2,7 @@
  * Telegram HITL input rendering tests.
  *
  * Constructs covered:
+ * - External groups reject framework session-budget prompts before any Telegram or durable side effect.
  * - `createTelegramInputRequestHandler`: persists approver identity before exposing buttons.
  * - Interactive and scheduled requests receive aliases without changing Eve's continuation hook.
  * - Long approval prompts are delivered completely before the actionable final message.
@@ -13,6 +14,80 @@ import { describe, expect, it, vi } from "vitest";
 import { createTelegramInputRequestHandler } from "./input-request.js";
 
 describe("createTelegramInputRequestHandler", () => {
+  it("rejects an external-group session-limit prompt before parking or Telegram delivery", async () => {
+    const parkSession = vi.fn();
+    const present = vi.fn();
+    const register = vi.fn();
+    const registerMessageRoutes = vi.fn();
+    const request = vi.fn();
+    const handler = createTelegramInputRequestHandler({
+      approvals: { register },
+      parkSession,
+      present,
+      registerMessageRoutes,
+    });
+    const channel = {
+      state: {
+        botUsername: "osinara_bot",
+        chatId: "-1001",
+        chatType: "supergroup",
+        conversationId: "77",
+        hitlCallbacks: {},
+        messageThreadId: null,
+        nextHitlCallbackId: 0,
+        pendingFreeformReplies: {},
+        triggeringUserId: "101",
+      },
+      telegram: { request },
+    } as unknown as TelegramEventContext;
+    const ctx = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "app-session-1",
+              groupType: "external",
+              telegramChatId: "-1001",
+              telegramChatType: "supergroup",
+              telegramUserId: "101",
+            },
+            authenticator: "telegram",
+            principalId: "telegram:101",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "wrun_root",
+        turn: { id: "turn-1", sequence: 1 },
+      },
+    } as unknown as SessionContext;
+
+    await expect(handler({
+      requests: [{
+        action: {
+          callId: "wrun_child:limit:input:36140505",
+          input: { kind: "input", limit: 36_140_505, usedTokens: 36_140_505 },
+          kind: "tool-call",
+          toolName: "session_limit_continuation",
+        },
+        allowFreeform: false,
+        display: "confirmation",
+        kind: "session-limit",
+        options: [
+          { id: "continue", label: "Approve", style: "primary" },
+          { id: "stop", label: "Stop", style: "danger" },
+        ],
+        prompt: "Approve a fresh token budget",
+        requestId: "wrun_child:limit:input:36140505",
+      }],
+    } as never, channel, ctx)).rejects.toThrow("AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN");
+    expect(present).not.toHaveBeenCalled();
+    expect(parkSession).not.toHaveBeenCalled();
+    expect(registerMessageRoutes).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("does not park a session when semantic presentation fails", async () => {
     const parkSession = vi.fn();
     const handler = createTelegramInputRequestHandler({
@@ -109,6 +184,7 @@ describe("createTelegramInputRequestHandler", () => {
           current: {
             attributes: {
               applicationSessionId: "app-session-1",
+              groupType: "external",
               telegramChatId: "-1001",
               telegramChatType: "supergroup",
               telegramReplyToMessageId: "77",
