@@ -78,7 +78,10 @@ export const imageGenerationOperationRepository = {
     const row = existing.rows[0];
     if (!row) throw invalidState(input.operationKey, "reserved operation is missing");
     assertReplayMatches(row, input);
-    if (row.status === "completed" && row.result) {
+    if (row.status === "completed") {
+      if (!row.result) {
+        throw invalidState(input.operationKey, "completed operation has no result");
+      }
       return { file: row.result, state: "completed" };
     }
     if (row.status === "started") return { state: "started", workspaceId: row.workspace_id };
