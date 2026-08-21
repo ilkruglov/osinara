@@ -216,4 +216,57 @@ describe("generate_image", () => {
     );
     expect(deps.deliver).not.toHaveBeenCalled();
   });
+
+  it("marks a failed workspace write ambiguous after provider completion", async () => {
+    const deps = dependencies();
+    deps.workspaces.writeBinary.mockRejectedValue(new Error("disk unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute(INPUT, context()))
+      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u);
+    expect(deps.operations.markAmbiguous).toHaveBeenCalledWith(
+      "call-image-1",
+      "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
+    );
+    expect(deps.deliver).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("recovers a written image when only ledger completion failed", async () => {
+    const deps = dependencies();
+    deps.operations.complete.mockRejectedValueOnce(new Error("database unavailable"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute(INPUT, context()))
+      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_STATUS_UNKNOWN/u);
+    expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
+
+    deps.operations.begin.mockResolvedValue({ state: "started", workspaceId: "workspace-1" });
+    deps.workspaces.findBinaryWrite.mockResolvedValue(FILE);
+    await expect(tool.execute(INPUT, context())).resolves.toMatchObject({
+      generated: false,
+      path: FILE.path,
+    });
+    expect(deps.client.generate).toHaveBeenCalledTimes(1);
+    expect(deps.operations.complete).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it.each([
+    { errorCode: "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN", state: "ambiguous" as const },
+    { errorCode: "AGENT_IMAGE_GENERATION_REJECTED", state: "failed" as const },
+  ])("does not regenerate a terminal $state reservation", async (reservation) => {
+    const deps = dependencies();
+    deps.operations.begin.mockResolvedValue(reservation);
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute(INPUT, context())).rejects.toThrowError(
+      new RegExp(reservation.errorCode, "u"),
+    );
+    expect(deps.client.generate).not.toHaveBeenCalled();
+    expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
+    expect(deps.deliver).not.toHaveBeenCalled();
+  });
 });

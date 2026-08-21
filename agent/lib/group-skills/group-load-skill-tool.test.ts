@@ -62,6 +62,22 @@ describe("external group load_skill", () => {
     expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
   });
 
+  it("does not load imagegen when the live capability check rejects", async () => {
+    const authorizeImageGeneration = vi.fn().mockRejectedValue(
+      new Error("AGENT_GROUP_TOOL_FORBIDDEN"),
+    );
+    const executeNative = vi.fn();
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration,
+      executeNative,
+      loadGroupSkillAllowlist: vi.fn(),
+    });
+
+    await expect(tool.execute({ skill: "imagegen" }, context()))
+      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(executeNative).not.toHaveBeenCalled();
+  });
+
   it("denies a revoked grant and an unknown skill before delegation", async () => {
     const executeNative = vi.fn();
     const loadGroupSkillAllowlist = vi.fn().mockResolvedValue(new Set());

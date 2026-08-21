@@ -43,6 +43,44 @@ const IMAGE_GENERATION_TIMEOUT_MS = 5 * 60 * 1_000;
 const IMAGE_RESPONSE_MAX_BYTES = 32 * 1_024 * 1_024;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/u;
 
+function hasValidImageChunk(bytes: Buffer, type: string, offset: number, size: number): boolean {
+  if (type === "VP8 ") {
+    return size >= 10 &&
+      (bytes[offset]! & 1) === 0 &&
+      bytes.subarray(offset + 3, offset + 6).toString("hex") === "9d012a" &&
+      (bytes.readUInt16LE(offset + 6) & 0x3fff) > 0 &&
+      (bytes.readUInt16LE(offset + 8) & 0x3fff) > 0;
+  }
+  return type === "VP8L" && size >= 5 && bytes[offset] === 0x2f;
+}
+
+function isStructurallyValidWebp(bytes: Buffer): boolean {
+  if (
+    bytes.length < 25 ||
+    bytes.subarray(0, 4).toString("ascii") !== "RIFF" ||
+    bytes.readUInt32LE(4) !== bytes.length - 8 ||
+    bytes.subarray(8, 12).toString("ascii") !== "WEBP"
+  ) return false;
+
+  // Validate every bounded RIFF chunk and require an actual lossy or lossless image payload.
+  let foundImage = false;
+  let offset = 12;
+  while (offset < bytes.length) {
+    if (offset + 8 > bytes.length) return false;
+    const type = bytes.subarray(offset, offset + 4).toString("ascii");
+    const size = bytes.readUInt32LE(offset + 4);
+    const dataOffset = offset + 8;
+    const dataEnd = dataOffset + size;
+    if (dataEnd > bytes.length) return false;
+    if (type === "VP8 " || type === "VP8L") {
+      if (!hasValidImageChunk(bytes, type, dataOffset, size)) return false;
+      foundImage = true;
+    }
+    offset = dataEnd + (size % 2);
+  }
+  return foundImage && offset === bytes.length;
+}
+
 function generationUrl(baseUrl: string): string {
   const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const url = new URL("images/generations", normalized);
@@ -117,10 +155,7 @@ function parseGeneratedImage(source: string): GeneratedImage {
   }
 
   const bytes = Buffer.from(encoded, "base64");
-  const webp = bytes.length >= 12 &&
-    bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
-    bytes.subarray(8, 12).toString("ascii") === "WEBP";
-  if (!webp) {
+  if (!isStructurallyValidWebp(bytes)) {
     throw new AppError(
       "AGENT_IMAGE_GENERATION_RESPONSE_INVALID",
       "Сервис генерации вернул файл неподдерживаемого формата. Создайте новый запрос позднее",

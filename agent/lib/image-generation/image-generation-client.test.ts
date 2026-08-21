@@ -10,7 +10,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createImageGenerationClient } from "./image-generation-client.js";
 
-const WEBP_BYTES = Buffer.from("524946460400000057454250", "hex");
+const VP8_FRAME = Buffer.from("0000009d012a01000100", "hex");
+const WEBP_BYTES = Buffer.alloc(12 + 8 + VP8_FRAME.byteLength);
+WEBP_BYTES.write("RIFF", 0, "ascii");
+WEBP_BYTES.writeUInt32LE(WEBP_BYTES.byteLength - 8, 4);
+WEBP_BYTES.write("WEBP", 8, "ascii");
+WEBP_BYTES.write("VP8 ", 12, "ascii");
+WEBP_BYTES.writeUInt32LE(VP8_FRAME.byteLength, 16);
+VP8_FRAME.copy(WEBP_BYTES, 20);
 
 function client(fetch: typeof globalThis.fetch, apiKey = "internal-bearer") {
   return createImageGenerationClient({
@@ -115,6 +122,19 @@ describe("image generation client", () => {
       headers: { "content-type": "application/json" },
       status: 200,
     }));
+
+    await expect(client(fetch).generate({
+      background: "auto",
+      prompt: "A city skyline",
+      quality: "auto",
+      size: "auto",
+    })).rejects.toThrowError(/AGENT_IMAGE_GENERATION_RESPONSE_INVALID/u);
+  });
+
+  it("rejects a header-only WebP container without image data", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: [{ b64_json: Buffer.from("524946460400000057454250", "hex").toString("base64") }],
+    }), { status: 200 }));
 
     await expect(client(fetch).generate({
       background: "auto",

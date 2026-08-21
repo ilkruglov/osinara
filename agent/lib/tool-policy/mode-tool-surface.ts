@@ -393,7 +393,8 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const validatedSkills = Object.keys(input.skills).some((name) =>
     !isGroupSafeSkillName(name) && !isImageGenerationSkillName(name)
   ) ? {} : input.skills;
-  const skills = IMAGE_GENERATION_AVAILABLE && !scheduledRun
+  const skills = IMAGE_GENERATION_AVAILABLE &&
+    !scheduledRun && allowed.has("generate_image")
     ? validatedSkills
     : Object.fromEntries(Object.entries(validatedSkills).filter(([name]) =>
       !isImageGenerationSkillName(name)

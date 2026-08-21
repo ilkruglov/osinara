@@ -241,7 +241,6 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
             path,
             scope: input.scope,
           });
-          await dependencies.operations.complete(ctx.callId, file);
         } catch (error) {
           console.error(JSON.stringify({
             code: "AGENT_IMAGE_GENERATION_PERSISTENCE_FAILED",
@@ -263,6 +262,20 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
           throw new AppError(
             "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
             "Изображение было создано, но его сохранение не подтверждено. Не повторяйте запрос сразу",
+          );
+        }
+        try {
+          await dependencies.operations.complete(ctx.callId, file);
+        } catch (error) {
+          // The workspace operation is durable, so retaining `started` lets exact-call replay recover it.
+          console.error(JSON.stringify({
+            code: "AGENT_IMAGE_GENERATION_LEDGER_COMPLETION_FAILED",
+            error: error instanceof Error ? error.message : String(error),
+            operationKey: ctx.callId,
+          }));
+          throw new AppError(
+            "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
+            "Изображение создано и сохранено, но завершение операции не подтверждено. Не повторяйте запрос сразу",
           );
         }
         generated = true;

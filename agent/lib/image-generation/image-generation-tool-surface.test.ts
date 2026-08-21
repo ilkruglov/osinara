@@ -52,6 +52,12 @@ describe("image generation tool surface", () => {
   });
 
   it("exposes generation only to interactive roots", () => {
+    const deniedExternal = buildModeToolSurface({
+      capabilities: new Set(),
+      environment: "external",
+      skills: { imagegen: {} as never },
+    });
+
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("generate_image");
     expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("generate_image");
     expect(buildModeToolSurface({ environment: "private", scheduledRun: true }))
@@ -72,6 +78,8 @@ describe("image generation tool surface", () => {
       environment: "external",
       skills: { imagegen: {} as never },
     }).load_skill?.description).toMatch(/недоступен/iu);
+    expect(deniedExternal).not.toHaveProperty("generate_image");
+    expect(deniedExternal.load_skill?.description).toMatch(/недоступен/iu);
   });
 
   it("denies an external call after live capability revocation", async () => {
