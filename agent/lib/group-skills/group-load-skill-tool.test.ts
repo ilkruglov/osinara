@@ -15,7 +15,12 @@ function context(): ToolContext {
     session: {
       auth: {
         current: {
-          attributes: { groupId: "group-1" },
+          attributes: {
+            familyId: "family-1",
+            groupId: "group-1",
+            groupType: "external",
+            role: "external",
+          },
           authenticator: "telegram",
           principalId: "user-1",
           principalType: "user",
@@ -29,17 +34,42 @@ describe("external group load_skill", () => {
   it("delegates only after a live grant check", async () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const loadGroupSkillAllowlist = vi.fn().mockResolvedValue(new Set(["pohuy"]));
-    const tool = createExternalGroupLoadSkillTool({ executeNative, loadGroupSkillAllowlist });
+    const authorizeImageGeneration = vi.fn();
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration,
+      executeNative,
+      loadGroupSkillAllowlist,
+    });
 
     await expect(tool.execute({ skill: "pohuy" }, context())).resolves.toEqual({ loaded: true });
     expect(loadGroupSkillAllowlist).toHaveBeenCalledWith("group-1");
     expect(executeNative).toHaveBeenCalledOnce();
+    expect(authorizeImageGeneration).not.toHaveBeenCalled();
+  });
+
+  it("loads imagegen only after the live generate_image capability check", async () => {
+    const authorizeImageGeneration = vi.fn().mockResolvedValue(undefined);
+    const executeNative = vi.fn().mockResolvedValue({ loaded: true });
+    const loadGroupSkillAllowlist = vi.fn();
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration,
+      executeNative,
+      loadGroupSkillAllowlist,
+    });
+
+    await expect(tool.execute({ skill: "imagegen" }, context())).resolves.toEqual({ loaded: true });
+    expect(authorizeImageGeneration).toHaveBeenCalledWith(expect.anything());
+    expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
   });
 
   it("denies a revoked grant and an unknown skill before delegation", async () => {
     const executeNative = vi.fn();
     const loadGroupSkillAllowlist = vi.fn().mockResolvedValue(new Set());
-    const tool = createExternalGroupLoadSkillTool({ executeNative, loadGroupSkillAllowlist });
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration: vi.fn(),
+      executeNative,
+      loadGroupSkillAllowlist,
+    });
 
     await expect(tool.execute({ skill: "pohuy" }, context())).rejects.toThrowError(
       /AGENT_GROUP_SKILL_FORBIDDEN/u,

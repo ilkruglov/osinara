@@ -25,6 +25,10 @@ function capabilityNames<const Catalog extends readonly ExternalGroupCapability[
 // Persisted grants are action-level where one static descriptor contains distinct side effects.
 export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
+    name: "generate_image",
+    usage: "создавать одно GPT-Image-2 изображение в workspace текущей группы и сразу отправлять его в текущий Telegram-чат",
+  },
+  {
     name: "import_telegram_attachment",
     usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML и YAML из сообщений текущей группы",
   },

@@ -46,7 +46,9 @@ const input = {
   action: "update_policy" as const,
   messageMode: "owner_only" as const,
   telegramChatId: "-1003567628736",
-  toolAllowlist: ["remember", "list_group_history"] as Array<"remember" | "list_group_history">,
+  toolAllowlist: ["remember", "list_group_history", "generate_image"] as Array<
+    "remember" | "list_group_history" | "generate_image"
+  >,
 };
 
 describe("manage_telegram_group.update_policy", () => {
@@ -62,14 +64,14 @@ describe("manage_telegram_group.update_policy", () => {
       messageMode: "owner_only",
       policyUpdated: true,
       telegramChatId: "-1003567628736",
-      toolAllowlist: ["remember", "list_group_history"],
+      toolAllowlist: ["remember", "list_group_history", "generate_image"],
     });
     expect(updatePolicy).toHaveBeenCalledWith({
       familyId: "family-1",
       messageMode: "owner_only",
       requestedBy: "owner-1",
       telegramChatId: "-1003567628736",
-      toolAllowlist: ["remember", "list_group_history"],
+      toolAllowlist: ["remember", "list_group_history", "generate_image"],
     });
   });
 
@@ -96,7 +98,7 @@ describe("manage_telegram_group.update_policy", () => {
     }, context("private"))).resolves.toMatchObject({ policyUpdated: true });
     expect(updatePolicy).toHaveBeenCalledWith(expect.objectContaining({
       messageMode: "owner_only",
-      toolAllowlist: ["remember", "list_group_history"],
+      toolAllowlist: ["remember", "list_group_history", "generate_image"],
     }));
   });
 
