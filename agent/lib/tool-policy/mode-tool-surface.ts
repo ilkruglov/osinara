@@ -384,8 +384,6 @@ function buildExternalToolSurface(
     // Provider-native web_search has no local execution hook, so it is never grantable externally.
     surface[toolName] = deniedTool(toolName);
   }
-  // A scheduled run stays in its root context so each provider/tool boundary remains reauthorizable.
-  if (scheduledRun) surface.agent = deniedTool("agent");
   const effectiveSurface = scheduledRun
     ? Object.fromEntries(Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]))
     : surface;

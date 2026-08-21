@@ -107,6 +107,7 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
 // `web_fetch` is conditionally denied because a local controlled override is grantable.
 // Provider-native `web_search` has no execution hook and therefore stays unconditionally denied.
 export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
+  "agent",
   "ask_question",
   "bash",
   "todo",
