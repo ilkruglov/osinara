@@ -14,7 +14,21 @@ import { describe, expect, it, vi } from "vitest";
 import { createTelegramInputRequestHandler } from "./input-request.js";
 
 describe("createTelegramInputRequestHandler", () => {
-  it("rejects an external-group session-limit prompt before parking or Telegram delivery", async () => {
+  it.each([
+    {
+      kind: "session-limit",
+      signal: "request kind",
+      toolName: "manage_agent_schedule",
+    },
+    {
+      kind: "tool-approval",
+      signal: "synthetic tool name",
+      toolName: "session_limit_continuation",
+    },
+  ])("rejects an external-group session-limit prompt by $signal before side effects", async ({
+    kind,
+    toolName,
+  }) => {
     const parkSession = vi.fn();
     const present = vi.fn();
     const register = vi.fn();
@@ -68,11 +82,11 @@ describe("createTelegramInputRequestHandler", () => {
           callId: "wrun_child:limit:input:36140505",
           input: { kind: "input", limit: 36_140_505, usedTokens: 36_140_505 },
           kind: "tool-call",
-          toolName: "session_limit_continuation",
+          toolName,
         },
         allowFreeform: false,
         display: "confirmation",
-        kind: "session-limit",
+        kind,
         options: [
           { id: "continue", label: "Approve", style: "primary" },
           { id: "stop", label: "Stop", style: "danger" },
