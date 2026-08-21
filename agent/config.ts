@@ -2,7 +2,7 @@
  * Stable application configuration.
  *
  * Exports:
- * - Agent compaction, session lifecycle, attachment, update, and timeout constants.
+ * - Agent compaction, per-turn model safety, session lifecycle, attachment, update, and timeout constants.
  * - Internal service locations and sandbox runner execution limits.
  * - Telegram group journal and proactive delivery model-context limits.
  * - Cross-process advisory-lock namespaces for sensitive workspace state.
@@ -12,6 +12,8 @@
 import { z } from "zod";
 
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
+// The model may perform substantial tool work, but one turn must never consume unbounded calls.
+export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
 export const GROQ_TRANSCRIPTION_TIMEOUT_MS = 60_000;
 export const GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED = 2;
 export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;
