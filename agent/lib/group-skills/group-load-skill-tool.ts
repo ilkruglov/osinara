@@ -9,6 +9,7 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { loadSkill } from "eve/tools/defaults";
 
 import { AppError } from "../app-error.js";
+import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { isImageGenerationSkillName } from "../image-generation/image-generation-skill.js";
 import { authorizeCurrentExternalGroupCapability } from "../tool-policy/external-group-live-policy.js";
 import { resolveExternalGroupPolicyIdentity } from "../tool-policy/external-group-policy.js";
@@ -50,7 +51,10 @@ export function createExternalGroupLoadSkillTool(
       }
 
       // Image instructions are coupled to the tool grant, so the owner changes only one policy.
+      // A grant persisted under a previous model provider must not resurrect the skill, so the
+      // provider gate is re-checked here rather than trusting the turn-scoped skill manifest.
       if (isImageGenerationSkillName(skill)) {
+        if (!IMAGE_GENERATION_AVAILABLE) throw forbidden();
         await dependencies.authorizeImageGeneration(ctx);
         return await dependencies.executeNative(input, ctx);
       }

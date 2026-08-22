@@ -5,11 +5,16 @@
  * - One successful generation is persisted and delivered as a Telegram photo.
  * - Completed and filesystem-recoverable calls never charge the subscription twice.
  * - Definitive and ambiguous provider outcomes become terminal durable operation states.
+ * - The provider gate is asserted separately, so this suite runs the Codex-subscription runtime.
  */
 import { createHash } from "node:crypto";
 
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./image-generation/image-generation-availability.js", () => ({
+  IMAGE_GENERATION_AVAILABLE: true,
+}));
 
 import { AppError } from "./app-error.js";
 import { createGenerateImageTool } from "./tools/generate_image.js";

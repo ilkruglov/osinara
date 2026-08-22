@@ -16,6 +16,7 @@ import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError, isAppError } from "../app-error.js";
+import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import {
   imageGenerationClient,
   type ImageGenerationRequest,
@@ -205,6 +206,15 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
     ].join(" "),
     inputSchema,
     async execute(rawInput, ctx) {
+      // The mode surfaces never emit this descriptor without the subscription provider, so reaching
+      // execution means a stale descriptor. Fail before the durable reservation records a call that
+      // could never have been billed.
+      if (!IMAGE_GENERATION_AVAILABLE) {
+        throw new AppError(
+          "AGENT_IMAGE_GENERATION_UNAVAILABLE",
+          "Генерация изображений недоступна: текущая модель агента работает не через подписку OpenAI Codex",
+        );
+      }
       const input = parseInput(rawInput);
       const auth = requireWorkspaceAuthorization(ctx);
       const workspaceId = await dependencies.workspaces.workspaceId(auth, input.scope);

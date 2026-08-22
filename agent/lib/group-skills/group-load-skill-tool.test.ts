@@ -4,9 +4,16 @@
  * Constructs covered:
  * - The Eve loader runs only for a safe skill present in the current live group policy.
  * - Revoked, unknown and malformed requests fail before native skill loading.
+ * - The capability-coupled `imagegen` skill additionally requires its active model provider.
  */
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
+
+// The imagegen cases below describe the Codex-subscription runtime; the direct-provider denial has
+// its own suite because the provider gate resolves once at module load.
+vi.mock("../image-generation/image-generation-availability.js", () => ({
+  IMAGE_GENERATION_AVAILABLE: true,
+}));
 
 import { createExternalGroupLoadSkillTool } from "./group-load-skill-tool.js";
 

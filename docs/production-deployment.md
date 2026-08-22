@@ -141,7 +141,10 @@ boundary for exactly one `gpt-image-2` WebP. The agent reserves the call in Post
 billable request, never retries an ambiguous transport or provider result, stores confirmed bytes in
 the authorized workspace, and uses the existing exact-once Telegram file delivery. External groups
 receive the capability only after the owner changes the complete group policy from the private chat;
-scheduled turns and subagents never receive it. CLIProxy is configured with
+scheduled turns and subagents never receive it. Under any other model provider the tool, its
+`imagegen` skill, and its owner grant all disappear: `manage_telegram_group` rejects the capability
+instead of persisting an inert grant, and a grant made while Codex was active is reported as
+`unavailableConfiguredTools` until the provider is restored. CLIProxy is configured with
 `disable-image-generation: chat`: `/v1/images/*` remains available to the controlled application
 client, while CLIProxy cannot inject its own hidden image tool into ordinary model calls.
 

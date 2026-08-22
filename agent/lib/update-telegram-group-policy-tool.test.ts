@@ -4,12 +4,18 @@
  * Constructs covered:
  * - `manage_telegram_group.update_policy`: requires one complete top-level policy payload.
  * - Execution uses only verified private-owner identity and returns the persisted policy contract.
+ * - Subscription-coupled capabilities are grantable only while their model provider is active.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { updatePolicy } = vi.hoisted(() => ({ updatePolicy: vi.fn() }));
 
+// This suite covers the Codex-subscription runtime, where image generation is genuinely grantable.
+// The direct-provider denial has its own suite because the gate resolves once at module load.
+vi.mock("./image-generation/image-generation-availability.js", () => ({
+  IMAGE_GENERATION_AVAILABLE: true,
+}));
 vi.mock("./telegram-group-administration-repository.js", () => ({
   telegramGroupAdministrationRepository: {
     registerGroup: vi.fn(),
