@@ -35,6 +35,17 @@ export const SOFTWARE_UPDATE_GITHUB_RESPONSE_MAX_BYTES = 1024 * 1024;
 export const SOFTWARE_UPDATE_HTTP_TIMEOUT_MS = 15_000;
 export const SOFTWARE_UPDATE_MANIFEST_MAX_BYTES = 64 * 1024;
 export const TELEGRAM_API_REQUEST_TIMEOUT_MS = 15_000;
+// An unanswered approval parks the Eve turn indefinitely: Eve keeps `session.waiting` for as long
+// as it takes. The confirmation window bounds that wait so one ignored prompt cannot freeze a chat.
+export const TELEGRAM_HITL_APPROVAL_TIMEOUT_MS = 5 * 60 * 1_000;
+// One `respond` waits up to Eve's 30-second command-hook handover, so the lease must outlast a whole
+// batch; a lease that expires mid-flight would let the next minute answer the same request twice.
+export const TELEGRAM_HITL_TIMEOUT_LEASE_MS = 15 * 60 * 1_000;
+export const TELEGRAM_HITL_TIMEOUT_SWEEP_BATCH_SIZE = 5;
+export const TELEGRAM_HITL_TIMEOUT_SWEEP_TIMEOUT_MS = 180 * 1_000;
+// The timeout sweep needs a route-scoped `attachSession`, which exists only inside an HTTP handler,
+// so the minute schedule calls the agent's own private route. The port is fixed by `npm start`.
+export const AGENT_INTERNAL_SELF_BASE_URL = "http://127.0.0.1:3000";
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 12_000;
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES = 100;
 export const TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES = 10_000;

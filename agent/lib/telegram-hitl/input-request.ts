@@ -222,6 +222,7 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       // Exact prompt ownership is required for both interactive and scheduled callback/reply claims.
       await dependencies.registerMessageRoutes(channel, ctx, [...detailMessageIds, sentMessageId]);
       await dependencies.approvals.register({
+        kind,
         applicationSessionId: appSessionId,
         callbackData: callbacks,
         callbackOptions: options,
