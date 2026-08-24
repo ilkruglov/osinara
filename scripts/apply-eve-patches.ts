@@ -1,10 +1,9 @@
 /**
- * Reproducible local Eve 0.32.0 patch installer.
+ * Reproducible local Eve 0.40.0 patch installer.
  *
  * Constructs:
  * - `replaceExact`: fail-fast, count-checked, idempotent artifact replacement.
  * - Production startup health wait: permits bounded first-run sandbox preparation.
- * - Local Workflow transport: outlives the workflow replay window without premature redelivery.
  * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
  * - Memory review delegation policy: hides only the implicit root agent from verified reviews.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
@@ -16,8 +15,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const EXPECTED_EVE_VERSION = "0.32.0";
-const EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS = 300_000;
+const EXPECTED_EVE_VERSION = "0.40.0";
 const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
 
 const runtimePaths = {
@@ -38,9 +36,6 @@ const runtimePaths = {
     "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
   ),
   toolLoop: resolve("node_modules/eve/dist/src/harness/tool-loop.js"),
-  workflowLocal: resolve(
-    "node_modules/eve/dist/src/compiled/@workflow/world-local/index.js",
-  ),
 } as const;
 
 function occurrenceCount(source: string, marker: string): number {
@@ -66,7 +61,7 @@ async function replaceExact(
   if (unpatchedBeforeCount === 0 && afterCount === expectedCount) return;
   if (unpatchedBeforeCount !== expectedCount || afterCount !== 0) {
     throw new Error(
-      `AGENT_EVE_PATCH_MISMATCH: Не удалось применить проверенный Eve 0.32.0 patch к ${path}; before=${beforeCount}, after=${afterCount}, expected=${expectedCount}`,
+      `AGENT_EVE_PATCH_MISMATCH: Не удалось применить проверенный Eve 0.40.0 patch к ${path}; before=${beforeCount}, after=${afterCount}, expected=${expectedCount}`,
     );
   }
 
@@ -88,15 +83,6 @@ await replaceExact(
   runtimePaths.productionStart,
   "const HEALTH_TIMEOUT_MS=6e4",
   `const HEALTH_TIMEOUT_MS=${EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS.toExponential().replace("+", "")}`,
-);
-
-// The local queue handler may legitimately wait for a four-minute Workflow replay. Its upstream
-// 30-second HTTP timeout aborted the self-delivery while the original step kept running, creating a
-// redelivery storm. Wait beyond Workflow's own deadline without changing queue retry semantics.
-await replaceExact(
-  runtimePaths.workflowLocal,
-  "function mn(){return{bodyTimeout:pn(`WORKFLOW_LOCAL_BODY_TIMEOUT_MS`,3e4),connections:1e3,headersTimeout:pn(`WORKFLOW_LOCAL_HEADERS_TIMEOUT_MS`,3e4),keepAliveTimeout:3e4}}",
-  `function mn(){return{bodyTimeout:pn(\`WORKFLOW_LOCAL_BODY_TIMEOUT_MS\`,${EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS.toExponential().replace("+", "")}),connections:1e3,headersTimeout:pn(\`WORKFLOW_LOCAL_HEADERS_TIMEOUT_MS\`,${EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS.toExponential().replace("+", "")}),keepAliveTimeout:3e4}}`,
 );
 
 // Provider transport retries remain AI SDK's responsibility; Eve must never reissue a model call.
@@ -168,8 +154,8 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.telegram,
-  "let n=e.from(continuationTokenFromState(t));u===void 0?await n.send(a,{auth:r.auth,context:[o,...s],state:t}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
-  "let n=e.from(r.continuationToken??continuationTokenFromState(t));return u===void 0?await n.send(r.message??a,{auth:r.auth,context:[o,...s],state:t}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
+  "let n=e.from(continuationTokenFromState(t));u===void 0?await n.send(a,{auth:r.auth,context:[o,...s],state:t,title:r.title}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
+  "let n=e.from(r.continuationToken??continuationTokenFromState(t));return u===void 0?await n.send(r.message??a,{auth:r.auth,context:[o,...s],state:t,title:r.title}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
 );
 await replaceExact(
   runtimePaths.telegram,
@@ -224,8 +210,8 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.telegramTypes,
-  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n} | null;",
-  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly message?: string;\n    readonly replyHandling?: \"message\";\n} | null;",
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    /** Overrides the workflow run title without changing the message sent to the model. */\n    readonly title?: string;\n} | null;",
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly message?: string;\n    readonly replyHandling?: \"message\";\n    /** Overrides the workflow run title without changing the message sent to the model. */\n    readonly title?: string;\n} | null;",
 );
 const telegramConfigHooks = `    /** Optional internal endpoint that resumes persisted ingress after process restarts. */
     readonly drainRoute?: string;

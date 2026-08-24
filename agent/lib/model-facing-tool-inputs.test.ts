@@ -164,7 +164,7 @@ describe("model-facing tool input hardening", () => {
     const approval = manageReminder.approval;
     expect(approval).toBeTypeOf("function");
 
-    expect(() => approval!({
+    expect(() => (approval as (context: never) => unknown)({
       approvedTools: new Set(),
       callId: "call-invalid-recurrence",
       session: {} as never,
@@ -184,7 +184,7 @@ describe("model-facing tool input hardening", () => {
     const approval = manageReminder.approval;
     expect(approval).toBeTypeOf("function");
 
-    expect(approval!({
+    expect((approval as (context: never) => unknown)({
       approvedTools: new Set(),
       callId: "call-valid-recurrence",
       session: {} as never,

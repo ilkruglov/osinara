@@ -48,7 +48,9 @@ import manageFamilyInvitation from "./tools/manage_family_invitation.js";
 const context = { callId: "call-1" } as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return manageFamilyInvitation.approval!({ toolInput: input } as never);
+  return (manageFamilyInvitation.approval as (context: never) => unknown)(
+    { toolInput: input } as never,
+  );
 }
 
 describe("manage_family_invitation model input", () => {

@@ -1,18 +1,15 @@
 /**
- * Eve 0.32.0 session retention job boundary.
+ * PostgreSQL Workflow session retention job boundary.
  *
  * Export:
  * - `deleteExpiredSessions`: globally serializes, leases, and physically deletes retired Eve sessions.
  */
-import { resolve } from "node:path";
-
 import { isAppError } from "../app-error.js";
 import { database } from "../database.js";
-import { deleteLocalEveSession } from "./eve-session-storage.js";
 import { sessionRepository } from "./session-repository.js";
+import { deleteConfiguredPostgresEveSession } from "./workflow-postgres-session-storage.js";
 
 const SESSION_RETENTION_ADVISORY_LOCK_KEY = "osinara-eve-session-retention";
-const WORKFLOW_DATA_ROOT = resolve(".eve", ".workflow-data");
 
 export async function deleteExpiredSessions(): Promise<number> {
   // Per-session leases allow parallel workers, but world-local hook indexes are shared across runs.
@@ -43,7 +40,7 @@ async function deleteExpiredSessionsUnderLock(): Promise<number> {
     if (!claim) return deleted;
 
     try {
-      await deleteLocalEveSession(WORKFLOW_DATA_ROOT, claim.eveSessionId);
+      await deleteConfiguredPostgresEveSession(claim.eveSessionId);
       await sessionRepository.completeDeletion(claim.id, claim.leaseToken);
       deleted += 1;
     } catch (error) {

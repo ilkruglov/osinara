@@ -31,7 +31,9 @@ import notificationSettings from "./tools/notification_settings.js";
 const context = { callId: "call-1" } as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return notificationSettings.approval!({ toolInput: input } as never);
+  return (notificationSettings.approval as (context: never) => unknown)(
+    { toolInput: input } as never,
+  );
 }
 
 describe("notification_settings model input", () => {

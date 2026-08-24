@@ -10,6 +10,7 @@ readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0
 readonly LEGACY_EVE_VOLUME="osinara-production-workflow-data"
 readonly LEGACY_EVE_LOGICAL_VOLUME="workflow-data"
 readonly CURRENT_EVE_LOGICAL_VOLUME="eve-workflow-data"
+readonly POSTGRES_WORLD_CUTOVER_VOLUME="osinara-production-eve-workflow-data-v032"
 readonly DURABLE_VOLUME_BINDINGS=(
   "osinara-production-cli-proxy-auth|cli-proxy-auth"
   "osinara-production-google-workspace-credentials|google-workspace-credentials"
@@ -22,6 +23,7 @@ BACKUP_DURABLE_VOLUMES=()
 CREATED_CANDIDATE_VOLUMES=()
 RETIRED_CUTOVER_VOLUME=""
 RETIRED_CUTOVER_ARCHIVED=0
+PRESERVED_WORKFLOW_CUTOVER_VOLUME=""
 CANDIDATE_HEALTH_VALIDATED=0
 
 prune_old_deploy_backups() {
@@ -123,6 +125,7 @@ select_durable_volumes() {
   BACKUP_DURABLE_VOLUMES=()
   RETIRED_CUTOVER_VOLUME=""
   RETIRED_CUTOVER_ARCHIVED=0
+  PRESERVED_WORKFLOW_CUTOVER_VOLUME=""
   for binding in "${DURABLE_VOLUME_BINDINGS[@]}"; do
     IFS='|' read -r volume logical_volume <<<"$binding"
     current_owns=0
@@ -131,12 +134,16 @@ select_durable_volumes() {
     compose_declares_volume "$CANDIDATE_COMPOSE" "$logical_volume" && candidate_owns=1
     [[ "$current_owns" -eq 1 || "$candidate_owns" -eq 1 ]] || continue
 
-    # Only the documented Eve 0.32 storage cutover may remove a current-owned durable mount.
+    # Each documented world cutover must preserve a restorable snapshot before changing ownership.
     if [[ "$current_owns" -eq 1 && "$candidate_owns" -eq 0 ]]; then
       if [[ "$volume" == "$LEGACY_EVE_VOLUME" &&
             "$logical_volume" == "$LEGACY_EVE_LOGICAL_VOLUME" ]] &&
         compose_declares_volume "$CANDIDATE_COMPOSE" "$CURRENT_EVE_LOGICAL_VOLUME"; then
         RETIRED_CUTOVER_VOLUME="$volume"
+      elif [[ "$volume" == "$POSTGRES_WORLD_CUTOVER_VOLUME" &&
+              "$logical_volume" == "$CURRENT_EVE_LOGICAL_VOLUME" ]]; then
+        # PostgreSQL cutover keeps the physical v0.32 volume for immediate rollback.
+        PRESERVED_WORKFLOW_CUTOVER_VOLUME="$volume"
       else
         fail "DEPLOY_CANDIDATE_DURABLE_VOLUME_REMOVED" \
           "Candidate release removes a current-owned durable volume: ${volume}"
@@ -175,7 +182,16 @@ preflight_backup() {
   database_bytes="$(psql_current --command="SELECT pg_database_size('osinara');")"
   [[ "$database_bytes" =~ ^[0-9]+$ ]] ||
     fail "DEPLOY_BACKUP_SIZE_INVALID" "Could not determine PostgreSQL size"
-  required_bytes=$(((required_bytes + database_bytes) * 2 + BACKUP_RESERVE_BYTES))
+  local workflow_database_exists workflow_database_bytes=0
+  workflow_database_exists="$(psql_current --command="SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'osinara_workflow');")"
+  [[ "$workflow_database_exists" == "t" || "$workflow_database_exists" == "f" ]] ||
+    fail "DEPLOY_BACKUP_DATABASE_STATE_INVALID" "Could not determine Workflow database state"
+  if [[ "$workflow_database_exists" == "t" ]]; then
+    workflow_database_bytes="$(psql_current --command="SELECT pg_database_size('osinara_workflow');")"
+    [[ "$workflow_database_bytes" =~ ^[0-9]+$ ]] ||
+      fail "DEPLOY_BACKUP_SIZE_INVALID" "Could not determine Workflow PostgreSQL size"
+  fi
+  required_bytes=$(((required_bytes + database_bytes + workflow_database_bytes) * 2 + BACKUP_RESERVE_BYTES))
 
   local -a disk_lines
   mapfile -t disk_lines < <(df --output=avail -B1 "$BACKUPS_DIR")
@@ -192,6 +208,16 @@ create_postgres_backup() {
     --format=custom --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/postgres.dump"
   compose_current exec -T postgres pg_restore --list < "${BACKUP_TEMP_DIR}/postgres.dump" \
     > /dev/null
+  local workflow_database_exists
+  workflow_database_exists="$(psql_current --command="SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'osinara_workflow');")"
+  if [[ "$workflow_database_exists" == "t" ]]; then
+    compose_current exec -T postgres pg_dump --username osinara --dbname osinara_workflow \
+      --format=custom --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/workflow-postgres.dump"
+    compose_current exec -T postgres pg_restore --list < "${BACKUP_TEMP_DIR}/workflow-postgres.dump" \
+      > /dev/null
+  elif [[ "$workflow_database_exists" != "f" ]]; then
+    fail "DEPLOY_BACKUP_DATABASE_STATE_INVALID" "Could not determine Workflow database state"
+  fi
 }
 
 stop_current_services() {

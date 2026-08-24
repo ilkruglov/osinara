@@ -257,7 +257,6 @@ validate_resolved_compose_security() {
       {service: $service.key, type, source, target}] | sort_by(.service, .target)) == ([
         {service: "agent", type: "volume", source: "sandbox-data", target: "/app/.eve/sandbox-cache"},
         {service: "agent", type: "volume", source: "google-workspace-credentials", target: "/app/google-workspace-credentials"},
-        {service: "agent", type: "volume", source: "eve-workflow-data", target: "/app/.eve/.workflow-data"},
         {service: "agent", type: "volume", source: "workspace-data", target: "/app/workspaces"},
         {service: "agent", type: "bind", source: "/opt/osinara/agent-model-providers.json", target: "/app/config/agent-model-providers.json"},
         {service: "cli-proxy-api", type: "volume", source: "cli-proxy-auth", target: "/var/lib/cli-proxy-api/auth"},

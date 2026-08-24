@@ -5,7 +5,7 @@
  * - The patched runtime removes only Eve's implicit root `agent` from verified background review.
  * - Interactive and non-review root sessions retain native delegation.
  * - Authored tools and non-root subagent lookalikes are never removed by the review policy.
- * - The reproducible installer owns the exact Eve 0.32.0 runtime patch.
+ * - The reproducible installer owns the exact Eve 0.40.0 runtime patch.
  */
 import { readFile } from "node:fs/promises";
 

@@ -69,6 +69,8 @@ export default telegramChannel({
     webhookSecretToken: process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN as string,
   },
   drainRoute: "/eve/v1/telegram-drain",
+  // Durable ingress is FIFO; a later update must never cancel a paid or side-effecting active turn.
+  turnPolicy: "queue",
   events: {
     async "input.requested"(data, channel, ctx) {
       if (isTelegramChannelSession(ctx.session.auth)) {

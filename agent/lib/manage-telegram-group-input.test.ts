@@ -43,7 +43,9 @@ const context = {
 } as unknown as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return manageTelegramGroup.approval!({ toolInput: input } as never);
+  return (manageTelegramGroup.approval as (context: never) => unknown)(
+    { toolInput: input } as never,
+  );
 }
 
 describe("manage_telegram_group model input", () => {
