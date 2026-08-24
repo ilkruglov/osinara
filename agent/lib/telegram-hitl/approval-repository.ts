@@ -20,6 +20,8 @@ type TelegramChatType = "group" | "private" | "supergroup";
 
 export interface RegisterTelegramHitlApprovalInput {
   applicationSessionId: string;
+  /** Framework-owned request source; the confirmation window applies only to human-answerable kinds. */
+  kind: "question" | "session-limit" | "tool-approval";
   callbackData: readonly string[];
   callbackOptions: readonly {
     callbackData: string;
@@ -197,8 +199,9 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
          (application_session_id, eve_session_id, request_id,
            telegram_chat_id, telegram_chat_type, telegram_message_id,
            telegram_message_thread_id, expected_telegram_user_id, callback_data,
-            prompt_text, callback_options, tool_call_id, tool_name, tool_input_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            prompt_text, callback_options, tool_call_id, tool_name, tool_input_hash,
+            request_kind)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (application_session_id, eve_session_id, request_id) DO UPDATE
          SET telegram_chat_id = EXCLUDED.telegram_chat_id,
              telegram_chat_type = EXCLUDED.telegram_chat_type,
@@ -211,6 +214,12 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
                tool_call_id = EXCLUDED.tool_call_id,
                tool_name = EXCLUDED.tool_name,
                tool_input_hash = EXCLUDED.tool_input_hash,
+               request_kind = EXCLUDED.request_kind,
+              -- A replayed request re-opens the prompt, so no timeout state may survive it.
+              timed_out_at = NULL,
+              timeout_lease_token = NULL,
+              timeout_lease_expires_at = NULL,
+              timeout_attempts = 0,
               selected_option_id = NULL,
               selected_option_label = NULL,
               consumed_at = NULL`,
@@ -229,6 +238,7 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         input.toolCallId,
         input.toolName,
         input.toolInputHash,
+        input.kind,
       ],
     );
   },
@@ -246,6 +256,7 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
            AND approval.tool_name = $5
            AND approval.tool_input_hash = $6
            AND approval.consumed_at IS NOT NULL
+           AND approval.timed_out_at IS NULL
            AND (approval.selected_option_id IS NULL OR approval.selected_option_id = 'approve')
            AND session.eve_session_id = approval.eve_session_id
            AND session.retired_at IS NULL

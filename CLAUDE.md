@@ -84,6 +84,7 @@ retrieval и thread activation используют только локальн�
 
 Owner-only операции разрешены только в личном Telegram-чате владельца.
 После HITL side-effect executor должен повторно проверить текущую owner-role в БД.
+Запрос подтверждения не ждёт вечно: неотвеченные tool-approval и вопрос отменяются через пять минут, tool не исполняется, turn продолжается, а пользователь получает предупреждение и не получает повторный запрос без явной просьбы. Framework `session-limit` и OAuth в это окно не входят.
 Изменение типа группы пересоздаёт trust zone и удаляет данные старой области.
 
 Весь прикладной tool surface выдаётся per-mode через step-scoped Eve `defineDynamic` в `agent/tools/capabilities.ts`.
