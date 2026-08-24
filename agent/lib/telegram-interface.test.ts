@@ -34,11 +34,11 @@ describe("Telegram interface localization", () => {
     });
 
     expect(request.prompt).toBe(
-      "Подтвердите действие: подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены.",
+      "Подтверждение: подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены.\n\nДействие будет выполнено один раз. Автоматического повтора при ошибке не будет.",
     );
     expect(request.options).toEqual([
       { id: "approve", label: "Да, подтвердить", style: "primary" },
-      { id: "deny", label: "Нет, отклонить", style: "default" },
+      { id: "deny", label: "Нет, отменить", style: "default" },
     ]);
   });
 
@@ -54,7 +54,9 @@ describe("Telegram interface localization", () => {
       requestId: "request-1",
     });
 
-    expect(request.prompt).toBe("Подтвердите выполнение действия.");
+    expect(request.prompt).toBe(
+      "Подтверждение: выполнение действия.\n\nДействие будет выполнено один раз. Автоматического повтора при ошибке не будет.",
+    );
     expect(request.prompt).not.toContain("future_tool");
   });
 
@@ -76,7 +78,7 @@ describe("Telegram interface localization", () => {
     });
 
     expect(request.prompt).toBe(
-      "Подтвердите действие: удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата.\n\nTelegram chat ID: -1001",
+      "Подтверждение: удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата.\n\nTelegram chat ID: -1001\n\nДействие будет выполнено один раз. Автоматического повтора при ошибке не будет.",
     );
   });
 
@@ -100,7 +102,7 @@ describe("Telegram interface localization", () => {
       requestId: "request-reminder-update",
     });
 
-    expect(request.prompt).toContain("Подтвердите действие: изменить напоминание.");
+    expect(request.prompt).toContain("Подтверждение: изменить напоминание.");
     expect(request.prompt).toContain("ID: 00000000-0000-4000-8000-000000000001");
     expect(request.prompt).toContain("Повторение: без повтора");
     expect(request.prompt).not.toContain("Часовой пояс");

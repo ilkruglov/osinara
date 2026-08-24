@@ -20,6 +20,7 @@ import {
   isGroupSafeSkillName,
 } from "../group-skills/group-skill-catalog.js";
 import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   GROUP_TITLE_MAX_LENGTH,
   TELEGRAM_GROUP_ID_PATTERN,
@@ -72,6 +73,7 @@ const registrationSchema = z.object({
 }).strict();
 
 const manageTelegramGroupSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS).describe(
     "Сначала выберите ровно один action; обязательные значения: register, remove, start_new_context, status, update_policy или update_skills.",
   ),

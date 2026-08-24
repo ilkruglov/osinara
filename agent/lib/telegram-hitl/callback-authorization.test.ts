@@ -128,7 +128,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
         auth,
         continuationToken: "-1001:55:88:osinara:2",
         promptText: "Удалить расписание «Утренний дайджест ИИ»?",
-        selectedOptionId: "deny",
+        selectedOptionId: "cancel",
         selectedOptionLabel: "Нет, отклонить",
         status: "authorized",
       }),
@@ -139,7 +139,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
 
     expect(request).toHaveBeenCalledWith("editMessageText", expect.objectContaining({
       reply_markup: { inline_keyboard: [] },
-      text: expect.stringContaining("Отклонено"),
+      text: expect.stringContaining("Отменено"),
     }));
   });
 });

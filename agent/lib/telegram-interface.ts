@@ -7,6 +7,11 @@
  * - `TelegramInputRequest`: stable structural input used by the secure HITL renderer.
  * - Failure formatters: hide internals while preserving stable support references.
  */
+import {
+  buildApprovalMessage,
+  genericApprovalFacts,
+} from "./telegram-hitl/approval-message.js";
+
 
 const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
   remember: "сохранить запись в общей или чувствительной памяти",
@@ -92,6 +97,12 @@ export interface TelegramInputRequest {
   prompt: string;
   requestId: string;
 }
+
+const APPROVAL_OPTION_LABELS: Readonly<Record<string, string>> = {
+  approve: "Да, подтвердить",
+  cancel: "Нет, отменить",
+  deny: "Нет, отменить",
+};
 
 interface FailureData {
   code: string;
@@ -286,22 +297,23 @@ export function localizeTelegramInputRequest<T extends TelegramInputRequest>(req
   // Option IDs remain unchanged because Eve resolves callbacks by ID, not visible text.
   const options = request.options?.map((option) => ({
     ...option,
-    label:
-      option.id === "approve"
-        ? "Да, подтвердить"
-        : option.id === "deny"
-          ? "Нет, отклонить"
-          : option.label,
+    // Eve 0.32/0.40 присылает `cancel`; ветка `deny` оставлена для обратной совместимости опций.
+    label: APPROVAL_OPTION_LABELS[option.id] ?? option.label,
   }));
   const actionLabel = approvalActionLabel(request.action.toolName, request.action.input);
-  const parameterLines = approvalParameterLines(request.action.toolName, request.action.input);
-  const prompt = actionLabel
-    ? `Подтвердите действие: ${actionLabel}.`
-    : "Подтвердите выполнение действия.";
+  const reviewed = approvalParameterLines(request.action.toolName, request.action.input);
   return {
     ...request,
     ...(options ? { options } : {}),
-    prompt: parameterLines.length ? `${prompt}\n\n${parameterLines.join("\n")}` : prompt,
+    prompt: buildApprovalMessage({
+      actionLabel,
+      // A reviewed tool that shows no parameters chose that deliberately. Only a tool with no
+      // description at all falls back to bounded scalar fields instead of an empty confirmation.
+      facts: reviewed.length || actionLabel !== null
+        ? reviewed
+        : genericApprovalFacts(request.action.input),
+      reason: request.action.input.approvalReason,
+    }),
   };
 }
 

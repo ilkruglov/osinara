@@ -12,8 +12,10 @@ import { requireMemoryAuthorization } from "../memory-context.js";
 import { MEMORY_REF_PATTERN } from "../model-memory.js";
 import { AppError } from "../app-error.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 const conflictInputSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(["choose", "keep_both", "keep_unresolved"]),
   conflictRef: z.string(),
   memoryRef: z.string().optional(),

@@ -6,6 +6,7 @@
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 import { AppError } from "../app-error.js";
 import { requirePrivateTelegramOwner } from "../family-context.js";
@@ -20,6 +21,7 @@ export default defineTool({
   description:
     "В личном чате владельца показать или изменить self-проекцию профиля во внешнюю группу. Сначала вызови {\"action\":\"list\"}: результат policies содержит актуальные opaque groupRef. Для изменения используй только {\"action\":\"update\",\"enabled\":true|false,\"groupRef\":\"grp_...\"}; update требует Eve HITL. Не придумывай groupRef и не используй Telegram chat ID.",
   inputSchema: z.object({
+    approvalReason: approvalReasonSchema,
     action: z.enum(["list", "update"]).describe("list читает политики; update изменяет одну"),
     enabled: z.boolean().optional().describe("Обязательно только для action=update"),
     groupRef: z.string().regex(GROUP_REF_PATTERN).optional().describe("Обязательно для update; только из результата action=list"),

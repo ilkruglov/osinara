@@ -31,10 +31,11 @@ function resolvedApprovalText(result: {
   selectedOptionId: string;
   selectedOptionLabel: string;
 }): string {
+  // Eve присылает `cancel`; прежняя проверка на `deny` не срабатывала и показывала английский ярлык.
   const resolution = result.selectedOptionId === "approve"
     ? "Решение: Подтверждено.\nДействие передано на выполнение."
-    : result.selectedOptionId === "deny"
-    ? "Решение: Отклонено.\nДействие не будет выполнено."
+    : result.selectedOptionId === "cancel" || result.selectedOptionId === "deny"
+    ? "Решение: Отменено.\nДействие не будет выполнено."
     : `Выбран ответ: ${result.selectedOptionLabel}`;
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
   const prompt = result.promptText.length <= promptLimit

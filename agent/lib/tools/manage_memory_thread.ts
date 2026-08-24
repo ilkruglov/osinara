@@ -6,6 +6,7 @@
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 import { AppError } from "../app-error.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
@@ -15,6 +16,7 @@ import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.j
 
 const OUTCOME_REF_PATTERN = /^outcome_[0-9a-f]{32}$/u;
 const inputSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(["complete", "reactivate"]).describe("Одна lifecycle-операция"),
   authority: z.enum(["current_user_statement", "confirmed_outcome", "formal_goal_condition"]).optional()
     .describe("Обязательно только для complete"),

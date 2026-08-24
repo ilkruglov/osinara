@@ -25,6 +25,7 @@ import {
 } from "../agent-schedules/external-agent-schedule-policy.js";
 import { AppError } from "../app-error.js";
 import { requirePrivateTelegramOwner } from "../family-context.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 const ACTIONS = ["create", "delete", "pause", "resume", "run_now", "status", "update"] as const;
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
@@ -47,6 +48,7 @@ const recurrenceSchema = z.discriminatedUnion("kind", [
 ]);
 
 const toolSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(ACTIONS),
   capabilityAllowlist: z.array(z.enum(EXTERNAL_SCHEDULE_CAPABILITIES)).max(
     EXTERNAL_SCHEDULE_CAPABILITIES.length,

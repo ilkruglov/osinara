@@ -15,6 +15,7 @@ import { z } from "zod";
 import { AppError } from "../app-error.js";
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
 import { reminderRepository } from "../reminders/reminder-repository.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   requireAction,
   requiredString,
@@ -30,6 +31,7 @@ const TOP_LEVEL_FIELDS = ["action", "quietEnd", "quietStart", "timezone"] as con
 
 const nullableTimeSchema = z.union([z.string(), z.null()]).optional();
 const notificationSettingsSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS).describe("Обязательный action: get или set."),
   quietEnd: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),
   quietStart: nullableTimeSchema.describe("Обязательно для action=set: ЧЧ:ММ или null."),

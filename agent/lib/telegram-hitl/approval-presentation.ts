@@ -23,25 +23,7 @@ import {
   localizeTelegramInputRequest,
   type TelegramInputRequest,
 } from "../telegram-interface.js";
-
-function googleWorkspacePrompt(input: Record<string, unknown>): string {
-  const argv = input.argv;
-  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((item) => typeof item === "string")) {
-    throw new AppError(
-      "AGENT_APPROVAL_INPUT_INVALID",
-      "Не удалось показать параметры команды Google Workspace",
-    );
-  }
-  return [
-    "Подтверждение изменения в Google Workspace",
-    "",
-    "Точные аргументы команды:",
-    JSON.stringify(argv, null, 2),
-    "",
-    "После подтверждения команда будет выполнена один раз в текущем профиле.",
-    "При ошибке автоматического повтора не будет.",
-  ].join("\n");
-}
+import { buildApprovalMessage, googleWorkspaceFacts } from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
   findSchedule(auth: AgentScheduleAuthorization, id: string): Promise<AgentScheduleRecord | null>;
@@ -168,7 +150,16 @@ export function createTelegramApprovalPresenter(
       request.display === "confirmation" &&
       request.action.toolName === "execute_google_workspace"
     ) {
-      return { ...localized, prompt: googleWorkspacePrompt(request.action.input) };
+      return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: "изменение в Google Workspace",
+          consequence:
+            "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.",
+          facts: googleWorkspaceFacts(request.action.input),
+          reason: request.action.input.approvalReason,
+        }),
+      };
     }
     if (
       request.display !== "confirmation" ||

@@ -83,7 +83,13 @@ describe("Telegram approval presentation", () => {
       requestId: "request-gws",
     }, context());
 
-    expect(result.prompt).toContain(JSON.stringify(argv, null, 2));
+    // Каждый материальный аргумент по-прежнему виден, но читаемыми строками, а не дампом массива.
+    expect(result.prompt).toContain("Сервис: Gmail");
+    expect(result.prompt).toContain("to: family@example.com");
+    expect(result.prompt).toContain("subject: Семейный план");
+    expect(result.prompt).toContain("body: Встречаемся в 19:00");
+    expect(result.prompt).toContain(`Точная команда: ${argv.join(" ")}`);
+    expect(result.prompt).not.toContain(JSON.stringify(argv, null, 2));
     expect(result.prompt).toContain("будет выполнена один раз");
   });
 
@@ -114,7 +120,7 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).not.toContain(SCHEDULE_ID);
     expect(result.options?.map((option) => option.label)).toEqual([
       "Да, подтвердить",
-      "Нет, отклонить",
+      "Нет, отменить",
     ]);
   });
 

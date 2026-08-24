@@ -19,8 +19,10 @@ import {
 import { googleIntegrationRepository } from "../google-workspace/google-integration-repository.js";
 import { startGoogleWorkspaceAuthorization } from "../google-workspace/google-oauth-service.js";
 import { googleWorkspaceProfileStore } from "../google-workspace/google-workspace-profile-store.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 const connectionSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(["connect", "disconnect", "status"]),
 }).strict();
 

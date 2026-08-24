@@ -15,6 +15,7 @@ import { z } from "zod";
 import { requirePrivateTelegramOwner } from "../family-context.js";
 import { familyRepository } from "../family-repository.js";
 import { deliverFamilyInvitation } from "../telegram-delivery.js";
+import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   requireAction,
   requiredString,
@@ -33,6 +34,7 @@ const TOP_LEVEL_FIELDS = [
 ] as const;
 
 const manageFamilyInvitationSchema = z.object({
+  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS).describe("Обязательный action: create или approve."),
   candidateDisplayName: z.string().optional().describe("Обязательно только для action=approve."),
   candidateTelegramUserId: z.string().optional().describe("Обязательно только для action=approve."),
