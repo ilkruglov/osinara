@@ -19,7 +19,6 @@ import { memoryRepository } from "../memory-repository.js";
 import { MEMORY_UNDO_DENIED_MESSAGE } from "../memory-undo-repository.js";
 import { MEMORY_REF_PATTERN, toModelMemory } from "../model-memory.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
-import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   optionalEnum,
   requireAction,
@@ -36,7 +35,6 @@ const MEMORY_SENSITIVITIES = ["normal", "sensitive"] as const;
 const TOP_LEVEL_FIELDS = ["action", "content", "kind", "memoryRef", "sensitivity"] as const;
 
 const manageMemorySchema = z.object({
-  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS),
   content: z.string().optional(),
   kind: z.string().optional(),

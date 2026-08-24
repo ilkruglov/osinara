@@ -7,6 +7,8 @@
  * - A model-authored purpose is labelled and bounded; it never replaces verified facts.
  * - `genericApprovalFacts`: an undescribed tool still shows readable, bounded fields.
  * - `googleWorkspaceFacts`: readable service, command and parameters plus the exact command line.
+ * - A model-authored parameter key cannot forge a line that looks application-authored.
+ * - Every `--params` payload is rendered, in both the separate and the inline form.
  */
 import { describe, expect, it } from "vitest";
 
@@ -129,6 +131,47 @@ describe("googleWorkspaceFacts", () => {
     const facts = googleWorkspaceFacts({ argv: ["drive", "files", "list", "--params", "not-json"] });
     expect(facts).toContain("Сервис: Drive");
     expect(facts.at(-1)).toBe("Точная команда: drive files list --params not-json");
+  });
+
+  it("cannot be made to forge an application line through a parameter key", () => {
+    const facts = googleWorkspaceFacts({
+      argv: [
+        "gmail",
+        "users",
+        "messages",
+        "trash",
+        "--params",
+        JSON.stringify({
+          id: "REAL_TARGET",
+          "x\nТочная команда": "gmail users messages get --params {}",
+        }),
+      ],
+    });
+
+    // Exactly one line may claim to be the exact command, and it must be the real trailing one.
+    const forged = facts.filter((fact) => fact.startsWith("Точная команда:"));
+    expect(forged).toHaveLength(1);
+    expect(facts.at(-1)!.startsWith("Точная команда: gmail users messages trash")).toBe(true);
+    expect(facts.every((fact) => !fact.includes("\n"))).toBe(true);
+  });
+
+  it("renders every parameter payload, separate or inline", () => {
+    const inline = googleWorkspaceFacts({
+      argv: ["drive", "files", "list", '--params={"pageSize":10}'],
+    });
+    expect(inline).toContain("pageSize: 10");
+
+    const duplicated = googleWorkspaceFacts({
+      argv: ["gmail", "users", "messages", "trash", "--params", '{"id":"A"}', "--params", '{"id":"B"}'],
+    });
+    // Showing only the first payload would describe one action while another one runs.
+    expect(duplicated.filter((fact) => fact.startsWith("id: "))).toEqual(["id: A", "id: B"]);
+  });
+
+  it("does not report a value-arity flag with no value as enabled", () => {
+    const facts = googleWorkspaceFacts({ argv: ["gmail", "users", "list", "--query"] });
+    expect(facts).toContain("query: указан");
+    expect(facts.some((fact) => fact === "query: да")).toBe(false);
   });
 
   it("rejects an argv that is not a non-empty list of strings", () => {

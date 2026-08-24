@@ -13,7 +13,6 @@ import { z } from "zod";
 
 import { requireBehaviorPreferenceAuthorization } from "../behavior-preference-context.js";
 import { behaviorPreferenceRepository } from "../behavior-preference-repository.js";
-import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   CHAT_OPERATIONAL_PROMPT_MAX_CHARACTERS,
   requireChatOperationalPromptText,
@@ -29,7 +28,6 @@ const INPUT_ERROR_CODE = "AGENT_BEHAVIOR_PREFERENCE_INPUT_INVALID";
 const TOOL_ACTIONS = ["get", "append", "replace", "clear"] as const;
 
 const manageBehaviorPreferenceSchema = z.object({
-  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS),
   content: z.string().min(1).max(CHAT_OPERATIONAL_PROMPT_MAX_CHARACTERS).optional(),
   expectedRevision: z.number().int().min(0).optional(),

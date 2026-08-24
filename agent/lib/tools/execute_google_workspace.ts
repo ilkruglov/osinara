@@ -21,10 +21,8 @@ import {
 } from "../google-workspace/google-workspace-config.js";
 import { refreshGoogleAccessToken } from "../google-workspace/google-oauth-client.js";
 import { googleWorkspaceProfileStore } from "../google-workspace/google-workspace-profile-store.js";
-import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 const commandSchema = z.object({
-  approvalReason: approvalReasonSchema,
   argv: z.array(z.string().min(1).max(64 * 1024)).min(1).max(128).describe(
     "Точные аргументы gws без имени бинарника и shell quoting; API resource и method передаются отдельными элементами",
   ),

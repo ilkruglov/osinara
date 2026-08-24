@@ -18,7 +18,6 @@ import {
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
 import type { ReminderRecurrence, ReminderScope } from "../reminders/reminder-record.js";
 import { reminderRepository } from "../reminders/reminder-repository.js";
-import { approvalReasonSchema } from "../tool-approval-reason.js";
 import {
   optionalIsoDate,
   optionalString,
@@ -52,7 +51,6 @@ const recurrenceSchema = z.object({
 }).strict();
 
 const manageReminderSchema = z.object({
-  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS),
   content: z.string().optional(),
   firstRunAt: z.string().optional(),

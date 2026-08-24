@@ -157,7 +157,6 @@ export function createTelegramApprovalPresenter(
           consequence:
             "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.",
           facts: googleWorkspaceFacts(request.action.input),
-          reason: request.action.input.approvalReason,
         }),
       };
     }

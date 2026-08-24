@@ -22,7 +22,6 @@ import { requireAgentScheduleAuthorization } from "../agent-schedules/agent-sche
 import { agentScheduleRepository } from "../agent-schedules/agent-schedule-repository.js";
 import type { AgentScheduleInputRecurrence } from "../agent-schedules/agent-schedule-validation.js";
 import { AppError } from "../app-error.js";
-import { approvalReasonSchema } from "../tool-approval-reason.js";
 
 const TOOL_ACTIONS = ["create", "update", "pause", "resume", "run_now", "delete"] as const;
 const RECURRENCE_KINDS = ["once", "daily", "weekly"] as const;
@@ -62,7 +61,6 @@ const recurrenceSchema = z.discriminatedUnion("kind", [
 ]);
 
 const manageAgentScheduleSchema = z.object({
-  approvalReason: approvalReasonSchema,
   action: z.enum(TOOL_ACTIONS),
   firstRunAt: z.string().optional(),
   id: z.string().optional(),

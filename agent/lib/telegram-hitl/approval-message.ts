@@ -74,7 +74,9 @@ export function genericApprovalFacts(input: Record<string, unknown>): string[] {
   for (const [key, value] of Object.entries(input)) {
     if (facts.length === GENERIC_FACT_LIMIT) break;
     const readable = readableScalar(value);
-    if (readable !== null) facts.push(`${key}: ${readable}`);
+    // The key is model-authored too: unflattened, a newline inside it forges an application line.
+    const label = flatten(key);
+    if (readable !== null && label) facts.push(`${label}: ${readable}`);
   }
   return facts;
 }
@@ -99,29 +101,45 @@ function flagFacts(argv: readonly string[]): string[] {
   const facts: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index]!;
-    if (!item.startsWith("--") || item === "--params") continue;
+    if (!item.startsWith("--") || item === "--params" || item.startsWith("--params=")) continue;
     const value = argv[index + 1];
+    // A value-arity flag whose value is missing must not be reported as an enabled switch.
     const readable = value === undefined || value.startsWith("--")
-      ? "да"
+      ? "указан"
       : readableScalar(value);
-    if (readable !== null) facts.push(`${item.slice(2)}: ${readable}`);
+    if (readable !== null) facts.push(`${flatten(item.slice(2))}: ${readable}`);
   }
   return facts;
 }
 
-function decodedParameterFacts(argv: readonly string[]): string[] {
-  const index = argv.indexOf("--params");
-  const raw = index === -1 ? undefined : argv[index + 1];
-  if (raw === undefined) return [];
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(raw);
-  } catch {
-    // An undecodable payload is not an error here: the exact command below still shows it verbatim.
-    return [];
+/** Every `--params` payload, in both the separate and the inline `--params=` form. */
+function parameterPayloads(argv: readonly string[]): string[] {
+  const payloads: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index]!;
+    if (item === "--params") {
+      const value = argv[index + 1];
+      if (value !== undefined && !value.startsWith("--")) payloads.push(value);
+      continue;
+    }
+    if (item.startsWith("--params=")) payloads.push(item.slice("--params=".length));
   }
-  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return [];
-  return genericApprovalFacts(decoded as Record<string, unknown>);
+  return payloads;
+}
+
+function decodedParameterFacts(argv: readonly string[]): string[] {
+  // Every payload is rendered: showing only the first would describe one action while another runs.
+  return parameterPayloads(argv).flatMap((raw) => {
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(raw);
+    } catch {
+      // An undecodable payload is not an error: the exact command below still shows it verbatim.
+      return [];
+    }
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return [];
+    return genericApprovalFacts(decoded as Record<string, unknown>);
+  });
 }
 
 export function googleWorkspaceFacts(input: Record<string, unknown>): string[] {

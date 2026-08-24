@@ -93,15 +93,20 @@ export interface TelegramInputRequest {
   };
   allowFreeform?: boolean;
   display?: "confirmation" | "select" | "text";
+  /** Framework-owned source of the request. Only `tool-approval` is an application confirmation. */
+  kind?: "question" | "session-limit" | "tool-approval";
   options?: TelegramInputOption[];
   prompt: string;
   requestId: string;
 }
 
-const APPROVAL_OPTION_LABELS: Readonly<Record<string, string>> = {
+// Eve 0.32.0 emits `approve`/`cancel` for a tool approval and `continue`/`stop` for a session
+// limit. No path emits `deny`, so no branch for it is kept.
+const OPTION_LABELS: Readonly<Record<string, string>> = {
   approve: "Да, подтвердить",
   cancel: "Нет, отменить",
-  deny: "Нет, отменить",
+  continue: "Продолжить",
+  stop: "Остановить",
 };
 
 interface FailureData {
@@ -292,14 +297,18 @@ function publicFailureExplanation(data: FailureData): string | null {
 }
 
 export function localizeTelegramInputRequest<T extends TelegramInputRequest>(request: T): T {
-  if (request.display !== "confirmation") return request;
-
   // Option IDs remain unchanged because Eve resolves callbacks by ID, not visible text.
   const options = request.options?.map((option) => ({
     ...option,
-    // Eve 0.32/0.40 присылает `cancel`; ветка `deny` оставлена для обратной совместимости опций.
-    label: APPROVAL_OPTION_LABELS[option.id] ?? option.label,
+    label: OPTION_LABELS[option.id] ?? option.label,
   }));
+
+  // Only an application tool approval gets the composed confirmation. A framework request such as
+  // `session-limit` executes nothing, so its own prompt and consequence must not be rewritten.
+  if (request.display !== "confirmation" || request.kind !== "tool-approval") {
+    return options ? { ...request, options } : request;
+  }
+
   const actionLabel = approvalActionLabel(request.action.toolName, request.action.input);
   const reviewed = approvalParameterLines(request.action.toolName, request.action.input);
   return {
@@ -312,7 +321,6 @@ export function localizeTelegramInputRequest<T extends TelegramInputRequest>(req
       facts: reviewed.length || actionLabel !== null
         ? reviewed
         : genericApprovalFacts(request.action.input),
-      reason: request.action.input.approvalReason,
     }),
   };
 }

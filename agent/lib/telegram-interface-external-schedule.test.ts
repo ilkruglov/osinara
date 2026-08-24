@@ -34,6 +34,7 @@ function approval(action: "create" | "update") {
       toolName: "manage_external_group_schedule",
     },
     display: "confirmation" as const,
+      kind: "tool-approval" as const,
     options: [],
     prompt: "Approve tool call",
     requestId: `request-external-schedule-${action}`,

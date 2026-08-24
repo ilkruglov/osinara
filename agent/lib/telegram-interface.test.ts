@@ -25,9 +25,10 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [
         { id: "approve", label: "Yes", style: "primary" as const },
-        { id: "deny", label: "No", style: "default" as const },
+        { id: "cancel", label: "No", style: "default" as const },
       ],
       prompt: "Approve tool call: manage_telegram_group",
       requestId: "request-1",
@@ -38,7 +39,35 @@ describe("Telegram interface localization", () => {
     );
     expect(request.options).toEqual([
       { id: "approve", label: "Да, подтвердить", style: "primary" },
-      { id: "deny", label: "Нет, отменить", style: "default" },
+      { id: "cancel", label: "Нет, отменить", style: "default" },
+    ]);
+  });
+
+  it("leaves a framework session-limit request unrewritten but localizes its buttons", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-1",
+        input: { limit: 1_000_000, usedTokens: 1_000_123 },
+        kind: "tool-call" as const,
+        toolName: "session_limit_continuation",
+      },
+      display: "confirmation" as const,
+      kind: "session-limit" as const,
+      options: [
+        { id: "continue", label: "Approve" },
+        { id: "stop", label: "Stop" },
+      ],
+      prompt: "Session limit reached",
+      requestId: "request-limit",
+    });
+
+    // Nothing is executed by a budget prompt, so neither its text nor a consequence may be invented.
+    expect(request.prompt).toBe("Session limit reached");
+    expect(request.prompt).not.toContain("будет выполнено один раз");
+    expect(request.prompt).not.toContain("usedTokens");
+    expect(request.options).toEqual([
+      { id: "continue", label: "Продолжить" },
+      { id: "stop", label: "Остановить" },
     ]);
   });
 
@@ -46,9 +75,10 @@ describe("Telegram interface localization", () => {
     const request = localizeTelegramInputRequest({
       action: { callId: "call-1", input: {}, kind: "tool-call" as const, toolName: "future_tool" },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [
         { id: "approve", label: "Yes" },
-        { id: "deny", label: "No" },
+        { id: "cancel", label: "No" },
       ],
       prompt: "Approve tool call: future_tool",
       requestId: "request-1",
@@ -69,9 +99,10 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [
         { id: "approve", label: "Yes", style: "danger" as const },
-        { id: "deny", label: "No" },
+        { id: "cancel", label: "No" },
       ],
       prompt: "Approve tool call",
       requestId: "request-1",
@@ -97,6 +128,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_reminder",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-reminder-update",
@@ -125,6 +157,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_reminder",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-reminder-create",
@@ -155,6 +188,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-1",
@@ -184,6 +218,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-hostile-title",
@@ -207,6 +242,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-policy",
@@ -228,6 +264,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-skills",
@@ -256,6 +293,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_telegram_group",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-register-empty",
@@ -278,6 +316,7 @@ describe("Telegram interface localization", () => {
         toolName: "notification_settings",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-notifications",
@@ -302,6 +341,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_memory",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-memory-edit",
@@ -330,6 +370,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_agent_schedule",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-schedule-create",
@@ -364,6 +405,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_external_group_schedule",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-external-schedule-create",
@@ -387,6 +429,7 @@ describe("Telegram interface localization", () => {
         toolName: "manage_google_workspace_connection",
       },
       display: "confirmation" as const,
+      kind: "tool-approval" as const,
       options: [],
       prompt: "Approve tool call",
       requestId: "request-google",

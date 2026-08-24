@@ -12,7 +12,6 @@
  * - `modelFacingMemorySubjectSchema`: normalizes the active provider's serialized nested subject.
  */
 import { z } from "zod";
-import { approvalReasonSchema } from "./tool-approval-reason.js";
 
 import {
   THREAD_PURPOSE_MAX_CHARACTERS,
@@ -94,7 +93,6 @@ export const memoryThreadSchema = z.discriminatedUnion("action", [
 
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
   return z.object({
-    approvalReason: approvalReasonSchema,
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
