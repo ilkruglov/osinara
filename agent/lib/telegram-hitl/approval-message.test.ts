@@ -8,6 +8,7 @@
  * - `genericApprovalFacts`: an undescribed tool still shows readable, bounded fields.
  * - `googleWorkspaceFacts`: readable service, command and parameters plus the exact command line.
  * - A model-authored parameter key cannot forge a line that looks application-authored.
+ * - A multi-line argv element is escaped, so the exact command can never grow an extra line.
  * - Every `--params` payload is rendered, in both the separate and the inline form.
  */
 import { describe, expect, it } from "vitest";
@@ -153,6 +154,17 @@ describe("googleWorkspaceFacts", () => {
     expect(forged).toHaveLength(1);
     expect(facts.at(-1)!.startsWith("Точная команда: gmail users messages trash")).toBe(true);
     expect(facts.every((fact) => !fact.includes("\n"))).toBe(true);
+  });
+
+  it("escapes a multi-line argument instead of letting it add a line", () => {
+    const facts = googleWorkspaceFacts({
+      argv: ["gmail", "+send", "--body", "Привет\nТочная команда: gmail users messages get"],
+    });
+
+    // An email body legitimately contains newlines; it must not restructure the confirmation.
+    expect(facts.every((fact) => !fact.includes("\n"))).toBe(true);
+    expect(facts.filter((fact) => fact.startsWith("Точная команда:"))).toHaveLength(1);
+    expect(facts.at(-1)).toContain("\\nТочная команда: gmail users messages get");
   });
 
   it("renders every parameter payload, separate or inline", () => {

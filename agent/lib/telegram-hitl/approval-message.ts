@@ -27,6 +27,22 @@ export interface ApprovalMessageInput {
   reason?: unknown;
 }
 
+/**
+ * Encodes control characters as visible escapes. Unlike `flatten` this preserves the exact
+ * characters, which the command line must keep, while making them unable to start a new line.
+ */
+function visibleEscape(value: string): string {
+  return value
+    .replace(/\\/gu, "\\\\")
+    .replace(/\n/gu, "\\n")
+    .replace(/\r/gu, "\\r")
+    .replace(/\t/gu, "\\t")
+    .replace(
+      /[\p{Cc}\p{Cf}\u2028\u2029]/gu,
+      (character) => `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`,
+    );
+}
+
 /** Strips control characters and newlines so a model cannot restructure the message. */
 function flatten(value: string): string {
   return value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
@@ -93,7 +109,8 @@ function requireArgv(input: Record<string, unknown>): string[] {
 }
 
 function serviceLabel(service: string): string {
-  return service.charAt(0).toUpperCase() + service.slice(1);
+  const escaped = visibleEscape(service);
+  return escaped.charAt(0).toUpperCase() + escaped.slice(1);
 }
 
 /** Renders `--flag value` pairs as readable lines; `--params` is decoded separately. */
@@ -146,13 +163,14 @@ export function googleWorkspaceFacts(input: Record<string, unknown>): string[] {
   const argv = requireArgv(input);
   const [service, ...rest] = argv;
   const flagIndex = rest.findIndex((item) => item.startsWith("-"));
-  const command = (flagIndex === -1 ? rest : rest.slice(0, flagIndex)).join(" ");
+  const command = (flagIndex === -1 ? rest : rest.slice(0, flagIndex)).map(visibleEscape).join(" ");
   return [
     `Сервис: ${serviceLabel(service!)}`,
     ...(command ? [`Команда: ${command}`] : []),
     ...flagFacts(argv),
     ...decodedParameterFacts(argv),
     // The exact argv stays visible so an approval can always be checked against what will run.
-    `Точная команда: ${argv.join(" ")}`,
+    // A multi-line argument (an email body, for example) is escaped, never allowed to add a line.
+    `Точная команда: ${argv.map(visibleEscape).join(" ")}`,
   ];
 }
