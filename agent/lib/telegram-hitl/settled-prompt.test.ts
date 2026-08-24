@@ -4,12 +4,17 @@
  * Constructs covered:
  * - `settledPromptText`: removes the forward-looking consequence of every composed window.
  * - A prompt from an older release keeps its full text instead of losing its last block.
+ * - `boundSettledPrompt`: fits the Telegram limit without splitting a surrogate pair.
  */
 import { describe, expect, it } from "vitest";
 
-import { buildApprovalMessage, DEFAULT_CONSEQUENCE } from "./approval-message.js";
-import { GOOGLE_WORKSPACE_CONSEQUENCE } from "./approval-presentation.js";
-import { settledPromptText } from "./settled-prompt.js";
+import {
+  DEFAULT_CONSEQUENCE,
+  GOOGLE_WORKSPACE_CONSEQUENCE,
+  SCHEDULE_CONSEQUENCES,
+} from "./approval-consequences.js";
+import { buildApprovalMessage } from "./approval-message.js";
+import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
 
 describe("settledPromptText", () => {
   it("removes the default consequence once the request is settled", () => {
@@ -35,18 +40,56 @@ describe("settledPromptText", () => {
     );
   });
 
-  it("removes a schedule consequence", () => {
-    const prompt = buildApprovalMessage({
-      actionLabel: "приостановить агентное расписание",
-      consequence: "Будущие автоматические запуски остановятся до ручного возобновления.",
-      facts: ["Расписание: Утренние новости"],
-    });
-    expect(settledPromptText(prompt)).not.toContain("остановятся до ручного возобновления");
+  it.each(Object.entries(SCHEDULE_CONSEQUENCES))(
+    "removes the %s schedule consequence",
+    (_action, consequence) => {
+      const prompt = buildApprovalMessage({
+        actionLabel: "действие с расписанием",
+        consequence,
+        facts: ["Расписание: Утренние новости"],
+      });
+      expect(settledPromptText(prompt)).toBe(
+        "Подтверждение: действие с расписанием.\n\nРасписание: Утренние новости",
+      );
+    },
+  );
+
+  it("also settles a schedule prompt composed by the previous release", () => {
+    // Такое окно может висеть pending через этот деплой; без снятия оно противоречило бы решению.
+    const legacy = [
+      "Подтверждение действия",
+      "",
+      "Действие: Приостановить агентное расписание",
+      "Расписание: Утренние новости",
+      "",
+      `Что произойдёт: ${SCHEDULE_CONSEQUENCES.pause}`,
+    ].join("\n");
+
+    expect(settledPromptText(legacy)).toBe(
+      "Подтверждение действия\n\nДействие: Приостановить агентное расписание\nРасписание: Утренние новости",
+    );
   });
 
-  it("leaves a prompt composed by an older release intact", () => {
-    // Такие строки могут висеть pending через деплой; отрезать у них последний блок нельзя.
-    const legacy = "Подтвердите действие: удалить файл.\n\nПуть: notes/plan.md";
-    expect(settledPromptText(legacy)).toBe(legacy);
+  it("leaves a prompt with no known consequence intact", () => {
+    // Структурная обрезка последнего блока съела бы у такого промпта параметры.
+    const other = "Подтвердите действие: удалить файл.\n\nПуть: notes/plan.md";
+    expect(settledPromptText(other)).toBe(other);
+  });
+});
+
+describe("boundSettledPrompt", () => {
+  it("keeps a prompt that already fits", () => {
+    expect(boundSettledPrompt("короткий", 100)).toBe("короткий");
+  });
+
+  it("never splits a surrogate pair", () => {
+    const emoji = "🙂".repeat(50);
+    for (let limit = 2; limit <= emoji.length; limit += 1) {
+      const bounded = boundSettledPrompt(emoji, limit);
+      expect(bounded.length).toBeLessThanOrEqual(limit);
+      // Одиночный суррогат Telegram отвергнет, и решённое окно останется со старыми кнопками.
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u
+        .test(bounded)).toBe(false);
+    }
   });
 });

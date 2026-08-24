@@ -5,7 +5,6 @@
  * - `TelegramApprovalPresenter`: asynchronous trusted approval presentation contract.
  * - `createTelegramApprovalPresenter`: injectable presenter with schedule subject resolution.
  * - `presentTelegramApproval`: production presenter backed by PostgreSQL repositories.
- * - `GOOGLE_WORKSPACE_CONSEQUENCE`, `scheduleConsequences`: per-tool consequence wording.
  */
 import type { SessionContext } from "eve/context";
 
@@ -25,6 +24,10 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 import {
+  GOOGLE_WORKSPACE_CONSEQUENCE,
+  SCHEDULE_CONSEQUENCES,
+} from "./approval-consequences.js";
+import {
   approvalFact,
   buildApprovalMessage,
   googleWorkspaceFacts,
@@ -40,34 +43,25 @@ export type TelegramApprovalPresenter = (
   ctx: Pick<SessionContext, "session">,
 ) => Promise<TelegramInputRequest>;
 
-export const GOOGLE_WORKSPACE_CONSEQUENCE =
-  "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.";
-
-const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string; consequence: string }>> = {
+const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string }>> = {
   create: {
     action: "Создать агентное расписание",
-    consequence: "Будет создан новый автоматический запуск агента по указанному сценарию.",
-  },
+      },
   delete: {
     action: "Удалить агентное расписание",
-    consequence: "Расписание и все его будущие автоматические запуски будут удалены.",
-  },
+      },
   pause: {
     action: "Приостановить агентное расписание",
-    consequence: "Будущие автоматические запуски остановятся до ручного возобновления.",
-  },
+      },
   resume: {
     action: "Возобновить агентное расписание",
-    consequence: "Автоматические запуски возобновятся по сохранённому расписанию.",
-  },
+      },
   run_now: {
     action: "Запустить агентное расписание сейчас",
-    consequence: "Сценарий будет запущен один раз сейчас; обычное расписание не изменится.",
-  },
+      },
   update: {
     action: "Изменить агентное расписание",
-    consequence: "Сохранённые параметры расписания будут заменены указанными изменениями.",
-  },
+      },
 };
 
 function scheduleDate(schedule: AgentScheduleRecord): string {
@@ -131,7 +125,7 @@ function scheduleChanges(input: Record<string, unknown>): string[] {
 }
 
 function schedulePrompt(
-  action: { action: string; consequence: string },
+  actionName: string,
   schedule: AgentScheduleRecord,
   changes: readonly string[],
 ): string {
@@ -139,17 +133,21 @@ function schedulePrompt(
   // проходят ту же очистку, что и остальные факты, поэтому перенос строки в названии или сценарии
   // не может дорисовать строку, выглядящую как строка приложения.
   return buildApprovalMessage({
-    actionLabel: lowerFirst(action.action),
-    consequence: action.consequence,
+    actionLabel: lowerFirst(SCHEDULE_ACTIONS[actionName]!.action),
+    consequence: SCHEDULE_CONSEQUENCES[actionName]!,
     facts: [
       ...approvalFact("Расписание", schedule.title),
       ...approvalFact("Назначение", schedule.userRequest),
       ...approvalFact("Периодичность", describeRecurrence(schedule.recurrence)),
       ...approvalFact("Следующий запуск", `${scheduleDate(schedule)} (${schedule.timezone})`),
       ...approvalFact("Сценарий", schedule.scenarioPrompt),
-      // `scheduleChanges` уже формирует строки «Метка: значение», поэтому им нужна только очистка.
-      ...(changes.length === 0 ? [] : ["Изменения:", ...changes.map(sanitizeApprovalLine)]),
     ],
+    // Отдельным блоком: предлагаемые значения обязаны быть визуально отделены от текущих, иначе
+    // две строки «Сценарий:» — сохранённая и новая — читаются как одна.
+    // `scheduleChanges` уже формирует строки «Метка: значение», поэтому им нужна только очистка.
+    ...(changes.length === 0
+      ? {}
+      : { section: { lines: changes.map(sanitizeApprovalLine), title: "Изменения:" } }),
   });
 }
 
@@ -157,10 +155,6 @@ function lowerFirst(value: string): string {
   return value.charAt(0).toLowerCase() + value.slice(1);
 }
 
-/** Каждая формулировка последствия, которую снимает финализатор решённого запроса. */
-export function scheduleConsequences(): string[] {
-  return Object.values(SCHEDULE_ACTIONS).map((action) => action.consequence);
-}
 
 export function createTelegramApprovalPresenter(
   dependencies: ApprovalPresentationDependencies,
@@ -211,7 +205,7 @@ export function createTelegramApprovalPresenter(
     const changes = actionName === "update" ? scheduleChanges(request.action.input) : [];
     return {
       ...localized,
-      prompt: schedulePrompt(SCHEDULE_ACTIONS[actionName], schedule, changes),
+      prompt: schedulePrompt(actionName, schedule, changes),
     };
   };
 }

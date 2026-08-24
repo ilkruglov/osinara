@@ -164,6 +164,39 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).not.toContain("Подтверждение действия\n");
   });
 
+  it("sanitizes a proposed change that the model controls right now", async () => {
+    const findSchedule = vi.fn().mockResolvedValue(schedule);
+    const present = createTelegramApprovalPresenter({ findSchedule });
+
+    const result = await present({
+      action: {
+        callId: "call-change-forge",
+        input: {
+          action: "update",
+          id: SCHEDULE_ID,
+          scenarioPrompt: "Шаг A\nПериодичность: ежеминутно",
+        },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "cancel", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-change-forge",
+    }, context());
+
+    // Строки изменений приходят из живого input инструмента — самый подконтрольный модели путь.
+    const rows = result.prompt.split("\n");
+    expect(rows.filter((row) => row.startsWith("Периодичность:"))).toHaveLength(1);
+    expect(result.prompt).toContain("Сценарий: Шаг A Периодичность: ежеминутно");
+    // Предлагаемые значения отделены от текущих пустой строкой.
+    expect(result.prompt).toContain("\n\nИзменения:\n");
+  });
+
   it("sanitizes a schedule value that would otherwise forge a line", async () => {
     const findSchedule = vi.fn().mockResolvedValue({
       ...schedule,

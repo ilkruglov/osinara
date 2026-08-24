@@ -9,6 +9,7 @@
 import type { TelegramContext, TelegramCallbackQuery } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
+import { buildApprovalMessage } from "./approval-message.js";
 import { createTelegramHitlCallbackAuthorizer } from "./callback-authorization.js";
 
 function callbackQuery(): TelegramCallbackQuery {
@@ -141,5 +142,38 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
       reply_markup: { inline_keyboard: [] },
       text: expect.stringContaining("Отменено"),
     }));
+  });
+
+  it("does not keep promising an execution next to the cancellation", async () => {
+    // Сквозная проверка исправляемого бага: реальное собранное окно, а не строка без последствия.
+    const composed = buildApprovalMessage({
+      actionLabel: "удалить агентное расписание",
+      facts: ["Расписание: Утренний дайджест ИИ"],
+    });
+    expect(composed).toContain("будет выполнено один раз");
+
+    const authorize = createTelegramHitlCallbackAuthorizer({
+      claimCallback: vi.fn().mockResolvedValue({
+        auth: {
+          attributes: { applicationSessionId: "session-1", role: "member" },
+          authenticator: "telegram",
+          principalId: "user-1",
+          principalType: "user" as const,
+        },
+        continuationToken: "-1001:55:88:osinara:2",
+        promptText: composed,
+        selectedOptionId: "cancel",
+        selectedOptionLabel: "Нет, отменить",
+        status: "authorized",
+      }),
+    });
+    const { context, request } = telegramContext();
+
+    await authorize(context, callbackQuery(), "-1001:55:88");
+
+    const [, body] = request.mock.calls.find(([method]) => method === "editMessageText")!;
+    expect((body as { text: string }).text).not.toContain("будет выполнено один раз");
+    expect((body as { text: string }).text).toContain("Действие не будет выполнено.");
+    expect((body as { text: string }).text).toContain("Расписание: Утренний дайджест ИИ");
   });
 });

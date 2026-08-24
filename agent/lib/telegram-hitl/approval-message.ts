@@ -14,9 +14,8 @@
  *   to the one message the owner's authorization depends on.
  */
 import { AppError } from "../app-error.js";
+import { DEFAULT_CONSEQUENCE } from "./approval-consequences.js";
 
-export const DEFAULT_CONSEQUENCE =
-  "Действие будет выполнено один раз. Автоматического повтора при ошибке не будет.";
 const PURPOSE_MAX_CHARACTERS = 300;
 const GENERIC_FACT_LIMIT = 8;
 const GENERIC_VALUE_MAX_CHARACTERS = 180;
@@ -25,6 +24,8 @@ export interface ApprovalMessageInput {
   actionLabel: string | null;
   consequence?: string;
   facts: readonly string[];
+  /** Отдельный блок под фактами: отделяет предлагаемые значения от текущих. */
+  section?: { lines: readonly string[]; title: string };
   /** Model-authored purpose. Untrusted text: labelled, flattened and bounded before display. */
   reason?: unknown;
 }
@@ -69,6 +70,9 @@ export function buildApprovalMessage(input: ApprovalMessageInput): string {
   return [
     header,
     ...(input.facts.length ? [input.facts.join("\n")] : []),
+    ...(input.section && input.section.lines.length
+      ? [[input.section.title, ...input.section.lines].join("\n")]
+      : []),
     ...purposeLine(input.reason),
     input.consequence ?? DEFAULT_CONSEQUENCE,
   ].join("\n\n");
@@ -202,8 +206,11 @@ export function stripApprovalConsequence(
   consequences: Iterable<string>,
 ): string {
   for (const consequence of consequences) {
-    const suffix = `\n\n${consequence}`;
-    if (prompt.endsWith(suffix)) return prompt.slice(0, -suffix.length);
+    for (const suffix of [`\n\n${consequence}`, `\n\nЧто произойдёт: ${consequence}`]) {
+      // Вторая форма — окно расписания прошлого релиза: такие промпты могут висеть pending
+      // через этот деплой и без снятия продолжили бы противоречить решению.
+      if (prompt.endsWith(suffix)) return prompt.slice(0, -suffix.length);
+    }
   }
   return prompt;
 }

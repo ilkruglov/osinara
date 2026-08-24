@@ -17,7 +17,7 @@ import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
 } from "./approval-repository.js";
-import { settledPromptText } from "./settled-prompt.js";
+import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
 
 const CALLBACK_ERRORS = {
   expired:
@@ -41,9 +41,7 @@ function resolvedApprovalText(result: {
   // Решение уже принято: обещание будущего исполнения снимается, иначе текст противоречит сам себе.
   const settled = settledPromptText(result.promptText);
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
-  const prompt = settled.length <= promptLimit
-    ? settled
-    : `${settled.slice(0, promptLimit - 1).trimEnd()}…`;
+  const prompt = boundSettledPrompt(settled, promptLimit);
   return `${prompt}\n\n${resolution}`;
 }
 

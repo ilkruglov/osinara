@@ -12,7 +12,7 @@ import { callTelegramApi } from "eve/channels/telegram";
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import type { TimedOutApprovalClaim } from "./approval-timeout.js";
-import { settledPromptText } from "./settled-prompt.js";
+import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
 
 const TELEGRAM_MESSAGE_MAX_CHARACTERS = 4_096;
 const TIMEOUT_RESOLUTION = "Время на подтверждение истекло.\nДействие не выполнено.";
@@ -21,9 +21,7 @@ export function timedOutPromptText(promptText: string): string {
   // Запрос закрыт по времени: обещание будущего исполнения снимается вместе с ним.
   const settled = settledPromptText(promptText);
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - TIMEOUT_RESOLUTION.length - 2;
-  const prompt = settled.length <= promptLimit
-    ? settled
-    : `${settled.slice(0, promptLimit - 1).trimEnd()}…`;
+  const prompt = boundSettledPrompt(settled, promptLimit);
   return `${prompt}\n\n${TIMEOUT_RESOLUTION}`;
 }
 
