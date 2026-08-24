@@ -71,6 +71,7 @@ async function fixture(
   await sessionRepository.registerRouteAlias(session.id, "-1001:55:88");
   await telegramHitlApprovalRepository.register({
     applicationSessionId: session.id,
+    kind: "tool-approval" as const,
     callbackData: ["eve:0", "eve:1"],
     callbackOptions: [
       { callbackData: "eve:0", label: "Да, подтвердить", optionId: "approve" },
@@ -225,6 +226,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     await sessionRepository.registerRouteAlias(current.sessionId, "-1001:55:89");
     await telegramHitlApprovalRepository.register({
       applicationSessionId: current.sessionId,
+      kind: "tool-approval" as const,
       callbackData: ["eve:2", "eve:3"],
       callbackOptions: [
         {
@@ -271,6 +273,7 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     const current = await fixture();
     await telegramHitlApprovalRepository.register({
       applicationSessionId: current.sessionId,
+      kind: "tool-approval" as const,
       callbackData: ["eve:2"],
       callbackOptions: [
         {
