@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `APPROVAL_TIMEOUT_ROUTE`, `APPROVAL_TIMEOUT_TOKEN_HEADER`: internal route contract.
- * - `createApprovalTimeoutSweep`: dependency-injected trigger.
+ * - `createApprovalTimeoutSweep`: dependency-injected trigger; missing config is not swallowed.
  * - `sweepTimedOutApprovals`: production trigger for the in-process internal route.
  *
  * Key constructs:
@@ -43,11 +43,14 @@ export function createApprovalTimeoutSweep(dependencies: {
   token(): string;
 }) {
   return async function sweep(): Promise<void> {
+    // Required config fails fast: a missing internal token must surface, not silently disable
+    // the only mechanism that unfreezes a chat waiting on an unanswered confirmation.
+    const token = dependencies.token();
     try {
       const response = await dependencies.fetch(
         new URL(APPROVAL_TIMEOUT_ROUTE, AGENT_INTERNAL_SELF_BASE_URL),
         {
-          headers: { [APPROVAL_TIMEOUT_TOKEN_HEADER]: dependencies.token() },
+          headers: { [APPROVAL_TIMEOUT_TOKEN_HEADER]: token },
           method: "POST",
           redirect: "error",
           signal: AbortSignal.timeout(TELEGRAM_HITL_TIMEOUT_SWEEP_TIMEOUT_MS),

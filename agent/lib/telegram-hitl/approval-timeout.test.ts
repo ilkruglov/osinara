@@ -6,6 +6,7 @@
  * - The response carries revalidated Telegram auth, without which the resumed turn cannot deliver.
  * - Durable terminal state is written only after Eve accepts the synthetic cancellation.
  * - A failed Eve response releases the lease so the next sweep retries instead of freezing the chat.
+ * - Neither a failed settlement nor a failed lease release abandons the rest of the leased batch.
  * - A question is answered as "no answer", not as an option the user never saw.
  */
 import type { SessionAuthContext } from "eve/context";
@@ -182,6 +183,28 @@ describe("createApprovalTimeoutResolver", () => {
 
     expect(resolved).toBe(1);
     expect(reported.mock.calls[0]![0]).toContain("AGENT_APPROVAL_TIMEOUT_SETTLEMENT_FAILED");
+    reported.mockRestore();
+  });
+
+  it("keeps sweeping the batch when releasing a lease fails", async () => {
+    const { respond, values } = dependencies();
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
+    values.repository.claimExpired.mockResolvedValue([
+      claim({ id: "approval-1", requestId: "aitxt-1" }),
+      claim({ id: "approval-2", requestId: "aitxt-2" }),
+    ]);
+    respond
+      .mockRejectedValueOnce(new Error("first fails"))
+      .mockResolvedValue({ sessionId: "wrun_parked", status: "accepted" });
+    values.repository.failTimeout.mockRejectedValue(new Error("connection terminated"));
+
+    const resolved = await createApprovalTimeoutResolver(values as never)(NOW);
+
+    // The lease expires on its own; the remaining leased claims must still be processed.
+    expect(resolved).toBe(1);
+    expect(values.repository.completeTimeout).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls.some(([line]) =>
+      String(line).includes("AGENT_APPROVAL_TIMEOUT_LEASE_RELEASE_FAILED"))).toBe(true);
     reported.mockRestore();
   });
 
