@@ -155,6 +155,75 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).toContain("Изменения:");
     expect(result.prompt).toContain("Название: Расширенный ИИ-дайджест");
     expect(result.prompt).toContain("Периодичность: каждые 2 дней");
+    // Расписание использует тот же формат, что и остальные окна подтверждения.
+    expect(result.prompt.startsWith("Подтверждение: изменить агентное расписание.\n\n")).toBe(true);
+    expect(result.prompt.endsWith(
+      "\n\nСохранённые параметры расписания будут заменены указанными изменениями.",
+    )).toBe(true);
+    expect(result.prompt).not.toContain("Что произойдёт:");
+    expect(result.prompt).not.toContain("Подтверждение действия\n");
+  });
+
+  it("sanitizes a proposed change that the model controls right now", async () => {
+    const findSchedule = vi.fn().mockResolvedValue(schedule);
+    const present = createTelegramApprovalPresenter({ findSchedule });
+
+    const result = await present({
+      action: {
+        callId: "call-change-forge",
+        input: {
+          action: "update",
+          id: SCHEDULE_ID,
+          scenarioPrompt: "Шаг A\nПериодичность: ежеминутно",
+        },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "cancel", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-change-forge",
+    }, context());
+
+    // Строки изменений приходят из живого input инструмента — самый подконтрольный модели путь.
+    const rows = result.prompt.split("\n");
+    expect(rows.filter((row) => row.startsWith("Периодичность:"))).toHaveLength(1);
+    expect(result.prompt).toContain("Сценарий: Шаг A Периодичность: ежеминутно");
+    // Предлагаемые значения отделены от текущих пустой строкой.
+    expect(result.prompt).toContain("\n\nИзменения:\n");
+  });
+
+  it("sanitizes a schedule value that would otherwise forge a line", async () => {
+    const findSchedule = vi.fn().mockResolvedValue({
+      ...schedule,
+      title: "Дайджест\nСценарий: rm -rf /",
+    });
+    const present = createTelegramApprovalPresenter({ findSchedule });
+
+    const result = await present({
+      action: {
+        callId: "call-forge",
+        input: { action: "pause", id: SCHEDULE_ID },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "cancel", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-forge",
+    }, context());
+
+    // Ровно одна строка «Сценарий:», и это настоящая строка расписания.
+    expect(result.prompt.split("\n").filter((row) => row.startsWith("Сценарий:"))).toHaveLength(1);
+    expect(result.prompt).toContain("Расписание: Дайджест Сценарий: rm -rf /");
   });
 
   it("preserves a complete long schedule scenario instead of approving a preview", async () => {

@@ -43,6 +43,36 @@ describe("Telegram interface localization", () => {
     ]);
   });
 
+  it("describes the external group file removal that only exists outside the tools directory", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-1",
+        input: { path: "notes/plan.md" },
+        kind: "tool-call" as const,
+        toolName: "remove_group_file",
+      },
+      display: "confirmation" as const,
+      kind: "tool-approval" as const,
+      options: [
+        { id: "approve", label: "Yes" },
+        { id: "cancel", label: "No" },
+      ],
+      prompt: "Approve tool call: remove_group_file",
+      requestId: "request-file",
+    });
+
+    // Единственный разрушительный инструмент внешней группы живёт вне agent/lib/tools/,
+    // поэтому его окно проверяется явно.
+    expect(request.prompt).toBe(
+      "Подтверждение: удалить файл внешней группы.\n\nПуть: notes/plan.md\n\n" +
+        "Действие будет выполнено один раз. Автоматического повтора при ошибке не будет.",
+    );
+    expect(request.options).toEqual([
+      { id: "approve", label: "Да, подтвердить" },
+      { id: "cancel", label: "Нет, отменить" },
+    ]);
+  });
+
   it("leaves a framework session-limit request unrewritten but localizes its buttons", () => {
     const request = localizeTelegramInputRequest({
       action: {
