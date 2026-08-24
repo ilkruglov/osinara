@@ -5,6 +5,7 @@
  * - `TelegramApprovalPresenter`: asynchronous trusted approval presentation contract.
  * - `createTelegramApprovalPresenter`: injectable presenter with schedule subject resolution.
  * - `presentTelegramApproval`: production presenter backed by PostgreSQL repositories.
+ * - `GOOGLE_WORKSPACE_CONSEQUENCE`, `scheduleConsequences`: per-tool consequence wording.
  */
 import type { SessionContext } from "eve/context";
 
@@ -23,7 +24,12 @@ import {
   localizeTelegramInputRequest,
   type TelegramInputRequest,
 } from "../telegram-interface.js";
-import { buildApprovalMessage, googleWorkspaceFacts } from "./approval-message.js";
+import {
+  approvalFact,
+  buildApprovalMessage,
+  googleWorkspaceFacts,
+  sanitizeApprovalLine,
+} from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
   findSchedule(auth: AgentScheduleAuthorization, id: string): Promise<AgentScheduleRecord | null>;
@@ -33,6 +39,9 @@ export type TelegramApprovalPresenter = (
   request: TelegramInputRequest,
   ctx: Pick<SessionContext, "session">,
 ) => Promise<TelegramInputRequest>;
+
+export const GOOGLE_WORKSPACE_CONSEQUENCE =
+  "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.";
 
 const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string; consequence: string }>> = {
   create: {
@@ -126,19 +135,31 @@ function schedulePrompt(
   schedule: AgentScheduleRecord,
   changes: readonly string[],
 ): string {
-  return [
-    "Подтверждение действия",
-    "",
-    `Действие: ${action.action}`,
-    `Расписание: ${schedule.title}`,
-    `Назначение: ${schedule.userRequest}`,
-    `Периодичность: ${describeRecurrence(schedule.recurrence)}`,
-    `Следующий запуск: ${scheduleDate(schedule)} (${schedule.timezone})`,
-    `Сценарий: ${schedule.scenarioPrompt}`,
-    ...(changes.length === 0 ? [] : ["", "Изменения:", ...changes]),
-    "",
-    `Что произойдёт: ${action.consequence}`,
-  ].join("\n");
+  // Одна и та же структура во всех окнах: заголовок, факты, последствие. Значения расписания
+  // проходят ту же очистку, что и остальные факты, поэтому перенос строки в названии или сценарии
+  // не может дорисовать строку, выглядящую как строка приложения.
+  return buildApprovalMessage({
+    actionLabel: lowerFirst(action.action),
+    consequence: action.consequence,
+    facts: [
+      ...approvalFact("Расписание", schedule.title),
+      ...approvalFact("Назначение", schedule.userRequest),
+      ...approvalFact("Периодичность", describeRecurrence(schedule.recurrence)),
+      ...approvalFact("Следующий запуск", `${scheduleDate(schedule)} (${schedule.timezone})`),
+      ...approvalFact("Сценарий", schedule.scenarioPrompt),
+      // `scheduleChanges` уже формирует строки «Метка: значение», поэтому им нужна только очистка.
+      ...(changes.length === 0 ? [] : ["Изменения:", ...changes.map(sanitizeApprovalLine)]),
+    ],
+  });
+}
+
+function lowerFirst(value: string): string {
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+/** Каждая формулировка последствия, которую снимает финализатор решённого запроса. */
+export function scheduleConsequences(): string[] {
+  return Object.values(SCHEDULE_ACTIONS).map((action) => action.consequence);
 }
 
 export function createTelegramApprovalPresenter(
@@ -154,8 +175,7 @@ export function createTelegramApprovalPresenter(
         ...localized,
         prompt: buildApprovalMessage({
           actionLabel: "изменение в Google Workspace",
-          consequence:
-            "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.",
+          consequence: GOOGLE_WORKSPACE_CONSEQUENCE,
           facts: googleWorkspaceFacts(request.action.input),
         }),
       };

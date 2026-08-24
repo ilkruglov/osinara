@@ -17,6 +17,7 @@ import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
 } from "./approval-repository.js";
+import { settledPromptText } from "./settled-prompt.js";
 
 const CALLBACK_ERRORS = {
   expired:
@@ -37,10 +38,12 @@ function resolvedApprovalText(result: {
     : result.selectedOptionId === "cancel"
     ? "Решение: Отменено.\nДействие не будет выполнено."
     : `Выбран ответ: ${result.selectedOptionLabel}`;
+  // Решение уже принято: обещание будущего исполнения снимается, иначе текст противоречит сам себе.
+  const settled = settledPromptText(result.promptText);
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
-  const prompt = result.promptText.length <= promptLimit
-    ? result.promptText
-    : `${result.promptText.slice(0, promptLimit - 1).trimEnd()}…`;
+  const prompt = settled.length <= promptLimit
+    ? settled
+    : `${settled.slice(0, promptLimit - 1).trimEnd()}…`;
   return `${prompt}\n\n${resolution}`;
 }
 

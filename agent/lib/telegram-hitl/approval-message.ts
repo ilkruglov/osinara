@@ -4,6 +4,7 @@
  * Exports:
  * - `buildApprovalMessage`: fixed order of header, verified facts, agent purpose and consequence.
  * - `genericApprovalFacts`: bounded readable fields for a tool without a reviewed description.
+ * - `approvalFact`, `sanitizeApprovalLine`: sanitized application-derived lines, never shortened.
  * - `googleWorkspaceFacts`: decoded service, command, flags and parameters plus the exact command.
  *
  * Key constructs:
@@ -14,7 +15,8 @@
  */
 import { AppError } from "../app-error.js";
 
-const CONSEQUENCE = "Действие будет выполнено один раз. Автоматического повтора при ошибке не будет.";
+export const DEFAULT_CONSEQUENCE =
+  "Действие будет выполнено один раз. Автоматического повтора при ошибке не будет.";
 const PURPOSE_MAX_CHARACTERS = 300;
 const GENERIC_FACT_LIMIT = 8;
 const GENERIC_VALUE_MAX_CHARACTERS = 180;
@@ -68,7 +70,7 @@ export function buildApprovalMessage(input: ApprovalMessageInput): string {
     header,
     ...(input.facts.length ? [input.facts.join("\n")] : []),
     ...purposeLine(input.reason),
-    input.consequence ?? CONSEQUENCE,
+    input.consequence ?? DEFAULT_CONSEQUENCE,
   ].join("\n\n");
 }
 
@@ -81,6 +83,21 @@ function readableScalar(value: unknown): string | null {
   return text.length <= GENERIC_VALUE_MAX_CHARACTERS
     ? text
     : `${text.slice(0, GENERIC_VALUE_MAX_CHARACTERS - 1).trimEnd()}…`;
+}
+
+/**
+ * Один факт «метка: значение». Значение очищается, но НЕ сокращается: подтверждать нужно полный
+ * текст, а не превью — длинное сообщение разбивается на части при доставке.
+ */
+export function approvalFact(label: string, value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  const text = flatten(value);
+  return text ? [`${flatten(label)}: ${text}`] : [];
+}
+
+/** Очистка уже готовой строки «метка: значение», собранной вызывающим кодом. */
+export function sanitizeApprovalLine(line: string): string {
+  return flatten(line);
 }
 
 export function genericApprovalFacts(input: Record<string, unknown>): string[] {
@@ -173,4 +190,20 @@ export function googleWorkspaceFacts(input: Record<string, unknown>): string[] {
     // A multi-line argument (an email body, for example) is escaped, never allowed to add a line.
     `Точная команда: ${argv.map(visibleEscape).join(" ")}`,
   ];
+}
+
+/**
+ * Removes the trailing consequence once the request is settled: an approved, cancelled or expired
+ * prompt must not keep promising that the action "будет выполнено". Only an exact known sentence is
+ * removed, so a prompt composed by an older release is left untouched instead of being truncated.
+ */
+export function stripApprovalConsequence(
+  prompt: string,
+  consequences: Iterable<string>,
+): string {
+  for (const consequence of consequences) {
+    const suffix = `\n\n${consequence}`;
+    if (prompt.endsWith(suffix)) return prompt.slice(0, -suffix.length);
+  }
+  return prompt;
 }
