@@ -29,7 +29,7 @@ Osinara — приватный семейный Telegram-агент на TypeScr
 
 | Блок | Что умеет |
 | --- | --- |
-| Telegram | Durable webhook ingress, быстрый ACK Telegram, FIFO-drain по chat/topic, обычные и rich replies, HITL callbacks. |
+| Telegram | Durable webhook ingress, быстрый ACK Telegram, FIFO-drain по chat/topic, обычные и rich replies, HITL callbacks с ограниченным окном подтверждения. |
 | Семья и группы | Bootstrap владельца, приглашения, подтверждение участников, owner-only операции, семейные и внешние группы. |
 | Память | Root-agent source-backed writes, atomic memory threads, локальный hybrid retrieval, экспорт, HITL для sensitive data и отдельные scopes. |
 | Расписания | Напоминания и автономные agent schedules: личные и семейные сценарии, а также owner-approved отчёты во внешние группы с отдельной fresh session, минимальным capability allowlist и bounded snapshot истории. |
