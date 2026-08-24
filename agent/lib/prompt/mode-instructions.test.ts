@@ -318,3 +318,17 @@ describe("mode instruction determinism", () => {
     );
   });
 });
+
+describe("external memory deletion", () => {
+  it("tells the group that deletion is impossible there", () => {
+    const text = external("remember", "list_memories");
+    expect(text).toMatch(/можешь только запоминать/iu);
+    expect(text).toMatch(/удалять и править записи памяти здесь нельзя никому/iu);
+  });
+
+  it("does not offer a memory mutation tool in an external group", () => {
+    // Отказ держится не только формулировкой: инструмента правки там нет вовсе.
+    expect(external("remember", "list_memories")).not.toMatch(/manage_memory\b/u);
+  });
+});
+

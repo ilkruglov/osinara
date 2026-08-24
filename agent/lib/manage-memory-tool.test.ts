@@ -113,12 +113,13 @@ describe("manage_memory", () => {
     expect(canUndoMemory).not.toHaveBeenCalled();
   });
 
-  it.each(["edit", "delete"] as const)("shows private approval before %s", async (action) => {
+  it.each(["edit", "delete"] as const)("does not confirm %s with the user", async (action) => {
     const input = action === "edit"
       ? { action, content: "Исправлено", memoryRef: MEMORY_REF }
       : { action, memoryRef: MEMORY_REF };
 
-    await expect(approvalFor(input)).resolves.toBe("user-approval");
+    // Решение о фактах принимает агент; страховкой служит мягкое удаление, а не окно подтверждения.
+    await expect(approvalFor(input)).resolves.toBe("not-applicable");
   });
 
   it("allows undo without HITL only when repository proves immediate provenance", async () => {

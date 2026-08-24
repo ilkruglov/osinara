@@ -55,6 +55,12 @@ Long-term memory является application concern, а не заменой Ev
 коммитит claim, evidence, Eve provenance и optional thread entry одной транзакцией. Subagent не
 получает `remember`. Background semantic extraction, relation/thread classifiers и LLM briefs удалены;
 retrieval и thread activation используют только локальный E5 и scoped SQL.
+Работа с фактами подтверждений не запрашивает: решение принимает агент. Страховкой служит мягкое
+удаление — строка получает `deleted_at`, помечается отозванным заявлением и исчезает из всех чтений
+и из векторной выдачи, потому что `memory_items` является представлением над `memory_items_all`.
+Физически строка убирается ретенцией по истечении окна восстановления. Во внешней группе правка и
+удаление памяти недоступны вовсе: инструмент мутации туда не выдаётся, а промпт прямо говорит, что
+удалять нельзя никому.
 
 ## Как проходит Telegram update
 

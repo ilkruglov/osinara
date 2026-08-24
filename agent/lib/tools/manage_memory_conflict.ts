@@ -28,7 +28,6 @@ function invalidInput(): AppError {
 }
 
 export default defineTool({
-  approval: () => "user-approval",
   description: [
     "Разрешить показанный конфликт памяти только по явному решению пользователя.",
     "choose требует conflictRef и memoryRef выбранной версии; keep_both сохраняет обе версии;",

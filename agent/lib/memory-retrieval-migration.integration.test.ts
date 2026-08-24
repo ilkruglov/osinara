@@ -24,13 +24,13 @@ describeWithDatabase("050 Russian memory retrieval migration", () => {
       `SELECT is_generated, generation_expression
          FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND table_name = 'memory_items'
+          AND table_name = 'memory_items_all'
           AND column_name = 'russian_search_vector'`,
     );
     const indexes = await database().query<{ indexdef: string; indexname: string }>(
       `SELECT indexdef, indexname
          FROM pg_indexes
-        WHERE schemaname = 'public' AND tablename = 'memory_items'`,
+        WHERE schemaname = 'public' AND tablename = 'memory_items_all'`,
     );
 
     expect(column.rows[0]).toEqual({

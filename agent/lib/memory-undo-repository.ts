@@ -205,7 +205,15 @@ export const memoryUndoRepository = {
                  jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
         [auth.familyId, auth.userId, id, memory.scope, memory.kind],
       );
-      await client.query("DELETE FROM memory_items WHERE id = $1", [id]);
+      // Отмена создания тоже мягкая: единый путь означает, что ни одна операция памяти не уносит
+      // данные безвозвратно, а ретенция вычищает мягко удалённое позже.
+      await client.query(
+        `UPDATE memory_items_all
+            SET deleted_at = now(), claim_status = 'retracted'
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [id],
+      );
+      await client.query("DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1", [id]);
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {

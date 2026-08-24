@@ -20,7 +20,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
 describeWithDatabase("memory conflict repository", () => {
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE claim_conflicts, memory_items, family_memberships, users, families CASCADE`,
+      `TRUNCATE claim_conflicts, memory_items_all, family_memberships, users, families CASCADE`,
     );
   });
 

@@ -41,7 +41,7 @@ const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
 describeWithDatabase("memoryRepository", () => {
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE memory_embedding_jobs, behavior_preferences, memory_items, audit_events,
+      `TRUNCATE memory_embedding_jobs, behavior_preferences, memory_items_all, audit_events,
          telegram_groups, family_memberships, users, families CASCADE`,
     );
   });
@@ -420,7 +420,7 @@ describeWithDatabase("memoryRepository", () => {
     ).rejects.toThrowError(/AGENT_MEMORY_QUOTA_EXCEEDED/);
   });
 
-  it("physically removes the memory, embedding job, and searchable content while retaining safe audit metadata", async () => {
+  it("hides the memory and drops its embedding job while keeping it recoverable", async () => {
     const family = await createFamily("delete");
     const record = await memoryRepository.create(
       family.owner,
@@ -443,8 +443,15 @@ describeWithDatabase("memoryRepository", () => {
       [record.id],
     );
 
+    const retained = await database().query(
+      "SELECT deleted_at FROM memory_items_all WHERE id = $1",
+      [record.id],
+    );
+
     expect(persisted.rowCount).toBe(0);
     expect(jobs.rowCount).toBe(0);
+    // Удаление мягкое: строка остаётся восстановимой до истечения окна ретенции.
+    expect(retained.rowCount).toBe(1);
     expect(audit.rows[0]?.metadata).not.toHaveProperty("content");
   });
 });

@@ -16,20 +16,11 @@ import { toModelMemory } from "../model-memory.js";
 import { rememberInputSchema, type RememberInput } from "../remember-contract.js";
 
 export default defineTool({
-  approval: ({ session, toolInput }) => {
-    // Sensitive data and disclosure from a private chat into family memory require explicit consent.
-    const input = toolInput as RememberInput | undefined;
-    const privateFamilyWrite =
-      input?.scope === "family" && session.auth.current?.attributes.telegramChatType === "private";
-    return input?.sensitivity === "sensitive" || privateFamilyWrite
-      ? "user-approval"
-      : "not-applicable";
-  },
   description: [
     "Сохранить одну устойчивую запись, которую ты сама определила только из проверенного сообщения текущего хода; не сохраняй предположения и одноразовые запросы.",
     "Обычный payload: {\"basis\":\"user_requested\",\"content\":\"...\",\"kind\":\"fact\",\"scope\":\"personal\",\"sensitivity\":\"normal\",\"subject\":{\"kind\":\"current_author\"}}.",
     "В группе sourceSequence выбирает ровно одно сообщение видимой дельты. Для существующей нити используй thread.action=attach и threadRef только из list/search/read_memory_thread; thread.action=create создаёт нить атомарно.",
-    "Sensitive и запись из private в family автоматически требуют Eve HITL. Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
+    "Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
   ].join(" "),
   inputSchema: rememberInputSchema,
   async execute(input, ctx) {

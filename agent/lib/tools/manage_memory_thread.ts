@@ -39,13 +39,12 @@ function verifiedTurn(ctx: Parameters<typeof requireMemoryAuthorization>[0]) {
 }
 
 export default defineTool({
-  approval: () => "user-approval",
   description: [
     "Явно завершить или реактивировать нить памяти.",
     "complete разрешён только после проверенного текущего заявления пользователя, confirmed outcome или formal goal condition и требует sourceEntryRefs из read_memory_thread.",
     "reactivate используй только когда пользователь прямо просит продолжить именно завершённую нить; новая цель обычно создаёт новый subthread.",
     "Payload reactivate: {\"action\":\"reactivate\",\"threadRef\":\"thread_...\"}. Payload complete с текущим заявлением: {\"action\":\"complete\",\"authority\":\"current_user_statement\",\"sourceEntryRefs\":[\"entry_...\"],\"threadRef\":\"thread_...\"}.",
-    "Обе операции требуют Eve HITL. Результат возвращает актуальное состояние нити; NOT_FOUND требует заново получить threadRef.",
+    "Результат возвращает актуальное состояние нити; NOT_FOUND требует заново получить threadRef.",
   ].join(" "),
   inputSchema,
   async execute(input, ctx) {
