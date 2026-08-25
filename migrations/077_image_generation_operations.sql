@@ -1,6 +1,7 @@
 CREATE TABLE image_generation_operations (
   operation_key text PRIMARY KEY CHECK (char_length(operation_key) BETWEEN 1 AND 512),
-  workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  -- Historical idempotency state must outlive deletion of the workspace and its files.
+  workspace_id uuid NOT NULL,
   input_hash text NOT NULL CHECK (input_hash ~ '^[0-9a-f]{64}$'),
   output_path text NOT NULL CHECK (char_length(output_path) BETWEEN 1 AND 512),
   status text NOT NULL DEFAULT 'started'

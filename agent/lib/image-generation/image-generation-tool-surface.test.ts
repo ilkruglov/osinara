@@ -7,6 +7,7 @@
  * - External execution rechecks the live owner-managed capability before provider access.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const loadCurrentExternalGroupCapabilities = vi.hoisted(() => vi.fn());
 const authorizeCurrentExternalGroupCapability = vi.hoisted(() => vi.fn());
@@ -93,5 +94,23 @@ describe("image generation tool surface", () => {
     await expect(surface.generate_image!.execute({}, context))
       .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
     expect(surface.generate_image!.description).not.toMatch(/[—–«»]/u);
+  });
+
+  it("does not expose workspace scope as model input", () => {
+    const tool = buildModeToolSurface({
+      capabilities: new Set(["generate_image"]),
+      environment: "external",
+      skills: {},
+    }).generate_image!;
+    const schema = tool.inputSchema as z.ZodType;
+    const input = {
+      background: "auto",
+      prompt: "A clean editorial illustration",
+      quality: "auto",
+      size: "auto",
+    };
+
+    expect(schema.safeParse(input).success).toBe(true);
+    expect(schema.safeParse({ ...input, scope: "group" }).success).toBe(false);
   });
 });

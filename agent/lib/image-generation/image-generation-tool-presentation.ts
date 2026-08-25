@@ -27,7 +27,6 @@ export const EXTERNAL_IMAGE_GENERATION_TOOL_PRESENTATION: Pick<
     caption: z.string().min(1).max(TELEGRAM_CAPTION_MAX_LENGTH).optional(),
     prompt: z.string().min(1).max(IMAGE_PROMPT_MAX_LENGTH),
     quality: z.enum(["low", "medium", "high", "auto"]),
-    scope: z.literal("group"),
     size: z.enum(["1024x1024", "1536x1024", "1024x1536", "auto"]),
   }).strict(),
 };

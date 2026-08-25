@@ -5,6 +5,7 @@
  * - One operation key reserves exactly one billable generation attempt.
  * - Completed results replay without another provider call.
  * - Input drift and ambiguous outcomes fail closed.
+ * - Workspace deletion keeps the billing ledger tombstone.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -107,5 +108,28 @@ describeWithDatabase("image generation operation repository", () => {
       errorCode: "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
       state: "ambiguous",
     });
+  });
+
+  it("keeps a terminal operation after its workspace is deleted", async () => {
+    const workspaceId = await workspace();
+    const input = {
+      inputHash: "e".repeat(64),
+      operationKey: "image-call-retired-workspace",
+      outputPath: FILE.path,
+      workspaceId,
+    };
+    await imageGenerationOperationRepository.begin(input);
+    await imageGenerationOperationRepository.markAmbiguous(
+      input.operationKey,
+      "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
+    );
+
+    await database().query("DELETE FROM workspaces WHERE id = $1", [workspaceId]);
+
+    const ledger = await database().query(
+      "SELECT 1 FROM image_generation_operations WHERE operation_key = $1",
+      [input.operationKey],
+    );
+    expect(ledger.rowCount).toBe(1);
   });
 });

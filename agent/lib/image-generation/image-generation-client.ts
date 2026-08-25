@@ -175,14 +175,20 @@ function parseGeneratedImage(source: string): GeneratedImage {
 }
 
 export function createImageGenerationClient(options: ImageGenerationClientOptions) {
+  function assertConfigured(): void {
+    if (!options.apiKey || /\s/u.test(options.apiKey)) {
+      throw new AppError(
+        "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+        "Не настроен доступ к сервису генерации изображений",
+      );
+    }
+    generationUrl(options.baseUrl);
+  }
+
   return {
+    assertConfigured,
     async generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
-      if (!options.apiKey || /\s/u.test(options.apiKey)) {
-        throw new AppError(
-          "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
-          "Не настроен доступ к сервису генерации изображений",
-        );
-      }
+      assertConfigured();
       const url = generationUrl(options.baseUrl);
       let response: Response;
       try {
@@ -268,6 +274,9 @@ function productionClient(): ReturnType<typeof createImageGenerationClient> {
 }
 
 export const imageGenerationClient = {
+  assertConfigured(): void {
+    productionClient().assertConfigured();
+  },
   generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
     return productionClient().generate(input);
   },

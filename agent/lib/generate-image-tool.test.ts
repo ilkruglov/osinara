@@ -36,7 +36,6 @@ const INPUT = {
   caption: "Готовая иллюстрация",
   prompt: "A clean editorial illustration of a shared calendar",
   quality: "high" as const,
-  scope: "group" as const,
   size: "1536x1024" as const,
 };
 
@@ -69,6 +68,7 @@ function context(): ToolContext {
 function dependencies() {
   return {
     client: {
+      assertConfigured: vi.fn(),
       generate: vi.fn().mockResolvedValue({
         bytes: Buffer.from("generated"),
         mediaType: "image/webp",
@@ -109,6 +109,32 @@ function dependencies() {
 }
 
 describe("generate_image", () => {
+  it("rejects a model-supplied workspace scope", async () => {
+    const deps = dependencies();
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute({ ...INPUT, scope: "personal" }, context()))
+      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_INPUT_INVALID/u);
+    expect(deps.workspaces.workspaceId).not.toHaveBeenCalled();
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+  });
+
+  it("validates provider configuration before reserving an operation", async () => {
+    const deps = dependencies();
+    deps.client.assertConfigured.mockImplementation(() => {
+      throw new AppError(
+        "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+        "Не настроен доступ к сервису генерации изображений",
+      );
+    });
+    const tool = createGenerateImageTool(deps as never);
+
+    await expect(tool.execute(INPUT, context()))
+      .rejects.toThrowError(/AGENT_IMAGE_GENERATION_CONFIG_INVALID/u);
+    expect(deps.workspaces.workspaceId).not.toHaveBeenCalled();
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+  });
+
   it("generates, stores, and delivers one authorized image", async () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);

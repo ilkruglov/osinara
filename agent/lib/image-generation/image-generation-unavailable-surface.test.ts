@@ -161,7 +161,7 @@ describe("unavailable subscription image generation", () => {
     const begin = vi.fn();
     const generate = vi.fn();
     const tool = createGenerateImageTool({
-      client: { generate },
+      client: { assertConfigured: vi.fn(), generate },
       deliver: vi.fn(),
       operations: {
         begin,
@@ -180,7 +180,6 @@ describe("unavailable subscription image generation", () => {
       background: "auto",
       prompt: "A clean editorial illustration",
       quality: "auto",
-      scope: "group",
       size: "auto",
     }, externalContext())).rejects.toThrowError(/AGENT_IMAGE_GENERATION_UNAVAILABLE/u);
     expect(begin).not.toHaveBeenCalled();

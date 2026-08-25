@@ -34,12 +34,15 @@ import sendWorkspaceFile from "./send_workspace_file.js";
 type AnyToolDefinition = ToolDefinition<any, any>;
 
 interface GenerateImageDependencies {
-  client: { generate(input: ImageGenerationRequest): Promise<{
-    bytes: Buffer;
-    mediaType: "image/webp";
-    model: "gpt-image-2";
-    revisedPrompt?: string;
-  }> };
+  client: {
+    assertConfigured(): void;
+    generate(input: ImageGenerationRequest): Promise<{
+      bytes: Buffer;
+      mediaType: "image/webp";
+      model: "gpt-image-2";
+      revisedPrompt?: string;
+    }>;
+  };
   deliver(input: {
     caption?: string;
     path: string;
@@ -87,8 +90,6 @@ const inputSchema = z.object({
   prompt: z.string().min(1).max(IMAGE_PROMPT_MAX_LENGTH)
     .describe("Полная визуальная спецификация изображения без служебных инструкций"),
   quality: z.enum(IMAGE_QUALITIES).describe("low, medium, high или auto"),
-  scope: z.enum(["personal", "family", "group"])
-    .describe("Workspace текущего доверенного контекста"),
   size: z.enum(IMAGE_SIZES).describe("1024x1024, 1536x1024, 1024x1536 или auto"),
 }).strict();
 
@@ -110,14 +111,26 @@ function outputPath(operationKey: string): string {
   return `generated-images/image-${digest}.webp`;
 }
 
-function inputHash(input: GenerateImageInput): string {
+function inputHash(input: GenerateImageInput, scope: WorkspaceScope): string {
   return createHash("sha256").update(JSON.stringify({
     background: input.background,
     prompt: input.prompt,
     quality: input.quality,
-    scope: input.scope,
+    scope,
     size: input.size,
   }), "utf8").digest("hex");
+}
+
+function currentWorkspaceScope(auth: WorkspaceAuthorization): WorkspaceScope {
+  if (auth.telegramChatType === "private" && auth.userId !== null) return "personal";
+  if (auth.telegramChatType !== "private" && auth.groupId !== null) {
+    if (auth.groupType === "family_private") return "family";
+    if (auth.groupType === "external") return "group";
+  }
+  throw new AppError(
+    "AGENT_WORKSPACE_CONTEXT_INVALID",
+    "Не удалось определить область для сохранения изображения",
+  );
 }
 
 function assertOutputMatches(
@@ -179,18 +192,18 @@ async function settleProviderFailure(
 async function recoverStartedOperation(
   dependencies: GenerateImageDependencies,
   auth: WorkspaceAuthorization,
-  input: GenerateImageInput,
+  scope: WorkspaceScope,
   operationKey: string,
   expectedPath: string,
 ): Promise<WorkspaceFileRecord> {
-  const replay = await dependencies.workspaces.findBinaryWrite(auth, input.scope, operationKey);
+  const replay = await dependencies.workspaces.findBinaryWrite(auth, scope, operationKey);
   if (!replay) {
     throw new AppError(
       "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
       "Не удалось подтвердить прошлую генерацию. Не повторяйте её без нового запроса",
     );
   }
-  assertOutputMatches(replay, input.scope, expectedPath);
+  assertOutputMatches(replay, scope, expectedPath);
   await dependencies.operations.complete(operationKey, replay);
   return replay;
 }
@@ -200,7 +213,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
     description: [
       "Когда использовать: создать одно новое raster-изображение через GPT-Image-2 и сразу отправить его в текущий Telegram-чат.",
       "Не использовать: для SVG, диаграмм из кода, редактирования существующего файла или незапрошенной фоновой генерации.",
-      "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты; scope берётся только из текущего контекста. Если размер или качество не заданы пользователем, передай auto.",
+      "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер или качество не заданы пользователем, передай auto.",
       "Результат: изображение сохраняется без перезаписи в generated-images и доставляется как photo; returned path можно использовать в следующих запросах.",
       "Ошибка: status unknown означает возможное списание лимита подписки; не повторяй вызов автоматически.",
     ].join(" "),
@@ -217,10 +230,12 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       }
       const input = parseInput(rawInput);
       const auth = requireWorkspaceAuthorization(ctx);
-      const workspaceId = await dependencies.workspaces.workspaceId(auth, input.scope);
+      const scope = currentWorkspaceScope(auth);
+      dependencies.client.assertConfigured();
+      const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
       const path = outputPath(ctx.callId);
       const reservation = await dependencies.operations.begin({
-        inputHash: inputHash(input),
+        inputHash: inputHash(input, scope),
         operationKey: ctx.callId,
         outputPath: path,
         workspaceId,
@@ -231,9 +246,9 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       let revisedPrompt: string | undefined;
       if (reservation.state === "completed") {
         file = reservation.file;
-        assertOutputMatches(file, input.scope, path);
+        assertOutputMatches(file, scope, path);
       } else if (reservation.state === "started") {
-        file = await recoverStartedOperation(dependencies, auth, input, ctx.callId, path);
+        file = await recoverStartedOperation(dependencies, auth, scope, ctx.callId, path);
       } else if (reservation.state === "failed" || reservation.state === "ambiguous") {
         throw terminalReservationError(reservation);
       } else {
@@ -249,7 +264,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
             mediaType: generatedImage.mediaType,
             operationKey: ctx.callId,
             path,
-            scope: input.scope,
+            scope,
           });
         } catch (error) {
           console.error(JSON.stringify({
@@ -296,7 +311,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
         ...(input.caption === undefined ? {} : { caption: input.caption }),
         path: file.path,
         presentation: "photo",
-        scope: input.scope,
+        scope,
       }, ctx) as Record<string, unknown>;
       return {
         ...delivery,
