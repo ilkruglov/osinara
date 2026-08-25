@@ -32,5 +32,13 @@ export async function purgeSoftDeletedMemory(now: Date): Promise<number> {
       WHERE item.id = expired.id`,
     [now, MEMORY_SOFT_DELETE_RETENTION_DAYS, MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE],
   );
-  return result.rowCount ?? 0;
+  const deletedCount = result.rowCount ?? 0;
+  if (deletedCount > 0) {
+    console.info(JSON.stringify({
+      code: "AGENT_MEMORY_PURGE_COMPLETED",
+      deletedCount,
+      batchLimitReached: deletedCount === MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE,
+    }));
+  }
+  return deletedCount;
 }

@@ -7,7 +7,7 @@
  * - `purgeSoftDeletedMemory`: физически убирает только строки старше окна.
  * - Представление не отстаёт от базовой таблицы по набору колонок.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MEMORY_SOFT_DELETE_RETENTION_DAYS } from "../config.js";
 import { closeDatabase, database } from "./database.js";
@@ -48,6 +48,7 @@ describeWithDatabase("soft-deleted memory", () => {
       "TRUNCATE memory_items_all, families CASCADE",
     );
   });
+  afterEach(() => vi.restoreAllMocks());
   afterAll(async () => closeDatabase());
 
   it("keeps the view in step with the base table", async () => {
@@ -110,6 +111,7 @@ describeWithDatabase("soft-deleted memory", () => {
   });
 
   it("purges only what has outlived the recovery window", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const fresh = await insertFact("свежее удаление");
     const old = await insertFact("старое удаление");
     const beyond = new Date(
@@ -119,7 +121,11 @@ describeWithDatabase("soft-deleted memory", () => {
     await softDelete(old, beyond);
 
     await expect(purgeSoftDeletedMemory(NOW)).resolves.toBe(1);
-
+    expect(info).toHaveBeenCalledWith(JSON.stringify({
+      code: "AGENT_MEMORY_PURGE_COMPLETED",
+      deletedCount: 1,
+      batchLimitReached: false,
+    }));
     const remaining = await database().query<{ id: string }>("SELECT id FROM memory_items_all");
     expect(remaining.rows.map((row) => row.id)).toEqual([fresh]);
   });
