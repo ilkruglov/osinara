@@ -166,10 +166,10 @@ async function createInitialSession(
 async function canonicalReplacementSeed(
   client: PoolClient,
   input: PrepareSessionInput,
-): Promise<{ generation: number; threadId: string } | null> {
+): Promise<{ threadId: string } | null> {
   if (input.kind !== "canonical" || input.groupId === null) return null;
-  const result = await client.query<{ generation: number; thread_id: string }>(
-    `SELECT generation, thread_id
+  const result = await client.query<{ thread_id: string }>(
+    `SELECT thread_id
        FROM conversation_sessions
       WHERE group_id = $1
         AND telegram_forum_topic_id IS NOT DISTINCT FROM $2
@@ -179,7 +179,26 @@ async function canonicalReplacementSeed(
     [input.groupId, input.telegramForumTopicId],
   );
   const row = result.rows[0];
-  return row ? { generation: row.generation + 1, threadId: row.thread_id } : null;
+  return row ? { threadId: row.thread_id } : null;
+}
+
+async function nextThreadGeneration(client: PoolClient, threadId: string): Promise<number> {
+  // Lifecycle selection may intentionally prefer an older active task, but generation remains
+  // monotonic across the complete thread history, including retired rows.
+  const result = await client.query<{ next_generation: number | null }>(
+    `SELECT max(generation) + 1 AS next_generation
+       FROM conversation_sessions
+      WHERE thread_id = $1`,
+    [threadId],
+  );
+  const generation = result.rows[0]?.next_generation;
+  if (generation === null || generation === undefined) {
+    throw new AppError(
+      "AGENT_SESSION_GENERATION_INVALID",
+      "Не удалось определить следующую версию контекста",
+    );
+  }
+  return generation;
 }
 
 async function initialGeneration(client: PoolClient, baseToken: string): Promise<number> {
@@ -204,7 +223,7 @@ async function rotateSession(
     [current.id, input.now, deleteAfter],
   );
 
-  const generation = current.generation + 1;
+  const generation = await nextThreadGeneration(client, current.thread_id);
   const continuationToken = continuationTokenForGeneration(input.baseContinuationToken, generation);
   const result = await client.query<SessionRow>(
     `INSERT INTO conversation_sessions
@@ -277,8 +296,9 @@ export const sessionRepository = {
           );
         }
         const replacement = await canonicalReplacementSeed(client, input);
-        const generation = replacement?.generation ??
-          await initialGeneration(client, input.baseContinuationToken);
+        const generation = replacement
+          ? await nextThreadGeneration(client, replacement.threadId)
+          : await initialGeneration(client, input.baseContinuationToken);
         current = await createInitialSession(client, input, generation, replacement?.threadId);
         if (replacement) {
           await client.query(
@@ -293,7 +313,11 @@ export const sessionRepository = {
       }
       if (current.retired_at !== null) {
         trustZoneRecreated = true;
-        current = await createInitialSession(client, input, current.generation + 1);
+        current = await createInitialSession(
+          client,
+          input,
+          await nextThreadGeneration(client, current.thread_id),
+        );
       }
       assertSameScope(current, input);
 
