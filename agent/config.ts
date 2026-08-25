@@ -36,6 +36,10 @@ export const PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT = 50;
 export const SOFTWARE_UPDATE_GITHUB_RESPONSE_MAX_BYTES = 1024 * 1024;
 export const SOFTWARE_UPDATE_HTTP_TIMEOUT_MS = 15_000;
 export const SOFTWARE_UPDATE_MANIFEST_MAX_BYTES = 64 * 1024;
+// Мягко удалённый факт остаётся восстановимым это окно, затем вычищается физически вместе со
+// связанными чанками и заявлениями по каскадам базовой таблицы.
+export const MEMORY_SOFT_DELETE_RETENTION_DAYS = 30;
+export const MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE = 200;
 export const TELEGRAM_API_REQUEST_TIMEOUT_MS = 15_000;
 // An unanswered approval parks the Eve turn indefinitely: Eve keeps `session.waiting` for as long
 // as it takes. The confirmation window bounds that wait so one ignored prompt cannot freeze a chat.

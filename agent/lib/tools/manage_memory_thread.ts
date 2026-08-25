@@ -11,7 +11,6 @@ import { AppError } from "../app-error.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { memoryThreadLifecycleRepository } from "../memory-thread-lifecycle-repository.js";
 import { THREAD_ENTRY_REF_PATTERN, THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const OUTCOME_REF_PATTERN = /^outcome_[0-9a-f]{32}$/u;
 const inputSchema = z.object({
@@ -39,17 +38,15 @@ function verifiedTurn(ctx: Parameters<typeof requireMemoryAuthorization>[0]) {
 }
 
 export default defineTool({
-  approval: () => "user-approval",
   description: [
     "Явно завершить или реактивировать нить памяти.",
     "complete разрешён только после проверенного текущего заявления пользователя, confirmed outcome или formal goal condition и требует sourceEntryRefs из read_memory_thread.",
     "reactivate используй только когда пользователь прямо просит продолжить именно завершённую нить; новая цель обычно создаёт новый subthread.",
     "Payload reactivate: {\"action\":\"reactivate\",\"threadRef\":\"thread_...\"}. Payload complete с текущим заявлением: {\"action\":\"complete\",\"authority\":\"current_user_statement\",\"sourceEntryRefs\":[\"entry_...\"],\"threadRef\":\"thread_...\"}.",
-    "Обе операции требуют Eve HITL. Результат возвращает актуальное состояние нити; NOT_FOUND требует заново получить threadRef.",
+    "Результат возвращает актуальное состояние нити; NOT_FOUND требует заново получить threadRef.",
   ].join(" "),
   inputSchema,
   async execute(input, ctx) {
-    await requireToolApprovalEvidence(ctx, "manage_memory_thread", input);
     const auth = requireMemoryAuthorization(ctx);
     const turn = verifiedTurn(ctx);
     if (input.action === "reactivate") {

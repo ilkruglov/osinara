@@ -337,8 +337,8 @@ describeWithDatabase("critical main-agent memory paths", () => {
            ON turn_source.eve_session_id = operation.eve_session_id
           AND turn_source.eve_turn_id = operation.eve_turn_id
         WHERE operation.operation_key = 'background-memory-call'
-        GROUP BY item.id, evidence.timeline_entry_id, batch.status, app_session.task_state,
-                 app_session.retired_at, lane.processed_through_sequence`,
+        GROUP BY item.id, item.content, evidence.timeline_entry_id, batch.status,
+                 app_session.task_state, app_session.retired_at, lane.processed_through_sequence`,
       [batch!.batchId],
     )).resolves.toMatchObject({ rows: [{
       batch_status: "completed",

@@ -9,10 +9,7 @@ import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const { requireApprovalEvidence, resolveConflict } = vi.hoisted(() => ({
-  requireApprovalEvidence: vi.fn(),
-  resolveConflict: vi.fn(),
-}));
+const { resolveConflict } = vi.hoisted(() => ({ resolveConflict: vi.fn() }));
 
 vi.mock("./memory-context.js", () => ({
   requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
@@ -20,10 +17,6 @@ vi.mock("./memory-context.js", () => ({
 vi.mock("./memory-conflict-repository.js", () => ({
   memoryConflictRepository: { resolve: resolveConflict },
 }));
-vi.mock("./require-tool-approval-evidence.js", () => ({
-  requireToolApprovalEvidence: requireApprovalEvidence,
-}));
-
 import manageMemoryConflict from "./tools/manage_memory_conflict.js";
 
 const CONFLICT_REF = "conf_0123456789abcdef0123456789abcdef";
@@ -32,8 +25,6 @@ const context = { callId: "conflict-call-1" } as ToolContext;
 
 describe("manage_memory_conflict", () => {
   beforeEach(() => {
-    requireApprovalEvidence.mockReset();
-    requireApprovalEvidence.mockResolvedValue(undefined);
     resolveConflict.mockReset();
   });
 
@@ -59,11 +50,6 @@ describe("manage_memory_conflict", () => {
       { familyId: "family-1", scopes: ["personal"] },
       { action: "choose", conflictRef: CONFLICT_REF, memoryRef: MEMORY_REF, operationKey: "conflict-call-1" },
     );
-    expect(requireApprovalEvidence).toHaveBeenCalledWith(context, "manage_memory_conflict", {
-      action: "choose", conflictRef: CONFLICT_REF, memoryRef: MEMORY_REF,
-    });
-    expect(requireApprovalEvidence.mock.invocationCallOrder[0])
-      .toBeLessThan(resolveConflict.mock.invocationCallOrder[0]!);
     expect(JSON.stringify(result)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-/iu);
   });
 

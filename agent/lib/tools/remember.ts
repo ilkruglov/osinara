@@ -11,25 +11,15 @@ import { requireMemoryAuthorization, requireWritableScope } from "../memory-cont
 import { memoryRepository } from "../memory-repository.js";
 import { logMemoryWriteEvent } from "../memory-observability.js";
 import { resolveMemoryTurnSource } from "../memory-turn-source.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import { toModelMemory } from "../model-memory.js";
-import { rememberInputSchema, type RememberInput } from "../remember-contract.js";
+import { rememberInputSchema } from "../remember-contract.js";
 
 export default defineTool({
-  approval: ({ session, toolInput }) => {
-    // Sensitive data and disclosure from a private chat into family memory require explicit consent.
-    const input = toolInput as RememberInput | undefined;
-    const privateFamilyWrite =
-      input?.scope === "family" && session.auth.current?.attributes.telegramChatType === "private";
-    return input?.sensitivity === "sensitive" || privateFamilyWrite
-      ? "user-approval"
-      : "not-applicable";
-  },
   description: [
     "Сохранить одну устойчивую запись, которую ты сама определила только из проверенного сообщения текущего хода; не сохраняй предположения и одноразовые запросы.",
     "Обычный payload: {\"basis\":\"user_requested\",\"content\":\"...\",\"kind\":\"fact\",\"scope\":\"personal\",\"sensitivity\":\"normal\",\"subject\":{\"kind\":\"current_author\"}}.",
     "В группе sourceSequence выбирает ровно одно сообщение видимой дельты. Для существующей нити используй thread.action=attach и threadRef только из list/search/read_memory_thread; thread.action=create создаёт нить атомарно.",
-    "Sensitive и запись из private в family автоматически требуют Eve HITL. Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
+    "Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
   ].join(" "),
   inputSchema: rememberInputSchema,
   async execute(input, ctx) {
@@ -40,9 +30,6 @@ export default defineTool({
     let item: Awaited<ReturnType<typeof memoryRepository.create>>;
     try {
       source = await resolveMemoryTurnSource(ctx, authorization, input.sourceSequence);
-      // The approval declaration controls Eve UX; exact consumed evidence independently guards writes.
-      const privateFamilyWrite = input.scope === "family" &&
-        ctx.session.auth.current?.attributes.telegramChatType === "private";
       const reviewWrite = source.isReview;
       if (reviewWrite && (input.sensitivity !== "normal" || input.basis !== "agent_inferred" ||
         input.sourceSequence === undefined)) {
@@ -51,13 +38,9 @@ export default defineTool({
           "Тихая проверка сохраняет только normal-память с конкретным sourceSequence",
         );
       }
-      const approvedWrite = input.sensitivity === "sensitive" || privateFamilyWrite;
-      if (approvedWrite) {
-        await requireToolApprovalEvidence(ctx, "remember", input);
-      }
       item = await memoryRepository.create(authorization, {
         // A request to save another participant's delta message is not that author's endorsement.
-        confirmation: (input.basis === "user_requested" && source.isCurrent) || approvedWrite
+        confirmation: input.basis === "user_requested" && source.isCurrent
           ? "user_confirmed"
           : "model_high",
         content: requireAllowedMemoryContent(input.content),
