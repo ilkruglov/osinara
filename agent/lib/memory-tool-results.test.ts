@@ -16,14 +16,12 @@ const {
   createMemory,
   listMemories,
   logMemoryWriteEvent,
-  requireApprovalEvidence,
   resolveMemoryTurnSource,
   retrieveMemories,
 } = vi.hoisted(() => ({
   createMemory: vi.fn(),
   listMemories: vi.fn(),
   logMemoryWriteEvent: vi.fn(),
-  requireApprovalEvidence: vi.fn(),
   resolveMemoryTurnSource: vi.fn(),
   retrieveMemories: vi.fn(),
 }));
@@ -55,10 +53,6 @@ vi.mock("./session-auth.js", () => ({
     },
   }),
 }));
-vi.mock("./require-tool-approval-evidence.js", () => ({
-  requireToolApprovalEvidence: requireApprovalEvidence,
-}));
-
 import listMemoriesTool from "./tools/list_memories.js";
 import remember from "./tools/remember.js";
 import searchMemories from "./tools/search_memories.js";
@@ -92,8 +86,12 @@ const internalMemory = {
 } as const;
 const context = {
   callId: "call-1",
-  session: { id: "session-internal", turn: { id: "turn-internal" } },
-} as ToolContext;
+  session: {
+    auth: { current: { attributes: { telegramChatType: "private" } } },
+    id: "session-internal",
+    turn: { id: "turn-internal" },
+  },
+} as unknown as ToolContext;
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return value !== null &&
@@ -120,8 +118,6 @@ describe("model-facing memory tool results", () => {
   beforeEach(() => {
     createMemory.mockReset();
     listMemories.mockReset();
-    requireApprovalEvidence.mockReset();
-    requireApprovalEvidence.mockResolvedValue(undefined);
     resolveMemoryTurnSource.mockReset();
     resolveMemoryTurnSource.mockResolvedValue({
       conversationId: "conversation-1",
@@ -134,7 +130,7 @@ describe("model-facing memory tool results", () => {
     logMemoryWriteEvent.mockReset();
   });
 
-  it("requires exact approval evidence before a sensitive remember write", async () => {
+  it("persists an inferred sensitive memory without fabricating user confirmation", async () => {
     createMemory.mockResolvedValue(internalMemory);
     const input = {
       basis: "agent_inferred" as const,
@@ -147,9 +143,28 @@ describe("model-facing memory tool results", () => {
 
     await executeNonStreamingTool(remember, input, context);
 
-    expect(requireApprovalEvidence).toHaveBeenCalledWith(context, "remember", input);
-    expect(requireApprovalEvidence.mock.invocationCallOrder[0])
-      .toBeLessThan(createMemory.mock.invocationCallOrder[0]!);
+    expect(createMemory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      confirmation: "model_high",
+      sensitivity: "sensitive",
+    }));
+  });
+
+  it("does not fabricate confirmation for an inferred private-to-family write", async () => {
+    createMemory.mockResolvedValue(internalMemory);
+
+    await executeNonStreamingTool(remember, {
+      basis: "agent_inferred",
+      content: internalMemory.content,
+      kind: "preference",
+      scope: "family",
+      sensitivity: "normal",
+      subject: { kind: "current_author" },
+    }, context);
+
+    expect(createMemory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      confirmation: "model_high",
+      scope: "family",
+    }));
   });
 
   it("rejects impossible thread identities before tool execution", () => {

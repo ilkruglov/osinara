@@ -49,7 +49,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   },
   {
     name: "manage_memory.delete",
-    usage: "безвозвратно удалить запись памяти текущей группы по безопасной ссылке memoryRef",
+    usage: "мягко удалить запись памяти текущей группы по безопасной ссылке memoryRef",
   },
   {
     name: "manage_memory.edit",
@@ -61,7 +61,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   },
   {
     name: "manage_memory_conflict",
-    usage: "после явного подтверждения разрешить показанный конфликт памяти текущей группы",
+    usage: "по явному решению пользователя разрешить показанный конфликт памяти текущей группы",
   },
   {
     name: "manage_memory_thread.complete",

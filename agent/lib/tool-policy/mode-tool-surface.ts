@@ -36,7 +36,11 @@ import listGroupHistory from "../tools/list_group_history.js";
 import listMemories from "../tools/list_memories.js";
 import listMemoryThreads from "../tools/list_memory_threads.js";
 import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
-import manageMemory from "../tools/manage_memory.js";
+import manageMemory, {
+  MANAGE_MEMORY_ACTIONS,
+  manageMemoryPresentation,
+  type ManageMemoryAction,
+} from "../tools/manage_memory.js";
 import manageMemoryConflict from "../tools/manage_memory_conflict.js";
 import manageMemoryThread from "../tools/manage_memory_thread.js";
 import remember from "../tools/remember.js";
@@ -244,10 +248,11 @@ function allowedDirectTool(capability: DirectExternalToolName, definition: AnyTo
   });
 }
 
-function allowedMemoryTool(): AnyToolDefinition {
+function allowedMemoryTool(actions: readonly ManageMemoryAction[]): AnyToolDefinition {
   const definition = manageMemory as unknown as AnyToolDefinition;
   return defineTool({
     ...definition,
+    ...manageMemoryPresentation(actions),
     async execute(input, ctx) {
       const action = (input as { action?: unknown }).action;
       if (action !== "edit" && action !== "delete" && action !== "undo") {
@@ -323,8 +328,9 @@ function buildExternalToolSurface(
     if (definition === undefined) continue;
     surface[capability] = allowedDirectTool(capability as DirectExternalToolName, definition);
   }
-  if ([...allowed].some((capability) => capability.startsWith("manage_memory."))) {
-    surface.manage_memory = allowedMemoryTool();
+  const memoryActions = MANAGE_MEMORY_ACTIONS.filter((action) => allowed.has(`manage_memory.${action}`));
+  if (memoryActions.length > 0) {
+    surface.manage_memory = allowedMemoryTool(memoryActions);
   }
   if ([...allowed].some((capability) => capability.startsWith("manage_memory_thread."))) {
     surface.manage_memory_thread = allowedMemoryThreadTool();

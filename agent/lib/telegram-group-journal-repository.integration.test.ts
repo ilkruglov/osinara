@@ -88,7 +88,7 @@ function message(input: {
 describeWithDatabase("Telegram group journal repositories", () => {
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE invitations, memory_items,
+      `TRUNCATE invitations, memory_items_all,
          telegram_group_messages, telegram_groups, family_memberships, users, families CASCADE`,
     );
   });

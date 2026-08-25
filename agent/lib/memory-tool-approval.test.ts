@@ -2,12 +2,16 @@
  * Memory tool approval policy regression tests.
  *
  * Constructs covered:
- * - Sensitive and private-to-family writes require direct tool confirmation.
- * - Every destructive mutation requires HITL; immediate undo requires durable provenance instead.
+ * - Работа с фактами подтверждения не запрашивает: решение принимает агент, а страховкой служит
+ *   мягкое удаление. Публичный чат не получает окна подтверждения памяти вовсе.
+ * - Отмена создания остаётся под политикой прав: без доказанного provenance она отклоняется.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { canUndoCreate } = vi.hoisted(() => ({ canUndoCreate: vi.fn() }));
+const { canUndoCreate, reactivateThread } = vi.hoisted(() => ({
+  canUndoCreate: vi.fn(),
+  reactivateThread: vi.fn(),
+}));
 
 vi.mock("./memory-context.js", () => ({
   requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
@@ -20,6 +24,12 @@ vi.mock("./memory-repository.js", () => ({
     deleteByRef: vi.fn(),
     undoCreate: vi.fn(),
     updateByRef: vi.fn(),
+  },
+}));
+vi.mock("./memory-thread-lifecycle-repository.js", () => ({
+  memoryThreadLifecycleRepository: {
+    complete: vi.fn(),
+    reactivate: reactivateThread,
   },
 }));
 
@@ -51,38 +61,65 @@ function approvalFor(tool: unknown, input: Record<string, unknown>, chatType: st
 describe("memory tool approvals", () => {
   beforeEach(() => {
     canUndoCreate.mockReset();
+    reactivateThread.mockReset();
   });
 
-  it("requires approval for sensitive writes and private family disclosure", () => {
-    expect(approvalFor(remember, { scope: "personal", sensitivity: "sensitive" }, "private"))
-      .toBe("user-approval");
-    expect(approvalFor(remember, { scope: "family", sensitivity: "normal" }, "private"))
-      .toBe("user-approval");
-    expect(approvalFor(remember, { scope: "group", sensitivity: "normal" }, "group"))
-      .toBe("not-applicable");
+  it("never asks the user to confirm remembering a fact", () => {
+    // Политика снята целиком: даже sensitive-запись и раскрытие из лички в семейную область
+    // больше не рисуют окно подтверждения.
+    expect((remember as { approval?: unknown }).approval).toBeUndefined();
   });
 
-  it("confirms every destructive memory mutation independently of chat type", async () => {
+  it("never asks the user to confirm a memory mutation", async () => {
     const memoryRef = "mem_0123456789abcdef0123456789abcdef";
-    expect(await approvalFor(manageMemory, { action: "delete", memoryRef }, "private"))
-      .toBe("user-approval");
-    expect(await approvalFor(manageMemory, { action: "delete", memoryRef }, "supergroup"))
-      .toBe("user-approval");
-    expect(await approvalFor(
-      manageMemory,
-      { action: "edit", content: "Исправлено", memoryRef },
-      "supergroup",
-    )).toBe("user-approval");
+    for (const chatType of ["private", "supergroup"]) {
+      expect(await approvalFor(manageMemory, { action: "delete", memoryRef }, chatType))
+        .toBe("not-applicable");
+      expect(await approvalFor(
+        manageMemory,
+        { action: "edit", content: "Исправлено", memoryRef },
+        chatType,
+      )).toBe("not-applicable");
+    }
+  });
 
+  it("still refuses an undo without durable provenance", async () => {
+    const memoryRef = "mem_0123456789abcdef0123456789abcdef";
     canUndoCreate.mockResolvedValue(true);
     expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private"))
       .toBe("not-applicable");
+
+    // Это проверка прав, а не вопрос пользователю, поэтому она сохраняется.
+    canUndoCreate.mockResolvedValue(false);
+    expect(await approvalFor(manageMemory, { action: "undo", memoryRef }, "private"))
+      .toMatchObject({ type: "denied" });
   });
 
-  it("requires identity-bound HITL for thread lifecycle", () => {
-    expect(approvalFor(manageMemoryThread, { action: "complete" }, "private"))
-      .toBe("user-approval");
-    expect(approvalFor(manageMemoryThread, { action: "reactivate" }, "supergroup"))
-      .toBe("user-approval");
+  it("does not gate thread lifecycle behind a confirmation", () => {
+    expect((manageMemoryThread as { approval?: unknown }).approval).toBeUndefined();
+  });
+
+  it("executes thread lifecycle without persisted approval evidence", async () => {
+    reactivateThread.mockResolvedValue({ status: "active" });
+    const context = {
+      callId: "call-1",
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              telegramConversationId: "conversation-1",
+              telegramTimelineEntryId: "timeline-entry-1",
+            },
+          },
+        },
+      },
+    } as never;
+
+    await manageMemoryThread.execute({
+      action: "reactivate",
+      threadRef: "thread_0123456789abcdef0123456789abcdef",
+    }, context);
+
+    expect(reactivateThread).toHaveBeenCalledOnce();
   });
 });

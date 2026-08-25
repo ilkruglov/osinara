@@ -5,7 +5,7 @@
  * - `manage_memory.edit`: passes an opaque ref to the scoped repository boundary.
  * - Delete and provenance-bound undo use distinct opaque-ref repository boundaries.
  * - Raw database UUIDs and the historical `id` field are rejected at the model boundary.
- * - Approval and execution share one strict action parser.
+ * - Approval and execution share one strict action parser without requiring persisted HITL evidence.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,13 +14,11 @@ import { z } from "zod";
 const {
   canUndoMemory,
   deleteMemoryByRef,
-  requireApprovalEvidence,
   undoMemory,
   updateMemoryByRef,
 } = vi.hoisted(() => ({
   canUndoMemory: vi.fn(),
   deleteMemoryByRef: vi.fn(),
-  requireApprovalEvidence: vi.fn(),
   undoMemory: vi.fn(),
   updateMemoryByRef: vi.fn(),
 }));
@@ -36,10 +34,6 @@ vi.mock("./memory-repository.js", () => ({
     updateByRef: updateMemoryByRef,
   },
 }));
-vi.mock("./require-tool-approval-evidence.js", () => ({
-  requireToolApprovalEvidence: requireApprovalEvidence,
-}));
-
 import manageMemory from "./tools/manage_memory.js";
 
 const MEMORY_REF = "mem_0123456789abcdef0123456789abcdef";
@@ -90,8 +84,6 @@ describe("manage_memory", () => {
   beforeEach(() => {
     canUndoMemory.mockReset();
     deleteMemoryByRef.mockReset();
-    requireApprovalEvidence.mockReset();
-    requireApprovalEvidence.mockResolvedValue(undefined);
     undoMemory.mockReset();
     updateMemoryByRef.mockReset();
   });
@@ -106,6 +98,12 @@ describe("manage_memory", () => {
     expect(schema.properties?.action).toMatchObject({ enum: ["edit", "delete", "undo"] });
   });
 
+  it("tells the model that edit is a complete integrity-preserving replacement", () => {
+    expect(manageMemory.description).toContain("полную новую версию записи");
+    expect(manageMemory.description).toContain("сохранив все актуальные детали");
+    expect(manageMemory.description).toContain("не выполняй необоснованную мутацию");
+  });
+
   it("rejects malformed edit before showing private approval", async () => {
     await expect(approvalFor({ action: "edit", memoryRef: MEMORY_REF })).rejects.toThrowError(
       /AGENT_MEMORY_INPUT_INVALID: Поле content обязательно/u,
@@ -113,12 +111,13 @@ describe("manage_memory", () => {
     expect(canUndoMemory).not.toHaveBeenCalled();
   });
 
-  it.each(["edit", "delete"] as const)("shows private approval before %s", async (action) => {
+  it.each(["edit", "delete"] as const)("does not confirm %s with the user", async (action) => {
     const input = action === "edit"
       ? { action, content: "Исправлено", memoryRef: MEMORY_REF }
       : { action, memoryRef: MEMORY_REF };
 
-    await expect(approvalFor(input)).resolves.toBe("user-approval");
+    // Решение о фактах принимает агент; страховкой служит мягкое удаление, а не окно подтверждения.
+    await expect(approvalFor(input)).resolves.toBe("not-applicable");
   });
 
   it("allows undo without HITL only when repository proves immediate provenance", async () => {
@@ -174,9 +173,6 @@ describe("manage_memory", () => {
         source: { conversationId: "conversation-1", timelineEntryId: "timeline-entry-1" },
       },
     );
-    expect(requireApprovalEvidence).toHaveBeenCalledWith(context, "manage_memory", {
-      action: "edit", content: "Исправлено", memoryRef: MEMORY_REF,
-    });
     expect(result).not.toHaveProperty("id");
     expect(result).not.toHaveProperty("source");
   });
@@ -191,7 +187,6 @@ describe("manage_memory", () => {
       MEMORY_REF,
       "call-1",
     );
-    expect(requireApprovalEvidence).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -219,6 +214,5 @@ describe("manage_memory", () => {
       },
     );
     expect(deleteMemoryByRef).not.toHaveBeenCalled();
-    expect(requireApprovalEvidence).not.toHaveBeenCalled();
   });
 });

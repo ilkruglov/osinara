@@ -117,6 +117,51 @@ describeWithDatabase("canonical group session repository", () => {
     expect(resumed.id).toBe(canonical.id);
   });
 
+  it("allocates above newer retired generations when an older running task remains", async () => {
+    const f = await fixture();
+    const staleTask = await sessionRepository.prepareTurn(canonicalInput(f, null));
+    await sessionRepository.bindEveSession(staleTask.id, "wrun_stale_task");
+    await sessionRepository.parkSession({
+      applicationSessionId: staleTask.id,
+      pendingRequestId: "request-stale",
+      requesterTelegramUserId: "canonical-owner",
+      requesterUserId: f.userId,
+    });
+    await sessionRepository.resumePendingSession(staleTask.id, "wrun_stale_task");
+
+    const firstReplacement = await sessionRepository.prepareTurn(canonicalInput(f, null));
+    await sessionRepository.requestRotation(firstReplacement.id);
+    const newer = await sessionRepository.prepareTurn(canonicalInput(f, null));
+    await sessionRepository.bindEveSession(newer.id, "wrun_newer_task");
+    await sessionRepository.parkSession({
+      applicationSessionId: newer.id,
+      pendingRequestId: "request-newer",
+      requesterTelegramUserId: "canonical-owner",
+      requesterUserId: f.userId,
+    });
+    await sessionRepository.recordTurnCompleted(newer.id, "wrun_newer_task", false);
+
+    const [recovered, concurrent] = await Promise.all([
+      sessionRepository.prepareTurn(canonicalInput(f, null)),
+      sessionRepository.prepareTurn(canonicalInput(f, null)),
+    ]);
+
+    expect(staleTask.generation).toBe(0);
+    expect(firstReplacement.generation).toBe(1);
+    expect(newer.generation).toBe(2);
+    expect(recovered).toMatchObject({ generation: 3, rotated: true });
+    expect(concurrent.id).toBe(recovered.id);
+    expect(recovered.sandboxSessionId).toBe(staleTask.sandboxSessionId);
+    expect(recovered.continuationToken).toBe(
+      `${canonicalInput(f, null).baseContinuationToken}:osinara:3`,
+    );
+    await expect(database().query(
+      `SELECT 1 FROM conversation_sessions
+        WHERE id = $1 AND kind = 'task' AND task_state = 'running' AND retired_at IS NULL`,
+      [staleTask.id],
+    )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
   it("promotes an OAuth authorization park without inventing a request identity", async () => {
     const f = await fixture();
     const canonical = await sessionRepository.prepareTurn(canonicalInput(f, 77));

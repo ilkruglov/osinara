@@ -7,6 +7,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { buildApprovalMessage } from "./approval-message.js";
 import {
   createTimedOutPromptFinalizer,
   timedOutPromptEditBody,
@@ -34,6 +35,20 @@ describe("timedOutPromptText", () => {
     expect(text).toContain(CLAIM.promptText);
     expect(text).toContain("Время на подтверждение истекло.");
     expect(text).toContain("Действие не выполнено.");
+  });
+
+  it("does not keep promising an execution next to the expiry", () => {
+    // Сквозная проверка исправляемого бага: реальное собранное окно, а не строка без последствия.
+    const composed = buildApprovalMessage({
+      actionLabel: "исправить запись в памяти",
+      facts: ["Тип памяти: episode"],
+    });
+    expect(composed).toContain("будет выполнено один раз");
+
+    const text = timedOutPromptText(composed);
+    expect(text).not.toContain("будет выполнено один раз");
+    expect(text).toContain("Действие не выполнено.");
+    expect(text).toContain("Тип памяти: episode");
   });
 
   it("truncates an oversized prompt within the Telegram message limit", () => {

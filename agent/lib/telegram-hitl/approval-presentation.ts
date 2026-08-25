@@ -23,25 +23,16 @@ import {
   localizeTelegramInputRequest,
   type TelegramInputRequest,
 } from "../telegram-interface.js";
-
-function googleWorkspacePrompt(input: Record<string, unknown>): string {
-  const argv = input.argv;
-  if (!Array.isArray(argv) || argv.length === 0 || !argv.every((item) => typeof item === "string")) {
-    throw new AppError(
-      "AGENT_APPROVAL_INPUT_INVALID",
-      "Не удалось показать параметры команды Google Workspace",
-    );
-  }
-  return [
-    "Подтверждение изменения в Google Workspace",
-    "",
-    "Точные аргументы команды:",
-    JSON.stringify(argv, null, 2),
-    "",
-    "После подтверждения команда будет выполнена один раз в текущем профиле.",
-    "При ошибке автоматического повтора не будет.",
-  ].join("\n");
-}
+import {
+  GOOGLE_WORKSPACE_CONSEQUENCE,
+  SCHEDULE_CONSEQUENCES,
+} from "./approval-consequences.js";
+import {
+  approvalFact,
+  buildApprovalMessage,
+  googleWorkspaceFacts,
+  sanitizeApprovalLine,
+} from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
   findSchedule(auth: AgentScheduleAuthorization, id: string): Promise<AgentScheduleRecord | null>;
@@ -52,31 +43,25 @@ export type TelegramApprovalPresenter = (
   ctx: Pick<SessionContext, "session">,
 ) => Promise<TelegramInputRequest>;
 
-const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string; consequence: string }>> = {
+const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string }>> = {
   create: {
     action: "Создать агентное расписание",
-    consequence: "Будет создан новый автоматический запуск агента по указанному сценарию.",
-  },
+      },
   delete: {
     action: "Удалить агентное расписание",
-    consequence: "Расписание и все его будущие автоматические запуски будут удалены.",
-  },
+      },
   pause: {
     action: "Приостановить агентное расписание",
-    consequence: "Будущие автоматические запуски остановятся до ручного возобновления.",
-  },
+      },
   resume: {
     action: "Возобновить агентное расписание",
-    consequence: "Автоматические запуски возобновятся по сохранённому расписанию.",
-  },
+      },
   run_now: {
     action: "Запустить агентное расписание сейчас",
-    consequence: "Сценарий будет запущен один раз сейчас; обычное расписание не изменится.",
-  },
+      },
   update: {
     action: "Изменить агентное расписание",
-    consequence: "Сохранённые параметры расписания будут заменены указанными изменениями.",
-  },
+      },
 };
 
 function scheduleDate(schedule: AgentScheduleRecord): string {
@@ -140,24 +125,36 @@ function scheduleChanges(input: Record<string, unknown>): string[] {
 }
 
 function schedulePrompt(
-  action: { action: string; consequence: string },
+  actionName: string,
   schedule: AgentScheduleRecord,
   changes: readonly string[],
 ): string {
-  return [
-    "Подтверждение действия",
-    "",
-    `Действие: ${action.action}`,
-    `Расписание: ${schedule.title}`,
-    `Назначение: ${schedule.userRequest}`,
-    `Периодичность: ${describeRecurrence(schedule.recurrence)}`,
-    `Следующий запуск: ${scheduleDate(schedule)} (${schedule.timezone})`,
-    `Сценарий: ${schedule.scenarioPrompt}`,
-    ...(changes.length === 0 ? [] : ["", "Изменения:", ...changes]),
-    "",
-    `Что произойдёт: ${action.consequence}`,
-  ].join("\n");
+  // Одна и та же структура во всех окнах: заголовок, факты, последствие. Значения расписания
+  // проходят ту же очистку, что и остальные факты, поэтому перенос строки в названии или сценарии
+  // не может дорисовать строку, выглядящую как строка приложения.
+  return buildApprovalMessage({
+    actionLabel: lowerFirst(SCHEDULE_ACTIONS[actionName]!.action),
+    consequence: SCHEDULE_CONSEQUENCES[actionName]!,
+    facts: [
+      ...approvalFact("Расписание", schedule.title),
+      ...approvalFact("Назначение", schedule.userRequest),
+      ...approvalFact("Периодичность", describeRecurrence(schedule.recurrence)),
+      ...approvalFact("Следующий запуск", `${scheduleDate(schedule)} (${schedule.timezone})`),
+      ...approvalFact("Сценарий", schedule.scenarioPrompt),
+    ],
+    // Отдельным блоком: предлагаемые значения обязаны быть визуально отделены от текущих, иначе
+    // две строки «Сценарий:» — сохранённая и новая — читаются как одна.
+    // `scheduleChanges` уже формирует строки «Метка: значение», поэтому им нужна только очистка.
+    ...(changes.length === 0
+      ? {}
+      : { section: { lines: changes.map(sanitizeApprovalLine), title: "Изменения:" } }),
+  });
 }
+
+function lowerFirst(value: string): string {
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
 
 export function createTelegramApprovalPresenter(
   dependencies: ApprovalPresentationDependencies,
@@ -168,7 +165,14 @@ export function createTelegramApprovalPresenter(
       request.display === "confirmation" &&
       request.action.toolName === "execute_google_workspace"
     ) {
-      return { ...localized, prompt: googleWorkspacePrompt(request.action.input) };
+      return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: "изменение в Google Workspace",
+          consequence: GOOGLE_WORKSPACE_CONSEQUENCE,
+          facts: googleWorkspaceFacts(request.action.input),
+        }),
+      };
     }
     if (
       request.display !== "confirmation" ||
@@ -201,7 +205,7 @@ export function createTelegramApprovalPresenter(
     const changes = actionName === "update" ? scheduleChanges(request.action.input) : [];
     return {
       ...localized,
-      prompt: schedulePrompt(SCHEDULE_ACTIONS[actionName], schedule, changes),
+      prompt: schedulePrompt(actionName, schedule, changes),
     };
   };
 }

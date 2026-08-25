@@ -8,7 +8,7 @@
  * - Object-shaped model schema avoids fragile root action unions.
  * - Action validators keep memory mutations fail-closed on malformed model payloads.
  */
-import { defineTool } from "eve/tools";
+import { defineTool, type ToolContext } from "eve/tools";
 import { z } from "zod";
 
 import { MEMORY_CONTENT_MAX_LENGTH } from "../memory-config.js";
@@ -18,7 +18,6 @@ import type { MemoryKind, MemorySensitivity } from "../memory-record.js";
 import { memoryRepository } from "../memory-repository.js";
 import { MEMORY_UNDO_DENIED_MESSAGE } from "../memory-undo-repository.js";
 import { MEMORY_REF_PATTERN, toModelMemory } from "../model-memory.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import {
   optionalEnum,
   requireAction,
@@ -29,20 +28,51 @@ import {
 } from "../tool-input-validation.js";
 
 const INPUT_ERROR_CODE = "AGENT_MEMORY_INPUT_INVALID";
-const TOOL_ACTIONS = ["edit", "delete", "undo"] as const;
+export const MANAGE_MEMORY_ACTIONS = ["edit", "delete", "undo"] as const;
 const MEMORY_KINDS = ["profile", "preference", "fact", "episode", "family_shared"] as const;
 const MEMORY_SENSITIVITIES = ["normal", "sensitive"] as const;
 const TOP_LEVEL_FIELDS = ["action", "content", "kind", "memoryRef", "sensitivity"] as const;
 
-const manageMemorySchema = z.object({
-  action: z.enum(TOOL_ACTIONS),
-  content: z.string().optional(),
-  kind: z.string().optional(),
-  memoryRef: z.string().optional(),
-  sensitivity: z.string().optional(),
-}).strict();
+export type ManageMemoryAction = (typeof MANAGE_MEMORY_ACTIONS)[number];
 
-type MemoryAction = (typeof TOOL_ACTIONS)[number];
+const ACTION_DESCRIPTIONS: Readonly<Record<ManageMemoryAction, string>> = {
+  delete: 'Delete payload: {"action":"delete","memoryRef":"mem_..."}.',
+  edit:
+    'Edit payload: {"action":"edit","memoryRef":"mem_...","content":"Исправленный текст","kind":"preference","sensitivity":"normal"}. kind и sensitivity необязательны.',
+  undo:
+    'Undo используется только для немедленной отмены сохранения: {"action":"undo","memoryRef":"mem_..."}.',
+};
+
+export function manageMemoryPresentation(actions: readonly ManageMemoryAction[]) {
+  const [firstAction, ...otherActions] = actions;
+  if (firstAction === undefined) throw new Error("manage_memory requires at least one action");
+  const canEdit = actions.includes("edit");
+  const mutableActions = actions.filter((action) => action !== "undo");
+  return {
+    description: [
+      "Управлять доступной записью долговременной памяти только через перечисленные операции.",
+      mutableActions.length > 0
+        ? `Перед ${mutableActions.join("/")} сначала получи memoryRef через remember, search_memories или list_memories.`
+        : null,
+      canEdit
+        ? "Edit передаёт полную новую версию записи: обогащай или исправляй её, сохранив все актуальные детали исходного текста."
+        : null,
+      mutableActions.length > 0
+        ? "Самостоятельно не выполняй необоснованную мутацию, которая ухудшает точность, полноту либо будущую полезность памяти."
+        : null,
+      ...MANAGE_MEMORY_ACTIONS
+        .filter((action) => actions.includes(action))
+        .map((action) => ACTION_DESCRIPTIONS[action]),
+    ].filter((section): section is string => section !== null).join(" "),
+    inputSchema: z.object({
+      action: z.enum([firstAction, ...otherActions]),
+      content: z.string().optional(),
+      kind: z.string().optional(),
+      memoryRef: z.string().optional(),
+      sensitivity: z.string().optional(),
+    }).strict(),
+  };
+}
 
 function requireMemoryRef(input: Record<string, unknown>): string {
   const memoryRef = requiredString(
@@ -84,12 +114,12 @@ function requireEditInput(input: Record<string, unknown>) {
   };
 }
 
-function requireRefOnlyInput(input: Record<string, unknown>, action: MemoryAction): string {
+function requireRefOnlyInput(input: Record<string, unknown>, action: ManageMemoryAction): string {
   requireOnlyFields(input, ["action", "memoryRef"], `action=${action}`, INPUT_ERROR_CODE);
   return requireMemoryRef(input);
 }
 
-function requireCurrentCorrectionSource(ctx: Parameters<typeof requireToolApprovalEvidence>[0]) {
+function requireCurrentCorrectionSource(ctx: ToolContext) {
   const attributes = ctx.session.auth.current?.attributes;
   const conversationId = attributes?.telegramConversationId;
   const timelineEntryId = attributes?.telegramTimelineEntryId;
@@ -105,9 +135,9 @@ function requireCurrentCorrectionSource(ctx: Parameters<typeof requireToolApprov
 function requireManageMemoryInput(input: unknown) {
   const payload = requireInputRecord(input, "manage_memory", INPUT_ERROR_CODE);
   requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_memory", INPUT_ERROR_CODE);
-  const action = requireAction(payload, "manage_memory", TOOL_ACTIONS, INPUT_ERROR_CODE);
+  const action = requireAction(payload, "manage_memory", MANAGE_MEMORY_ACTIONS, INPUT_ERROR_CODE);
 
-  // Approval and execution share semantic parsing so malformed mutations never reach HITL.
+  // Approval and execution share semantic parsing so malformed mutations never reach a repository.
   if (action === "edit") return { action, values: requireEditInput(payload) } as const;
   return { action, memoryRef: requireRefOnlyInput(payload, action) } as const;
 }
@@ -116,12 +146,7 @@ function currentProvenance(session: { id: string; turn: { id: string } }) {
   return { sessionId: session.id, turnId: session.turn.id };
 }
 
-const TOOL_DESCRIPTION = [
-  "Исправить доступную запись долговременной памяти, удалить её или отменить только что выполненное сохранение.",
-  "Перед edit/delete сначала получи memoryRef через remember, search_memories или list_memories.",
-  "Edit payload: {\"action\":\"edit\",\"memoryRef\":\"mem_...\",\"content\":\"Исправленный текст\",\"kind\":\"preference\",\"sensitivity\":\"normal\"}. kind и sensitivity необязательны.",
-  "Delete payload: {\"action\":\"delete\",\"memoryRef\":\"mem_...\"}. Undo используется только для немедленной отмены сохранения: {\"action\":\"undo\",\"memoryRef\":\"mem_...\"}.",
-].join(" ");
+const TOOL_PRESENTATION = manageMemoryPresentation(MANAGE_MEMORY_ACTIONS);
 
 export default defineTool({
   approval: async ({ session, toolInput }) => {
@@ -141,17 +166,14 @@ export default defineTool({
           };
     }
 
-    // Every edit/delete is destructive and remains identity-bound through exact approval evidence.
-    return "user-approval";
+    // Решение о фактах принимает агент: подтверждение здесь было лишним трением. Безопасность даёт
+    // мягкое удаление — строка скрывается из всех чтений и из векторной выдачи, но остаётся в базе.
+    return "not-applicable";
   },
-  description: TOOL_DESCRIPTION,
-  inputSchema: manageMemorySchema,
+  ...TOOL_PRESENTATION,
   async execute(input, ctx) {
     const parsed = requireManageMemoryInput(input);
     const authorization = requireMemoryAuthorization(ctx);
-    if (parsed.action !== "undo") {
-      await requireToolApprovalEvidence(ctx, "manage_memory", input);
-    }
     if (parsed.action === "edit") {
       const updated = await memoryRepository.updateByRef(authorization, {
         ...parsed.values,
