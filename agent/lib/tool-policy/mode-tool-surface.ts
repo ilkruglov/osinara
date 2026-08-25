@@ -45,7 +45,11 @@ import manageBehaviorPreference from "../tools/manage_behavior_preference.js";
 import manageExternalGroupSchedule from "../tools/manage_external_group_schedule.js";
 import manageFamilyInvitation from "../tools/manage_family_invitation.js";
 import manageGoogleWorkspaceConnection from "../tools/manage_google_workspace_connection.js";
-import manageMemory from "../tools/manage_memory.js";
+import manageMemory, {
+  MANAGE_MEMORY_ACTIONS,
+  manageMemoryPresentation,
+  type ManageMemoryAction,
+} from "../tools/manage_memory.js";
 import manageMemoryConflict from "../tools/manage_memory_conflict.js";
 import manageMemoryThread from "../tools/manage_memory_thread.js";
 import manageProfileProjection from "../tools/manage_profile_projection.js";
@@ -294,10 +298,11 @@ function allowedDirectTool(capability: DirectExternalToolName, definition: AnyTo
   });
 }
 
-function allowedMemoryTool(): AnyToolDefinition {
+function allowedMemoryTool(actions: readonly ManageMemoryAction[]): AnyToolDefinition {
   const definition = manageMemory as unknown as AnyToolDefinition;
   return defineTool({
     ...definition,
+    ...manageMemoryPresentation(actions),
     async execute(input, ctx) {
       const action = (input as { action?: unknown }).action;
       if (action !== "edit" && action !== "delete" && action !== "undo") {
@@ -367,8 +372,9 @@ function buildExternalToolSurface(
     if (definition === undefined) continue;
     surface[capability] = allowedDirectTool(capability as DirectExternalToolName, definition);
   }
-  if ([...allowed].some((capability) => capability.startsWith("manage_memory."))) {
-    surface.manage_memory = allowedMemoryTool();
+  const memoryActions = MANAGE_MEMORY_ACTIONS.filter((action) => allowed.has(`manage_memory.${action}`));
+  if (memoryActions.length > 0) {
+    surface.manage_memory = allowedMemoryTool(memoryActions);
   }
   if ([...allowed].some((capability) => capability.startsWith("manage_memory_thread."))) {
     surface.manage_memory_thread = allowedMemoryThreadTool();

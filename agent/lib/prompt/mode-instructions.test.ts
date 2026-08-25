@@ -145,6 +145,47 @@ describe("mode instruction isolation", () => {
     expect(external()).toMatch(/Доступна только память этой группы/u);
     expect(external()).toMatch(/Других областей памяти в этом чате нет/u);
   });
+
+  it("keeps memory mutations under one semantic integrity contract", () => {
+    const modes = [privateMode, familyMode];
+
+    for (const markdown of modes) {
+      expect(markdown).toContain("## Целостность изменений памяти");
+      expect(markdown).toContain("не безусловная команда");
+      expect(markdown).toContain("полный текущий текст записи");
+      expect(markdown).toContain("сохрани все ещё актуальные детали");
+      expect(markdown).toContain("не выполняй запрошенную мутацию");
+      expect(markdown).toContain("явная просьба автора забыть его собственные данные");
+      expect(markdown).toContain("откажи в изменении");
+    }
+
+    const editOnly = external("manage_memory.edit");
+    expect(editOnly).toContain("## Целостность изменений памяти");
+    expect(editOnly).toContain("полную новую версию записи");
+    expect(editOnly).toContain("сохрани все ещё актуальные детали");
+    expect(editOnly).not.toContain("Удаление допустимо");
+    expect(editOnly).not.toContain("Для исправления и удаления");
+    expect(editOnly).not.toContain("забыть его собственные данные");
+
+    const deleteOnly = external("manage_memory.delete");
+    expect(deleteOnly).toContain("## Целостность изменений памяти");
+    expect(deleteOnly).toContain("явная просьба автора забыть его собственные данные");
+    expect(deleteOnly).not.toContain("полную новую версию записи");
+    expect(deleteOnly).not.toContain("Для исправления и удаления");
+    expect(deleteOnly).not.toContain("обогащении сохрани");
+
+    expect(external("manage_memory.undo")).not.toContain("## Целостность изменений памяти");
+    expect(external()).not.toContain("## Целостность изменений памяти");
+  });
+
+  it("does not promise removed memory confirmation windows", () => {
+    expect(privateMode).not.toContain("семейную область требует подтверждения");
+    expect(privateMode).not.toContain("сохраняются только после подтверждения");
+    expect(familyMode).not.toContain("сохраняются только после подтверждения");
+    expect(familyMode).not.toContain("самого автора с подтверждением");
+    expect(external("remember")).not.toContain("сохраняются только после подтверждения");
+    expect(external("remember")).not.toContain("самого автора с подтверждением");
+  });
 });
 
 describe("mode instruction anchors", () => {
@@ -304,6 +345,7 @@ describe("external instructions follow the effective allowlist", () => {
     expect(external("manage_memory.edit")).toContain('"action":"edit"');
     expect(external("manage_memory.delete")).toContain('"action":"delete"');
     expect(external("manage_memory.edit")).not.toContain('"action":"delete"');
+    expect(external("manage_memory.edit")).not.toMatch(/править записи памяти здесь нельзя/iu);
     expect(external()).not.toContain("сама решай");
     expect(external()).not.toContain("manage_memory");
   });
@@ -318,17 +360,3 @@ describe("mode instruction determinism", () => {
     );
   });
 });
-
-describe("external memory deletion", () => {
-  it("tells the group that deletion is impossible there", () => {
-    const text = external("remember", "list_memories");
-    expect(text).toMatch(/можешь только запоминать/iu);
-    expect(text).toMatch(/удалять и править записи памяти здесь нельзя никому/iu);
-  });
-
-  it("does not offer a memory mutation tool in an external group", () => {
-    // Отказ держится не только формулировкой: инструмента правки там нет вовсе.
-    expect(external("remember", "list_memories")).not.toMatch(/manage_memory\b/u);
-  });
-});
-

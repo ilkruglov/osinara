@@ -1,5 +1,5 @@
 /**
- * Explicit HITL claim-conflict resolution tool.
+ * Explicit claim-conflict resolution tool.
  *
  * Export:
  * - `manage_memory_conflict`: chooses one version, keeps both, or records an unresolved decision.
@@ -11,7 +11,6 @@ import { memoryConflictRepository } from "../memory-conflict-repository.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { MEMORY_REF_PATTERN } from "../model-memory.js";
 import { AppError } from "../app-error.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const conflictInputSchema = z.object({
   action: z.enum(["choose", "keep_both", "keep_unresolved"]),
@@ -44,8 +43,6 @@ export default defineTool({
       throw invalidInput();
     }
     if (parsed.data.action !== "choose" && parsed.data.memoryRef !== undefined) throw invalidInput();
-    // Conflict resolution is consequential even when both claims remain, so bind every action.
-    await requireToolApprovalEvidence(ctx, "manage_memory_conflict", input);
     const resolution = parsed.data.action === "choose"
       ? {
           action: parsed.data.action,

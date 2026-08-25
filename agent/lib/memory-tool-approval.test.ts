@@ -8,7 +8,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { canUndoCreate } = vi.hoisted(() => ({ canUndoCreate: vi.fn() }));
+const { canUndoCreate, reactivateThread } = vi.hoisted(() => ({
+  canUndoCreate: vi.fn(),
+  reactivateThread: vi.fn(),
+}));
 
 vi.mock("./memory-context.js", () => ({
   requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
@@ -21,6 +24,12 @@ vi.mock("./memory-repository.js", () => ({
     deleteByRef: vi.fn(),
     undoCreate: vi.fn(),
     updateByRef: vi.fn(),
+  },
+}));
+vi.mock("./memory-thread-lifecycle-repository.js", () => ({
+  memoryThreadLifecycleRepository: {
+    complete: vi.fn(),
+    reactivate: reactivateThread,
   },
 }));
 
@@ -52,6 +61,7 @@ function approvalFor(tool: unknown, input: Record<string, unknown>, chatType: st
 describe("memory tool approvals", () => {
   beforeEach(() => {
     canUndoCreate.mockReset();
+    reactivateThread.mockReset();
   });
 
   it("never asks the user to confirm remembering a fact", () => {
@@ -87,5 +97,29 @@ describe("memory tool approvals", () => {
 
   it("does not gate thread lifecycle behind a confirmation", () => {
     expect((manageMemoryThread as { approval?: unknown }).approval).toBeUndefined();
+  });
+
+  it("executes thread lifecycle without persisted approval evidence", async () => {
+    reactivateThread.mockResolvedValue({ status: "active" });
+    const context = {
+      callId: "call-1",
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              telegramConversationId: "conversation-1",
+              telegramTimelineEntryId: "timeline-entry-1",
+            },
+          },
+        },
+      },
+    } as never;
+
+    await manageMemoryThread.execute({
+      action: "reactivate",
+      threadRef: "thread_0123456789abcdef0123456789abcdef",
+    }, context);
+
+    expect(reactivateThread).toHaveBeenCalledOnce();
   });
 });

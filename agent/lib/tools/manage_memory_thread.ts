@@ -11,7 +11,6 @@ import { AppError } from "../app-error.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { memoryThreadLifecycleRepository } from "../memory-thread-lifecycle-repository.js";
 import { THREAD_ENTRY_REF_PATTERN, THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const OUTCOME_REF_PATTERN = /^outcome_[0-9a-f]{32}$/u;
 const inputSchema = z.object({
@@ -48,7 +47,6 @@ export default defineTool({
   ].join(" "),
   inputSchema,
   async execute(input, ctx) {
-    await requireToolApprovalEvidence(ctx, "manage_memory_thread", input);
     const auth = requireMemoryAuthorization(ctx);
     const turn = verifiedTurn(ctx);
     if (input.action === "reactivate") {

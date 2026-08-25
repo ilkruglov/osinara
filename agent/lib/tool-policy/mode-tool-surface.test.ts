@@ -379,6 +379,14 @@ describe("external group tool surface", () => {
     loadCurrentExternalGroupCapabilities.mockResolvedValueOnce(new Set(["manage_memory.undo"]));
 
     expect(surface).toHaveProperty("manage_memory");
+    const schema = surface.manage_memory!.inputSchema as z.ZodType;
+    expect(schema.safeParse({ action: "undo", memoryRef: "mem_0123456789abcdef0123456789abcdef" }).success)
+      .toBe(true);
+    expect(schema.safeParse({ action: "delete", memoryRef: "mem_0123456789abcdef0123456789abcdef" }).success)
+      .toBe(false);
+    expect(surface.manage_memory!.description).toContain('"action":"undo"');
+    expect(surface.manage_memory!.description).not.toContain('"action":"edit"');
+    expect(surface.manage_memory!.description).not.toContain('"action":"delete"');
     await expect(surface.manage_memory!.execute({ action: "delete", id: "00000000-0000-4000-8000-000000000001" }, context)).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
   });
 

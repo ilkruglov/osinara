@@ -11,9 +11,8 @@ import { requireMemoryAuthorization, requireWritableScope } from "../memory-cont
 import { memoryRepository } from "../memory-repository.js";
 import { logMemoryWriteEvent } from "../memory-observability.js";
 import { resolveMemoryTurnSource } from "../memory-turn-source.js";
-import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import { toModelMemory } from "../model-memory.js";
-import { rememberInputSchema, type RememberInput } from "../remember-contract.js";
+import { rememberInputSchema } from "../remember-contract.js";
 
 export default defineTool({
   description: [
@@ -31,9 +30,6 @@ export default defineTool({
     let item: Awaited<ReturnType<typeof memoryRepository.create>>;
     try {
       source = await resolveMemoryTurnSource(ctx, authorization, input.sourceSequence);
-      // The approval declaration controls Eve UX; exact consumed evidence independently guards writes.
-      const privateFamilyWrite = input.scope === "family" &&
-        ctx.session.auth.current?.attributes.telegramChatType === "private";
       const reviewWrite = source.isReview;
       if (reviewWrite && (input.sensitivity !== "normal" || input.basis !== "agent_inferred" ||
         input.sourceSequence === undefined)) {
@@ -42,13 +38,9 @@ export default defineTool({
           "Тихая проверка сохраняет только normal-память с конкретным sourceSequence",
         );
       }
-      const approvedWrite = input.sensitivity === "sensitive" || privateFamilyWrite;
-      if (approvedWrite) {
-        await requireToolApprovalEvidence(ctx, "remember", input);
-      }
       item = await memoryRepository.create(authorization, {
         // A request to save another participant's delta message is not that author's endorsement.
-        confirmation: (input.basis === "user_requested" && source.isCurrent) || approvedWrite
+        confirmation: input.basis === "user_requested" && source.isCurrent
           ? "user_confirmed"
           : "model_high",
         content: requireAllowedMemoryContent(input.content),
