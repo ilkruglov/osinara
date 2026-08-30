@@ -6,14 +6,15 @@
  * - `createInvitationCodeForOperation`: replay-stable code derived from a secret operation key.
  * - `hashInvitationCode`: deterministic lookup hash for high-entropy codes.
  * - `requireInvitationSigningSecret`: validates the dedicated runtime secret.
- * - `parseInvitationStartCommand`: extracts only a strict Telegram deep-link token.
+ * - `parseInvitationStartCommand`: extracts only a strict deep-link token for the current bot.
  */
 import { createHash, createHmac, randomBytes } from "node:crypto";
 
 export const INVITATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 export const INVITATION_SIGNING_SECRET_MIN_LENGTH = 32;
 const INVITATION_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
-const TELEGRAM_START_COMMAND_PATTERN = /^\/start(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{32})$/;
+const TELEGRAM_START_COMMAND_PATTERN =
+  /^\/start(?:@(?<target>[A-Za-z0-9_]{5,32}))?\s+(?<token>[A-Za-z0-9_-]{32})$/u;
 
 export function hashInvitationCode(code: string): string {
   return createHash("sha256").update(code, "utf8").digest("hex");
@@ -55,8 +56,11 @@ export function requireInvitationSigningSecret(): string {
   return secret;
 }
 
-export function parseInvitationStartCommand(text: string): string | null {
+export function parseInvitationStartCommand(text: string, botUsername: string): string | null {
   // Exact matching keeps arbitrary unknown-user messages out of the invitation verifier.
-  const token = TELEGRAM_START_COMMAND_PATTERN.exec(text.trim())?.[1];
+  const match = TELEGRAM_START_COMMAND_PATTERN.exec(text);
+  const target = match?.groups?.target;
+  if (target && target.toLowerCase() !== botUsername.toLowerCase()) return null;
+  const token = match?.groups?.token;
   return token && INVITATION_CODE_PATTERN.test(token) ? token : null;
 }

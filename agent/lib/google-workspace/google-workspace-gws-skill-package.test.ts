@@ -113,15 +113,16 @@ describe("Google Workspace gws skill packages", () => {
     expect(people).toContain("metadata.sources.etag");
   });
 
-  it("documents exact Gmail mutation argv and payload boundaries", async () => {
+  it("routes single-message deletion through the structured Gmail boundary", async () => {
     const gmail = await readSkill("gws-gmail");
 
-    // Resource and method names must remain separate argv entries for the reviewed route allowlist.
-    expect(gmail).toContain('["gmail", "users", "messages", "trash"');
-    expect(gmail).toContain('["gmail", "users", "messages", "delete"');
-    expect(gmail).toContain('["gmail", "users", "messages", "modify"');
-    expect(gmail).toContain('["schema", "gmail.users.messages.trash"]');
-    expect(gmail).toContain('\\"removeLabelIds\\":[\\"UNREAD\\"]');
+    expect(gmail).toContain("manage_gmail_message");
+    expect(gmail).toContain('{"action":"trash","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
+    expect(gmail).toContain('{"action":"delete","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
+    expect(gmail).toContain('{"action":"mark_read","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}');
+    expect(gmail).not.toContain('["gmail", "users", "messages", "trash"');
+    expect(gmail).not.toContain('["gmail", "users", "messages", "delete"');
+    expect(gmail).not.toContain('["gmail", "users", "messages", "modify"');
     expect(gmail).toMatch(/Do not combine resource and\s+method segments/u);
   });
 

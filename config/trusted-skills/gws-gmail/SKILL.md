@@ -59,22 +59,24 @@ Use `gws schema` output to build your `--params` and `--json` flags.
 
 Pass each API resource and method as a separate `argv` entry. Do not combine resource and
 method segments such as `users.messages.trash`, and do not put `schema` after `gmail`.
-Schema discovery is a top-level command:
+Schema discovery for API reads is a top-level command.
+
+Change one message only with the structured `manage_gmail_message` tool. Copy both `messageId` and
+`profileRef` unchanged from a previous Gmail result:
 
 ```json
-["schema", "gmail.users.messages.trash"]
+{"action":"trash","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}
+{"action":"delete","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}
+{"action":"restore","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}
+{"action":"mark_read","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}
+{"action":"mark_unread","messageId":"MESSAGE_ID","profileRef":"PROFILE_REF"}
 ```
 
-Use these exact command shapes with `execute_google_workspace`:
-
-```json
-["gmail", "users", "messages", "trash", "--params", "{\"userId\":\"me\",\"id\":\"MESSAGE_ID\"}"]
-["gmail", "users", "messages", "delete", "--params", "{\"userId\":\"me\",\"id\":\"MESSAGE_ID\"}"]
-["gmail", "users", "messages", "modify", "--params", "{\"userId\":\"me\",\"id\":\"MESSAGE_ID\"}", "--json", "{\"removeLabelIds\":[\"UNREAD\"]}"]
-```
-
-`trash` is recoverable; `delete` permanently deletes the message. Mark a message read by removing
-the `UNREAD` label in `--json`; `READ` is not a Gmail system label. URI identifiers belong in
-`--params`, while label changes belong in `--json`. These mutations are supported and trigger
-automatic Eve HITL. A command-forbidden result means the `argv` shape is outside the reviewed
-allowlist; it does not prove that the Google profile is read-only or lacks an OAuth scope.
+Do not pass message or thread `trash`, `delete`, `untrash`, `modify`, `batchDelete`, or `batchModify`
+through `execute_google_workspace`. Before Eve asks
+for approval, Osinara loads the exact message from the current verified Google profile and displays
+its mailbox, sender, subject, date, short snippet, and immutable Gmail ID. `trash` is recoverable;
+`delete` permanently deletes the message. For multiple messages or a thread, resolve its message IDs
+first, then call `manage_gmail_message` separately for each one. A command-forbidden result does not
+prove that the Google profile is read-only or lacks an OAuth scope; follow its correction and use the
+structured tool when directed.

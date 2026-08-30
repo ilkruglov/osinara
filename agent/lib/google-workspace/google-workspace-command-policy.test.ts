@@ -7,7 +7,10 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { classifyGoogleWorkspaceCommand } from "./google-workspace-command-policy.js";
+import {
+  classifyGoogleWorkspaceCommand,
+  classifyModelFacingGoogleWorkspaceCommand,
+} from "./google-workspace-command-policy.js";
 
 describe("classifyGoogleWorkspaceCommand", () => {
   it("classifies reviewed reads and mutations independently of argument text", () => {
@@ -29,6 +32,48 @@ describe("classifyGoogleWorkspaceCommand", () => {
       .toBe("mutation");
     expect(classifyGoogleWorkspaceCommand(["gmail", "+send", "--help"])).toBe("read");
     expect(classifyGoogleWorkspaceCommand(["schema", "calendar.events.insert"])).toBe("read");
+  });
+
+  it("reserves message and thread state changes for the structured Gmail tool", () => {
+    for (const action of ["trash", "delete", "untrash", "modify"]) {
+      const argv = [
+        "gmail",
+        "users",
+        "messages",
+        action,
+        "--params",
+        '{"userId":"me","id":"message-id"}',
+      ];
+      expect(classifyGoogleWorkspaceCommand(argv)).toBe("mutation");
+      expect(() => classifyModelFacingGoogleWorkspaceCommand(argv)).toThrowError(
+        /AGENT_GOOGLE_WORKSPACE_COMMAND_FORBIDDEN.*manage_gmail_message/u,
+      );
+    }
+    expect(() => classifyModelFacingGoogleWorkspaceCommand([
+      "gmail",
+      "users",
+      "messages",
+      "batchDelete",
+      "--params",
+      '{"userId":"me"}',
+      "--json",
+      '{"ids":["message-1","message-2"]}',
+    ])).toThrowError(/manage_gmail_message.*каждый messageId/u);
+    for (const route of [
+      ["gmail", "users", "messages", "batchModify"],
+      ["gmail", "users", "threads", "delete"],
+      ["gmail", "users", "threads", "modify"],
+      ["gmail", "users", "threads", "trash"],
+      ["gmail", "users", "threads", "untrash"],
+    ]) {
+      expect(() => classifyModelFacingGoogleWorkspaceCommand([
+        ...route,
+        "--params",
+        '{"userId":"me","id":"target-id"}',
+        "--json",
+        "{}",
+      ])).toThrowError(/manage_gmail_message/u);
+    }
   });
 
   it("fails closed for auth, unknown methods, and shell command wrappers", () => {

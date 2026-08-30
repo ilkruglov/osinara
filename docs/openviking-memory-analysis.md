@@ -3,9 +3,7 @@
 Дата исследования: 8 августа 2026 года.
 
 Статус: historical research context. Описания прежних extraction/brief mechanisms не являются
-текущим runtime-контрактом после миграции `059_main_agent_owned_memory.sql`. Актуальная архитектура,
-в которой единственное смысловое решение принимает root-agent через `remember`, зафиксирована в
-[`memory-system-full.md`](memory-system-full.md).
+текущим runtime-контрактом.
 
 Исследованный upstream:
 

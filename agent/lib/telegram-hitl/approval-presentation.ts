@@ -19,6 +19,9 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
+import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
+import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
+import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
 import {
   localizeTelegramInputRequest,
   type TelegramInputRequest,
@@ -44,6 +47,11 @@ function googleWorkspacePrompt(input: Record<string, unknown>): string {
 }
 
 interface ApprovalPresentationDependencies {
+  findGmailMessage(
+    messageId: string,
+    profileRef: string,
+    ctx: Pick<SessionContext, "session">,
+  ): Promise<GmailMessageApprovalSubject>;
   findSchedule(auth: AgentScheduleAuthorization, id: string): Promise<AgentScheduleRecord | null>;
 }
 
@@ -78,6 +86,80 @@ const SCHEDULE_ACTIONS: Readonly<Record<string, { action: string; consequence: s
     consequence: "Сохранённые параметры расписания будут заменены указанными изменениями.",
   },
 };
+
+const GMAIL_MESSAGE_ACTIONS = {
+  delete: {
+    action: "Безвозвратно удалить письмо Gmail",
+    consequence: "Письмо будет удалено навсегда. Его нельзя будет восстановить.",
+  },
+  mark_read: {
+    action: "Отметить письмо Gmail прочитанным",
+    consequence: "Письмо больше не будет отмечено как непрочитанное.",
+  },
+  mark_unread: {
+    action: "Отметить письмо Gmail непрочитанным",
+    consequence: "Письмо будет отмечено как непрочитанное.",
+  },
+  restore: {
+    action: "Восстановить письмо Gmail из корзины",
+    consequence: "Письмо будет возвращено из корзины.",
+  },
+  trash: {
+    action: "Переместить письмо в корзину Gmail",
+    consequence: "Письмо будет перемещено в корзину. Его можно будет восстановить.",
+  },
+} as const;
+
+function approvalValue(value: string | null, missing: string, maxCharacters = 500): string {
+  if (value === null) return missing;
+  const normalized = value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  if (!normalized) return missing;
+  return normalized.length <= maxCharacters
+    ? normalized
+    : `${normalized.slice(0, maxCharacters - 1).trimEnd()}…`;
+}
+
+function gmailMessagePrompt(
+  actionName: keyof typeof GMAIL_MESSAGE_ACTIONS,
+  message: GmailMessageApprovalSubject,
+): string {
+  const action = GMAIL_MESSAGE_ACTIONS[actionName];
+  return [
+    "Подтверждение действия",
+    "",
+    `Действие: ${action.action}`,
+    `Профиль: ${message.scope === "personal" ? "личный" : "семейный"}`,
+    `Почтовый ящик: ${approvalValue(message.profileDisplayName, "не определён")}`,
+    `Отправитель: ${approvalValue(message.from, "не указан")}`,
+    `Тема: ${approvalValue(message.subject, "без темы")}`,
+    `Дата: ${approvalValue(message.date, "не указана")}`,
+    `Фрагмент письма: ${approvalValue(message.snippet, "не предоставлен Gmail", 240)}`,
+    `Gmail ID: ${message.id}`,
+    "",
+    `Что произойдёт: ${action.consequence}`,
+  ].join("\n");
+}
+
+function gmailMessageOptions(
+  request: TelegramInputRequest,
+  actionName: keyof typeof GMAIL_MESSAGE_ACTIONS,
+): TelegramInputRequest["options"] {
+  const approveLabels: Readonly<Record<keyof typeof GMAIL_MESSAGE_ACTIONS, string>> = {
+    delete: "Удалить навсегда",
+    mark_read: "Отметить прочитанным",
+    mark_unread: "Отметить непрочитанным",
+    restore: "Восстановить письмо",
+    trash: "Переместить в корзину",
+  };
+  return request.options?.map((option) => ({
+    ...option,
+    label: option.id === "approve"
+      ? approveLabels[actionName]
+      : option.id === "deny" || option.id === "cancel"
+        ? "Отменить"
+        : option.label,
+  }));
+}
 
 function scheduleDate(schedule: AgentScheduleRecord): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -166,6 +248,18 @@ export function createTelegramApprovalPresenter(
     const localized = localizeTelegramInputRequest(request);
     if (
       request.display === "confirmation" &&
+      request.action.toolName === "manage_gmail_message"
+    ) {
+      const input = requireGmailMessageInput(request.action.input);
+      const message = await dependencies.findGmailMessage(input.messageId, input.profileRef, ctx);
+      return {
+        ...localized,
+        options: gmailMessageOptions(localized, input.action),
+        prompt: gmailMessagePrompt(input.action, message),
+      };
+    }
+    if (
+      request.display === "confirmation" &&
       request.action.toolName === "execute_google_workspace"
     ) {
       return { ...localized, prompt: googleWorkspacePrompt(request.action.input) };
@@ -207,5 +301,6 @@ export function createTelegramApprovalPresenter(
 }
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
+  findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });

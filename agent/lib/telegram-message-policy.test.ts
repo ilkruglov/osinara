@@ -2,7 +2,7 @@
  * Telegram dispatch policy tests.
  *
  * Constructs covered:
- * - `isMessageAddressedToBot`: preserves command semantics and accepts configured name stems.
+ * - `isMessageAddressedToBot`: ignores slash commands and accepts configured name stems.
  * - `classifyTelegramInboundMedia`: recognizes one native photo or allowlisted document candidate.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
@@ -59,10 +59,7 @@ describe("isMessageAddressedToBot", () => {
     },
   );
 
-  it("accepts commands, mentions, and replies to this bot", () => {
-    expect(isMessageAddressedToBot({ ...groupMessage, text: "/ask помоги" }, "family_agent")).toBe(
-      true,
-    );
+  it("accepts mentions and replies to this bot", () => {
     expect(
       isMessageAddressedToBot({ ...groupMessage, text: "@family_agent помоги" }, "family_agent"),
     ).toBe(true);
@@ -79,13 +76,28 @@ describe("isMessageAddressedToBot", () => {
     ).toBe(true);
   });
 
-  it("accepts an explicit command suffix only when it targets this bot", () => {
-    expect(
-      isMessageAddressedToBot({ ...groupMessage, text: "/ask@FAMILY_AGENT помоги" }, "family_agent"),
-    ).toBe(true);
-    expect(
-      isMessageAddressedToBot({ ...groupMessage, text: "/ask@other_bot помоги" }, "family_agent"),
-    ).toBe(false);
+  it.each(["/ask помоги", "/clear", "/clear 😁", "/ask@FAMILY_AGENT помоги", "/ask@other_bot помоги"])(
+    "does not treat an application-unsupported slash command as an address: %s",
+    (text) => {
+      expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
+    },
+  );
+
+  it("does not let a reply route turn an unsupported slash command into an address", () => {
+    expect(isMessageAddressedToBot({
+      ...groupMessage,
+      replyToMessage: {
+        from: { id: "bot", isBot: true, username: "family_agent" },
+      },
+      text: "/clear",
+    }, "family_agent")).toBe(false);
+  });
+
+  it("does not hide a mention after text that exceeds the Telegram command limit", () => {
+    const oversizedCommand = `/${"a".repeat(33)} @family_agent помоги`;
+
+    expect(isMessageAddressedToBot({ ...groupMessage, text: oversizedCommand }, "family_agent"))
+      .toBe(true);
   });
 
   it("does not treat an indented command as a Telegram bot command", () => {

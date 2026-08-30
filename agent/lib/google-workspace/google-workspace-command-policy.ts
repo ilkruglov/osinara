@@ -4,6 +4,7 @@
  * Exports:
  * - `GoogleWorkspaceCommandKind`: read-only or externally mutating operation.
  * - `classifyGoogleWorkspaceCommand`: validates an exact gws argv and fails closed when unknown.
+ * - `classifyModelFacingGoogleWorkspaceCommand`: reserves structured application-owned actions.
  *
  * The allowlist is pinned to the installed gws 0.22.5 command tree. Command meaning is never
  * inferred from model prose, JSON bodies, flag names, or substrings in user-controlled values.
@@ -256,6 +257,18 @@ const REVIEWED_ROUTES = [...READ_ROUTES, ...MUTATION_ROUTES]
   .map((route) => ({ route, segments: route.split(" ") }))
   .sort((left, right) => right.segments.length - left.segments.length);
 const SERVICE_NAMES = new Set(["calendar", "docs", "drive", "gmail", "people", "sheets"]);
+const STRUCTURED_APPLICATION_ROUTES: Readonly<Record<string, string>> = {
+  "gmail users messages batchDelete": "manage_gmail_message по одному вызову на каждый messageId",
+  "gmail users messages batchModify": "manage_gmail_message по одному вызову на каждый messageId",
+  "gmail users messages delete": "manage_gmail_message",
+  "gmail users messages modify": "manage_gmail_message",
+  "gmail users messages trash": "manage_gmail_message",
+  "gmail users messages untrash": "manage_gmail_message",
+  "gmail users threads delete": "manage_gmail_message по одному вызову на каждый messageId цепочки",
+  "gmail users threads modify": "manage_gmail_message по одному вызову на каждый messageId цепочки",
+  "gmail users threads trash": "manage_gmail_message по одному вызову на каждый messageId цепочки",
+  "gmail users threads untrash": "manage_gmail_message по одному вызову на каждый messageId цепочки",
+};
 const FILE_PATH_FLAGS = new Set([
   "-a",
   "-o",
@@ -454,4 +467,21 @@ export function classifyGoogleWorkspaceCommand(
     throw googleWorkspaceArgumentsTooLarge();
   }
   return reviewed.kind;
+}
+
+export function classifyModelFacingGoogleWorkspaceCommand(
+  argv: readonly string[],
+): GoogleWorkspaceCommandKind {
+  const kind = classifyGoogleWorkspaceCommand(argv);
+  if (kind !== "mutation") return kind;
+
+  const reviewed = resolveReviewedRoute(argv);
+  const structuredTool = STRUCTURED_APPLICATION_ROUTES[reviewed.route];
+  if (structuredTool) {
+    throw forbidden(
+      `Route ${reviewed.route} принадлежит структурированному прикладному действию.`,
+      `Используйте ${structuredTool}; не передавайте эту mutation через execute_google_workspace.`,
+    );
+  }
+  return kind;
 }

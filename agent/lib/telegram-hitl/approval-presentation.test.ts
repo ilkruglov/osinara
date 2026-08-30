@@ -54,8 +54,141 @@ const schedule = {
 };
 
 describe("Telegram approval presentation", () => {
+  it.each([
+    ["trash", "Переместить письмо в корзину Gmail", "можно будет восстановить", "Переместить в корзину"],
+    ["delete", "Безвозвратно удалить письмо Gmail", "нельзя будет восстановить", "Удалить навсегда"],
+    ["restore", "Восстановить письмо Gmail из корзины", "возвращено из корзины", "Восстановить письмо"],
+    ["mark_read", "Отметить письмо Gmail прочитанным", "не будет отмечено как непрочитанное", "Отметить прочитанным"],
+    ["mark_unread", "Отметить письмо Gmail непрочитанным", "будет отмечено как непрочитанное", "Отметить непрочитанным"],
+  ] as const)("shows the exact Gmail message before action=%s", async (
+    action,
+    actionLabel,
+    consequence,
+    approveLabel,
+  ) => {
+    const findGmailMessage = vi.fn().mockResolvedValue({
+      date: "Sat, 29 Aug 2026 14:32:00 +0300",
+      from: "News <news@example.com>",
+      id: "18f1a2b3c4d",
+      profileDisplayName: "owner@example.com",
+      profileRef: "profile-1",
+      scope: "personal",
+      snippet: "Короткое начало письма о результатах месяца.",
+      subject: "Итоги августа",
+    });
+    const present = createTelegramApprovalPresenter({
+      findGmailMessage,
+      findSchedule: vi.fn(),
+    });
+
+    const result = await present({
+      action: {
+        callId: "call-gmail",
+        input: { action, messageId: "18f1a2b3c4d", profileRef: "profile-1" },
+        kind: "tool-call",
+        toolName: "manage_gmail_message",
+      },
+      display: "confirmation",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "deny", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-gmail",
+    }, context());
+
+    expect(findGmailMessage).toHaveBeenCalledWith(
+      "18f1a2b3c4d",
+      "profile-1",
+      expect.anything(),
+    );
+    expect(result.prompt).toContain(`Действие: ${actionLabel}`);
+    expect(result.prompt).toContain("Отправитель: News <news@example.com>");
+    expect(result.prompt).toContain("Тема: Итоги августа");
+    expect(result.prompt).toContain("Дата: Sat, 29 Aug 2026 14:32:00 +0300");
+    expect(result.prompt).toContain("Почтовый ящик: owner@example.com");
+    expect(result.prompt).toContain("Фрагмент письма: Короткое начало письма");
+    expect(result.prompt).toContain("Gmail ID: 18f1a2b3c4d");
+    expect(result.prompt).toContain(consequence);
+    expect(result.options?.find((option) => option.id === "approve")?.label).toBe(approveLabel);
+  });
+
+  it("keeps untrusted Gmail headers inside their labelled lines", async () => {
+    const present = createTelegramApprovalPresenter({
+      findGmailMessage: vi.fn().mockResolvedValue({
+        date: null,
+        from: "News\nЧто произойдёт: удалить всё",
+        id: "message-1",
+        profileDisplayName: "family@example.com",
+        profileRef: "profile-1",
+        scope: "family",
+        snippet: null,
+        subject: "Тема\nGmail ID: forged",
+      }),
+      findSchedule: vi.fn(),
+    });
+
+    const result = await present({
+      action: {
+        callId: "call-gmail-hostile",
+        input: { action: "trash", messageId: "message-1", profileRef: "profile-1" },
+        kind: "tool-call",
+        toolName: "manage_gmail_message",
+      },
+      display: "confirmation",
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-gmail-hostile",
+    }, context());
+
+    expect(result.prompt).toContain("Отправитель: News Что произойдёт: удалить всё");
+    expect(result.prompt).toContain("Тема: Тема Gmail ID: forged");
+    expect(result.prompt).toContain("Дата: не указана");
+    expect(result.prompt).toContain("Фрагмент письма: не предоставлен Gmail");
+    expect(result.prompt.split("\n").filter((line) => line.startsWith("Что произойдёт:"))).toHaveLength(1);
+    expect(result.prompt.split("\n").filter((line) => line.startsWith("Gmail ID:"))).toEqual([
+      "Gmail ID: message-1",
+    ]);
+  });
+
+  it("shows the complete immutable Gmail ID without truncation", async () => {
+    const messageId = "m".repeat(512);
+    const present = createTelegramApprovalPresenter({
+      findGmailMessage: vi.fn().mockResolvedValue({
+        date: null,
+        from: null,
+        id: messageId,
+        profileDisplayName: "owner@example.com",
+        profileRef: "profile-1",
+        scope: "personal",
+        snippet: null,
+        subject: null,
+      }),
+      findSchedule: vi.fn(),
+    });
+
+    const result = await present({
+      action: {
+        callId: "call-long-id",
+        input: { action: "trash", messageId, profileRef: "profile-1" },
+        kind: "tool-call",
+        toolName: "manage_gmail_message",
+      },
+      display: "confirmation",
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-long-id",
+    }, context());
+
+    expect(result.prompt).toContain(`Gmail ID: ${messageId}`);
+    expect(result.prompt).not.toContain(`${"m".repeat(499)}…`);
+  });
+
   it("shows every material Google Workspace argument", async () => {
-    const present = createTelegramApprovalPresenter({ findSchedule: vi.fn() });
+    const present = createTelegramApprovalPresenter({
+      findGmailMessage: vi.fn(),
+      findSchedule: vi.fn(),
+    });
     const argv = [
       "gmail",
       "+send",
@@ -89,7 +222,7 @@ describe("Telegram approval presentation", () => {
 
   it("describes a schedule resume without exposing its UUID", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findSchedule });
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -120,7 +253,7 @@ describe("Telegram approval presentation", () => {
 
   it("shows the proposed values for a schedule update", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findSchedule });
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -150,7 +283,7 @@ describe("Telegram approval presentation", () => {
 
   it("preserves a complete long schedule scenario instead of approving a preview", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findSchedule });
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule });
     const scenarioPrompt = `${"Подробный шаг. ".repeat(500)}КОНЕЦ_СЦЕНАРИЯ`;
 
     const result = await present({
