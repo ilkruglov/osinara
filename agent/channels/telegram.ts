@@ -380,8 +380,7 @@ export default telegramChannel({
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
       if (!awaitingApproval) {
-        // Evidence is durable at the terminal boundary; a parked HITL turn retains its source set.
-        await releaseMemoryTurnSources(ctx);
+        // Completion verifies review evidence before release; a parked HITL turn retains its source set.
         const reviewBatchId = memoryReviewBatchId(ctx);
         if (reviewBatchId) {
           await memoryReviewRepository.completeBatch({
@@ -391,6 +390,7 @@ export default telegramChannel({
             eveTurnId: ctx.session.turn.id,
           });
         }
+        await releaseMemoryTurnSources(ctx);
       }
       if (isScheduledSession(ctx) && !awaitingApproval) {
         // Successful scheduled runs are completed atomically with Telegram delivery above.

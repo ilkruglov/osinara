@@ -281,6 +281,50 @@ describeWithDatabase("memory review dispatch repository", () => {
     )).resolves.toMatchObject({ rows: [{ source_count: 50, status: "running" }] });
   });
 
+  it("fails completion without a source binding and keeps the lane blocked", async () => {
+    const { claim } = await claimBackgroundBatch();
+    const session = await memoryReviewSessionRepository.prepare(claim, new Date());
+    await memoryReviewDispatchRepository.markDispatchStarted(claim, session.id);
+    await memoryReviewRepository.bindEveTurn({
+      applicationSessionId: session.id,
+      batchId: claim.batchId,
+      eveSessionId: "eve-unbound-review",
+      eveTurnId: "turn-unbound-review",
+    });
+
+    const completion = {
+      batchId: claim.batchId,
+      completedAt: new Date("2026-08-12T10:00:02.000Z"),
+      eveSessionId: "eve-unbound-review",
+      eveTurnId: "turn-unbound-review",
+    };
+    await expect(memoryReviewRepository.completeBatch(completion)).resolves.toBe("failed");
+    await expect(memoryReviewRepository.completeBatch(completion)).resolves.toBe("failed");
+    await expect(database().query(
+      `SELECT batch.status::text, batch.diagnostic_code,
+              lane.processed_through_sequence::text AS lane_cursor,
+              app_session.task_state::text, app_session.retired_at,
+              count(DISTINCT source.timeline_entry_id)::integer AS source_count,
+              count(DISTINCT alert.id)::integer AS alert_count
+         FROM memory_review_batches AS batch
+         JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
+         JOIN conversation_sessions AS app_session ON app_session.id = batch.application_session_id
+         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
+         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
+        WHERE batch.id = $1
+        GROUP BY batch.id, lane.id, app_session.id`,
+      [claim.batchId],
+    )).resolves.toMatchObject({ rows: [{
+      alert_count: 1,
+      diagnostic_code: "AGENT_MEMORY_REVIEW_SOURCE_BINDING_MISSING",
+      lane_cursor: "0",
+      retired_at: expect.any(Date),
+      source_count: 50,
+      status: "failed",
+      task_state: "failed",
+    }] });
+  });
+
   it("atomically marks an interactive session failure and retains its sources for repair", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await database().query<{ id: string }>(

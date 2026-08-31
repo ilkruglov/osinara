@@ -11,6 +11,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { createMainAgentMemoryFixture } from "../memory-agent-write.integration-fixtures.js";
+import { memoryTurnSourceRepository } from "../memory-turn-source-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
 
@@ -181,12 +182,25 @@ describeWithDatabase("memory review repository", () => {
       eveSessionId: "eve-retention-complete",
       eveTurnId: "turn-retention-complete",
     });
+    await memoryTurnSourceRepository.bind({
+      applicationSessionId: session.rows[0]!.id,
+      conversationId: fixture.conversationId,
+      currentTimelineEntryId: firstSource.id,
+      eveSessionId: "eve-retention-complete",
+      eveTurnId: "turn-retention-complete",
+      invokingActorId: "agent-memory-author",
+      invokingActorKind: "telegram_user",
+      memoryReviewBatchId: first!.batchId,
+      memoryReviewSourceEntryIds: first!.sourceEntryIds,
+      visibleTimelineEntryIds: [firstSource.id],
+    });
     await memoryReviewRepository.completeBatch({
       batchId: first!.batchId,
       completedAt: new Date(),
       eveSessionId: "eve-retention-complete",
       eveTurnId: "turn-retention-complete",
     });
+    await memoryTurnSourceRepository.release("eve-retention-complete", "turn-retention-complete");
     await expect(memoryReviewRepository.getLaneCursor({
       conversationId: fixture.conversationId,
       messageThreadId: null,
@@ -223,6 +237,18 @@ describeWithDatabase("memory review repository", () => {
       batchId: batch!.batchId,
       eveSessionId: "eve-review-replay",
       eveTurnId: "turn-review-replay",
+    });
+    await memoryTurnSourceRepository.bind({
+      applicationSessionId: session.rows[0]!.id,
+      conversationId: fixture.conversationId,
+      currentTimelineEntryId: source.id,
+      eveSessionId: "eve-review-replay",
+      eveTurnId: "turn-review-replay",
+      invokingActorId: "agent-memory-author",
+      invokingActorKind: "telegram_user",
+      memoryReviewBatchId: batch!.batchId,
+      memoryReviewSourceEntryIds: batch!.sourceEntryIds,
+      visibleTimelineEntryIds: [source.id],
     });
     const completion = {
       batchId: batch!.batchId,

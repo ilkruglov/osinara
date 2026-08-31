@@ -85,6 +85,8 @@ describe("memory review dispatcher", () => {
           memoryReviewMode: "background",
           memoryReviewSourceEntryIds: batch.sourceEntryIds,
           memoryScopes: ["family"],
+          telegramActorId: batch.ownerTelegramUserId,
+          telegramActorKind: "telegram_user",
           telegramConversationId: batch.conversationId,
           telegramTimelineSequence: "50",
         }),

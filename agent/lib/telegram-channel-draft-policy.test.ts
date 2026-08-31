@@ -48,9 +48,16 @@ describe("Telegram channel draft policy", () => {
 
   it("retains turn-bound memory sources while HITL is parked", async () => {
     const source = await readFile(TELEGRAM_CHANNEL_PATH, "utf8");
+    const turnCompleted = source.slice(
+      source.indexOf('async "turn.completed"'),
+      source.indexOf('async "authorization.required"'),
+    );
+    const reviewCompletion = turnCompleted.indexOf("await memoryReviewRepository.completeBatch(");
+    const sourceRelease = turnCompleted.indexOf("await releaseMemoryTurnSources(ctx)");
 
     expect(source).toContain("await bindMemoryTurnSources(ctx)");
-    expect(source).toContain("await releaseMemoryTurnSources(ctx)");
-    expect(source).toMatch(/if \(!awaitingApproval\) \{\s*\/\/ Evidence[\s\S]*?releaseMemoryTurnSources/u);
+    expect(turnCompleted).toContain("if (!awaitingApproval) {");
+    expect(reviewCompletion).toBeGreaterThan(-1);
+    expect(sourceRelease).toBeGreaterThan(reviewCompletion);
   });
 });

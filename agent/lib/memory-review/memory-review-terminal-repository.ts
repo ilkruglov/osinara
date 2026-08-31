@@ -1,5 +1,5 @@
 /**
- * Terminal preparation state for interactive memory-review batches.
+ * Terminal state for interactive and background memory-review batches.
  *
  * Export:
  * - `memoryReviewTerminalRepository`: replay-safe completion/failure and pre-Eve source release.
@@ -12,6 +12,9 @@ import { database } from "../database.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 
 export type MemoryReviewTerminalResult = "recorded" | "replayed";
+export type MemoryReviewCompletionResult = MemoryReviewTerminalResult | "failed";
+
+const SOURCE_BINDING_MISSING = "AGENT_MEMORY_REVIEW_SOURCE_BINDING_MISSING";
 
 async function advanceCompletedChain(client: PoolClient, laneId: string): Promise<void> {
   const lane = await client.query<{ processed_through_sequence: string }>(
@@ -85,39 +88,75 @@ export const memoryReviewTerminalRepository = {
     completedAt: Date;
     eveSessionId: string;
     eveTurnId: string;
-  }): Promise<MemoryReviewTerminalResult> {
+  }): Promise<MemoryReviewCompletionResult> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
       const batch = await client.query<{
-        application_session_id: string; eve_session_id: string; lane_id: string;
+        application_session_id: string; diagnostic_code: string | null;
+        eve_session_id: string | null; eve_turn_id: string | null; lane_id: string;
+        status: string;
       }>(
-        `UPDATE memory_review_batches
-            SET status = 'completed', completed_at = $2, updated_at = $2,
-                lease_token = NULL, lease_expires_at = NULL
-          WHERE id = $1 AND status IN ('running', 'dispatching')
-            AND eve_session_id = $3 AND eve_turn_id = $4
-          RETURNING lane_id, application_session_id, eve_session_id`,
-        [input.batchId, input.completedAt, input.eveSessionId, input.eveTurnId],
+        `SELECT lane_id, application_session_id, eve_session_id, eve_turn_id,
+                status::text, diagnostic_code
+           FROM memory_review_batches WHERE id = $1 FOR UPDATE`,
+        [input.batchId],
       );
-      if (batch.rowCount !== 1) {
+      const recorded = batch.rows[0];
+      const exactTurn = recorded?.eve_session_id === input.eveSessionId &&
+        recorded.eve_turn_id === input.eveTurnId;
+      if (recorded?.status === "completed" && exactTurn) {
         // Eve lifecycle events are at-least-once; an identical terminal replay is a no-op.
-        const replay = await client.query<{ status: string }>(
-          "SELECT status::text FROM memory_review_batches WHERE id = $1 FOR UPDATE",
-          [input.batchId],
-        );
-        if (replay.rows[0]?.status !== "completed") throw new AppError(
-          "AGENT_MEMORY_REVIEW_COMPLETION_INVALID",
-          "Пакет проверки памяти завершён с другим результатом или недоступен",
-        );
         await client.query("COMMIT");
         return "replayed";
       }
-      const recorded = batch.rows[0]!;
+      if (recorded?.status === "failed" && exactTurn &&
+        recorded.diagnostic_code === SOURCE_BINDING_MISSING) {
+        await client.query("COMMIT");
+        return "failed";
+      }
+      if (!recorded || !exactTurn || !["running", "dispatching"].includes(recorded.status)) {
+        throw new AppError(
+          "AGENT_MEMORY_REVIEW_COMPLETION_INVALID",
+          "Пакет проверки памяти завершён с другим результатом или недоступен",
+        );
+      }
+
+      const sourceBinding = await client.query(
+        `SELECT 1 FROM memory_turn_source_sets
+          WHERE memory_review_batch_id = $1 AND eve_session_id = $2 AND eve_turn_id = $3`,
+        [input.batchId, input.eveSessionId, input.eveTurnId],
+      );
+      if (sourceBinding.rowCount !== 1) {
+        await client.query(
+          `UPDATE memory_review_batches
+              SET status = 'failed', diagnostic_code = $2, completed_at = $3, updated_at = $3,
+                  lease_token = NULL, lease_expires_at = NULL
+            WHERE id = $1`,
+          [input.batchId, SOURCE_BINDING_MISSING, input.completedAt],
+        );
+        await terminalizeApplicationSession(client, {
+          applicationSessionId: recorded.application_session_id,
+          completedAt: input.completedAt,
+          eveSessionId: input.eveSessionId,
+          outcome: "failed",
+        });
+        await enqueueMemoryReviewOwnerAlert(client, input.batchId, SOURCE_BINDING_MISSING);
+        await client.query("COMMIT");
+        return "failed";
+      }
+
+      await client.query(
+        `UPDATE memory_review_batches
+            SET status = 'completed', completed_at = $2, updated_at = $2,
+                lease_token = NULL, lease_expires_at = NULL
+          WHERE id = $1`,
+        [input.batchId, input.completedAt],
+      );
       await terminalizeApplicationSession(client, {
         applicationSessionId: recorded.application_session_id,
         completedAt: input.completedAt,
-        eveSessionId: recorded.eve_session_id,
+        eveSessionId: input.eveSessionId,
         outcome: "completed",
       });
       await advanceCompletedChain(client, recorded.lane_id);

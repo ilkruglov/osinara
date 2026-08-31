@@ -108,6 +108,7 @@ const POST_V0101_MIGRATIONS = [
   "074_memory_review_empty_response_recovery.sql",
   "075_telegram_channel_senders.sql",
   "076_telegram_hitl_approval_timeout.sql",
+  "077_memory_review_source_binding_recovery.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
