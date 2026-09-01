@@ -51,6 +51,7 @@ export function generateInternalSecrets(
     invitationSigningSecret: generate("invitation-signing-secret"),
     postgresPassword: generate("postgres-password"),
     telegramWebhookSecretToken: generate("telegram-webhook-secret-token"),
+    workflowPostgresPassword: generate("workflow-postgres-password"),
   };
   const values = Object.values(secrets);
   if (

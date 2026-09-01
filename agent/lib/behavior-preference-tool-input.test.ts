@@ -37,7 +37,9 @@ import manageBehaviorPreference from "./tools/manage_behavior_preference.js";
 const context = { callId: "call-1" } as ToolContext;
 
 function approvalFor(input: Record<string, unknown>) {
-  return manageBehaviorPreference.approval!({ toolInput: input } as never);
+  return (manageBehaviorPreference.approval as (context: never) => unknown)(
+    { toolInput: input } as never,
+  );
 }
 
 describe("manage_behavior_preference model input", () => {

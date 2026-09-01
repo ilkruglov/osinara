@@ -1,31 +1,33 @@
-# Osinara
+<h1 align="center">Osinara</h1>
 
 <p align="center">
-  <strong>Семейный Telegram-агент с долговременной памятью, безопасными областями доступа и production-grade деплоем.</strong>
+  <strong>Личный и семейный Telegram-агент: помнит контекст, ведёт дела, работает с файлами и сервисами — и держит строгие границы между личным, семейным и групповым.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/nyxandro/osinara/actions/workflows/ci-release.yaml"><img alt="CI and release" src="https://img.shields.io/github/actions/workflow/status/nyxandro/osinara/ci-release.yaml?branch=main&label=CI%20and%20release&style=for-the-badge"></a>
-  <a href="https://github.com/nyxandro/osinara/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/nyxandro/osinara?style=for-the-badge&label=Release"></a>
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white">
-  <img alt="Eve" src="https://img.shields.io/badge/Eve-0.32.0-111827?style=for-the-badge">
+  <a href="https://github.com/nyxandro/osinara/actions/workflows/ci-release.yaml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/nyxandro/osinara/ci-release.yaml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/nyxandro/osinara/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/nyxandro/osinara?style=flat-square&label=release"></a>
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24.x-339933?style=flat-square&logo=node.js&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Eve" src="https://img.shields.io/badge/Eve-0.40.0-111827?style=flat-square">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-pgvector%2017-4169E1?style=flat-square&logo=postgresql&logoColor=white">
 </p>
 
-<p align="center">
-  <a href="#быстрый-старт"><img alt="Быстрый старт" src="https://img.shields.io/badge/Быстрый%20старт-Запустить%20локально-2563EB?style=for-the-badge"></a>
-  <a href="#проверка"><img alt="Проверка" src="https://img.shields.io/badge/Проверка-Typecheck%20%2B%20Tests%20%2B%20Build-16A34A?style=for-the-badge"></a>
-  <a href="docs/production-deployment.md"><img alt="Production runbook" src="https://img.shields.io/badge/Runbook-Production%20deployment-7C3AED?style=for-the-badge"></a>
-  <a href="https://github.com/nyxandro/osinara/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-Immutable%20GHCR%20images-0F172A?style=for-the-badge"></a>
-</p>
+---
 
-## Что Это
+## Что это
 
-Osinara — приватный семейный Telegram-агент на TypeScript, Eve `0.32.0`, PostgreSQL, Groq Whisper, Docker Compose и нативных skills. Проект делает упор не на «чат-бота вообще», а на строгие границы между личным, семейным и внешним групповым контекстом.
+Osinara — self-hosted агент, который живёт в Telegram и работает как личный ассистент одной семьи.
+Он говорит по-русски, понимает голосовые, помнит договорённости между сессиями,
+сам напоминает о делах и умеет доводить задачи до результата через инструменты: документы, Google Workspace,
+браузер, брокерский счёт, файлы, sandbox.
 
-Главная идея: пользователь может доверять агенту бытовые задачи, файлы, память, расписания и интеграции, при этом приложение не принимает идентичность, роли или область доступа из текста модели. Источники доверия — Telegram update, session auth и PostgreSQL.
+Ключевое отличие от обычного бота: **права не живут в промте**. Кто ты, из какой ты семьи, что тебе доступно
+в этом чате — определяется проверенным Telegram-апдейтом и базой, а не текстом от модели. Личная память
+никогда не попадает в групповой чат, внешняя группа никогда не получает доступ к личным данным и сервисам.
 
-## Возможности
+**Рассчитан на:** одну семью на своём сервере. Один владелец, приглашённые участники, закрытые семейные группы
+и отдельно — внешние группы (рабочие, дружеские), где агент работает в урезанном режиме.
 
 | Блок | Что умеет |
 | --- | --- |
@@ -41,191 +43,169 @@ Osinara — приватный семейный Telegram-агент на TypeScr
 | Оркестрация | В trusted private/family режимах root-agent делегирует большие задачи нативному Eve `agent` со свежим контекстом и теми же разрешёнными tools, skills, connections, sandbox и workspace; во внешних группах child delegation запрещена. |
 | Production | Immutable GitHub releases, GHCR digest images, Telegram approval перед deploy, systemd timer на сервере. |
 
-## Архитектура
+---
 
-```mermaid
-flowchart LR
-  Telegram[Telegram] --> Edge[Nginx edge]
-  Edge --> Agent[Eve agent]
-  Edge --> OAuth[Google OAuth callback]
-  Agent --> Postgres[(PostgreSQL)]
-  Agent --> Runner[Sandbox runner]
-  Agent --> Memory[Embedding worker]
-  Agent --> CLIProxy[CLIProxyAPI]
-  Agent --> Child[Native Eve child]
-  Child --> Runner
-  Runner --> Docker[Docker Engine]
-  Docker --> Sandbox[Scoped sandbox containers]
-  Sandbox --> Egress[Sandbox egress proxy]
-  Agent --> GHCR[Immutable GHCR releases]
-```
+## Функционал
 
-## Trust Zones
+### 🧠 Долговременная память
 
-| Область | Память | Workspace | Tools |
+- Помнит факты и договорённости; каждая запись привязана к источнику — можно спросить «откуда ты это взяла».
+- **Треды** — незакрытые сюжеты (поиск квартиры, ремонт, лечение): агент сам поднимает их, когда тема возвращается.
+- Гибридный поиск по памяти (pgvector + локальные эмбеддинги `multilingual-e5-small`), без отправки памяти во внешние сервисы.
+- Конфликты («раньше говорил одно, теперь другое») выносятся на ваше решение, а не переписываются молча.
+- Отдельные области: `personal`, `family`, `group`. Экспорт всей личной памяти в JSON + Markdown одной командой.
+
+### ⏰ Напоминания и автономные сценарии
+
+- Напоминания: разовые, ежедневные, еженедельные; личные и семейные.
+- Агентные сценарии по расписанию — не просто текст в срок, а полноценный запуск с инструментами
+  («каждое утро собери погоду, календарь и почту», «в пятницу — сводка по портфелю»).
+- Часовой пояс и тихие часы: ночью не разбудит.
+- Для внешних групп — отчёты по расписанию с отдельным подтверждением владельца.
+
+### 🎙 Голос, файлы и вложения
+
+- Голосовые сообщения расшифровываются через Groq Whisper до основного хода агента.
+- Присланные файлы и фото сохраняются в рабочую область чата и доступны инструментам.
+- Агент может прислать файл из рабочей области обратно в Telegram и посмотреть картинку.
+- Изолированные области: `personal`, `family`, `group` — файлы одной области не видны в другой.
+
+### 📄 Документы
+
+- `pdf`, `docx`, `xlsx` — чтение, правка, сборка: договор, таблица, отчёт, презентационный документ.
+- Работа идёт в sandbox-контейнере, результат приходит файлом в чат.
+
+### 📬 Google Workspace
+
+- Нативный `gws`-доступ к Gmail, Calendar, Drive, Docs, Sheets, People.
+- OAuth-подключение владельца; токены шифруются и не попадают в текст модели.
+- Пример: «что у меня в календаре на среду», «найди письмо от подрядчика и вытащи сумму».
+
+### 📈 Т-Инвестиции
+
+- Портфель, позиции, свободные деньги, котировки, операции, дивиденды, комиссии, доходность.
+- Сделки — только по явной команде. Это доступ к данным и расчётам, не инвестиционные рекомендации.
+
+### 🌐 Веб
+
+- `agent-browser` — автоматизация браузера: открыть, заполнить, нажать, забрать данные.
+- `find-docs` — актуальная документация библиотек и API вместо памяти модели.
+- Во внешних группах веб-доступ идёт только через контролируемую обёртку и отдельное разрешение.
+
+### 👨‍👩‍👧 Семья, приглашения, роли
+
+- Bootstrap владельца по одноразовому коду при установке.
+- Приглашение участника: владелец создаёт одноразовую ссылку → человек переходит → владелец подтверждает.
+- Административные операции возможны только в личном чате владельца — и перепроверяются в базе перед выполнением.
+
+### 💬 Группы
+
+- **Семейная группа** (`family_private`): только подтверждённые участники семьи, доступна семейная память.
+- **Внешняя группа** (`external`): своя изолированная область, без личных и семейных данных, без Bash и произвольной сети.
+- Режимы реакции: только по обращению, на все сообщения, либо только на сообщения владельца.
+- Для внешней группы владелец точечно выдаёт allowlist инструментов и skills; смена типа группы пересоздаёт зону доверия и удаляет данные прежней области.
+
+### 🎛 Стиль и подтверждения
+
+- Пожелания к стилю общения сохраняются на чат: короче, без смайлов, другой язык, свой формат.
+- Действия с последствиями подтверждаются кнопкой в Telegram (HITL), включая деплой обновлений.
+- Ручная ротация контекста, когда тема сменилась и старый диалог мешает.
+
+---
+
+## Границы доступа
+
+| Где | Память | Файлы | Инструменты |
 | --- | --- | --- | --- |
 | Личный чат | `personal` и `family` | `/workspace/personal`, `/workspace/family` | Полный trusted sandbox и personal tools environment; при активной Codex-подписке root-agent может создавать изображения. |
 | Семейная группа | Только `family` | `/workspace/family` | Trusted sandbox и family tools environment; при активной Codex-подписке root-agent может создавать изображения. |
 | Внешняя группа | Только `group` | `/workspace/group` | Без Bash, произвольного сетевого доступа и persistent credentials; `web_fetch` и `generate_image` доступны только через отдельные owner grants, причём `generate_image` предлагается владельцу лишь при активном provider `codex-subscription`; безопасные file tools и настраиваемый импорт UTF-8 TXT/MD/JSON/CSV/TSV/HTML/XML/YAML/YML из Telegram. |
 | Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же trust-zone surface, кроме root-owned `remember` и `generate_image`; отдельные history и state. |
 
-## Production Flow
+---
 
-1. PR проходит `docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests`.
-2. Merge в `main` запускает GitHub Actions `CI and release`.
-3. Workflow собирает шесть production images и публикует immutable release `vX.Y.Z`.
-4. Osinara создаёт Telegram proposal владельцу на обновление.
-5. Только после owner approval серверный `/opt/osinara/bin/production-deploy.sh` забирает release.
-6. Deploy script проверяет manifest, digest images, Compose hash, backups, migrations и health endpoint.
+## Как пользоваться
 
-Подробнее: [`docs/production-deployment.md`](docs/production-deployment.md).
-
-Архитектура canonical и task sessions для Telegram-групп:
-[`docs/group-session-architecture.md`](docs/group-session-architecture.md).
-
-Полная спецификация памяти: [`docs/memory-system-full.md`](docs/memory-system-full.md).
-
-## Быстрый Старт
-
-### Self-hosted установка
-
-Для чистого GNU/Linux x86_64 сервера на glibc с Docker Engine и Compose v2 загрузите `install.sh`
-из immutable GitHub Release и передайте ему URL CLI asset и SHA-256 из того же release. Текущий
-`osinara-linux-x64` собирается из glibc-варианта Node.js SEA и не поддерживает musl/Alpine Linux:
+**1. Поставить на сервер.** Нужен GNU/Linux x86_64 (glibc), Docker Engine + Compose v2, свободные порты `80`, `443`, `8082`.
+Скачайте `install.sh` из последнего [релиза](https://github.com/nyxandro/osinara/releases/latest) и передайте ему URL CLI-ассета и его SHA-256 из того же релиза:
 
 ```bash
 sudo ./install.sh \
-  https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-linux-x64 \
+  https://github.com/nyxandro/osinara/releases/download/vX.Y.Z/osinara-linux-x64 \
   <SHA-256 из osinara-linux-x64.sha256>
 ```
 
-Установщик потребует свободные порты `80`, `443` и `8082`, проверит чистое состояние
-`/opt/osinara` и production Docker resources, предложит `sslip.io` или собственный домен,
-проверит Telegram и модель, затем запустит digest-pinned images, HTTPS и webhook. После успеха
-проверенный CLI устанавливается как `/usr/local/bin/osinara` до изменения application state, поэтому
-остаётся доступен для диагностики даже при неоднозначном завершении первичной установки.
-Если установка дошла до webhook, но не показала ссылку владельца, после `osinara doctor` выполните
-`sudo osinara owner-bootstrap`: предыдущий активный код будет отозван, новый действует 15 минут.
+Установщик спросит домен (или предложит `sslip.io`), проверит Telegram-бота и модель, поднимет
+digest-pinned образы, HTTPS и webhook, и выдаст ссылку владельца.
 
-Bridge-релиз `v0.15.2` не включает новый пятиобразный auto-update controller для fresh install.
-Он будет добавлен отдельным cutover-релизом; до него обновление новой установки выполняется только
-через явно проверенный release CLI.
+**2. Стать владельцем.** Перейдите по ссылке из установщика и напишите боту. Если ссылка не появилась —
+`sudo osinara owner-bootstrap` выдаст новый код на 15 минут (прежний отзывается).
 
-### Требования
+**3. Позвать своих.** В личном чате: «пригласи Анну» → отправьте ссылку → после её перехода подтвердите кандидата.
 
-| Runtime | Версия |
-| --- | --- |
-| Node.js | `24.x` |
-| npm | из Node `24.x` |
-| Docker | Docker Engine + Compose v2 |
-| PostgreSQL | через Compose, `pgvector/pgvector:pg17` |
+**4. Подключить группы.** Добавьте бота в группу и в личном чате владельца скажите, чем эта группа является:
+семейной или внешней. Для внешней сразу задайте режим реакции и что ей разрешено.
 
-### Установка
+**5. Дальше — обычным языком.** «Напомни в четверг про садик», «расшифруй голосовое и вынеси задачи»,
+«собери из этих чеков таблицу», «что по портфелю», «каждое утро в 8 присылай сводку», «запомни, что мы выбрали клинику».
+
+**Обслуживание:**
 
 ```bash
-npm ci
+osinara status     # состояние сервисов
+osinara doctor     # диагностика установки
+osinara logs       # логи
+osinara restart    # перезапуск
+osinara config     # конфигурация модели и провайдера
 ```
 
-`postinstall` применяет локальные Eve patches. Если patch mismatch падает, это намеренная защита от незамеченного изменения Eve internals.
+Обновления агент сам предлагает в Telegram; деплой начинается только после подтверждения владельца.
 
-### Локальная конфигурация
+---
 
-Создайте `.env` с обязательными секретами и environment-specific значениями. Проект намеренно не подставляет business fallback values для required config.
-
-Минимально для локального Compose нужны:
-
-```dotenv
-POSTGRES_PASSWORD=
-MODEL_API_KEY=
-CLI_PROXY_API_KEY=
-INVITATION_SIGNING_SECRET=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_BOT_USERNAME=
-TELEGRAM_WEBHOOK_SECRET_TOKEN=
-```
-
-`MODEL_API_KEY` используется выбранным transport. Для прямого provider это внешний API key; для
-`codex-subscription` он должен в точности совпадать с внутренним `CLI_PROXY_API_KEY`. Codex OAuth
-хранится отдельно в persistent volume `cli-proxy-auth` и никогда не передаётся agent container.
-
-Для Google Workspace OAuth дополнительно нужны:
-
-```dotenv
-GOOGLE_OAUTH_CLIENT_ID=
-GOOGLE_OAUTH_CLIENT_SECRET=
-INTEGRATION_TOKEN_ENCRYPTION_KEY=
-PUBLIC_BASE_URL=
-```
-
-### Запуск
+## Локальная разработка
 
 ```bash
-docker compose up --build
+npm ci                      # postinstall применяет локальные Eve-патчи
+cp .env.example .env        # заполнить обязательные секреты
+docker compose up --build   # edge: http://localhost:8080
 ```
 
-Локальный Codex gateway включается отдельно профилем `codex-subscription` после заполнения
-`cli-proxy-auth` нативным OAuth record; default direct-provider запуск от него не зависит.
+Полный список переменных — в [`.env.example`](.env.example): только секреты, доступы и привязки
+к инфраструктуре. Поведение агента (таймауты, лимиты, расписания, настройки модели) живёт в
+конфигурации в репозитории, а не в окружении. Отсутствующий обязательный секрет — ошибка на старте,
+а не подставленное значение по умолчанию. Блок Google Workspace нужен только при включённой интеграции.
 
-Локальный edge слушает `http://localhost:8080` и публикует только разрешённые маршруты из `infra/nginx.conf`.
-
-## Проверка
-
-Быстрый локальный набор:
+Проверки:
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-```
+npm run typecheck && npm test && npm run build
 
-Runtime bundle для workers и sandbox services:
-
-```bash
-npm run build:runtime
-```
-
-Главная production-equivalent проверка:
-
-```bash
+# production-equivalent прогон
 docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
 ```
 
-## Структура
+Миграции запускаются только внутри backend/test-контейнера: `npm run migrate`.
 
-| Путь | Назначение |
-| --- | --- |
-| `agent/agent.ts` | Root Eve agent: model и compaction; native child tool в Eve 0.32 доступен только root runtime node. |
-| `agent/channels/telegram.ts` | Telegram channel, durable ingress, HITL, rich delivery. |
-| `agent/tools/` | Единственный discovered application tool: dynamic capability surface текущего режима. |
-| `agent/lib/tools/` | Реализации model-facing typed tools. Не класть сюда tests. |
-| `agent/instructions/` | Turn-scoped dynamic блоки промта: режим, стиль, память. |
-| `agent/lib/prompt/` | Фрагменты промта и композиция блоков по режимам. |
-| `agent/skills/` | Static native Eve skills и turn-scoped dynamic skill resolver. |
-| `agent/lib/` | Application logic, repositories, policies и colocated tests. |
-| `agent/schedules/` | Nitro/Eve schedules: reminders, agent schedules, software update checks. |
-| `services/sandbox-runner/` | Docker-backed sandbox lifecycle, mounts, process execution, policy versions. |
-| `services/sandbox-egress-proxy/` | Network boundary для trusted sandbox egress. |
-| `migrations/` | PostgreSQL schema migrations. |
-| `scripts/` | Migration runner, workers, bootstrap, Eve patches, production deployment helpers. |
-| `compose.yaml` | Local Docker Compose graph. |
-| `compose.production.yaml` | Source template для immutable production release assets. |
-| `infra/nginx.conf` | Public edge allowlist. |
+---
 
-## Security Notes
+## Стек
 
-- Authorization is application-owned, not prompt-owned.
-- Telegram identity, family, group type, roles and scopes never come from model text.
-- Missing required config fails fast with stable errors.
-- External groups cannot access personal/family memory, credentials, Bash, network or trusted tools.
-- Trusted Node CLI traffic uses the internal egress proxy; T-Invest TLS trusts the pinned official Russian root CA without disabling certificate verification.
-- Native child наследует только capability surface вызывающего turn и не может расширить его trust zone.
-- Production images are built only by GitHub Actions from canonical `main` state.
-- Production deployment requires Telegram owner approval and exact release manifest validation.
-- Sandbox credentials are mounted by workspace scope and kept outside model-visible text.
+TypeScript на Node 24 · [Eve](https://eve.dev/docs) `0.40.0` · PostgreSQL 17 + pgvector ·
+Docker Compose · Groq Whisper · локальные эмбеддинги E5 · Telegram как единственный канал.
+
+Архитектурные заметки и рантбуки — в [`docs/`](docs/), правила разработки — в [`CLAUDE.md`](CLAUDE.md)
+и [`AGENTS.md`](AGENTS.md), деплой — в [`docs/production-deployment.md`](docs/production-deployment.md).
+
+## Безопасность
+
+- Авторизация принадлежит приложению: identity, семья, роль и область доступа никогда не берутся из текста модели.
+- Память, документы, сайты и результаты инструментов — это данные, а не инструкции для агента.
+- Отсутствие обязательного конфига — быстрая ошибка со стабильным кодом, а не догадка со значением по умолчанию.
+- Внешние группы не получают личную и семейную память, учётные данные, Bash и произвольную сеть.
+- Production-образы собирает только CI из канонического `main`; деплой требует подтверждения владельца и точной проверки манифеста релиза.
 
 ## Skills
-
-Static skills are committed under `agent/skills` and loaded by Eve on demand. Code-reviewed grantable skills are resolved natively on `turn.started`, materialized with supporting files in the sandbox and become visible according to the verified conversation policy. Eve `0.32.0` does not add an arbitrary folder written during a turn to the current dynamic manifest; a resolver change applies from the next turn.
 
 Highlighted skill groups:
 

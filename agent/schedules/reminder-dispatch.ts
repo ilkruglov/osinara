@@ -2,7 +2,7 @@
  * Eve static minute dispatcher for application-managed proactive notifications.
  *
  * Export:
- * - Default minute schedule for reminders, expired-session retention, workspace cleanup, and
+ * - Default minute schedule for reminders, expired-session retention, workspace cleanup,
  *   cancellation of Telegram approvals nobody confirmed in time, and physical cleanup of memory
  *   whose soft-delete recovery window has elapsed.
  */

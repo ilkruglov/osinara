@@ -22,7 +22,7 @@ the exact Compose bytes, and six exact `ghcr.io/nyxandro/...@sha256:...` referen
   Both release assets are independently attested and checked against pinned SHA-256 values before
   installation by their release-specific bridges.
 
-The app image contains the authored `agent/` tree because Eve `0.32.0` bundles those modules
+The app image contains the authored `agent/` tree because Eve `0.40.0` bundles those modules
 when `eve start` serves the built `.output`. The server receives no checkout: the source is confined
 to the immutable app image selected by digest.
 
@@ -71,11 +71,12 @@ Fresh installation additionally creates `osinara-production-edge-frontend`. Only
 `osinara-production-app-network`, so TLS termination cannot directly address PostgreSQL, the agent,
 embedding, workers, or sandbox egress services.
 
-Eve `0.32.0` mounts its local world at `/app/.eve/.workflow-data` from the logical
-`eve-workflow-data` volume. Its physical production name is
-`osinara-production-eve-workflow-data-v032`; the incompatible legacy
-`osinara-production-workflow-data` volume is never mounted by the new release. During the one-time
-cutover it is retained through archive validation and candidate health, then removed after promotion.
+Eve `0.40.0` uses the official `@workflow/world-postgres` backend in the separate
+`osinara_workflow` database inside the existing PostgreSQL service. The migration gate bootstraps
+that database before the agent starts, and the agent no longer mounts a local Workflow volume.
+During the one-time cutover from the Eve `0.32.0` local world, the controller archives the current
+`osinara-production-eve-workflow-data-v032` volume and preserves it for explicit rollback after the
+PostgreSQL-backed candidate passes health checks.
 
 ## Server files
 
@@ -108,7 +109,7 @@ sources a module. It creates `/opt/osinara/releases`, `/opt/osinara/backups`, an
 `DEEPSEEK_API_KEY`; during the v0.15.2 bridge it gains `MODEL_API_KEY` with the exact same credential
 token while retaining `DEEPSEEK_API_KEY` for the rollback window. It also contains
 `POSTGRES_PASSWORD`, the required internal application `DATABASE_URL`, `CLI_PROXY_API_KEY`,
-`GROQ_API_KEY`,
+`WORKFLOW_POSTGRES_URL`, `GROQ_API_KEY`,
 Telegram secrets, and environment-specific integration
 settings. It must never contain or export any of the six `OSINARA_*_IMAGE` variables or
 `SANDBOX_RUNTIME_IMAGE`; those values exist only in a validated per-release `release.env`.
@@ -161,6 +162,15 @@ the initial direct-provider config and model/proxy assignments, creates an absen
 sets its root to `10001:10001 0700`, then follows the same irreversible provision and smoke boundary.
 The standalone fresh installer still removes CLIProxy from its generated Compose and stays on the
 selected direct provider, so it does not require this production-only OAuth seed.
+
+The one-time v0.18.0 bridge accepts only exact v0.17.1 source state. After immutable release and
+owner validation but before candidate Compose interpolation, it appends a dedicated
+`WORKFLOW_POSTGRES_URL` to the root-owned environment with an OpenSSL-generated 256-bit password.
+Initial installs must already contain the installer-generated connection. A pre-migration retry
+accepts only the exact single assignment written by the first attempt; duplicate, malformed, exported
+but unpersisted, conflicting, or wrong-source state fails closed. The bridge exports the validated
+value into the controller process so shell precedence cannot replace the root-owned credential. This
+one transition requires `openssl` on the existing v0.17.1 host; other update and initial paths do not.
 
 Long-term memory has no separate model route. The root Eve agent decides whether to call `remember`;
 PostgreSQL validates the current Telegram source and atomically writes optional thread state. Thread
@@ -248,14 +258,12 @@ only those exact recorded volumes; a failed removal makes the result `ambiguous`
 is removed after migration starts, and pre-existing candidate-only bytes remain a fail-closed error.
 
 Before every non-initial update the script derives the backup set from the current immutable Compose,
-verifies those durable volumes and free space, writes and
-validates a logical PostgreSQL dump, stops application writers, archives
-`google-workspace-credentials`, `tool-environments`, the current Eve workflow store, and
-`workspace-data`, then validates each archive. On the one-time Eve `0.32.0` cutover this archives
-`osinara-production-workflow-data` before candidate writers start and creates the absent versioned
-Eve `0.32` volume. After the candidate is healthy and promoted, the controller removes that exact
-archived legacy volume; failure is terminally ambiguous. The single rolling pre-migration archive
-remains available under the normal backup policy. Later backups select the new active volume instead.
+verifies those durable volumes and free space, writes and validates a logical dump of the application
+database and, when present, the separate `osinara_workflow` database. It then stops application
+writers, archives `google-workspace-credentials`, `tool-environments`, `workspace-data`, and any
+current release-owned local Workflow volume, and validates every artifact. During the one-time
+PostgreSQL Workflow cutover the old Eve `0.32.0` volume is archived and deliberately preserved for
+explicit rollback; later backups use `workflow-postgres.dump` instead of a local Workflow volume.
 Any other current-owned durable volume missing from the candidate is forbidden. A missing
 current-owned volume or a pre-existing candidate-only volume fails closed, so deploy never creates
 an empty replacement for active data or silently reuses bytes of unknown provenance. Reconstructible

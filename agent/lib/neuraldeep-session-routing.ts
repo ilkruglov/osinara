@@ -11,25 +11,29 @@ import type { ModelProviderId } from "./model-provider-config.js";
 
 interface SessionModelSelectionInput {
   readonly model: LanguageModel;
+  readonly modelContextWindowTokens: number;
   readonly providerId: ModelProviderId;
   readonly sessionId: string;
 }
 
 interface SessionModelSelection {
   readonly model: LanguageModel;
-  readonly modelOptions: AgentModelOptionsDefinition;
+  readonly modelContextWindowTokens: number;
+  readonly modelOptions?: AgentModelOptionsDefinition;
 }
 
 export function resolveSessionModelSelection({
   model,
+  modelContextWindowTokens,
   providerId,
   sessionId,
-}: SessionModelSelectionInput): SessionModelSelection | null {
+}: SessionModelSelectionInput): SessionModelSelection {
   // NeuralDeep uses this OpenAI-compatible field for sticky upstream routing and KV-cache reuse.
-  if (providerId !== "neuraldeep") return null;
+  if (providerId !== "neuraldeep") return { model, modelContextWindowTokens };
 
   return {
     model,
+    modelContextWindowTokens,
     modelOptions: {
       providerOptions: {
         neuraldeep: { user: sessionId },

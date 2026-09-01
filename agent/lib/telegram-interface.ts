@@ -100,7 +100,7 @@ export interface TelegramInputRequest {
   requestId: string;
 }
 
-// Eve 0.32.0 emits `approve`/`cancel` for a tool approval and `continue`/`stop` for a session
+// Eve 0.40.0 emits `approve`/`cancel` for a tool approval and `continue`/`stop` for a session
 // limit. No path emits `deny`, so no branch for it is kept.
 const OPTION_LABELS: Readonly<Record<string, string>> = {
   approve: "Да, подтвердить",

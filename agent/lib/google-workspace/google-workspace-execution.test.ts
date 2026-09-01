@@ -37,14 +37,21 @@ function toolDescription(): string {
   return (executeGoogleWorkspace as unknown as { description: string }).description;
 }
 
+async function executeRaw(input: { argv: string[] }) {
+  return await (executeGoogleWorkspace as unknown as {
+    execute: (input: { argv: string[] }, ctx: unknown) => Promise<unknown>;
+  }).execute(input, {});
+}
+
 function dependencies(auth: GoogleIntegrationAuthorization = personalAuth) {
+  const profile = { displayName: "owner@example.com", profileRef: "profile-1" };
   return {
     resolveAuthorization: vi.fn().mockResolvedValue(auth),
     run: vi.fn().mockResolvedValue({ exitCode: 0, stderr: "", stdout: "{}" }),
     withAuthorizedExecution: vi.fn(async <T>(
       _auth: GoogleIntegrationAuthorization,
-      operation: (accessToken: string) => Promise<T>,
-    ): Promise<T> => await operation("live-access-token")),
+      operation: (accessToken: string, currentProfile: typeof profile) => Promise<T>,
+    ): Promise<T> => await operation("live-access-token", profile)),
   };
 }
 
@@ -57,11 +64,36 @@ describe("execute_google_workspace approval", () => {
       "user-approval",
     );
     expect(approval(["auth", "export"])).toMatchObject({ type: "denied" });
+    expect(approval([
+      "gmail",
+      "users",
+      "messages",
+      "trash",
+      "--params",
+      '{"userId":"me","id":"message-id"}',
+    ])).toMatchObject({
+      reason: expect.stringMatching(/manage_gmail_message/u),
+      type: "denied",
+    });
   });
 
   it("tells the model to keep API route segments in separate argv entries", () => {
-    expect(toolDescription()).toContain('"gmail", "users", "messages", "trash"');
+    expect(toolDescription()).toContain('"calendar", "events", "list"');
+    expect(toolDescription()).toContain("manage_gmail_message");
     expect(toolDescription()).toContain("не объединяйте их через точку");
+  });
+
+  it("denies a replayed raw Gmail deletion before resolving credentials", async () => {
+    await expect(executeRaw({
+      argv: [
+        "gmail",
+        "users",
+        "messages",
+        "delete",
+        "--params",
+        '{"userId":"me","id":"message-id"}',
+      ],
+    })).rejects.toThrowError(/manage_gmail_message/u);
   });
 });
 
@@ -82,8 +114,12 @@ describe("createGoogleWorkspaceExecutor", () => {
     const deps = dependencies(auth);
     const execute = createGoogleWorkspaceExecutor(deps as never);
 
-    await execute({ argv: ["calendar", "events", "list", "--params", "{}"] }, {} as never);
+    const result = await execute(
+      { argv: ["calendar", "events", "list", "--params", "{}"] },
+      {} as never,
+    );
 
+    expect(result).toMatchObject({ profileRef: "profile-1", scope: auth.scope });
     expect(deps.withAuthorizedExecution).toHaveBeenCalledWith(auth, expect.any(Function));
     expect(deps.run).toHaveBeenCalledWith(
       ["calendar", "events", "list", "--params", "{}"],
@@ -112,7 +148,10 @@ describe("createGoogleWorkspaceExecutor", () => {
     deps.withAuthorizedExecution.mockImplementationOnce(async (_auth, operation) => {
       authorizationActive = true;
       try {
-        return await operation("live-access-token");
+        return await operation("live-access-token", {
+          displayName: "owner@example.com",
+          profileRef: "profile-1",
+        });
       } finally {
         authorizationActive = false;
       }
@@ -163,9 +202,21 @@ describe("createGoogleWorkspaceExecutor", () => {
       kind: "mutation",
       outputBytes: expect.any(Number),
       outputTruncated: true,
+      profileRef: "profile-1",
       scope: "personal",
       stderr: "",
       stdout: "",
     });
+  });
+
+  it("stops inside the live profile lock when the approved profile was replaced", async () => {
+    const deps = dependencies();
+    const execute = createGoogleWorkspaceExecutor(deps as never);
+
+    await expect(execute({
+      argv: ["gmail", "users", "messages", "trash", "--params", "{}"],
+      expectedProfileRef: "old-profile",
+    }, {} as never)).rejects.toThrowError(/AGENT_GOOGLE_WORKSPACE_PROFILE_CHANGED/u);
+    expect(deps.run).not.toHaveBeenCalled();
   });
 });

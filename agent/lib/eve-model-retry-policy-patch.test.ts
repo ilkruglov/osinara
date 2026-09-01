@@ -6,7 +6,7 @@
  * - Eve outer orchestration never reissues a completed or partially observed model step.
  * - Empty output and unsupported provider tools propagate without a second paid call.
  * - Compaction fails rather than issuing a second summary model call.
- * - Dependency pins satisfy Eve 0.32.0's AI SDK 7 peer contract.
+ * - Dependency pins satisfy Eve 0.40.0's AI SDK 7 peer contract.
  */
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -32,7 +32,7 @@ describe("Eve model retry policy patch", () => {
       "@ai-sdk/openai-compatible": "3.0.29",
       "@googleworkspace/cli": "0.22.5",
       ai: "7.0.60",
-      eve: "0.32.0",
+      eve: "0.40.0",
     });
     expect(packageJson.overrides.ai).toBe("7.0.60");
   });

@@ -77,12 +77,12 @@ describe("Eve Telegram verified ingress patch", () => {
     // @ts-expect-error The pinned seam deliberately permits no other handling modes.
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
-    expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.32.0";');
+    expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.40.0";');
     expect(runtime.match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
     expect(runtime.match(/i\.acknowledgementText\?\?`Answer received\.`/g)).toHaveLength(1);
     expect(runtime.match(/n\.send\(r\.message\?\?a/g)).toHaveLength(1);
-    // Eve 0.32 natively defers callback context until after the isolated approval step.
-    expect(inputRequestsRuntime).toContain("deferredContext");
+    // Eve natively defers callback context until after the isolated approval step.
+    expect(inputRequestsRuntime).toContain("deferMessagesWhileApprovalsPending");
     expect(inputRequestsRuntime).toContain("queueDeferredStepInput");
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);

@@ -16,10 +16,12 @@ describe("resolveSessionModelSelection", () => {
   it("uses the opaque Eve session ID for NeuralDeep sticky routing", () => {
     expect(resolveSessionModelSelection({
       model,
+      modelContextWindowTokens: 128_000,
       providerId: "neuraldeep",
       sessionId: "session_01CACHE",
     })).toEqual({
       model,
+      modelContextWindowTokens: 128_000,
       modelOptions: {
         providerOptions: {
           neuraldeep: { user: "session_01CACHE" },
@@ -31,8 +33,9 @@ describe("resolveSessionModelSelection", () => {
   it("does not add NeuralDeep provider options to another provider", () => {
     expect(resolveSessionModelSelection({
       model,
+      modelContextWindowTokens: 128_000,
       providerId: "deepseek",
       sessionId: "session_01CACHE",
-    })).toBeNull();
+    })).toEqual({ model, modelContextWindowTokens: 128_000 });
   });
 });

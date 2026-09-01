@@ -6,7 +6,8 @@
  * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
  * - `isAgentNameMentioned`: recognizes established agent-name stems at Unicode word boundaries.
- * - `isMessageAddressedToBot`: preserves private, command, mention, and reply behavior.
+ * - `isMessageAddressedToBot`: preserves private, mention, and reply behavior.
+ * - `isTelegramSlashCommand`: identifies command-shaped text reserved for application handlers.
  * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: prevents direct file delivery to the text-only primary model.
  */
@@ -31,7 +32,7 @@ interface TelegramDispatchMessage {
 }
 
 const TELEGRAM_COMMAND_PATTERN =
-  /^\/(?<command>[A-Za-z0-9_]+)(?:@(?<target>[A-Za-z0-9_]+))?(?:\s|$)/u;
+  /^\/[A-Za-z0-9_]{1,32}(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u;
 const TELEGRAM_MENTION_PATTERN = /(?:^|[^A-Za-z0-9_])@(?<target>[A-Za-z0-9_]+)/gu;
 const AGENT_NAME_PATTERN =
   /(?:^|[^\p{L}\p{N}_])(?:(?:осинар|асинар|азинар|озинар|синаар)(?:а|ы|е|у|ой|ою)?|(?:osinar|asinar)a?)(?=$|[^\p{L}\p{N}_])/iu;
@@ -165,6 +166,10 @@ export function isAgentNameMentioned(text: string): boolean {
   return AGENT_NAME_PATTERN.test(text);
 }
 
+export function isTelegramSlashCommand(text: string): boolean {
+  return TELEGRAM_COMMAND_PATTERN.test(text);
+}
+
 export function isMessageAddressedToBot(
   message: TelegramDispatchMessage,
   botUsername: string,
@@ -172,13 +177,7 @@ export function isMessageAddressedToBot(
   // Private messages are direct by definition; channels never dispatch to the agent.
   if (message.chat.type === "private") return true;
   if (message.chat.type === "channel") return false;
-
-  // Telegram commands start at the first character; an explicit suffix must name this bot.
-  const commandMatch = TELEGRAM_COMMAND_PATTERN.exec(message.text);
-  const commandTarget = commandMatch?.groups?.target;
-  if (commandMatch && (!commandTarget || commandTarget.toLowerCase() === botUsername.toLowerCase())) {
-    return true;
-  }
+  if (isTelegramSlashCommand(message.text)) return false;
 
   // Mentions and replies must target the complete username of this bot, not another bot.
   const addressedByMention = Array.from(message.text.matchAll(TELEGRAM_MENTION_PATTERN)).some(

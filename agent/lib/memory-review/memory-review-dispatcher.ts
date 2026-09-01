@@ -68,6 +68,8 @@ function reviewAuth(batch: ClaimedMemoryReviewBatch, prepared: PreparedSession) 
       memoryScopes: [batch.scope],
       role: batch.groupType === "external" ? "external" : "owner",
       sandboxSessionId: prepared.sandboxSessionId,
+      telegramActorId: batch.ownerTelegramUserId,
+      telegramActorKind: "telegram_user",
       telegramChatId: batch.telegramChatId,
       telegramChatType: batch.telegramChatType,
       telegramConversationId: batch.conversationId,

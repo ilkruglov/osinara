@@ -18,8 +18,10 @@ describe("family invitation code", () => {
   it("generates a token accepted by the Telegram start command parser", () => {
     const invitation = createInvitationCode(new Date("2026-07-11T12:00:00.000Z"));
 
-    expect(parseInvitationStartCommand(`/start ${invitation.code}`)).toBe(invitation.code);
-    expect(parseInvitationStartCommand(`/start@osinara_bot ${invitation.code}`)).toBe(
+    expect(parseInvitationStartCommand(`/start ${invitation.code}`, "osinara_bot")).toBe(
+      invitation.code,
+    );
+    expect(parseInvitationStartCommand(`/start@osinara_bot ${invitation.code}`, "osinara_bot")).toBe(
       invitation.code,
     );
   });
@@ -27,9 +29,16 @@ describe("family invitation code", () => {
   it("rejects ordinary messages and commands containing extra text", () => {
     const invitation = createInvitationCode(new Date("2026-07-11T12:00:00.000Z"));
 
-    expect(parseInvitationStartCommand(invitation.code)).toBeNull();
-    expect(parseInvitationStartCommand(`/start ${invitation.code} extra`)).toBeNull();
-    expect(parseInvitationStartCommand("/start short-token")).toBeNull();
+    expect(parseInvitationStartCommand(invitation.code, "osinara_bot")).toBeNull();
+    expect(
+      parseInvitationStartCommand(`/start ${invitation.code} extra`, "osinara_bot"),
+    ).toBeNull();
+    expect(parseInvitationStartCommand("/start short-token", "osinara_bot")).toBeNull();
+    expect(parseInvitationStartCommand(` /start ${invitation.code}`, "osinara_bot")).toBeNull();
+    expect(parseInvitationStartCommand(`/start ${invitation.code} `, "osinara_bot")).toBeNull();
+    expect(
+      parseInvitationStartCommand(`/start@other_bot ${invitation.code}`, "osinara_bot"),
+    ).toBeNull();
   });
 
   it("derives the same high-entropy token for one durable Eve operation", () => {

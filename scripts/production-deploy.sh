@@ -153,6 +153,7 @@ main() {
   fi
   provision_v0152_model_bridge
   validate_v0160_codex_bridge
+  provision_v0180_workflow_postgres_bridge
   prepare_candidate_release
   pull_release_images
   prepare_v0160_codex_volume

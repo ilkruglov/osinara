@@ -23,7 +23,7 @@ describe("Eve production startup patch", () => {
     ]);
     const evePackage = JSON.parse(evePackageSource) as { version?: string };
 
-    expect(evePackage.version).toBe("0.32.0");
+    expect(evePackage.version).toBe("0.40.0");
     expect(patchSource).toContain("const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;");
     expect(runtime).toContain(PATCHED_HEALTH_TIMEOUT_MARKER);
     expect(runtime).not.toContain("const HEALTH_TIMEOUT_MS=6e4");

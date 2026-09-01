@@ -35,7 +35,6 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
         volumes: [
           volume("sandbox-data", "/app/.eve/sandbox-cache"),
           volume("google-workspace-credentials", "/app/google-workspace-credentials"),
-          volume("eve-workflow-data", "/app/.eve/.workflow-data"),
           volume("workspace-data", "/app/workspaces"),
           volume("/opt/osinara/agent-model-providers.json", "/app/config/agent-model-providers.json", "bind", true),
         ],

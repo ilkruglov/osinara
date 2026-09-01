@@ -2,7 +2,7 @@
  * Eve terminal session retention job tests.
  *
  * Constructs covered:
- * - A dedicated PostgreSQL advisory lock serializes physical world-local graph deletion.
+ * - A dedicated PostgreSQL advisory lock serializes physical Workflow graph deletion.
  * - A concurrent invocation exits without claiming a second application session.
  * - Destroying the lock connection releases the session-level lock after the sweep.
  */
@@ -26,7 +26,7 @@ const values = vi.hoisted(() => {
     claimExpiredForDeletion: vi.fn(),
     completeDeletion: vi.fn(),
     connect: vi.fn(async () => ({ query: lockQuery, release: lockRelease })),
-    deleteLocalEveSession: vi.fn(async () => deletionPromise),
+    deletePostgresEveSession: vi.fn(async () => deletionPromise),
     failDeletion: vi.fn(),
     lockQuery,
     lockRelease,
@@ -38,8 +38,8 @@ const values = vi.hoisted(() => {
 vi.mock("../database.js", () => ({
   database: () => ({ connect: values.connect }),
 }));
-vi.mock("./eve-session-storage.js", () => ({
-  deleteLocalEveSession: values.deleteLocalEveSession,
+vi.mock("./workflow-postgres-session-storage.js", () => ({
+  deleteConfiguredPostgresEveSession: values.deletePostgresEveSession,
 }));
 vi.mock("./session-repository.js", () => ({
   sessionRepository: {
@@ -66,7 +66,7 @@ describe("deleteExpiredSessions", () => {
 
   it("serializes physical deletion across concurrent retention jobs", async () => {
     const first = deleteExpiredSessions();
-    await vi.waitFor(() => expect(values.deleteLocalEveSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(values.deletePostgresEveSession).toHaveBeenCalledTimes(1));
 
     await expect(deleteExpiredSessions()).resolves.toBe(0);
     expect(values.claimExpiredForDeletion).toHaveBeenCalledTimes(1);

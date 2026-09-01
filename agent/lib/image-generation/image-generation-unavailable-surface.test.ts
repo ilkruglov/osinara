@@ -105,8 +105,12 @@ describe("unavailable subscription image generation", () => {
 
   it("refuses to grant the capability during registration and policy update", () => {
     const rejected = /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*OpenAI Codex/su;
+    const approval = manageTelegramGroup.approval;
+    if (typeof approval !== "function") {
+      throw new Error("AGENT_TEST_APPROVAL_CONTRACT_INVALID: manage_telegram_group approval is not callable");
+    }
 
-    expect(() => manageTelegramGroup.approval!({
+    expect(() => approval({
       toolInput: {
         action: "update_policy",
         messageMode: "owner_only",
@@ -114,7 +118,7 @@ describe("unavailable subscription image generation", () => {
         toolAllowlist: ["remember", "generate_image"],
       },
     } as never)).toThrowError(rejected);
-    expect(() => manageTelegramGroup.approval!({
+    expect(() => approval({
       toolInput: {
         action: "register",
         registration: {

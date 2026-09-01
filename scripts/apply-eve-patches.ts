@@ -1,13 +1,13 @@
 /**
- * Reproducible local Eve 0.32.0 patch installer.
+ * Reproducible local Eve 0.40.0 patch installer.
  *
  * Constructs:
  * - `replaceExact`: fail-fast, count-checked, idempotent artifact replacement.
  * - Production startup health wait: permits bounded first-run sandbox preparation.
- * - Local Workflow transport: outlives the workflow replay window without premature redelivery.
  * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
  * - Restricted delegation policy: hides only the implicit root agent from external/review modes.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
+ * - Background task auth: restores the verified caller that created the task on every parent wake.
  * - Telegram durable ingress: verified-update and authenticated internal-drain hooks.
  * - Telegram dispatch extensions: Session return, message/token override, reply routing, and HITL auth.
  * - Telegram topic normalization: accepts thread IDs only on explicit forum-topic updates.
@@ -16,14 +16,21 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const EXPECTED_EVE_VERSION = "0.32.0";
-const EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS = 300_000;
+const EXPECTED_EVE_VERSION = "0.40.0";
 const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
 
 const runtimePaths = {
   channelAdapter: resolve("node_modules/eve/dist/src/channel/adapter.js"),
   channelAdapterTypes: resolve("node_modules/eve/dist/src/channel/adapter.d.ts"),
   compaction: resolve("node_modules/eve/dist/src/harness/compaction.js"),
+  contextKeys: resolve("node_modules/eve/dist/src/context/keys.js"),
+  contextKeyTypes: resolve("node_modules/eve/dist/src/context/keys.d.ts"),
+  dispatchRuntimeActionsShared: resolve(
+    "node_modules/eve/dist/src/execution/dispatch-runtime-actions-shared.js",
+  ),
+  dispatchRuntimeActionsSharedTypes: resolve(
+    "node_modules/eve/dist/src/execution/dispatch-runtime-actions-shared.d.ts",
+  ),
   productionStart: resolve(
     "node_modules/eve/dist/src/internal/nitro/host/start-production-server.js",
   ),
@@ -37,10 +44,29 @@ const runtimePaths = {
   telegramTypes: resolve(
     "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
   ),
-  toolLoop: resolve("node_modules/eve/dist/src/harness/tool-loop.js"),
-  workflowLocal: resolve(
-    "node_modules/eve/dist/src/compiled/@workflow/world-local/index.js",
+  taskChildSteps: resolve(
+    "node_modules/eve/dist/src/execution/tasks/child/steps.js",
   ),
+  taskChildStepTypes: resolve(
+    "node_modules/eve/dist/src/execution/tasks/child/steps.d.ts",
+  ),
+  taskChildWorkflow: resolve(
+    "node_modules/eve/dist/src/execution/tasks/child/workflow.js",
+  ),
+  taskChildWorkflowTypes: resolve(
+    "node_modules/eve/dist/src/execution/tasks/child/workflow.d.ts",
+  ),
+  taskDispatch: resolve(
+    "node_modules/eve/dist/src/execution/tasks/parent/dispatch-task-step.js",
+  ),
+  taskParentDelegate: resolve(
+    "node_modules/eve/dist/src/execution/tasks/parent/delegate.js",
+  ),
+  taskParentDelegateTypes: resolve(
+    "node_modules/eve/dist/src/execution/tasks/parent/delegate.d.ts",
+  ),
+  toolLoop: resolve("node_modules/eve/dist/src/harness/tool-loop.js"),
+  workflowSteps: resolve("node_modules/eve/dist/src/execution/workflow-steps.js"),
 } as const;
 
 function occurrenceCount(source: string, marker: string): number {
@@ -66,7 +92,7 @@ async function replaceExact(
   if (unpatchedBeforeCount === 0 && afterCount === expectedCount) return;
   if (unpatchedBeforeCount !== expectedCount || afterCount !== 0) {
     throw new Error(
-      `AGENT_EVE_PATCH_MISMATCH: Не удалось применить проверенный Eve 0.32.0 patch к ${path}; before=${beforeCount}, after=${afterCount}, expected=${expectedCount}`,
+      `AGENT_EVE_PATCH_MISMATCH: Не удалось применить проверенный Eve 0.40.0 patch к ${path}; before=${beforeCount}, after=${afterCount}, expected=${expectedCount}`,
     );
   }
 
@@ -88,15 +114,6 @@ await replaceExact(
   runtimePaths.productionStart,
   "const HEALTH_TIMEOUT_MS=6e4",
   `const HEALTH_TIMEOUT_MS=${EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS.toExponential().replace("+", "")}`,
-);
-
-// The local queue handler may legitimately wait for a four-minute Workflow replay. Its upstream
-// 30-second HTTP timeout aborted the self-delivery while the original step kept running, creating a
-// redelivery storm. Wait beyond Workflow's own deadline without changing queue retry semantics.
-await replaceExact(
-  runtimePaths.workflowLocal,
-  "function mn(){return{bodyTimeout:pn(`WORKFLOW_LOCAL_BODY_TIMEOUT_MS`,3e4),connections:1e3,headersTimeout:pn(`WORKFLOW_LOCAL_HEADERS_TIMEOUT_MS`,3e4),keepAliveTimeout:3e4}}",
-  `function mn(){return{bodyTimeout:pn(\`WORKFLOW_LOCAL_BODY_TIMEOUT_MS\`,${EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS.toExponential().replace("+", "")}),connections:1e3,headersTimeout:pn(\`WORKFLOW_LOCAL_HEADERS_TIMEOUT_MS\`,${EVE_LOCAL_WORKFLOW_TRANSPORT_TIMEOUT_MS.toExponential().replace("+", "")}),keepAliveTimeout:3e4}}`,
 );
 
 // Provider transport retries remain AI SDK's responsibility; Eve must never reissue a model call.
@@ -143,6 +160,148 @@ await replaceExact(
   " * Throwing handlers are logged and swallowed except for `input.requested`, whose\n * failure propagates so an unbound human approval cannot remain parked fail-open.",
 );
 
+// Framework task wakes are ordinary deliveries. Without an explicit caller they reuse whichever
+// request most recently touched the parent session, which may be an HITL callback or another user.
+// Freeze the caller at the originating turn and send it on every durable task-owned wake. The
+// optional task-run field keeps old in-flight runs readable; absence becomes null and fails closed.
+await replaceExact(
+  runtimePaths.contextKeys,
+  "ChannelDeliveryKey=new ContextKey(`eve.channelDelivery`),TurnTaskDeliveryKey=new ContextKey(`eve.turnTaskDelivery`)",
+  "ChannelDeliveryKey=new ContextKey(`eve.channelDelivery`),TurnOriginAuthKey=new ContextKey(`eve.turnOriginAuth`),TurnTaskDeliveryKey=new ContextKey(`eve.turnTaskDelivery`)",
+);
+await replaceExact(
+  runtimePaths.contextKeys,
+  "TurnDynamicToolMetadataKey,TurnTaskDeliveryKey",
+  "TurnDynamicToolMetadataKey,TurnOriginAuthKey,TurnTaskDeliveryKey",
+);
+await replaceExact(
+  runtimePaths.contextKeyTypes,
+  "export declare const ChannelDeliveryKey: ContextKey<ChannelDeliveryMetadata>;\n/** Whether the active turn began from a task-addressed durable delivery. */",
+  "export declare const ChannelDeliveryKey: ContextKey<ChannelDeliveryMetadata>;\n/** Verified caller delivered at the start of the active turn. */\nexport declare const TurnOriginAuthKey: ContextKey<SessionAuthContext | null>;\n/** Whether the active turn began from a task-addressed durable delivery. */",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "AuthKey,CapabilitiesKey,ModeKey,SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnTaskDeliveryKey",
+  "AuthKey,CapabilitiesKey,ModeKey,SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnOriginAuthKey,TurnTaskDeliveryKey",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "a.input?.kind===`deliver`&&c.set(TurnTaskDeliveryKey,a.input.taskDeliveryId!==void 0)",
+  "a.input?.kind===`deliver`&&(c.set(TurnTaskDeliveryKey,a.input.taskDeliveryId!==void 0),getHarnessEmissionState(s.state).turnId.length===0&&c.set(TurnOriginAuthKey,a.input.auth??null))",
+);
+await replaceExact(
+  runtimePaths.dispatchRuntimeActionsShared,
+  "AuthKey,CapabilitiesKey,ChannelInstrumentationKey,InitiatorAuthKey,SandboxKey",
+  "AuthKey,CapabilitiesKey,ChannelInstrumentationKey,InitiatorAuthKey,SandboxKey,TurnOriginAuthKey",
+);
+await replaceExact(
+  runtimePaths.dispatchRuntimeActionsShared,
+  "serializedContext:e.serializedContext,session:u}",
+  "serializedContext:e.serializedContext,session:u,turnOriginAuth:s.get(TurnOriginAuthKey)}",
+);
+await replaceExact(
+  runtimePaths.dispatchRuntimeActionsSharedTypes,
+  "    readonly session: RuntimeSession;\n}",
+  "    readonly session: RuntimeSession;\n    readonly turnOriginAuth: Parameters<typeof buildSubagentRunInput>[0][\"auth\"] | undefined;\n}",
+);
+await replaceExact(
+  runtimePaths.taskDispatch,
+  "let n=await beginDelegatedTask({",
+  "let n=await beginDelegatedTask({auth:i.turnOriginAuth??null,",
+);
+await replaceExact(
+  runtimePaths.taskParentDelegate,
+  "initialView:{metadata:o,status:`working`,taskId:r},parentContinuationToken:sessionCommandHookToken(n.session.sessionId)",
+  "initialView:{metadata:o,status:`working`,taskId:r},parentAuth:n.auth,parentContinuationToken:sessionCommandHookToken(n.session.sessionId)",
+);
+await replaceExact(
+  runtimePaths.taskParentDelegateTypes,
+  "import type { JsonValue } from \"#shared/json.js\";",
+  "import type { JsonValue } from \"#shared/json.js\";\nimport type { SessionAuthContext } from \"#channel/types.js\";",
+);
+await replaceExact(
+  runtimePaths.taskParentDelegateTypes,
+  "export declare function beginDelegatedTask(input: {\n    readonly agentId: string;",
+  "export declare function beginDelegatedTask(input: {\n    readonly auth: SessionAuthContext | null;\n    readonly agentId: string;",
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflowTypes,
+  "import { type TaskView } from \"#tasks/types.js\";",
+  "import type { SessionAuthContext } from \"#channel/types.js\";\nimport { type TaskView } from \"#tasks/types.js\";",
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflowTypes,
+  "    readonly parentContinuationToken: string;\n}",
+  "    readonly parentContinuationToken: string;\n    /** Additive for old in-flight task runs; absence is restored as fail-closed null auth. */\n    readonly parentAuth?: SessionAuthContext | null;\n}",
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflow,
+  "let a=createHook({token:i.taskInboxToken}),o=a[Symbol.asyncIterator](),s=!1;",
+  "let a=createHook({token:i.taskInboxToken}),o=a[Symbol.asyncIterator](),s=!1,y=i.parentAuth??null;",
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflow,
+  "wakeTaskUpdateParentStep({token:i.parentContinuationToken,",
+  "wakeTaskUpdateParentStep({auth:y,token:i.parentContinuationToken,",
+  3,
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflow,
+  "wakeTaskParentStep({token:i.parentContinuationToken,",
+  "wakeTaskParentStep({auth:y,token:i.parentContinuationToken,",
+  2,
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflow,
+  "wakeTaskAuthorizationParentStep({request:",
+  "wakeTaskAuthorizationParentStep({auth:y,request:",
+);
+await replaceExact(
+  runtimePaths.taskChildWorkflow,
+  "wakeTaskInputRequestParentStep({request:",
+  "wakeTaskInputRequestParentStep({auth:y,request:",
+);
+await replaceExact(
+  runtimePaths.taskChildSteps,
+  "let a={kind:`send`,payload:i,taskDeliveryId:",
+  "let a={auth:e.auth,kind:`send`,payload:i,taskDeliveryId:",
+);
+await replaceExact(
+  runtimePaths.taskChildSteps,
+  "let r={kind:`send`,payload:n,taskDeliveryId:",
+  "let r={auth:e.auth,kind:`send`,payload:n,taskDeliveryId:",
+);
+await replaceExact(
+  runtimePaths.taskChildSteps,
+  "let n={kind:`send`,payload:{message:`Background task",
+  "let n={auth:e.auth,kind:`send`,payload:{message:`Background task",
+);
+await replaceExact(
+  runtimePaths.taskChildSteps,
+  "let n={kind:`send`,payload:{task:{inputRequests:",
+  "let n={auth:e.auth,kind:`send`,payload:{task:{inputRequests:",
+);
+await replaceExact(
+  runtimePaths.taskChildStepTypes,
+  "export declare function wakeTaskAuthorizationParentStep(input: {\n    readonly request:",
+  "export declare function wakeTaskAuthorizationParentStep(input: {\n    readonly auth: import(\"#channel/types.js\").SessionAuthContext | null;\n    readonly request:",
+);
+await replaceExact(
+  runtimePaths.taskChildStepTypes,
+  "export declare function wakeTaskParentStep(input: {\n    readonly token:",
+  "export declare function wakeTaskParentStep(input: {\n    readonly auth: import(\"#channel/types.js\").SessionAuthContext | null;\n    readonly token:",
+);
+await replaceExact(
+  runtimePaths.taskChildStepTypes,
+  "export declare function wakeTaskUpdateParentStep(input: {\n    readonly token:",
+  "export declare function wakeTaskUpdateParentStep(input: {\n    readonly auth: import(\"#channel/types.js\").SessionAuthContext | null;\n    readonly token:",
+);
+await replaceExact(
+  runtimePaths.taskChildStepTypes,
+  "export declare function wakeTaskInputRequestParentStep(input: {\n    readonly request:",
+  "export declare function wakeTaskInputRequestParentStep(input: {\n    readonly auth: import(\"#channel/types.js\").SessionAuthContext | null;\n    readonly request:",
+);
+
 // Verified webhooks can be durably acknowledged before native dispatch; drain reuses that dispatcher.
 await replaceExact(
   runtimePaths.telegram,
@@ -168,8 +327,8 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.telegram,
-  "let n=e.from(continuationTokenFromState(t));u===void 0?await n.send(a,{auth:r.auth,context:[o,...s],state:t}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
-  "let n=e.from(r.continuationToken??continuationTokenFromState(t));return u===void 0?await n.send(r.message??a,{auth:r.auth,context:[o,...s],state:t}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
+  "let n=e.from(continuationTokenFromState(t));u===void 0?await n.send(a,{auth:r.auth,context:[o,...s],state:t,title:r.title}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
+  "let n=e.from(r.continuationToken??continuationTokenFromState(t));return u===void 0?await n.send(r.message??a,{auth:r.auth,context:[o,...s],state:t,title:r.title}):await n.respond(u,{auth:r.auth,context:[o,...s]})",
 );
 await replaceExact(
   runtimePaths.telegram,
@@ -224,8 +383,8 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.telegramTypes,
-  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n} | null;",
-  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly message?: string;\n    readonly replyHandling?: \"message\";\n} | null;",
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    /** Overrides the workflow run title without changing the message sent to the model. */\n    readonly title?: string;\n} | null;",
+  "export type TelegramInboundResult = {\n    readonly auth: SessionAuthContext | null;\n    readonly context?: readonly string[];\n    readonly continuationToken?: string;\n    readonly message?: string;\n    readonly replyHandling?: \"message\";\n    /** Overrides the workflow run title without changing the message sent to the model. */\n    readonly title?: string;\n} | null;",
 );
 const telegramConfigHooks = `    /** Optional internal endpoint that resumes persisted ingress after process restarts. */
     readonly drainRoute?: string;

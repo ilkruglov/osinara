@@ -80,7 +80,7 @@ describe("production container contract", () => {
       "FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy",
     );
 
-    // Eve 0.32.0 serves built output but still bundles authored modules during `eve start`.
+    // Eve 0.40.0 serves built output but still bundles authored modules during `eve start`.
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
     expect(runtime).toContain("COPY --from=build /app/.runtime ./.runtime");
     expect(runtime).toContain("COPY --from=build /app/agent ./agent");
@@ -165,7 +165,7 @@ describe("production container contract", () => {
     expect(agent).toContain("migrate:\n        condition: service_completed_successfully");
     expect(agent).toContain('command: ["start-after-migration"]');
     expect(migrate).toContain("restart: \"no\"");
-    expect(migrate).toContain(".runtime/scripts/migrate.js");
+    expect(migrate).toContain('entrypoint: ["npm", "run", "migrate:runtime"]');
     expect(agent).toContain("healthcheck:");
     expect(agent).toContain("retries: 72");
     expect(edge).toContain("healthcheck:");
@@ -177,13 +177,10 @@ describe("production container contract", () => {
       "google-workspace-credentials",
       "sandbox-data",
       "tool-environments",
-      "eve-workflow-data",
       "workspace-data",
       "cli-proxy-auth",
     ]) {
-      const physicalName = volume === "eve-workflow-data"
-        ? "osinara-production-eve-workflow-data-v032"
-        : `osinara-production-${volume}`;
+      const physicalName = `osinara-production-${volume}`;
       expect(compose).toMatch(new RegExp(`  ${volume}:\\n    name: ${physicalName}\\n`));
     }
     for (const network of ["app-network", "sandbox-control", "sandbox-egress"]) {
@@ -210,7 +207,7 @@ describe("production container contract", () => {
     expect(compose.match(/\/var\/run\/docker\.sock/g)).toHaveLength(2);
     expect(agent).not.toContain("/var/run/docker.sock");
     expect(agent).toContain("google-workspace-credentials:/app/google-workspace-credentials");
-    expect(agent).toContain("eve-workflow-data:/app/.eve/.workflow-data");
+    expect(agent).not.toContain("/app/.eve/.workflow-data");
     expect(agent).not.toContain("workflow-data:/app/.workflow-data");
     expect(runner).toContain("/var/run/docker.sock:/var/run/docker.sock");
     expect(runner).not.toContain("google-workspace-credentials");

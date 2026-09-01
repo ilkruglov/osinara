@@ -5,6 +5,7 @@
  * - Explicit primary model from the multi-provider registry.
  * - Fail-closed per-turn model step limit and NeuralDeep routing for upstream KV-cache reuse.
  * - Context compaction; Eve exposes its native fresh-context child only to root sessions.
+ * - Official PostgreSQL Workflow world retained as an external runtime dependency.
  */
 import { defineAgent, defineDynamic } from "eve";
 
@@ -21,12 +22,19 @@ const primaryModelContextWindowTokens =
   modelProviderConfig.agent.models.primary.contextWindowTokens;
 
 export default defineAgent({
+  build: {
+    externalDependencies: ["@workflow/world-postgres"],
+  },
   compaction: {
     modelContextWindowTokens: primaryModelContextWindowTokens,
     thresholdPercent: AGENT_COMPACTION_THRESHOLD,
   },
+  experimental: {
+    workflow: {
+      world: "@workflow/world-postgres",
+    },
+  },
   model: defineDynamic({
-    fallback: primaryModel,
     events: {
       "step.started": (event, ctx) => {
         // Resolve the guard first: resolver exceptions would let Eve silently use its fallback.
@@ -39,11 +47,11 @@ export default defineAgent({
 
         return resolveSessionModelSelection({
           model: primaryModel,
+          modelContextWindowTokens: primaryModelContextWindowTokens,
           providerId: modelProviderConfig.provider,
           sessionId: ctx.session.id,
         });
       },
     },
   }),
-  modelContextWindowTokens: primaryModelContextWindowTokens,
 });

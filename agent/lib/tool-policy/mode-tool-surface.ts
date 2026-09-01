@@ -336,7 +336,7 @@ function buildExternalToolSurface(
     surface.manage_memory_thread = allowedMemoryThreadTool();
   }
 
-  // Eve always registers its own built-ins, and 0.32.0 cannot hide a framework descriptor, so the
+  // Eve always registers its own built-ins, and 0.40.0 cannot hide a framework descriptor, so the
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
     if (toolName === "web_fetch") {

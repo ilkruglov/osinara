@@ -290,6 +290,40 @@ describe("production deploy shell policies", () => {
     expect(futureDeploy.stdout).not.toContain("osinara-production-workflow-data");
   });
 
+  it("archives and preserves the v0.32 local world during PostgreSQL cutover", () => {
+    const directory = mkdtempSync(join(tmpdir(), "osinara-postgres-world-cutover-"));
+    temporaryDirectories.push(directory);
+    const currentComposePath = join(directory, "current-compose.yaml");
+    const candidateComposePath = join(directory, "candidate-compose.yaml");
+    writeFileSync(
+      currentComposePath,
+      "volumes:\n  eve-workflow-data:\n    name: osinara-production-eve-workflow-data-v032\n",
+      "utf8",
+    );
+    writeFileSync(candidateComposePath, "services:\n  agent: {}\n", "utf8");
+
+    const result = runShell(`
+      source scripts/production-deploy/backup.sh
+      fail() { printf '%s %s\n' "$1" "$2" >&2; exit 1; }
+      docker() {
+        [[ "$1 $2" == "volume inspect" ]] && return 0
+        return 2
+      }
+      CURRENT_COMPOSE=${JSON.stringify(currentComposePath)}
+      CANDIDATE_COMPOSE=${JSON.stringify(candidateComposePath)}
+      select_durable_volumes
+      printf 'preserved=%s\n' "$PRESERVED_WORKFLOW_CUTOVER_VOLUME"
+      printf '%s\n' "\${BACKUP_DURABLE_VOLUMES[@]}"
+    `);
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(
+      "preserved=osinara-production-eve-workflow-data-v032",
+    );
+    expect(result.stdout).toContain("osinara-production-eve-workflow-data-v032");
+    expect(result.stdout).not.toContain("volume rm");
+  });
+
   it("forbids removal of a current-owned durable volume outside the Eve cutover", () => {
     const directory = mkdtempSync(join(tmpdir(), "osinara-durable-volume-removal-"));
     temporaryDirectories.push(directory);

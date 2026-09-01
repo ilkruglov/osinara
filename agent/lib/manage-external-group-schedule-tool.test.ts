@@ -28,6 +28,12 @@ vi.mock("./family-context.js", () => ({
 
 import manageExternalGroupSchedule from "./tools/manage_external_group_schedule.js";
 
+function approvalFor(toolInput: unknown): unknown {
+  return (manageExternalGroupSchedule.approval as (context: never) => unknown)(
+    { toolInput } as never,
+  );
+}
+
 const context = { callId: "call-1" } as ToolContext;
 
 describe("manage_external_group_schedule", () => {
@@ -42,7 +48,7 @@ describe("manage_external_group_schedule", () => {
     dependencies.list.mockResolvedValue({ items: [], total: 0 });
     const input = { action: "status" } as const;
 
-    expect(await manageExternalGroupSchedule.approval?.({ toolInput: input } as never))
+    expect(await approvalFor(input))
       .toBe("not-applicable");
     await expect(manageExternalGroupSchedule.execute(input, context)).resolves.toEqual({
       items: [],
@@ -70,7 +76,7 @@ describe("manage_external_group_schedule", () => {
     } as const;
     dependencies.create.mockResolvedValue({ id: "schedule-1", scope: "group" });
 
-    expect(await manageExternalGroupSchedule.approval?.({ toolInput: input } as never))
+    expect(await approvalFor(input))
       .toBe("user-approval");
     await manageExternalGroupSchedule.execute({
       ...input,
@@ -92,7 +98,7 @@ describe("manage_external_group_schedule", () => {
   });
 
   it("returns a structured denial for schema-invalid approval input", () => {
-    expect(manageExternalGroupSchedule.approval?.({ toolInput: undefined } as never)).toEqual({
+    expect(approvalFor(undefined)).toEqual({
       reason:
         "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Входные данные не соответствуют схеме manage_external_group_schedule. Проверьте обязательные поля и их типы",
       type: "denied",
@@ -100,9 +106,7 @@ describe("manage_external_group_schedule", () => {
   });
 
   it("returns a structured denial for semantically incomplete approval input", () => {
-    expect(manageExternalGroupSchedule.approval?.({
-      toolInput: { action: "create" },
-    } as never)).toEqual({
+    expect(approvalFor({ action: "create" })).toEqual({
       reason: "AGENT_EXTERNAL_SCHEDULE_INPUT_INVALID: Для action=create обязательно поле recurrence",
       type: "denied",
     });

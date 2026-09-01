@@ -29,6 +29,7 @@ import { groupCanonicalContinuationToken } from "./sessions/group-canonical-toke
 import {
   classifyTelegramInboundMedia,
   isMessageAddressedToBot,
+  isTelegramSlashCommand,
 } from "./telegram-message-policy.js";
 import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
 import { telegramForumTopicId } from "./telegram-group-message-storage.js";
@@ -71,12 +72,17 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       throw new Error("AGENT_TELEGRAM_CONFIG_MISSING: Не задано имя Telegram-бота");
     }
     const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
-    let addressed = isMessageAddressedToBot({ ...message, text: dispatchText }, botUsername);
+    const routingText = Object.hasOwn(message.raw, "voice") ? message.caption : dispatchText;
+    let addressed = isMessageAddressedToBot({ ...message, text: routingText }, botUsername);
+    const unsupportedGroupSlashCommand = message.chat.type !== "private" &&
+      isTelegramSlashCommand(routingText);
     let verifiedReplyRoute: string | undefined;
     let exactReplyRoute: string | undefined;
     let hasResumableReplyRoute = false;
 
-    const invitationCode = parseInvitationStartCommand(message.text);
+    const invitationCode = Object.hasOwn(message.raw, "voice")
+      ? null
+      : parseInvitationStartCommand(message.text, botUsername);
     if (invitationCode && message.chat.type !== "private") {
       // Leaked deep links in any group are dropped silently before identity or session work.
       return null;
@@ -119,6 +125,15 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       if (inboundTimeline.status === "duplicate") {
         journalDuplicate = true;
         if (!hasLazyGroupAttachment) return null;
+      }
+      if (unsupportedGroupSlashCommand) {
+        if (inboundTimeline.status === "inserted" && actor.kind === "telegram_user") {
+          await repositories.memoryReview.observePassiveMessage({
+            groupId: group.groupId,
+            timelineEntryId: inboundTimeline.entryId,
+          });
+        }
+        return null;
       }
       if (inboundTimeline.replyToAgent) addressed = true;
       const routeEligibleReply = message.replyToMessage &&

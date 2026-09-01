@@ -57,7 +57,7 @@ const context = {
 } as unknown as ToolContext;
 
 function approvalFor(input: Record<string, unknown>, chatType = "private") {
-  const approval = manageMemory.approval!;
+  const approval = manageMemory.approval as (context: never) => unknown;
   return approval({
     approvedTools: new Set(),
     callId: "call-1",

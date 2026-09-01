@@ -36,6 +36,7 @@ const EXPECTED_TOOL_MODULES = [
   "manage_behavior_preference.ts",
   "manage_external_group_schedule.ts",
   "manage_family_invitation.ts",
+  "manage_gmail_message.ts",
   "manage_google_workspace_connection.ts",
   "manage_memory.ts",
   "manage_memory_conflict.ts",

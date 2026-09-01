@@ -56,8 +56,12 @@ async function materializeReadyBatches(client: PoolClient): Promise<void> {
     message_thread_id: string | null;
     processed_through_sequence: string;
   }>(
-    `SELECT id, conversation_id, message_thread_id::text, processed_through_sequence::text
-       FROM memory_review_lanes ORDER BY created_at, id FOR UPDATE`,
+    `SELECT lane.id, lane.conversation_id, lane.message_thread_id::text,
+            lane.processed_through_sequence::text
+       FROM memory_review_lanes AS lane
+       JOIN application_conversations AS conversation ON conversation.id = lane.conversation_id
+       JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
+      ORDER BY lane.created_at, lane.id FOR UPDATE OF lane`,
   );
   for (const lane of lanes.rows) {
     const existing = await client.query<{ status: string; through_sequence: string }>(
