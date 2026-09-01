@@ -208,15 +208,22 @@ describe("Telegram approval presentation", () => {
         toolName: "execute_google_workspace",
       },
       display: "confirmation",
+      kind: "tool-approval",
       options: [
         { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
+        { id: "cancel", label: "No", style: "default" },
       ],
       prompt: "Approve tool call",
       requestId: "request-gws",
     }, context());
 
-    expect(result.prompt).toContain(JSON.stringify(argv, null, 2));
+    // Каждый материальный аргумент по-прежнему виден, но читаемыми строками, а не дампом массива.
+    expect(result.prompt).toContain("Сервис: Gmail");
+    expect(result.prompt).toContain("to: family@example.com");
+    expect(result.prompt).toContain("subject: Семейный план");
+    expect(result.prompt).toContain("body: Встречаемся в 19:00");
+    expect(result.prompt).toContain(`Точная команда: ${argv.join(" ")}`);
+    expect(result.prompt).not.toContain(JSON.stringify(argv, null, 2));
     expect(result.prompt).toContain("будет выполнена один раз");
   });
 
@@ -232,9 +239,10 @@ describe("Telegram approval presentation", () => {
         toolName: "manage_agent_schedule",
       },
       display: "confirmation",
+      kind: "tool-approval",
       options: [
         { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
+        { id: "cancel", label: "No", style: "default" },
       ],
       prompt: "Approve tool call",
       requestId: "request-1",
@@ -247,7 +255,7 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).not.toContain(SCHEDULE_ID);
     expect(result.options?.map((option) => option.label)).toEqual([
       "Да, подтвердить",
-      "Нет, отклонить",
+      "Нет, отменить",
     ]);
   });
 
@@ -268,9 +276,10 @@ describe("Telegram approval presentation", () => {
         toolName: "manage_agent_schedule",
       },
       display: "confirmation",
+      kind: "tool-approval",
       options: [
         { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
+        { id: "cancel", label: "No", style: "default" },
       ],
       prompt: "Approve tool call",
       requestId: "request-2",
@@ -279,6 +288,75 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).toContain("Изменения:");
     expect(result.prompt).toContain("Название: Расширенный ИИ-дайджест");
     expect(result.prompt).toContain("Периодичность: каждые 2 дней");
+    // Расписание использует тот же формат, что и остальные окна подтверждения.
+    expect(result.prompt.startsWith("Подтверждение: изменить агентное расписание.\n\n")).toBe(true);
+    expect(result.prompt.endsWith(
+      "\n\nСохранённые параметры расписания будут заменены указанными изменениями.",
+    )).toBe(true);
+    expect(result.prompt).not.toContain("Что произойдёт:");
+    expect(result.prompt).not.toContain("Подтверждение действия\n");
+  });
+
+  it("sanitizes a proposed change that the model controls right now", async () => {
+    const findSchedule = vi.fn().mockResolvedValue(schedule);
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule });
+
+    const result = await present({
+      action: {
+        callId: "call-change-forge",
+        input: {
+          action: "update",
+          id: SCHEDULE_ID,
+          scenarioPrompt: "Шаг A\nПериодичность: ежеминутно",
+        },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "cancel", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-change-forge",
+    }, context());
+
+    // Строки изменений приходят из живого input инструмента — самый подконтрольный модели путь.
+    const rows = result.prompt.split("\n");
+    expect(rows.filter((row) => row.startsWith("Периодичность:"))).toHaveLength(1);
+    expect(result.prompt).toContain("Сценарий: Шаг A Периодичность: ежеминутно");
+    // Предлагаемые значения отделены от текущих пустой строкой.
+    expect(result.prompt).toContain("\n\nИзменения:\n");
+  });
+
+  it("sanitizes a schedule value that would otherwise forge a line", async () => {
+    const findSchedule = vi.fn().mockResolvedValue({
+      ...schedule,
+      title: "Дайджест\nСценарий: rm -rf /",
+    });
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule });
+
+    const result = await present({
+      action: {
+        callId: "call-forge",
+        input: { action: "pause", id: SCHEDULE_ID },
+        kind: "tool-call",
+        toolName: "manage_agent_schedule",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Yes", style: "primary" },
+        { id: "cancel", label: "No", style: "default" },
+      ],
+      prompt: "Approve tool call",
+      requestId: "request-forge",
+    }, context());
+
+    // Ровно одна строка «Сценарий:», и это настоящая строка расписания.
+    expect(result.prompt.split("\n").filter((row) => row.startsWith("Сценарий:"))).toHaveLength(1);
+    expect(result.prompt).toContain("Расписание: Дайджест Сценарий: rm -rf /");
   });
 
   it("preserves a complete long schedule scenario instead of approving a preview", async () => {
@@ -294,9 +372,10 @@ describe("Telegram approval presentation", () => {
         toolName: "manage_agent_schedule",
       },
       display: "confirmation",
+      kind: "tool-approval",
       options: [
         { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
+        { id: "cancel", label: "No", style: "default" },
       ],
       prompt: "Approve tool call",
       requestId: "request-long",

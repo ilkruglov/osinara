@@ -138,7 +138,7 @@ export const approvalTimeoutRepository: ApprovalTimeoutRepository = {
                   ELSE NULL
                 END,
                 task_state = CASE
-                  WHEN kind <> 'canonical' AND NOT EXISTS (
+                  WHEN kind = 'task' AND NOT EXISTS (
                     SELECT 1 FROM telegram_hitl_approvals pending
                      WHERE pending.application_session_id = session.id
                        AND pending.eve_session_id = $2

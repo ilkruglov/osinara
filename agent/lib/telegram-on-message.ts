@@ -19,10 +19,11 @@ import type {
 } from "eve/channels/telegram";
 
 import type { StoredTelegramAttachment } from "./attachments/telegram-workspace-attachments.js";
-import { isAppError } from "./app-error.js";
+import { AppError, isAppError } from "./app-error.js";
 import { bindTelegramConversationTimeline } from "./telegram-conversation-timeline.js";
 import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
+import { CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES } from "./memory-config.js";
 import { handleTelegramEnrollmentBoundary } from "./telegram-enrollment-boundary.js";
 import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
@@ -411,10 +412,30 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         })
       : preparedGroupTurnContext;
     if (!group) {
-      await repositories.conversations.syncTimelineParticipants(
-        conversation.id,
-        groupTurnContext.visibleEntryIds,
+      // The current participant was synchronized before context preparation. Remaining private
+      // history can exceed the repository's bounded selection contract, so synchronize it in order.
+      if (
+        groupTurnContext.visibleEntryIds.length === 0 ||
+        new Set(groupTurnContext.visibleEntryIds).size !== groupTurnContext.visibleEntryIds.length
+      ) {
+        throw new AppError(
+          "AGENT_CONVERSATION_TIMELINE_SELECTION_INVALID",
+          "Набор записей разговора пуст или содержит повторы",
+        );
+      }
+      const additionalEntryIds = groupTurnContext.visibleEntryIds.filter(
+        (entryId) => entryId !== inboundTimeline.entryId,
       );
+      for (
+        let offset = 0;
+        offset < additionalEntryIds.length;
+        offset += CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES
+      ) {
+        await repositories.conversations.syncTimelineParticipants(
+          conversation.id,
+          additionalEntryIds.slice(offset, offset + CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES),
+        );
+      }
     }
     const turnResult = buildTelegramTurnResult({
       access,

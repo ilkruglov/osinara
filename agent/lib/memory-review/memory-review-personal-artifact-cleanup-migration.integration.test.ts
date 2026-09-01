@@ -1,5 +1,5 @@
 /**
- * Migration 078 erroneous personal memory-review artifact cleanup tests.
+ * Migration 080 erroneous personal memory-review artifact cleanup tests.
  *
  * Constructs covered:
  * - Cleanup requires the exact inspected production batch, sources, and two legacy personal lanes.
@@ -28,8 +28,8 @@ if (integrationTestsEnabled) {
 }
 
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
-const MIGRATION_NAME = "078_remove_personal_memory_review_artifacts.sql";
-const MIGRATION_ORDINAL = 78;
+const MIGRATION_NAME = "080_remove_personal_memory_review_artifacts.sql";
+const MIGRATION_ORDINAL = 80;
 const TEST_SCHEMA = "test_personal_memory_review_cleanup";
 const FAMILY_ID = "13a6d926-5c7d-4dee-8b3b-a8d5762a760e";
 const FIRST_OWNER_ID = "d09d5ffa-c516-4d38-bde5-28f6b63e193c";

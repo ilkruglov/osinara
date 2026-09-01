@@ -6,7 +6,7 @@
  * - An external group emits guarded file tools, granted capabilities, and framework denials.
  * - Granted capabilities re-check the live policy at execution and stay action-level for memory.
  * - HITL approval configuration survives dynamic emission.
- * - Native subagents inherit trust-zone reads/actions but cannot make durable-memory decisions.
+ * - Native subagents stay unavailable externally and cannot make root-owned durable-memory decisions.
  */
 import type { SessionAuth } from "eve/context";
 import type { SkillDefinition } from "eve/skills";
@@ -167,6 +167,18 @@ describe("external group tool surface", () => {
     );
   });
 
+  it("denies native child delegation in every interactive external group", async () => {
+    const surface = buildModeToolSurface({
+      capabilities: new Set(),
+      environment: "external",
+      skills: {},
+    });
+
+    expect(surface).toHaveProperty("agent");
+    await expect(surface.agent!.execute({ message: "Run a long task" }, {} as never))
+      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+  });
+
   it("makes load_skill executable only when the current turn has a granted skill", async () => {
     const denied = buildModeToolSurface({
       capabilities: new Set(),
@@ -297,7 +309,7 @@ describe("external group tool surface", () => {
       skills: {},
     });
 
-    for (const toolName of ["ask_question", "bash", "todo", "web_fetch"]) {
+    for (const toolName of ["agent", "ask_question", "bash", "todo", "web_fetch"]) {
       await expect(surface[toolName]!.execute({}, {} as never), `${toolName} must be denied`).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
     }
   });
@@ -367,6 +379,14 @@ describe("external group tool surface", () => {
     loadCurrentExternalGroupCapabilities.mockResolvedValueOnce(new Set(["manage_memory.undo"]));
 
     expect(surface).toHaveProperty("manage_memory");
+    const schema = surface.manage_memory!.inputSchema as z.ZodType;
+    expect(schema.safeParse({ action: "undo", memoryRef: "mem_0123456789abcdef0123456789abcdef" }).success)
+      .toBe(true);
+    expect(schema.safeParse({ action: "delete", memoryRef: "mem_0123456789abcdef0123456789abcdef" }).success)
+      .toBe(false);
+    expect(surface.manage_memory!.description).toContain('"action":"undo"');
+    expect(surface.manage_memory!.description).not.toContain('"action":"edit"');
+    expect(surface.manage_memory!.description).not.toContain('"action":"delete"');
     await expect(surface.manage_memory!.execute({ action: "delete", id: "00000000-0000-4000-8000-000000000001" }, context)).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
   });
 

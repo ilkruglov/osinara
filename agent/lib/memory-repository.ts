@@ -244,7 +244,7 @@ export const memoryRepository = {
       }
       await requireMutationAccess(client, auth, memory);
 
-      // Persist idempotency and audit before physical deletion nulls the operation reference.
+      // Идемпотентность и аудит пишутся до удаления.
       await client.query(
         `INSERT INTO memory_mutation_operations
            (family_id, operation_key, mutation_kind, input_hash, memory_item_id)
@@ -257,7 +257,22 @@ export const memoryRepository = {
                  jsonb_build_object('scope', $4::text, 'kind', $5::text))`,
         [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
       );
-      await client.query("DELETE FROM memory_items WHERE id = $1", [memory.id]);
+      // Удаление мягкое: ошибка агента не должна уносить факт безвозвратно. Представление
+      // `memory_items` скрывает такую строку от всех чтений и от векторной выдачи.
+      // Заявление помечается отозванным, поэтому существующие триггеры снимают проекции нитей и
+      // подтверждённых исходов ровно так же, как это делал каскад физического удаления.
+      await client.query(
+        `UPDATE memory_items_all
+            SET deleted_at = now(), claim_status = 'retracted'
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [memory.id],
+      );
+      // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
+      // воркер впустую. При восстановлении оно создаётся заново.
+      await client.query(
+        "DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1",
+        [memory.id],
+      );
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {
@@ -318,7 +333,22 @@ export const memoryRepository = {
                  jsonb_build_object('scope', $4::text, 'kind', $5::text, 'reason', 'immediate_undo'))`,
         [auth.familyId, auth.userId, memory.id, memory.scope, memory.kind],
       );
-      await client.query("DELETE FROM memory_items WHERE id = $1", [memory.id]);
+      // Удаление мягкое: ошибка агента не должна уносить факт безвозвратно. Представление
+      // `memory_items` скрывает такую строку от всех чтений и от векторной выдачи.
+      // Заявление помечается отозванным, поэтому существующие триггеры снимают проекции нитей и
+      // подтверждённых исходов ровно так же, как это делал каскад физического удаления.
+      await client.query(
+        `UPDATE memory_items_all
+            SET deleted_at = now(), claim_status = 'retracted'
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [memory.id],
+      );
+      // Задание на индексацию — производная величина: держать его для скрытой строки значит гонять
+      // воркер впустую. При восстановлении оно создаётся заново.
+      await client.query(
+        "DELETE FROM memory_embedding_jobs WHERE memory_item_id = $1",
+        [memory.id],
+      );
       await client.query("COMMIT");
       return { deleted: true };
     } catch (error) {

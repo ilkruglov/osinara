@@ -7,6 +7,11 @@
  * - `TelegramInputRequest`: stable structural input used by the secure HITL renderer.
  * - Failure formatters: hide internals while preserving stable support references.
  */
+import {
+  buildApprovalMessage,
+  genericApprovalFacts,
+} from "./telegram-hitl/approval-message.js";
+
 
 const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
   remember: "сохранить запись в общей или чувствительной памяти",
@@ -88,10 +93,21 @@ export interface TelegramInputRequest {
   };
   allowFreeform?: boolean;
   display?: "confirmation" | "select" | "text";
+  /** Framework-owned source of the request. Only `tool-approval` is an application confirmation. */
+  kind?: "question" | "session-limit" | "tool-approval";
   options?: TelegramInputOption[];
   prompt: string;
   requestId: string;
 }
+
+// Eve 0.40.0 emits `approve`/`cancel` for a tool approval and `continue`/`stop` for a session
+// limit. No path emits `deny`, so no branch for it is kept.
+const OPTION_LABELS: Readonly<Record<string, string>> = {
+  approve: "Да, подтвердить",
+  cancel: "Нет, отменить",
+  continue: "Продолжить",
+  stop: "Остановить",
+};
 
 interface FailureData {
   code: string;
@@ -281,27 +297,31 @@ function publicFailureExplanation(data: FailureData): string | null {
 }
 
 export function localizeTelegramInputRequest<T extends TelegramInputRequest>(request: T): T {
-  if (request.display !== "confirmation") return request;
-
   // Option IDs remain unchanged because Eve resolves callbacks by ID, not visible text.
   const options = request.options?.map((option) => ({
     ...option,
-    label:
-      option.id === "approve"
-        ? "Да, подтвердить"
-        : option.id === "deny"
-          ? "Нет, отклонить"
-          : option.label,
+    label: OPTION_LABELS[option.id] ?? option.label,
   }));
+
+  // Only an application tool approval gets the composed confirmation. A framework request such as
+  // `session-limit` executes nothing, so its own prompt and consequence must not be rewritten.
+  if (request.display !== "confirmation" || request.kind !== "tool-approval") {
+    return options ? { ...request, options } : request;
+  }
+
   const actionLabel = approvalActionLabel(request.action.toolName, request.action.input);
-  const parameterLines = approvalParameterLines(request.action.toolName, request.action.input);
-  const prompt = actionLabel
-    ? `Подтвердите действие: ${actionLabel}.`
-    : "Подтвердите выполнение действия.";
+  const reviewed = approvalParameterLines(request.action.toolName, request.action.input);
   return {
     ...request,
     ...(options ? { options } : {}),
-    prompt: parameterLines.length ? `${prompt}\n\n${parameterLines.join("\n")}` : prompt,
+    prompt: buildApprovalMessage({
+      actionLabel,
+      // A reviewed tool that shows no parameters chose that deliberately. Only a tool with no
+      // description at all falls back to bounded scalar fields instead of an empty confirmation.
+      facts: reviewed.length || actionLabel !== null
+        ? reviewed
+        : genericApprovalFacts(request.action.input),
+    }),
   };
 }
 

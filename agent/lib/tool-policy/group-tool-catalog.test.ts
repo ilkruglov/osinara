@@ -20,6 +20,7 @@ describe("external group tool catalog", () => {
   it("denies every framework built-in an external group must not reach", () => {
     // Application tools are emitted per mode, so only framework descriptors need an override.
     expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
+      "agent",
       "ask_question",
       "bash",
       "todo",
@@ -49,6 +50,12 @@ describe("external group tool catalog", () => {
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("bash");
   });
 
+  it("offers owner-grantable subscription image generation with Telegram delivery", () => {
+    expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("generate_image");
+    expect(EXTERNAL_GROUP_CAPABILITY_CATALOG.find(({ name }) => name === "generate_image")?.usage)
+      .toMatch(/создавать.*отправлять/iu);
+  });
+
   it("defines non-empty model usage for every persisted and always-available capability", () => {
     expect(EXTERNAL_GROUP_CAPABILITY_CATALOG.map(({ name }) => name)).toEqual(
       EXTERNAL_GROUP_TOOL_NAMES,
@@ -68,7 +75,7 @@ describe("external group tool catalog", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
-    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("agent");
   });
 
   it("describes external memory mutations through model-safe memoryRef values", () => {
@@ -81,5 +88,19 @@ describe("external group tool catalog", () => {
       expect(usage).toContain("memoryRef");
       expect(usage).not.toMatch(/\bID\b/u);
     }
+  });
+
+  it("describes memory deletion and conflict resolution without obsolete HITL claims", () => {
+    const deleteCapability = EXTERNAL_GROUP_CAPABILITY_CATALOG.find(
+      ({ name }) => name === "manage_memory.delete",
+    );
+    const conflictCapability = EXTERNAL_GROUP_CAPABILITY_CATALOG.find(
+      ({ name }) => name === "manage_memory_conflict",
+    );
+
+    expect(deleteCapability?.usage).toContain("мягко удалить");
+    expect(deleteCapability?.usage).not.toContain("безвозвратно");
+    expect(conflictCapability?.usage).toContain("по явному решению пользователя");
+    expect(conflictCapability?.usage).not.toContain("подтверждени");
   });
 });

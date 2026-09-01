@@ -17,6 +17,7 @@ import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,
 } from "./approval-repository.js";
+import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
 
 const CALLBACK_ERRORS = {
   expired:
@@ -31,15 +32,16 @@ function resolvedApprovalText(result: {
   selectedOptionId: string;
   selectedOptionLabel: string;
 }): string {
+  // Eve присылает `cancel`; прежняя проверка на `deny` не срабатывала и оставляла английский ярлык.
   const resolution = result.selectedOptionId === "approve"
     ? "Решение: Подтверждено.\nДействие передано на выполнение."
-    : result.selectedOptionId === "deny"
-    ? "Решение: Отклонено.\nДействие не будет выполнено."
+    : result.selectedOptionId === "cancel"
+    ? "Решение: Отменено.\nДействие не будет выполнено."
     : `Выбран ответ: ${result.selectedOptionLabel}`;
+  // Решение уже принято: обещание будущего исполнения снимается, иначе текст противоречит сам себе.
+  const settled = settledPromptText(result.promptText);
   const promptLimit = TELEGRAM_MESSAGE_MAX_CHARACTERS - resolution.length - 2;
-  const prompt = result.promptText.length <= promptLimit
-    ? result.promptText
-    : `${result.promptText.slice(0, promptLimit - 1).trimEnd()}…`;
+  const prompt = boundSettledPrompt(settled, promptLimit);
   return `${prompt}\n\n${resolution}`;
 }
 

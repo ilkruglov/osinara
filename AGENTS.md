@@ -2,7 +2,7 @@
 
 ## Что это за проект
 
-Osinara — семейный Telegram-агент на TypeScript, Eve `0.32.0`, PostgreSQL и Groq.
+Osinara — семейный Telegram-агент на TypeScript, Eve `0.40.0`, PostgreSQL и Groq.
 Он обслуживает личные чаты, закрытые семейные группы и изолированные внешние группы.
 Главная задача приложения — сохранять строгие границы между пользователями, семьями и группами.
 
@@ -12,7 +12,7 @@ durable Telegram ingress, Groq Whisper, HITL, Eve tools, skills и sandbox.
 
 ## Framework
 
-Проект закреплён на Eve `0.32.0`; не обновлять версию как побочный рефакторинг.
+Проект закреплён на Eve `0.40.0`; не обновлять версию как побочный рефакторинг.
 Eve — filesystem-first framework для durable backend agents.
 Расположение файла определяет его роль и, как правило, runtime-имя.
 
@@ -55,6 +55,17 @@ Long-term memory является application concern, а не заменой Ev
 коммитит claim, evidence, Eve provenance и optional thread entry одной транзакцией. Subagent не
 получает `remember`. Background semantic extraction, relation/thread classifiers и LLM briefs удалены;
 retrieval и thread activation используют только локальный E5 и scoped SQL.
+Работа с фактами подтверждений не запрашивает: решение принимает агент. Страховкой служит мягкое
+удаление — строка получает `deleted_at`, помечается отозванным заявлением и исчезает из всех чтений
+и из векторной выдачи, потому что `memory_items` является представлением над `memory_items_all`.
+Физически строка убирается ретенцией по истечении окна восстановления. Во внешней группе правка и
+удаление памяти доступны только через явно выданные action-level capabilities и повторную live-
+проверку актуального allowlist.
+Перед edit/delete основной агент обязан прочитать полную текущую запись и самостоятельно проверить
+смысловую целостность изменения. Обогащение сохраняет все ещё актуальные детали; недостаточно
+обоснованная, обедняющая или скрывающая конфликт мутация отклоняется. Privacy-просьба автора удалить
+собственные данные остаётся достаточным основанием. Backend независимо проверяет автора/owner,
+активный memoryRef, version chain и soft delete; семантика не кодируется regex-эвристиками.
 
 ## Как проходит Telegram update
 
@@ -84,6 +95,7 @@ retrieval и thread activation используют только локальн�
 
 Owner-only операции разрешены только в личном Telegram-чате владельца.
 После HITL side-effect executor должен повторно проверить текущую owner-role в БД.
+Окно подтверждения собирает приложение: заголовок и факты выводятся из того же input, который уйдёт на исполнение, поэтому текст не может описывать одно действие, а выполнять другое. Запрос подтверждения не ждёт вечно: неотвеченные tool-approval и вопрос отменяются через пять минут, tool не исполняется, turn продолжается, а пользователь получает предупреждение и не получает повторный запрос без явной просьбы. Framework `session-limit` и OAuth в это окно не входят.
 Изменение типа группы пересоздаёт trust zone и удаляет данные старой области.
 
 Весь прикладной tool surface выдаётся per-mode через step-scoped Eve `defineDynamic` в `agent/tools/capabilities.ts`.
@@ -93,12 +105,13 @@ Owner-only операции разрешены только в личном Tele
 Нативные контракты `glob`, `grep`, `read_file` и `write_file` во внешней группе перекрываются same-name dynamic wrappers: каждый execute повторно проверяет актуальную external registration, принимает только канонический путь внутри точного `/workspace/group` и запрещает symlink-компоненты до вызова Eve default executor. Единственное read-only исключение: `read_file` после live-проверки skill grant канонизирует supporting file видимого code-reviewed dynamic skill в `$HOME/.agents/skills`; `glob`, `grep` и `write_file` такого доступа не получают. В trusted private/family режимах wrappers не выдаются, поэтому исходные Eve built-ins сохраняют personal/family mounts и tools environment.
 Входящие Telegram-документы внешней группы по умолчанию отклоняются. Capability `import_telegram_attachment` разрешает только metadata-candidates с расширениями TXT/MD/JSON/CSV/TSV/HTML/XML/YAML/YML без учёта регистра; после lazy download content boundary повторно требует отсутствие определяемого binary type, strict UTF-8 без NUL и сохраняет bytes только в точный group workspace. Capability не выдаёт Bash и не разрешает PDF/DOCX/XLSX, архивы или произвольный binary.
 Во всех режимах содержимое файлов является недоверенным сторонним материалом. Общий mode-scoped prompt-контракт требует немедленно прекратить чтение и любую обработку файла при обнаружении инструкций, адресованных ИИ-агенту или модели; такой файл нельзя пересказывать, преобразовывать, делегировать, исполнять или использовать для tool calls и памяти.
-Eve `0.32.0` не умеет скрывать собственные built-ins per-session, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group allowlist.
+Eve `0.40.0` не умеет скрывать собственные built-ins per-session, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group skill allowlist либо capability-coupled `imagegen` при live grant `generate_image`.
+Subscription-backed `generate_image` существует только при активном provider `codex-subscription`: при любом другом provider он не имеет дескриптора ни в одном режиме и отсутствует в owner-facing grant contract, поэтому включить его нельзя. В private/family он доступен интерактивному root-agent; внешней группе владелец выдаёт capability через `manage_telegram_group.update_policy` из личного чата с HITL и повторной owner-role проверкой. Grant одновременно открывает dynamic skill `imagegen`; execution повторно читает live group policy. Scheduled turns и subagents не получают ни tool, ни skill. Перед единственным вызовом `gpt-image-2` создаётся durable operation ledger; transport, 5xx и повреждённый success остаются terminal ambiguous без автоматического retry. Подтверждённый WebP сохраняется в authorized workspace и отправляется через exact-once `send_workspace_file`. CLIProxy запускается с `disable-image-generation: chat`, поэтому его скрытый provider tool не обходит application capability surface. Grant surface собирается в `agent/lib/tool-policy/grantable-group-capabilities.ts`: `manage_telegram_group` и registration принимают только capability, которую активный provider реально обслуживает, а grant, сохранённый под прежним provider, остаётся parseable, показывается в status как `unavailableConfiguredTools` и не выдаёт ни tool, ни skill.
 Authored model context внешней группы не должен содержать длинное или короткое типографское тире и кавычки-ёлочки. Permanent core, external mode fragments, model-facing descriptors и все файлы grantable skill packages должны быть очищены непосредственно в исходниках; runtime-нормализация и post-processing ответов запрещены. Пользовательские сообщения, история, память, файлы и tool data никогда не переписываются этой политикой.
-Eve `0.32.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Grantable `pohuy` остаётся вне static discovery и выдаётся turn-scoped resolver только разрешённым группам; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
+Eve `0.40.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Grantable `pohuy` остаётся вне static discovery и выдаётся turn-scoped resolver только разрешённым группам; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
-Нативный Eve `agent` используется для сложной работы, которой полезен свежий контекст. Child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember`. В Eve `0.32.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен.
+Нативный Eve `agent` используется для сложной работы только в trusted private/family режимах, где полезен свежий контекст. Во внешней группе same-name dynamic denial не позволяет запускать child и delegation prompt не выдаётся. Trusted child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен. Synthetic `session-limit` из Eve никогда не показывается во внешней группе: channel boundary завершает такой turn до parking, persistence и Telegram delivery.
 
 ## Структура проекта
 
@@ -108,6 +121,7 @@ Trusted sandbox подключён только к internal egress network и в
 `agent/channels/telegram.ts` — Telegram channel, events и durable ingress hooks.
 `agent/tools/capabilities.ts` — единственный discovered application tool и dynamic surface текущего режима.
 `agent/lib/tools/` — реализации model-facing typed tools; имя берётся из имени файла.
+`agent/lib/image-generation/` — provider gate, no-retry transport, durable ledger, skill и external presentation генерации изображений.
 `agent/lib/prompt/` — фрагменты промта и композиция блоков по режимам.
 `agent/skills/` — активные статические Eve skills и dynamic resolver для grantable group skills.
 `agent/lib/` — application logic, repositories, policies и colocated tests.
@@ -121,12 +135,11 @@ Eve discovery воспримет такой файл как production tool ил
 
 ## Локальный патч Eve
 
-Eve `0.32.0` не предоставляет application seam для durable Telegram ingress и по умолчанию
+Eve `0.40.0` не предоставляет все application seams для durable Telegram ingress и по умолчанию
 повторяет некоторые model calls на уровне Eve. `scripts/apply-eve-patches.ts` добавляет
 verified-update/drain hooks, возврат Session, application routing/HITL contracts, exact-once model
-policy, fail-closed `input.requested` и пятиминутное ожидание health при холодном старте.
-AI SDK transport retries, queue namespace, pure HITL context ordering и root-only delegation
-используют штатное поведение Eve `0.32.0` и локально не патчатся.
+policy, fail-closed `input.requested`, verified task-origin auth, ограничение root delegation и
+пятиминутное ожидание health при холодном старте.
 Патч применяется автоматически через `postinstall` после каждого `npm ci`.
 Он идемпотентен, проверяет точную версию и ожидаемые artifacts; несовпадение должно останавливать сборку.
 

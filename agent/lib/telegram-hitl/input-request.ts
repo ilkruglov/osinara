@@ -4,6 +4,9 @@
  * Exports:
  * - `createTelegramInputRequestHandler`: dependency-injected renderer and durable approval binder.
  * - `handleTelegramInputRequested`: production Eve `input.requested` event handler.
+ *
+ * Key constructs:
+ * - External session-budget continuations fail before parking or Telegram delivery.
  */
 import {
   registerTelegramFreeformPrompt,
@@ -57,6 +60,7 @@ interface InputRequestDependencies {
 
 const HITL_PREPARING_MESSAGE = "Подготавливаю безопасный запрос подтверждения.";
 const HITL_PROMPT_CHUNK_CHARACTERS = 3_000;
+const SESSION_LIMIT_CONTINUATION_TOOL_NAME = "session_limit_continuation";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 type TelegramJsonValue =
@@ -134,6 +138,22 @@ function numberedPromptChunk(chunk: string, index: number, total: number): strin
   return total === 1 ? chunk : `Часть ${index + 1} из ${total}\n\n${chunk}`;
 }
 
+function assertInputRequestPolicy(data: InputRequestedData, ctx: Pick<SessionContext, "session">) {
+  const externalGroup = ctx.session.auth.current?.attributes.groupType === "external";
+  if (!externalGroup) return;
+
+  // Eve authors this synthetic request outside the tool surface, so descriptor denials cannot stop it.
+  const requestsSessionBudget = data.requests.some((request) =>
+    request.kind === "session-limit" ||
+    request.action.toolName === SESSION_LIMIT_CONTINUATION_TOOL_NAME
+  );
+  if (!requestsSessionBudget) return;
+  throw new AppError(
+    "AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN",
+    "Агент остановил слишком длинную задачу во внешней группе. Разбейте запрос на части и отправьте его заново",
+  );
+}
+
 export function createTelegramInputRequestHandler(dependencies: InputRequestDependencies) {
   return async function handleInputRequested(
     data: InputRequestedData,
@@ -164,6 +184,9 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
         "Eve не передал запрос, который нужно показать пользователю",
       );
     }
+
+    // Policy is evaluated before semantic presentation, session parking, persistence, or network I/O.
+    assertInputRequestPolicy(data, ctx);
 
     // Resolve trusted semantic subjects before parking so presentation failures remain recoverable.
     const localizedRequests: Array<{

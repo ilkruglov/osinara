@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createApprovalTimeoutSweep`: posts to the private route with the internal token.
  * - A failed cycle is reported and swallowed so the minute schedule keeps running.
+ * - Missing required config is not swallowed: it surfaces instead of disabling the sweep.
  * - `isInternalTokenAuthorized`: rejects a missing, short, long, or wrong token.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -42,8 +43,7 @@ describe("createApprovalTimeoutSweep", () => {
     expect(reported.mock.calls[0]![0]).toContain("AGENT_APPROVAL_TIMEOUT_SWEEP_FAILED");
   });
 
-  it("never sends an unauthenticated request when the token is missing", async () => {
-    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("fails fast and sends nothing when the internal token is missing", async () => {
     const fetchMock = vi.fn();
     const sweep = createApprovalTimeoutSweep({
       fetch: fetchMock,
@@ -52,9 +52,9 @@ describe("createApprovalTimeoutSweep", () => {
       },
     });
 
-    await expect(sweep()).resolves.toBeUndefined();
+    // Missing required config is not a transient cycle failure and must not be swallowed.
+    await expect(sweep()).rejects.toThrow(/AGENT_INTERNAL_TOKEN_MISSING/u);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(reported.mock.calls[0]![0]).toContain("AGENT_INTERNAL_TOKEN_MISSING");
   });
 });
 

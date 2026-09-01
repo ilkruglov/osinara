@@ -46,6 +46,7 @@ export interface ApprovalTimeoutDependencies {
 
 const TIMEOUT_RESPONSE_FAILED = "AGENT_APPROVAL_TIMEOUT_RESPONSE_FAILED";
 const TIMEOUT_SETTLEMENT_FAILED = "AGENT_APPROVAL_TIMEOUT_SETTLEMENT_FAILED";
+const TIMEOUT_LEASE_RELEASE_FAILED = "AGENT_APPROVAL_TIMEOUT_LEASE_RELEASE_FAILED";
 const TIMEOUT_SESSION_INACTIVE = "AGENT_APPROVAL_TIMEOUT_SESSION_INACTIVE";
 const TIMEOUT_PROMPT_FINALIZE_FAILED = "AGENT_APPROVAL_TIMEOUT_PROMPT_FINALIZE_FAILED";
 const TIMEOUT_MINUTES = Math.round(TELEGRAM_HITL_APPROVAL_TIMEOUT_MS / 60_000);
@@ -115,7 +116,16 @@ async function resolveOne(
       error: error instanceof Error ? error.message : String(error),
       eveSessionId: claim.eveSessionId,
     }));
-    await dependencies.repository.failTimeout(claim, TIMEOUT_RESPONSE_FAILED);
+    try {
+      await dependencies.repository.failTimeout(claim, TIMEOUT_RESPONSE_FAILED);
+    } catch (releaseError) {
+      // The lease expires on its own; losing it must not abandon the rest of the leased batch.
+      console.error(JSON.stringify({
+        approvalId: claim.id,
+        code: TIMEOUT_LEASE_RELEASE_FAILED,
+        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+      }));
+    }
     return false;
   }
 

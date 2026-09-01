@@ -55,7 +55,7 @@ describeWithDatabase("familyRepository invitations", () => {
   beforeEach(async () => {
     // Integration tests own the disposable database and reset every domain table between cases.
     await database().query(
-      `TRUNCATE invitations, memory_items,
+      `TRUNCATE invitations, memory_items_all,
          telegram_groups, family_memberships, users, families CASCADE`,
     );
   });

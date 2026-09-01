@@ -2,7 +2,7 @@
  * Stable application configuration.
  *
  * Exports:
- * - Agent compaction, session lifecycle, attachment, update, and timeout constants.
+ * - Agent compaction, per-turn model safety, session lifecycle, attachment, update, and timeout constants.
  * - Internal service locations and sandbox runner execution limits.
  * - Telegram group journal and proactive delivery model-context limits.
  * - Cross-process advisory-lock namespaces for sensitive workspace state.
@@ -12,6 +12,8 @@
 import { z } from "zod";
 
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
+// The model may perform substantial tool work, but one turn must never consume unbounded calls.
+export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
 export const GROQ_TRANSCRIPTION_TIMEOUT_MS = 60_000;
 export const GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED = 2;
 export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;
@@ -34,6 +36,10 @@ export const PROACTIVE_DELIVERY_HISTORY_MAX_LIMIT = 50;
 export const SOFTWARE_UPDATE_GITHUB_RESPONSE_MAX_BYTES = 1024 * 1024;
 export const SOFTWARE_UPDATE_HTTP_TIMEOUT_MS = 15_000;
 export const SOFTWARE_UPDATE_MANIFEST_MAX_BYTES = 64 * 1024;
+// Мягко удалённый факт остаётся восстановимым это окно, затем вычищается физически вместе со
+// связанными чанками и заявлениями по каскадам базовой таблицы.
+export const MEMORY_SOFT_DELETE_RETENTION_DAYS = 30;
+export const MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE = 200;
 export const TELEGRAM_API_REQUEST_TIMEOUT_MS = 15_000;
 // An unanswered approval parks the Eve turn indefinitely: Eve keeps `session.waiting` for as long
 // as it takes. The confirmation window bounds that wait so one ignored prompt cannot freeze a chat.

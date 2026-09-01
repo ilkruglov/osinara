@@ -1,5 +1,5 @@
 /**
- * Migration 077 missing source-binding recovery tests.
+ * Migration 079 missing source-binding recovery tests.
  *
  * Constructs covered:
  * - Only the two exact side-effect-free production batches are requeued.
@@ -29,8 +29,8 @@ if (integrationTestsEnabled) {
 }
 
 const describeWithDatabase = integrationTestsEnabled ? describe : describe.skip;
-const MIGRATION_NAME = "077_memory_review_source_binding_recovery.sql";
-const MIGRATION_ORDINAL = 77;
+const MIGRATION_NAME = "079_memory_review_source_binding_recovery.sql";
+const MIGRATION_ORDINAL = 79;
 const TEST_SCHEMA = "test_memory_review_source_binding_recovery";
 const FIRST_BATCH_ID = "90619ff3-137e-423e-9615-4e436e3a52b1";
 const SECOND_BATCH_ID = "e19dc521-5a31-4d2f-b6ea-2baa6639ee10";

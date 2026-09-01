@@ -80,7 +80,7 @@ describe("production container contract", () => {
       "FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy",
     );
 
-    // Eve 0.32.0 serves built output but still bundles authored modules during `eve start`.
+    // Eve 0.40.0 serves built output but still bundles authored modules during `eve start`.
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
     expect(runtime).toContain("COPY --from=build /app/.runtime ./.runtime");
     expect(runtime).toContain("COPY --from=build /app/agent ./agent");

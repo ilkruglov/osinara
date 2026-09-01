@@ -52,7 +52,7 @@ async function insertPendingMemory(): Promise<string> {
 describeWithDatabase("memoryIndexRepository", () => {
   beforeEach(async () => {
     await database().query(
-      "TRUNCATE memory_embedding_chunks, memory_embedding_jobs, memory_items, family_memberships, users, families CASCADE",
+      "TRUNCATE memory_embedding_chunks, memory_embedding_jobs, memory_items_all, family_memberships, users, families CASCADE",
     );
   });
   afterAll(async () => closeDatabase());

@@ -1,10 +1,10 @@
 /**
- * Eve implicit-agent policy patch tests for background memory review.
+ * Eve implicit-agent policy patch tests for restricted runtime modes.
  *
  * Constructs covered:
- * - The patched runtime removes only Eve's implicit root `agent` from verified background review.
- * - Interactive and non-review root sessions retain native delegation.
- * - Authored tools and non-root subagent lookalikes are never removed by the review policy.
+ * - The patched runtime removes Eve's implicit root `agent` from external groups and background review.
+ * - Trusted interactive root sessions retain native delegation.
+ * - Authored tools and non-root subagent lookalikes are never removed by the policy.
  * - The reproducible installer owns the exact Eve 0.40.0 runtime patch.
  */
 import { readFile } from "node:fs/promises";
@@ -62,9 +62,9 @@ function extractRuntimeToolBuilder(source: string): RuntimeToolBuilder {
   return factory(() => [], AUTH_KEY);
 }
 
-function context(authenticator: string, memoryReviewMode?: string) {
+function context(authenticator: string, attributes: Readonly<Record<string, unknown>> = {}) {
   const auth: RuntimeAuth = {
-    attributes: memoryReviewMode === undefined ? {} : { memoryReviewMode },
+    attributes,
     authenticator,
   };
   return {
@@ -74,7 +74,7 @@ function context(authenticator: string, memoryReviewMode?: string) {
   };
 }
 
-describe("Eve memory-review implicit agent policy patch", () => {
+describe("Eve implicit agent policy patch", () => {
   it("removes native root delegation only from verified background review", async () => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
     const buildTools = extractRuntimeToolBuilder(runtime);
@@ -84,23 +84,39 @@ describe("Eve memory-review implicit agent policy patch", () => {
         ["agent", implicitRootAgent],
         ["remember", { name: "remember" }],
       ]),
-      context("memory-review", "background"),
+      context("memory-review", { memoryReviewMode: "background" }),
     );
 
     expect([...tools.keys()]).toEqual(["remember"]);
   });
 
+  it("removes native root delegation from an authenticated external group", async () => {
+    const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
+    const buildTools = extractRuntimeToolBuilder(runtime);
+
+    const tools = buildTools(
+      new Map([
+        ["agent", implicitRootAgent],
+        ["read_file", { name: "read_file" }],
+      ]),
+      context("telegram", { groupType: "external" }),
+    );
+
+    expect([...tools.keys()]).toEqual(["read_file"]);
+  });
+
   it.each([
-    ["ordinary root session", "telegram", undefined],
-    ["interactive review marker", "memory-review", "interactive"],
-    ["unverified background marker", "telegram", "background"],
-  ])("retains native root delegation for %s", async (_case, authenticator, mode) => {
+    ["private root session", "telegram", {}],
+    ["family root session", "telegram", { groupType: "family_private" }],
+    ["interactive review marker", "memory-review", { memoryReviewMode: "interactive" }],
+    ["unverified background marker", "telegram", { memoryReviewMode: "background" }],
+  ])("retains native root delegation for %s", async (_case, authenticator, attributes) => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
     const buildTools = extractRuntimeToolBuilder(runtime);
 
     const tools = buildTools(
       new Map([["agent", implicitRootAgent]]),
-      context(authenticator, mode),
+      context(authenticator, attributes),
     );
 
     expect(tools.get("agent")).toBe(implicitRootAgent);
@@ -122,7 +138,7 @@ describe("Eve memory-review implicit agent policy patch", () => {
 
     const tools = buildTools(
       new Map([["agent", agentTool]]),
-      context("memory-review", "background"),
+      context("memory-review", { memoryReviewMode: "background" }),
     );
 
     expect(tools.get("agent")).toBe(agentTool);
@@ -135,6 +151,8 @@ describe("Eve memory-review implicit agent policy patch", () => {
     ]);
 
     expect(patchSource).toContain("memoryReviewMode===`background`");
+    expect(patchSource).toContain("groupType===`external`");
     expect(runtime.match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
+    expect(runtime.match(/groupType===`external`/gu)).toHaveLength(1);
   });
 });

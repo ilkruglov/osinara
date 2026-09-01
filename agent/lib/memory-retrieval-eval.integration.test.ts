@@ -71,7 +71,7 @@ describeEval("memory retrieval eval v1", () => {
   beforeAll(async () => {
     // The fixture owns the disposable database for deterministic ranks and metrics.
     await database().query(
-      "TRUNCATE memory_embedding_chunks, memory_embedding_jobs, memory_items, family_memberships, users, families CASCADE",
+      "TRUNCATE memory_embedding_chunks, memory_embedding_jobs, memory_items_all, family_memberships, users, families CASCADE",
     );
     const family = await database().query<{ id: string }>(
       "INSERT INTO families (name) VALUES ('Синтетический retrieval eval') RETURNING id",

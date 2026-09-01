@@ -29,6 +29,20 @@ Osinara — self-hosted агент, который живёт в Telegram и р�
 **Рассчитан на:** одну семью на своём сервере. Один владелец, приглашённые участники, закрытые семейные группы
 и отдельно — внешние группы (рабочие, дружеские), где агент работает в урезанном режиме.
 
+| Блок | Что умеет |
+| --- | --- |
+| Telegram | Durable webhook ingress, быстрый ACK Telegram, FIFO-drain по chat/topic, обычные и rich replies, HITL callbacks с ограниченным окном подтверждения. |
+| Семья и группы | Bootstrap владельца, приглашения, подтверждение участников, owner-only операции, семейные и внешние группы. |
+| Память | Root-agent source-backed writes, semantic integrity для изменений, versioned mutations, soft delete, atomic memory threads, локальный hybrid retrieval, экспорт и отдельные scopes. |
+| Расписания | Напоминания и автономные agent schedules: личные и семейные сценарии, а также owner-approved отчёты во внешние группы с отдельной fresh session, минимальным capability allowlist и bounded snapshot истории. |
+| Голос | Groq Whisper transcription перед основным agent turn с повторной проверкой authorization. |
+| Workspaces | Изолированные personal, family и group файловые области, attachment persistence, безопасная отправка файлов. |
+| Изображения | Root-agent создаёт одно WebP через `gpt-image-2`, сохраняет его в authorized workspace и доставляет в Telegram без скрытых повторов; внешней группе capability выдаёт владелец из личного чата. |
+| Google Workspace | Native `gws` skills для Gmail, Calendar, Drive, Docs, Sheets и People через workspace-bound OAuth credentials. |
+| Sandbox | Долгоживущие Docker sandbox sessions с scoped mounts, isolated tools volume, egress proxy и fail-closed policy. |
+| Оркестрация | В trusted private/family режимах root-agent делегирует большие задачи нативному Eve `agent` со свежим контекстом и теми же разрешёнными tools, skills, connections, sandbox и workspace; во внешних группах child delegation запрещена. |
+| Production | Immutable GitHub releases, GHCR digest images, Telegram approval перед deploy, systemd timer на сервере. |
+
 ---
 
 ## Функционал
@@ -103,9 +117,10 @@ Osinara — self-hosted агент, который живёт в Telegram и р�
 
 | Где | Память | Файлы | Инструменты |
 | --- | --- | --- | --- |
-| Личный чат | `personal` + `family` | `/workspace/personal`, `/workspace/family` | Полный набор, доверенный sandbox, все интеграции |
-| Семейная группа | только `family` | `/workspace/family` | Доверенный sandbox, семейные инструменты |
-| Внешняя группа | только `group` | `/workspace/group` | Только выданный allowlist: безопасные файловые операции, контролируемый `web_fetch`, разрешённые skills |
+| Личный чат | `personal` и `family` | `/workspace/personal`, `/workspace/family` | Полный trusted sandbox и personal tools environment; при активной Codex-подписке root-agent может создавать изображения. |
+| Семейная группа | Только `family` | `/workspace/family` | Trusted sandbox и family tools environment; при активной Codex-подписке root-agent может создавать изображения. |
+| Внешняя группа | Только `group` | `/workspace/group` | Без Bash, произвольного сетевого доступа и persistent credentials; `web_fetch` и `generate_image` доступны только через отдельные owner grants, причём `generate_image` предлагается владельцу лишь при активном provider `codex-subscription`; безопасные file tools и настраиваемый импорт UTF-8 TXT/MD/JSON/CSV/TSV/HTML/XML/YAML/YML из Telegram. |
+| Native child | Та же проверенная identity и scopes, что у parent turn | Тот же разрешённый workspace и sandbox | Тот же trust-zone surface, кроме root-owned `remember` и `generate_image`; отдельные history и state. |
 
 ---
 
@@ -189,3 +204,26 @@ Docker Compose · Groq Whisper · локальные эмбеддинги E5 · 
 - Отсутствие обязательного конфига — быстрая ошибка со стабильным кодом, а не догадка со значением по умолчанию.
 - Внешние группы не получают личную и семейную память, учётные данные, Bash и произвольную сеть.
 - Production-образы собирает только CI из канонического `main`; деплой требует подтверждения владельца и точной проверки манифеста релиза.
+
+## Skills
+
+Highlighted skill groups:
+
+| Skill group | Examples |
+| --- | --- |
+| Google Workspace | `gws-gmail`, `gws-calendar`, `gws-drive`, `gws-docs`, `gws-sheets`, `gws-people`. |
+| Documents | `pdf`, `docx`, `xlsx`. |
+| Browser and research | `agent-browser`, `find-docs`. |
+| Personalization | `behavior-preferences`. |
+| Tone, opt-in | `pohuy` — режим ответов с матом, грузится только по явной просьбе. |
+| Image generation | Dynamic `imagegen` доступен root-agent только вместе с активным subscription-backed `generate_image`; без provider `codex-subscription` ни tool, ни skill не существуют и не выдаются. |
+
+## Release Badges
+
+<p>
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-pgvector%2017-4169E1?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="Docker Compose" src="https://img.shields.io/badge/Docker%20Compose-required-2496ED?style=flat-square&logo=docker&logoColor=white">
+  <img alt="Telegram" src="https://img.shields.io/badge/Telegram-primary%20channel-26A5E4?style=flat-square&logo=telegram&logoColor=white">
+  <img alt="Google Workspace" src="https://img.shields.io/badge/Google%20Workspace-native%20gws-4285F4?style=flat-square&logo=google&logoColor=white">
+  <img alt="Groq" src="https://img.shields.io/badge/Groq-Whisper%20voice-F55036?style=flat-square">
+</p>
