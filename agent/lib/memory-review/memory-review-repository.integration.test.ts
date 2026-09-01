@@ -10,7 +10,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
-import { createMainAgentMemoryFixture } from "../memory-agent-write.integration-fixtures.js";
+import {
+  createMainAgentMemoryFixture,
+  createMainAgentPrivateMemoryFixture,
+} from "../memory-agent-write.integration-fixtures.js";
 import { memoryTurnSourceRepository } from "../memory-turn-source-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
@@ -21,7 +24,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
 
 async function insertUserMessage(input: {
   conversationId: string;
-  groupId: string;
+  groupId: string | null;
   messageThreadId?: number;
   sequence: number;
 }) {
@@ -142,6 +145,33 @@ describeWithDatabase("memory review repository", () => {
       status: "pending",
       throughSequence: "51",
     });
+  });
+
+  it("does not materialize a legacy personal lane after observer crash", async () => {
+    const fixture = await createMainAgentPrivateMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    for (let sequence = 2; sequence <= 51; sequence += 1) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId,
+        groupId: null,
+        sequence,
+      });
+    }
+
+    await expect(memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-08-12T10:00:00.000Z"),
+    })).resolves.toEqual([]);
+    await expect(database().query(
+      `SELECT count(*)::integer AS count FROM memory_review_batches
+        WHERE conversation_id = $1`,
+      [fixture.conversationId],
+    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it("retains active sources and advances only after successful completion", async () => {

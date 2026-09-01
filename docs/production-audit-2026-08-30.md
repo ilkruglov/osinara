@@ -5,11 +5,8 @@
 Production в целом стабилен: контейнеры работают без рестартов и OOM, health endpoint сообщает
 `ready`, Telegram ingress не содержит активных или зависших updates.
 
-При этом аудит обнаружил два подтверждённых дефекта и одну известную проблему качества retrieval:
-
-1. Google Workspace периодически недоступен из-за выбора неработающего IPv6;
-2. materialization создаёт personal background batch, который невозможно обработать;
-3. automatic retrieval технически работает, но добавляет нерелевантную память на нейтральных запросах.
+Остаётся одна известная проблема качества: automatic retrieval технически работает, но добавляет
+нерелевантную память на нейтральных запросах.
 
 Аудит выполнялся в read-only режиме. Рестарты, миграции, изменения конфигурации и записи в production
 PostgreSQL не выполнялись. Для проверки retrieval использовались только `SELECT` и read-only E5
@@ -26,42 +23,7 @@ inference. Содержимое пользовательских сообщен�
 - Docker хранит около 9.969 ГБ удаляемых образов.
 - Telegram ingress: 16 811 completed updates, активных и зависших updates нет.
 
-## 1. Google Workspace ломается при выборе IPv6
-
-### Наблюдаемое последствие
-
-Google Workspace CLI завершался с `AGENT_GOOGLE_WORKSPACE_COMMAND_FAILED` и сообщением
-`HTTP request failed`. Egress-proxy в те же моменты регистрировал `ENETUNREACH` для
-`gmail.googleapis.com` и `www.googleapis.com`.
-
-Прямая проверка внутри production egress container показала:
-
-- IPv4-адрес Google принимает TCP connection на 443;
-- IPv6-адрес Google сразу возвращает `ENETUNREACH`.
-
-Обе Docker-сети proxy имеют `EnableIPv6=false` и не выдают контейнеру IPv6 address.
-
-### Причина
-
-`resolvePublicInternetAddress` в
-`services/sandbox-egress-proxy/public-dns-resolver.ts:42` параллельно запрашивает A и AAAA. Если A-запрос
-временно завершается ошибкой, а AAAA отвечает, публичный IPv6 считается допустимым и передаётся в
-`connect`, хотя runtime не имеет IPv6 connectivity.
-
-### Требуемое исправление
-
-В текущем IPv4-only deployment proxy должен выбирать только проверенный публичный IPv4 address. Если
-A-запрос не дал допустимого адреса, операция должна завершаться явной ошибкой, а не переключаться на
-заведомо неработающий IPv6.
-
-Тест обязан покрывать случай: A-запрос завершился ошибкой, AAAA вернул публичный адрес, Docker runtime
-не поддерживает IPv6. Ожидаемый результат - явный отказ до попытки соединения.
-
-За семь дней egress-proxy также зарегистрировал 250 timeout. Большая часть относится к фоновым
-браузерным адресам вроде `mtalk.google.com` и не доказывает отказ Google Workspace. Эти события нужно
-анализировать отдельно от подтверждённого IPv6-дефекта Gmail.
-
-## 2. Automatic retrieval работает, но возвращает semantic noise
+## 1. Automatic retrieval работает, но возвращает semantic noise
 
 ### Подтверждённый рабочий путь
 
@@ -129,30 +91,7 @@ production false positives достигают `0.7974`. Один scalar threshol
    - длительность retrieval;
    - код ошибки при fail-closed результате.
 
-## 3. Ошибочный personal background batch
-
-Personal batch находится в `pending` с 2026-08-20. Lane остановлена на sequence 85, batch покрывает
-50 источников, после него накопилось ещё 28 пользовательских сообщений.
-
-Background review architecture является group-only:
-
-- `MemoryReviewClaim` требует group metadata;
-- dispatcher строит group auth;
-- `claimPending` обязательно соединяет conversation с `telegram_groups`.
-
-Однако `materializeReadyBatches` в
-`agent/lib/memory-review/memory-review-dispatch-repository.ts:51` перебирает все lanes, включая personal.
-Он создаёт personal batch, который `claimPending` затем никогда не может получить. Ошибка остаётся
-тихой, потому что lease и dispatch даже не начинаются.
-
-### Требуемое исправление
-
-1. Ограничить background materialization разговорами с подтверждённым `telegram_group_id`.
-2. Проверяемой миграцией удалить ошибочный personal pending batch и связанные personal review lanes.
-3. Не расширять background pipeline на personal как побочный рефакторинг: в private chat смысловое
-   решение о `remember` уже принимает основной агент на обычном turn.
-
-## 4. Состояние данных памяти
+## 2. Состояние данных памяти
 
 - Всего 354 memory items, из них 353 active.
 - 352 active items имеют indexed embeddings.
@@ -176,21 +115,14 @@ service. Автоматический бесконечный retry добавл�
 
 ## Рекомендуемый порядок работ
 
-### Hotfix
-
-1. Перевести egress DNS/connect path на IPv4-only и восстановить Google Workspace.
-2. Запретить materialization personal background batches и удалить существующий ошибочный batch.
-
-### Отдельный этап качества памяти
-
 1. Добавить retrieval observability.
 2. Расширить versioned eval production-derived negative controls.
 3. Реализовать semantic gating без потери paraphrase и cross-language recall.
 4. Провести отдельный аудит 50 `legacy_unresolved` personal records.
 5. Точно восстановить один failed embedding job.
 
-Такой порядок сначала останавливает пользовательские отказы и тихую потерю результатов memory review,
-а затем меняет качество отбора и persisted legacy data в отдельном контролируемом scope.
+Такой порядок сначала добавляет измеримость и release gate, а затем меняет качество отбора и
+persisted legacy data в отдельном контролируемом scope.
 
 ## Что не проверено
 
@@ -198,5 +130,6 @@ service. Автоматический бесконечный retry добавл�
   retrieval telemetry сейчас отсутствует.
 - Batch от 2026-08-23 не признан ошибочным автоматически, потому что его source-binding log уже вне
   доступного окна наблюдения.
-- Исправления оставшихся пунктов не реализовывались и тесты для них не запускались: первоначальная
-  задача этого этапа была только read-only production-аудитом и документированием результатов.
+- Обновлённый egress image ещё не развёрнут в production; после release не проверены реальный Google
+  Workspace вызов и снижение прежних CONNECT timeout для долгоживущих browser-соединений.
+- Исправления оставшихся retrieval и legacy-memory пунктов не реализовывались.

@@ -16,12 +16,11 @@ const PUBLIC_DNS_ATTEMPTS = 1;
 
 export interface PublicDnsClient {
   resolve4(hostname: string): Promise<string[]>;
-  resolve6(hostname: string): Promise<string[]>;
 }
 
 export interface PublicInternetAddress {
   address: string;
-  family: 4 | 6;
+  family: 4;
 }
 
 const publicDnsClient = new Resolver({
@@ -30,37 +29,27 @@ const publicDnsClient = new Resolver({
 });
 publicDnsClient.setServers([PUBLIC_DNS_SERVER]);
 
-function addressesFrom(
-  result: PromiseSettledResult<string[]>,
-  family: 4 | 6,
-): PublicInternetAddress[] {
-  // A or AAAA may legitimately be absent, so only fulfilled answers contribute candidates.
-  if (result.status === "rejected") return [];
-  return result.value.map((address) => ({ address, family }));
-}
-
 export async function resolvePublicInternetAddress(
   hostname: string,
   client: PublicDnsClient = publicDnsClient,
 ): Promise<PublicInternetAddress> {
-  // Independent public DNS avoids VPN fake-IP answers while one bounded query per family avoids retries.
-  const [ipv4, ipv6] = await Promise.allSettled([
-    client.resolve4(hostname),
-    client.resolve6(hostname),
-  ]);
-  const candidates = [
-    ...addressesFrom(ipv4, 4),
-    ...addressesFrom(ipv6, 6),
-  ];
-
-  // The selected address is pinned by the caller for the connection, preventing DNS rebinding.
-  const publicAddress = candidates.find((candidate) =>
-    isPublicInternetAddress(candidate.address)
-  );
-  if (!publicAddress) {
+  // This deployment has no IPv6 route, so an AAAA answer is never a connectable fallback.
+  let addresses: string[];
+  try {
+    addresses = await client.resolve4(hostname);
+  } catch (error) {
     throw new Error(
-      "AGENT_SANDBOX_EGRESS_DESTINATION_FORBIDDEN: Destination has no public DNS address",
+      "AGENT_SANDBOX_EGRESS_IPV4_RESOLUTION_FAILED: IPv4 DNS resolution failed",
+      { cause: error },
     );
   }
-  return publicAddress;
+
+  // The selected address is pinned by the caller for the connection, preventing DNS rebinding.
+  const publicAddress = addresses.find(isPublicInternetAddress);
+  if (!publicAddress) {
+    throw new Error(
+      "AGENT_SANDBOX_EGRESS_DESTINATION_FORBIDDEN: Destination has no public IPv4 address",
+    );
+  }
+  return { address: publicAddress, family: 4 };
 }
