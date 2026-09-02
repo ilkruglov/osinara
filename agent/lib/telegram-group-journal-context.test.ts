@@ -6,6 +6,7 @@
  * - `selectTelegramGroupJournalContext`: preserves explicit ancestry and favors recent suffixes.
  * - Oldest messages are discarded first to satisfy the explicit character budget.
  * - Telegram identifiers that are not needed for conversation context stay private.
+ * - Entries carry the time of day only, with one dated separator per calendar day.
  */
 import { describe, expect, it } from "vitest";
 
@@ -33,6 +34,32 @@ function entry(messageId: string, contentText: string): TelegramGroupJournalEntr
     telegramUserId: `private-user-${messageId}`,
   };
 }
+
+function entryAt(sequenceId: string, sentAt: string): TelegramGroupJournalEntry {
+  return { ...entry(sequenceId, `сообщение ${sequenceId}`), sentAt };
+}
+
+describe("timeline timestamps", () => {
+  it("prints the time of day instead of a full stamp", () => {
+    const context = formatTelegramGroupJournalContext([entry("1", "первая")], 12_000);
+
+    expect(context).toContain(" 10:00 ");
+    expect(context).not.toContain("2026-07-12T10:00");
+  });
+
+  it("dates each calendar day once, in the order the messages arrived", () => {
+    const context = formatTelegramGroupJournalContext([
+      entryAt("1", "2026-07-12T10:00:00.000Z"),
+      entryAt("2", "2026-07-12T23:59:00.000Z"),
+      entryAt("3", "2026-07-13T00:01:00.000Z"),
+    ], 12_000) ?? "";
+
+    expect(context.split("-- 2026-07-12 UTC --").length - 1).toBe(1);
+    expect(context.split("-- 2026-07-13 UTC --").length - 1).toBe(1);
+    expect(context.indexOf("-- 2026-07-12 UTC --")).toBeLessThan(context.indexOf("#1 "));
+    expect(context.indexOf("#2 ")).toBeLessThan(context.indexOf("-- 2026-07-13 UTC --"));
+  });
+});
 
 describe("formatTelegramGroupJournalContext", () => {
   it("serializes chronological messages inside an explicit untrusted boundary", () => {
