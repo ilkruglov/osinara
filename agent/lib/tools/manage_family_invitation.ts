@@ -69,13 +69,8 @@ function requireManageFamilyInvitationInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Создать одноразовое семейное приглашение или подтвердить кандидата из list_pending_family_invitations.",
-  "Доступно только владельцу в личном чате; оба action всегда требуют подтверждения.",
-  "Для action=create обязателен только action: {\"action\":\"create\"}; поля кандидата не передавайте.",
-  "Для action=approve обязательны action, invitationId, candidateTelegramUserId и candidateDisplayName: {\"action\":\"approve\",\"invitationId\":\"<UUID из list_pending_family_invitations>\",\"candidateTelegramUserId\":\"123456789\",\"candidateDisplayName\":\"Анна\"}.",
-  "invitationId должен быть UUID из list_pending_family_invitations; candidateTelegramUserId и candidateDisplayName должны точно соответствовать выбранному кандидату.",
-  "Не угадывай обязательные значения и не подставляй defaults: если их нет, снова запроси list_pending_family_invitations или спроси владельца.",
-  "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
+  "Создать одноразовое семейное приглашение или подтвердить кандидата; оба action требуют подтверждения. Create: {\"action\":\"create\"} без полей кандидата.",
+  "Approve: {\"action\":\"approve\",\"invitationId\":\"<UUID из list_pending_family_invitations>\",\"candidateTelegramUserId\":\"123456789\",\"candidateDisplayName\":\"Анна\"}; все три значения берутся точно из list_pending_family_invitations, иначе запроси список снова или спроси владельца.",
 ].join(" ");
 
 export default defineTool({

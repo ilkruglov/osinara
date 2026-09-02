@@ -141,18 +141,16 @@ describe("manage_family_invitation model input", () => {
     );
   });
 
-  it("documents every action payload and one bounded correction without defaults", () => {
+  it("documents every action payload and the exact source of candidate values", () => {
     const description = manageFamilyInvitation.description;
 
     for (const fragment of [
-      "action=create",
-      "action=approve",
+      '{"action":"create"}',
+      '"action":"approve"',
       "invitationId",
       "candidateTelegramUserId",
       "candidateDisplayName",
-      "обязательн",
-      "не более одного раза",
-      "Не угадывай",
+      "берутся точно из list_pending_family_invitations",
     ]) expect(description).toContain(fragment);
   });
 });

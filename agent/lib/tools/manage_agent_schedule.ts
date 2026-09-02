@@ -347,14 +347,10 @@ function requireManageAgentScheduleInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Создать, изменить, приостановить, возобновить, запустить сейчас или удалить агентное расписание.",
-  "Это не напоминание: schedule запускает агента по сценарию и отправляет итог. Существующее расписание сначала найди через list_agent_schedules.",
-  "Create payload: {\"action\":\"create\",\"title\":\"Дайджест: новые модели ИИ\",\"firstRunAt\":\"2026-07-15T23:33:00+03:00\",\"timezone\":\"Europe/Moscow\",\"recurrence\":{\"kind\":\"daily\",\"interval\":1},\"scope\":\"personal\",\"scenarioPrompt\":\"Что собрать, источники, фильтры, формат итогового сообщения и когда не присылать пустой отчет\",\"userRequest\":\"ежедневно в 23:33 МСК получать сводку\"}.",
-  "Update payload: {\"action\":\"update\",\"id\":\"<id из list_agent_schedules>\",\"nextRunAt\":\"2026-07-16T23:33:00+03:00\",\"recurrence\":{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]},\"title\":\"Новый заголовок\",\"scenarioPrompt\":\"Новый сценарий\",\"userRequest\":\"Обновленная просьба пользователя\"}; передавай id и только реально изменяемые поля из этого примера. firstRunAt, timezone и scope в update не передавай.",
-  "Pause payload: {\"action\":\"pause\",\"id\":\"<id из list_agent_schedules>\"}. Resume payload: {\"action\":\"resume\",\"id\":\"<id из list_agent_schedules>\"}. Run_now payload: {\"action\":\"run_now\",\"id\":\"<id из list_agent_schedules>\"}. Delete payload: {\"action\":\"delete\",\"id\":\"<id из list_agent_schedules>\"}. Для этих действий не передавай другие поля.",
-  "Не удаляй и не пересоздавай расписание для изменения времени, повторения, заголовка, сценария или исходной просьбы: используй update, сохраняя существующий id.",
-  "Recurrence: once = {\"kind\":\"once\"}; daily = {\"kind\":\"daily\",\"interval\":1}; weekly = {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник ... 7=воскресенье.",
-  "firstRunAt и nextRunAt всегда ISO datetime с UTC offset. timezone всегда IANA, например Europe/Moscow. scope: personal только в личном чате, family только в зарегистрированной семейной группе.",
+  "Создать, изменить, приостановить, возобновить, запустить сейчас или удалить агентное расписание. Это не напоминание: schedule запускает агента по сценарию и присылает итог. Существующее расписание сначала найди через list_agent_schedules; любое изменение делай через update с тем же id, не пересоздавай.",
+  "Create: {\"action\":\"create\",\"title\":\"Дайджест: новые модели ИИ\",\"firstRunAt\":\"2026-07-15T23:33:00+03:00\",\"timezone\":\"Europe/Moscow\",\"recurrence\":{\"kind\":\"daily\",\"interval\":1},\"scope\":\"personal\",\"scenarioPrompt\":\"Что собрать, источники, фильтры, формат итога и когда не присылать пустой отчёт\",\"userRequest\":\"ежедневно в 23:33 МСК получать сводку\"}.",
+  "Update: {\"action\":\"update\",\"id\":\"<id из list_agent_schedules>\",\"nextRunAt\":\"2026-07-16T23:33:00+03:00\",\"recurrence\":{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]},\"title\":\"...\",\"scenarioPrompt\":\"...\",\"userRequest\":\"...\"} только с реально изменяемыми полями; firstRunAt, timezone и scope в update не передавай. Pause, resume, run_now и delete: {\"action\":\"pause\",\"id\":\"<id>\"} без других полей.",
+  "Recurrence: {\"kind\":\"once\"}, {\"kind\":\"daily\",\"interval\":1}, {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник. firstRunAt и nextRunAt в ISO с UTC offset, timezone IANA. scope: personal в личном чате, family в зарегистрированной семейной группе.",
 ].join(" ");
 
 export default defineTool({

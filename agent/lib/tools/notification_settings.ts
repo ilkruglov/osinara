@@ -79,13 +79,7 @@ function requireNotificationSettingsInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Получить или настроить личный IANA timezone и тихие часы для напоминаний.",
-  "Для action=get обязателен только action: {\"action\":\"get\"}; остальные поля не передавайте.",
-  "Для action=set обязательны action, timezone, quietStart и quietEnd: {\"action\":\"set\",\"timezone\":\"Europe/Moscow\",\"quietStart\":\"22:00\",\"quietEnd\":\"08:00\"}.",
-  "timezone должен быть явным IANA timezone; quietStart и quietEnd должны быть разными значениями ЧЧ:ММ.",
-  "Чтобы отключить тихие часы, передай оба обязательных поля quietStart=null и quietEnd=null.",
-  "Не угадывай timezone или тихие часы и не подставляй defaults: если данных нет, спроси пользователя.",
-  "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
+  "Получить или настроить личный IANA timezone и тихие часы для напоминаний. Get: {\"action\":\"get\"}. Set: {\"action\":\"set\",\"timezone\":\"Europe/Moscow\",\"quietStart\":\"22:00\",\"quietEnd\":\"08:00\"}; quietStart и quietEnd разные значения ЧЧ:ММ, для отключения тихих часов оба null. Не угадывай timezone и часы: если данных нет, спроси пользователя.",
 ].join(" ");
 
 export default defineTool({

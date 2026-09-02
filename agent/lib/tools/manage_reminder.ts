@@ -158,13 +158,9 @@ function requireManageReminderInput(input: unknown) {
 }
 
 const TOOL_DESCRIPTION = [
-  "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления.",
-  "Это не агентное расписание: если нужен будущий автономный запуск агента с исследованием или отчётом, используй manage_agent_schedule.",
-  "Create payload: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}.",
-  "Повторение: без повтора recurrence=null; повтор — {\"unit\":\"daily\",\"interval\":1}, {\"unit\":\"weekly\",\"interval\":1} или {\"unit\":\"monthly\",\"interval\":1}.",
-  "Убрать повторение: {\"action\":\"update\",\"id\":\"<id из list_reminders>\",\"recurrence\":null}. Не удаляй и не пересоздавай напоминание для смены повторения.",
-  "Update передаёт id и только изменяемые content, firstRunAt или recurrence. Pause/resume/delete передают только action и id.",
-  "firstRunAt всегда ISO datetime с UTC offset, timezone всегда IANA. Перед update/pause/resume/delete сначала найди id через list_reminders.",
+  "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления. Для автономного запуска агента с исследованием или отчётом используй manage_agent_schedule. Перед update/pause/resume/delete найди id через list_reminders; повторение меняй через update, не пересоздавай.",
+  "Create: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}. Повтор: {\"unit\":\"daily\",\"interval\":1}, unit также weekly или monthly; без повтора recurrence=null.",
+  "Update передаёт id и только изменяемые content, firstRunAt или recurrence; pause/resume/delete только action и id. firstRunAt в ISO с UTC offset, timezone IANA.",
 ].join(" ");
 
 export default defineTool({

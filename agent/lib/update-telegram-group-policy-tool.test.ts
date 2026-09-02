@@ -83,17 +83,13 @@ describe("manage_telegram_group.update_policy", () => {
 
   it("describes a complete in-place replacement without type or title", () => {
     expect(manageTelegramGroup.description).toContain(
-      "ровно action, telegramChatId, messageMode и полный toolAllowlist",
+      '{"action":"update_policy","telegramChatId":"-1001234567890","messageMode":"all","toolAllowlist":["search_memories"]}',
     );
-    expect(manageTelegramGroup.description).toContain("type и title не передавай");
+    expect(manageTelegramGroup.description).toContain("без type и title");
     expect(manageTelegramGroup.description).toContain(
-      "сначала вызови status и перенеси неизменённые текущие права",
+      "сначала status, затем полный toolAllowlist с одним изменением",
     );
-    expect(manageTelegramGroup.description).toContain("полный toolAllowlist");
-    expect(manageTelegramGroup.description).toContain(
-      "добавь или удали только выбранную capability",
-    );
-    expect(manageTelegramGroup.description).toContain("сохраняет её ID, название, тип, историю, workspace, память и сессии");
+    expect(manageTelegramGroup.description).toContain("сохраняет ID, название, тип и все данные");
   });
 
   it("ignores known sibling fields materialized beside the complete policy", async () => {
