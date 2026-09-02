@@ -272,6 +272,10 @@ describeWithDatabase("group reminder repository", () => {
       enabled: false,
       operationKey: "shared-pause",
     })).resolves.toMatchObject({ status: "paused" });
+    await expect(groupReminderRepository.update(groupAuth(fixture, SECOND_AUTHOR), reminder.id, {
+      enabled: true,
+      operationKey: "shared-resume",
+    })).resolves.toMatchObject({ status: "active" });
     await expect(groupReminderRepository.delete(
       groupAuth(fixture, SECOND_AUTHOR),
       reminder.id,
@@ -304,6 +308,17 @@ describeWithDatabase("group reminder repository", () => {
       operationKey: "shared-key",
       recurrence: null,
     })).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+  });
+
+  it("confirms a repeated deletion instead of reporting the record as missing", async () => {
+    const fixture = await createFixture();
+    const reminder = await create(fixture, FIRST_AUTHOR, "Убрать дважды", "2026-09-04T15:00:00.000Z", "twice-created");
+    const auth = groupAuth(fixture, SECOND_AUTHOR);
+    await groupReminderRepository.delete(auth, reminder.id, "twice-delete");
+
+    // The Eve step can replay after a crash, and the record is already gone: the repeat is a
+    // confirmation, not a failure the model should report to the chat.
+    await expect(groupReminderRepository.delete(auth, reminder.id, "twice-delete")).resolves.toBe(true);
   });
 
   it("refuses to delete a reminder whose delivery is already in flight", async () => {

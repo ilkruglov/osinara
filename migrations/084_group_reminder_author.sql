@@ -40,8 +40,9 @@ ALTER TABLE reminders
       AND message_thread_id IS NULL AND forum_topic_id IS NULL)
   );
 
--- Both group caps are counted over live reminders only: a delivered one-shot reminder frees its
--- slot, while an active, paused or in-flight one still occupies it.
+-- The chat cap is counted over live reminders only: a delivered one-shot reminder frees its slot,
+-- while an active, paused or in-flight one still occupies it. The author column stays in the index
+-- as stored provenance; the count itself is served by the leading group column.
 CREATE INDEX reminders_group_live_idx
   ON reminders (group_id, author_telegram_user_id)
   WHERE scope = 'group' AND status IN ('active', 'leased', 'paused');

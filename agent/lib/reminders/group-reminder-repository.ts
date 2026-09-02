@@ -6,8 +6,9 @@
  * - `groupReminderRepository`: replay-safe create/list/update/delete for a public chat.
  *
  * Key constructs:
- * - The author is a verified Telegram user id, because a participant of an external group has no
- *   account here. Both caps are therefore counted per Telegram author and per chat.
+ * - The reminder belongs to the chat: every participant may change and remove any of them, and the
+ *   verified Telegram author is stored as provenance only, because a participant of an external
+ *   group has no account here.
  * - Counting and inserting share one transaction under a per-group advisory lock, so two
  *   participants writing at the same moment cannot both pass the same free slot.
  * - Schedule math, lease policy and replay markers come from the shared mutation module, so a
@@ -269,11 +270,7 @@ export const groupReminderRepository = {
     }
   },
 
-  /**
-   * Deletion additionally accepts another participant once Telegram confirms that the author has
-   * left the chat: otherwise a departed author would leave an undeletable reminder behind, and a
-   * recurring one would keep writing into the chat forever while holding one of its slots.
-   */
+  /** Any participant of the chat may remove any of its reminders, except one already in flight. */
   async delete(
     auth: GroupReminderAuthorization,
     id: string,
@@ -291,6 +288,13 @@ export const groupReminderRepository = {
         inputHash,
       );
       if (replay !== undefined) {
+        // A completed deletion leaves the marker without a row, so the repeat is simply confirmed.
+        // A marker that still points at a record is only honoured for a record of this chat.
+        if (replay !== null) {
+          const existing = await selectReminder(client, auth.familyId, replay);
+          if (!existing) throw reminderNotFound();
+          requireGroupReminderOfThisChat(auth, existing);
+        }
         await client.query("COMMIT");
         return true;
       }

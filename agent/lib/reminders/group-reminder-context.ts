@@ -7,8 +7,8 @@
  *
  * Key construct:
  * - A participant of an external group has no account in this application, so the only durable
- *   author identity is the Telegram user id. A channel speaks for no person and therefore cannot
- *   own a reminder or be counted against the per-author limit.
+ *   author identity is the Telegram user id. A channel speaks for no person, so a record cannot be
+ *   stored against it at all.
  * - Group-scoped proactive delivery is chat-level by contract, so no forum topic is carried here.
  */
 import type { SessionContext } from "eve/context";

@@ -101,12 +101,12 @@ export async function requireReminderMutationAccess(
   auth: ReminderAuthorization,
   reminder: MutableReminderRow,
 ): Promise<void> {
-  // A public-chat reminder belongs to a Telegram author with no account here, so no membership
-  // role can stand in for them. It stays administered inside its own chat by its own author.
+  // A public-chat reminder belongs to that chat and to no account here, so no membership role can
+  // stand in for a participant. It is administered only from inside the chat itself.
   if (reminder.scope === "group") {
     throw new AppError(
       "AGENT_REMINDER_MUTATION_DENIED",
-      "Напоминание публичного чата можно изменить или удалить только в этом чате и только его автору",
+      "Напоминание публичного чата можно изменить или удалить только в самом этом чате",
     );
   }
   const role = await requireCurrentMembership(client, auth);

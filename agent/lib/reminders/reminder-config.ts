@@ -3,7 +3,7 @@
  *
  * Exports:
  * - Named content, pagination, recurrence, batch, lease, and lateness constants.
- * - External-group reminder timezone and the per-author and per-chat live reminder caps.
+ * - External-group reminder timezone, its live reminder cap and the accepted first-run window.
  */
 export const REMINDER_CONTENT_MAX_LENGTH = 1_000;
 export const REMINDER_LIST_DEFAULT_LIMIT = 100;
