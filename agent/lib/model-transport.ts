@@ -26,6 +26,7 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
 import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
+import { observeModelUsage } from "./model-usage-log.js";
 
 export interface ConfiguredLanguageModelOptions {
   readonly apiKey: string;
@@ -92,8 +93,10 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
         statusCode: response.status,
         url: modelRequestUrl(input),
       }));
+      return response;
     }
-    return response;
+    // Provider-reported usage, including cache hits, is the baseline for prompt-cost work.
+    return observeModelUsage(response, { modelId: options.modelId, url: modelRequestUrl(input) });
   };
 }
 
