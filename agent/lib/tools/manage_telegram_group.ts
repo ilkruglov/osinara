@@ -19,7 +19,6 @@ import {
   GROUP_SAFE_SKILL_NAMES,
   isGroupSafeSkillName,
 } from "../group-skills/group-skill-catalog.js";
-import { ownerGroupReminderAdministration } from "../reminders/owner-group-reminder-administration.js";
 import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
 import {
   GROUP_TITLE_MAX_LENGTH,
@@ -42,15 +41,12 @@ import {
   requiredString,
   requireInputRecord,
   requireOnlyFields,
-  requiredUuid,
   requiredObjectField,
   toolInputError,
 } from "../tool-input-validation.js";
 
 const INPUT_ERROR_CODE = "AGENT_TELEGRAM_GROUP_INPUT_INVALID";
 const TOOL_ACTIONS = [
-  "delete_reminder",
-  "list_reminders",
   "register",
   "remove",
   "start_new_context",
@@ -65,7 +61,6 @@ const TOP_LEVEL_FIELDS = [
   "action",
   "messageMode",
   "registration",
-  "reminderId",
   "skillAllowlist",
   "telegramChatId",
   "toolAllowlist",
@@ -82,7 +77,7 @@ const registrationSchema = z.object({
 
 const manageTelegramGroupSchema = z.object({
   action: z.enum(TOOL_ACTIONS).describe(
-    "Сначала выберите ровно один action; обязательные значения: delete_reminder, list_reminders, register, remove, start_new_context, status, update_policy или update_skills.",
+    "Сначала выберите ровно один action; обязательные значения: register, remove, start_new_context, status, update_policy или update_skills.",
   ),
   messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe(
     "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
@@ -90,14 +85,11 @@ const manageTelegramGroupSchema = z.object({
   registration: registrationSchema.optional().describe(
     "Передавайте только при action=register. Для остальных actions полностью пропустите registration.",
   ),
-  reminderId: z.string().optional().describe(
-    "Передавайте только при action=delete_reminder: UUID напоминания из action=list_reminders.",
-  ),
   skillAllowlist: z.array(z.enum(GROUP_SAFE_SKILL_NAMES)).optional().describe(
     `Передавайте только при action=update_skills. Полный список: ${GROUP_SAFE_SKILL_NAMES.join(", ")}; пустой массив отзывает все skills.`,
   ),
   telegramChatId: z.string().optional().describe(
-    "Точный отрицательный ID обязателен для start_new_context, update_policy, update_skills, remove, list_reminders и delete_reminder. Для status не передавайте; для register используйте registration.telegramChatId.",
+    "Точный отрицательный ID обязателен для start_new_context, update_policy, update_skills и remove. Для status не передавайте; для register используйте registration.telegramChatId.",
   ),
   toolAllowlist: z.array(z.enum(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES)).optional().describe(
     "Передавайте на верхнем уровне только при action=update_policy. Для external register используйте registration.toolAllowlist; для остальных actions поле не передавайте.",
@@ -249,31 +241,6 @@ function requireManageTelegramGroupInput(input: unknown) {
       telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
     } as const;
   }
-  if (action === "list_reminders") {
-    requireOnlyFields(payload, ["action", "telegramChatId"], "action=list_reminders", INPUT_ERROR_CODE);
-    return {
-      action,
-      telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
-    } as const;
-  }
-  if (action === "delete_reminder") {
-    requireOnlyFields(
-      payload,
-      ["action", "reminderId", "telegramChatId"],
-      "action=delete_reminder",
-      INPUT_ERROR_CODE,
-    );
-    return {
-      action,
-      reminderId: requiredUuid(
-        payload,
-        "reminderId",
-        INPUT_ERROR_CODE,
-        "напоминание из action=list_reminders",
-      ),
-      telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
-    } as const;
-  }
   if (action === "update_policy") {
     return {
       action,
@@ -312,15 +279,13 @@ const TOOL_DESCRIPTION = [
   `Update_skills заменяет полный allowlist безопасных skills и применяется со следующей реплики группы без сброса контекста. Payload: {\"action\":\"update_skills\",\"telegramChatId\":\"-1001234567890\",\"skillAllowlist\":[\"pohuy\"]}. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}. Для отзыва передай пустой массив.`,
   "Start_new_context payload: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}.",
   "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
-  "Напоминания внешней группы: list_reminders показывает действующие записи и id авторов, delete_reminder убирает одну по reminderId из этого списка, когда автор вышел из чата. Обоим нужен только telegramChatId.",
   "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
 ].join(" ");
 
 export default defineTool({
   approval: ({ toolInput }) => {
     const parsed = requireManageTelegramGroupInput(toolInput);
-    return parsed.action === "status" || parsed.action === "start_new_context" ||
-        parsed.action === "list_reminders"
+    return parsed.action === "status" || parsed.action === "start_new_context"
       ? "not-applicable"
       : "user-approval";
   },
@@ -330,19 +295,6 @@ export default defineTool({
     const parsed = requireManageTelegramGroupInput(input);
     const owner = requirePrivateTelegramOwner(ctx);
 
-    if (parsed.action === "list_reminders") {
-      return await ownerGroupReminderAdministration.list(owner, parsed.telegramChatId);
-    }
-    if (parsed.action === "delete_reminder") {
-      return {
-        deleted: await ownerGroupReminderAdministration.delete(
-          owner,
-          parsed.telegramChatId,
-          parsed.reminderId,
-          ctx.callId,
-        ),
-      };
-    }
     if (parsed.action === "status") {
       const groups = await telegramGroupAdministrationRepository.listStatuses({
         familyId: owner.familyId,

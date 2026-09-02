@@ -18,15 +18,13 @@ import type { PoolClient } from "pg";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { decodeDateUuidCursor, encodeDateUuidCursor, paginationFilterDigest } from "../keyset-pagination.js";
-import type { TelegramChatPresenceLookup } from "../telegram-chat-membership.js";
 import { GROUP_REMINDER_TIMEZONE, REMINDER_LIST_MAX_LIMIT } from "./reminder-config.js";
 import {
+  GROUP_REMINDER_LIVE_STATUSES,
   requireFreeGroupSlot,
   requireGroupReminderDestination,
   requireGroupReminderOfThisChat,
   requireGroupReminderTime,
-  requireOwnGroupReminder,
-  mutationDenied,
   reminderNotFound,
 } from "./group-reminder-policy.js";
 import type { GroupReminderAuthorization } from "./group-reminder-context.js";
@@ -56,53 +54,12 @@ export interface GroupReminderCreateInput {
   recurrence: ReminderRecurrence | null;
 }
 
-/** A public-chat reminder additionally reports whether the caller may change it. */
-export interface GroupReminderRecord extends ReminderRecord {
-  mine: boolean;
-}
-
 export interface GroupReminderUpdateInput {
   content?: string;
   enabled?: boolean;
   firstRunAt?: Date;
   operationKey: string;
   recurrence?: ReminderRecurrence | null;
-}
-
-/**
- * Resolves who may delete this reminder without holding a lock or a connection. A foreign author is
- * accepted only once Telegram confirms they left the chat; a delivery already in flight is refused
- * before the lookup, so an in-flight reminder costs no provider request.
- */
-async function requireDeletableGroupReminderAuthor(
-  auth: GroupReminderAuthorization,
-  id: string,
-  resolveAuthorPresence: TelegramChatPresenceLookup,
-): Promise<string> {
-  const client = await database().connect();
-  let reminder;
-  try {
-    reminder = await selectReminder(client, auth.familyId, id);
-  } finally {
-    client.release();
-  }
-  if (!reminder) throw reminderNotFound();
-  requireGroupReminderOfThisChat(auth, reminder);
-  const author = reminder.author_telegram_user_id;
-  if (author === null) throw reminderNotFound();
-  requireReminderNotLeased(reminder, "delete");
-  if (author === auth.telegramUserId) return author;
-
-  const presence = await resolveAuthorPresence({
-    telegramChatId: auth.telegramChatId,
-    telegramUserId: author,
-  });
-  if (presence === "present") {
-    throw mutationDenied(
-      "Это напоминание поставил другой участник, и он в чате. Удалить его может только он",
-    );
-  }
-  return author;
 }
 
 export const groupReminderRepository = {
@@ -137,9 +94,9 @@ export const groupReminderRepository = {
         }
         const existing = await selectReminder(client, auth.familyId, replay);
         if (!existing) throw reminderNotFound();
-        // A replayed marker still has to point at this chat and this author: the family owns more
-        // than one chat, and a marker is keyed only by family and operation key.
-        requireOwnGroupReminder(auth, existing);
+        // A replayed marker still has to point at this chat: the family owns more than one, and a
+        // marker is keyed only by family and operation key.
+        requireGroupReminderOfThisChat(auth, existing);
         await client.query("COMMIT");
         return rowToReminder(existing);
       }
@@ -192,52 +149,39 @@ export const groupReminderRepository = {
     }
   },
 
-  /**
-   * A reminder of a public chat fires in front of everyone, so every participant sees the upcoming
-   * ones. A paused reminder is not upcoming and stays visible only to the author who can resume it.
-   */
+  /** Every record of the chat is visible to every participant, paused ones included. */
   async list(
     auth: GroupReminderAuthorization,
     options: { cursor?: string; limit: number },
-  ): Promise<{ items: GroupReminderRecord[]; nextCursor: string | null }> {
+  ): Promise<{ items: ReminderRecord[]; nextCursor: string | null }> {
     if (
       !Number.isInteger(options.limit) || options.limit < 1 ||
       options.limit > REMINDER_LIST_MAX_LIMIT
     ) {
       throw new AppError("AGENT_REMINDER_LIMIT_INVALID", "Некорректный размер страницы напоминаний");
     }
-    const binding = paginationFilterDigest([auth.groupId, auth.telegramUserId]);
+    const binding = paginationFilterDigest([auth.groupId]);
     const cursor = decodeDateUuidCursor(
       options.cursor,
       "AGENT_REMINDER_CURSOR_INVALID",
       "Не удалось продолжить просмотр напоминаний",
       binding,
     );
-    const result = await database().query<ReminderRow & { mine: boolean }>(
-      `SELECT ${REMINDER_COLUMNS},
-              (reminder.author_telegram_user_id = $2) AS mine
+    const result = await database().query<ReminderRow>(
+      `SELECT ${REMINDER_COLUMNS}
        FROM reminders AS reminder
        WHERE reminder.scope = 'group' AND reminder.group_id = $1
-         AND (
-           reminder.status IN ('active', 'leased') OR
-           (reminder.status = 'paused' AND reminder.author_telegram_user_id = $2)
-         )
-         AND ($3::timestamptz IS NULL OR (reminder.due_at, reminder.id) > ($3, $4::uuid))
+         AND reminder.status IN ${GROUP_REMINDER_LIVE_STATUSES}
+         AND ($2::timestamptz IS NULL OR (reminder.due_at, reminder.id) > ($2, $3::uuid))
        ORDER BY reminder.due_at, reminder.id
-       LIMIT $5`,
-      [
-        auth.groupId,
-        auth.telegramUserId,
-        cursor?.timestamp ?? null,
-        cursor?.id ?? null,
-        options.limit + 1,
-      ],
+       LIMIT $4`,
+      [auth.groupId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
     );
     const hasNext = result.rows.length > options.limit;
     const rows = result.rows.slice(0, options.limit);
     const last = rows.at(-1);
     return {
-      items: rows.map((row) => ({ ...rowToReminder(row), mine: row.mine })),
+      items: rows.map(rowToReminder),
       nextCursor: hasNext && last ? encodeDateUuidCursor(last.due_at, last.id, binding) : null,
     };
   },
@@ -278,13 +222,13 @@ export const groupReminderRepository = {
       if (replay) {
         const existing = await selectReminder(client, auth.familyId, replay);
         if (!existing) throw reminderNotFound();
-        requireOwnGroupReminder(auth, existing);
+        requireGroupReminderOfThisChat(auth, existing);
         await client.query("COMMIT");
         return rowToReminder(existing);
       }
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw reminderNotFound();
-      requireOwnGroupReminder(auth, reminder);
+      requireGroupReminderOfThisChat(auth, reminder);
       const live = reminder.status === "active" || reminder.status === "leased" ||
         reminder.status === "paused";
       if (input.enabled === false && !live) {
@@ -334,12 +278,7 @@ export const groupReminderRepository = {
     auth: GroupReminderAuthorization,
     id: string,
     operationKey: string,
-    resolveAuthorPresence: TelegramChatPresenceLookup,
   ): Promise<boolean> {
-    // Presence is resolved before any lock and before a pooled connection is held: the lookup is a
-    // network call, and the delivery path takes its own `FOR UPDATE` on the same row. Holding the
-    // row through it would stall the current dispatch batch for the whole Telegram timeout.
-    const author = await requireDeletableGroupReminderAuthor(auth, id, resolveAuthorPresence);
     const inputHash = reminderOperationHash({ id });
     const client = await database().connect();
     try {
@@ -358,13 +297,6 @@ export const groupReminderRepository = {
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw reminderNotFound();
       requireGroupReminderOfThisChat(auth, reminder);
-      // The row could have been replaced between the presence answer and this lock, so the verdict
-      // is only honoured for the exact author it was given for.
-      if (reminder.author_telegram_user_id !== author) {
-        throw mutationDenied(
-          "Напоминание изменилось, пока проверялся его автор. Повторите удаление",
-        );
-      }
       requireReminderNotLeased(reminder, "delete");
       await recordReminderOperation(client, {
         familyId: auth.familyId,
@@ -378,7 +310,7 @@ export const groupReminderRepository = {
          VALUES ($1, NULL, 'reminder.deleted', $2,
                  jsonb_build_object('scope', 'group', 'telegramUserId', $3::text,
                                     'authorTelegramUserId', $4::text))`,
-        [auth.familyId, id, auth.telegramUserId, author],
+        [auth.familyId, id, auth.telegramUserId, reminder.author_telegram_user_id],
       );
       await client.query("DELETE FROM reminders WHERE id = $1", [id]);
       await client.query("COMMIT");

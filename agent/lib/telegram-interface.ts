@@ -54,8 +54,6 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     update: "изменить напоминание",
   },
   manage_telegram_group: {
-    delete_reminder:
-      "удалить напоминание внешней Telegram-группы властью владельца. Участники группы это напоминание больше не увидят",
     register:
       "подключить Telegram-группу. Если чат уже подключён с другим типом, его история, workspace, память и сессии будут безвозвратно удалены",
     remove:
@@ -156,12 +154,6 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
   switch (toolName) {
     case "manage_telegram_group": {
       if (input.action === "remove") return line("Telegram chat ID", "telegramChatId");
-      if (input.action === "delete_reminder") {
-        return [
-          ...line("Telegram chat ID", "telegramChatId"),
-          ...line("Напоминание", "reminderId"),
-        ];
-      }
       if (input.action === "update_skills") {
         const allowlist = Array.isArray(input.skillAllowlist)
           ? input.skillAllowlist.filter((item): item is string => typeof item === "string").join(", ")

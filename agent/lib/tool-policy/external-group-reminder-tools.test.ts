@@ -5,7 +5,7 @@
  * - Malformed model payloads stop in the approval policy, before HITL and before any write.
  * - Action routing: pause and resume become one enabled flag, delete carries the Eve call id.
  * - The group descriptor knows no scope or timezone field, so neither can reach the repository.
- * - Deletion carries the live Telegram presence lookup that decides the author-left case.
+ * - A Moscow offset is required, so a UTC timestamp cannot move the reminder by three hours.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,16 +16,12 @@ const repository = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 const authorization = vi.hoisted(() => ({ requireGroupReminderAuthorization: vi.fn() }));
-const presence = vi.hoisted(() => ({ telegramChatMemberPresence: vi.fn() }));
 
 vi.mock("../reminders/group-reminder-repository.js", () => ({
   groupReminderRepository: repository,
 }));
 vi.mock("../reminders/group-reminder-context.js", () => ({
   requireGroupReminderAuthorization: authorization.requireGroupReminderAuthorization,
-}));
-vi.mock("../telegram-chat-membership.js", () => ({
-  telegramChatMemberPresence: presence.telegramChatMemberPresence,
 }));
 
 const { EXTERNAL_GROUP_REMINDER_TOOLS } = await import("./external-group-reminder-tools.js");
@@ -134,18 +130,22 @@ describe("external group reminder tools", () => {
     });
   });
 
-  it("reports a deletion and hands the live presence lookup to the boundary", async () => {
+  it("reports a deletion through the same replay key", async () => {
     repository.delete.mockResolvedValue(true);
 
     await expect(manageReminder.execute({ action: "delete", id: REMINDER_ID } as never, context))
       .resolves.toEqual({ deleted: true });
-    // The author-left rule is decided inside the repository, so it must receive the real lookup.
-    expect(repository.delete).toHaveBeenCalledWith(
-      AUTH,
-      REMINDER_ID,
-      "call-1",
-      presence.telegramChatMemberPresence,
-    );
+    expect(repository.delete).toHaveBeenCalledWith(AUTH, REMINDER_ID, "call-1");
+  });
+
+  it("refuses a first run that is not expressed in Moscow time", () => {
+    expect(() => approve({
+      action: "create",
+      content: "Созвон по проекту",
+      firstRunAt: "2026-09-04T18:00:00Z",
+      recurrence: null,
+    })).toThrowError(/AGENT_REMINDER_INPUT_INVALID/u);
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it("lists the chat reminders of the verified author's chat", async () => {

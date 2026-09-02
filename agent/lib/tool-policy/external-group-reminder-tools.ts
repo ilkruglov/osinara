@@ -8,17 +8,15 @@
  * Key constructs:
  * - The public chat has exactly one scope and one timezone, so neither is a model input here. A
  *   trusted descriptor keeps its own scope field and stays untouched by this module.
- * - Every execute re-derives the verified Telegram author, so a resumed approval cannot inherit
- *   another participant's identity.
+ * - Every execute re-derives the verified Telegram participant, so a resumed approval acts in the
+ *   chat it was requested in and nowhere else.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { groupReminderRepository } from "../reminders/group-reminder-repository.js";
-import { telegramChatMemberPresence } from "../telegram-chat-membership.js";
 import { requireGroupReminderAuthorization } from "../reminders/group-reminder-context.js";
 import {
-  GROUP_REMINDER_MAX_PER_AUTHOR,
   GROUP_REMINDER_MAX_PER_CHAT,
   GROUP_REMINDER_TIMEZONE,
   REMINDER_CONTENT_MAX_LENGTH,
@@ -149,22 +147,21 @@ function requireManageInput(input: unknown) {
 const MANAGE_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить или удалить напоминание этого чата: в указанное время бот сам пришлёт сюда его текст.",
   "Это не автономный запуск агента: работать по расписанию, искать в сети и готовить отчёты в этом чате нельзя.",
-  `Лимиты: не больше ${GROUP_REMINDER_MAX_PER_AUTHOR} действующих напоминаний на одного участника и не больше ${GROUP_REMINDER_MAX_PER_CHAT} на весь чат.`,
+  "Напоминания принадлежат чату: любой участник может изменить и удалить любое из них, а не только своё.",
+  `Лимит: не больше ${GROUP_REMINDER_MAX_PER_CHAT} действующих напоминаний на весь чат.`,
   `Часовой пояс чата всегда ${GROUP_REMINDER_TIMEZONE}, менять его нельзя; называй время по Москве, когда подтверждаешь напоминание.`,
   "Create payload: {\"action\":\"create\",\"content\":\"Созвон по проекту\",\"firstRunAt\":\"2026-09-04T18:00:00+03:00\",\"recurrence\":null}.",
   "Повторение: без повтора recurrence=null; для повтора передай {\"unit\":\"daily\",\"interval\":1}, {\"unit\":\"weekly\",\"interval\":1} или {\"unit\":\"monthly\",\"interval\":1}.",
   "Update передаёт id и только изменяемые content, firstRunAt или recurrence. Pause/resume/delete передают только action и id.",
-  "Изменить, приостановить и возобновить можно только напоминание, которое создал сам обратившийся участник.",
-  "Удалить чужое напоминание разрешено, только если его автор больше не в этом чате: приложение проверяет это само и отклоняет удаление, пока автор здесь.",
-  "Перед update/pause/resume/delete найди id через list_reminders.",
+  "Один вызов работает ровно с одним напоминанием: не создавай и не удаляй несколько за раз.",
+  "Человек называет напоминание словами, а не id: найди нужную запись через list_reminders и, если под описание подходит несколько, уточни какую именно.",
   `firstRunAt всегда ISO datetime с московским смещением ${MOSCOW_OFFSET_SUFFIX}: другое смещение отклоняется, чтобы подтверждённое человеку время совпадало с сохранённым.`,
   "Напоминание уходит в общий чат, а не в тему форума.",
 ].join(" ");
 
 const LIST_DESCRIPTION = [
-  "Постранично показать предстоящие напоминания этого чата: их видит любой участник.",
-  "Приостановленные напоминания видны только тому, кто их создал.",
-  "У каждой записи поле mine показывает, поставил ли её сам обратившийся участник: изменить, приостановить и удалить можно только запись с mine=true.",
+  "Постранично показать действующие напоминания этого чата: их видит любой участник, включая приостановленные.",
+  "Используй перед изменением или удалением, чтобы найти id записи по названию, которое произнёс человек.",
   "Результат: {items,nextCursor}; если nextCursor не null, передай его без изменений для следующей страницы.",
 ].join(" ");
 
@@ -212,12 +209,7 @@ export const EXTERNAL_GROUP_REMINDER_TOOLS: Readonly<Record<string, AnyToolDefin
       }
 
       return {
-        deleted: await groupReminderRepository.delete(
-          authorization,
-          parsed.id,
-          ctx.callId,
-          telegramChatMemberPresence,
-        ),
+        deleted: await groupReminderRepository.delete(authorization, parsed.id, ctx.callId),
       };
     },
   }) as unknown as AnyToolDefinition,

@@ -72,8 +72,6 @@ describe("manage_telegram_group model input", () => {
     expect(schema.type).toBe("object");
     expect(schema.required).toContain("action");
     expect(schema.properties.action?.enum).toEqual([
-      "delete_reminder",
-      "list_reminders",
       "register",
       "remove",
       "start_new_context",
