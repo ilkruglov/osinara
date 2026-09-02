@@ -2,6 +2,7 @@
  * Live per-chat Telegram reaction policy.
  *
  * Exports:
+ * - `TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS`: window in which a cached policy stays verified.
  * - `TelegramReactionPolicy`: whether the chat accepts any emoji or an explicit list.
  * - `telegramReactionPolicyEmoji`: parses the verified getChat answer.
  * - `refreshTelegramReactionPolicy`: refreshes the cached policy of one chat when it is stale.
@@ -9,14 +10,15 @@
  * Key construct:
  * - An absent `available_reactions` documents that every emoji reaction is allowed, so the two
  *   states are read from the provider answer and never guessed. An unknown policy stays unknown:
- *   the prompt then offers no reaction surface at all.
+ *   the prompt then offers no reaction surface at all. A record older than the refresh window means
+ *   the refresh keeps failing, so it stops counting as verified instead of describing a stale set.
  */
 import type { TelegramHandle } from "eve/channels/telegram";
 
 import { isAppError } from "./app-error.js";
 import { telegramReactionPolicyRepository } from "./telegram-reaction-policy-repository.js";
 
-const REACTION_POLICY_TTL_MILLISECONDS = 24 * 60 * 60 * 1000;
+export const TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS = 24 * 60 * 60 * 1000;
 
 export interface TelegramReactionPolicy {
   readonly allowsAll: boolean;
@@ -48,7 +50,10 @@ export async function refreshTelegramReactionPolicy(
 ): Promise<void> {
   try {
     const cached = await telegramReactionPolicyRepository.read(telegram.chatId);
-    if (cached && Date.now() - cached.fetchedAt.getTime() < REACTION_POLICY_TTL_MILLISECONDS) return;
+    if (
+      cached &&
+      Date.now() - cached.fetchedAt.getTime() < TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS
+    ) return;
 
     const response = await telegram.request("getChat", { chat_id: telegram.chatId });
     const body = response.body as { ok?: unknown; result?: unknown } | null;

@@ -216,6 +216,9 @@ describe("mode block resolution", () => {
 
     expect(loadCapabilities).not.toHaveBeenCalled();
     expect(loadSkills).not.toHaveBeenCalled();
+    // The text-only channel surface must not gain a reaction it could apply to a channel post.
+    expect(reactionPolicy).not.toHaveBeenCalled();
+    expect(markdown).not.toContain("## Реакция вместо сообщения");
     expect(markdown).not.toContain("`remember`");
     expect(markdown).not.toContain("`load_skill`");
   });

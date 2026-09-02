@@ -93,6 +93,21 @@ describe("splitTelegramAuthoredParts", () => {
     });
   });
 
+  it("keeps a directive inside a tilde fenced block", () => {
+    const markdown = `Пример:\n\n~~~\n${directive}\n~~~`;
+
+    expect(splitTelegramAuthoredParts(markdown)).toEqual({ asides: [], main: markdown });
+  });
+
+  it("does not let a tilde line close a backtick fence", () => {
+    const markdown = `\`\`\`\n~~~\n${directive}\n\`\`\`\n${directive}\nкстати`;
+
+    expect(splitTelegramAuthoredParts(markdown)).toEqual({
+      asides: ["кстати"],
+      main: "```\n~~~\n" + directive + "\n```",
+    });
+  });
+
   it("removes a directive written inside a sentence", () => {
     expect(splitTelegramAuthoredParts(`Ответ готов ${directive} кстати вот ещё`)).toEqual({
       asides: [],

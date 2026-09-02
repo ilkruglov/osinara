@@ -21,7 +21,7 @@ export const TELEGRAM_ASIDE_DIRECTIVE = "<telegram-split>";
 // Column zero only: an indented directive belongs to a Markdown code block, not to the transport.
 const DIRECTIVE_LINE_PATTERN = new RegExp(`^${TELEGRAM_ASIDE_DIRECTIVE}[ \\t\\r]*$`, "u");
 const INLINE_DIRECTIVE_PATTERN = new RegExp(TELEGRAM_ASIDE_DIRECTIVE, "gu");
-const FENCE_LINE_PATTERN = /^ {0,3}(?<fence>`{3,})(?<info>.*)$/u;
+const FENCE_LINE_PATTERN = /^ {0,3}(?<fence>`{3,}|~{3,})(?<info>.*)$/u;
 const INDENTED_CODE_PATTERN = /^(?: {4}|\t)/u;
 
 export interface TelegramAuthoredParts {
@@ -30,17 +30,25 @@ export interface TelegramAuthoredParts {
 }
 
 interface FenceState {
+  character: string;
   length: number;
 }
 
 function nextFenceState(line: string, open: FenceState | null): FenceState | null {
   const match = FENCE_LINE_PATTERN.exec(line);
   if (!match) return open;
-  const fence = match.groups?.fence?.length ?? 0;
+  const fence = match.groups?.fence ?? "";
   const info = match.groups?.info ?? "";
-  // A closing fence is at least as long as its opening one and carries no info string.
-  if (open) return fence >= open.length && info.trim().length === 0 ? null : open;
-  return info.includes("`") ? null : { length: fence };
+  const character = fence[0] ?? "";
+  // A closing fence repeats the opening character, is at least as long, and carries no info string.
+  if (open) {
+    const closes = character === open.character && fence.length >= open.length &&
+      info.trim().length === 0;
+    return closes ? null : open;
+  }
+  // Markdown forbids a backtick inside the info string of a backtick fence.
+  if (character === "`" && info.includes("`")) return null;
+  return { character, length: fence.length };
 }
 
 function withoutInlineDirective(line: string): string {

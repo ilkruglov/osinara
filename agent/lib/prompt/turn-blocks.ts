@@ -44,7 +44,10 @@ import {
 } from "../profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
 import { isTelegramChannelSession } from "../telegram-session-actor.js";
-import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
+import {
+  TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS,
+  type TelegramReactionPolicy,
+} from "../telegram-reaction-policy.js";
 import { telegramReactionPolicyRepository } from "../telegram-reaction-policy-repository.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
@@ -145,9 +148,11 @@ export function createModeBlockResolver(dependencies: {
       return MODE_UNAVAILABLE_BLOCK;
     }
     const scheduledRun = isScheduledSession(ctx);
-    // A scheduled run has no inbound message to react to, so its policy is never requested.
+    // A scheduled run has no inbound message to react to, and a channel-authored turn keeps its
+    // text-only surface, so neither one requests a reaction policy.
+    const reactionsPossible = !scheduledRun && !isTelegramChannelSession(ctx.session.auth);
     let reactionPolicy: TelegramReactionPolicy | null = null;
-    const telegramChatId = scheduledRun ? null : verifiedTelegramChatId(ctx.session.auth);
+    const telegramChatId = reactionsPossible ? verifiedTelegramChatId(ctx.session.auth) : null;
     if (telegramChatId !== null) {
       try {
         reactionPolicy = await dependencies.loadReactionPolicy(telegramChatId);
@@ -295,7 +300,12 @@ export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
   loadReactionPolicy: async (telegramChatId) => {
     const cached = await telegramReactionPolicyRepository.read(telegramChatId);
-    return cached === null ? null : { allowsAll: cached.allowsAll, emoji: cached.emoji };
+    if (cached === null) return null;
+    // Past the refresh window the record proves only that getChat keeps failing, so the prompt
+    // must not describe a reaction set an administrator may have already changed.
+    const age = Date.now() - cached.fetchedAt.getTime();
+    if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
+    return { allowsAll: cached.allowsAll, emoji: cached.emoji };
   },
   loadSkills: (groupId) => groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
 });
