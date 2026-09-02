@@ -16,7 +16,7 @@ async function importEveModule(path: string): Promise<Record<string, unknown>> {
 }
 
 describe("Eve dynamic skill runtime revision patch", () => {
-  it("wires the revision refresh into workflow preparation before turn dispatch", async () => {
+  it("refreshes only resumed-session skills inside the managed sandbox scope", async () => {
     const [patch, keys, lifecycle, workflow] = await Promise.all([
       readFile("scripts/apply-eve-patches.ts", "utf8"),
       readFile("node_modules/eve/dist/src/context/keys.js", "utf8"),
@@ -28,8 +28,23 @@ describe("Eve dynamic skill runtime revision patch", () => {
     expect(keys).toContain("eve.sessionDynamicSkillRuntimeRevision");
     expect(lifecycle).toContain("async function refreshDynamicSessionSkillsForRuntimeRevision");
     expect(workflow).toContain("refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C");
-    expect(workflow.indexOf("refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C"))
-      .toBeLessThan(workflow.indexOf("let k=o.parentWritable.getWriter()"));
+    const revisionAssignment = workflow.indexOf(
+      "runtimeRevision=t;if(!v.sessionStarted)c.set(SessionDynamicSkillRuntimeRevisionKey,t)",
+    );
+    const managedScope = workflow.indexOf("j=await runStep(c,g,async e=>{");
+    const skillRefresh = workflow.indexOf(
+      "refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C",
+    );
+    const turnPreparation = workflow.indexOf("let t=resolveEffectiveOutputSchema(");
+
+    expect(revisionAssignment).toBeGreaterThanOrEqual(0);
+    expect(revisionAssignment).toBeLessThan(managedScope);
+    expect(managedScope).toBeGreaterThanOrEqual(0);
+    expect(workflow.slice(managedScope, skillRefresh)).toContain(
+      "v.sessionStarted&&await ",
+    );
+    expect(skillRefresh).toBeGreaterThan(managedScope);
+    expect(skillRefresh).toBeLessThan(turnPreparation);
   });
 
   it("replaces a legacy manifest once before the first turn of a new runtime", async () => {

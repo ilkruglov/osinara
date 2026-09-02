@@ -312,8 +312,9 @@ await replaceExact(
 // Dynamic tools and subagents already refresh their session-scoped durable selections when the
 // compiled runtime changes. Skills must do the same: otherwise a pre-deploy turn-scoped manifest
 // survives forever when its resolver moves to session.started, including packages removed by the
-// new application. Clear every old resolver slot and sandbox package, then materialize the current
-// session selection once before turn.started applies any live external capability.
+// new application. Skill refresh must run inside runStep: the sandbox provider installs SandboxKey
+// only after that managed scope starts. Clear every old resolver slot and sandbox package, then
+// materialize the current session selection before turn.started applies live external capability.
 await replaceExact(
   runtimePaths.contextKeys,
   "SessionDynamicToolRuntimeRevisionKey=new ContextKey(`eve.sessionDynamicToolRuntimeRevision`),TurnDynamicToolMetadataKey",
@@ -356,8 +357,18 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.workflowSteps,
-  "c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t);else{let e=createSessionStartedEvent({runtime:O});await Promise.all([refreshDynamicSessionSubagentsForRuntimeRevision({ctx:c,resolvers:w,event:e,messages:g.history,persistentSessions:T,runtimeRevision:t}),refreshDynamicSessionToolsForRuntimeRevision({ctx:c,resolvers:E,event:e,messages:g.history,runtimeRevision:t})])",
-  "c.set(SessionDynamicSkillRuntimeRevisionKey,t),c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t);else{let e=createSessionStartedEvent({runtime:O});await Promise.all([refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C,event:e,messages:g.history,runtimeRevision:t}),refreshDynamicSessionSubagentsForRuntimeRevision({ctx:c,resolvers:w,event:e,messages:g.history,persistentSessions:T,runtimeRevision:t}),refreshDynamicSessionToolsForRuntimeRevision({ctx:c,resolvers:E,event:e,messages:g.history,runtimeRevision:t})])",
+  "D={...u.graph.root,turnAgent:f.turnAgent},O=buildRuntimeIdentity(D);try{let e=process.env.VERCEL_DEPLOYMENT_ID?.trim()",
+  "D={...u.graph.root,turnAgent:f.turnAgent},O=buildRuntimeIdentity(D);let runtimeRevision;try{let e=process.env.VERCEL_DEPLOYMENT_ID?.trim()",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "resolveRuntimeCompiledArtifactsVersionedCacheKey(u.compiledArtifactsSource);if(!v.sessionStarted)c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t)",
+  "resolveRuntimeCompiledArtifactsVersionedCacheKey(u.compiledArtifactsSource);runtimeRevision=t;if(!v.sessionStarted)c.set(SessionDynamicSkillRuntimeRevisionKey,t),c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t)",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "j=await runStep(c,g,async e=>{let t=resolveEffectiveOutputSchema(",
+  "j=await runStep(c,g,async e=>{v.sessionStarted&&await refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C,event:createSessionStartedEvent({runtime:O}),messages:e.history,runtimeRevision});let t=resolveEffectiveOutputSchema(",
 );
 
 // Verified webhooks can be durably acknowledged before native dispatch; drain reuses that dispatcher.
