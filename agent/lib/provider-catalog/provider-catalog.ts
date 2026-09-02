@@ -11,6 +11,7 @@
  * - Fail-fast dispatch to strict live and metadata response parsers.
  */
 import { AppError } from "../app-error.js";
+import { selectSupportedGroqModels } from "./groq-models.js";
 import { enrichModelsFromModelsDev } from "./models-dev-parser.js";
 import { parseOpenAiModelList } from "./openai-model-list-parser.js";
 import { parseOpenRouterModels } from "./openrouter-model-parser.js";
@@ -49,6 +50,11 @@ const PROVIDER_ENDPOINTS = {
     authentication: "required",
     protocol: "openai-chat-completions",
     url: "https://api.deepseek.com/models",
+  },
+  groq: {
+    authentication: "required",
+    protocol: "openai-chat-completions",
+    url: "https://api.groq.com/openai/v1/models",
   },
   minimax: {
     authentication: "required",
@@ -184,6 +190,7 @@ export async function fetchProviderCatalog(
 
     // Validate availability first, then spend only the remaining deadline on metadata enrichment.
     const liveModels = parseLiveProviderResponse(providerId, liveBody);
+    if (providerId === "groq") return selectSupportedGroqModels(liveModels);
     if (providerId === "neuraldeep") return selectSupportedNeuralDeepModels(liveModels);
     const metadataBody = await fetchJsonWithinDeadline(
       fetch,

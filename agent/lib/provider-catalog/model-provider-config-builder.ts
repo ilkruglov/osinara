@@ -196,6 +196,11 @@ function buildTransport(
       format: "deepseek",
       providerName: "deepseek",
     },
+    groq: {
+      baseUrl: "https://api.groq.com/openai/v1",
+      format: "reasoning-effort",
+      providerName: "groq",
+    },
     neuraldeep: {
       baseUrl: "https://api.neuraldeep.ru/v1",
       format: "reasoning-effort",

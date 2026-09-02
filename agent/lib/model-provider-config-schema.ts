@@ -19,6 +19,7 @@ const CODEX_SUBSCRIPTION_BASE_URL = "http://cli-proxy-api:8317/v1";
 const modelProviderIdSchema = z.enum([
   "codex-subscription",
   "deepseek",
+  "groq",
   "minimax",
   "neuraldeep",
   "opencode-go",
@@ -99,6 +100,7 @@ const modelProviderConfigSchema = z.object({
   const expectedBaseUrl = {
     "codex-subscription": CODEX_SUBSCRIPTION_BASE_URL,
     deepseek: "https://api.deepseek.com",
+    groq: "https://api.groq.com/openai/v1",
     minimax: "https://api.minimax.io/anthropic/v1",
     neuraldeep: "https://api.neuraldeep.ru/v1",
     "opencode-go": "https://opencode.ai/zen/go/v1",
@@ -132,6 +134,12 @@ const modelProviderConfigSchema = z.object({
     transport.providerName !== "deepseek" ||
     transport.reasoning !== null && transport.reasoning.format !== "deepseek"
   )) context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
+  if (config.provider === "groq" && (
+    transport.protocol !== "openai-chat-completions" ||
+    transport.providerName !== "groq" ||
+    transport.reasoning === null ||
+    transport.reasoning.format !== "reasoning-effort"
+  )) context.addIssue({ code: "custom", message: "Groq transport mismatch", path: ["agent", "transport"] });
   if (config.provider === "minimax" && (
     transport.protocol !== "anthropic-messages" ||
     transport.authentication !== "bearer" ||

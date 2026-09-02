@@ -10,7 +10,13 @@
  * - `ProviderCatalogFetch`: injected Fetch API-compatible dependency.
  * - `FetchProviderCatalogOptions`: explicit catalog request inputs.
  */
-export type ProviderId = "deepseek" | "minimax" | "neuraldeep" | "opencode-go" | "openrouter";
+export type ProviderId =
+  | "deepseek"
+  | "groq"
+  | "minimax"
+  | "neuraldeep"
+  | "opencode-go"
+  | "openrouter";
 
 export type ProviderProtocol = "anthropic-messages" | "openai-chat-completions";
 

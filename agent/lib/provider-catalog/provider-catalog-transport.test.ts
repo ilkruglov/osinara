@@ -102,6 +102,7 @@ describe("provider catalog transport", () => {
 
   it.each([
     ["deepseek", { object: "list", data: [{ object: "model", owned_by: "deepseek" }] }],
+    ["groq", { object: "list", data: [{ id: "", object: "model", owned_by: "Qwen" }] }],
     ["minimax", { object: "list", data: "MiniMax-M3" }],
     ["opencode-go", { object: "list", data: [{ id: "", object: "model", owned_by: "opencode" }] }],
     ["openrouter", { data: [{ id: "vendor/broken" }] }],
@@ -110,7 +111,9 @@ describe("provider catalog transport", () => {
 
     await expectAppError(
       fetchProviderCatalog({
-        apiKey: providerId === "deepseek" || providerId === "minimax" ? "secret" : undefined,
+        apiKey: providerId === "deepseek" || providerId === "groq" || providerId === "minimax"
+          ? "secret"
+          : undefined,
         fetch,
         providerId,
         timeoutMs: REQUEST_TIMEOUT_MS,

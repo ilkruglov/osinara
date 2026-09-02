@@ -19,6 +19,7 @@ describe("provider installer configuration", () => {
   it("offers exactly the supported immutable provider variants", () => {
     expect(MODEL_PROVIDER_OPTIONS.map(({ value }) => value)).toEqual([
       "deepseek",
+      "groq",
       "minimax",
       "neuraldeep",
       "opencode-go",

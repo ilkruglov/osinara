@@ -36,7 +36,7 @@ function createCatalogFetch(responses: Record<string, Response>): ProviderCatalo
 }
 
 describe("fetchProviderCatalog", () => {
-  it.each(["deepseek", "minimax", "neuraldeep"] as const)(
+  it.each(["deepseek", "groq", "minimax", "neuraldeep"] as const)(
     "requires authentication before fetching the %s catalog",
     async (providerId) => {
       const fetch = createFetch(jsonResponse({ object: "list", data: [] }));
@@ -82,6 +82,48 @@ describe("fetchProviderCatalog", () => {
       maxOutputTokens: 16_384,
       protocol: "openai-chat-completions",
       reasoningOptions: [],
+      supportsImageInput: true,
+      supportsTools: true,
+    }]);
+  });
+
+  it("returns the audited Groq Qwen 3.8 model only when the exact ID is live", async () => {
+    const fetch = createCatalogFetch({
+      "https://api.groq.com/openai/v1/models": jsonResponse({
+        object: "list",
+        data: [
+          { id: "qwen/qwen3.8-27b", object: "model", owned_by: "Qwen" },
+          { id: "qwen/qwen3.6-27b", object: "model", owned_by: "Qwen" },
+        ],
+      }),
+    });
+
+    const models = await fetchProviderCatalog({
+      apiKey: "groq-secret",
+      fetch,
+      providerId: "groq",
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
+
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith("https://api.groq.com/openai/v1/models", {
+      headers: { authorization: "Bearer groq-secret" },
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
+    expect(models).toEqual<ProviderCatalogModel[]>([{
+      contextWindowTokens: 131_042,
+      defaultReasoningOption: { type: "none" },
+      displayName: "Qwen 3.8 27B",
+      id: "qwen/qwen3.8-27b",
+      maxOutputTokens: 16_384,
+      protocol: "openai-chat-completions",
+      reasoningOptions: [
+        { type: "none" },
+        { effort: "low", type: "effort" },
+        { effort: "medium", type: "effort" },
+        { effort: "high", type: "effort" },
+      ],
       supportsImageInput: true,
       supportsTools: true,
     }]);
