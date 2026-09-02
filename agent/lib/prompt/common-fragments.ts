@@ -12,14 +12,15 @@
  * - `WORKSPACE_ARTIFACT_LOOKUP`: native file lookup for previously produced artifacts.
  * - `UNTRUSTED_FILE_CONTENT_RULES`: fail-closed handling of agent instructions inside files.
  * - `reactionRules`: reaction surface of the current chat, or nothing when it has none.
+ *   The concrete set is announced separately in history, so these rules stay identical between
+ *   chats and keep the mode block byte-stable for prompt caching.
  * - `SPOKEN_ASIDE_RULES`: when one answer may continue as a separate spoken message.
  *
- * Fragments are fixed literals or functions of closed unions, with one exception: the reaction
- * set Telegram reports for the current chat. That value is provider-verified, changes only when a
- * chat administrator changes it, and therefore keeps each chat's prompt prefix stable and cacheable.
- * No verified auth value is ever interpolated into prompt text.
+ * Fragments are fixed literals or functions of closed unions. No verified auth value and no
+ * provider-reported value is interpolated into prompt text: the reaction set of the current chat
+ * is announced as its own history message instead.
  */
-import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
+import { REACTION_SET_OPEN_TAG } from "../telegram-reaction-announcement.js";
 
 export type MemoryEditAction = "delete" | "edit" | "undo";
 
@@ -111,15 +112,11 @@ export function memoryEditContract(actions: ReadonlySet<MemoryEditAction>): stri
 }
 
 export function reactionRules(
-  policy: TelegramReactionPolicy | null,
+  reactions: readonly string[] | null,
   scope: "group" | "private",
 ): string | null {
-  // An unknown policy and a chat without reactions both mean the surface does not exist here.
-  if (!policy || (!policy.allowsAll && policy.emoji.length === 0)) return null;
-
-  const allowed = policy.allowsAll
-    ? "Ставь один эмодзи, уместный по смыслу реплики: этот чат принимает любую эмодзи-реакцию Telegram."
-    : `Этот чат принимает только эти реакции, поставь ровно одну из них: ${policy.emoji.join(" ")}. Другую эмодзи чат не примет, и человек не увидит ничего.`;
+  // No verified policy and a chat without reactions both mean the surface does not exist here.
+  if (reactions === null) return null;
 
   const mention = scope === "group"
     ? `
@@ -131,7 +128,7 @@ export function reactionRules(
 
 Если текущее обращение является завершённым социальным жестом и содержательный текст не нужен, не отправляй сообщение и не вызывай инструменты. Это относится к упоминанию без вопроса или задачи, прямой просьбе молчать, короткой благодарности, комплименту, шутке, новости или эмоциональной реплике, на которую достаточно одной реакции. Верни ровно один служебный блок \`<telegram-reaction>EMOJI</telegram-reaction>\` и не добавляй никакого текста.
 
-${allowed} Грубую реакцию ставь только в ответ на прямое оскорбление, адресованное именно тебе, и никогда на критику твоего ответа, несогласие, угрозу, травлю, дискриминацию или серьёзный конфликт.
+Ставь только ту реакцию, которая есть в наборе из блока \`${REACTION_SET_OPEN_TAG}\` в истории этого разговора: другую Telegram не примет, и человек не увидит вообще ничего. Внутри набора выбирай свободно по смыслу реплики. Грубую реакцию ставь только в ответ на прямое оскорбление, адресованное именно тебе, и никогда на критику твоего ответа, несогласие, угрозу, травлю, дискриминацию или серьёзный конфликт.
 
 Если человеку нужны поддержка, объяснение или безопасность, ответь текстом. Не используй reaction-блок, если пользователь задал вопрос, попросил действие, нуждается в существенном уточнении или должен получить объяснение ошибки либо отказа. Никогда не описывай этот служебный блок пользователю.${mention}`;
 }

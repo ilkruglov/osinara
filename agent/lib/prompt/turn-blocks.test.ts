@@ -17,7 +17,10 @@ import {
   createMemoryBlockResolver,
   createModeBlockResolver,
   createPreferenceBlockResolver,
+  createReactionSetBlockResolver,
 } from "./turn-blocks.js";
+import { formatReactionSetAnnouncement } from "../telegram-reaction-announcement.js";
+import { TELEGRAM_DEFAULT_REACTIONS } from "../telegram-reaction-set.js";
 
 const createProfile = vi.fn();
 const TEST_TURN_ID = "turn-1";
@@ -380,5 +383,85 @@ describe("preference block resolution", () => {
     });
 
     expect(await resolve(context(privateAuth))).toBeNull();
+  });
+});
+
+const reactionAuth = auth({
+  memoryScopes: ["personal", "family"],
+  telegramActorId: "101",
+  telegramActorKind: "telegram_user",
+  telegramChatId: "101",
+  telegramChatType: "private",
+  telegramUserId: "101",
+});
+
+describe("reaction set block resolution", () => {
+  it("announces the default set for a chat that added no restriction", async () => {
+    const loadReactionPolicy = vi.fn().mockResolvedValue({ allowsAll: true, emoji: [] });
+    const resolve = createReactionSetBlockResolver({ loadReactionPolicy });
+
+    const announcement = await resolve(context(reactionAuth));
+
+    expect(loadReactionPolicy).toHaveBeenCalledWith("101");
+    expect(announcement).toBe(formatReactionSetAnnouncement(TELEGRAM_DEFAULT_REACTIONS));
+  });
+
+  it("announces exactly the narrowed list of a chat", async () => {
+    const resolve = createReactionSetBlockResolver({
+      loadReactionPolicy: vi.fn().mockResolvedValue({ allowsAll: false, emoji: ["👍", "🔥"] }),
+    });
+
+    expect(await resolve(context(reactionAuth)))
+      .toBe(formatReactionSetAnnouncement(["👍", "🔥"]));
+  });
+
+  it("stays silent while the same announcement is still in history", async () => {
+    const resolve = createReactionSetBlockResolver({
+      loadReactionPolicy: vi.fn().mockResolvedValue({ allowsAll: false, emoji: ["👍", "🔥"] }),
+    });
+    const announced = formatReactionSetAnnouncement(["👍", "🔥"]);
+
+    expect(await resolve({
+      ...context(reactionAuth),
+      messages: [{ content: announced, role: "user" }],
+    })).toBeNull();
+  });
+
+  it("announces again when the set changed under an older announcement", async () => {
+    const resolve = createReactionSetBlockResolver({
+      loadReactionPolicy: vi.fn().mockResolvedValue({ allowsAll: false, emoji: ["👍"] }),
+    });
+
+    expect(await resolve({
+      ...context(reactionAuth),
+      messages: [{ content: formatReactionSetAnnouncement(["👍", "🔥"]), role: "user" }],
+    })).toBe(formatReactionSetAnnouncement(["👍"]));
+  });
+
+  it.each([
+    ["reactions turned off", { allowsAll: false, emoji: [] }],
+    ["unknown policy", null],
+  ])("announces nothing for %s", async (_case, policy) => {
+    const resolve = createReactionSetBlockResolver({
+      loadReactionPolicy: vi.fn().mockResolvedValue(policy),
+    });
+
+    expect(await resolve(context(reactionAuth))).toBeNull();
+  });
+
+  it("announces nothing to a channel actor", async () => {
+    const loadReactionPolicy = vi.fn();
+    const resolve = createReactionSetBlockResolver({ loadReactionPolicy });
+
+    expect(await resolve(context(channelAuth))).toBeNull();
+    expect(loadReactionPolicy).not.toHaveBeenCalled();
+  });
+
+  it("discloses nothing instead of throwing when the lookup fails", async () => {
+    const resolve = createReactionSetBlockResolver({
+      loadReactionPolicy: vi.fn().mockRejectedValue(new Error("database unavailable")),
+    });
+
+    await expect(resolve(context(reactionAuth))).resolves.toBeNull();
   });
 });
