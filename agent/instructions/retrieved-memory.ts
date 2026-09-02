@@ -1,14 +1,15 @@
 /**
- * Turn-scoped retrieved long-term memory instructions.
+ * Turn-scoped retrieved long-term memory.
  *
  * Export:
  * - Eve dynamic instructions containing only authorized memory records as untrusted data.
  *
- * Key construct:
+ * Key constructs:
  * - The runtime event supplies the durable turn ID used to bind writable profile subject refs.
- *
- * The filename orders this block last, so the volatile per-turn payload never invalidates the
- * cacheable prefix formed by the permanent instructions and the mode rulebook.
+ * - Records enter durable history as a user-role message before the current delivery. The system
+ *   prefix therefore stays byte-identical between turns and the provider prompt cache covers the
+ *   whole conversation instead of only the permanent instructions.
+ * - Fail-closed notices remain system-role so they outrank untrusted data.
  */
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
@@ -33,9 +34,9 @@ export default defineDynamic({
       if (isMemoryReviewSession(ctx)) return null;
       // Eve exposes the durable turn identity on the lifecycle event, not the resolve context.
       const turnId = turnIdFromEvent(event);
-      if (turnId === null) return defineInstructions({ markdown: INVALID_TURN_BLOCK });
-      const markdown = await resolveMemoryBlock(ctx, turnId);
-      return markdown === null ? null : defineInstructions({ markdown });
+      if (turnId === null) return defineInstructions({ content: INVALID_TURN_BLOCK, role: "system" });
+      const block = await resolveMemoryBlock(ctx, turnId);
+      return block === null ? null : defineInstructions({ content: block.markdown, role: block.role });
     },
   },
 });

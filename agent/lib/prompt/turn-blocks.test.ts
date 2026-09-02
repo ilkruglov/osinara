@@ -34,8 +34,12 @@ function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   };
 }
 
-function context(sessionAuth: SessionAuth, messages: readonly ModelMessage[] = []) {
-  return { messages, session: { auth: sessionAuth, id: "session-1" } };
+function context(
+  sessionAuth: SessionAuth,
+  messages: readonly ModelMessage[] = [],
+  channelKind = "telegram",
+) {
+  return { channel: { kind: channelKind }, messages, session: { auth: sessionAuth, id: "session-1" } };
 }
 
 const privateAuth = auth({
@@ -211,23 +215,27 @@ describe("memory block resolution", () => {
     userId: "user-1",
   };
 
-  it("returns retrieved records for an authorized turn", async () => {
+  it("returns retrieved records as a user-role block so the system prefix stays cacheable", async () => {
     const resolve = createMemoryBlockResolver({
       authorize: () => authorization,
       createProfile,
       retrieve: vi.fn().mockResolvedValue({
-        memories: [],
+        memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
         retrievedClaimIds: [],
         threads: { threads: [], totalCharacters: 0 },
       }),
     });
 
-    const markdown = await resolve(
+    const block = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
       TEST_TURN_ID,
     );
 
-    expect(markdown).toContain("активный pipeline текущей реализации");
+    expect(block?.role).toBe("user");
+    expect(block?.markdown).toContain("<retrieved_long_term_memory>");
+    expect(block?.markdown).toContain("Любит гречку");
+    // The pipeline explanation lives once in the permanent instructions, not in every turn.
+    expect(block?.markdown).not.toContain("активный pipeline");
   });
 
   it("returns no block when the turn carries no user text", async () => {
@@ -238,7 +246,26 @@ describe("memory block resolution", () => {
     expect(retrieve).not.toHaveBeenCalled();
   });
 
-  it("discloses unavailable memory instead of throwing on authorization failure", async () => {
+  it("skips retrieval and profile creation for a subagent turn", async () => {
+    const retrieve = vi.fn();
+    const profile = vi.fn();
+    const resolve = createMemoryBlockResolver({
+      authorize: () => authorization,
+      createProfile: profile,
+      retrieve,
+    });
+
+    const block = await resolve(
+      context(privateAuth, [{ content: "исследуй тему", role: "user" }] as ModelMessage[], "subagent"),
+      TEST_TURN_ID,
+    );
+
+    expect(block).toBeNull();
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(profile).not.toHaveBeenCalled();
+  });
+
+  it("discloses unavailable memory as a system block instead of throwing on authorization failure", async () => {
     const resolve = createMemoryBlockResolver({
       authorize: () => {
         throw new Error("AGENT_MEMORY_CONTEXT_INVALID: нет области памяти");
@@ -247,13 +274,14 @@ describe("memory block resolution", () => {
       retrieve: vi.fn(),
     });
 
-    const markdown = await resolve(
+    const block = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
       TEST_TURN_ID,
     );
 
-    expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
-    expect(markdown).not.toContain("активный pipeline текущей реализации");
+    expect(block?.role).toBe("system");
+    expect(block?.markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
+    expect(block?.markdown).not.toContain("<retrieved_long_term_memory>");
   });
 
   it("discloses unavailable memory instead of throwing on retrieval failure", async () => {
@@ -263,12 +291,12 @@ describe("memory block resolution", () => {
       retrieve: vi.fn().mockRejectedValue(new Error("embedding service down")),
     });
 
-    const markdown = await resolve(
+    const block = await resolve(
       context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
       TEST_TURN_ID,
     );
 
-    expect(markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
+    expect(block?.markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
   });
 
   it("builds the same-turn profile from verified signals and retrieval-related claim identities", async () => {
@@ -304,10 +332,11 @@ describe("memory block resolution", () => {
       telegramUserId: "101",
     });
 
-    const markdown = await resolve(
+    const block = await resolve(
       context(telegramAuth, [{ content: "что любит Пётр?", role: "user" }] as ModelMessage[]),
       TEST_TURN_ID,
     );
+    const markdown = block?.markdown;
 
     expect(profile).toHaveBeenCalledWith(authorization, {
       conversationId: "conversation-1",
