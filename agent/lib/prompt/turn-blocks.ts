@@ -60,11 +60,22 @@ import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
+  readonly channel?: { readonly kind?: string };
   readonly messages: readonly ModelMessage[];
   readonly session: {
     readonly auth: SessionAuth;
     readonly id: string;
   };
+}
+
+/**
+ * Retrieved records are volatile per-turn data, so they enter durable history as a user-role
+ * message and leave the cacheable system prefix untouched. Fail-closed notices stay system-role:
+ * they are short, rare, and must outrank untrusted data.
+ */
+export interface MemoryBlock {
+  readonly markdown: string;
+  readonly role: "system" | "user";
 }
 
 type CapabilityLoader = (identity: {
@@ -197,7 +208,10 @@ export function createMemoryBlockResolver(dependencies: {
     skillHints: readonly string[],
   ) => Promise<MemoryTurnContext>;
 }) {
-  return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<string | null> {
+  return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<MemoryBlock | null> {
+    // A delegated child receives its task in the delegation message; retrieving memory and writing
+    // a profile view for every child would double the parent's per-turn context cost.
+    if (ctx.channel?.kind === "subagent") return null;
     try {
       const authorization = dependencies.authorize(ctx);
       const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
@@ -211,13 +225,16 @@ export function createMemoryBlockResolver(dependencies: {
       const profile = profileInput === null
         ? null
         : await dependencies.createProfile(authorization, profileInput);
-      return [
-        ...(profile === null ? [] : [formatProfileViewContext(profile)]),
-        formatRetrievedMemoryInstructions(context.memories, context.threads),
-      ].join("\n\n");
+      return {
+        markdown: [
+          ...(profile === null ? [] : [formatProfileViewContext(profile)]),
+          formatRetrievedMemoryInstructions(context.memories, context.threads),
+        ].join("\n\n"),
+        role: "user",
+      };
     } catch (error) {
       logBlockFailure("AGENT_MEMORY_UNAVAILABLE", error);
-      return MEMORY_UNAVAILABLE_BLOCK;
+      return { markdown: MEMORY_UNAVAILABLE_BLOCK, role: "system" };
     }
   };
 }

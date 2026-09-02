@@ -20,6 +20,8 @@ export const MEMORY_CONTENT_MAX_LENGTH = 4_000;
 export const MEMORY_LIST_DEFAULT_LIMIT = 20;
 export const MEMORY_LIST_MAX_LIMIT = 50;
 export const MEMORY_RETRIEVAL_LIMIT = 12;
+// Automatic per-turn context enters model input on every step, so it is narrower than tool search.
+export const MEMORY_TURN_RETRIEVAL_LIMIT = 8;
 export const MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 40;
 
 export const CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES = 50;
@@ -31,11 +33,13 @@ export const MEMORY_EXTRACTION_WORKER_STABILITY_MILLISECONDS = 30_000;
 export const MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS = 1_000;
 
 // Live briefs are generated only for activated threads and contain whole source-backed records.
+// Per-turn budgets are prompt-cost budgets: the model can read a full thread through
+// read_memory_thread when the automatic brief is not enough.
 export const THREAD_CONTEXT_MAX_THREADS = 2;
-export const THREAD_CONTEXT_MAX_CHARACTERS = 16_000;
+export const THREAD_CONTEXT_MAX_CHARACTERS = 6_000;
 export const THREAD_TITLE_MAX_CHARACTERS = 120;
 export const THREAD_PURPOSE_MAX_CHARACTERS = 500;
-export const THREAD_BRIEF_MAX_CHARACTERS = 6_000;
+export const THREAD_BRIEF_MAX_CHARACTERS = 3_000;
 export const THREAD_BRIEF_MAX_ITEMS = 20;
 export const THREAD_CONTEXT_EPISODES_PER_THREAD = 3;
 export const THREAD_EPISODE_MAX_CHARACTERS = 2_000;
@@ -55,9 +59,9 @@ export const THREAD_NOTICE_DELIVERY_LEASE_MILLISECONDS = 5 * 60 * 1_000;
 
 // Profile context is a bounded read projection; whole claims are skipped rather than truncated.
 export const PROFILE_CONTEXT_MAX_SUBJECTS = 4;
-export const PROFILE_CONTEXT_MAX_CHARACTERS = 12_000;
-export const PROFILE_CONTEXT_MAX_CLAIMS_PER_SUBJECT = 30;
-export const PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS = 8_000;
+export const PROFILE_CONTEXT_MAX_CHARACTERS = 6_000;
+export const PROFILE_CONTEXT_MAX_CLAIMS_PER_SUBJECT = 20;
+export const PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS = 4_000;
 export const PROFILE_SELECTION_DORMANCY_MILLISECONDS = 60 * 24 * 60 * 60 * 1_000;
 export const PROFILE_PROJECTION_NOTICE_LEASE_MILLISECONDS = 5 * 60 * 1_000;
 
