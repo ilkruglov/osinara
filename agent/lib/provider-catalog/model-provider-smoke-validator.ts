@@ -58,15 +58,20 @@ export async function validateModelProviderSmoke(
     modelId: primary.id,
     transport: options.config.agent.transport,
   });
+  const usesDeepSeekThinking = options.config.provider === "deepseek"
+    && options.config.agent.transport.protocol === "openai-chat-completions"
+    && options.config.agent.transport.reasoning?.type === "effort";
   const result = await generateText({
     abortSignal: AbortSignal.timeout(options.timeoutMs),
     maxRetries: 0,
     model,
-    prepareStep: ({ stepNumber }) => ({
-      toolChoice: stepNumber === 0
-        ? { toolName: SMOKE_TOOL_NAME, type: "tool" }
-        : "none",
-    }),
+    prepareStep: ({ stepNumber }) => usesDeepSeekThinking
+      ? {}
+      : {
+          toolChoice: stepNumber === 0
+            ? { toolName: SMOKE_TOOL_NAME, type: "tool" }
+            : "none",
+        },
     prompt: SMOKE_PROMPT,
     stopWhen: stepCountIs(2),
     tools: {

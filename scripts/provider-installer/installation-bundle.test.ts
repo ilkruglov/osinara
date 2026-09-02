@@ -46,6 +46,24 @@ describe("installation bundle", () => {
     expect(tlsCompose).toContain("name: osinara-production-edge-frontend");
   });
 
+  it("accepts the plain Uint8Array returned by release fetch", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "osinara-install-bundle-test-"));
+    temporaryDirectories.push(directory);
+    const archive = join(directory, "release-fetch.tar.gz");
+    const manifestPath = join(directory, "osinara-deployment.json");
+    const composePath = join(directory, "compose.installation.json");
+    await writeFile(manifestPath, JSON.stringify({ schemaVersion: 1 }));
+    await writeFile(composePath, JSON.stringify({ name: "osinara-production", services: {} }));
+    const build = spawnSync("bash", [buildScript, archive, manifestPath, composePath], {
+      encoding: "utf8",
+    });
+    expect(build.status, build.stderr).toBe(0);
+
+    const fetchBytes = Uint8Array.from(await readFile(archive));
+
+    await expect(validateInstallationBundle(fetchBytes)).resolves.toBeUndefined();
+  });
+
   it("rejects an archive containing a symbolic link", async () => {
     const directory = await mkdtemp(join(tmpdir(), "osinara-install-bundle-test-"));
     temporaryDirectories.push(directory);

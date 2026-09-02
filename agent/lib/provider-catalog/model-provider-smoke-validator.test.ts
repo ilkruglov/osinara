@@ -149,6 +149,83 @@ describe("validateModelProviderSmoke", () => {
     expect(requests[1]).not.toHaveProperty("tools");
   });
 
+  it("uses automatic tool choice for the exact DeepSeek thinking handshake", async () => {
+    const requests: Record<string, unknown>[] = [];
+    const responses = [
+      completion({
+        content: null,
+        reasoning_content: "The requested tool must be called.",
+        role: "assistant",
+        tool_calls: [{
+          function: {
+            arguments: JSON.stringify({ value: "OSINARA_MODEL_PROVIDER_SMOKE_READY" }),
+            name: "confirm_model_provider",
+          },
+          id: "smoke-call-1",
+          type: "function",
+        }],
+      }, "tool_calls"),
+      completion({
+        content: "OSINARA_MODEL_PROVIDER_SMOKE_OK",
+        reasoning_content: "The tool result is accepted.",
+        role: "assistant",
+      }, "stop"),
+    ];
+    const deepSeekModel: ProviderCatalogModel = {
+      ...model,
+      displayName: "DeepSeek V4 Flash Vision Exp",
+      id: "deepseek-v4-flash-vision-exp",
+      reasoningOptions: [
+        { type: "none" },
+        { effort: "high", type: "effort" },
+      ],
+      supportsImageInput: true,
+    };
+    const config = buildModelProviderConfig(
+      "deepseek",
+      deepSeekModel,
+      { effort: "high", type: "effort" },
+      false,
+    );
+
+    await expect(validateModelProviderSmoke({
+      apiKey: "provider-secret",
+      config,
+      fetch: async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        requests.push(body);
+        if ("tool_choice" in body) {
+          return new Response(JSON.stringify({
+            error: {
+              code: "invalid_request_error",
+              message: "Thinking mode does not support this tool_choice",
+              type: "invalid_request_error",
+            },
+          }), {
+            headers: { "content-type": "application/json" },
+            status: 400,
+          });
+        }
+        const response = responses.shift();
+        if (!response) throw new Error("Unexpected smoke request");
+        return response;
+      },
+      timeoutMs: 2_000,
+    })).resolves.toBeUndefined();
+
+    expect(requests).toHaveLength(2);
+    expect(requests).toEqual([
+      expect.objectContaining({
+        reasoning_effort: "high",
+        thinking: { type: "enabled" },
+      }),
+      expect.objectContaining({
+        reasoning_effort: "high",
+        thinking: { type: "enabled" },
+      }),
+    ]);
+  });
+
   it("rejects a response that does not end with the exact final text", async () => {
     const responses = [
       completion({

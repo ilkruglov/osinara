@@ -88,7 +88,7 @@ export async function readInstallationBundle(
 
     const gunzip = createGunzip();
     gunzip.on("error", fail);
-    Readable.from(archive).pipe(gunzip).pipe(extract);
+    Readable.from([archive]).pipe(gunzip).pipe(extract);
   });
 }
 
