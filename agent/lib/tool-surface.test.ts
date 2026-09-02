@@ -4,12 +4,10 @@
  * Constructs:
  * - `agent/tools` holds only the dynamic resolver; native `agent` supplies fresh-context delegation.
  * - Exact application tool-module allowlist after CRUD consolidation.
- * - Exact static package directories plus the single dynamic policy resolver.
- * - The opt-in tone skill lives outside static Eve discovery.
+ * - Exact static package directories plus lifecycle-scoped dynamic resolvers.
  * - The compiled dynamic resolver stays step-scoped and avoids durable helper-closure replay.
  */
 import { readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -100,26 +98,7 @@ describe("agent capability surface", () => {
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
-    expect(skillFiles).toEqual(["scoped.ts"]);
-  });
-
-  it("keeps the opt-in profanity package outside static discovery", async () => {
-    const packageRoot = resolve(AGENT_ROOT, "../config/group-skills/pohuy");
-    const skill = await readFile(`${packageRoot}/instructions.md`, "utf8");
-    const definitions = await readFile(
-      `${AGENT_ROOT}/lib/group-skills/group-skill-definitions.ts`,
-      "utf8",
-    );
-
-    // Activation guidance is emitted only when policy grants this dynamic skill.
-    expect(definitions).toContain("Загружай только по явной просьбе");
-
-    // The dynamic definition ships all sibling references with the sandbox package.
-    const references = await readdir(`${packageRoot}/references`);
-    expect(references.sort()).toEqual(["ontologia.md", "sceny.md", "slovar.md"]);
-
-    // The vendored copy must not try to reach the upstream repository from the sandbox.
-    expect(skill).not.toContain("raw.githubusercontent.com");
+    expect(skillFiles).toEqual(["external.ts", "scoped.ts"]);
   });
 
   it("requires every native skill package to declare SKILL.md", async () => {

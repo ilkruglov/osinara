@@ -23,7 +23,6 @@ interface TelegramGroupRow {
   family_id: string;
   id: string;
   message_mode: RegisteredGroup["messageMode"];
-  skill_allowlist: string[];
   telegram_chat_id: string;
   tool_allowlist: string[];
   type: RegisteredGroup["type"];
@@ -127,14 +126,14 @@ export const telegramRepository: TelegramRepository = {
       `UPDATE telegram_groups SET telegram_chat_type = $2
         WHERE telegram_chat_id = $1 AND telegram_chat_type IS NULL
       RETURNING id, family_id, telegram_chat_id, type, message_mode,
-                tool_allowlist, skill_allowlist`,
+                tool_allowlist`,
       [telegramChatId, telegramChatType],
     );
     const result = initialized.rows[0]
       ? initialized
       : await database().query<TelegramGroupRow>(
           `SELECT id, family_id, telegram_chat_id, type, message_mode,
-                  tool_allowlist, skill_allowlist
+                  tool_allowlist
              FROM telegram_groups
             WHERE telegram_chat_id = $1 AND telegram_chat_type = $2`,
           [telegramChatId, telegramChatType],
@@ -144,7 +143,6 @@ export const telegramRepository: TelegramRepository = {
     const common = {
       familyId: row.family_id,
       groupId: row.id,
-      skillAllowlist: row.skill_allowlist,
       telegramChatId: row.telegram_chat_id,
       toolAllowlist: row.tool_allowlist,
     };

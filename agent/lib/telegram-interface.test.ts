@@ -285,26 +285,6 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Группа и бот останутся подключены");
   });
 
-  it("shows the complete skill replacement including revoking every skill", () => {
-    const request = localizeTelegramInputRequest({
-      action: {
-        callId: "call-skills",
-        input: { action: "update_skills", skillAllowlist: [], telegramChatId: "-1001" },
-        kind: "tool-call" as const,
-        toolName: "manage_telegram_group",
-      },
-      display: "confirmation" as const,
-      kind: "tool-approval" as const,
-      options: [],
-      prompt: "Approve tool call",
-      requestId: "request-skills",
-    });
-
-    expect(request.prompt).toContain("изменить список skills внешней Telegram-группы");
-    expect(request.prompt).toContain("Telegram chat ID: -1001");
-    expect(request.prompt).toContain("Полный список разрешённых skills: пуст");
-  });
-
   it("shows an explicitly empty tool policy during external registration", () => {
     const request = localizeTelegramInputRequest({
       action: {

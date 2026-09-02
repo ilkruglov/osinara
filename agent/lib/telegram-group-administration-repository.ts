@@ -4,7 +4,6 @@
  * Exports:
  * - `TelegramGroupRegistration`: complete persisted registration input.
  * - `TelegramGroupPolicyUpdate`: complete external-group policy replacement input.
- * - `TelegramGroupSkillUpdate`: complete safe-skill policy replacement input.
  * - `TelegramGroupStatus`: complete read-only registration and policy projection.
  * - `TelegramGroupSessionRotation`: owner-requested canonical rotation for every group topic.
  * - `TelegramGroupAdministrationRepository`: injectable registration/removal/policy contract.
@@ -49,16 +48,8 @@ export interface TelegramGroupPolicyUpdate {
   toolAllowlist: string[];
 }
 
-export interface TelegramGroupSkillUpdate {
-  familyId: string;
-  requestedBy: string;
-  skillAllowlist: string[];
-  telegramChatId: string;
-}
-
 export interface TelegramGroupStatus {
   messageMode: TelegramGroupMessageMode;
-  skillAllowlist: string[];
   telegramChatId: string;
   title: string;
   toolAllowlist: string[];
@@ -87,7 +78,6 @@ export interface TelegramGroupAdministrationRepository {
     requestedCanonicalSessions: number;
   }>;
   updatePolicy(input: TelegramGroupPolicyUpdate): Promise<{ groupId: string }>;
-  updateSkills(input: TelegramGroupSkillUpdate): Promise<{ groupId: string }>;
 }
 
 export const telegramGroupAdministrationRepository: TelegramGroupAdministrationRepository = {
@@ -114,11 +104,10 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         message_mode: TelegramGroupMessageMode;
         telegram_chat_id: string;
         title: string;
-        skill_allowlist: string[];
         tool_allowlist: string[];
         type: RegisteredGroupType;
       }>(
-        `SELECT telegram_chat_id, title, type, message_mode, tool_allowlist, skill_allowlist
+        `SELECT telegram_chat_id, title, type, message_mode, tool_allowlist
            FROM telegram_groups
           WHERE family_id = $1
           ORDER BY lower(title), telegram_chat_id`,
@@ -127,7 +116,6 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("COMMIT");
       return result.rows.map((row) => ({
         messageMode: row.message_mode,
-        skillAllowlist: row.skill_allowlist,
         telegramChatId: row.telegram_chat_id,
         title: row.title,
         toolAllowlist: row.tool_allowlist,
@@ -399,53 +387,6 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         throw new AppError(
           "AGENT_GROUP_POLICY_UPDATE_FAILED",
           "Не удалось обновить политику группы. Повторите попытку",
-        );
-      }
-
-      await client.query("COMMIT");
-      return { groupId: row.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async updateSkills(input) {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-
-      // Recheck current ownership after HITL so a parked approval cannot outlive role revocation.
-      const owner = await client.query(
-        `SELECT 1
-           FROM family_memberships
-          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-          FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
-
-      // Serialize with trust-zone replacement/removal before replacing the complete skill policy.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
-      const result = await client.query<{ id: string }>(
-        `UPDATE telegram_groups
-            SET skill_allowlist = $1
-          WHERE family_id = $2 AND telegram_chat_id = $3
-          RETURNING id`,
-        [input.skillAllowlist, input.familyId, input.telegramChatId],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new AppError(
-          "AGENT_GROUP_NOT_FOUND",
-          "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
         );
       }
 

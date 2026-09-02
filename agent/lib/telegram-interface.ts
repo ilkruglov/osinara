@@ -60,7 +60,6 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
       "удалить регистрацию Telegram-группы и связанные данные Osinara. Бот останется участником Telegram-чата",
     update_policy:
       "изменить политику внешней Telegram-группы. Группа и бот останутся подключены",
-    update_skills: "изменить список skills внешней Telegram-группы",
   },
   notification_settings: {
     set: "изменить настройки уведомлений",
@@ -150,17 +149,6 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
   switch (toolName) {
     case "manage_telegram_group": {
       if (input.action === "remove") return line("Telegram chat ID", "telegramChatId");
-      if (input.action === "update_skills") {
-        const allowlist = Array.isArray(input.skillAllowlist)
-          ? input.skillAllowlist.filter((item): item is string => typeof item === "string").join(", ")
-          : null;
-        return [
-          ...line("Telegram chat ID", "telegramChatId"),
-          ...(allowlist === null
-            ? []
-            : [`Полный список разрешённых skills: ${allowlist || "пуст"}`]),
-        ];
-      }
       if (input.action === "update_policy") {
         // An empty array is still a complete replacement and must be visible before approval.
         const allowlist = Array.isArray(input.toolAllowlist)

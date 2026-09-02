@@ -6,6 +6,7 @@
  * - Production startup health wait: permits bounded first-run sandbox preparation.
  * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
  * - Restricted delegation policy: hides only the implicit root agent from external/review modes.
+ * - Dynamic skill revision policy: refreshes session packages after a compiled deployment change.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
  * - Background task auth: restores the verified caller that created the task on every parent wake.
  * - Telegram durable ingress: verified-update and authenticated internal-drain hooks.
@@ -25,6 +26,12 @@ const runtimePaths = {
   compaction: resolve("node_modules/eve/dist/src/harness/compaction.js"),
   contextKeys: resolve("node_modules/eve/dist/src/context/keys.js"),
   contextKeyTypes: resolve("node_modules/eve/dist/src/context/keys.d.ts"),
+  dynamicSkillLifecycle: resolve(
+    "node_modules/eve/dist/src/context/dynamic-skill-lifecycle.js",
+  ),
+  dynamicSkillLifecycleTypes: resolve(
+    "node_modules/eve/dist/src/context/dynamic-skill-lifecycle.d.ts",
+  ),
   dispatchRuntimeActionsShared: resolve(
     "node_modules/eve/dist/src/execution/dispatch-runtime-actions-shared.js",
   ),
@@ -181,8 +188,8 @@ await replaceExact(
 );
 await replaceExact(
   runtimePaths.workflowSteps,
-  "AuthKey,CapabilitiesKey,ModeKey,SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnTaskDeliveryKey",
-  "AuthKey,CapabilitiesKey,ModeKey,SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnOriginAuthKey,TurnTaskDeliveryKey",
+  "SessionDynamicToolRuntimeRevisionKey,TurnTaskDeliveryKey",
+  "SessionDynamicToolRuntimeRevisionKey,TurnOriginAuthKey,TurnTaskDeliveryKey",
 );
 await replaceExact(
   runtimePaths.workflowSteps,
@@ -300,6 +307,57 @@ await replaceExact(
   runtimePaths.taskChildStepTypes,
   "export declare function wakeTaskInputRequestParentStep(input: {\n    readonly request:",
   "export declare function wakeTaskInputRequestParentStep(input: {\n    readonly auth: import(\"#channel/types.js\").SessionAuthContext | null;\n    readonly request:",
+);
+
+// Dynamic tools and subagents already refresh their session-scoped durable selections when the
+// compiled runtime changes. Skills must do the same: otherwise a pre-deploy turn-scoped manifest
+// survives forever when its resolver moves to session.started, including packages removed by the
+// new application. Clear every old resolver slot and sandbox package, then materialize the current
+// session selection once before turn.started applies any live external capability.
+await replaceExact(
+  runtimePaths.contextKeys,
+  "SessionDynamicToolRuntimeRevisionKey=new ContextKey(`eve.sessionDynamicToolRuntimeRevision`),TurnDynamicToolMetadataKey",
+  "SessionDynamicToolRuntimeRevisionKey=new ContextKey(`eve.sessionDynamicToolRuntimeRevision`),SessionDynamicSkillRuntimeRevisionKey=new ContextKey(`eve.sessionDynamicSkillRuntimeRevision`),TurnDynamicToolMetadataKey",
+);
+await replaceExact(
+  runtimePaths.contextKeys,
+  "SessionDynamicToolMetadataKey,SessionDynamicToolRuntimeRevisionKey,SessionIdKey",
+  "SessionDynamicSkillRuntimeRevisionKey,SessionDynamicToolMetadataKey,SessionDynamicToolRuntimeRevisionKey,SessionIdKey",
+);
+await replaceExact(
+  runtimePaths.contextKeyTypes,
+  "/**\n * Durable session-scoped instruction messages (from `session.started`",
+  "/** Compiled runtime revision that produced the current session dynamic skills. */\nexport declare const SessionDynamicSkillRuntimeRevisionKey: ContextKey<string>;\n/**\n * Durable session-scoped instruction messages (from `session.started`",
+);
+await replaceExact(
+  runtimePaths.dynamicSkillLifecycle,
+  "import{DynamicSkillManifestKey,SandboxKey}from\"#context/keys.js\"",
+  "import{DynamicSkillManifestKey,SandboxKey,SessionDynamicSkillRuntimeRevisionKey}from\"#context/keys.js\"",
+);
+await replaceExact(
+  runtimePaths.dynamicSkillLifecycle,
+  "}export{PendingSkillAnnouncementKey,dispatchDynamicSkillEvent};",
+  "}async function refreshDynamicSessionSkillsForRuntimeRevision(e){if(e.ctx.get(SessionDynamicSkillRuntimeRevisionKey)===e.runtimeRevision)return;let t=e.ctx.get(DynamicSkillManifestKey)??{};e.ctx.set(DynamicSkillManifestKey,{}),e.ctx.setVirtualContext(PendingSkillAnnouncementKey,await formatDynamicSkillAnnouncement({ctx:e.ctx,manifest:{}}));let n=await e.ctx.require(SandboxKey).get();if(n!==null)for(let r of new Set(Object.values(t).flat().map(e=>e.name)))await removeSkillPackageFromSandbox({name:r,sandbox:n});await dispatchDynamicSkillEvent({ctx:e.ctx,resolvers:e.resolvers,event:e.event,messages:e.messages}),e.ctx.set(SessionDynamicSkillRuntimeRevisionKey,e.runtimeRevision)}export{PendingSkillAnnouncementKey,dispatchDynamicSkillEvent,refreshDynamicSessionSkillsForRuntimeRevision};",
+);
+await replaceExact(
+  runtimePaths.dynamicSkillLifecycleTypes,
+  "export declare function dispatchDynamicSkillEvent(input: {",
+  "/** Refreshes session skills exactly once for each compiled runtime revision. */\nexport declare function refreshDynamicSessionSkillsForRuntimeRevision(input: {\n    readonly ctx: ContextContainer;\n    readonly resolvers: readonly ResolvedDynamicSkillResolver[];\n    readonly event: UnstampedMessageStreamEvent;\n    readonly messages: readonly ModelMessage[];\n    readonly runtimeRevision: string;\n}): Promise<void>;\nexport declare function dispatchDynamicSkillEvent(input: {",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnOriginAuthKey",
+  "SessionDynamicSkillRuntimeRevisionKey,SessionDynamicSubagentRuntimeRevisionKey,SessionDynamicToolRuntimeRevisionKey,TurnOriginAuthKey",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "import{dispatchDynamicSkillEvent}from\"#context/dynamic-skill-lifecycle.js\"",
+  "import{dispatchDynamicSkillEvent,refreshDynamicSessionSkillsForRuntimeRevision}from\"#context/dynamic-skill-lifecycle.js\"",
+);
+await replaceExact(
+  runtimePaths.workflowSteps,
+  "c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t);else{let e=createSessionStartedEvent({runtime:O});await Promise.all([refreshDynamicSessionSubagentsForRuntimeRevision({ctx:c,resolvers:w,event:e,messages:g.history,persistentSessions:T,runtimeRevision:t}),refreshDynamicSessionToolsForRuntimeRevision({ctx:c,resolvers:E,event:e,messages:g.history,runtimeRevision:t})])",
+  "c.set(SessionDynamicSkillRuntimeRevisionKey,t),c.set(SessionDynamicSubagentRuntimeRevisionKey,t),c.set(SessionDynamicToolRuntimeRevisionKey,t);else{let e=createSessionStartedEvent({runtime:O});await Promise.all([refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C,event:e,messages:g.history,runtimeRevision:t}),refreshDynamicSessionSubagentsForRuntimeRevision({ctx:c,resolvers:w,event:e,messages:g.history,persistentSessions:T,runtimeRevision:t}),refreshDynamicSessionToolsForRuntimeRevision({ctx:c,resolvers:E,event:e,messages:g.history,runtimeRevision:t})])",
 );
 
 // Verified webhooks can be durably acknowledged before native dispatch; drain reuses that dispatcher.

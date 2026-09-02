@@ -5,7 +5,7 @@
  * - `externalGroupCapabilityInstructions`: renders exact model-visible effective capabilities.
  * - Action-level memory grants remain granular and do not imply sibling actions.
  * - Application-core descriptors are included in the same exact effective surface.
- * - Skill loading is advertised only for the exact live group grants.
+ * - Image skill loading is advertised only with its live capability.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -19,7 +19,6 @@ describe("externalGroupCapabilityInstructions", () => {
   it("includes always-available files and only explicitly allowed application capabilities", () => {
     const markdown = externalGroupCapabilityInstructions(
       new Set(["remember", "manage_memory.undo"]),
-      new Set(),
     );
 
     expect(markdown).toContain("`glob`");
@@ -39,7 +38,6 @@ describe("externalGroupCapabilityInstructions", () => {
   it("uses the executable manage_memory_thread name for action-level grants", () => {
     const markdown = externalGroupCapabilityInstructions(
       new Set(["manage_memory_thread.complete", "manage_memory_thread.reactivate"]),
-      new Set(),
     );
 
     expect(markdown).toContain("`manage_memory_thread` с `action=complete`");
@@ -48,7 +46,7 @@ describe("externalGroupCapabilityInstructions", () => {
   });
 
   it("includes independently issued application-core and scheduled-history tools", () => {
-    const markdown = externalGroupCapabilityInstructions(new Set(), new Set(), {
+    const markdown = externalGroupCapabilityInstructions(new Set(), {
       includeApplicationCore: true,
       scheduledHistory: true,
       scheduledRun: false,
@@ -61,7 +59,7 @@ describe("externalGroupCapabilityInstructions", () => {
   });
 
   it("does not advertise interactive preferences during a scheduled run", () => {
-    const markdown = externalGroupCapabilityInstructions(new Set(), new Set(), {
+    const markdown = externalGroupCapabilityInstructions(new Set(), {
       includeApplicationCore: true,
       scheduledHistory: true,
       scheduledRun: true,
@@ -73,27 +71,24 @@ describe("externalGroupCapabilityInstructions", () => {
   });
 
   it("forbids offering any other visible static descriptor", () => {
-    const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
+    const markdown = externalGroupCapabilityInstructions(new Set());
 
     expect(markdown).toMatch(
       /не вызывай, не предлагай и не утверждай, что можешь использовать инструменты, не перечисленные выше/iu,
     );
   });
 
-  it("advertises executable load_skill only with an exact live skill grant", () => {
-    const withoutSkills = externalGroupCapabilityInstructions(new Set(), new Set());
-    const withPohuy = externalGroupCapabilityInstructions(new Set(), new Set(["pohuy"]));
+  it("does not advertise removed custom skills", () => {
+    const markdown = externalGroupCapabilityInstructions(new Set());
 
-    expect(withoutSkills).not.toContain("`load_skill`");
-    expect(withoutSkills).not.toContain("`pohuy`");
-    expect(withPohuy).toContain("`load_skill` с `skill=pohuy`");
-    expect(withPohuy).toContain("Effective skill allowlist: `pohuy`.");
+    expect(markdown).not.toContain("`load_skill`");
+    expect(markdown).not.toContain("`pohuy`");
   });
 
   it("advertises imagegen instructions only with generate_image", () => {
-    const denied = externalGroupCapabilityInstructions(new Set(), new Set());
-    const granted = externalGroupCapabilityInstructions(new Set(["generate_image"]), new Set());
-    const scheduled = externalGroupCapabilityInstructions(new Set(["generate_image"]), new Set(), {
+    const denied = externalGroupCapabilityInstructions(new Set());
+    const granted = externalGroupCapabilityInstructions(new Set(["generate_image"]));
+    const scheduled = externalGroupCapabilityInstructions(new Set(["generate_image"]), {
       includeApplicationCore: true,
       scheduledHistory: true,
       scheduledRun: true,
@@ -101,13 +96,13 @@ describe("externalGroupCapabilityInstructions", () => {
 
     expect(denied).not.toContain("skill=imagegen");
     expect(granted).toContain("`load_skill` с `skill=imagegen`");
-    expect(granted).toContain("Effective skill allowlist: `imagegen`.");
+    expect(granted).toContain("Effective skills: `imagegen`.");
     expect(scheduled).not.toContain("skill=imagegen");
     expect(scheduled).not.toContain("`generate_image`");
   });
 
   it("marks static trusted-only Google Workspace skills as unavailable externally", () => {
-    const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
+    const markdown = externalGroupCapabilityInstructions(new Set());
 
     expect(markdown).toMatch(/Google Workspace.*не доступны.*внешн/iu);
     expect(markdown).not.toMatch(/`gws-[^`]+`/u);

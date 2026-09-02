@@ -65,7 +65,6 @@ describe("memory thread creation notice", () => {
         familyId: "family-1",
         groupId: "group-1",
         messageMode: "addressed_only",
-        skillAllowlist: [],
         telegramChatId: "group-101",
         toolAllowlist: [],
         type: groupType,

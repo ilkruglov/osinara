@@ -2,7 +2,7 @@
  * Telegram live group-policy reauthorization tests.
  *
  * Constructs covered:
- * - A skill grant changed between registration reads stops dispatch before turn creation.
+ * - A capability grant changed between registration reads stops dispatch before turn creation.
  */
 import { describe, expect, it } from "vitest";
 
@@ -15,19 +15,18 @@ import {
 } from "./telegram-on-message.test-fixtures.js";
 
 describe("Telegram group policy reauthorization", () => {
-  it("rejects a turn when the skill allowlist changes during live reauthorization", async () => {
+  it("rejects a turn when the tool allowlist changes during live reauthorization", async () => {
     const repository = repositories();
     const group = {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only" as const,
       telegramChatId: "group-101",
-      toolAllowlist: [],
       type: "external" as const,
     };
     repository.telegram.findGroup
-      .mockResolvedValueOnce({ ...group, skillAllowlist: ["pohuy"] })
-      .mockResolvedValueOnce({ ...group, skillAllowlist: [] });
+      .mockResolvedValueOnce({ ...group, toolAllowlist: ["remember"] })
+      .mockResolvedValueOnce({ ...group, toolAllowlist: [] });
     repository.telegram.findIdentity.mockResolvedValue({
       familyId: "family-1",
       role: "owner",

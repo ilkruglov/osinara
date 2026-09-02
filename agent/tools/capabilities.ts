@@ -15,13 +15,11 @@
 import { defineDynamic } from "eve/tools";
 
 import { resolveConversationEnvironment } from "../lib/conversation-environment.js";
-import { selectGroupSafeSkillDefinitions } from "../lib/group-skills/group-skill-definitions.js";
 import { scheduledGroupHistoryAccess } from "../lib/agent-schedules/scheduled-group-history-context.js";
 import { isScheduledSession } from "../lib/agent-schedules/scheduled-session.js";
 import { loadCurrentExternalGroupCapabilities } from "../lib/tool-policy/external-group-live-policy.js";
 import {
   resolveExternalGroupPolicyIdentity,
-  resolveExternalGroupSkillPolicy,
   resolveExternalGroupToolPolicy,
 } from "../lib/tool-policy/external-group-policy.js";
 import type { ExternalGroupToolName } from "../lib/tool-policy/group-tool-catalog.js";
@@ -75,7 +73,6 @@ export default defineDynamic({
           capabilities: new Set(),
           environment: "external",
           includeApplicationCore: false,
-          skills: {},
         });
       }
       if (environment !== "external") {
@@ -89,7 +86,6 @@ export default defineDynamic({
           capabilities: new Set(),
           environment: "external",
           includeApplicationCore: false,
-          skills: {},
         });
       }
 
@@ -100,7 +96,6 @@ export default defineDynamic({
           capabilities: new Set(),
           environment: "external",
           includeApplicationCore: false,
-          skills: {},
         });
       }
 
@@ -121,16 +116,12 @@ export default defineDynamic({
         includeApplicationCore = false;
       }
 
-      // Skill descriptors use the same verified turn snapshot as Eve's dynamic skill resolver.
-      // Live execution still denies a skill that the owner revokes while this turn is running.
-      const skills = selectGroupSafeSkillDefinitions(resolveExternalGroupSkillPolicy(auth));
       return buildSurface({
         capabilities: new Set([...policy.allowed].filter((name) => current.has(name))),
         environment: "external",
         includeApplicationCore,
         scheduledHistory: includeApplicationCore && scheduledGroupHistoryAccess(auth) !== null,
         scheduledRun: isScheduledSession(ctx),
-        skills,
       });
     },
   },

@@ -13,15 +13,12 @@ import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation
 import { isImageGenerationSkillName } from "../image-generation/image-generation-skill.js";
 import { authorizeCurrentExternalGroupCapability } from "../tool-policy/external-group-live-policy.js";
 import { resolveExternalGroupPolicyIdentity } from "../tool-policy/external-group-policy.js";
-import { isGroupSafeSkillName, type GroupSafeSkillName } from "./group-skill-catalog.js";
-import { groupSkillPolicyRepository } from "./group-skill-repository.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
 interface ExternalGroupLoadSkillDependencies {
   authorizeImageGeneration(ctx: ToolContext): Promise<void>;
   executeNative(input: unknown, ctx: ToolContext): Promise<unknown>;
-  loadGroupSkillAllowlist(groupId: string): Promise<ReadonlySet<GroupSafeSkillName>>;
 }
 
 function forbidden(): AppError {
@@ -38,17 +35,7 @@ export function createExternalGroupLoadSkillTool(
     ...(loadSkill as AnyToolDefinition),
     async execute(input, ctx) {
       const skill = (input as { skill?: unknown } | null)?.skill;
-      const groupId = ctx.session.auth.current?.attributes.groupId;
-      if (
-        typeof skill !== "string" ||
-        (!isGroupSafeSkillName(skill) && !isImageGenerationSkillName(skill))
-      ) throw forbidden();
-      if (typeof groupId !== "string") {
-        throw new AppError(
-          "AGENT_GROUP_SKILL_CONTEXT_INVALID",
-          "Не удалось определить группу для загрузки skill. Отправьте сообщение ещё раз",
-        );
-      }
+      if (typeof skill !== "string" || !isImageGenerationSkillName(skill)) throw forbidden();
 
       // Image instructions are coupled to the tool grant, so the owner changes only one policy.
       // A grant persisted under a previous model provider must not resurrect the skill, so the
@@ -58,11 +45,7 @@ export function createExternalGroupLoadSkillTool(
         await dependencies.authorizeImageGeneration(ctx);
         return await dependencies.executeNative(input, ctx);
       }
-
-      // Re-read after model planning so revocation wins over a stale turn-scoped descriptor.
-      const allowed = await dependencies.loadGroupSkillAllowlist(groupId);
-      if (!allowed.has(skill)) throw forbidden();
-      return await dependencies.executeNative(input, ctx);
+      throw forbidden();
     },
   });
 }
@@ -75,6 +58,4 @@ export const externalGroupLoadSkillTool = createExternalGroupLoadSkillTool({
     await authorizeCurrentExternalGroupCapability(identity, "generate_image");
   },
   executeNative: (input, ctx) => nativeLoadSkill.execute(input, ctx),
-  loadGroupSkillAllowlist: (groupId) =>
-    groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
 });

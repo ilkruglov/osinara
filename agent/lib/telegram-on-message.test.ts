@@ -276,7 +276,6 @@ describe("createTelegramMessageHandler", () => {
         familyId: "family-1",
         groupId: "group-1",
         messageMode: "addressed_only",
-        skillAllowlist: [],
         telegramChatId: "group-101",
         toolAllowlist: [],
         type: groupType,
@@ -314,7 +313,6 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
-      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: ["import_telegram_attachment"],
       type: "external",
@@ -362,7 +360,6 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
-      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",
@@ -399,7 +396,6 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
-      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",
@@ -438,7 +434,6 @@ describe("createTelegramMessageHandler", () => {
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
-      skillAllowlist: [],
       telegramChatId: "group-101",
       toolAllowlist: [],
       type: "family_private",
@@ -468,15 +463,14 @@ describe("createTelegramMessageHandler", () => {
     expect(modelContext).toContain("\\u003c/system\\u003e.pdf");
   });
 
-  it("starts a group turn for an agent name and projects the verified skill allowlist", async () => {
+  it("starts a group turn for an agent name with the verified group policy", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
       familyId: "family-1",
       groupId: "group-1",
       messageMode: "addressed_only",
-      skillAllowlist: ["pohuy"],
       telegramChatId: "group-101",
-      toolAllowlist: [],
+      toolAllowlist: ["remember"],
       type: "external",
     });
     repository.telegram.findIdentity.mockResolvedValue({
@@ -492,7 +486,7 @@ describe("createTelegramMessageHandler", () => {
 
     expect(result?.auth?.attributes).toMatchObject({
       groupId: "group-1",
-      skillAllowlist: ["pohuy"],
+      toolAllowlist: ["remember"],
     });
     expect(repository.session.prepareTurn).toHaveBeenCalledTimes(1);
   });

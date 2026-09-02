@@ -14,7 +14,6 @@ import { EXTERNAL_GROUP_MODEL_POLICY } from "../external-group-model-policy.js";
 import { externalGroupCapabilityInstructions } from "../tool-policy/external-group-capability-instructions.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
-import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import {
   IMAGE_INSPECTION_CONTRACT,
   MEMORY_DEEPENING_PROTOCOL,
@@ -65,7 +64,6 @@ export type ModeInstructionsInput =
       reactionPolicy?: TelegramReactionPolicy | null;
       scheduledHistory?: boolean;
       scheduledRun?: boolean;
-      skills: ReadonlySet<GroupSafeSkillName>;
   };
 
 const ENVIRONMENT_OPEN_TAG = "<current_conversation_environment>";
@@ -120,7 +118,7 @@ ${CURRENT_TIME_TOOL_RULES}`,
   PROGRESS_UPDATE_RULES,
   `## Администрирование
 
-Для проверки настроек Telegram-групп используй \`manage_telegram_group\` с \`{"action":"status"}\`: этот read-only вызов не требует подтверждения и возвращает все регистрации семьи, режимы сообщений, политики инструментов и разрешённые skills. На команду \`/status\` или просьбу показать статус групп выполняй этот вызов и показывай результат пользователю одним сообщением. Перед \`update_policy\` или \`update_skills\` сначала вызови \`{"action":"status"}\`, если точная текущая политика ещё не получена в этом разговоре; не угадывай существующий allowlist и не заменяй его частичным списком. \`update_skills\` заменяет полный список skills выбранной группы; изменение видно со следующей реплики без нового контекста.
+Для проверки настроек Telegram-групп и команды \`/status\` вызови \`manage_telegram_group\` ровно с \`{"action":"status"}\`; read-only status не требует подтверждения. Перед \`update_policy\` получи status, если точная текущая политика ещё неизвестна, и меняй полный allowlist без потери остальных прав.
 
 Если владелец явно просит начать новый контекст в зарегистрированной группе, сначала вызови \`status\` ровно с \`{"action":"status"}\` и не заполняй optional-поля других actions. Однозначно сопоставь название с группой; при нескольких совпадениях задай один уточняющий вопрос. Затем без реконструирования скопируй \`startNewContextInput\` выбранной группы в следующий вызов \`manage_telegram_group\`. Операция относится к main-чату и canonical sessions всех forum-тем, начинает новые контексты со следующих сообщений, но сохраняет timeline, память, файлы и pending tasks.
 
@@ -223,7 +221,6 @@ function externalMemorySection(
 
 function externalInstructions(
   capabilities: ReadonlySet<ExternalGroupToolName>,
-  skills: ReadonlySet<GroupSafeSkillName>,
   reactionPolicy: TelegramReactionPolicy | null,
   includeApplicationCore = true,
   scheduledRun = false,
@@ -299,7 +296,7 @@ ${GROUP_TIMELINE_TRUST}`,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
-    externalGroupCapabilityInstructions(capabilities, skills, {
+    externalGroupCapabilityInstructions(capabilities, {
       includeApplicationCore,
       scheduledHistory,
       scheduledRun,
@@ -314,7 +311,6 @@ export function modeInstructions(input: ModeInstructionsInput): string {
   if (input.environment === "family") return familyInstructions(scheduledRun, reactionPolicy);
   return externalInstructions(
     input.capabilities,
-    input.skills,
     reactionPolicy,
     input.includeApplicationCore,
     scheduledRun,

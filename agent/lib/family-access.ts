@@ -26,7 +26,6 @@ export interface FamilyIdentity {
 interface RegisteredGroupBase {
   familyId: string;
   groupId: string;
-  skillAllowlist: string[];
   telegramChatId: string;
   toolAllowlist: string[];
 }

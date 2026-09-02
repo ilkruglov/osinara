@@ -9,7 +9,6 @@
  * - Native subagents stay unavailable externally and cannot make root-owned durable-memory decisions.
  */
 import type { SessionAuth } from "eve/context";
-import type { SkillDefinition } from "eve/skills";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -27,11 +26,6 @@ import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, EXTERNAL_GROUP_TOOL_NAMES, FR
 function names(input: Parameters<typeof buildModeToolSurface>[0]): string[] {
   return Object.keys(buildModeToolSurface(input)).sort();
 }
-
-const POHUY_SKILL = {
-  description: "pohuy",
-  markdown: "# pohuy",
-} as SkillDefinition;
 
 function externalAuth(toolAllowlist: readonly string[]): SessionAuth {
   return {
@@ -63,7 +57,6 @@ describe("trusted mode tool surfaces", () => {
     const externalNames = names({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     });
 
     expect(privateNames).toEqual(
@@ -83,13 +76,11 @@ describe("trusted mode tool surfaces", () => {
     const ordinary = names({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     });
     const scheduled = names({
       capabilities: new Set(),
       environment: "external",
       scheduledHistory: true,
-      skills: {},
     } as never);
 
     expect(ordinary).not.toContain("read_scheduled_group_history");
@@ -134,7 +125,6 @@ describe("trusted mode tool surfaces", () => {
       buildSubagentToolSurface({
         capabilities: new Set(["remember"]),
         environment: "external",
-        skills: {},
       }),
     ).not.toHaveProperty("remember");
     expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty("manage_behavior_preference");
@@ -144,7 +134,6 @@ describe("trusted mode tool surfaces", () => {
         capabilities: new Set(["remember"]),
         environment: "external",
         scheduledRun: true,
-        skills: {},
       }),
     ).not.toHaveProperty("remember");
   });
@@ -162,7 +151,7 @@ describe("external group tool surface", () => {
   });
 
   it("emits only guarded baseline tools and framework denials without a grant", () => {
-    expect(names({ capabilities: new Set(), environment: "external", skills: {} })).toEqual(
+    expect(names({ capabilities: new Set(), environment: "external" })).toEqual(
       [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill", "manage_behavior_preference", "read_profile_view"].sort(),
     );
   });
@@ -171,7 +160,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     });
 
     expect(surface).toHaveProperty("agent");
@@ -179,28 +167,22 @@ describe("external group tool surface", () => {
       .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
   });
 
-  it("makes load_skill executable only when the current turn has a granted skill", async () => {
-    const denied = buildModeToolSurface({
+  it("keeps framework load_skill denied without the image capability", async () => {
+    const tool = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
-    }).load_skill!;
-    const granted = buildModeToolSurface({
-      capabilities: new Set(),
-      environment: "external",
-      skills: { pohuy: POHUY_SKILL },
     }).load_skill!;
 
-    await expect(denied.execute({}, {} as never)).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
-    expect(denied.description).toMatch(/недоступен/iu);
-    expect(granted.description).toMatch(/available skill/iu);
+    await expect(tool.execute({ skill: "pohuy" }, {} as never)).rejects.toThrowError(
+      /AGENT_GROUP_TOOL_FORBIDDEN/u,
+    );
+    expect(tool.description).toMatch(/недоступен/iu);
   });
 
   it("overrides native workspace file tools only in the external group surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     });
 
     for (const nativeTool of ["glob", "grep", "read_file", "write_file"]) {
@@ -219,7 +201,6 @@ describe("external group tool surface", () => {
     for (const emitted of names({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     })) {
       expect(applicationNames.has(emitted) && !grantable.has(emitted) && !alwaysExternal.has(emitted)).toBe(false);
     }
@@ -230,37 +211,33 @@ describe("external group tool surface", () => {
       names({
         capabilities: new Set(["remember"]),
         environment: "external",
-        skills: {},
       }),
     ).toContain("remember");
-    expect(names({ capabilities: new Set(), environment: "external", skills: {} })).toContain("web_search");
+    expect(names({ capabilities: new Set(), environment: "external" })).toContain("web_search");
     expect(
       names({
         capabilities: new Set(["web_fetch"]),
         environment: "external",
-        skills: {},
       }),
     ).toContain("web_fetch");
   });
 
   it("surfaces constrained group file removal only when explicitly allowed", () => {
-    expect(names({ capabilities: new Set(), environment: "external", skills: {} })).not.toContain("remove_group_file");
+    expect(names({ capabilities: new Set(), environment: "external" })).not.toContain("remove_group_file");
     expect(
       names({
         capabilities: new Set(["remove_group_file"]),
         environment: "external",
-        skills: {},
       }),
     ).toContain("remove_group_file");
   });
 
   it("surfaces Telegram text attachment import only when explicitly allowed", () => {
-    expect(names({ capabilities: new Set(), environment: "external", skills: {} })).not.toContain("import_telegram_attachment");
+    expect(names({ capabilities: new Set(), environment: "external" })).not.toContain("import_telegram_attachment");
     expect(
       names({
         capabilities: new Set(["import_telegram_attachment"]),
         environment: "external",
-        skills: {},
       }),
     ).toContain("import_telegram_attachment");
   });
@@ -269,7 +246,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(EXTERNAL_GROUP_TOOL_NAMES),
       environment: "external",
-      skills: { pohuy: POHUY_SKILL },
     });
     const descriptions = Object.values(surface)
       .map(({ description }) => description)
@@ -282,7 +258,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["import_telegram_attachment"]),
       environment: "external",
-      skills: {},
     });
     const staleContext = {
       session: { auth: externalAuth(["import_telegram_attachment"]) },
@@ -306,7 +281,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
-      skills: {},
     });
 
     for (const toolName of ["agent", "ask_question", "bash", "todo", "web_fetch"]) {
@@ -318,7 +292,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["remember"]),
       environment: "external",
-      skills: {},
     });
     const staleContext = {
       session: { auth: externalAuth(["remember"]) },
@@ -335,7 +308,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["send_workspace_file"]),
       environment: "external",
-      skills: {},
     });
     const staleContext = {
       session: { auth: externalAuth(["send_workspace_file"]) },
@@ -351,7 +323,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["remember"]),
       environment: "external",
-      skills: {},
     });
     const staleContext = {
       session: { auth: externalAuth(["remember"]) },
@@ -371,7 +342,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["manage_memory.undo"]),
       environment: "external",
-      skills: {},
     });
     const context = {
       session: { auth: externalAuth(["manage_memory.undo"]) },
@@ -394,7 +364,6 @@ describe("external group tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["manage_memory_thread.complete"]),
       environment: "external",
-      skills: {},
     });
     const revoked = { session: { auth: externalAuth([]) } } as never;
 
@@ -417,7 +386,6 @@ describe("external group tool surface", () => {
       names({
         capabilities: new Set(["unknown_tool"] as unknown as ExternalGroupToolName[]),
         environment: "external",
-        skills: {},
       }),
     ).toEqual([...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill", "manage_behavior_preference", "read_profile_view"].sort());
   });
@@ -426,7 +394,6 @@ describe("external group tool surface", () => {
     const external = buildModeToolSurface({
       capabilities: new Set(["inspect_workspace_image", "list_memories", "list_memory_threads", "remember", "send_workspace_file"]),
       environment: "external",
-      skills: {},
     });
 
     const inputs = {

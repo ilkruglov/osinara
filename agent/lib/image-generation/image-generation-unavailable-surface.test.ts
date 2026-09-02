@@ -82,12 +82,8 @@ describe("unavailable subscription image generation", () => {
     const external = buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
-      skills: { imagegen: {} as never },
     });
-    const instructions = externalGroupCapabilityInstructions(
-      new Set(["generate_image"]),
-      new Set(),
-    );
+    const instructions = externalGroupCapabilityInstructions(new Set(["generate_image"]));
 
     expect(buildModeToolSurface({ environment: "private" })).not.toHaveProperty("generate_image");
     expect(external).not.toHaveProperty("generate_image");
@@ -152,7 +148,6 @@ describe("unavailable subscription image generation", () => {
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
       executeNative,
-      loadGroupSkillAllowlist: vi.fn(),
     });
 
     await expect(tool.execute({ skill: "imagegen" }, externalContext()))
