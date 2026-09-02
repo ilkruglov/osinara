@@ -52,6 +52,29 @@ describe("isMessageAddressedToBot", () => {
     expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
   });
 
+  it.each([
+    "Мия, помоги",
+    "Мии это понравится",
+    "Передай Мие сообщение",
+    "Позови Мию",
+    "Сделано Мией",
+    "Mia, help us",
+  ])("accepts the Mia name variant in ordinary group text: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
+  });
+
+  it.each([
+    "премия объявлена",
+    "вдохновились химией",
+    "Mias is a surname",
+    "_Мия",
+    `Mia\u0301s`,
+    `Мия\u200Ds`,
+    `Мия\u203Fs`,
+  ])("does not match a Mia form inside one Unicode word: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
+  });
+
   it.each(["семинар начался", "osinary is a package", "квазиосинара"])(
     "does not match a name stem inside another word: %s",
     (text) => {

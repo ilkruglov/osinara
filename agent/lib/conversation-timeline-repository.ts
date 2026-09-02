@@ -22,7 +22,7 @@ import {
 } from "./telegram-group-message-storage.js";
 
 const AGENT_ACTOR_ID = "agent:osinara";
-const AGENT_DISPLAY_NAME = "Осинара";
+const AGENT_DISPLAY_NAME = "Мия";
 
 interface ConversationBoundary {
   family_id: string;

@@ -9,6 +9,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { conversationRepository } from "./conversation-repository.js";
+import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
 import { closeDatabase, database } from "./database.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
@@ -77,5 +78,42 @@ describeWithDatabase("conversationRepository", () => {
     await expect(
       conversationRepository.resolveParticipantRef(otherConversation.id, firstRef),
     ).rejects.toThrowError(/AGENT_CONVERSATION_PARTICIPANT_NOT_FOUND/u);
+  });
+
+  it("records the Mia display name without changing the stable agent actor ID", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Personal timeline') RETURNING id",
+    );
+    const user = await database().query<{ id: string }>(
+      `INSERT INTO users (telegram_user_id, display_name)
+       VALUES ('502', 'Анна') RETURNING id`,
+    );
+    await database().query(
+      "INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'owner')",
+      [family.rows[0]!.id, user.rows[0]!.id],
+    );
+    const conversation = await conversationRepository.getByChatId("502");
+
+    const result = await conversationTimelineRepository.recordAgentResponse({
+      applicationSessionId: null,
+      contentText: "Готово",
+      conversationId: conversation.id,
+      deliveredAt: new Date("2026-09-02T09:00:00.000Z"),
+      messageThreadId: null,
+      replyToEntryId: null,
+      telegramMessageIds: ["9001"],
+    });
+    const stored = await database().query<{
+      actor_id: string;
+      sender_display_name: string;
+    }>(
+      "SELECT actor_id, sender_display_name FROM telegram_group_messages WHERE id = $1",
+      [result.entryId],
+    );
+
+    expect(stored.rows[0]).toEqual({
+      actor_id: "agent:osinara",
+      sender_display_name: "Мия",
+    });
   });
 });
