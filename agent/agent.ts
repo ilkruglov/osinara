@@ -10,6 +10,7 @@
 import { defineAgent, defineDynamic } from "eve";
 
 import {
+  AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS,
   AGENT_COMPACTION_THRESHOLD,
   AGENT_MAX_MODEL_STEPS_PER_TURN,
 } from "./config.js";
@@ -18,8 +19,12 @@ import { modelProviderConfig } from "./lib/model-provider-config.js";
 import { resolveSessionModelSelection } from "./lib/neuraldeep-session-routing.js";
 import { resolveTurnModelStepLimitSelection } from "./lib/turn-model-step-limit.js";
 
-const primaryModelContextWindowTokens =
-  modelProviderConfig.agent.models.primary.contextWindowTokens;
+// Eve derives the compaction threshold from the runtime-selected model's window, so the same
+// capped value must reach both the static compaction config and the per-step model selection.
+const primaryModelContextWindowTokens = Math.min(
+  modelProviderConfig.agent.models.primary.contextWindowTokens,
+  AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS,
+);
 
 export default defineAgent({
   build: {

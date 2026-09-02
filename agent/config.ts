@@ -12,6 +12,10 @@
 import { z } from "zod";
 
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
+// Eve compacts at threshold × context window. A million-token window would let a session grow to
+// 750k tokens that every turn re-sends at cache-miss price, so the working window is capped: with
+// the threshold above compaction starts near 120k tokens regardless of what the model supports.
+export const AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS = 160_000;
 // The model may perform substantial tool work, but one turn must never consume unbounded calls.
 export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
 export const GROQ_TRANSCRIPTION_TIMEOUT_MS = 60_000;
