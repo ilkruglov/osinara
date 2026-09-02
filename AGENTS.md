@@ -213,8 +213,15 @@ docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-
 
 Migrations выполнять только внутри backend/test container через `npm run migrate`.
 После Eve-facing изменений обязательно проверять чистый `npm ci` и `eve build`.
-После tool/channel edits проверять `.eve/discovery/agent-discovery-manifest.json` и результат `eve build`.
-`.eve/compile/compiled-agent-manifest.json` относится к Eve `0.22.5` и не является актуальным artifact.
+После tool/channel edits запускать `npm run build` и проверять свежий discovery в
+`.output/.eve/discovery/agent-discovery-manifest.json`: `eve build` пишет artifacts только под
+`.output/.eve/`, а `npm run build` дополнительно валидирует скомпилированный dynamic tool resolver
+в `.output/server/index.mjs`. Тот же путь показывает, попал ли новый instructions-блок в сборку и в
+каком порядке.
+Копии в корневом `.eve/discovery/` и `.eve/compile/` остались от прогона на более старой версии Eve
+(compile schema 39 против текущей 41), и ни `eve build`, ни `eve dev` их больше не обновляют: dev
+пишет compiler artifacts в свою папку `.eve/dev-hosts/<uuid>/compiler/`. Сверять по корневым копиям
+discovery нельзя.
 Формулировки промптов тестами не проверяются: соответствующие тесты удалены сознательно, поэтому
 изменения prompt-текста проверяются чтением диффа и живым чатом.
 Production image собирается только из canonical repository state через CI/CD.
