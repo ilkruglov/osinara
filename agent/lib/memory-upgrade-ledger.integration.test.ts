@@ -112,6 +112,8 @@ const POST_V0101_MIGRATIONS = [
   "078_memory_soft_delete.sql",
   "079_memory_review_source_binding_recovery.sql",
   "080_remove_personal_memory_review_artifacts.sql",
+  "081_telegram_progress_notices.sql",
+  "082_telegram_chat_reaction_policies.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

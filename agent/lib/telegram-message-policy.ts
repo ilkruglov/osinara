@@ -5,7 +5,7 @@
  * - `TelegramInboundMediaKind`: strict none/photo/readable-text/unsupported-media decision.
  * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
- * - `isAgentNameMentioned`: recognizes established agent-name stems at Unicode word boundaries.
+ * - `isAgentNameMentioned`: recognizes agent-name stems with any suffix at Unicode word boundaries.
  * - `isMessageAddressedToBot`: preserves private, mention, and reply behavior.
  * - `isTelegramSlashCommand`: identifies command-shaped text reserved for application handlers.
  * - `isReplyToBot`: verifies that a Telegram reply targets this exact bot identity.
@@ -35,7 +35,7 @@ const TELEGRAM_COMMAND_PATTERN =
   /^\/[A-Za-z0-9_]{1,32}(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u;
 const TELEGRAM_MENTION_PATTERN = /(?:^|[^A-Za-z0-9_])@(?<target>[A-Za-z0-9_]+)/gu;
 const AGENT_NAME_PATTERN =
-  /(?:^|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])(?:(?:ми(?:я|и|е|ю|ей|ею)|mia)|(?:осинар|асинар|азинар|озинар|синаар)(?:а|ы|е|у|ой|ою)?|(?:osinar|asinar)a?)(?=$|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])/iu;
+  /(?:^|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])(?:(?:ми(?:я|и|е|ю|ей|ею)|mia)|(?:осинар|асинар|азинар|озинар|синаар|osinar|asinar)\p{L}*)(?=$|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])/iu;
 
 // The application persists authorized files and exposes trusted workspace paths. Eve must not
 // forward a second copy to the text-only primary model; vision runs through the dedicated tool.

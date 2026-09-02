@@ -7,10 +7,13 @@
  * - Durable identity-bound HITL callbacks and replies.
  * - Validated attachment persistence with model-safe workspace references.
  * - Completed ordinary/Rich Message or silent reaction delivery without speculative chat drafts.
+ * - Interim progress notices delivered at most once per assistant step of an interactive turn.
  * - Scheduled final delivery bound to its owner-approved Telegram chat and forum topic.
  * - Verified group replies anchored to the triggering member message.
  * - Successfully delivered final group output persisted as one logical timeline entry.
  */
+import { setTimeout as sleep } from "node:timers/promises";
+
 import { telegramChannel } from "eve/channels/telegram";
 
 import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js";
@@ -18,6 +21,10 @@ import { formatTelegramTurnFailure } from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput } from "../lib/telegram-progress.js";
+import { deliverTelegramProgressNotice } from "../lib/telegram-progress-notice.js";
+import { refreshTelegramReactionPolicy } from "../lib/telegram-reaction-policy.js";
+import { asidePauseMilliseconds } from "../lib/telegram-aside-pacing.js";
+import { stripTelegramAsideDirectives } from "../lib/telegram-authored-split.js";
 import { deliverTelegramFinalOutput } from "../lib/telegram-final-delivery.js";
 import { telegramFinalDeliveryRepository } from "../lib/telegram-final-delivery-repository.js";
 import { postTelegramRichMessageChunk } from "../lib/telegram-rich-messages.js";
@@ -88,6 +95,17 @@ export default telegramChannel({
       if (!output) return;
       const sessionId = applicationSessionId(ctx);
       if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
+      if (output.kind === "progress") {
+        await deliverTelegramProgressNotice({
+          applicationSessionId: sessionId,
+          channel,
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+          message: output.message,
+          stepIndex: data.stepIndex,
+        });
+        return;
+      }
       const currentAttributes = ctx.session.auth.current?.attributes;
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       if (output.kind === "reaction") {
@@ -120,6 +138,7 @@ export default telegramChannel({
       const replyParameters = isScheduledSession(ctx)
         ? undefined
         : telegramTurnReplyParameters(channel.state, ctx);
+      const durableText = stripTelegramAsideDirectives(message);
       let sentMessages: Awaited<ReturnType<typeof deliverTelegramFinalOutput>>;
       try {
         sentMessages = await deliverTelegramFinalOutput({
@@ -131,19 +150,26 @@ export default telegramChannel({
           },
           eveSessionId: ctx.session.id,
           eveTurnId: ctx.session.turn.id,
-          markdown: message,
-          sendChunk: (chunk, ordinal) => chunk.format === "plain"
-            ? postTelegramPlainMessageChunk(
-                chunk.text,
-                channel,
-                ordinal === 0 ? replyParameters : undefined,
-              )
-            : postTelegramRichMessageChunk(
-                chunk.text,
-                channel.telegram,
-                channel.state,
-                ordinal === 0 ? replyParameters : undefined,
-              ),
+          markdown: isScheduledSession(ctx) ? durableText : message,
+          sendChunk: async (chunk, ordinal) => {
+            // An authored aside is a second thought, so it arrives after a visible typing pause.
+            if (chunk.pacing === "aside") {
+              await channel.telegram.startTyping();
+              await sleep(asidePauseMilliseconds(chunk.text));
+            }
+            return chunk.format === "plain"
+              ? await postTelegramPlainMessageChunk(
+                  chunk.text,
+                  channel,
+                  ordinal === 0 ? replyParameters : undefined,
+                )
+              : await postTelegramRichMessageChunk(
+                  chunk.text,
+                  channel.telegram,
+                  channel.state,
+                  ordinal === 0 ? replyParameters : undefined,
+                );
+          },
         });
       } catch (error) {
         if (scheduledDelivery) {
@@ -187,7 +213,7 @@ export default telegramChannel({
         }
         await agentScheduleDispatchRepository.completeDeliveredRun({
           applicationSessionId: sessionId,
-          content: message,
+          content: durableText,
           deliveredAt,
           eveSessionId: ctx.session.id,
           familyId: scheduledDelivery.familyId,
@@ -217,7 +243,7 @@ export default telegramChannel({
         if (groupId) {
           await telegramGroupJournalRepository.recordAgentResponse({
             applicationSessionId: isScheduledSession(ctx) ? null : sessionId,
-            contentText: message,
+            contentText: durableText,
             deliveredAt,
             groupId,
             messageThreadId: forumTopicId,
@@ -227,7 +253,7 @@ export default telegramChannel({
         } else if (conversationId) {
           await conversationTimelineRepository.recordAgentResponse({
             applicationSessionId: sessionId,
-            contentText: message,
+            contentText: durableText,
             conversationId,
             deliveredAt,
             messageThreadId: null,
@@ -345,9 +371,13 @@ export default telegramChannel({
       if (!reviewBatchId) await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
     },
-    async "turn.started"(_data, _channel, ctx) {
+    async "turn.started"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       await sessionRepository.bindEveSession(sessionId, ctx.session.id);
+      // Which reactions this chat accepts is provider state, so it is refreshed here and read from
+      // the database by the prompt resolver. A brand new chat therefore gains the reaction surface
+      // from its next turn instead of guessing it now.
+      if (!isScheduledSession(ctx)) await refreshTelegramReactionPolicy(channel.telegram);
       const reviewBatchId = memoryReviewBatchId(ctx);
       if (reviewBatchId) {
         await memoryReviewRepository.bindEveTurn({

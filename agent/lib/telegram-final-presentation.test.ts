@@ -5,10 +5,12 @@
  * - Conversational text stays on the plain Telegram transport.
  * - Supported formatting selects Rich Message delivery.
  * - Long output is collapsed even when the model omits the mandatory details block.
+ * - Authored asides become paced messages unless the answer is collapsed as long.
  */
 import { describe, expect, it } from "vitest";
 
 import { formatTelegramFinalPresentation } from "./telegram-final-presentation.js";
+import { TELEGRAM_ASIDE_DIRECTIVE } from "./telegram-authored-split.js";
 
 describe("Telegram final presentation", () => {
   it.each([
@@ -19,7 +21,8 @@ describe("Telegram final presentation", () => {
     "цена $5 + $2",
     "было $100 - $80",
   ])("keeps conversational text plain: %s", (text) => {
-    expect(formatTelegramFinalPresentation(text)).toEqual([{ format: "plain", text }]);
+    expect(formatTelegramFinalPresentation(text))
+      .toEqual([{ format: "plain", pacing: "immediate", text }]);
   });
 
   it.each([
@@ -32,6 +35,7 @@ describe("Telegram final presentation", () => {
   ])("selects Rich Message for supported formatting: %s", (markdown) => {
     expect(formatTelegramFinalPresentation(markdown)).toEqual([{
       format: "rich",
+      pacing: "immediate",
       text: markdown,
     }]);
   });
@@ -59,6 +63,44 @@ describe("Telegram final presentation", () => {
     expect(chunks[0]!.text).toContain("</details>");
   });
 
+  it("delivers an authored aside as its own paced message", () => {
+    const markdown = `Счёт за август — 12 долларов\n${TELEGRAM_ASIDE_DIRECTIVE}\nа, и да — почти всё это один голосовой`;
+
+    expect(formatTelegramFinalPresentation(markdown)).toEqual([
+      { format: "plain", pacing: "immediate", text: "Счёт за август — 12 долларов" },
+      { format: "plain", pacing: "aside", text: "а, и да — почти всё это один голосовой" },
+    ]);
+  });
+
+  it("keeps aside pacing independent of the main answer transport", () => {
+    const markdown = `**Итог:** счёт вырос втрое\n${TELEGRAM_ASIDE_DIRECTIVE}\nхотя это всё ещё меньше подписки`;
+    const chunks = formatTelegramFinalPresentation(markdown);
+
+    expect(chunks).toEqual([
+      { format: "rich", pacing: "immediate", text: "**Итог:** счёт вырос втрое" },
+      { format: "plain", pacing: "aside", text: "хотя это всё ещё меньше подписки" },
+    ]);
+  });
+
+  it("collapses a long main answer without swallowing the aside", () => {
+    const markdown = `${"подробность ".repeat(70)}\n${TELEGRAM_ASIDE_DIRECTIVE}\nвот такой расклад`;
+    const chunks = formatTelegramFinalPresentation(markdown);
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toMatchObject({ format: "rich", pacing: "immediate" });
+    expect(chunks[0]!.text).toContain("<details><summary>Полный ответ</summary>");
+    expect(chunks[1]).toEqual({ format: "plain", pacing: "aside", text: "вот такой расклад" });
+  });
+
+  it("keeps a structured aside as its own message", () => {
+    const markdown = `Что делать\n${TELEGRAM_ASIDE_DIRECTIVE}\n- сначала одно\n- потом другое`;
+
+    expect(formatTelegramFinalPresentation(markdown)).toEqual([
+      { format: "plain", pacing: "immediate", text: "Что делать" },
+      { format: "rich", pacing: "aside", text: "- сначала одно\n- потом другое" },
+    ]);
+  });
+
   it("keeps a short direct lead outside the generated accordion", () => {
     const body = "подробность ".repeat(70);
 
@@ -70,7 +112,8 @@ describe("Telegram final presentation", () => {
   it("preserves an authored details block without wrapping it again", () => {
     const markdown = `<details><summary>Разбор</summary>\n\n${"текст ".repeat(150)}\n\n</details>`;
 
-    expect(formatTelegramFinalPresentation(markdown)).toEqual([{ format: "rich", text: markdown }]);
+    expect(formatTelegramFinalPresentation(markdown))
+      .toEqual([{ format: "rich", pacing: "immediate", text: markdown }]);
   });
 
   it("recognizes an indented valid details block", () => {

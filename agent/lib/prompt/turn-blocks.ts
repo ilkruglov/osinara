@@ -44,6 +44,11 @@ import {
 } from "../profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
 import { isTelegramChannelSession } from "../telegram-session-actor.js";
+import {
+  TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS,
+  type TelegramReactionPolicy,
+} from "../telegram-reaction-policy.js";
+import { telegramReactionPolicyRepository } from "../telegram-reaction-policy-repository.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
@@ -69,6 +74,7 @@ type CapabilityLoader = (identity: {
   groupId: string;
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
 type SkillLoader = (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>;
+type ReactionPolicyLoader = (telegramChatId: string) => Promise<TelegramReactionPolicy | null>;
 
 interface EffectiveExternalCapabilities {
   capabilities: ReadonlySet<ExternalGroupToolName>;
@@ -123,8 +129,14 @@ async function effectiveExternalCapabilities(
   };
 }
 
+function verifiedTelegramChatId(auth: SessionAuth): string | null {
+  const chatId = auth.current?.attributes.telegramChatId;
+  return typeof chatId === "string" && chatId.length > 0 ? chatId : null;
+}
+
 export function createModeBlockResolver(dependencies: {
   loadCapabilities: CapabilityLoader;
+  loadReactionPolicy: ReactionPolicyLoader;
   loadSkills: SkillLoader;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string> {
@@ -136,7 +148,21 @@ export function createModeBlockResolver(dependencies: {
       return MODE_UNAVAILABLE_BLOCK;
     }
     const scheduledRun = isScheduledSession(ctx);
-    if (environment !== "external") return modeInstructions({ environment, scheduledRun });
+    // A scheduled run has no inbound message to react to, and a channel-authored turn keeps its
+    // text-only surface, so neither one requests a reaction policy.
+    const reactionsPossible = !scheduledRun && !isTelegramChannelSession(ctx.session.auth);
+    let reactionPolicy: TelegramReactionPolicy | null = null;
+    const telegramChatId = reactionsPossible ? verifiedTelegramChatId(ctx.session.auth) : null;
+    if (telegramChatId !== null) {
+      try {
+        reactionPolicy = await dependencies.loadReactionPolicy(telegramChatId);
+      } catch (error) {
+        logBlockFailure("AGENT_TELEGRAM_REACTION_POLICY_LOOKUP_FAILED", error);
+      }
+    }
+    if (environment !== "external") {
+      return modeInstructions({ environment, reactionPolicy, scheduledRun });
+    }
 
     // Channel-authored turns can receive text only. Keep prompt instructions aligned with the
     // descriptor-absent execution surface without consulting grants owned by human participants.
@@ -145,6 +171,7 @@ export function createModeBlockResolver(dependencies: {
         capabilities: new Set(),
         environment: "external",
         includeApplicationCore: false,
+        reactionPolicy,
         scheduledRun,
         skills: new Set(),
       });
@@ -167,6 +194,7 @@ export function createModeBlockResolver(dependencies: {
       capabilities: effective.capabilities,
       environment: "external",
       includeApplicationCore: effective.includeApplicationCore,
+      reactionPolicy,
       scheduledHistory: effective.includeApplicationCore &&
         scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       scheduledRun,
@@ -270,6 +298,15 @@ export function createPreferenceBlockResolver(dependencies: {
 
 export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
+  loadReactionPolicy: async (telegramChatId) => {
+    const cached = await telegramReactionPolicyRepository.read(telegramChatId);
+    if (cached === null) return null;
+    // Past the refresh window the record proves only that getChat keeps failing, so the prompt
+    // must not describe a reaction set an administrator may have already changed.
+    const age = Date.now() - cached.fetchedAt.getTime();
+    if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
+    return { allowsAll: cached.allowsAll, emoji: cached.emoji };
+  },
   loadSkills: (groupId) => groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
 });
 
