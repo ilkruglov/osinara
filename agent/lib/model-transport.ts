@@ -48,6 +48,30 @@ function isRetryableModelResponse(response: Response): boolean {
   return RETRYABLE_MODEL_HTTP_STATUS_CODES.has(response.status) || response.status >= 500;
 }
 
+function normalizeDeepSeekThinkingRequest(
+  options: ConfiguredLanguageModelOptions,
+  init: RequestInit | undefined,
+): RequestInit | undefined {
+  const reasoning = options.transport.protocol === "openai-chat-completions"
+    ? options.transport.reasoning
+    : null;
+  if (
+    options.transport.protocol !== "openai-chat-completions"
+    || options.transport.providerName !== "deepseek"
+    || reasoning?.format !== "deepseek"
+    || reasoning.type !== "effort"
+    || typeof init?.body !== "string"
+  ) {
+    return init;
+  }
+
+  const body = JSON.parse(init.body) as Record<string, unknown>;
+  const thinking = body.thinking as { type?: unknown } | undefined;
+  if (thinking?.type !== "enabled" || body.tool_choice !== "auto") return init;
+  delete body.tool_choice;
+  return { ...init, body: JSON.stringify(body) };
+}
+
 function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): FetchFunction {
   return async (input, init) => {
     if (!options.apiKey || /\s/u.test(options.apiKey)) {
@@ -56,7 +80,10 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
         "Не задан корректный ключ доступа к основной модели",
       );
     }
-    const response = await (options.fetch ?? globalThis.fetch)(input, init);
+    const response = await (options.fetch ?? globalThis.fetch)(
+      input,
+      normalizeDeepSeekThinkingRequest(options, init),
+    );
     if (isRetryableModelResponse(response)) {
       console.error(JSON.stringify({
         code: "AGENT_MODEL_TRANSIENT_RESPONSE",
