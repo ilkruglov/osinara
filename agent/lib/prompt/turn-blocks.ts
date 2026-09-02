@@ -175,6 +175,7 @@ export function createModeBlockResolver(dependencies: {
     if (isTelegramChannelSession(ctx.session.auth)) {
       return modeInstructions({
         capabilities: new Set(),
+        channelAuthored: true,
         environment: "external",
         includeApplicationCore: false,
         reactions,

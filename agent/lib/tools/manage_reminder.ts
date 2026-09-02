@@ -16,7 +16,7 @@ import {
   REMINDER_RECURRENCE_INTERVAL_MAX,
 } from "../reminders/reminder-config.js";
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
-import type { ReminderRecurrence, ReminderScope } from "../reminders/reminder-record.js";
+import type { ReminderRecurrence } from "../reminders/reminder-record.js";
 import { reminderRepository } from "../reminders/reminder-repository.js";
 import {
   optionalIsoDate,
@@ -111,7 +111,7 @@ function requireCreateInput(input: Record<string, unknown>) {
     }),
     firstRunAt: requiredIsoDate(input, "firstRunAt", INPUT_ERROR_CODE),
     recurrence: requireReminderRecurrence(input.recurrence),
-    scope: requiredEnum(input, "scope", SCOPES, INPUT_ERROR_CODE) as ReminderScope,
+    scope: requiredEnum(input, "scope", SCOPES, INPUT_ERROR_CODE) as (typeof SCOPES)[number],
     timezone: requiredString(input, "timezone", INPUT_ERROR_CODE, "Europe/Moscow", { maxLength: 100 }),
   };
 }

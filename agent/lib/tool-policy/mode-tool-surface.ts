@@ -55,6 +55,7 @@ import { controlledWebFetchTool } from "./controlled-web-fetch.js";
 import { EXTERNAL_GROUP_FILE_TOOLS } from "./external-group-file-tools.js";
 import { authorizeCurrentExternalGroupCapability } from "./external-group-live-policy.js";
 import { resolveExternalGroupPolicyIdentity } from "./external-group-policy.js";
+import { EXTERNAL_GROUP_REMINDER_TOOLS } from "./external-group-reminder-tools.js";
 import { scheduledExternalTool } from "./scheduled-external-tool.js";
 import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
@@ -310,6 +311,9 @@ function buildExternalToolSurface(
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
     if (!scheduledRun) {
       surface.manage_behavior_preference = manageBehaviorPreference as unknown as AnyToolDefinition;
+      // Reminders need no grant: the caps are enforced per Telegram author and per chat, and a
+      // background run has no participant who could own a new one.
+      Object.assign(surface, EXTERNAL_GROUP_REMINDER_TOOLS);
     }
     if (scheduledHistory) {
       surface.read_scheduled_group_history = readScheduledGroupHistory as unknown as AnyToolDefinition;
@@ -431,7 +435,9 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
     : input;
   const {
     generate_image: _generateImage,
+    list_reminders: _listReminders,
     manage_behavior_preference: _manageBehaviorPreference,
+    manage_reminder: _manageReminder,
     remember: _remember,
     ...surface
   } = buildModeToolSurface(effectiveInput);

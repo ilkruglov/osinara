@@ -12,8 +12,11 @@ import type { ReminderAuthorization } from "./reminder-context.js";
 import type { ReminderRow } from "./reminder-record.js";
 
 export interface MutableReminderRow extends ReminderRow {
-  author_user_id: string;
+  /** Null exactly for the group scope, where the author has no account in this application. */
+  author_telegram_user_id: string | null;
+  author_user_id: string | null;
   family_id: string;
+  group_id: string | null;
   occurrence_index: number;
   recurrence_anchor_local: Date;
 }
@@ -53,7 +56,7 @@ export async function requireTimezone(client: PoolClient, timezone: string): Pro
 
 export async function findReminderOperation(
   client: PoolClient,
-  auth: ReminderAuthorization,
+  familyId: string,
   operationKey: string,
   operationKind: "create" | "delete" | "update",
   inputHash: string,
@@ -65,7 +68,7 @@ export async function findReminderOperation(
   }>(
     `SELECT operation_kind, input_hash, reminder_id
      FROM reminder_operations WHERE family_id = $1 AND operation_key = $2`,
-    [auth.familyId, operationKey],
+    [familyId, operationKey],
   );
   const operation = result.rows[0];
   if (!operation) return undefined;
@@ -85,8 +88,8 @@ export async function selectReminder(
   lock = false,
 ): Promise<MutableReminderRow | null> {
   const result = await client.query<MutableReminderRow>(
-    `SELECT ${REMINDER_COLUMNS}, family_id, author_user_id, occurrence_index,
-            recurrence_anchor_local
+    `SELECT ${REMINDER_COLUMNS}, family_id, author_user_id, author_telegram_user_id, group_id,
+            occurrence_index, recurrence_anchor_local
      FROM reminders WHERE family_id = $1 AND id = $2${lock ? " FOR UPDATE" : ""}`,
     [familyId, id],
   );
@@ -98,6 +101,14 @@ export async function requireReminderMutationAccess(
   auth: ReminderAuthorization,
   reminder: MutableReminderRow,
 ): Promise<void> {
+  // A public-chat reminder belongs to a Telegram author with no account here, so no membership
+  // role can stand in for them. It stays administered inside its own chat by its own author.
+  if (reminder.scope === "group") {
+    throw new AppError(
+      "AGENT_REMINDER_MUTATION_DENIED",
+      "Напоминание публичного чата можно изменить или удалить только в этом чате и только его автору",
+    );
+  }
   const role = await requireCurrentMembership(client, auth);
   const allowed = reminder.scope === "personal"
     ? reminder.author_user_id === auth.userId

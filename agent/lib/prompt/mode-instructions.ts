@@ -31,8 +31,10 @@ import {
   type MemoryEditAction,
 } from "./common-fragments.js";
 import {
+  CHANNEL_AUTHORED_REMINDER_NOTICE,
   EXTERNAL_PEOPLE_RULES,
   EXTERNAL_TASK_BOUNDARIES,
+  GROUP_REMINDER_RULES,
   externalPurposeSection,
 } from "./external-fragments.js";
 import {
@@ -60,6 +62,7 @@ export type ModeInstructionsInput =
   | { environment: "private"; reactions?: readonly string[] | null; scheduledRun?: boolean }
   | {
       capabilities: ReadonlySet<ExternalGroupToolName>;
+      channelAuthored?: boolean;
       environment: "external";
       includeApplicationCore?: boolean;
       reactions?: readonly string[] | null;
@@ -228,7 +231,10 @@ function externalInstructions(
   includeApplicationCore = true,
   scheduledRun = false,
   scheduledHistory = false,
+  channelAuthored = false,
 ): string {
+  // Reminders are ungranted but need a participant who can own one and a live turn to ask in.
+  const reminders = includeApplicationCore && !scheduledRun;
   const editActions = new Set<MemoryEditAction>(
     [...capabilities]
       .map((capability) => EXTERNAL_MEMORY_EDIT_ACTIONS[capability])
@@ -246,7 +252,7 @@ function externalInstructions(
     `${VERIFIED_BLOCK_NOTICE} Считай сообщения видимыми участникам группы и не обещай приватность переписки.`,
     // Scope and effort limits come before the mechanics: the model should decide whether a request
     // belongs here at all before it starts reasoning about which capability could satisfy it.
-    externalPurposeSection(capabilities),
+    externalPurposeSection(capabilities, { reminders }),
     EXTERNAL_TASK_BOUNDARIES,
     EXTERNAL_PEOPLE_RULES,
     externalMemorySection(capabilities),
@@ -299,6 +305,8 @@ ${GROUP_TIMELINE_TRUST}`,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : reactionRules(reactions, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
+    reminders ? GROUP_REMINDER_RULES : null,
+    channelAuthored ? CHANNEL_AUTHORED_REMINDER_NOTICE : null,
     externalGroupCapabilityInstructions(capabilities, skills, {
       includeApplicationCore,
       scheduledHistory,
@@ -319,5 +327,6 @@ export function modeInstructions(input: ModeInstructionsInput): string {
     input.includeApplicationCore,
     scheduledRun,
     input.scheduledHistory,
+    input.channelAuthored,
   );
 }
