@@ -349,7 +349,8 @@ export default telegramChannel({
         }
       }
       // Terminal diagnostics are private-only even when the failed turn belonged to a shared chat.
-      notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel);
+      const privateChat = channel.state.chatType === "private";
+      notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel, data.code);
       // A final send that started may already be visible; never append a second failure message.
       const finalDeliveryMayBeVisible = notifyFailure &&
         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
@@ -362,7 +363,7 @@ export default telegramChannel({
           : telegramTurnReplyParameters(channel.state, ctx);
         const failureMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
           ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
-          text: formatTelegramTurnFailure(data),
+          text: formatTelegramTurnFailure(data, { includeDiagnostics: privateChat }),
         });
         if (!isScheduledSession(ctx)) {
           await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);

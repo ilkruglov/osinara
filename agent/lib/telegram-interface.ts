@@ -109,6 +109,10 @@ const OPTION_LABELS: Readonly<Record<string, string>> = {
   stop: "Остановить",
 };
 
+// Eve reports an exhausted model call under this code; the message it produces carries no
+// internals, which is what makes it safe to show in a shared chat.
+export const MODEL_UNAVAILABLE_FAILURE_CODE = "MODEL_CALL_FAILED";
+
 interface FailureData {
   code: string;
   details?: Readonly<Record<string, unknown>>;
@@ -288,9 +292,6 @@ function supportReference(details: FailureData["details"]): string | null {
 }
 
 function publicFailureExplanation(data: FailureData): string | null {
-  if (data.code === "MODEL_CALL_FAILED") {
-    return "Модель не смогла сформировать завершённый ответ.";
-  }
   // Validation errors are authored by application code and already contain safe Russian guidance.
   if (!data.code.endsWith("_INPUT_INVALID") || typeof data.message !== "string") return null;
   return data.message.replace(new RegExp(`^${data.code}:\\s*`, "u"), "");
@@ -332,15 +333,32 @@ export function localizeTelegramReplyMarkup(
   return { ...replyMarkup, input_field_placeholder: "Введите ответ" };
 }
 
-export function formatTelegramTurnFailure(data: FailureData): string {
+export function formatTelegramTurnFailure(
+  data: FailureData,
+  options?: { readonly includeDiagnostics?: boolean },
+): string {
+  const includeDiagnostics = options?.includeDiagnostics !== false;
   const errorId = supportReference(data.details);
+  const diagnostics = includeDiagnostics
+    ? [`Код: ${data.code}`, ...(errorId ? [`Номер ошибки: ${errorId}`] : [])]
+    : [];
+
+  // Every retry Eve had is already spent by the time this runs, so the ask is to wait, not to
+  // repeat immediately, and the reason is named plainly instead of as a failed request.
+  if (data.code === MODEL_UNAVAILABLE_FAILURE_CODE) {
+    return [
+      "Нейросеть сейчас недоступна.",
+      "Попробуйте повторить запрос чуть позже.",
+      ...diagnostics,
+    ].join("\n\n");
+  }
+
   const explanation = publicFailureExplanation(data);
   return [
     "Не удалось выполнить запрос.",
     ...(explanation ? [explanation] : []),
     "Попробуйте отправить сообщение ещё раз. Если ошибка повторится, сообщите код поддержке.",
-    `Код: ${data.code}`,
-    ...(errorId ? [`Номер ошибки: ${errorId}`] : []),
+    ...diagnostics,
   ].join("\n\n");
 }
 
