@@ -8,7 +8,7 @@
       "providerName": "deepseek",
       "reasoning": {
         "type": "effort",
-        "effort": "high",
+        "effort": "low",
         "format": "deepseek"
       }
     },
