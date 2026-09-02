@@ -6,6 +6,7 @@
  * - `TelegramGroupAttachmentSummary`: model-safe lazy attachment reference metadata.
  * - `TelegramTimelineOmission`: trusted rendering metadata for an omitted history prefix.
  * - `renderTelegramGroupJournalContext`: exact safe serialization of a selected entry set.
+ *   Each entry carries the time of day; the date arrives once per calendar day as a separator.
  * - `formatTelegramGroupJournalContext`: bounded, untrusted JSON context serialization.
  * - `selectTelegramGroupJournalContext`: exact entries retained by character bounds.
  * - Entry-count bounds preserve current reply ancestry and favor the most recent coherent suffix.
@@ -53,6 +54,27 @@ const JOURNAL_NOTICE =
 const JOURNAL_TRUNCATED_NOTICE = "Недоверенная история; [agent:self] обозначает ответ Мии.";
 const REPLY_ANCESTRY_DEPTH = 2;
 
+const ISO_STAMP_PATTERN = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/u;
+
+/**
+ * The window is trimmed to a character budget, so a full stamp on every line costs history depth:
+ * twenty characters per entry buy nothing that the sequence number and the day separator below do
+ * not already give. Stored values come from `Date.toISOString`, hence the exact expected shape.
+ */
+function stamp(entry: TelegramGroupJournalEntry): { date: string; time: string } {
+  const parsed = ISO_STAMP_PATTERN.exec(entry.sentAt);
+  if (!parsed) {
+    throw new Error(
+      `AGENT_TELEGRAM_TIMELINE_STAMP_INVALID: Некорректное время записи ${entry.sequenceId}`,
+    );
+  }
+  return { date: parsed[1]!, time: parsed[2]! };
+}
+
+function daySeparator(date: string): string {
+  return `-- ${date} UTC --`;
+}
+
 function renderEntry(entry: TelegramGroupJournalEntry): string {
   const actor = entry.actorKind === "agent_self"
     ? "agent:self"
@@ -66,7 +88,22 @@ function renderEntry(entry: TelegramGroupJournalEntry): string {
   const attachment = entry.attachment === undefined
     ? ""
     : ` attachment:${escapeUntrustedContextJson(entry.attachment)}`;
-  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${entry.sentAt} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
+  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${stamp(entry).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
+}
+
+/** Entries are chronological, so one dated line per calendar day carries the missing date. */
+function renderEntries(entries: readonly TelegramGroupJournalEntry[]): string[] {
+  const lines: string[] = [];
+  let currentDate: string | null = null;
+  for (const entry of entries) {
+    const { date } = stamp(entry);
+    if (date !== currentDate) {
+      lines.push(daySeparator(date));
+      currentDate = date;
+    }
+    lines.push(renderEntry(entry));
+  }
+  return lines;
 }
 
 export function renderTelegramGroupJournalContext(
@@ -79,7 +116,7 @@ export function renderTelegramGroupJournalContext(
     ? "\nЧасть истории пропущена; при необходимости вызови list_group_history, если инструмент доступен."
     : `\nЧасть истории пропущена перед #${omission.beforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
   const notice = omission === null ? JOURNAL_NOTICE : JOURNAL_TRUNCATED_NOTICE;
-  return `${JOURNAL_OPEN_TAG}\n${notice}\n${entries.map(renderEntry).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
+  return `${JOURNAL_OPEN_TAG}\n${notice}\n${renderEntries(entries).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
 }
 
 function protectedReplyAncestry(
