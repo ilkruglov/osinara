@@ -2,11 +2,14 @@
  * Deterministic Telegram final-presentation selection.
  *
  * Exports:
+ * - `TelegramChunkPacing`: whether a chunk opens an authored aside or continues immediately.
  * - `TelegramFinalPresentationChunk`: one plain or rich provider-sized delivery unit.
  * - `formatTelegramFinalPresentation`: selects plain text unless supported markup is present.
  *
  * Key construct:
  * - Transport selection depends on authored syntax, not message length or a hidden default.
+ * - An authored aside is a separate paced message; a length-driven split never is.
+ * - Every authored message passes the length policy on its own.
  */
 import { splitTelegramMessageText } from "eve/channels/telegram";
 
@@ -14,9 +17,13 @@ import {
   formatTelegramRichMessages,
   hasTelegramRichDetailsBlock,
 } from "./telegram-rich-markdown.js";
+import { splitTelegramAuthoredParts } from "./telegram-authored-split.js";
+
+export type TelegramChunkPacing = "aside" | "immediate";
 
 export interface TelegramFinalPresentationChunk {
   readonly format: "plain" | "rich";
+  readonly pacing: TelegramChunkPacing;
   readonly text: string;
 }
 
@@ -86,16 +93,34 @@ function collapseLongAnswer(markdown: string): string {
   return keepLead ? `${first}\n\n${details}` : details;
 }
 
+function formatPart(
+  markdown: string,
+  pacing: TelegramChunkPacing,
+): TelegramFinalPresentationChunk[] {
+  // Only the opening chunk carries the pause: a provider-sized overflow is the same utterance.
+  const chunkPacing = (index: number): TelegramChunkPacing => index === 0 ? pacing : "immediate";
+
+  // Plain text uses Telegram's ordinary 4096-character transport and never receives parse mode.
+  if (!usesSupportedRichFormatting(markdown)) {
+    return splitTelegramMessageText(markdown)
+      .map((text, index) => ({ format: "plain", pacing: chunkPacing(index), text }));
+  }
+  return formatTelegramRichMessages(markdown)
+    .map((text, index) => ({ format: "rich", pacing: chunkPacing(index), text }));
+}
+
 export function formatTelegramFinalPresentation(
   markdown: string,
 ): TelegramFinalPresentationChunk[] {
   const normalized = markdown.trim();
   if (!normalized) return [];
-  const presentation = collapseLongAnswer(normalized);
+  const { asides, main } = splitTelegramAuthoredParts(normalized);
+  if (!main) return [];
 
-  // Plain text uses Telegram's ordinary 4096-character transport and never receives parse mode.
-  if (!usesSupportedRichFormatting(presentation)) {
-    return splitTelegramMessageText(presentation).map((text) => ({ format: "plain", text }));
-  }
-  return formatTelegramRichMessages(presentation).map((text) => ({ format: "rich", text }));
+  // The length policy applies to each authored message on its own, so a long main answer still
+  // collapses without swallowing the asides its author separated from it.
+  return [
+    ...formatPart(collapseLongAnswer(main), "immediate"),
+    ...asides.flatMap((aside) => formatPart(collapseLongAnswer(aside), "aside")),
+  ];
 }
