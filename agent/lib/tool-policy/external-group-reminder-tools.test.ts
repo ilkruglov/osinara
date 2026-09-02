@@ -5,6 +5,7 @@
  * - Malformed model payloads stop in the approval policy, before HITL and before any write.
  * - Action routing: pause and resume become one enabled flag, delete carries the Eve call id.
  * - The group descriptor knows no scope or timezone field, so neither can reach the repository.
+ * - Deletion carries the live Telegram presence lookup that decides the author-left case.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,12 +16,16 @@ const repository = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 const authorization = vi.hoisted(() => ({ requireGroupReminderAuthorization: vi.fn() }));
+const presence = vi.hoisted(() => ({ telegramChatMemberPresence: vi.fn() }));
 
 vi.mock("../reminders/group-reminder-repository.js", () => ({
   groupReminderRepository: repository,
 }));
 vi.mock("../reminders/group-reminder-context.js", () => ({
   requireGroupReminderAuthorization: authorization.requireGroupReminderAuthorization,
+}));
+vi.mock("../telegram-chat-membership.js", () => ({
+  telegramChatMemberPresence: presence.telegramChatMemberPresence,
 }));
 
 const { EXTERNAL_GROUP_REMINDER_TOOLS } = await import("./external-group-reminder-tools.js");
@@ -129,12 +134,18 @@ describe("external group reminder tools", () => {
     });
   });
 
-  it("reports a deletion through the same replay key", async () => {
+  it("reports a deletion and hands the live presence lookup to the boundary", async () => {
     repository.delete.mockResolvedValue(true);
 
     await expect(manageReminder.execute({ action: "delete", id: REMINDER_ID } as never, context))
       .resolves.toEqual({ deleted: true });
-    expect(repository.delete).toHaveBeenCalledWith(AUTH, REMINDER_ID, "call-1");
+    // The author-left rule is decided inside the repository, so it must receive the real lookup.
+    expect(repository.delete).toHaveBeenCalledWith(
+      AUTH,
+      REMINDER_ID,
+      "call-1",
+      presence.telegramChatMemberPresence,
+    );
   });
 
   it("lists the chat reminders of the verified author's chat", async () => {

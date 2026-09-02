@@ -8,9 +8,11 @@
  * - Dispatch claims a group reminder, ignores personal quiet hours and revokes a changed zone.
  * - The trusted private-chat boundary never reaches a reminder of a public chat.
  * - Caps hold across pausing and revival, and no anchor may sit far in the past.
+ * - A departed author's reminder becomes removable by anyone, an unverified one stays put.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { AppError } from "../app-error.js";
 import { closeDatabase, database } from "../database.js";
 import {
   GROUP_REMINDER_MAX_PER_AUTHOR,
@@ -92,6 +94,9 @@ function ownerPrivateAuth(fixture: Fixture) {
     userId: fixture.ownerId,
   };
 }
+
+const authorPresent = async () => "present" as const;
+const authorAbsent = async () => "absent" as const;
 
 async function create(
   fixture: Fixture,
@@ -188,6 +193,7 @@ describeWithDatabase("group reminder repository", () => {
       groupAuth(fixture, FIRST_AUTHOR),
       created[0]!.id,
       "slot-delete",
+      authorPresent,
     );
 
     await expect(create(fixture, FIRST_AUTHOR, "Новое", "2026-09-04T15:00:00.000Z", "slot-refill"))
@@ -293,6 +299,7 @@ describeWithDatabase("group reminder repository", () => {
       groupAuth(fixture, SECOND_AUTHOR),
       reminder.id,
       "foreign-delete",
+      authorPresent,
     )).rejects.toThrowError(/AGENT_REMINDER_MUTATION_DENIED/);
     await expect(groupReminderRepository.update(groupAuth(fixture, FIRST_AUTHOR), reminder.id, {
       content: "Своя правка",
@@ -302,6 +309,7 @@ describeWithDatabase("group reminder repository", () => {
       groupAuth(fixture, FIRST_AUTHOR),
       reminder.id,
       "own-delete",
+      authorPresent,
     )).resolves.toBe(true);
   });
 
@@ -316,7 +324,56 @@ describeWithDatabase("group reminder repository", () => {
       groupAuth(fixture, FIRST_AUTHOR),
       reminder.id,
       "cross-chat-delete",
+      authorPresent,
     )).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+  });
+
+  it("lets another participant delete a reminder whose author left the chat", async () => {
+    const fixture = await createFixture();
+    const orphan = await create(fixture, FIRST_AUTHOR, "Автор ушёл", "2026-09-04T15:00:00.000Z", "orphan");
+
+    await expect(groupReminderRepository.delete(
+      groupAuth(fixture, SECOND_AUTHOR),
+      orphan.id,
+      "orphan-delete",
+      authorAbsent,
+    )).resolves.toBe(true);
+    const stored = await database().query("SELECT 1 FROM reminders WHERE id = $1", [orphan.id]);
+    expect(stored.rowCount).toBe(0);
+  });
+
+  it("frees the chat slot once a departed author's reminder is removed", async () => {
+    const fixture = await createFixture();
+    const orphan = await create(fixture, FIRST_AUTHOR, "Автор ушёл", "2026-09-04T15:00:00.000Z", "orphan-slot");
+    for (let index = 1; index < GROUP_REMINDER_MAX_PER_AUTHOR; index += 1) {
+      await create(fixture, FIRST_AUTHOR, `Ещё ${index}`, "2026-09-04T15:00:00.000Z", `orphan-slot-${index}`);
+    }
+    await groupReminderRepository.delete(
+      groupAuth(fixture, SECOND_AUTHOR),
+      orphan.id,
+      "orphan-slot-delete",
+      authorAbsent,
+    );
+
+    await expect(create(fixture, FIRST_AUTHOR, "Снова можно", "2026-09-04T15:00:00.000Z", "orphan-slot-refill"))
+      .resolves.toMatchObject({ scope: "group" });
+  });
+
+  it("keeps a foreign reminder when the author's presence cannot be verified", async () => {
+    const fixture = await createFixture();
+    const reminder = await create(fixture, FIRST_AUTHOR, "Автор на месте", "2026-09-04T15:00:00.000Z", "unknown-presence");
+    const presenceUnknown = async () => {
+      throw new AppError("AGENT_TELEGRAM_CHAT_PRESENCE_UNKNOWN", "Не удалось проверить участие");
+    };
+
+    await expect(groupReminderRepository.delete(
+      groupAuth(fixture, SECOND_AUTHOR),
+      reminder.id,
+      "unknown-delete",
+      presenceUnknown,
+    )).rejects.toThrowError(/AGENT_TELEGRAM_CHAT_PRESENCE_UNKNOWN/);
+    const stored = await database().query("SELECT 1 FROM reminders WHERE id = $1", [reminder.id]);
+    expect(stored.rowCount).toBe(1);
   });
 
   it("refuses to let the family owner change a public-chat reminder from a private chat", async () => {

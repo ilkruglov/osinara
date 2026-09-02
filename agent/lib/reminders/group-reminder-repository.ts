@@ -18,6 +18,7 @@ import type { PoolClient } from "pg";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { decodeDateUuidCursor, encodeDateUuidCursor, paginationFilterDigest } from "../keyset-pagination.js";
+import type { TelegramChatPresenceLookup } from "../telegram-chat-membership.js";
 import {
   GROUP_REMINDER_MAX_BACKDATE_MS,
   GROUP_REMINDER_MAX_PER_AUTHOR,
@@ -90,18 +91,26 @@ function requireGroupReminderTime(firstRunAt: Date): Date {
 
 /**
  * A reminder of another chat stays invisible rather than merely unchangeable: the participant must
- * not learn that it exists. Only a reminder of this chat can then be checked against its author.
+ * not learn that it exists.
  */
-function requireOwnGroupReminder(
+function requireGroupReminderOfThisChat(
   auth: GroupReminderAuthorization,
   reminder: MutableReminderRow,
 ): void {
   if (reminder.scope !== "group" || reminder.group_id !== auth.groupId) throw reminderNotFound();
+}
+
+function mutationDenied(message: string): AppError {
+  return new AppError("AGENT_REMINDER_MUTATION_DENIED", message);
+}
+
+function requireOwnGroupReminder(
+  auth: GroupReminderAuthorization,
+  reminder: MutableReminderRow,
+): void {
+  requireGroupReminderOfThisChat(auth, reminder);
   if (reminder.author_telegram_user_id !== auth.telegramUserId) {
-    throw new AppError(
-      "AGENT_REMINDER_MUTATION_DENIED",
-      "Изменить или удалить напоминание может только тот, кто его создал",
-    );
+    throw mutationDenied("Изменить или удалить напоминание может только тот, кто его создал");
   }
 }
 
@@ -374,10 +383,16 @@ export const groupReminderRepository = {
     }
   },
 
+  /**
+   * Deletion additionally accepts another participant once Telegram confirms that the author has
+   * left the chat: otherwise a departed author would leave an undeletable reminder behind, and a
+   * recurring one would keep writing into the chat forever while holding one of its slots.
+   */
   async delete(
     auth: GroupReminderAuthorization,
     id: string,
     operationKey: string,
+    resolveAuthorPresence: TelegramChatPresenceLookup,
   ): Promise<boolean> {
     const inputHash = reminderOperationHash({ id });
     const client = await database().connect();
@@ -396,7 +411,22 @@ export const groupReminderRepository = {
       }
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw reminderNotFound();
-      requireOwnGroupReminder(auth, reminder);
+      requireGroupReminderOfThisChat(auth, reminder);
+      const author = reminder.author_telegram_user_id;
+      if (author === null) throw reminderNotFound();
+      // The row lock is held across one bounded Telegram call. The dispatcher claims with SKIP
+      // LOCKED, so a locked reminder is only passed over for that minute rather than blocking.
+      if (author !== auth.telegramUserId) {
+        const presence = await resolveAuthorPresence({
+          telegramChatId: auth.telegramChatId,
+          telegramUserId: author,
+        });
+        if (presence === "present") {
+          throw mutationDenied(
+            "Это напоминание поставил другой участник, и он в чате. Удалить его может только он",
+          );
+        }
+      }
       requireReminderNotLeased(reminder, "delete");
       await recordReminderOperation(client, {
         familyId: auth.familyId,
@@ -408,8 +438,9 @@ export const groupReminderRepository = {
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, NULL, 'reminder.deleted', $2,
-                 jsonb_build_object('scope', 'group', 'telegramUserId', $3::text))`,
-        [auth.familyId, id, auth.telegramUserId],
+                 jsonb_build_object('scope', 'group', 'telegramUserId', $3::text,
+                                    'authorTelegramUserId', $4::text))`,
+        [auth.familyId, id, auth.telegramUserId, author],
       );
       await client.query("DELETE FROM reminders WHERE id = $1", [id]);
       await client.query("COMMIT");

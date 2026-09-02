@@ -15,6 +15,7 @@ import { defineTool, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { groupReminderRepository } from "../reminders/group-reminder-repository.js";
+import { telegramChatMemberPresence } from "../telegram-chat-membership.js";
 import { requireGroupReminderAuthorization } from "../reminders/group-reminder-context.js";
 import {
   GROUP_REMINDER_MAX_PER_AUTHOR,
@@ -138,7 +139,9 @@ const MANAGE_DESCRIPTION = [
   "Create payload: {\"action\":\"create\",\"content\":\"Созвон по проекту\",\"firstRunAt\":\"2026-09-04T18:00:00+03:00\",\"recurrence\":null}.",
   "Повторение: без повтора recurrence=null; для повтора передай {\"unit\":\"daily\",\"interval\":1}, {\"unit\":\"weekly\",\"interval\":1} или {\"unit\":\"monthly\",\"interval\":1}.",
   "Update передаёт id и только изменяемые content, firstRunAt или recurrence. Pause/resume/delete передают только action и id.",
-  "Изменить и удалить можно только напоминание, которое создал сам обратившийся участник. Перед update/pause/resume/delete найди id через list_reminders.",
+  "Изменить, приостановить и возобновить можно только напоминание, которое создал сам обратившийся участник.",
+  "Удалить чужое напоминание разрешено, только если его автор больше не в этом чате: приложение проверяет это само и отклоняет удаление, пока автор здесь.",
+  "Перед update/pause/resume/delete найди id через list_reminders.",
   "firstRunAt всегда ISO datetime с offset. Напоминание уходит в общий чат, а не в тему форума.",
 ].join(" ");
 
@@ -193,7 +196,12 @@ export const EXTERNAL_GROUP_REMINDER_TOOLS: Readonly<Record<string, AnyToolDefin
       }
 
       return {
-        deleted: await groupReminderRepository.delete(authorization, parsed.id, ctx.callId),
+        deleted: await groupReminderRepository.delete(
+          authorization,
+          parsed.id,
+          ctx.callId,
+          telegramChatMemberPresence,
+        ),
       };
     },
   }) as unknown as AnyToolDefinition,
