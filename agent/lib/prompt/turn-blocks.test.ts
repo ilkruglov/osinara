@@ -80,9 +80,15 @@ const channelAuth: SessionAuth = {
   initiator: null,
 };
 
+const reactionPolicy = vi.fn().mockResolvedValue(null);
+
 describe("mode block resolution", () => {
   it("resolves the verified profile for a trusted conversation", async () => {
-    const resolve = createModeBlockResolver({ loadCapabilities: vi.fn(), loadSkills: vi.fn() });
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn(),
+      loadReactionPolicy: reactionPolicy,
+      loadSkills: vi.fn(),
+    });
 
     const markdown = await resolve(context(privateAuth));
 
@@ -90,7 +96,11 @@ describe("mode block resolution", () => {
   });
 
   it("returns an explicit fail-closed block instead of throwing on invalid auth", async () => {
-    const resolve = createModeBlockResolver({ loadCapabilities: vi.fn(), loadSkills: vi.fn() });
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn(),
+      loadReactionPolicy: reactionPolicy,
+      loadSkills: vi.fn(),
+    });
 
     const markdown = await resolve(context({ current: null, initiator: null }));
 
@@ -101,7 +111,11 @@ describe("mode block resolution", () => {
 
   it("degrades to an empty allowlist when the live capability lookup fails", async () => {
     const loadCapabilities = vi.fn().mockRejectedValue(new Error("database unavailable"));
-    const resolve = createModeBlockResolver({ loadCapabilities, loadSkills: vi.fn().mockResolvedValue(new Set()) });
+    const resolve = createModeBlockResolver({
+      loadCapabilities,
+      loadReactionPolicy: reactionPolicy,
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
 
     const markdown = await resolve(context(externalAuth));
 
@@ -118,6 +132,7 @@ describe("mode block resolution", () => {
     const scheduledAuth = { ...current, initiator: current.current };
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn().mockRejectedValue(new Error("database unavailable")),
+      loadReactionPolicy: reactionPolicy,
       loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
@@ -135,6 +150,7 @@ describe("mode block resolution", () => {
     const scheduledAuth = { ...current, initiator: current.current };
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn().mockResolvedValue(new Set()),
+      loadReactionPolicy: reactionPolicy,
       loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
@@ -145,7 +161,11 @@ describe("mode block resolution", () => {
 
   it("omits a capability revoked from the current database policy", async () => {
     const loadCapabilities = vi.fn().mockResolvedValue(new Set<ExternalGroupToolName>());
-    const resolve = createModeBlockResolver({ loadCapabilities, loadSkills: vi.fn().mockResolvedValue(new Set()) });
+    const resolve = createModeBlockResolver({
+      loadCapabilities,
+      loadReactionPolicy: reactionPolicy,
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
 
     const markdown = await resolve(context(externalAuth));
 
@@ -157,7 +177,11 @@ describe("mode block resolution", () => {
     const loadCapabilities = vi.fn().mockResolvedValue(
       new Set<ExternalGroupToolName>(["remember", "web_fetch"]),
     );
-    const resolve = createModeBlockResolver({ loadCapabilities, loadSkills: vi.fn().mockResolvedValue(new Set()) });
+    const resolve = createModeBlockResolver({
+      loadCapabilities,
+      loadReactionPolicy: reactionPolicy,
+      loadSkills: vi.fn().mockResolvedValue(new Set()),
+    });
 
     const markdown = await resolve(context(externalAuth));
 
@@ -169,6 +193,7 @@ describe("mode block resolution", () => {
     const loadSkills = vi.fn().mockResolvedValue(new Set(["pohuy"]));
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn().mockResolvedValue(new Set()),
+      loadReactionPolicy: reactionPolicy,
       loadSkills,
     });
 
@@ -181,7 +206,11 @@ describe("mode block resolution", () => {
   it("does not describe human capabilities or skills to a channel actor", async () => {
     const loadCapabilities = vi.fn().mockResolvedValue(new Set(["remember"]));
     const loadSkills = vi.fn().mockResolvedValue(new Set(["pohuy"]));
-    const resolve = createModeBlockResolver({ loadCapabilities, loadSkills });
+    const resolve = createModeBlockResolver({
+      loadCapabilities,
+      loadReactionPolicy: reactionPolicy,
+      loadSkills,
+    });
 
     const markdown = await resolve(context(channelAuth));
 

@@ -11,13 +11,33 @@ import { describe, expect, it } from "vitest";
 import { completedTelegramOutput } from "./telegram-progress.js";
 
 describe("completedTelegramOutput", () => {
-  it("does not deliver model-authored pre-tool text as a separate Telegram message", () => {
+  it("delivers model-authored pre-tool text as an interim progress notice", () => {
     expect(
       completedTelegramOutput({
         finishReason: "tool-calls",
         message: "Собрал информацию. Теперь формирую документ.",
       }),
+    ).toEqual({ kind: "progress", message: "Собрал информацию. Теперь формирую документ." });
+  });
+
+  it("drops interim text that carries a reaction directive", () => {
+    expect(
+      completedTelegramOutput({
+        finishReason: "tool-calls",
+        message: "<telegram-reaction>👍</telegram-reaction>",
+      }),
     ).toBeNull();
+  });
+
+  it("does not deliver an answer made of transport directives alone", () => {
+    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-split>" }))
+      .toBeNull();
+  });
+
+  it("keeps aside directives inside a final answer for the presentation layer", () => {
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "Готово\n<telegram-split>\nкстати" }),
+    ).toEqual({ kind: "message", message: "Готово\n<telegram-split>\nкстати" });
   });
 
   it("trims surrounding whitespace from a delivered message", () => {

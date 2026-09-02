@@ -2,13 +2,14 @@
  * Telegram delivery policy for completed model messages.
  *
  * Exports:
- * - `CompletedTelegramOutput`: terminal visible-message or silent-reaction decision.
+ * - `CompletedTelegramOutput`: final message, silent reaction, or interim progress decision.
  * - `completedTelegramOutput`: validates model output before Telegram delivery.
  *
  * Provider adapters route typed reasoning parts to dedicated Eve events that this delivery
  * policy never receives.
  */
 import { AppError } from "./app-error.js";
+import { stripTelegramAsideDirectives } from "./telegram-authored-split.js";
 import {
   isTelegramMessageReactionEmoji,
   type TelegramMessageReactionEmoji,
@@ -21,19 +22,25 @@ const TELEGRAM_REACTION_DIRECTIVE_FRAGMENT = "telegram-reaction";
 
 export type CompletedTelegramOutput =
   | { emoji: TelegramMessageReactionEmoji; kind: "reaction" }
-  | { kind: "message"; message: string };
+  | { kind: "message"; message: string }
+  | { kind: "progress"; message: string };
 
 export function completedTelegramOutput(data: {
   finishReason: string;
   message?: string | null;
 }): CompletedTelegramOutput | null {
-  // Telegram has no safe ephemeral progress surface here; pre-tool text can be model noise.
-  if (data.finishReason === TOOL_CALLS_FINISH_REASON) return null;
-
   // Only completed visible assistant text should become a durable Telegram message.
   const message =
     data.message === undefined || data.message === null ? "" : data.message.trim();
   if (!message) return null;
+
+  // Text authored before a tool call is what a person reads while a long task runs.
+  if (data.finishReason === TOOL_CALLS_FINISH_REASON) {
+    const progress = stripTelegramAsideDirectives(message);
+    // Transport directives belong to the final answer; interim noise is dropped, never delivered.
+    if (!progress || progress.includes(TELEGRAM_REACTION_DIRECTIVE_FRAGMENT)) return null;
+    return { kind: "progress", message: progress };
+  }
 
   // Reaction is a terminal transport directive and can never be mixed with user-visible text.
   const reaction = TELEGRAM_REACTION_DIRECTIVE_PATTERN.exec(message)?.groups?.emoji;
@@ -46,5 +53,7 @@ export function completedTelegramOutput(data: {
       "Не удалось выбрать безопасную реакцию на сообщение",
     );
   }
+  // An answer made of transport directives alone has no visible content to deliver.
+  if (!stripTelegramAsideDirectives(message)) return null;
   return { kind: "message", message };
 }
