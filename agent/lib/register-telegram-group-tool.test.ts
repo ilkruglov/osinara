@@ -81,7 +81,6 @@ describe("manage_telegram_group.register", () => {
       action: "register",
       messageMode: "owner_only",
       registration: input,
-      skillAllowlist: ["pohuy"],
       telegramChatId: "-1009999999999",
       toolAllowlist: ["remember"],
     }, context("private"))).resolves.toMatchObject({

@@ -67,7 +67,6 @@ const channelAuth: SessionAuth = {
       groupType: "external",
       memoryScopes: ["group"],
       role: "external",
-      skillAllowlist: ["pohuy"],
       telegramActorId: "-1001783384254",
       telegramActorKind: "telegram_channel",
       telegramChatType: "supergroup",
@@ -87,7 +86,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn(),
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn(),
     });
 
     const markdown = await resolve(context(privateAuth));
@@ -99,7 +97,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn(),
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn(),
     });
 
     const markdown = await resolve(context({ current: null, initiator: null }));
@@ -114,7 +111,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities,
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
     const markdown = await resolve(context(externalAuth));
@@ -133,7 +129,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn().mockRejectedValue(new Error("database unavailable")),
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
     const markdown = await resolve(context(scheduledAuth));
@@ -151,7 +146,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities: vi.fn().mockResolvedValue(new Set()),
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
     const markdown = await resolve(context(scheduledAuth));
@@ -164,7 +158,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities,
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
     const markdown = await resolve(context(externalAuth));
@@ -180,7 +173,6 @@ describe("mode block resolution", () => {
     const resolve = createModeBlockResolver({
       loadCapabilities,
       loadReactionPolicy: reactionPolicy,
-      loadSkills: vi.fn().mockResolvedValue(new Set()),
     });
 
     const markdown = await resolve(context(externalAuth));
@@ -189,33 +181,16 @@ describe("mode block resolution", () => {
     expect(markdown).not.toContain("`web_fetch`");
   });
 
-  it("matches the external skill prompt to the current persisted grants", async () => {
-    const loadSkills = vi.fn().mockResolvedValue(new Set(["pohuy"]));
-    const resolve = createModeBlockResolver({
-      loadCapabilities: vi.fn().mockResolvedValue(new Set()),
-      loadReactionPolicy: reactionPolicy,
-      loadSkills,
-    });
-
-    const markdown = await resolve(context(externalAuth));
-
-    expect(loadSkills).toHaveBeenCalledWith("group-1");
-    expect(markdown).toContain("`load_skill` с `skill=pohuy`");
-  });
-
   it("does not describe human capabilities or skills to a channel actor", async () => {
     const loadCapabilities = vi.fn().mockResolvedValue(new Set(["remember"]));
-    const loadSkills = vi.fn().mockResolvedValue(new Set(["pohuy"]));
     const resolve = createModeBlockResolver({
       loadCapabilities,
       loadReactionPolicy: reactionPolicy,
-      loadSkills,
     });
 
     const markdown = await resolve(context(channelAuth));
 
     expect(loadCapabilities).not.toHaveBeenCalled();
-    expect(loadSkills).not.toHaveBeenCalled();
     // The text-only channel surface must not gain a reaction it could apply to a channel post.
     expect(reactionPolicy).not.toHaveBeenCalled();
     expect(markdown).not.toContain("## Реакция вместо сообщения");

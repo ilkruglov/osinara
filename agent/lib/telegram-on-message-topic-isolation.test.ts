@@ -23,7 +23,6 @@ function registeredRepositories() {
     familyId: "family-1",
     groupId: "group-1",
     messageMode: "all",
-    skillAllowlist: [],
     telegramChatId: "group-101",
     toolAllowlist: [],
     type: "family_private",

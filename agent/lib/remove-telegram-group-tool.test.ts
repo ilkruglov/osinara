@@ -71,7 +71,6 @@ describe("manage_telegram_group.remove", () => {
       action: "remove",
       messageMode: "all",
       registration: {},
-      skillAllowlist: ["pohuy"],
       telegramChatId: "-1003567628736",
       toolAllowlist: ["remember"],
     }, context("private"))).resolves.toMatchObject({ registrationRemoved: true });

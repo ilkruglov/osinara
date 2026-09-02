@@ -23,7 +23,6 @@ function familyGroupRepositories() {
     familyId: "family-1",
     groupId: "group-1",
     messageMode: "addressed_only",
-    skillAllowlist: [],
     telegramChatId: "group-101",
     toolAllowlist: [],
     type: "family_private",

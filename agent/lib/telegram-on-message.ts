@@ -462,17 +462,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       );
     }
 
-    // Dynamic tools and skills consume the same verified registration snapshot as this turn.
-    return {
-      ...turnResult,
-      auth: {
-        ...turnResult.auth,
-        attributes: {
-          ...turnResult.auth.attributes,
-          skillAllowlist: group.skillAllowlist,
-        },
-      },
-    };
+    return turnResult;
   };
 }
 

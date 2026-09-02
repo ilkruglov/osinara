@@ -5,7 +5,7 @@
  * - Machine-visible required action enum in an object-shaped schema.
  * - One semantic parser rejects invalid actions before HITL and execution.
  * - Known MiniMax sibling fields remain inert while unpublished fields fail closed.
- * - Mutation results expose the complete applied registration, policy, or allowlist.
+ * - Mutation results expose the complete applied registration or policy.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -77,7 +77,6 @@ describe("manage_telegram_group model input", () => {
       "start_new_context",
       "status",
       "update_policy",
-      "update_skills",
     ]);
   });
 
@@ -86,7 +85,7 @@ describe("manage_telegram_group model input", () => {
     [{ action: "remove" }, /telegramChatId/u],
     [{ action: "start_new_context" }, /telegramChatId/u],
     [{ action: "update_policy", telegramChatId: "-1001" }, /messageMode/u],
-    [{ action: "update_skills", telegramChatId: "-1001" }, /skillAllowlist/u],
+    [{ action: "update_skills", telegramChatId: "-1001" }, /action/u],
   ])("rejects the same invalid action before HITL and execution", async (invalid, message) => {
     expect(() => approvalFor(invalid)).toThrowError(message);
     await expect(manageTelegramGroup.execute(invalid as never, context)).rejects.toThrowError(message);
@@ -100,12 +99,11 @@ describe("manage_telegram_group model input", () => {
     })).toBe("not-applicable");
   });
 
-  it("ignores only published MiniMax siblings and rejects unpublished fields before HITL", () => {
+  it("ignores only published MiniMax siblings and rejects removed fields before HITL", () => {
     expect(approvalFor({
       action: "remove",
       messageMode: "all",
       registration: {},
-      skillAllowlist: [],
       telegramChatId: "-1001234567890",
       toolAllowlist: [],
     })).toBe("user-approval");
@@ -114,6 +112,11 @@ describe("manage_telegram_group model input", () => {
       telegramChat: "-1001234567890",
       telegramChatId: "-1001234567890",
     })).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*telegramChat/u);
+    expect(() => approvalFor({
+      action: "remove",
+      skillAllowlist: [],
+      telegramChatId: "-1001234567890",
+    })).toThrowError(/AGENT_TELEGRAM_GROUP_INPUT_INVALID.*skillAllowlist/u);
   });
 
   it("returns complete applied registration and replacement policies", async () => {
@@ -143,11 +146,6 @@ describe("manage_telegram_group model input", () => {
       messageMode: "all",
       toolAllowlist: ["search_memories"],
     });
-    await expect(manageTelegramGroup.execute({
-      action: "update_skills",
-      skillAllowlist: ["pohuy"],
-      telegramChatId: "-1001234567890",
-    }, context)).resolves.toMatchObject({ skillAllowlist: ["pohuy"] });
     await expect(manageTelegramGroup.execute({
       action: "remove",
       telegramChatId: "-1001234567890",

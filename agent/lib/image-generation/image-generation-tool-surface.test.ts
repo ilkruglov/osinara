@@ -56,7 +56,6 @@ describe("image generation tool surface", () => {
     const deniedExternal = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
-      skills: { imagegen: {} as never },
     });
 
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("generate_image");
@@ -66,18 +65,15 @@ describe("image generation tool surface", () => {
     expect(buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
-      skills: {},
     })).toHaveProperty("generate_image");
     expect(buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
       scheduledRun: true,
-      skills: { imagegen: {} as never },
     })).not.toHaveProperty("generate_image");
     expect(buildSubagentToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
-      skills: { imagegen: {} as never },
     }).load_skill?.description).toMatch(/недоступен/iu);
     expect(deniedExternal).not.toHaveProperty("generate_image");
     expect(deniedExternal.load_skill?.description).toMatch(/недоступен/iu);
@@ -87,7 +83,6 @@ describe("image generation tool surface", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
-      skills: {},
     });
     const context = { session: { auth: externalAuth() } } as never;
 
@@ -100,7 +95,6 @@ describe("image generation tool surface", () => {
     const tool = buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
-      skills: {},
     }).generate_image!;
     const schema = tool.inputSchema as z.ZodType;
     const input = {

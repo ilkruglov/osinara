@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Same-name Eve overrides authorize every execution against current group state.
  * - Canonical sandbox paths remain inside the exact `/workspace/group` root.
- * - Read-only dynamic skill files require a current code-reviewed group grant.
+ * - Removed custom skill directories are outside the external workspace boundary.
  * - Symlink components cannot redirect an operation outside the group workspace.
  * - Allowed paths retain Eve's native executor contracts.
  * - Native filesystem failures become safe model-facing correction contracts.
@@ -16,7 +16,6 @@ import { join } from "node:path";
 import type { ToolDefinition } from "eve/tools";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
 import { createExternalGroupFileTools } from "./external-group-file-tools.js";
 
@@ -64,9 +63,6 @@ function context() {
 describe("external-group file tools", () => {
   let root: string;
   let authorize: Mock<(auth: WorkspaceAuthorization) => Promise<string>>;
-  let loadGroupSkillAllowlist: Mock<
-    (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>
-  >;
   let executors: Record<"glob" | "grep" | "read_file" | "write_file", ReturnType<typeof vi.fn>>;
 
   beforeEach(async () => {
@@ -74,7 +70,6 @@ describe("external-group file tools", () => {
     await mkdir(join(root, "docs"));
     await writeFile(join(root, "docs", "allowed.txt"), "allowed\n");
     authorize = vi.fn(async (_auth: WorkspaceAuthorization) => root);
-    loadGroupSkillAllowlist = vi.fn(async (_groupId: string) => new Set(["pohuy"]));
     executors = {
       glob: vi.fn(async (input) => ({ input })),
       grep: vi.fn(async (input) => ({ input })),
@@ -96,7 +91,6 @@ describe("external-group file tools", () => {
         write_file: tool(executors.write_file),
       },
       authorize,
-      loadGroupSkillAllowlist,
     });
   }
 
@@ -132,71 +126,12 @@ describe("external-group file tools", () => {
     SKILL_REFERENCE,
     "/home/eve/.agents/skills/pohuy/references/slovar.md",
     "$HOME/.agents/skills/pohuy/SKILL.md",
-  ])("canonicalizes and executes an allowed skill file read from %s", async (filePath) => {
-    const expectedFilePath = filePath.endsWith("/SKILL.md")
-      ? "$HOME/.agents/skills/pohuy/SKILL.md"
-      : SKILL_REFERENCE;
-    const input = { filePath, limit: 25, offset: 2 };
-
-    await tools().read_file!.execute(input, context());
-
-    expect(authorize).toHaveBeenCalledWith(AUTHORIZATION);
-    expect(loadGroupSkillAllowlist).toHaveBeenCalledWith("group-1");
-    expect(executors.read_file).toHaveBeenCalledWith(
-      { ...input, filePath: expectedFilePath },
-      context(),
-    );
-  });
-
-  it("denies a revoked skill before the native reader executes", async () => {
-    loadGroupSkillAllowlist.mockResolvedValueOnce(new Set());
-
-    await expect(tools().read_file!.execute(
-      { filePath: SKILL_REFERENCE },
-      context(),
-    )).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
-
-    expect(authorize).toHaveBeenCalledWith(AUTHORIZATION);
-    expect(loadGroupSkillAllowlist).toHaveBeenCalledWith("group-1");
-    expect(executors.read_file).not.toHaveBeenCalled();
-  });
-
-  it("normalizes a native supporting-file read failure", async () => {
-    executors.read_file.mockRejectedValueOnce(new Error("ENOENT: /host/private/skill.md"));
-
-    await expect(tools().read_file!.execute(
-      { filePath: SKILL_REFERENCE },
-      context(),
-    )).rejects.toMatchObject({
-      contract: {
-        code: "AGENT_FILE_TOOL_EXECUTION_FAILED",
-        retryable: true,
-        sideEffectStatus: "not_started",
-      },
-    });
-  });
-
-  it("denies a skill file when the external registration is stale", async () => {
-    authorize.mockRejectedValueOnce(
-      new Error("AGENT_WORKSPACE_ACCESS_DENIED: Группа больше не зарегистрирована как external"),
-    );
-
-    await expect(tools().read_file!.execute(
-      { filePath: SKILL_REFERENCE },
-      context(),
-    )).rejects.toThrowError(/AGENT_WORKSPACE_ACCESS_DENIED/u);
-
-    expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
-    expect(executors.read_file).not.toHaveBeenCalled();
-  });
-
-  it.each([
     "$HOME/.agents/skills/unknown/references/file.md",
     "$HOME/.agents/skills/pohuy/references/../secret.md",
     "/home/eve/.agents/skills/pohuy//secret.md",
-  ])("denies an unknown or malformed skill file path: %s", async (filePath) => {
+  ])("denies every path under the removed custom skill root: %s", async (filePath) => {
     await expect(tools().read_file!.execute({ filePath }, context())).rejects.toThrowError(
-      /AGENT_GROUP_(?:FILE_PATH|SKILL)_FORBIDDEN/u,
+      /AGENT_GROUP_FILE_PATH_FORBIDDEN/u,
     );
     expect(executors.read_file).not.toHaveBeenCalled();
   });

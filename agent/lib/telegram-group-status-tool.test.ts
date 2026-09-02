@@ -59,7 +59,6 @@ describe("manage_telegram_group.status", () => {
     listStatuses.mockResolvedValue([
       {
         messageMode: "owner_only",
-        skillAllowlist: ["pohuy"],
         telegramChatId: "-1002",
         title: "Внешняя",
         toolAllowlist: ["search_memories"],
@@ -67,7 +66,6 @@ describe("manage_telegram_group.status", () => {
       },
       {
         messageMode: "all",
-        skillAllowlist: [],
         telegramChatId: "-1001",
         title: "Семья",
         toolAllowlist: [],
@@ -78,7 +76,6 @@ describe("manage_telegram_group.status", () => {
 
   it("returns every configured policy in one read-only result", async () => {
     await expect(manageTelegramGroup.execute({ action: "status" }, context())).resolves.toEqual({
-      availableSafeSkills: ["pohuy"],
       groups: [
         expect.objectContaining({
           builtInWorkspaceTools: ["glob", "grep", "read_file", "write_file"],
@@ -143,11 +140,6 @@ describe("manage_telegram_group.status", () => {
       telegramChatId: "-1001",
       toolAllowlist: [],
     })).toBe("user-approval");
-    expect(approvalFor({
-      action: "update_skills",
-      skillAllowlist: [],
-      telegramChatId: "-1001",
-    })).toBe("user-approval");
     expect(approvalFor({ action: "remove", telegramChatId: "-1001" })).toBe("user-approval");
     expect(approvalFor({
       action: "register",
@@ -163,9 +155,8 @@ describe("manage_telegram_group.status", () => {
   it("requires status before replacing an unknown current policy", () => {
     const instructions = modeInstructions({ environment: "private" });
 
-    expect(instructions).toContain("Перед `update_policy` или `update_skills` сначала вызови");
+    expect(instructions).toContain("Перед `update_policy` получи status");
     expect(instructions).toContain("`{\"action\":\"status\"}`");
-    expect(instructions).toContain("команду `/status`");
-    expect(instructions).toContain("одним сообщением");
+    expect(instructions).toContain("команды `/status`");
   });
 });

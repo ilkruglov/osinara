@@ -95,7 +95,6 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
       ...(job.scope === "group"
         ? {
             scheduledGroupHistory: job.historyWindowDays === null ? "disabled" : "enabled",
-            skillAllowlist: [],
             toolAllowlist: job.capabilityAllowlist,
           }
         : {}),

@@ -58,7 +58,6 @@ describe("Telegram group history", () => {
       modeInstructions({
         capabilities: new Set(["list_group_history"]),
         environment: "external",
-        skills: new Set(),
       }),
     ],
   ] as const)("forbids parallel history calls in the %s mode instructions", (_mode, instructions) => {

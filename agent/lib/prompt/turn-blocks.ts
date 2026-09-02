@@ -51,8 +51,6 @@ import {
 import { telegramReactionPolicyRepository } from "../telegram-reaction-policy-repository.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
-import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
-import { groupSkillPolicyRepository } from "../group-skills/group-skill-repository.js";
 import {
   resolveExternalGroupPolicyIdentity,
   resolveExternalGroupToolPolicy,
@@ -73,7 +71,6 @@ type CapabilityLoader = (identity: {
   familyId: string;
   groupId: string;
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
-type SkillLoader = (groupId: string) => Promise<ReadonlySet<GroupSafeSkillName>>;
 type ReactionPolicyLoader = (telegramChatId: string) => Promise<TelegramReactionPolicy | null>;
 
 interface EffectiveExternalCapabilities {
@@ -137,7 +134,6 @@ function verifiedTelegramChatId(auth: SessionAuth): string | null {
 export function createModeBlockResolver(dependencies: {
   loadCapabilities: CapabilityLoader;
   loadReactionPolicy: ReactionPolicyLoader;
-  loadSkills: SkillLoader;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string> {
     let environment: ReturnType<typeof resolveConversationEnvironment>;
@@ -173,7 +169,6 @@ export function createModeBlockResolver(dependencies: {
         includeApplicationCore: false,
         reactionPolicy,
         scheduledRun,
-        skills: new Set(),
       });
     }
 
@@ -181,15 +176,6 @@ export function createModeBlockResolver(dependencies: {
       ctx.session.auth,
       dependencies.loadCapabilities,
     );
-    let skills: ReadonlySet<GroupSafeSkillName> = new Set();
-    const groupId = ctx.session.auth.current?.attributes.groupId;
-    if (typeof groupId === "string") {
-      try {
-        skills = await dependencies.loadSkills(groupId);
-      } catch (error) {
-        logBlockFailure("AGENT_GROUP_SKILL_LOOKUP_FAILED", error);
-      }
-    }
     return modeInstructions({
       capabilities: effective.capabilities,
       environment: "external",
@@ -198,7 +184,6 @@ export function createModeBlockResolver(dependencies: {
       scheduledHistory: effective.includeApplicationCore &&
         scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       scheduledRun,
-      skills,
     });
   };
 }
@@ -307,7 +292,6 @@ export const resolveModeBlock = createModeBlockResolver({
     if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
     return { allowsAll: cached.allowsAll, emoji: cached.emoji };
   },
-  loadSkills: (groupId) => groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
 });
 
 export const resolveMemoryBlock = createMemoryBlockResolver({

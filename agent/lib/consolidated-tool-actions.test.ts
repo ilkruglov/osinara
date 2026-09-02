@@ -103,7 +103,8 @@ describe("consolidated tool action schemas", () => {
     }).success).toBe(true);
     const properties = jsonSchema.properties as Record<string, { description?: string }>;
     expect(properties.action?.description).toContain("Сначала выберите ровно один action");
-    expect(properties.action?.description).toContain("update_skills");
+    expect(properties.action?.description).not.toContain("update_skills");
+    expect(properties).not.toHaveProperty("skillAllowlist");
     expect(properties.registration?.description).toContain("только при action=register");
     expect(properties.telegramChatId?.description).toContain("status не передавайте");
     expect(properties.toolAllowlist?.description).toContain("только при action=update_policy");

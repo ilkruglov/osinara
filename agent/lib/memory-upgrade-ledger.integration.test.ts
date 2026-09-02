@@ -114,6 +114,7 @@ const POST_V0101_MIGRATIONS = [
   "080_remove_personal_memory_review_artifacts.sql",
   "081_telegram_progress_notices.sql",
   "082_telegram_chat_reaction_policies.sql",
+  "083_remove_group_skill_allowlist.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -193,6 +194,14 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         "INSERT INTO schema_migrations (name) SELECT unnest($1::text[])",
         [[...V0101_LEDGER]],
       );
+      await client.query("INSERT INTO families (id, name) VALUES ('00000000-0000-4000-8000-000000000083', 'Legacy skill')");
+      await client.query(`
+        INSERT INTO telegram_groups
+          (family_id, telegram_chat_id, title, type, message_mode, skill_allowlist)
+        VALUES
+          ('00000000-0000-4000-8000-000000000083', '-100083', 'Legacy skill',
+           'external', 'addressed_only', ARRAY['pohuy'])
+      `);
 
       // Filesystem identity is part of the upgrade contract: an old and renamed memory file must not coexist.
       const migrationNames = (await readdir(resolve("migrations")))
@@ -220,6 +229,12 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
       expect(after.rows.map(({ name }) => name).filter((name) => !namesBefore.has(name)))
         .toEqual(POST_V0101_MIGRATIONS);
       expect(after.rows).toHaveLength(V0101_LEDGER.length + POST_V0101_MIGRATIONS.length);
+      await expect(client.query<{ skill_allowlist: string[] }>(
+        "SELECT skill_allowlist FROM telegram_groups WHERE telegram_chat_id = '-100083'",
+      )).resolves.toMatchObject({ rows: [{ skill_allowlist: [] }] });
+      await expect(client.query(
+        "UPDATE telegram_groups SET skill_allowlist = ARRAY['removed-skill'] WHERE telegram_chat_id = '-100083'",
+      )).rejects.toThrow();
 
       // Representative authoritative and projection objects prove every R0-R7 migration took effect.
       for (const table of EXPECTED_R0_R7_TABLES) {

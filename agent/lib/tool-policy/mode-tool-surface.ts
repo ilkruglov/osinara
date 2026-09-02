@@ -13,19 +13,16 @@
  * - External groups additionally deny the framework built-ins Eve always registers, and re-check
  *   every granted capability at execution time against the live database policy.
  */
-import type { SkillDefinition } from "eve/skills";
 import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
-import { isImageGenerationSkillName } from "../image-generation/image-generation-skill.js";
 import { EXTERNAL_IMAGE_GENERATION_TOOL_PRESENTATION } from "../image-generation/image-generation-tool-presentation.js";
 import { wrapModelFacingToolMap } from "../model-facing-tool.js";
 import { authorizeAgentScheduleDelivery } from "../agent-schedules/agent-schedule-delivery-authorization.js";
 import { scheduledDeliveryMetadata } from "../agent-schedules/scheduled-session.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
-import { isGroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT, THREAD_HISTORY_PAGE_MAX_ENTRIES } from "../memory-config.js";
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
 import { externalRememberInputSchema } from "../remember-contract.js";
@@ -84,7 +81,6 @@ export type ModeToolSurfaceInput =
       includeApplicationCore?: boolean;
       scheduledHistory?: boolean;
       scheduledRun?: boolean;
-      skills: Readonly<Record<string, SkillDefinition>>;
     };
 
 const DENIED_TOOL_INPUT = z.record(z.string(), z.unknown());
@@ -296,13 +292,12 @@ function buildExternalToolSurface(
   includeApplicationCore: boolean,
   scheduledHistory: boolean,
   scheduledRun: boolean,
-  skills: Readonly<Record<string, SkillDefinition>>,
 ): ToolMap {
   const imageGenerationAllowed = IMAGE_GENERATION_AVAILABLE &&
     !scheduledRun && allowed.has("generate_image");
   const surface: Record<string, AnyToolDefinition> = {
     ...EXTERNAL_GROUP_FILE_TOOLS,
-    load_skill: Object.keys(skills).length > 0 || imageGenerationAllowed
+    load_skill: imageGenerationAllowed
       ? externalGroupLoadSkillTool
       : deniedTool("load_skill"),
   };
@@ -396,25 +391,15 @@ export function buildModeToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const includeApplicationCore = input.includeApplicationCore !== false;
   const scheduledHistory = input.scheduledHistory === true;
   const scheduledRun = input.scheduledRun === true || scheduledHistory;
-  const validatedSkills = Object.keys(input.skills).some((name) =>
-    !isGroupSafeSkillName(name) && !isImageGenerationSkillName(name)
-  ) ? {} : input.skills;
-  const skills = IMAGE_GENERATION_AVAILABLE &&
-    !scheduledRun && allowed.has("generate_image")
-    ? validatedSkills
-    : Object.fromEntries(Object.entries(validatedSkills).filter(([name]) =>
-      !isImageGenerationSkillName(name)
-    ));
   const key = [
     includeApplicationCore ? "core" : "failed",
     scheduledHistory ? "history" : "ordinary",
     scheduledRun ? "scheduled" : "interactive",
     allowlistKey(allowed),
-    Object.keys(skills).sort().join(","),
   ].join("|");
   const cached = EXTERNAL_SURFACES.get(key);
   if (cached) return cached;
-  const surface = buildExternalToolSurface(allowed, includeApplicationCore, scheduledHistory, scheduledRun, skills);
+  const surface = buildExternalToolSurface(allowed, includeApplicationCore, scheduledHistory, scheduledRun);
   EXTERNAL_SURFACES.set(key, surface);
   return surface;
 }
@@ -424,9 +409,6 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
     ? {
       ...input,
       capabilities: new Set([...input.capabilities].filter((name) => name !== "generate_image")),
-      skills: Object.fromEntries(Object.entries(input.skills).filter(([name]) =>
-        !isImageGenerationSkillName(name)
-      )),
     }
     : input;
   const {

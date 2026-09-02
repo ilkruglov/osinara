@@ -30,7 +30,6 @@ function surfaces() {
     environment: "external" as const,
     includeApplicationCore: true,
     scheduledHistory: false,
-    skills: {},
   };
   return {
     external: buildModeToolSurface(externalInput),

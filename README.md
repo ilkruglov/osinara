@@ -103,7 +103,7 @@ Osinara — self-hosted агент, который живёт в Telegram и р�
 - **Семейная группа** (`family_private`): только подтверждённые участники семьи, доступна семейная память.
 - **Внешняя группа** (`external`): своя изолированная область, без личных и семейных данных, без Bash и произвольной сети.
 - Режимы реакции: только по обращению, на все сообщения, либо только на сообщения владельца.
-- Для внешней группы владелец точечно выдаёт allowlist инструментов и skills; смена типа группы пересоздаёт зону доверия и удаляет данные прежней области.
+- Для внешней группы владелец точечно выдаёт allowlist capabilities; `imagegen` включается только вместе с capability `generate_image`. Смена типа группы пересоздаёт зону доверия и удаляет данные прежней области.
 
 ### 🎛 Стиль и подтверждения
 
@@ -224,7 +224,6 @@ Highlighted skill groups:
 | Documents | `pdf`, `docx`, `xlsx`. |
 | Browser and research | `agent-browser`, `find-docs`. |
 | Personalization | `behavior-preferences`. |
-| Tone, opt-in | `pohuy` — режим ответов с матом, грузится только по явной просьбе. |
 | Image generation | Dynamic `imagegen` доступен root-agent только вместе с активным subscription-backed `generate_image`; без provider `codex-subscription` ни tool, ни skill не существуют и не выдаются. |
 
 ## Release Badges

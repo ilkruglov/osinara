@@ -15,7 +15,6 @@ const group: RegisteredGroup = {
   familyId: "family-1",
   groupId: "group-1",
   messageMode: "addressed_only",
-  skillAllowlist: [],
   telegramChatId: "-1001",
   toolAllowlist: ["import_telegram_attachment"],
   type: "external",

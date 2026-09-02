@@ -21,7 +21,6 @@ function ownerOnlyGroup() {
     familyId: "family-1",
     groupId: "group-1",
     messageMode: "owner_only" as const,
-    skillAllowlist: [],
     telegramChatId: "group-101",
     toolAllowlist: ["list_group_history"],
     type: "external" as const,
