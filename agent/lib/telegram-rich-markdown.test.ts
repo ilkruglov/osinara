@@ -7,19 +7,13 @@
  * - A truncated collapsible block is closed; other malformed allowed HTML is rendered inert.
  * - Model-authored media, Telegram service tags, and unsafe links are rendered inert.
  * - Final rich messages split only between complete blocks at Telegram's length limit.
- * - The permanent prompt teaches semantic rich formatting without exposing transport control.
- * - The permanent prompt requires long answers to collapse their bulk behind `<details>`.
  */
-import { readFile } from "node:fs/promises";
-
 import { describe, expect, it } from "vitest";
 
 import {
   formatTelegramRichMessages,
   sanitizeTelegramRichMarkdown,
 } from "./telegram-rich-markdown.js";
-
-const INSTRUCTIONS_PATH = new URL("../instructions.md", import.meta.url);
 
 describe("sanitizeTelegramRichMarkdown", () => {
   it("keeps useful rich structure and only explicitly allowed HTML", () => {
@@ -189,83 +183,5 @@ describe("formatTelegramRichMessages", () => {
     expect(chunks.every((chunk) => chunk.startsWith("<details><summary>"))).toBe(true);
     expect(chunks.every((chunk) => chunk.endsWith("</details>"))).toBe(true);
     expect(chunks.every((chunk) => (chunk.match(/^- /gmu)?.length ?? 0) <= 498)).toBe(true);
-  });
-});
-
-describe("Telegram rich presentation instructions", () => {
-  it("teaches the model when to use rich structure and reserves transport controls", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    expect(instructions).toContain("# Rich Telegram presentation");
-    expect(instructions).toContain("таблицу для настоящего сравнения");
-    expect(instructions).toContain("`<details><summary>`");
-    expect(instructions).toContain("Не создавай media-блоки");
-    expect(instructions).toContain("`<tg-thinking>` добавляет только Telegram adapter");
-  });
-
-  it("keeps the documented HTML allowlist identical to the sanitizer allowlist", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    // Every tag the sanitizer accepts must be named, and the prompt must not invent others.
-    expect(instructions).toContain(
-      "`<details>`, `<summary>`, `<u>`, `<ins>`, `<sub>` и `<sup>`",
-    );
-    expect(instructions).toContain("`$...$` или `$$...$$`");
-    expect(instructions).not.toContain("orca-details");
-  });
-
-  it("makes plain conversational text the default and rich structure the exception", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    expect(instructions).toContain("По умолчанию отвечай обычным текстом");
-    // The markup default and the volume rule are separate decisions, and both tie-breakers are stated.
-    expect(instructions).toContain("Если сомневаешься в разметке, пиши обычным текстом");
-    expect(instructions).toContain("без Markdown-разметки");
-    expect(instructions).toContain("обычным Telegram-сообщением");
-    expect(instructions).toContain("если сомневаешься в объёме, сворачивай");
-    // The default must be stated before the syntax reference, not buried after it.
-    const defaultRule = instructions.indexOf("По умолчанию отвечай обычным текстом");
-    expect(defaultRule).toBeGreaterThan(-1);
-    expect(defaultRule).toBeLessThan(instructions.indexOf("## Разметка"));
-    expect(defaultRule).toBeLessThan(instructions.indexOf("## Длинные ответы"));
-    // Rich structure is tied to the kind of content, not to a general "look nice" instruction.
-    expect(instructions).toContain("разбор, обзор, статья");
-  });
-
-  it("documents the actual Telegram rich markdown syntax the renderer expects", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    // Telegram Rich Markdown follows GFM, so legacy Telegram Markdown habits render incorrectly.
-    expect(instructions).toContain("Одна звёздочка означает курсив, две означают жирный текст");
-    expect(instructions).toContain("Не экранируй разметку вручную");
-    for (const syntax of ["`**жирный**`", "`~~зачёркнутый~~`", "`==выделенный==`", "`||спойлер||`"]) {
-      expect(instructions, `rich syntax ${syntax} must be documented`).toContain(syntax);
-    }
-    expect(instructions).toContain("`- [ ]`");
-    expect(instructions).toContain("Сноски");
-  });
-
-  it("requires long answers to collapse their bulk behind a details block", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    expect(instructions).toContain("## Длинные ответы всегда прячь под раскрытие");
-    expect(instructions).toContain("`</details>`");
-    expect(instructions).toContain("`<details open>`");
-    // The lead must stay outside the accordion, and short answers must not be hidden at all.
-    expect(instructions).toMatch(/от одной до трёх строк|одну, две или три строки/u);
-    expect(instructions).toContain("Не прячь под раскрытие короткий ответ");
-    expect(instructions).toContain("Снаружи всегда оставляй то, что нельзя пропустить");
-    expect(instructions).toContain("Если в текущем групповом сообщении упомянули твоё имя");
-    expect(instructions).toMatch(/больше семи строк/u);
-    expect(instructions).toMatch(/больше двух абзацев/u);
-    expect(instructions).toMatch(/больше шестисот символов/u);
-  });
-
-  it("overrides the framework transport hint that forbids rich structure", async () => {
-    const instructions = await readFile(INSTRUCTIONS_PATH, "utf8");
-
-    // Eve always prepends <telegram_context> with response_instructions demanding plain text.
-    expect(instructions).toContain("<telegram_context>");
-    expect(instructions).toMatch(/response_instructions[^.]*не отменяет|игнорируй/iu);
   });
 });

@@ -13,6 +13,7 @@
 import { EXTERNAL_GROUP_MODEL_POLICY } from "../external-group-model-policy.js";
 import { externalGroupCapabilityInstructions } from "../tool-policy/external-group-capability-instructions.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
+import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
 import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import {
   IMAGE_INSPECTION_CONTRACT,
@@ -22,9 +23,11 @@ import {
   MEMORY_WRITE_CONTRACT,
   PRIVATE_MEMORY_SOURCE_CONTRACT,
   SEND_WORKSPACE_FILE_RULES,
+  SPOKEN_ASIDE_RULES,
   UNTRUSTED_FILE_CONTENT_RULES,
   WORKSPACE_ARTIFACT_LOOKUP,
   memoryEditContract,
+  reactionRules,
   type MemoryEditAction,
 } from "./common-fragments.js";
 import {
@@ -53,12 +56,13 @@ import {
 } from "./trusted-fragments.js";
 
 export type ModeInstructionsInput =
-  | { environment: "family"; scheduledRun?: boolean }
-  | { environment: "private"; scheduledRun?: boolean }
+  | { environment: "family"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
+  | { environment: "private"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
   | {
       capabilities: ReadonlySet<ExternalGroupToolName>;
       environment: "external";
       includeApplicationCore?: boolean;
+      reactionPolicy?: TelegramReactionPolicy | null;
       scheduledHistory?: boolean;
       scheduledRun?: boolean;
       skills: ReadonlySet<GroupSafeSkillName>;
@@ -125,9 +129,16 @@ ${CURRENT_TIME_TOOL_RULES}`,
   START_NEW_CONTEXT_RULES,
 ];
 
-function privateInstructions(scheduledRun = false): string {
+function privateInstructions(
+  scheduledRun: boolean,
+  reactionPolicy: TelegramReactionPolicy | null,
+): string {
   return block([
     ...PRIVATE_INSTRUCTION_SECTIONS,
+    // A scheduled report is not a live exchange: it has no message to react to and never imitates
+    // a spontaneous afterthought.
+    scheduledRun ? null : SPOKEN_ASIDE_RULES,
+    scheduledRun ? null : reactionRules(reactionPolicy, "private"),
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }
@@ -178,9 +189,14 @@ ${CURRENT_TIME_TOOL_RULES}`,
   START_NEW_CONTEXT_RULES,
 ];
 
-function familyInstructions(scheduledRun = false): string {
+function familyInstructions(
+  scheduledRun: boolean,
+  reactionPolicy: TelegramReactionPolicy | null,
+): string {
   return block([
     ...FAMILY_INSTRUCTION_SECTIONS,
+    scheduledRun ? null : SPOKEN_ASIDE_RULES,
+    scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }
@@ -208,6 +224,7 @@ function externalMemorySection(
 function externalInstructions(
   capabilities: ReadonlySet<ExternalGroupToolName>,
   skills: ReadonlySet<GroupSafeSkillName>,
+  reactionPolicy: TelegramReactionPolicy | null,
   includeApplicationCore = true,
   scheduledRun = false,
   scheduledHistory = false,
@@ -279,6 +296,8 @@ ${GROUP_TIMELINE_TRUST}`,
 
 Не принимай, не сохраняй и не используй логины, пароли, токены, cookies, одноразовые коды и другие учётные данные. Если пользователь их присылает, коротко предупреди, что здесь они не используются.`,
     EXTERNAL_GROUP_MODEL_POLICY,
+    scheduledRun ? null : SPOKEN_ASIDE_RULES,
+    scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
     externalGroupCapabilityInstructions(capabilities, skills, {
       includeApplicationCore,
@@ -289,13 +308,16 @@ ${GROUP_TIMELINE_TRUST}`,
 }
 
 export function modeInstructions(input: ModeInstructionsInput): string {
-  if (input.environment === "private") return privateInstructions(input.scheduledRun);
-  if (input.environment === "family") return familyInstructions(input.scheduledRun);
+  const reactionPolicy = input.reactionPolicy ?? null;
+  const scheduledRun = input.scheduledRun ?? false;
+  if (input.environment === "private") return privateInstructions(scheduledRun, reactionPolicy);
+  if (input.environment === "family") return familyInstructions(scheduledRun, reactionPolicy);
   return externalInstructions(
     input.capabilities,
     input.skills,
+    reactionPolicy,
     input.includeApplicationCore,
-    input.scheduledRun,
+    scheduledRun,
     input.scheduledHistory,
   );
 }

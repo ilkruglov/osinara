@@ -2,7 +2,7 @@
  * Telegram dispatch policy tests.
  *
  * Constructs covered:
- * - `isMessageAddressedToBot`: ignores slash commands and accepts configured name stems.
+ * - `isMessageAddressedToBot`: ignores slash commands and accepts name stems with any suffix.
  * - `classifyTelegramInboundMedia`: recognizes one native photo or allowlisted document candidate.
  * - `hasTelegramInboundMedia`: detects every file-bearing Telegram message kind without download.
  * - `TELEGRAM_EVE_UPLOAD_POLICY`: keeps persisted files out of the text-only primary model.
@@ -52,7 +52,20 @@ describe("isMessageAddressedToBot", () => {
     expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
   });
 
-  it.each(["семинар начался", "osinary is a package", "квазиосинара"])(
+  it.each([
+    "осинарочка, глянь",
+    "асинарачка, спасибо",
+    "озинарка тут?",
+    "Осинарушка, помоги",
+    "передайте осинарам",
+    "осинарами не пользуются",
+    "асинарке привет",
+    "osinarochka, look",
+  ])("accepts any suffix after an agent name stem: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
+  });
+
+  it.each(["семинар начался", "квазиосинара", "квазиосинарочка", "не-осина-растёт"])(
     "does not match a name stem inside another word: %s",
     (text) => {
       expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);

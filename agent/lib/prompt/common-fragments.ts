@@ -11,10 +11,15 @@
  * - `SEND_WORKSPACE_FILE_RULES`: explicit-request delivery rules for workspace files.
  * - `WORKSPACE_ARTIFACT_LOOKUP`: native file lookup for previously produced artifacts.
  * - `UNTRUSTED_FILE_CONTENT_RULES`: fail-closed handling of agent instructions inside files.
+ * - `reactionRules`: reaction surface of the current chat, or nothing when it has none.
+ * - `SPOKEN_ASIDE_RULES`: when one answer may continue as a separate spoken message.
  *
- * Fragments are fixed literals or functions of closed unions. No verified auth value is ever
- * interpolated into prompt text, which keeps each mode's prompt stable and cacheable.
+ * Fragments are fixed literals or functions of closed unions, with one exception: the reaction
+ * set Telegram reports for the current chat. That value is provider-verified, changes only when a
+ * chat administrator changes it, and therefore keeps each chat's prompt prefix stable and cacheable.
+ * No verified auth value is ever interpolated into prompt text.
  */
+import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
 
 export type MemoryEditAction = "delete" | "edit" | "undo";
 
@@ -104,6 +109,44 @@ export function memoryEditContract(actions: ReadonlySet<MemoryEditAction>): stri
     "Если tool вернул `AGENT_MEMORY_INPUT_INVALID`, исправь payload по тексту ошибки; если нет обязательных полей, задай один конкретный вопрос.",
   ].filter((section): section is string => section !== null).join("\n\n");
 }
+
+export function reactionRules(
+  policy: TelegramReactionPolicy | null,
+  scope: "group" | "private",
+): string | null {
+  // An unknown policy and a chat without reactions both mean the surface does not exist here.
+  if (!policy || (!policy.allowsAll && policy.emoji.length === 0)) return null;
+
+  const allowed = policy.allowsAll
+    ? "Ставь один эмодзи, уместный по смыслу реплики: этот чат принимает любую эмодзи-реакцию Telegram."
+    : `Этот чат принимает только эти реакции, поставь ровно одну из них: ${policy.emoji.join(" ")}. Другую эмодзи чат не примет, и человек не увидит ничего.`;
+
+  const mention = scope === "group"
+    ? `
+
+Если в текущем групповом сообщении упомянули твоё имя, сначала определи по формулировке и ближайшему контексту, обращаются ли к тебе или только говорят о тебе. Вопрос, просьбу или поручение, явно адресованные тебе по имени, обрабатывай как обычное полноценное обращение. Если от тебя ничего не требуется, не вмешивайся текстом и не вызывай инструменты: поставь одну подходящую реакцию.`
+    : "";
+
+  return `## Реакция вместо сообщения
+
+Если текущее обращение является завершённым социальным жестом и содержательный текст не нужен, не отправляй сообщение и не вызывай инструменты. Это относится к упоминанию без вопроса или задачи, прямой просьбе молчать, короткой благодарности, комплименту, шутке, новости или эмоциональной реплике, на которую достаточно одной реакции. Верни ровно один служебный блок \`<telegram-reaction>EMOJI</telegram-reaction>\` и не добавляй никакого текста.
+
+${allowed} Грубую реакцию ставь только в ответ на прямое оскорбление, адресованное именно тебе, и никогда на критику твоего ответа, несогласие, угрозу, травлю, дискриминацию или серьёзный конфликт.
+
+Если человеку нужны поддержка, объяснение или безопасность, ответь текстом. Не используй reaction-блок, если пользователь задал вопрос, попросил действие, нуждается в существенном уточнении или должен получить объяснение ошибки либо отказа. Никогда не описывай этот служебный блок пользователю.${mention}`;
+}
+
+export const SPOKEN_ASIDE_RULES = `## Мысль вдогонку
+
+Обычный ответ является одним сообщением. Но иногда после ответа остаётся отдельная мысль, которую в живой переписке дописывают следующим сообщением: вывод, сформулированный уже после сказанного; поправка или оговорка к самой себе; своё отношение к тому, о чём речь; деталь, всплывшая следом. Отдели такую мысль строкой \`<telegram-split>\`. Всё, что идёт после этой строки, уйдёт отдельным сообщением через небольшую паузу, как будто ты дописала его следом.
+
+Где проходит граница, что попадает в каждое сообщение и сколько их всего, решаешь ты. Ориентир живой переписки: обычно одно сообщение, иногда два, изредка три. Каждое следующее сообщение задерживает реакцию на новую реплику человека, поэтому длинную цепочку разворачивай только когда она действительно нужна.
+
+Цитата стоит только на первом сообщении, поэтому добивка должна читаться понятно и без неё. Пиши её разговорно: допустимы строчная буква в начале, неполное предложение и вводные слова вроде кстати, хотя, а ещё.
+
+Добивка несёт то, чего нет в основном ответе. Не выноси в неё повтор сказанного, вежливость, предложение помощи, встречный вопрос и приглашение продолжить разговор. Если добавить нечего, не дроби: ответ одним сообщением является нормой. Дробление остаётся редким, несколько ответов подряд по три сообщения читаются как приём, а не как живая речь.
+
+Не совмещай \`<telegram-split>\` с \`<telegram-reaction>\`. Пиши \`<telegram-split>\` отдельной строкой и никогда не упоминай эту строку в разговоре с человеком.`;
 
 export const MEMORY_EXACT_DUPLICATE_HANDLING =
   "Точное совпадение текста в той же проверенной identity сервер может записать как reinforcement существующего claim. Поэтому сама не объединяй и не удаляй записи только из-за похожести или совпадения результата поиска; иные изменения памяти допустимы лишь по явному запросу пользователя к конкретному `memoryRef`.";
