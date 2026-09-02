@@ -65,6 +65,49 @@ describe("parseModelProviderConfig", () => {
     })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
   });
 
+  it("accepts only the fixed Groq transport with explicit reasoning effort", () => {
+    const groq = {
+      ...validConfig,
+      agent: {
+        models: {
+          primary: {
+            contextWindowTokens: 131_042,
+            id: "qwen/qwen3.8-27b",
+            maxOutputTokens: 16_384,
+          },
+          vision: {
+            id: "qwen/qwen3.8-27b",
+            maxOutputTokens: 16_384,
+            supportsImageInput: true,
+          },
+        },
+        transport: {
+          baseUrl: "https://api.groq.com/openai/v1",
+          protocol: "openai-chat-completions",
+          providerName: "groq",
+          reasoning: { effort: "low", format: "reasoning-effort", type: "effort" },
+        },
+      },
+      provider: "groq",
+    } as const;
+
+    expect(parseModelProviderConfig(groq)).toEqual(groq);
+    for (const transport of [
+      { ...groq.agent.transport, baseUrl: "https://api.groq.com/openai" },
+      { ...groq.agent.transport, providerName: "openrouter" },
+      {
+        ...groq.agent.transport,
+        reasoning: { effort: "low", format: "reasoning-object", type: "effort" },
+      },
+      { ...groq.agent.transport, reasoning: null },
+    ]) {
+      expect(() => parseModelProviderConfig({
+        ...groq,
+        agent: { ...groq.agent, transport },
+      })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    }
+  });
+
   it("loads the same active schema that production mounts for the agent", async () => {
     const active = JSON.parse(await readFile("config/agent-model-providers.json", "utf8"));
 

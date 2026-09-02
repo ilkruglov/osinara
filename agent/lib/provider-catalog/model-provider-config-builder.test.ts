@@ -59,6 +59,21 @@ describe("buildModelProviderConfig", () => {
     },
     {
       expected: {
+        baseUrl: "https://api.groq.com/openai/v1",
+        protocol: "openai-chat-completions",
+        providerName: "groq",
+        reasoning: { effort: "low", format: "reasoning-effort", type: "effort" },
+      },
+      model: catalogModel({
+        id: "qwen/qwen3.8-27b",
+        reasoningOptions: [{ type: "none" }, { effort: "low", type: "effort" }],
+        supportsImageInput: true,
+      }),
+      providerId: "groq",
+      reasoning: { effort: "low", type: "effort" },
+    },
+    {
+      expected: {
         authentication: "bearer",
         baseUrl: "https://api.minimax.io/anthropic/v1",
         compatibility: "minimax-anthropic",

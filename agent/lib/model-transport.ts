@@ -12,6 +12,7 @@
  * - OpenAI Chat Completions carries explicit provider-native thinking controls when configured.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGroq } from "@ai-sdk/groq";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
   LanguageModelV4FinishReason,
@@ -123,6 +124,9 @@ function configuredProviderOptions(
     return {
       [transport.providerName]: {
         ...existing?.[transport.providerName],
+        ...(transport.providerName === "groq"
+          ? { parallelToolCalls: false, reasoningFormat: "parsed" }
+          : {}),
         reasoningEffort: reasoning.type === "effort" ? reasoning.effort : "none",
       },
     };
@@ -258,6 +262,18 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
         ? { authToken: options.apiKey }
         : { apiKey: options.apiKey }),
       fetch,
+    });
+    return wrapLanguageModel({
+      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
+      model: provider(options.modelId),
+    });
+  }
+
+  if (transport.providerName === "groq") {
+    const provider = createGroq({
+      apiKey: options.apiKey,
+      baseURL: transport.baseUrl,
+      fetch: guardedFetch,
     });
     return wrapLanguageModel({
       middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),

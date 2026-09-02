@@ -11,7 +11,14 @@ import { supportsSubscriptionImageGeneration } from "./image-generation-availabi
 describe("subscription image generation availability", () => {
   it("requires the Codex subscription provider", () => {
     expect(supportsSubscriptionImageGeneration("codex-subscription")).toBe(true);
-    for (const provider of ["deepseek", "minimax", "neuraldeep", "opencode-go", "openrouter"] as const) {
+    for (const provider of [
+      "deepseek",
+      "groq",
+      "minimax",
+      "neuraldeep",
+      "opencode-go",
+      "openrouter",
+    ] as const) {
       expect(supportsSubscriptionImageGeneration(provider)).toBe(false);
     }
   });

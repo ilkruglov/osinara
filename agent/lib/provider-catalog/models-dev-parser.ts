@@ -57,7 +57,7 @@ const providerMetadataSchema = z.object({
 const metadataCatalogSchema = z.record(z.string(), z.unknown());
 
 type ModelCandidate = z.infer<typeof modelCandidateSchema>;
-type MetadataProviderId = Exclude<ProviderId, "openrouter">;
+type MetadataProviderId = Exclude<ProviderId, "groq" | "openrouter">;
 type MetadataReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
 const EXPRESSIBLE_EFFORTS = new Set<ReasoningEffort>(["low", "high", "max"]);
