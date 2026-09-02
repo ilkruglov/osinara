@@ -3,8 +3,8 @@
  *
  * Constructs covered:
  * - Eve delegates bounded transport retries to AI SDK 7's stable default.
- * - Eve outer orchestration never reissues a completed or partially observed model step.
- * - Empty output and unsupported provider tools propagate without a second paid call.
+ * - Eve keeps its own recovery for a stream that broke after the response started.
+ * - Empty output and unsupported provider tools stay recoverable inside one turn.
  * - Compaction fails rather than issuing a second summary model call.
  * - Dependency pins satisfy Eve 0.40.0's AI SDK 7 peer contract.
  */
@@ -37,7 +37,7 @@ describe("Eve model retry policy patch", () => {
     expect(packageJson.overrides.ai).toBe("7.0.60");
   });
 
-  it("delegates transport retries to AI SDK while disabling Eve-level reissues", async () => {
+  it("delegates transport retries to AI SDK and keeps Eve-level recovery", async () => {
     const [patchSource, runtime, compaction, aiRuntime] = await Promise.all([
       readFile("scripts/apply-eve-patches.ts", "utf8"),
       readFile(TOOL_LOOP_PATH, "utf8"),
@@ -50,13 +50,15 @@ describe("Eve model retry policy patch", () => {
     expect(aiRuntime).toContain("maxRetries = 2");
     expect(runtime).not.toMatch(/ToolLoopAgent\([^)]*maxRetries/u);
     expect(compaction).not.toMatch(/generateText\([^)]*maxRetries/u);
-    // Stable function names and log messages survive Eve's package build and guard semantic reissues.
-    expect(runtime).toContain("async function runModelCallWithRetries");
-    expect(runtime).toContain("async function attemptEmptyResponseRecovery");
-    expect(runtime).toContain("async function attemptUnsupportedProviderToolRecovery");
-    expect(runtime).not.toContain("model call failed transiently — retrying");
-    expect(runtime).not.toContain("reissuing the model call once");
-    expect(runtime).not.toContain("disabling unsupported provider tool(s); retrying step once");
+    // The patch must not strip Eve's own recovery: a stream that breaks after the response
+    // started is invisible to transport retries, and only these paths reissue that one call.
+    expect(patchSource).not.toContain("runModelCallWithRetries");
+    expect(patchSource).not.toContain("attemptEmptyResponseRecovery");
+    expect(patchSource).not.toContain("attemptUnsupportedProviderToolRecovery");
+    expect(runtime).toContain("classifyModelCallError(e)!==`retry`");
+    expect(runtime).toContain("model call failed transiently — retrying");
+    expect(runtime).toContain("reissuing the model call once");
+    expect(runtime).toContain("disabling unsupported provider tool(s); retrying step once");
     expect(compaction).toContain("EVE_COMPACTION_OUTPUT_TOO_LARGE");
   });
 
