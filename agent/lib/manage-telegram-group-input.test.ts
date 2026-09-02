@@ -159,7 +159,6 @@ describe("manage_telegram_group model input", () => {
       '{"action":"remove","telegramChatId":"-1001234567890"}',
       "addressed_only | all | owner_only",
       "family_private | external",
-      "не более одного раза",
     ]) expect(manageTelegramGroup.description).toContain(fragment);
   });
 });

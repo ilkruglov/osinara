@@ -15,14 +15,16 @@ import {
   buildSubagentToolSurface,
 } from "./tool-policy/mode-tool-surface.js";
 
-const REQUIRED_DESCRIPTION_SECTIONS = [
-  "Когда использовать:",
-  "Не использовать:",
-  "Вход:",
-  "Результат:",
-  "Ошибка:",
+// Generic call discipline (when to call, input provenance, result and error handling) is stated
+// once in the permanent instructions. Repeating it per descriptor cost ~17k characters per step.
+const GENERIC_DESCRIPTION_FILLER = [
+  "Когда использовать: только когда назначение выше",
+  "Вход: передавай только поля schema",
+  "Ошибка: следуй code, correction, retryable",
 ] as const;
-const TOTAL_DESCRIPTION_MAX_CHARACTERS = 40_000;
+const TOTAL_DESCRIPTION_MAX_CHARACTERS = 30_000;
+const TOOL_DESCRIPTION_MAX_CHARACTERS = 3_000;
+const DENIED_DESCRIPTION_MAX_CHARACTERS = 160;
 
 function surfaces() {
   const externalInput = {
@@ -56,11 +58,12 @@ describe("model-facing tool contracts", () => {
       for (const [toolName, definition] of Object.entries(surface)) {
         expect(definition.inputSchema, `${surfaceName}.${toolName} input schema`).toBeDefined();
         expect(typeof definition.execute, `${surfaceName}.${toolName} executor`).toBe("function");
+        const denied = /недоступен/u.test(definition.description);
         expect(definition.description.length, `${surfaceName}.${toolName} prompt size`)
-          .toBeLessThan(4_000);
-        for (const section of REQUIRED_DESCRIPTION_SECTIONS) {
-          expect(definition.description, `${surfaceName}.${toolName} missing ${section}`)
-            .toContain(section);
+          .toBeLessThan(denied ? DENIED_DESCRIPTION_MAX_CHARACTERS : TOOL_DESCRIPTION_MAX_CHARACTERS);
+        for (const filler of GENERIC_DESCRIPTION_FILLER) {
+          expect(definition.description, `${surfaceName}.${toolName} repeats generic filler`)
+            .not.toContain(filler);
         }
       }
     }

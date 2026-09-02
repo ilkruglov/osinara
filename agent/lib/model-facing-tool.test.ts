@@ -26,8 +26,8 @@ describe("model-facing tool boundary", () => {
     const wrapped = wrapModelFacingTool("test_tool", source);
 
     await expect(wrapped.execute({}, {} as never)).resolves.toEqual({ ok: true });
-    expect(wrapped.description).toContain(source.description);
-    expect(wrapped.description).toContain("Ошибка:");
+    // Generic call discipline lives in the permanent instructions, not in every descriptor.
+    expect(wrapped.description).toBe(source.description);
     expect(wrapped.inputSchema).toBe(source.inputSchema);
   });
 
