@@ -5,6 +5,7 @@
  * - Every documented member status maps to presence or absence without guessing.
  * - A restricted member is present only while Telegram still reports membership.
  * - An unusable answer stays unknown and fails closed instead of implying absence.
+ * - A missing bot token is reported as configuration, not as a retryable provider failure.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,6 +18,10 @@ vi.mock("eve/channels/telegram", () => ({ callTelegramApi: telegram.callTelegram
 const { telegramChatMemberPresence } = await import("./telegram-chat-membership.js");
 
 const TARGET = { telegramChatId: "-1001", telegramUserId: "77" };
+
+// The lookup resolves the bot token itself, so the suite provides one explicitly instead of
+// depending on the ambient environment: the test container has none.
+process.env.TELEGRAM_BOT_TOKEN = "test-bot-token";
 
 function answer(result: unknown, overrides: { ok?: boolean; status?: number } = {}) {
   return {
@@ -82,6 +87,19 @@ describe("telegramChatMemberPresence", () => {
     }
     expect(caught).toBeInstanceOf(AppError);
     expect((caught as AppError).code).toBe("AGENT_TELEGRAM_CHAT_PRESENCE_UNKNOWN");
+  });
+
+  it("fails as configuration when the bot token is missing", async () => {
+    telegram.callTelegramApi.mockClear();
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    try {
+      await expect(telegramChatMemberPresence(TARGET))
+        .rejects.toThrowError(/AGENT_TELEGRAM_PRESENCE_CONFIG_MISSING/u);
+    } finally {
+      process.env.TELEGRAM_BOT_TOKEN = token;
+    }
+    expect(telegram.callTelegramApi).not.toHaveBeenCalled();
   });
 
   it("refuses a Telegram user id that is not a positive integer", async () => {

@@ -46,6 +46,19 @@ const INPUT_ERROR_CODE = "AGENT_REMINDER_INPUT_INVALID";
 const TOOL_ACTIONS = ["create", "update", "pause", "resume", "delete"] as const;
 const RECURRENCE_UNITS = ["daily", "weekly", "monthly"] as const;
 const TOP_LEVEL_FIELDS = ["action", "content", "firstRunAt", "id", "recurrence"] as const;
+// The chat has one timezone, so the wall clock the human confirms and the instant that is stored
+// must be the same reading. A UTC timestamp would silently move the reminder by three hours.
+const MOSCOW_OFFSET_SUFFIX = "+03:00";
+
+function requireMoscowOffset(raw: unknown): void {
+  if (typeof raw === "string" && !raw.trim().endsWith(MOSCOW_OFFSET_SUFFIX)) {
+    toolInputError(
+      INPUT_ERROR_CODE,
+      `Для firstRunAt указывай московское время со смещением ${MOSCOW_OFFSET_SUFFIX}, ` +
+        "например 2026-09-04T18:00:00+03:00",
+    );
+  }
+}
 
 const recurrenceSchema = z.object({
   interval: z.number().int().min(1).max(REMINDER_RECURRENCE_INTERVAL_MAX),
@@ -90,6 +103,7 @@ function requireReminderId(input: Record<string, unknown>): string {
 
 function requireCreateInput(input: Record<string, unknown>) {
   requireOnlyFields(input, ["action", "content", "firstRunAt", "recurrence"], "action=create", INPUT_ERROR_CODE);
+  requireMoscowOffset(input.firstRunAt);
   return {
     content: requiredString(input, "content", INPUT_ERROR_CODE, "Созвон в 18:00", {
       maxLength: REMINDER_CONTENT_MAX_LENGTH,
@@ -104,6 +118,7 @@ function requireUpdateInput(input: Record<string, unknown>) {
   const content = optionalString(input, "content", INPUT_ERROR_CODE, "Созвон в 18:00", {
     maxLength: REMINDER_CONTENT_MAX_LENGTH,
   });
+  requireMoscowOffset(input.firstRunAt);
   const firstRunAt = optionalIsoDate(input, "firstRunAt", INPUT_ERROR_CODE);
   const recurrence = input.recurrence === undefined ? undefined : requireRecurrence(input.recurrence);
   if (content === undefined && firstRunAt === undefined && recurrence === undefined) {
@@ -142,7 +157,8 @@ const MANAGE_DESCRIPTION = [
   "Изменить, приостановить и возобновить можно только напоминание, которое создал сам обратившийся участник.",
   "Удалить чужое напоминание разрешено, только если его автор больше не в этом чате: приложение проверяет это само и отклоняет удаление, пока автор здесь.",
   "Перед update/pause/resume/delete найди id через list_reminders.",
-  "firstRunAt всегда ISO datetime с offset. Напоминание уходит в общий чат, а не в тему форума.",
+  `firstRunAt всегда ISO datetime с московским смещением ${MOSCOW_OFFSET_SUFFIX}: другое смещение отклоняется, чтобы подтверждённое человеку время совпадало с сохранённым.`,
+  "Напоминание уходит в общий чат, а не в тему форума.",
 ].join(" ");
 
 const LIST_DESCRIPTION = [

@@ -10,7 +10,7 @@
  * - Caps hold across pausing and revival, and no anchor may sit far in the past.
  * - A departed author's reminder becomes removable by anyone, an unverified one stays put.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../app-error.js";
 import { closeDatabase, database } from "../database.js";
@@ -357,6 +357,38 @@ describeWithDatabase("group reminder repository", () => {
 
     await expect(create(fixture, FIRST_AUTHOR, "Снова можно", "2026-09-04T15:00:00.000Z", "orphan-slot-refill"))
       .resolves.toMatchObject({ scope: "group" });
+  });
+
+  it("refuses to delete a reminder whose delivery is already in flight", async () => {
+    const fixture = await createFixture();
+    const reminder = await create(fixture, FIRST_AUTHOR, "В доставке", "2026-09-04T09:00:00.000Z", "leased-created");
+    const probe = vi.fn(authorAbsent);
+    await reminderDispatchRepository.claimDue({
+      leaseMilliseconds: 300_000,
+      limit: 10,
+      now: new Date("2026-09-04T09:00:10.000Z"),
+    });
+
+    await expect(groupReminderRepository.delete(
+      groupAuth(fixture, SECOND_AUTHOR),
+      reminder.id,
+      "leased-delete",
+      probe,
+    )).rejects.toThrowError(/AGENT_REMINDER_DELIVERY_IN_PROGRESS/);
+    // The in-flight state is known before the lookup, so no provider request is spent on it.
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("refuses a replayed create marker that points at another author", async () => {
+    const fixture = await createFixture();
+    await create(fixture, FIRST_AUTHOR, "Своё", "2026-09-04T15:00:00.000Z", "shared-key");
+
+    await expect(groupReminderRepository.create(groupAuth(fixture, SECOND_AUTHOR), {
+      content: "Своё",
+      firstRunAt: new Date("2026-09-04T15:00:00.000Z"),
+      operationKey: "shared-key",
+      recurrence: null,
+    })).rejects.toThrowError(/AGENT_REMINDER_MUTATION_DENIED/);
   });
 
   it("keeps a foreign reminder when the author's presence cannot be verified", async () => {

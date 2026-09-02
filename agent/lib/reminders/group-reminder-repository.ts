@@ -19,13 +19,16 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { decodeDateUuidCursor, encodeDateUuidCursor, paginationFilterDigest } from "../keyset-pagination.js";
 import type { TelegramChatPresenceLookup } from "../telegram-chat-membership.js";
+import { GROUP_REMINDER_TIMEZONE, REMINDER_LIST_MAX_LIMIT } from "./reminder-config.js";
 import {
-  GROUP_REMINDER_MAX_BACKDATE_MS,
-  GROUP_REMINDER_MAX_PER_AUTHOR,
-  GROUP_REMINDER_MAX_PER_CHAT,
-  GROUP_REMINDER_TIMEZONE,
-  REMINDER_LIST_MAX_LIMIT,
-} from "./reminder-config.js";
+  requireFreeGroupSlot,
+  requireGroupReminderDestination,
+  requireGroupReminderOfThisChat,
+  requireGroupReminderTime,
+  requireOwnGroupReminder,
+  mutationDenied,
+  reminderNotFound,
+} from "./group-reminder-policy.js";
 import type { GroupReminderAuthorization } from "./group-reminder-context.js";
 import {
   applyReminderUpdate,
@@ -41,15 +44,10 @@ import {
 } from "./reminder-record.js";
 import {
   REMINDER_COLUMNS,
-  type MutableReminderRow,
   findReminderOperation,
   selectReminder,
 } from "./reminder-repository-helpers.js";
-import {
-  requireReminderContent,
-  requireReminderDate,
-  requireReminderRecurrence,
-} from "./reminder-validation.js";
+import { requireReminderContent, requireReminderRecurrence } from "./reminder-validation.js";
 
 export interface GroupReminderCreateInput {
   content: string;
@@ -71,85 +69,40 @@ export interface GroupReminderUpdateInput {
   recurrence?: ReminderRecurrence | null;
 }
 
-/** Statuses that still occupy a slot: delivered one-time reminders free theirs. */
-const LIVE_STATUSES = "('active', 'leased', 'paused')";
-
-function reminderNotFound(): AppError {
-  return new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
-}
-
-function requireGroupReminderTime(firstRunAt: Date): Date {
-  const validated = requireReminderDate(firstRunAt);
-  if (validated.getTime() < Date.now() - GROUP_REMINDER_MAX_BACKDATE_MS) {
-    throw new AppError(
-      "AGENT_REMINDER_GROUP_TIME_TOO_OLD",
-      "Это время уже прошло. Укажите время напоминания в будущем",
-    );
-  }
-  return validated;
-}
-
 /**
- * A reminder of another chat stays invisible rather than merely unchangeable: the participant must
- * not learn that it exists.
+ * Resolves who may delete this reminder without holding a lock or a connection. A foreign author is
+ * accepted only once Telegram confirms they left the chat; a delivery already in flight is refused
+ * before the lookup, so an in-flight reminder costs no provider request.
  */
-function requireGroupReminderOfThisChat(
+async function requireDeletableGroupReminderAuthor(
   auth: GroupReminderAuthorization,
-  reminder: MutableReminderRow,
-): void {
-  if (reminder.scope !== "group" || reminder.group_id !== auth.groupId) throw reminderNotFound();
-}
-
-function mutationDenied(message: string): AppError {
-  return new AppError("AGENT_REMINDER_MUTATION_DENIED", message);
-}
-
-function requireOwnGroupReminder(
-  auth: GroupReminderAuthorization,
-  reminder: MutableReminderRow,
-): void {
+  id: string,
+  resolveAuthorPresence: TelegramChatPresenceLookup,
+): Promise<string> {
+  const client = await database().connect();
+  let reminder;
+  try {
+    reminder = await selectReminder(client, auth.familyId, id);
+  } finally {
+    client.release();
+  }
+  if (!reminder) throw reminderNotFound();
   requireGroupReminderOfThisChat(auth, reminder);
-  if (reminder.author_telegram_user_id !== auth.telegramUserId) {
-    throw mutationDenied("Изменить или удалить напоминание может только тот, кто его создал");
-  }
-}
+  const author = reminder.author_telegram_user_id;
+  if (author === null) throw reminderNotFound();
+  requireReminderNotLeased(reminder, "delete");
+  if (author === auth.telegramUserId) return author;
 
-/**
- * Both caps are enforced here under one per-group lock, so counting and the write that follows it
- * cannot interleave with another participant. `excludeId` keeps a revived reminder from counting
- * itself when it is already live.
- */
-async function requireFreeGroupSlot(
-  client: PoolClient,
-  auth: GroupReminderAuthorization,
-  excludeId: string | null,
-): Promise<void> {
-  await client.query(
-    "SELECT pg_advisory_xact_lock(hashtextextended('osinara-group-reminders:' || $1::text, 0))",
-    [auth.groupId],
-  );
-  const counts = await client.query<{ mine: string; total: string }>(
-    `SELECT count(*) AS total,
-            count(*) FILTER (WHERE author_telegram_user_id = $2) AS mine
-     FROM reminders
-     WHERE scope = 'group' AND group_id = $1 AND status IN ${LIVE_STATUSES}
-       AND ($3::uuid IS NULL OR id <> $3::uuid)`,
-    [auth.groupId, auth.telegramUserId, excludeId],
-  );
-  if (Number(counts.rows[0]!.mine) >= GROUP_REMINDER_MAX_PER_AUTHOR) {
-    throw new AppError(
-      "AGENT_REMINDER_GROUP_AUTHOR_LIMIT",
-      `Вы уже поставили в этом чате максимум напоминаний (${GROUP_REMINDER_MAX_PER_AUTHOR}). ` +
-        "Удалите одно из них, чтобы поставить новое",
+  const presence = await resolveAuthorPresence({
+    telegramChatId: auth.telegramChatId,
+    telegramUserId: author,
+  });
+  if (presence === "present") {
+    throw mutationDenied(
+      "Это напоминание поставил другой участник, и он в чате. Удалить его может только он",
     );
   }
-  if (Number(counts.rows[0]!.total) >= GROUP_REMINDER_MAX_PER_CHAT) {
-    throw new AppError(
-      "AGENT_REMINDER_GROUP_CHAT_LIMIT",
-      `В этом чате уже стоит максимум напоминаний (${GROUP_REMINDER_MAX_PER_CHAT}). ` +
-        "Новое можно поставить после того, как участники удалят ненужные",
-    );
-  }
+  return author;
 }
 
 export const groupReminderRepository = {
@@ -192,18 +145,7 @@ export const groupReminderRepository = {
       }
 
       // Destination is accepted only from the live registration of the verified current chat.
-      const group = await client.query(
-        `SELECT 1 FROM telegram_groups
-         WHERE id = $1 AND family_id = $2 AND telegram_chat_id = $3 AND type = 'external'`,
-        [auth.groupId, auth.familyId, auth.telegramChatId],
-      );
-      if (!group.rowCount) {
-        throw new AppError(
-          "AGENT_REMINDER_DESTINATION_INVALID",
-          "Эта группа больше не подключена как внешняя, напоминание создать нельзя",
-        );
-      }
-
+      await requireGroupReminderDestination(client, auth);
       await requireFreeGroupSlot(client, auth, null);
       const inserted = await client.query<ReminderRow>(
         `INSERT INTO reminders
@@ -394,6 +336,10 @@ export const groupReminderRepository = {
     operationKey: string,
     resolveAuthorPresence: TelegramChatPresenceLookup,
   ): Promise<boolean> {
+    // Presence is resolved before any lock and before a pooled connection is held: the lookup is a
+    // network call, and the delivery path takes its own `FOR UPDATE` on the same row. Holding the
+    // row through it would stall the current dispatch batch for the whole Telegram timeout.
+    const author = await requireDeletableGroupReminderAuthor(auth, id, resolveAuthorPresence);
     const inputHash = reminderOperationHash({ id });
     const client = await database().connect();
     try {
@@ -412,20 +358,12 @@ export const groupReminderRepository = {
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw reminderNotFound();
       requireGroupReminderOfThisChat(auth, reminder);
-      const author = reminder.author_telegram_user_id;
-      if (author === null) throw reminderNotFound();
-      // The row lock is held across one bounded Telegram call. The dispatcher claims with SKIP
-      // LOCKED, so a locked reminder is only passed over for that minute rather than blocking.
-      if (author !== auth.telegramUserId) {
-        const presence = await resolveAuthorPresence({
-          telegramChatId: auth.telegramChatId,
-          telegramUserId: author,
-        });
-        if (presence === "present") {
-          throw mutationDenied(
-            "Это напоминание поставил другой участник, и он в чате. Удалить его может только он",
-          );
-        }
+      // The row could have been replaced between the presence answer and this lock, so the verdict
+      // is only honoured for the exact author it was given for.
+      if (reminder.author_telegram_user_id !== author) {
+        throw mutationDenied(
+          "Напоминание изменилось, пока проверялся его автор. Повторите удаление",
+        );
       }
       requireReminderNotLeased(reminder, "delete");
       await recordReminderOperation(client, {

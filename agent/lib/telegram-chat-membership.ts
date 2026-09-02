@@ -27,6 +27,17 @@ const TELEGRAM_USER_ID_PATTERN = /^[1-9]\d*$/u;
 const PRESENT_STATUSES = new Set(["administrator", "creator", "member"]);
 const ABSENT_STATUSES = new Set(["kicked", "left"]);
 
+function requireTelegramBotToken(): string {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    throw new AppError(
+      "AGENT_TELEGRAM_PRESENCE_CONFIG_MISSING",
+      "Не задан Telegram bot token для проверки участия в чате",
+    );
+  }
+  return botToken;
+}
+
 function presenceUnknown(reason: string): AppError {
   console.error(JSON.stringify({ code: "AGENT_TELEGRAM_CHAT_PRESENCE_UNKNOWN", reason }));
   return new AppError(
@@ -46,11 +57,15 @@ export const telegramChatMemberPresence: TelegramChatPresenceLookup = async (inp
     );
   }
 
+  // The token is resolved before the call, so a missing secret fails as configuration instead of
+  // being translated into the retryable presence-unknown answer below.
+  const botToken = requireTelegramBotToken();
   const signal = AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS);
   let response;
   try {
     response = await callTelegramApi({
       body: { chat_id: input.telegramChatId, user_id: Number(input.telegramUserId) },
+      botToken,
       fetch: (request, init) => fetch(request, { ...init, signal }),
       method: "getChatMember",
     });
