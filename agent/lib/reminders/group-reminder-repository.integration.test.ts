@@ -9,6 +9,7 @@
  * - The trusted private-chat boundary never reaches a reminder of a public chat.
  * - Caps hold across pausing and revival, and no anchor may sit far in the past.
  * - A departed author's reminder becomes removable by anyone, an unverified one stays put.
+ * - The owner can always list and remove a public chat reminder from their private chat.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +22,7 @@ import {
 } from "./reminder-config.js";
 import type { GroupReminderAuthorization } from "./group-reminder-context.js";
 import { groupReminderRepository } from "./group-reminder-repository.js";
+import { ownerGroupReminderAdministration } from "./owner-group-reminder-administration.js";
 import { reminderDispatchRepository } from "./reminder-dispatch-repository.js";
 import { reminderRepository } from "./reminder-repository.js";
 
@@ -420,6 +422,61 @@ describeWithDatabase("group reminder repository", () => {
       .rejects.toThrowError(/AGENT_REMINDER_MUTATION_DENIED/);
     await expect(reminderRepository.list(ownerPrivateAuth(fixture), { limit: 100 }))
       .resolves.toEqual({ items: [], nextCursor: null });
+  });
+
+  it("lets the owner list and delete a public chat reminder from the private chat", async () => {
+    const fixture = await createFixture();
+    const owner = ownerPrivateAuth(fixture);
+    const reminder = await create(fixture, FIRST_AUTHOR, "Автор недоступен", "2026-09-04T15:00:00.000Z", "owner-door");
+
+    const listed = await ownerGroupReminderAdministration.list(owner, fixture.chatId);
+    expect(listed.items).toEqual([expect.objectContaining({
+      authorTelegramUserId: FIRST_AUTHOR,
+      content: "Автор недоступен",
+      id: reminder.id,
+      status: "active",
+    })]);
+
+    await expect(ownerGroupReminderAdministration.delete(
+      owner,
+      fixture.chatId,
+      reminder.id,
+      "owner-door-delete",
+    )).resolves.toBe(true);
+    const stored = await database().query("SELECT 1 FROM reminders WHERE id = $1", [reminder.id]);
+    expect(stored.rowCount).toBe(0);
+  });
+
+  it("refuses the owner a chat that is not their registered external group", async () => {
+    const fixture = await createFixture();
+    const other = await createFixture();
+    const reminder = await create(other, FIRST_AUTHOR, "Чужая группа", "2026-09-04T15:00:00.000Z", "owner-foreign");
+
+    await expect(ownerGroupReminderAdministration.list(ownerPrivateAuth(fixture), other.chatId))
+      .rejects.toThrowError(/AGENT_REMINDER_GROUP_NOT_REGISTERED/);
+    await expect(ownerGroupReminderAdministration.delete(
+      ownerPrivateAuth(fixture),
+      other.chatId,
+      reminder.id,
+      "owner-foreign-delete",
+    )).rejects.toThrowError(/AGENT_REMINDER_GROUP_NOT_REGISTERED/);
+  });
+
+  it("refuses the owner a reminder whose delivery is already in flight", async () => {
+    const fixture = await createFixture();
+    const reminder = await create(fixture, FIRST_AUTHOR, "В доставке", "2026-09-04T09:00:00.000Z", "owner-leased");
+    await reminderDispatchRepository.claimDue({
+      leaseMilliseconds: 300_000,
+      limit: 10,
+      now: new Date("2026-09-04T09:00:10.000Z"),
+    });
+
+    await expect(ownerGroupReminderAdministration.delete(
+      ownerPrivateAuth(fixture),
+      fixture.chatId,
+      reminder.id,
+      "owner-leased-delete",
+    )).rejects.toThrowError(/AGENT_REMINDER_DELIVERY_IN_PROGRESS/);
   });
 
   it("claims a due group reminder and ignores the family owner's quiet hours", async () => {
