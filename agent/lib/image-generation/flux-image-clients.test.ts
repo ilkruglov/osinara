@@ -69,7 +69,7 @@ describe("flux image clients", () => {
 
   it("maps requested quality to the Cloudflare model ladder", async () => {
     const { cloudflareModelsForQuality } = await import("./flux-image-clients.js");
-    expect(cloudflareModelsForQuality("high")[0]).toBe("@cf/black-forest-labs/flux-2-klein-9b");
+    expect(cloudflareModelsForQuality("high")).toEqual(["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"]);
     expect(cloudflareModelsForQuality("auto")).toEqual(["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"]);
     expect(cloudflareModelsForQuality("low")).toEqual(["@cf/black-forest-labs/flux-1-schnell"]);
   });
