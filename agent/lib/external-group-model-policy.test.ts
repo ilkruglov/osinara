@@ -6,6 +6,8 @@
  * - External refusals and responses conceal every internal implementation detail.
  * - Dynamic capabilities, rather than blanket network or media rules, govern availability.
  */
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import { EXTERNAL_GROUP_MODEL_POLICY } from "./external-group-model-policy.js";
@@ -72,21 +74,19 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
     );
   });
 
-  it("defines concise ordinary-participant communication without escalation", () => {
+  it("defines concise ordinary-participant communication without escalation", async () => {
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/несколькими предложениями/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/слегка подстраивай/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/не копируй оскорбления и не усиливай конфликт/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/обычный участник разговора/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(
-      /Не используй длинное или короткое типографское тире/iu,
-    );
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/кавычки-ёлочки/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("—");
-    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("–");
-    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("«");
-    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toContain("»");
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/корпоративные ИИ-формулировки/iu);
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/ритуальные вступления/iu);
+    // Natural Russian typography is allowed everywhere; the old ban lived only here.
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toMatch(/типографское тире/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toMatch(/кавычки-ёлочки/iu);
+    // The human register is the agent's character, so it lives once in the permanent core.
+    const core = await readFile("agent/instructions.md", "utf8");
+    expect(core).toMatch(/обычный участник разговора/iu);
+    expect(core).toMatch(/корпоративные ИИ-формулировки/iu);
+    expect(core).toMatch(/ритуальные вступления/iu);
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toMatch(/корпоративные ИИ-формулировки/iu);
   });
 
   it("bounds register adaptation behind the verified chat tool", () => {

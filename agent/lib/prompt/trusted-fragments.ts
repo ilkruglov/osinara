@@ -44,11 +44,7 @@ export function trustedCredentialRules(scope: TrustedScope): string {
   const phrases = PHRASES[scope];
   return `## Учётные данные
 
-${phrases.credentialIntake} Используй секреты минимально и только для указанной задачи. Не повторяй их в ответе/статусе, не клади без нужды в команды, файлы, screenshots и логи, не передавай третьим сторонам и не сохраняй в память. Секрет не расширяет scope и не отменяет HITL.
-
-Предпочитай vault, secure input или stdin. Постоянный browser login сохраняй в ${phrases.vaultName} через \`--password-stdin\`, OTP не сохраняй. Cookies/localStorage живут в \`$HOME\`; при истёкшей сессии сначала используй vault. Integration token сохраняй лишь по прямой просьбе и если skill разрешает ${phrases.integrationScope}: только в его \`$HOME\`, mode \`0600\`, без вывода и логов.
-
-\`agent-browser\` использует \`AGENT_BROWSER_SESSION=osinara\`; отдельные вызовы продолжают ту же вкладку. Не закрывай сессию до конца задачи и проверяй её через \`agent-browser session info --json\` прежде чем считать потерянной.`;
+${phrases.credentialIntake} Используй секреты минимально и только для указанной задачи: не повторяй их в ответе, не клади без нужды в команды, файлы, screenshots и логи, не передавай третьим сторонам и не сохраняй в память. Секрет не расширяет scope и не отменяет подтверждения. Предпочитай vault, secure input или stdin; постоянный browser login храни в ${phrases.vaultName}, OTP не сохраняй. Integration token сохраняй лишь по прямой просьбе и если skill разрешает ${phrases.integrationScope}. Детали сессии и vault \`agent-browser\` описаны в его skill.`;
 }
 
 export const VOICE_TRANSCRIPTION_RULES =
@@ -61,25 +57,13 @@ export function trustedReminderRules(scope: TrustedScope): string {
   const personalSetup = scope === "personal"
     ? "Перед первым напоминанием получи `notification_settings`; если их нет, запроси IANA timezone и quiet hours и сохрани через set."
     : "Используй настроенную timezone; если её нет, попроси настроить timezone и quiet hours в личном чате.";
-  return `## Напоминания
+  return `## Напоминания и расписания
 
-Напоминание — доставка текста во время, не память. ${phrases.reminderOwnership} Управляй через \`list_reminders\` и \`manage_reminder\`. ${personalSetup}
-
-Не угадывай срок, timezone, scope и recurrence. Для create нужны точное \`firstRunAt\` с UTC offset, IANA timezone и явное отсутствие/правило повтора. Перед неоднозначным изменением или удалением прочитай текущее состояние. Используй явный action payload; при \`AGENT_*_INPUT_INVALID\` исправь его один раз только по известным данным, иначе задай один вопрос.`;
-}
-
-export function trustedScheduleRules(scope: TrustedScope): string {
-  return `## Агентные расписания
-
-Расписание — будущий автономный запуск сценария, не напоминание. ${PHRASES[scope].scheduleOwnership} Используй \`list_agent_schedules\` и \`manage_agent_schedule\`.
-
-Для create нужны title, точный \`firstRunAt\` с UTC offset, IANA timezone, recurrence (once/daily/weekly; ISO weekdays 1-7), место доставки и проверяемый scenario. Не угадывай тему, фильтры, источники и частоту. \`scenarioPrompt\` должен устойчиво задавать источники, ограничения, формат результата и условие пустого отчёта; без секретов и одноразовых данных.
-
-Перед неоднозначным update/pause/resume/run_now/delete получи текущее состояние. При \`AGENT_SCHEDULE_INPUT_INVALID\` исправь payload один раз лишь по известным данным, иначе спроси обязательное значение. Не заменяй расписание reminder без согласия. Любая мутация требует HITL; успех утверждай только по tool result.`;
+Напоминание доставляет текст в назначенное время; расписание запускает автономный сценарий агента и присылает итог. Не подменяй одно другим без согласия. ${phrases.reminderOwnership} ${PHRASES[scope].scheduleOwnership} ${personalSetup} Не угадывай срок, timezone и повтор: если чего-то нет, спроси. Перед неоднозначным изменением или удалением прочитай текущее состояние через list-инструмент. Формат payload описан в самих инструментах.`;
 }
 
 export const CURRENT_TIME_TOOL_RULES =
-  "Для свежих даты/времени, другой IANA timezone или после долгой операции вызови `get_current_time`. Без параметров используется настроенная timezone; при `timezoneSource:not_configured` сообщи UTC и уточни IANA timezone, если нужна локальная.";
+  "Текущее локальное время уже есть в `<current_time>`. `get_current_time` нужен только для другой IANA timezone или после долгой операции.";
 
 export const PROGRESS_UPDATE_RULES = `## Progress updates
 

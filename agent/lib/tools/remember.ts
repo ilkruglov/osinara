@@ -19,7 +19,7 @@ export default defineTool({
     "Сохранить одну устойчивую запись, которую ты сама определила только из проверенного сообщения текущего хода; не сохраняй предположения и одноразовые запросы.",
     "Обычный payload: {\"basis\":\"user_requested\",\"content\":\"...\",\"kind\":\"fact\",\"scope\":\"personal\",\"sensitivity\":\"normal\",\"subject\":{\"kind\":\"current_author\"}}.",
     "В группе sourceSequence выбирает ровно одно сообщение видимой дельты. Для существующей нити используй thread.action=attach и threadRef только из list/search/read_memory_thread; thread.action=create создаёт нить атомарно.",
-    "Результат содержит item.memoryRef, optional thread и notice для немедленного undo.",
+    "Результат содержит item.memoryRef и optional thread; для немедленной отмены доступен manage_memory с action undo. Не пересказывай пользователю служебные поля результата.",
   ].join(" "),
   inputSchema: rememberInputSchema,
   async execute(input, ctx) {
@@ -85,7 +85,8 @@ export default defineTool({
     return {
       item: toModelMemory(item),
       ...(item.thread === undefined ? {} : { thread: item.thread }),
-      notice: `Сохранено в область «${scope}». Для немедленной отмены используй manage_memory с action undo и memoryRef ${item.memoryRef}.`,
+      // Machine-readable only: a sentence here tends to be echoed to the user verbatim.
+      undoAvailable: true,
     };
   },
 });
