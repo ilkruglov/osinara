@@ -78,6 +78,7 @@ export default defineChannel<undefined, void, { batchId: string }>({
         batchId,
         diagnosticCode: data.code,
         eveSessionId: ctx.session.id,
+        eveTurnId: ctx.session.turn.id,
       });
       await releaseMemoryTurnSources(ctx);
       if (terminal === "replayed") return;
@@ -89,6 +90,7 @@ export default defineChannel<undefined, void, { batchId: string }>({
         batchId,
         diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
         eveSessionId: ctx.session.id,
+        eveTurnId: ctx.session.turn.id,
       });
       await releaseMemoryTurnSources(ctx);
       if (terminal === "replayed") return;

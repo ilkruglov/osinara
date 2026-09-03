@@ -298,6 +298,7 @@ describeWithDatabase("memory review repository", () => {
       batchId: batch!.batchId,
       diagnosticCode: "AGENT_MEMORY_REVIEW_REPLAYED_FAILURE",
       eveSessionId: "eve-review-replay",
+      eveTurnId: "turn_0",
     })).rejects.toThrowError(/AGENT_MEMORY_REVIEW_FAILURE_STATE_INVALID/u);
   });
 
@@ -331,14 +332,62 @@ describeWithDatabase("memory review repository", () => {
       batchId: batch!.batchId,
       diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
       eveSessionId: "eve-review-failure-replay",
+      eveTurnId: "turn-review-failure-replay",
     };
 
-    await expect(memoryReviewRepository.failRunning(failure)).resolves.toBe("recorded");
+    // Ход ничего не записал, поэтому батч освобождается, а повтор события идемпотентен.
+    await expect(memoryReviewRepository.failRunning(failure)).resolves.toBe("released");
     await expect(memoryReviewRepository.failRunning(failure)).resolves.toBe("replayed");
     await expect(database().query(
       "SELECT completed_turns FROM conversation_sessions WHERE id = $1",
       [session.rows[0]!.id],
     )).resolves.toMatchObject({ rows: [{ completed_turns: 0 }] });
+  });
+
+  it("keeps a failed batch blocking when its turn already wrote memory", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const session = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+          continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'canonical', 'review-failure-wrote',
+               'review-failure-wrote', now(), now()) RETURNING id`,
+      [fixture.familyId, fixture.groupId],
+    );
+    const source = await insertUserMessage({
+      conversationId: fixture.conversationId,
+      groupId: fixture.groupId,
+      sequence: 2,
+    });
+    const batch = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session.rows[0]!.id,
+      groupId: fixture.groupId,
+      timelineEntryId: source.id,
+    });
+    await memoryReviewRepository.bindEveTurn({
+      applicationSessionId: session.rows[0]!.id,
+      batchId: batch!.batchId,
+      eveSessionId: "eve-review-wrote",
+      eveTurnId: "turn-review-wrote",
+    });
+    await database().query(
+      `INSERT INTO memory_items_all
+         (family_id, scope, kind, confirmation, sensitivity, content, source, operation_key)
+       VALUES ($1, 'family', 'fact', 'model_high', 'normal', 'Записано до сбоя', $2, $3)`,
+      [fixture.familyId, "eve:eve-review-wrote:turn-review-wrote", "op-review-wrote"],
+    );
+
+    // Ход мог создать запись памяти, поэтому повтор запрещён и батч остаётся терминальным.
+    await expect(memoryReviewRepository.failRunning({
+      batchId: batch!.batchId,
+      diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
+      eveSessionId: "eve-review-wrote",
+      eveTurnId: "turn-review-wrote",
+    })).resolves.toBe("recorded");
+    await expect(database().query(
+      "SELECT status::text FROM memory_review_batches WHERE id = $1",
+      [batch!.batchId],
+    )).resolves.toMatchObject({ rows: [{ status: "failed" }] });
   });
 
   it("terminalizes an interactive batch that never reached an Eve turn", async () => {

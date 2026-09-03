@@ -11,7 +11,7 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 
-export type MemoryReviewTerminalResult = "recorded" | "replayed";
+export type MemoryReviewTerminalResult = "recorded" | "released" | "replayed";
 export type MemoryReviewCompletionResult = MemoryReviewTerminalResult | "failed";
 
 const SOURCE_BINDING_MISSING = "AGENT_MEMORY_REVIEW_SOURCE_BINDING_MISSING";
@@ -174,14 +174,49 @@ export const memoryReviewTerminalRepository = {
     }
   },
 
+  /**
+   * A failed interactive turn keeps the lane blocked, because `(lane_id, predecessor_sequence)` is
+   * unique: no later batch can occupy the same cursor. That is correct only when the turn might
+   * already have written memory, since a repeat would duplicate it. When the turn provably wrote
+   * nothing, the batch is released instead: its sources return to the unreviewed tail and a later
+   * turn reviews them normally, so one broken model call cannot stop the group from remembering.
+   */
   async failRunning(input: {
     batchId: string;
     diagnosticCode: string;
     eveSessionId: string;
+    eveTurnId: string;
   }): Promise<MemoryReviewTerminalResult> {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      const wrote = await client.query(
+        "SELECT 1 FROM memory_items_all WHERE source = $1 LIMIT 1",
+        [`eve:${input.eveSessionId}:${input.eveTurnId}`],
+      );
+      if (!wrote.rowCount) {
+        const released = await client.query<{ application_session_id: string }>(
+          `DELETE FROM memory_review_batches
+            WHERE id = $1 AND status = 'running' AND eve_session_id = $2
+            RETURNING application_session_id`,
+          [input.batchId, input.eveSessionId],
+        );
+        if (released.rowCount === 1) {
+          await terminalizeApplicationSession(client, {
+            applicationSessionId: released.rows[0]!.application_session_id,
+            completedAt: new Date(),
+            eveSessionId: input.eveSessionId,
+            outcome: "failed",
+          });
+          console.error(JSON.stringify({
+            batchId: input.batchId,
+            code: "AGENT_MEMORY_REVIEW_BATCH_RELEASED",
+            diagnosticCode: input.diagnosticCode,
+          }));
+          await client.query("COMMIT");
+          return "released";
+        }
+      }
       const result = await client.query<{ application_session_id: string }>(
         `UPDATE memory_review_batches
             SET status = 'failed', diagnostic_code = $3, completed_at = now(), updated_at = now()
@@ -199,6 +234,11 @@ export const memoryReviewTerminalRepository = {
           [input.batchId],
         );
         const terminal = replay.rows[0];
+        // A released batch leaves no row: the repeated failure event describes the same outcome.
+        if (!terminal) {
+          await client.query("COMMIT");
+          return "replayed";
+        }
         const sameFailure = terminal?.status === "failed" &&
           terminal.eve_session_id === input.eveSessionId &&
           terminal.diagnostic_code === input.diagnosticCode;
@@ -215,8 +255,6 @@ export const memoryReviewTerminalRepository = {
         eveSessionId: input.eveSessionId,
         outcome: "failed",
       });
-      // Terminal failures retain exact sources so an operator can prove and perform a later repair.
-      await enqueueMemoryReviewOwnerAlert(client, input.batchId, input.diagnosticCode);
       await client.query("COMMIT");
       return "recorded";
     } catch (error) {
