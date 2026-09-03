@@ -50,3 +50,47 @@ describe("model-facing tool boundary", () => {
     await expect(surface.raw!.execute({}, {} as never)).rejects.not.toThrow(/secret/u);
   });
 });
+
+describe("model-facing approval boundary", () => {
+  function approvalTool(approval: (ctx: unknown) => unknown) {
+    return defineTool({
+      approval: approval as never,
+      description: "Approval tool",
+      inputSchema: z.object({}).strict(),
+      execute: () => ({ ok: true }),
+    }) as ToolDefinition<any, any>;
+  }
+  const context = { toolInput: {}, toolName: "approval_tool" } as never;
+
+  it("turns an application input error thrown by the approval policy into a denial", async () => {
+    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => {
+      throw new AppError("AGENT_TEST_INPUT_INVALID", "Передайте toolAllowlist массивом");
+    }));
+
+    await expect((wrapped.approval as (ctx: unknown) => unknown)(context)).resolves.toEqual({
+      reason: "AGENT_TEST_INPUT_INVALID: Передайте toolAllowlist массивом",
+      type: "denied",
+    });
+  });
+
+  it("passes ordinary approval decisions through unchanged", async () => {
+    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => "user-approval"));
+
+    expect(await (wrapped.approval as (ctx: unknown) => unknown)(context)).toBe("user-approval");
+  });
+
+  it("does not swallow unexpected failures inside the approval policy", async () => {
+    const wrapped = wrapModelFacingTool("approval_tool", approvalTool(() => {
+      throw new TypeError("boom");
+    }));
+
+    await expect(async () => await (wrapped.approval as (ctx: unknown) => unknown)(context))
+      .rejects.toThrow("boom");
+  });
+
+  it("keeps tools without an approval policy untouched", () => {
+    const wrapped = wrapModelFacingTool("plain", tool(() => ({ ok: true })));
+
+    expect(wrapped.approval).toBeUndefined();
+  });
+});
