@@ -28,15 +28,17 @@ export interface MemoryReviewBatchSummary {
 export interface MemoryReviewClaim extends MemoryReviewBatchSummary {
   conversationId: string;
   familyId: string;
-  groupId: string;
-  groupType: "external" | "family_private";
+  groupId: string | null;
+  groupType: "external" | "family_private" | null;
   leaseToken: string;
+  memoryScopes: Array<"family" | "group" | "personal">;
   ownerTelegramUserId: string;
   ownerUserId: string;
   prompt: string;
-  scope: "family" | "group";
+  role: "external" | "member" | "owner" | "recovery_owner";
+  scope: "family" | "group" | "personal";
   telegramChatId: string;
-  telegramChatType: "group" | "supergroup";
+  telegramChatType: "group" | "private" | "supergroup";
   toolAllowlist: string[];
 }
 

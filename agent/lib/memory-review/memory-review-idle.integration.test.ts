@@ -74,4 +74,138 @@ describeWithDatabase("idle memory review", () => {
     );
     expect(columns.rows.map((row) => row.column_name).sort()).toEqual(["attribute", "occurred_at"]);
   });
+
+  it("materializes one pending batch for a group lane silent for ten minutes", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    const stale = "2026-09-03T10:00:00.000Z";
+    for (const sequence of [2, 3, 4]) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId, sentAt: stale, sequence,
+      });
+    }
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(1);
+    expect(claims[0]).toMatchObject({
+      groupId: fixture.groupId,
+      sourceCount: 3,
+      throughSequence: "4",
+    });
+    expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4"]);
+  });
+
+  it("waits while the newest unprocessed message is younger than the idle window", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    await insertUserMessage({
+      conversationId: fixture.conversationId, groupId: fixture.groupId,
+      sentAt: "2026-09-03T10:05:00.000Z", sequence: 2,
+    });
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(0);
+  });
+
+  it("materializes a batch as soon as ten fresh sources accumulate", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    for (let sequence = 2; sequence <= 11; sequence += 1) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId,
+        sentAt: "2026-09-03T10:09:30.000Z", sequence,
+      });
+    }
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.sourceCount).toBe(10);
+  });
+
+  it("does not materialize a second batch while the lane predecessor is unresolved", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    await insertUserMessage({
+      conversationId: fixture.conversationId, groupId: fixture.groupId,
+      sentAt: "2026-09-03T09:00:00.000Z", sequence: 2,
+    });
+    await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+    await insertUserMessage({
+      conversationId: fixture.conversationId, groupId: fixture.groupId,
+      sentAt: "2026-09-03T09:30:00.000Z", sequence: 3,
+    });
+    await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T11:00:00.000Z"),
+    });
+
+    const batches = await database().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM memory_review_batches WHERE conversation_id = $1",
+      [fixture.conversationId],
+    );
+    expect(batches.rows[0]!.count).toBe("1");
+  });
+
+  it("claims a personal conversation batch sponsored by the conversation owner", async () => {
+    const fixture = await createMainAgentPrivateMemoryFixture();
+    for (const sequence of [2, 3]) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: null,
+        sentAt: "2026-09-03T09:00:00.000Z", sequence,
+      });
+    }
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-09-03T10:00:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(1);
+    expect(claims[0]).toMatchObject({
+      conversationId: fixture.conversationId,
+      groupId: null,
+      groupType: null,
+      memoryScopes: ["personal", "family"],
+      ownerUserId: fixture.userId,
+      role: "owner",
+      scope: "personal",
+      sourceCount: 3,
+      telegramChatType: "private",
+      toolAllowlist: [],
+    });
+    expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["1", "2", "3"]);
+  });
 });

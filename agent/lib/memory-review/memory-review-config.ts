@@ -6,6 +6,9 @@
  */
 export const MEMORY_REVIEW_BATCH_SIZE = 50;
 export const MEMORY_REVIEW_DISPATCH_BATCH_SIZE = 10;
+// Idle review: a lane is reviewed after ten minutes of silence or once ten sources accumulate.
+export const MEMORY_REVIEW_IDLE_MILLISECONDS = 10 * 60 * 1_000;
+export const MEMORY_REVIEW_IDLE_MIN_SOURCES = 10;
 export const MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS = 15 * 60 * 1_000;
 export const MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS = 15 * 60 * 1_000;
 export const MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS = 1;

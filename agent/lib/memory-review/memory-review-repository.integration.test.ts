@@ -2,7 +2,7 @@
  * Durable group memory-review PostgreSQL integration tests.
  *
  * Constructs covered:
- * - Passive user messages form one immutable batch only when one lane reaches exactly 50 sources.
+ * - Passive user messages form one immutable batch when one lane reaches 50 sources; personal lanes are claimable.
  * - Agent responses and other forum topics do not count toward that lane's batch.
  * - Active source rows prevent timeline pruning until terminal completion.
  * - Successful review advances the lane cursor; failure leaves the lane blocked at its predecessor.
@@ -147,7 +147,7 @@ describeWithDatabase("memory review repository", () => {
     });
   });
 
-  it("does not materialize a legacy personal lane after observer crash", async () => {
+  it("materializes and claims a personal lane batch once fifty sources accumulate", async () => {
     const fixture = await createMainAgentPrivateMemoryFixture();
     await memoryReviewRepository.initializeLane({
       conversationId: fixture.conversationId,
@@ -162,16 +162,20 @@ describeWithDatabase("memory review repository", () => {
       });
     }
 
-    await expect(memoryReviewDispatchRepository.claimPending({
+    const claimed = await memoryReviewDispatchRepository.claimPending({
       leaseMilliseconds: 60_000,
       limit: 10,
       now: new Date("2026-08-12T10:00:00.000Z"),
-    })).resolves.toEqual([]);
-    await expect(database().query(
-      `SELECT count(*)::integer AS count FROM memory_review_batches
-        WHERE conversation_id = $1`,
-      [fixture.conversationId],
-    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    });
+
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]).toMatchObject({
+      groupId: null,
+      scope: "personal",
+      sourceCount: 50,
+      telegramChatType: "private",
+      throughSequence: "51",
+    });
   });
 
   it("retains active sources and advances only after successful completion", async () => {
