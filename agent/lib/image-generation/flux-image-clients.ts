@@ -2,7 +2,7 @@
  * Flux image generation providers with an ordered fallback chain.
  *
  * Exports:
- * - `createCloudflareImageClient`: Workers AI text-to-image (klein-4b, schnell fallback), JSON base64.
+ * - `createCloudflareImageClient`: Workers AI text-to-image (klein-4b, schnell for low quality or fallback).
  * - `createNeuralDeepImageClient`: async task API (create → poll → download PNG).
  * - `createFallbackImageClient`: tries providers in order; quota, auth and transport failures of an
  *   earlier provider move on to the next one, a definitive rejection of the prompt does not.
@@ -11,8 +11,8 @@
 import { AppError, isAppError } from "../app-error.js";
 import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
 
+// klein-9b and flux-2-dev are deliberately absent: they burn the free Workers AI quota in a few images.
 export const CLOUDFLARE_IMAGE_MODELS = [
-  "@cf/black-forest-labs/flux-2-klein-9b",
   "@cf/black-forest-labs/flux-2-klein-4b",
   "@cf/black-forest-labs/flux-1-schnell",
 ] as const;
@@ -20,9 +20,8 @@ type CloudflareImageModel = (typeof CLOUDFLARE_IMAGE_MODELS)[number];
 
 /** Requested quality picks the first model; each failure moves down to a cheaper one. */
 export function cloudflareModelsForQuality(quality: ImageGenerationRequest["quality"]): readonly CloudflareImageModel[] {
-  if (quality === "high") return CLOUDFLARE_IMAGE_MODELS;
   if (quality === "low") return ["@cf/black-forest-labs/flux-1-schnell"];
-  return ["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"];
+  return CLOUDFLARE_IMAGE_MODELS;
 }
 
 /** FLUX.2 models accept only multipart bodies; FLUX.1 schnell accepts JSON. */
