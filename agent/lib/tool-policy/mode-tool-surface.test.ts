@@ -9,6 +9,7 @@
  * - Native subagents stay unavailable externally and cannot make root-owned durable-memory decisions.
  */
 import type { SessionAuth } from "eve/context";
+import { webFetch as eveWebFetch } from "eve/tools/defaults";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -25,6 +26,7 @@ vi.mock("./external-group-live-policy.js", () => ({
 }));
 
 import { FAMILY_ONLY_TOOL_NAMES, PRIVATE_ONLY_TOOL_NAMES, TRUSTED_MODE_TOOL_NAMES, buildModeToolSurface, buildSubagentToolSurface } from "./mode-tool-surface.js";
+import { TRUSTED_MODE_TOOLS } from "./trusted-mode-tool-catalog.js";
 import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, EXTERNAL_GROUP_TOOL_NAMES, FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, type ExternalGroupToolName } from "./group-tool-catalog.js";
 
 function names(input: Parameters<typeof buildModeToolSurface>[0]): string[] {
@@ -107,8 +109,26 @@ describe("trusted mode tool surfaces", () => {
   it("emits no denial stubs in a trusted zone", () => {
     for (const environment of ["private", "family"] as const) {
       for (const denied of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
+        // web_fetch is the one built-in a trusted zone re-describes; it keeps Eve's executor below.
+        if (denied === "web_fetch") continue;
         expect(names({ environment }), `${environment} must not override ${denied}`).not.toContain(denied);
       }
+    }
+  });
+
+  it("re-describes web_fetch in a trusted zone without replacing Eve's executor", () => {
+    for (const environment of ["private", "family"] as const) {
+      const surface = buildModeToolSurface({ environment });
+      const tool = surface.web_fetch as unknown as { description: string; execute: unknown };
+      expect(tool.description).toContain("web_search");
+      expect(typeof tool.execute).toBe("function");
+    }
+    // The catalog entry spreads Eve's definition, so the executor is Eve's own before wrapping.
+    {
+      const catalogTool = TRUSTED_MODE_TOOLS.web_fetch as unknown as { execute: unknown; inputSchema: unknown };
+      const eve = eveWebFetch as unknown as { execute: unknown; inputSchema: unknown };
+      expect(catalogTool.execute).toBe(eve.execute);
+      expect(catalogTool.inputSchema).toBe(eve.inputSchema);
     }
   });
 
