@@ -60,12 +60,15 @@ export function detectImageMediaType(bytes: Uint8Array): ImageMediaType | null {
   return null;
 }
 
-/** Codex sizes map to the closest Flux dimensions; `auto` is a square. */
+/**
+ * Codex sizes map to small Flux dimensions: Workers AI bills per 512x512 tile, so a square is one
+ * tile and the landscape/portrait variants are two. NeuralDeep only takes an aspect ratio.
+ */
 function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string; height: number; width: number } {
   switch (size) {
-    case "1536x1024": return { aspectRatio: "3:2", height: 1024, width: 1536 };
-    case "1024x1536": return { aspectRatio: "3:5", height: 1536, width: 1024 };
-    default: return { aspectRatio: "1:1", height: 1024, width: 1024 };
+    case "1536x1024": return { aspectRatio: "3:2", height: 512, width: 768 };
+    case "1024x1536": return { aspectRatio: "3:5", height: 768, width: 512 };
+    default: return { aspectRatio: "1:1", height: 512, width: 512 };
   }
 }
 

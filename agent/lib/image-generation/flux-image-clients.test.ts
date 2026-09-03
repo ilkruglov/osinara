@@ -42,7 +42,7 @@ describe("flux image clients", () => {
     expect(String(url)).toContain("/ai/run/@cf/black-forest-labs/flux-2-klein-4b");
     // FLUX.2 takes multipart form fields, not JSON.
     expect(init.body).toBeInstanceOf(FormData);
-    expect(Object.fromEntries((init.body as FormData).entries())).toEqual({ height: "1024", prompt: "кот на подоконнике", steps: "4", width: "1024" });
+    expect(Object.fromEntries((init.body as FormData).entries())).toEqual({ height: "512", prompt: "кот на подоконнике", steps: "4", width: "512" });
     expect(init.headers["content-type"]).toBeUndefined();
   });
 
@@ -62,7 +62,7 @@ describe("flux image clients", () => {
 
     expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/flux" });
     expect(cloudflareFetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(cloudflareFetch.mock.calls[1]![1].body)).toMatchObject({ height: 1024, steps: 4, width: 1536 });
+    expect(JSON.parse(cloudflareFetch.mock.calls[1]![1].body)).toMatchObject({ height: 512, steps: 4, width: 768 });
     expect(JSON.parse(neuralFetch.mock.calls[0]![1].body)).toEqual({ options: { aspect_ratio: "3:2" }, prompt: "кот на подоконнике" });
     expect(String(neuralFetch.mock.calls[3]![0])).toContain("/images/tasks/1ca2c888-1a64-4fbe-99e9-23c230779a37/result");
   });
