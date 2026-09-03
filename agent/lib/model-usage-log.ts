@@ -20,6 +20,12 @@ export interface NormalizedProviderUsage {
   readonly reasoningTokens: number | null;
 }
 
+/** Finish reason and visible content size: a reasoning-only reply shows up as zero characters. */
+interface ResponseShape {
+  contentChars: number;
+  finishReason: string | null;
+}
+
 export interface ModelUsageLogContext {
   readonly modelId: string;
   readonly url: string;
@@ -73,29 +79,46 @@ export function normalizeProviderUsage(usage: unknown): NormalizedProviderUsage 
   };
 }
 
-function usageFromJson(text: string): NormalizedProviderUsage | null {
-  let parsed: unknown;
+function parseJson(text: string): Record<string, unknown> | null {
   try {
-    parsed = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
-  return isRecord(parsed) ? normalizeProviderUsage(parsed.usage) : null;
 }
 
-function usageFromSseLine(line: string): NormalizedProviderUsage | null {
+/** Reads finish reason and content text from one chat-completions chunk or full response. */
+function observeChoices(payload: Record<string, unknown>, shape: ResponseShape): void {
+  if (!Array.isArray(payload.choices)) return;
+  for (const choice of payload.choices) {
+    if (!isRecord(choice)) continue;
+    if (typeof choice.finish_reason === "string") shape.finishReason = choice.finish_reason;
+    const part = isRecord(choice.delta) ? choice.delta : isRecord(choice.message) ? choice.message : null;
+    if (part && typeof part.content === "string") shape.contentChars += part.content.length;
+  }
+}
+
+function sseDataPayload(line: string): Record<string, unknown> | null {
   if (!line.startsWith(SSE_DATA_PREFIX)) return null;
   const payload = line.slice(SSE_DATA_PREFIX.length).trim();
   if (payload.length === 0 || payload === "[DONE]") return null;
-  return usageFromJson(payload);
+  return parseJson(payload);
 }
 
 function emit(
   log: UsageLogger,
   context: ModelUsageLogContext,
   usage: NormalizedProviderUsage,
+  shape: ResponseShape,
 ): void {
-  log(JSON.stringify({ code: "AGENT_MODEL_USAGE", modelId: context.modelId, url: context.url, ...usage }));
+  log(JSON.stringify({
+    code: "AGENT_MODEL_USAGE",
+    modelId: context.modelId,
+    url: context.url,
+    ...usage,
+    ...shape,
+  }));
 }
 
 function observeStream(
@@ -107,16 +130,22 @@ function observeStream(
   let pending = "";
   // Streaming providers report usage in one late chunk; the last observed value wins.
   let usage: NormalizedProviderUsage | null = null;
+  const shape: ResponseShape = { contentChars: 0, finishReason: null };
   const consume = (text: string, flush: boolean): void => {
     pending += text;
     const lines = pending.split(/\r?\n/u);
     pending = flush ? "" : (lines.pop() ?? "");
-    for (const line of lines) usage = usageFromSseLine(line) ?? usage;
+    for (const line of lines) {
+      const payload = sseDataPayload(line);
+      if (payload === null) continue;
+      observeChoices(payload, shape);
+      usage = normalizeProviderUsage(payload.usage) ?? usage;
+    }
   };
   return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     flush() {
       consume(decoder.decode(), true);
-      if (usage !== null) emit(log, context, usage);
+      if (usage !== null) emit(log, context, usage, shape);
     },
     transform(chunk, controller) {
       controller.enqueue(chunk);
@@ -141,8 +170,13 @@ export function observeModelUsage(
   }
   // Usage is read from a copy so the caller's body stream stays untouched.
   void response.clone().text().then((text) => {
-    const usage = usageFromJson(text);
-    if (usage !== null) emit(log, context, usage);
+    const payload = parseJson(text);
+    if (payload === null) return;
+    const usage = normalizeProviderUsage(payload.usage);
+    if (usage === null) return;
+    const shape: ResponseShape = { contentChars: 0, finishReason: null };
+    observeChoices(payload, shape);
+    emit(log, context, usage, shape);
   }).catch(() => undefined);
   return response;
 }

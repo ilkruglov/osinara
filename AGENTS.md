@@ -164,7 +164,8 @@ Eve discovery воспримет такой файл как production tool ил
 Eve `0.40.0` не предоставляет все application seams для durable Telegram ingress и по умолчанию
 повторяет некоторые model calls на уровне Eve. `scripts/apply-eve-patches.ts` добавляет
 verified-update/drain hooks, возврат Session, application routing/HITL contracts, exact-once model
-policy, fail-closed `input.requested`, verified task-origin auth, ограничение root delegation и
+policy (единственный повтор пустого ответа модели оставлен: у него нет side effect, а без него
+reasoning-only ответ паркует сессию), fail-closed `input.requested`, verified task-origin auth, ограничение root delegation и
 пятиминутное ожидание health при холодном старте.
 Патч применяется автоматически через `postinstall` после каждого `npm ci`.
 Он идемпотентен, проверяет точную версию и ожидаемые artifacts; несовпадение должно останавливать сборку.

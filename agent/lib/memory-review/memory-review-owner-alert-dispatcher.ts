@@ -41,7 +41,7 @@ function alertText(alert: MemoryReviewOwnerAlertClaim): string {
   const groupTitle = alert.groupTitle.replace(/\s+/gu, " ").trim();
   return [
     "AGENT_MEMORY_REVIEW_BLOCKED",
-    `Осинара остановила автоматическую проверку памяти группы «${groupTitle}».`,
+    `Мия остановила автоматическую проверку памяти группы «${groupTitle}».`,
     `Не удалось безопасно завершить пакет сообщений ${alert.fromSequence}–${alert.throughSequence}.`,
     "Возможный повтор после запуска модели отключён, чтобы не создать дубликаты.",
     "Исходные сообщения сохранены для безопасного восстановления.",
