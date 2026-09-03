@@ -15,6 +15,10 @@ import { z } from "zod";
 const loadCurrentExternalGroupCapabilities = vi.hoisted(() => vi.fn());
 const authorizeCurrentExternalGroupCapability = vi.hoisted(() => vi.fn());
 
+// The trusted matrix under test includes the Google tools, which exist only with OAuth credentials.
+vi.mock("../google-workspace/google-workspace-availability.js", () => ({
+  GOOGLE_WORKSPACE_AVAILABLE: true,
+}));
 vi.mock("./external-group-live-policy.js", () => ({
   loadCurrentExternalGroupCapabilities,
   authorizeCurrentExternalGroupCapability,

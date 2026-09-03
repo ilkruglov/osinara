@@ -43,14 +43,25 @@ import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
 import startNewContext from "../tools/start_new_context.js";
+import { GOOGLE_WORKSPACE_AVAILABLE } from "../google-workspace/google-workspace-availability.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ToolMap = Readonly<Record<string, AnyToolDefinition>>;
 
 /** Tools whose authorization boundary accepts both a private chat and a closed family group. */
+// Google tools exist only when OAuth credentials are configured: without them every call would
+// fail on a missing connection, and their descriptors would cost tokens on each model step.
+const GOOGLE_WORKSPACE_TOOLS: ToolMap = GOOGLE_WORKSPACE_AVAILABLE
+  ? {
+    execute_google_workspace: executeGoogleWorkspace as unknown as AnyToolDefinition,
+    manage_gmail_message: manageGmailMessage as unknown as AnyToolDefinition,
+    manage_google_workspace_connection: manageGoogleWorkspaceConnection as unknown as AnyToolDefinition,
+  }
+  : {};
+
 export const TRUSTED_MODE_TOOLS: ToolMap = {
-  execute_google_workspace: executeGoogleWorkspace as unknown as AnyToolDefinition,
+  ...GOOGLE_WORKSPACE_TOOLS,
   ...(IMAGE_GENERATION_AVAILABLE
     ? { generate_image: generateImage as unknown as AnyToolDefinition }
     : {}),
@@ -63,8 +74,6 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   list_reminders: listReminders as unknown as AnyToolDefinition,
   manage_agent_schedule: manageAgentSchedule as unknown as AnyToolDefinition,
   manage_behavior_preference: manageBehaviorPreference as unknown as AnyToolDefinition,
-  manage_google_workspace_connection: manageGoogleWorkspaceConnection as unknown as AnyToolDefinition,
-  manage_gmail_message: manageGmailMessage as unknown as AnyToolDefinition,
   manage_memory: manageMemory as unknown as AnyToolDefinition,
   manage_memory_conflict: manageMemoryConflict as unknown as AnyToolDefinition,
   manage_memory_thread: manageMemoryThread as unknown as AnyToolDefinition,

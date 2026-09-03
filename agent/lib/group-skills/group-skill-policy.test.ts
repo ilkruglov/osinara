@@ -10,6 +10,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../image-generation/image-generation-availability.js", () => ({
   IMAGE_GENERATION_AVAILABLE: true,
 }));
+vi.mock("../google-workspace/google-workspace-availability.js", () => ({
+  GOOGLE_WORKSPACE_AVAILABLE: true,
+}));
 
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES } from "./trusted-google-workspace-skills.js";
 import {

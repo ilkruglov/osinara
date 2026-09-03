@@ -9,6 +9,7 @@ import type { SessionAuth } from "eve/context";
 import type { SkillDefinition } from "eve/skills";
 
 import { resolveConversationEnvironment } from "../conversation-environment.js";
+import { GOOGLE_WORKSPACE_AVAILABLE } from "../google-workspace/google-workspace-availability.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import {
   IMAGE_GENERATION_SKILL_DEFINITION,
@@ -39,7 +40,9 @@ export function resolveTrustedSessionSkills(
   if (environment === "external") return {};
   return {
     ...imageGenerationSkill(options),
-    ...TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS,
+    // Nineteen packages are uploaded into the sandbox per session; skip them when nobody can
+    // connect a Google account anyway.
+    ...(GOOGLE_WORKSPACE_AVAILABLE ? TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS : {}),
   };
 }
 
