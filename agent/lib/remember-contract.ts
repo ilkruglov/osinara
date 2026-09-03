@@ -100,6 +100,10 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
     ),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
+    occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})?)?$/u).refine(
+      (value) => Number.isFinite(Date.parse(value)),
+      "Дата события должна быть корректной ISO-датой",
+    ).optional().describe("Только для episode: дата или дата-время события в ISO 8601, из текста или из sentAt сообщения"),
     scope: scope.describe("Разрешённая область памяти текущего trust zone"),
     sensitivity: z.enum(["normal", "sensitive"]).describe("Sensitive всегда требует Eve HITL"),
     sourceSequence: z.string().regex(TIMELINE_SEQUENCE_PATTERN).refine(
@@ -131,6 +135,13 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
         code: "custom",
         message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи",
         path: ["thread", "identity"],
+      });
+    }
+    if (input.occurredAt !== undefined && input.kind !== "episode") {
+      context.addIssue({
+        code: "custom",
+        message: "AGENT_MEMORY_INPUT_INVALID: occurredAt применим только к событию",
+        path: ["occurredAt"],
       });
     }
     if (input.attribute !== undefined && input.kind === "episode") {

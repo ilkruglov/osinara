@@ -42,6 +42,7 @@ function memory(content: string): ModelMemory {
     memoryRef: "mem_0123456789abcdef0123456789abcdef",
     scope: "group",
     sensitivity: "normal",
+    occurredAt: null,
     updatedAt: "2026-08-01T10:00:00.000Z",
   };
 }

@@ -104,7 +104,7 @@ async function selectAuthorizedMemory(
   const result = await client.query<MutationMemoryRow>(
     `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
             item.content, item.source, item.confirmation, item.sensitivity, item.message_thread_id,
-             item.embedding_status, item.created_at, item.updated_at, ref.memory_ref,
+             item.embedding_status, item.created_at, item.updated_at, item.occurred_at, ref.memory_ref,
              item.owner_user_id, item.group_id, item.origin_conversation_id,
              item.subject_family_id, item.subject_user_id, item.subject_participant_id,
              item.subject_conversation_id, item.subject_label, item.memory_project_id,
@@ -435,7 +435,7 @@ export const memoryRepository = {
                   profile_eligible AND COALESCE($6, sensitivity) = 'normal'
          FROM memory_items WHERE id = $1 AND claim_status = 'active'
          RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
-                   confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at`,
+                   confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
         [memory.id, auth.userId, memory.scope === "group" ? auth.telegramUserId : null,
           input.kind ?? null, input.content, input.sensitivity ?? null, input.operationKey,
            normalizeMemoryClaimContent(input.content), primarySource.sourceMessageId,
