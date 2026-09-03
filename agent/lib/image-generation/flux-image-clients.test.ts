@@ -2,14 +2,16 @@
  * Flux provider chain tests.
  *
  * Constructs covered:
- * - Cloudflare returns base64 JSON; the media type comes from magic bytes, not from the provider.
- * - Cloudflare availability failures (401/429/5xx) fall through to NeuralDeep; a 400 rejection on
- *   the last model stops the chain.
+ * - Cloudflare klein-4b takes a multipart body; the media type comes from magic bytes, not from the provider.
+ * - Any Cloudflare failure (quota, content filter, transport) falls through to NeuralDeep; schnell is
+ *   never tried because it neither accepts dimensions nor a cheaper quality.
+ * - When every provider rejects the prompt the chain reports a rejection, not an outage.
  * - NeuralDeep creates a task, polls until finished and downloads the PNG result.
  */
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CLOUDFLARE_IMAGE_MODELS,
   createCloudflareImageClient,
   createFallbackImageClient,
   createNeuralDeepImageClient,
@@ -24,6 +26,14 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" }, status });
 }
 
+function neuralDeepSuccess() {
+  return vi.fn()
+    .mockResolvedValueOnce(json({ task_uid: "1ca2c888-1a64-4fbe-99e9-23c230779a37" }))
+    .mockResolvedValueOnce(json({ status: "queued" }))
+    .mockResolvedValueOnce(json({ status: "finished" }))
+    .mockResolvedValueOnce(new Response(PNG, { headers: { "content-type": "image/png" }, status: 200 }));
+}
+
 describe("flux image clients", () => {
   it("detects image formats by magic bytes", () => {
     expect(detectImageMediaType(PNG)).toBe("image/png");
@@ -31,13 +41,18 @@ describe("flux image clients", () => {
     expect(detectImageMediaType(Buffer.from("hello"))).toBeNull();
   });
 
-  it("generates through Cloudflare with klein first and derives the media type from bytes", async () => {
+  it("offers only klein-4b on Cloudflare", () => {
+    expect(CLOUDFLARE_IMAGE_MODELS).toEqual(["@cf/black-forest-labs/flux-2-klein-4b"]);
+  });
+
+  it("generates through Cloudflare klein-4b and derives the media type from bytes", async () => {
     const fetch = vi.fn().mockResolvedValueOnce(json({ result: { image: JPEG.toString("base64") }, success: true }));
     const client = createCloudflareImageClient({ accountId: "0".repeat(32), fetch: fetch as never, token: "cf-token" });
 
-    const image = await client.generate(request);
+    const image = await client.generate({ ...request, quality: "low" });
 
     expect(image).toMatchObject({ mediaType: "image/jpeg", model: "@cf/black-forest-labs/flux-2-klein-4b" });
+    expect(fetch).toHaveBeenCalledTimes(1);
     const [url, init] = fetch.mock.calls[0]!;
     expect(String(url)).toContain("/ai/run/@cf/black-forest-labs/flux-2-klein-4b");
     // FLUX.2 takes multipart form fields, not JSON.
@@ -48,11 +63,7 @@ describe("flux image clients", () => {
 
   it("falls back from an exhausted Cloudflare quota to NeuralDeep", async () => {
     const cloudflareFetch = vi.fn().mockResolvedValue(json({ errors: [{ code: 3040, message: "quota" }] }, 429));
-    const neuralFetch = vi.fn()
-      .mockResolvedValueOnce(json({ task_uid: "1ca2c888-1a64-4fbe-99e9-23c230779a37" }))
-      .mockResolvedValueOnce(json({ status: "queued" }))
-      .mockResolvedValueOnce(json({ status: "finished" }))
-      .mockResolvedValueOnce(new Response(PNG, { headers: { "content-type": "image/png" }, status: 200 }));
+    const neuralFetch = neuralDeepSuccess();
     const chain = createFallbackImageClient([
       createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch as never, token: "cf-token" }),
       createNeuralDeepImageClient({ apiKey: "nd-key", fetch: neuralFetch as never, sleep: async () => {} }),
@@ -61,28 +72,38 @@ describe("flux image clients", () => {
     const image = await chain.generate({ ...request, size: "1536x1024" });
 
     expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/flux" });
-    expect(cloudflareFetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(cloudflareFetch.mock.calls[1]![1].body)).toMatchObject({ height: 512, steps: 4, width: 768 });
+    expect(cloudflareFetch).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries((cloudflareFetch.mock.calls[0]![1].body as FormData).entries())).toMatchObject({ height: "512", width: "768" });
     expect(JSON.parse(neuralFetch.mock.calls[0]![1].body)).toEqual({ options: { aspect_ratio: "3:2" }, prompt: "кот на подоконнике" });
     expect(String(neuralFetch.mock.calls[3]![0])).toContain("/images/tasks/1ca2c888-1a64-4fbe-99e9-23c230779a37/result");
   });
 
-  it("maps requested quality to the Cloudflare model ladder", async () => {
-    const { cloudflareModelsForQuality } = await import("./flux-image-clients.js");
-    expect(cloudflareModelsForQuality("high")).toEqual(["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"]);
-    expect(cloudflareModelsForQuality("auto")).toEqual(["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"]);
-    expect(cloudflareModelsForQuality("low")).toEqual(["@cf/black-forest-labs/flux-1-schnell"]);
+  it("falls back to NeuralDeep when the Cloudflare content filter flags the prompt", async () => {
+    const cloudflareFetch = vi.fn().mockResolvedValue(json({ errors: [{ code: 3030, message: "Your output has been flagged" }] }, 400));
+    const neuralFetch = neuralDeepSuccess();
+    const chain = createFallbackImageClient([
+      createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch as never, token: "cf-token" }),
+      createNeuralDeepImageClient({ apiKey: "nd-key", fetch: neuralFetch as never, sleep: async () => {} }),
+    ]);
+
+    const image = await chain.generate({ ...request, prompt: "Porsche Cayman на дороге" });
+
+    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/flux" });
+    expect(neuralFetch).toHaveBeenCalledTimes(4);
   });
 
-  it("does not retry a prompt the provider rejected", async () => {
-    const cloudflareFetch = vi.fn().mockResolvedValue(json({ errors: [{ code: 5006, message: "bad prompt" }] }, 400));
-    const neuralFetch = vi.fn();
+  it("reports a rejection with a wording hint when every provider refuses the prompt", async () => {
+    const cloudflareFetch = vi.fn().mockResolvedValue(json({ errors: [{ code: 3030, message: "flagged" }] }, 400));
+    const neuralFetch = vi.fn().mockResolvedValue(json({ error: "bad prompt" }, 422));
     const chain = createFallbackImageClient([
       createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch as never, token: "cf-token" }),
       createNeuralDeepImageClient({ apiKey: "nd-key", fetch: neuralFetch as never }),
     ]);
 
-    await expect(chain.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_REJECTED" });
-    expect(neuralFetch).not.toHaveBeenCalled();
+    await expect(chain.generate(request)).rejects.toMatchObject({
+      code: "AGENT_IMAGE_GENERATION_REJECTED",
+      message: expect.stringContaining("брендов"),
+    });
+    expect(neuralFetch).toHaveBeenCalledTimes(1);
   });
 });
