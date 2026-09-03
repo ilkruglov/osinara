@@ -215,7 +215,7 @@ describe("memory block resolution", () => {
     userId: "user-1",
   };
 
-  it("returns retrieved records as a user-role block so the system prefix stays cacheable", async () => {
+  it("returns retrieved records as a system block with only data inside", async () => {
     const resolve = createMemoryBlockResolver({
       authorize: () => authorization,
       createProfile,
@@ -231,7 +231,7 @@ describe("memory block resolution", () => {
       TEST_TURN_ID,
     );
 
-    expect(block?.role).toBe("user");
+    expect(block?.role).toBe("system");
     expect(block?.markdown).toContain("<retrieved_long_term_memory>");
     expect(block?.markdown).toContain("Любит гречку");
     // The pipeline explanation lives once in the permanent instructions, not in every turn.

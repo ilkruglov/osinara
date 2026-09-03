@@ -139,7 +139,7 @@ Trusted sandbox подключён только к internal egress network и в
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.
 `agent/instructions.md` — постоянное mode-agnostic ядро промта, не authorization layer.
-`agent/instructions/` — четыре turn-scoped dynamic блока; порядок задан именами файлов: режим, делегация, стиль, память. Первые три system-role и стабильны в рамках чата; память отдаётся user-role сообщением в history, чтобы не инвалидировать prompt cache провайдера. Subagent-ходы память и profile view не получают.
+`agent/instructions/` — четыре turn-scoped dynamic блока; порядок задан именами файлов: режим, делегация, стиль, память. Все четыре system-role; блок памяти стоит последним и меняется каждый ход. Отдавать его user-role сообщением нельзя: Eve показывает pending user-инструкции следующим turn.started-обработчикам как последнее сообщение пользователя, и парсинг Telegram-конверта ломается. Subagent-ходы память и profile view не получают.
 `agent/hooks/model-usage.ts` — лог `AGENT_MODEL_STEP` на каждый model step; провайдерский usage с cache hit/miss логируется транспортом как `AGENT_MODEL_USAGE`.
 `agent/channels/telegram.ts` — Telegram channel, events и durable ingress hooks.
 `agent/tools/capabilities.ts` — единственный discovered application tool и dynamic surface текущего режима.
