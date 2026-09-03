@@ -69,6 +69,12 @@ export interface TelegramIngressRepository {
     queueId: string;
   }): Promise<void>;
   release(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
+  /**
+   * Expires every live `processing` lease. Only the single agent process holds leases, so the
+   * leases found alive at process start belong to a predecessor that died mid-turn; without this
+   * the chat behind such an item stays silent until the lease times out.
+   */
+  releaseStaleLeases(): Promise<number>;
   renewLease(updateId: string, leaseToken: string, leaseMilliseconds: number): Promise<Date>;
   sessionEventStreamCursor(sessionId: string): Promise<number>;
   saveVoiceTranscript(updateId: string, leaseToken: string, transcript: string): Promise<void>;

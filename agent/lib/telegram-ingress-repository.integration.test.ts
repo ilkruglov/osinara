@@ -342,6 +342,25 @@ describeWithDatabase("telegramIngressRepository", () => {
     ).rejects.toThrowError(/AGENT_TELEGRAM_LEASE_LOST/);
   });
 
+  it("releases every live processing lease so a restarted process can reclaim at once", async () => {
+    await telegramIngressRepository.enqueue(updateInput("3101", "telegram:private:101", "restart"));
+    await telegramIngressRepository.enqueue(updateInput("3102", "telegram:private:101", "queued behind"));
+    const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    expect(first?.updateId).toBe("3101");
+    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toBeNull();
+
+    await expect(telegramIngressRepository.releaseStaleLeases()).resolves.toBe(1);
+
+    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    expect(reclaimed?.updateId).toBe("3101");
+    expect(reclaimed?.attemptCount).toBe(2);
+    expect(reclaimed?.leaseToken).not.toBe(first?.leaseToken);
+    // The dead process's token must not be able to complete the reclaimed item.
+    await expect(
+      telegramIngressRepository.complete(first!.updateId, first!.leaseToken),
+    ).rejects.toThrowError(/AGENT_TELEGRAM_LEASE_LOST/);
+  });
+
   it("keeps new Telegram anchors in the same logical FIFO", async () => {
     await telegramIngressRepository.enqueue(updateInput("4001", "telegram:group:old", "первое"));
     const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
