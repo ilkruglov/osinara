@@ -39,6 +39,7 @@ export default defineTool({
         );
       }
       item = await memoryRepository.create(authorization, {
+        ...(input.attribute === undefined ? {} : { attribute: input.attribute }),
         // A request to save another participant's delta message is not that author's endorsement.
         confirmation: input.basis === "user_requested" && source.isCurrent
           ? "user_confirmed"

@@ -14,6 +14,7 @@
 import { z } from "zod";
 
 import {
+  MEMORY_ATTRIBUTE_MAX_CHARACTERS,
   THREAD_PURPOSE_MAX_CHARACTERS,
   THREAD_TITLE_MAX_CHARACTERS,
 } from "./memory-config.js";
@@ -94,6 +95,9 @@ export const memoryThreadSchema = z.discriminatedUnion("action", [
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
+    attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS).optional().describe(
+      "Слот профиля для profile/preference/fact: работа, профессия, город, семья, дети, партнёр, питомцы, машина, здоровье, привычки, увлечения, вкусы, музыка, еда, техника, прозвище, роль в чате, день рождения. Новая запись в том же слоте заменяет старую",
+    ),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
     scope: scope.describe("Разрешённая область памяти текущего trust zone"),
@@ -127,6 +131,13 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
         code: "custom",
         message: "AGENT_MEMORY_THREAD_INPUT_INVALID: Project identity недоступна в личной записи",
         path: ["thread", "identity"],
+      });
+    }
+    if (input.attribute !== undefined && input.kind === "episode") {
+      context.addIssue({
+        code: "custom",
+        message: "AGENT_MEMORY_INPUT_INVALID: Слот attribute не применим к событию",
+        path: ["attribute"],
       });
     }
     if (input.sourceSequence !== undefined && input.sensitivity === "sensitive") {

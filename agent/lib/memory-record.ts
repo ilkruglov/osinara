@@ -76,6 +76,7 @@ export interface ReferencedMemoryItem extends MemoryItem {
 }
 
 export interface CreateMemoryInput {
+  attribute?: string;
   confirmation: MemoryConfirmation;
   content: string;
   explicitSource?: CreateMemoryExplicitSourceInput;
