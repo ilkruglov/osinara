@@ -305,10 +305,8 @@ describeWithDatabase("R3 external projection retrieval", () => {
     const safeModels = bothEnabled.map((result) => toModelMemory(result.memory, result.sourceEvidence));
     const safe = JSON.stringify(safeModels);
     expect(safeModels).toEqual(expect.arrayContaining([
-      expect.objectContaining({ evidence: expect.objectContaining({
-        kind: "unresolved",
-        notice: expect.stringMatching(/не установлено/iu),
-      }) }),
+      // Пояснение вида evidence живёт один раз в шапке блока, в записи остаётся только kind.
+      expect.objectContaining({ evidence: expect.objectContaining({ kind: "unresolved" }) }),
     ]));
     expect(safe).not.toMatch(new RegExp([
       selfA.id, later.id, fixture.externalA.groupId, fixture.externalB.groupId,
