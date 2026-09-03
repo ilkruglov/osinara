@@ -97,6 +97,7 @@ function normalizeDeepSeekResponsesTransportRequest(
         effort: options.transport.reasoning.effort,
         modelId: options.modelId,
         toolCount: tools.length,
+        toolNames: tools.slice(0, 60),
         webSearchOffered: tools.includes("web_search") || tools.includes("web_search_2025_08_26"),
       }));
     } catch {
