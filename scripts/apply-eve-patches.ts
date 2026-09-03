@@ -4,7 +4,8 @@
  * Constructs:
  * - `replaceExact`: fail-fast, count-checked, idempotent artifact replacement.
  * - Production startup health wait: permits bounded first-run sandbox preparation.
- * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
+ * - Model exact-once policy: disables Eve reissues after observed steps and multi-call compaction
+ *   recovery; the empty-response reissue stays because it cannot duplicate a side effect.
  * - Restricted delegation policy: hides only the implicit root agent from external/review modes.
  * - Dynamic skill revision policy: refreshes session packages after a compiled deployment change.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
@@ -123,16 +124,13 @@ await replaceExact(
   `const HEALTH_TIMEOUT_MS=${EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS.toExponential().replace("+", "")}`,
 );
 
-// Provider transport retries remain AI SDK's responsibility; Eve must never reissue a model call.
+// Provider transport retries remain AI SDK's responsibility; Eve must never reissue a model call
+// that may have produced a side effect. An empty model response (no text, no tool calls) has no
+// side effect, so Eve's single nudge-and-reissue for that case is intentionally left in place.
 await replaceExact(
   runtimePaths.toolLoop,
   "async function runModelCallWithRetries(e,t,n){for(let r=1;;r++){throwIfTurnAborted(n);try{return await e(r)}catch(e){if(throwIfTurnAborted(n),r===3||classifyModelCallError(e)!==`retry`)throw e;let i=500*2**(r-1)+Math.floor(Math.random()*250);log.warn(`model call failed transiently — retrying`,{attempt:r,delayMs:i,sessionId:t.sessionId,turnId:t.turnId,error:e}),await new Promise(e=>setTimeout(e,i))}}}",
   "async function runModelCallWithRetries(e,t,n){throwIfTurnAborted(n);try{return await e(1)}catch(e){throwIfTurnAborted(n);throw e}}",
-);
-await replaceExact(
-  runtimePaths.toolLoop,
-  "async function attemptEmptyResponseRecovery(e){if(!(e.error instanceof EmptyModelResponseError))return{outcome:`skipped`};log.warn(`empty model response; reissuing the model call once`,{sessionId:e.sessionId,turnId:e.turnId});try{return{outcome:`recovered`,result:await e.runOneModelCall({...e.retryCallOptions,retryReason:`empty-response`,suppressStepStartedEmission:!0,trailingUserNote:buildEmptyResponseNudge(e.emptyDeliveryEnabled)})}}catch(t){return{outcome:`failed`,error:t,retryCallOptions:e.retryCallOptions}}}",
-  "async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}",
 );
 await replaceExact(
   runtimePaths.toolLoop,

@@ -55,7 +55,10 @@ describe("Eve model retry policy patch", () => {
     expect(runtime).toContain("async function attemptEmptyResponseRecovery");
     expect(runtime).toContain("async function attemptUnsupportedProviderToolRecovery");
     expect(runtime).not.toContain("model call failed transiently — retrying");
-    expect(runtime).not.toContain("reissuing the model call once");
+    // An empty model response has no side effect to duplicate, so Eve's single nudge-and-reissue
+    // stays: without it a reasoning-only reply parks the whole session for the user.
+    expect(runtime).toContain("reissuing the model call once");
+    expect(patchSource).not.toContain("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}");
     expect(runtime).not.toContain("disabling unsupported provider tool(s); retrying step once");
     expect(compaction).toContain("EVE_COMPACTION_OUTPUT_TOO_LARGE");
   });

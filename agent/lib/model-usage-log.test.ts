@@ -86,7 +86,7 @@ describe("observeModelUsage", () => {
     const lines = [
       'data: {"choices":[{"delta":{"content":"При"}}]}',
       "",
-      'data: {"choices":[{"delta":{"content":"вет"}}]}',
+      'data: {"choices":[{"delta":{"content":"вет"},"finish_reason":"stop"}]}',
       "",
       'data: {"choices":[],"usage":{"prompt_tokens":100,"prompt_cache_hit_tokens":64,"prompt_cache_miss_tokens":36,"completion_tokens":2,"completion_tokens_details":{"reasoning_tokens":1}}}',
       "",
@@ -102,10 +102,34 @@ describe("observeModelUsage", () => {
       cacheMissTokens: 36,
       code: "AGENT_MODEL_USAGE",
       completionTokens: 2,
+      contentChars: 6,
+      finishReason: "stop",
       modelId: "deepseek-v4-flash",
       promptTokens: 100,
       reasoningTokens: 1,
       url: "https://api.deepseek.com/chat/completions",
+    });
+  });
+
+  it("makes a reasoning-only reply visible: finish reason with zero content characters", async () => {
+    const log = vi.fn();
+    const lines = [
+      'data: {"choices":[{"delta":{"reasoning":"думаю"}}]}',
+      "",
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+      "",
+      'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4,"completion_tokens_details":{"reasoning_tokens":4}}}',
+      "",
+      "data: [DONE]",
+      "",
+    ];
+    const observed = observeModelUsage(sseResponse(lines), { modelId: "qwen", url: "https://api.groq.com/openai/v1/chat/completions" }, log);
+
+    await observed.text();
+    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({
+      contentChars: 0,
+      finishReason: "stop",
+      reasoningTokens: 4,
     });
   });
 
@@ -193,6 +217,8 @@ describe("configured model transport usage logging", () => {
       cacheMissTokens: 12,
       code: "AGENT_MODEL_USAGE",
       completionTokens: 5,
+      contentChars: 6,
+      finishReason: "stop",
       modelId: "deepseek-v4-flash",
       promptTokens: 42,
       reasoningTokens: 2,
