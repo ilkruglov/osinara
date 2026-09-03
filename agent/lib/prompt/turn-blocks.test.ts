@@ -6,7 +6,6 @@
  * - An unresolvable environment produces an explicit fail-closed block, not a stale one.
  * - A failed external capability lookup degrades to an empty allowlist, matching execution policy.
  * - Scheduled-history instructions require the same successful application-core policy lookup.
- * - Unavailable memory is disclosed instead of looking like an empty result set.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
 import type { ModelMessage } from "ai";
@@ -14,13 +13,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import {
-  createMemoryBlockResolver,
   createModeBlockResolver,
   createPreferenceBlockResolver,
 } from "./turn-blocks.js";
-
-const createProfile = vi.fn();
-const TEST_TURN_ID = "turn-1";
 
 function auth(attributes: SessionAuthContext["attributes"]): SessionAuth {
   return {
@@ -200,156 +195,6 @@ describe("mode block resolution", () => {
     expect(markdown).not.toContain("## Реакция вместо сообщения");
     expect(markdown).not.toContain("`remember`");
     expect(markdown).not.toContain("`load_skill`");
-  });
-});
-
-describe("memory block resolution", () => {
-  const authorization = {
-    familyId: "family-1",
-    groupId: null,
-    role: "owner" as const,
-    scopes: ["personal" as const, "family" as const],
-    telegramActorId: "101",
-    telegramActorKind: "telegram_user" as const,
-    telegramUserId: "101",
-    userId: "user-1",
-  };
-
-  it("returns retrieved records as a system block with only data inside", async () => {
-    const resolve = createMemoryBlockResolver({
-      authorize: () => authorization,
-      createProfile,
-      retrieve: vi.fn().mockResolvedValue({
-        memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
-        retrievedClaimIds: [],
-        threads: { threads: [], totalCharacters: 0 },
-      }),
-    });
-
-    const block = await resolve(
-      context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
-      TEST_TURN_ID,
-    );
-
-    expect(block?.role).toBe("system");
-    expect(block?.markdown).toContain("<retrieved_long_term_memory>");
-    expect(block?.markdown).toContain("Любит гречку");
-    // The pipeline explanation lives once in the permanent instructions, not in every turn.
-    expect(block?.markdown).not.toContain("активный pipeline");
-  });
-
-  it("returns no block when the turn carries no user text", async () => {
-    const retrieve = vi.fn();
-    const resolve = createMemoryBlockResolver({ authorize: () => authorization, createProfile, retrieve });
-
-    expect(await resolve(context(privateAuth), TEST_TURN_ID)).toBeNull();
-    expect(retrieve).not.toHaveBeenCalled();
-  });
-
-  it("skips retrieval and profile creation for a subagent turn", async () => {
-    const retrieve = vi.fn();
-    const profile = vi.fn();
-    const resolve = createMemoryBlockResolver({
-      authorize: () => authorization,
-      createProfile: profile,
-      retrieve,
-    });
-
-    const block = await resolve(
-      context(privateAuth, [{ content: "исследуй тему", role: "user" }] as ModelMessage[], "subagent"),
-      TEST_TURN_ID,
-    );
-
-    expect(block).toBeNull();
-    expect(retrieve).not.toHaveBeenCalled();
-    expect(profile).not.toHaveBeenCalled();
-  });
-
-  it("discloses unavailable memory as a system block instead of throwing on authorization failure", async () => {
-    const resolve = createMemoryBlockResolver({
-      authorize: () => {
-        throw new Error("AGENT_MEMORY_CONTEXT_INVALID: нет области памяти");
-      },
-      createProfile,
-      retrieve: vi.fn(),
-    });
-
-    const block = await resolve(
-      context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
-      TEST_TURN_ID,
-    );
-
-    expect(block?.role).toBe("system");
-    expect(block?.markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
-    expect(block?.markdown).not.toContain("<retrieved_long_term_memory>");
-  });
-
-  it("discloses unavailable memory instead of throwing on retrieval failure", async () => {
-    const resolve = createMemoryBlockResolver({
-      authorize: () => authorization,
-      createProfile,
-      retrieve: vi.fn().mockRejectedValue(new Error("embedding service down")),
-    });
-
-    const block = await resolve(
-      context(privateAuth, [{ content: "что купить?", role: "user" }] as ModelMessage[]),
-      TEST_TURN_ID,
-    );
-
-    expect(block?.markdown).toContain("AGENT_MEMORY_UNAVAILABLE");
-  });
-
-  it("builds the same-turn profile from verified signals and retrieval-related claim identities", async () => {
-    const retrieve = vi.fn().mockResolvedValue({
-      memories: [],
-      retrievedClaimIds: ["claim-related"],
-      threads: { threads: [], totalCharacters: 0 },
-    });
-    const profile = vi.fn().mockResolvedValue({
-      generatedAt: "2026-08-08T10:00:00.000Z",
-      profileViewRef: "view_11111111111111111111111111111111",
-      subjects: [{
-        claims: [],
-        label: "Пётр",
-        priority: "retrieval_related",
-        subjectRef: "subj_11111111111111111111111111111111",
-        totalCharacters: 0,
-      }],
-      totalCharacters: 0,
-    });
-    const resolve = createMemoryBlockResolver({
-      authorize: () => authorization,
-      createProfile: profile,
-      retrieve,
-    });
-    const telegramAuth = auth({
-      memoryScopes: ["personal", "family"],
-      telegramConversationId: "conversation-1",
-      telegramProfileMentionUserIds: ["202"],
-      telegramProfileReplyUserId: "203",
-      telegramProfileReplyTimelineSequence: "44",
-      telegramTurnStartedAt: "2026-08-08T10:00:00.000Z",
-      telegramUserId: "101",
-    });
-
-    const block = await resolve(
-      context(telegramAuth, [{ content: "что любит Пётр?", role: "user" }] as ModelMessage[]),
-      TEST_TURN_ID,
-    );
-    const markdown = block?.markdown;
-
-    expect(profile).toHaveBeenCalledWith(authorization, {
-      conversationId: "conversation-1",
-      currentTelegramUserId: "101",
-      explicitMentionTelegramUserIds: ["202"],
-      now: new Date("2026-08-08T10:00:00.000Z"),
-      provenance: { sessionId: "session-1", turnId: TEST_TURN_ID },
-      replyTelegramUserId: "203",
-      replyTimelineSequence: "44",
-      retrievalClaimIds: ["claim-related"],
-    });
-    expect(markdown).toContain("<verified_profile_view");
-    expect(markdown).toContain('"priority":"retrieval_related"');
   });
 });
 

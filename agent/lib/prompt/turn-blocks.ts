@@ -4,7 +4,6 @@
  * Exports:
  * - `TurnBlockContext`: the minimal Eve resolve context a block resolver reads.
  * - `createModeBlockResolver` / `resolveModeBlock`: verified mode rulebook for the current turn.
- * - `createMemoryBlockResolver` / `resolveMemoryBlock`: authorized long-term memory records.
  * - `createPreferenceBlockResolver` / `resolvePreferenceBlock`: one editable chat prompt.
  *
  * Key constructs:
@@ -25,24 +24,6 @@ import {
 } from "../behavior-preferences.js";
 import { behaviorPreferenceRepository } from "../behavior-preference-repository.js";
 import { resolveConversationEnvironment } from "../conversation-environment.js";
-import {
-  requireMemoryAuthorization,
-  type MemoryAuthorization,
-} from "../memory-context.js";
-import {
-  formatRetrievedMemoryInstructions,
-  memoryRetrievalQuery,
-  retrieveRelevantMemories,
-  retrieveMemoryTurnContext,
-  type MemoryTurnContext,
-  type ModelMemoryContextItem,
-} from "../memory-retrieval.js";
-import { applicationThreadSkillHints } from "../memory-thread-activation.js";
-import {
-  formatProfileViewContext,
-  profileViewRepository,
-} from "../profile-view-repository.js";
-import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
 import { isTelegramChannelSession } from "../telegram-session-actor.js";
 import {
   TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS,
@@ -68,16 +49,6 @@ export interface TurnBlockContext {
   };
 }
 
-/**
- * The memory block is delivered as a system instruction. A user-role delivery was tried and
- * reverted: Eve exposes pending user-role instructions to later turn.started handlers as the
- * newest user message, which broke every reader that expects the Telegram envelope there.
- */
-export interface MemoryBlock {
-  readonly markdown: string;
-  readonly role: "system";
-}
-
 type CapabilityLoader = (identity: {
   familyId: string;
   groupId: string;
@@ -98,12 +69,6 @@ const MODE_UNAVAILABLE_BLOCK = `
 Ответь пользователю одним коротким человеческим сообщением: не получилось определить режим этого чата, попроси отправить сообщение ещё раз. Код ошибки не называй. Затем остановись.
 </current_conversation_environment>
 `.trim();
-
-const MEMORY_UNAVAILABLE_BLOCK = [
-  "AGENT_MEMORY_UNAVAILABLE: В этом ходу долговременная память недоступна.",
-  "Не утверждай, что проверила память, и не делай вывод, что записей нет.",
-  "Если ответ зависит от долговременной памяти, скажи, что она временно недоступна, и предложи повторить запрос позже.",
-].join(" ");
 
 function logBlockFailure(code: string, error: unknown): void {
   // Prompt assembly must not fail the turn, so the cause stays in logs with a stable code.
@@ -199,89 +164,6 @@ export function createModeBlockResolver(dependencies: {
   };
 }
 
-export function createMemoryBlockResolver(dependencies: {
-  authorize: (ctx: TurnBlockContext) => MemoryAuthorization;
-  createProfile: (auth: MemoryAuthorization, input: CreateProfileViewInput) => Promise<ProfileView>;
-  retrieve: (
-    auth: MemoryAuthorization,
-    query: string,
-    skillHints: readonly string[],
-  ) => Promise<MemoryTurnContext>;
-}) {
-  return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<MemoryBlock | null> {
-    // A delegated child receives its task in the delegation message; retrieving memory and writing
-    // a profile view for every child would double the parent's per-turn context cost.
-    if (ctx.channel?.kind === "subagent") return null;
-    try {
-      const authorization = dependencies.authorize(ctx);
-      const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
-      if (query === null) return null;
-      const context = await dependencies.retrieve(
-        authorization,
-        query,
-        applicationThreadSkillHints(ctx.messages),
-      );
-      const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds, turnId);
-      const profile = profileInput === null
-        ? null
-        : await dependencies.createProfile(authorization, profileInput);
-      return {
-        markdown: [
-          ...(profile === null ? [] : [formatProfileViewContext(profile)]),
-          formatRetrievedMemoryInstructions(context.memories, context.threads),
-        ].join("\n\n"),
-        role: "system",
-      };
-    } catch (error) {
-      logBlockFailure("AGENT_MEMORY_UNAVAILABLE", error);
-      return { markdown: MEMORY_UNAVAILABLE_BLOCK, role: "system" };
-    }
-  };
-}
-
-function telegramProfileInput(
-  ctx: TurnBlockContext,
-  retrievalClaimIds: readonly string[],
-  turnId: string,
-): CreateProfileViewInput | null {
-  if (isTelegramChannelSession(ctx.session.auth)) return null;
-  const attributes = ctx.session.auth.current?.attributes;
-  const conversationId = attributes?.telegramConversationId;
-  if (typeof conversationId !== "string") return null;
-  if (!attributes) return null;
-  const currentTelegramUserId = attributes.telegramUserId;
-  const turnStartedAt = attributes.telegramTurnStartedAt;
-  const mentions = attributes.telegramProfileMentionUserIds;
-  if (typeof currentTelegramUserId !== "string" || typeof turnStartedAt !== "string" ||
-    (mentions !== undefined && !Array.isArray(mentions))) {
-    throw new Error(
-      "AGENT_PROFILE_TURN_CONTEXT_INVALID: Не удалось проверить данные текущего Telegram-профиля",
-    );
-  }
-  const now = new Date(turnStartedAt);
-  if (Number.isNaN(now.getTime())) {
-    throw new Error("AGENT_PROFILE_TURN_CONTEXT_INVALID: Некорректно время текущего Telegram-хода");
-  }
-  const replyTelegramUserId = attributes.telegramProfileReplyUserId;
-  const replyTimelineSequence = attributes.telegramProfileReplyTimelineSequence;
-  if ((replyTelegramUserId !== undefined && typeof replyTelegramUserId !== "string") ||
-    (replyTimelineSequence !== undefined && typeof replyTimelineSequence !== "string")) {
-    throw new Error(
-      "AGENT_PROFILE_TURN_CONTEXT_INVALID: Некорректен проверенный сигнал Telegram-профиля",
-    );
-  }
-  return {
-    conversationId,
-    currentTelegramUserId,
-    explicitMentionTelegramUserIds: mentions === undefined ? [] : [...mentions],
-    now,
-    provenance: { sessionId: ctx.session.id, turnId },
-    replyTelegramUserId: replyTelegramUserId ?? null,
-    ...(replyTimelineSequence === undefined ? {} : { replyTimelineSequence }),
-    retrievalClaimIds: [...retrievalClaimIds],
-  };
-}
-
 export function createPreferenceBlockResolver(dependencies: {
   authorize: (ctx: TurnBlockContext) => BehaviorPreferenceReadAuthorization;
   get: (auth: BehaviorPreferenceReadAuthorization) => Promise<ChatOperationalPrompt>;
@@ -309,12 +191,6 @@ export const resolveModeBlock = createModeBlockResolver({
     if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
     return { allowsAll: cached.allowsAll, emoji: cached.emoji };
   },
-});
-
-export const resolveMemoryBlock = createMemoryBlockResolver({
-  authorize: requireMemoryAuthorization,
-  createProfile: profileViewRepository.create,
-  retrieve: retrieveMemoryTurnContext,
 });
 
 export const resolvePreferenceBlock = createPreferenceBlockResolver({

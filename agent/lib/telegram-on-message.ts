@@ -449,6 +449,19 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         }));
       }
     }
+    // Memory travels with the delivery so the cacheable system prefix never changes between turns.
+    const memoryContext = await repositories.memoryContext({
+      access,
+      actor: { id: actor.id, kind: actor.kind },
+      applicationSessionId: appSession.id,
+      conversationId: conversation.id,
+      explicitMentionTelegramUserIds: profileSignals.explicitMentionTelegramUserIds,
+      query: dispatchText,
+      replyTelegramUserId: profileSignals.replyTelegramUserId,
+      replyTimelineSequence: inboundTimeline.replyToSequenceId,
+      timelineEntryId: inboundTimeline.entryId,
+      turnStartedAt,
+    });
     const turnResult = buildTelegramTurnResult({
       access,
       actor,
@@ -457,6 +470,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       forumTopicId,
       group,
       lazyAttachment,
+      memoryContext,
       message,
       pendingDelivery: pendingDeliveries,
       profileSignals,

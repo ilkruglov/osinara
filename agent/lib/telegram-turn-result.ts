@@ -27,6 +27,7 @@ export function buildTelegramTurnResult(input: {
   forumTopicId: string | null;
   group: RegisteredGroup | null;
   lazyAttachment: (TelegramGroupAttachmentSummary & { telegramMessageId: string }) | null;
+  memoryContext: readonly string[];
   message: TelegramMessage;
   pendingDelivery: { context: string; cursor: string } | null;
   profileReplyTimelineSequence: string | null;
@@ -53,6 +54,7 @@ export function buildTelegramTurnResult(input: {
   }
   if (input.lazyAttachment) context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
   if (input.pendingDelivery) context.push(input.pendingDelivery.context);
+  context.push(...input.memoryContext);
 
   return {
     auth: {
