@@ -12,6 +12,7 @@ import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.j
 import { database } from "./database.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { reinforceExactClaim } from "./memory-exact-reinforcement.js";
+import { supersedeSlotClaims } from "./memory-slot-supersede.js";
 import { enforceMemoryQuota } from "./memory-quota.js";
 import {
   memoryOperationHash,
@@ -392,6 +393,19 @@ export async function createMemoryClaim(
         "AGENT_MEMORY_REF_CREATE_FAILED",
         "Не удалось создать безопасную ссылку на запись памяти",
       );
+    }
+    if (input.attribute !== undefined) {
+      await supersedeSlotClaims(client, auth, {
+        attribute: input.attribute,
+        kind: input.kind,
+        newClaimId: row.id,
+        scope: input.scope,
+        scopePartitionKey,
+        subjectLabel: prepared?.subjectLabel ?? null,
+        subjectParticipantId: prepared?.subjectParticipantId ?? null,
+        subjectUserId: prepared?.subjectUserId ?? null,
+        systemActor: input.systemActor === true,
+      });
     }
     await insertCreateOperation(client, auth, input, inputHash, row.id, threadWrite);
     await client.query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [row.id]);
