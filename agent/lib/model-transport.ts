@@ -82,7 +82,28 @@ function normalizeDeepSeekResponsesTransportRequest(
   init: RequestInit | undefined,
 ): RequestInit | undefined {
   if (options.transport.protocol !== "deepseek-responses") return init;
-  return normalizeDeepSeekResponsesRequest(init, { effort: options.transport.reasoning.effort });
+  const normalized = normalizeDeepSeekResponsesRequest(init, {
+    effort: options.transport.reasoning.effort,
+  });
+  // Tool names only: enough to see whether the provider web search is offered on this call.
+  if (typeof normalized?.body === "string") {
+    try {
+      const body = JSON.parse(normalized.body) as { tools?: Array<{ name?: unknown; type?: unknown }> };
+      const tools = Array.isArray(body.tools)
+        ? body.tools.map((tool) => typeof tool.name === "string" ? tool.name : String(tool.type))
+        : [];
+      console.log(JSON.stringify({
+        code: "AGENT_MODEL_REQUEST",
+        effort: options.transport.reasoning.effort,
+        modelId: options.modelId,
+        toolCount: tools.length,
+        webSearchOffered: tools.includes("web_search") || tools.includes("web_search_2025_08_26"),
+      }));
+    } catch {
+      // Diagnostics never block the call.
+    }
+  }
+  return normalized;
 }
 
 function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): FetchFunction {

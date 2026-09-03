@@ -141,9 +141,13 @@ function observeChoices(payload: Record<string, unknown>, shape: ResponseShape):
   if (typeof payload.type === "string" && /^response\.(completed|incomplete|failed)$/u.test(payload.type)) {
     shape.finishReason = payload.type.slice("response.".length);
   }
-  if (typeof payload.status === "string" && Array.isArray(payload.output)) {
-    shape.finishReason = payload.status;
-    for (const item of payload.output) {
+  // A streamed completion nests the final response; a JSON reply carries it at the top level.
+  const finalResponse = isRecord(payload.response) && Array.isArray(payload.response.output)
+    ? payload.response
+    : payload;
+  if (typeof finalResponse.status === "string" && Array.isArray(finalResponse.output)) {
+    shape.finishReason = finalResponse.status;
+    for (const item of finalResponse.output) {
       if (!isRecord(item)) continue;
       if (item.type === "web_search_call") shape.webSearchCalls += 1;
       if (item.type === "message" && Array.isArray(item.content)) {
@@ -207,7 +211,7 @@ function observeStream(
         ? payload.message.usage
         : isRecord(payload.response) ? payload.response.usage : undefined;
       usage = mergeUsage(usage, normalizeProviderUsage(payload.usage) ?? normalizeProviderUsage(nested));
-      if (payload.type === "response.web_search_call.completed") shape.webSearchCalls += 1;
+
     }
   };
   return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
