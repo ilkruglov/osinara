@@ -353,10 +353,10 @@ export async function createMemoryClaim(
           sensitivity, operation_key, origin_conversation_id, subject_participant_id,
            subject_conversation_id, subject_user_id, subject_label, memory_project_id, save_approved,
            endorsed_by_user_id, endorsed_at, provenance_state, content_normalized, profile_eligible,
-           claim_status, duplicate_of)
+           claim_status, duplicate_of, attribute)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, $16, $17, $18, $19, $20, $21, $22,
-                CASE WHEN $22::uuid IS NULL THEN NULL ELSE now() END, $23, $24, $25, $26, $27)
+                CASE WHEN $22::uuid IS NULL THEN NULL ELSE now() END, $23, $24, $25, $26, $27, $28)
        RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                  confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at`,
       [auth.familyId, ownerUserId, groupId, authorUserId,
@@ -372,7 +372,8 @@ export async function createMemoryClaim(
           prepared !== null && input.sensitivity === "normal" &&
             (prepared.subjectUserId !== null || prepared.subjectParticipantId !== null),
           "active",
-          null],
+          null,
+          input.attribute ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new AppError("AGENT_MEMORY_WRITE_FAILED", "Не удалось сохранить запись памяти");

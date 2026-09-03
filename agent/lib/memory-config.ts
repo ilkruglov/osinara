@@ -17,6 +17,7 @@ export const MEMORY_SCOPE_QUOTAS = {
 } as const;
 
 export const MEMORY_CONTENT_MAX_LENGTH = 4_000;
+export const MEMORY_ATTRIBUTE_MAX_CHARACTERS = 64;
 export const MEMORY_LIST_DEFAULT_LIMIT = 20;
 export const MEMORY_LIST_MAX_LIMIT = 50;
 export const MEMORY_RETRIEVAL_LIMIT = 12;

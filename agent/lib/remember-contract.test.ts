@@ -62,4 +62,17 @@ describe("externalRememberInputSchema", () => {
       subject,
     }).success).toBe(false);
   });
+
+  it("accepts an attribute slot for profile claims and rejects it for episodes", () => {
+    const base = {
+      basis: "agent_inferred",
+      content: "Работает логистом",
+      scope: "group",
+      sensitivity: "normal",
+      subject: { kind: "current_author" },
+    };
+    expect(externalRememberInputSchema.safeParse({ ...base, attribute: "работа", kind: "profile" }).success).toBe(true);
+    expect(externalRememberInputSchema.safeParse({ ...base, attribute: "работа", kind: "episode" }).success).toBe(false);
+    expect(externalRememberInputSchema.safeParse({ ...base, attribute: "x".repeat(65), kind: "profile" }).success).toBe(false);
+  });
 });
