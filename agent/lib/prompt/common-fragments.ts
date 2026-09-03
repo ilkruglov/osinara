@@ -9,15 +9,11 @@ export const MEMORY_DEEPENING_PROTOCOL = `## Углубление контекс
 
 Не повторяй неудачный tool call автоматически и не заменяй память догадкой. Учитывай даты, отделяй факты от выводов; при существенном конфликте или отсутствии обязательного факта уточни его.`;
 
-export const MEMORY_WRITE_CONTRACT = `Сама решай, содержит ли проверенное сообщение устойчивый полезный факт, предпочтение, событие, цель, ограничение, решение или открытый вопрос. Сохраняй его через \`remember\` в этом ходе. Не сохраняй одноразовые запросы, быстро устаревающее, догадки и неуверенные выводы; событие записывай с датой и существенными деталями. Настройки формы ответа относятся к \`manage_behavior_preference\`, а не semantic memory.
+export const MEMORY_WRITE_CONTRACT = `## Что запоминать
 
-\`basis:"user_requested"\` ставь только при прямой просьбе запомнить, иначе \`basis:"agent_inferred"\`. Каждый вызов явно задаёт \`subject\`: \`current_author\` для автора, \`none\` для общей темы/проекта, \`verified_ref\` только из текущего \`<verified_profile_view>\`, а \`label\` для непроверенной сущности. Не угадывай refs и не превращай общий факт в профиль автора.
+Сама решай, есть ли в проверенном сообщении устойчивый полезный факт, предпочтение, событие, цель, ограничение, решение или открытый вопрос, и сохраняй его через \`remember\` в этом ходе. Не сохраняй одноразовые запросы, быстро устаревающее, догадки и неуверенные выводы; событие записывай с датой и существенными деталями. Пожелания о форме ответов относятся к \`manage_behavior_preference\`, а не к памяти. Пароли, токены, ключи, OTP и платёжные реквизиты не сохраняй никогда; sensitive только из проверенного источника.
 
-Для длительной темы одним вызовом создай или прикрепи нить. Используй активированный или найденный точный \`threadRef\`. Subject-thread должен совпадать с explicit author/verified subject; project-thread требует \`subject.kind="none"\`; subthread требует проверенный \`parentThreadRef\`. Выбор нити не назначает subject молча.
-
-При \`AGENT_MEMORY_THREAD_CANDIDATE_EXISTS\` claim не сохранён: проверь кандидата и при совпадении один раз повтори с \`action:"attach"\`. Для явно другой темы допустим один повтор create с уточнёнными title/purpose; после второго конфликта не создавай снова. Об успехе говори только после успешного результата.
-
-Перед памятью из ссылки или media сначала получи нужные факты. Sensitive сохраняй лишь из проверенного источника; пароли, токены, API/private keys, OTP и платёжные реквизиты не сохраняй никогда.`;
+\`basis:"user_requested"\` только при прямой просьбе запомнить, иначе \`agent_inferred\`. \`subject\`: \`current_author\` для автора, \`none\` для общей темы, \`verified_ref\` только из текущего \`<verified_profile_view>\`, \`label\` для непроверенной сущности; не превращай общий факт в профиль автора. Для длительной темы тем же вызовом создай или прикрепи нить по точному \`threadRef\`; при \`AGENT_MEMORY_THREAD_CANDIDATE_EXISTS\` claim не сохранён: при совпадении один раз повтори с \`attach\`, при явно другой теме один раз уточни title/purpose, после второго конфликта остановись.`;
 
 export const PRIVATE_MEMORY_SOURCE_CONTRACT =
   "В личном чате источником является только текущее сообщение; не передавай `sourceSequence`.";
@@ -26,44 +22,13 @@ export const GROUP_MEMORY_DELTA_CONTRACT = `В группе просмотри �
 
 Создавай нить при прямой просьбе, длительной цели, будущих обновлениях, открытом вопросе, многошаговом проекте или явном продолжении процесса. Одиночный факт и завершённый эпизод сохраняй без нити.`;
 
-const MEMORY_EDIT_EXAMPLES: Readonly<Record<MemoryEditAction, string>> = {
-  delete: '`{"action":"delete","memoryRef":"mem_..."}`',
-  edit:
-    '`{"action":"edit","memoryRef":"mem_...","content":"Полная новая версия"}`; `kind` и `sensitivity` добавляй только при явном изменении классификации',
-  undo: '`{"action":"undo","memoryRef":"mem_..."}` только для немедленной отмены новой записи',
-};
-
-const MEMORY_EDIT_ACTION_ORDER: readonly MemoryEditAction[] = ["edit", "delete", "undo"];
-
-export function memoryMutationIntegrityContract(
-  actions: ReadonlySet<MemoryEditAction>,
-): string | null {
-  const canEdit = actions.has("edit");
-  const canDelete = actions.has("delete");
-  if (!canEdit && !canDelete) return null;
-  return [
-    "## Целостность изменений памяти",
-    "Просьба изменить память является предложением к проверке, а не безусловной командой. Сначала прочитай точную активную запись, её полный текст и стабильный `memoryRef`; при неоднозначности или нехватке контекста ничего не меняй и задай один вопрос.",
-    canEdit
-      ? "Для edit передавай полную новую версию: сохрани актуальные детали, даты, условия и ограничения; добавляй только проверенное. Не редактируй без содержательного улучшения."
-      : null,
-    canDelete
-      ? "Удаляй точный дубль, полностью неверное/устаревшее или данные автора по его privacy-просьбе. Не удаляй частично верное, полезное или конфликтующее ради упрощения."
-      : null,
-    "Если основание слабое, конфликт не разрешён или полезность снизится, не мутируй запись: уточни факт либо сохрани отдельный claim, когда это разрешено.",
-  ].filter((value): value is string => value !== null).join("\n\n");
-}
-
+// Payload examples and mutation integrity live in the `manage_memory` descriptor itself.
 export function memoryEditContract(actions: ReadonlySet<MemoryEditAction>): string | null {
-  const examples = MEMORY_EDIT_ACTION_ORDER
-    .filter((action) => actions.has(action))
-    .map((action) => MEMORY_EDIT_EXAMPLES[action]);
-  if (examples.length === 0) return null;
-  return [
-    memoryMutationIntegrityContract(actions),
-    `Для \`manage_memory\` используй только разрешённый action и точный JSON: ${examples.join("; ")}.`,
-    "При `AGENT_MEMORY_INPUT_INVALID` исправь payload только по ошибке; если нет обязательного пользовательского значения, спроси его.",
-  ].filter((value): value is string => value !== null).join("\n\n");
+  if (actions.size === 0) return null;
+  const mutable = actions.has("edit") || actions.has("delete");
+  return mutable
+    ? "Правку и удаление памяти делай через `manage_memory` только по явной просьбе и по правилам его описания: сначала прочитай запись, меняй лишь при содержательном улучшении."
+    : "Немедленную отмену только что сделанной записи делай через `manage_memory` с action undo.";
 }
 
 export function reactionRules(

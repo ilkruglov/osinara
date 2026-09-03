@@ -38,27 +38,33 @@ export type ManageMemoryAction = (typeof MANAGE_MEMORY_ACTIONS)[number];
 const ACTION_DESCRIPTIONS: Readonly<Record<ManageMemoryAction, string>> = {
   delete: 'Delete payload: {"action":"delete","memoryRef":"mem_..."}.',
   edit:
-    'Edit payload: {"action":"edit","memoryRef":"mem_...","content":"Исправленный текст","kind":"preference","sensitivity":"normal"}. kind и sensitivity необязательны.',
+    'Edit payload: {"action":"edit","memoryRef":"mem_...","content":"Полная новая версия"}; kind и sensitivity добавляй только при явном изменении классификации.',
   undo:
-    'Undo используется только для немедленной отмены сохранения: {"action":"undo","memoryRef":"mem_..."}.',
+    'Undo только для немедленной отмены только что сделанной записи: {"action":"undo","memoryRef":"mem_..."}.',
 };
 
+// Mutation integrity guidance lives with the tool: it matters only when the model is about to
+// call it, so it does not need to occupy every model step through the mode block.
 export function manageMemoryPresentation(actions: readonly ManageMemoryAction[]) {
   const [firstAction, ...otherActions] = actions;
   if (firstAction === undefined) throw new Error("manage_memory requires at least one action");
   const canEdit = actions.includes("edit");
+  const canDelete = actions.includes("delete");
   const mutableActions = actions.filter((action) => action !== "undo");
   return {
     description: [
-      "Управлять доступной записью долговременной памяти только через перечисленные операции.",
+      "Изменить доступную запись долговременной памяти только через перечисленные операции. Просьба изменить память является предложением к проверке, а не безусловной командой.",
       mutableActions.length > 0
-        ? `Перед ${mutableActions.join("/")} сначала получи memoryRef через remember, search_memories или list_memories.`
+        ? `Сначала прочитай точную активную запись, её полный текст и стабильный memoryRef через remember, search_memories или list_memories; при неоднозначности ничего не меняй и задай один вопрос.`
         : null,
       canEdit
-        ? "Edit передаёт полную новую версию записи: обогащай или исправляй её, сохранив все актуальные детали исходного текста."
+        ? "Edit передаёт полную новую версию: сохрани актуальные детали, даты, условия и ограничения, добавляй только проверенное; не редактируй без содержательного улучшения."
+        : null,
+      canDelete
+        ? "Удаляй точный дубль, полностью неверное или устаревшее, либо данные автора по его privacy-просьбе; не удаляй частично верное, полезное или конфликтующее ради упрощения."
         : null,
       mutableActions.length > 0
-        ? "Самостоятельно не выполняй необоснованную мутацию, которая ухудшает точность, полноту либо будущую полезность памяти."
+        ? "Если основание слабое или полезность снизится, не мутируй запись: уточни факт или сохрани отдельный claim. При AGENT_MEMORY_INPUT_INVALID исправь payload только по ошибке."
         : null,
       ...MANAGE_MEMORY_ACTIONS
         .filter((action) => actions.includes(action))

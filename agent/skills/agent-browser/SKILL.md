@@ -59,3 +59,9 @@ installed version.
 ## Observability Dashboard
 
 The dashboard runs independently of browser sessions on port 4848 and can also be opened through a proxied or forwarded URL such as `https://dashboard.agent-browser.localhost`. Agents should stay on the dashboard origin: session tabs, status, and stream traffic are proxied internally, so session ports do not need to be exposed.
+
+## Osinara: session and auth vault
+
+Osinara runs `agent-browser` with `AGENT_BROWSER_SESSION=osinara`; separate calls continue the same tab. Do not close the session before the task is done, and check it with `agent-browser session info --json` before treating it as lost. Cookies and localStorage live in `$HOME`; when a site session has expired, use the vault first.
+
+Persistent logins go into the `agent-browser auth vault` of the current trust zone (personal or family) through `--password-stdin`; never store OTP codes. Save an integration token only on the user's direct request and only when this skill allows the current scope: inside this skill's `$HOME`, mode `0600`, without printing or logging it.

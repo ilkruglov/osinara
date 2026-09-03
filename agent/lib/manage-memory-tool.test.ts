@@ -99,9 +99,10 @@ describe("manage_memory", () => {
   });
 
   it("tells the model that edit is a complete integrity-preserving replacement", () => {
-    expect(manageMemory.description).toContain("полную новую версию записи");
-    expect(manageMemory.description).toContain("сохранив все актуальные детали");
-    expect(manageMemory.description).toContain("не выполняй необоснованную мутацию");
+    expect(manageMemory.description).toContain("Edit передаёт полную новую версию");
+    expect(manageMemory.description).toContain("сохрани актуальные детали, даты, условия и ограничения");
+    expect(manageMemory.description).toContain("не редактируй без содержательного улучшения");
+    expect(manageMemory.description).toContain("Сначала прочитай точную активную запись");
   });
 
   it("rejects malformed edit before showing private approval", async () => {

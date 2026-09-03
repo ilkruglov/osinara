@@ -3,16 +3,18 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
+import { manageMemoryPresentation } from "../tools/manage_memory.js";
 import { EXTERNAL_GROUP_TOOL_NAMES } from "../tool-policy/group-tool-catalog.js";
-import { memoryEditContract } from "./common-fragments.js";
 import { modeInstructions } from "./mode-instructions.js";
 
-const CORE_CHARACTER_BUDGET = 9_000;
-const PRIVATE_CHARACTER_BUDGET = 17_000;
-const FAMILY_CHARACTER_BUDGET = 18_000;
-const EXTERNAL_CHARACTER_BUDGET = 11_000;
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 22_000;
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_000;
+// The mode block is re-sent on every model step: rules that only matter when a specific tool is
+// called belong in that tool's descriptor or skill, not here.
+const CORE_CHARACTER_BUDGET = 10_000;
+const PRIVATE_CHARACTER_BUDGET = 11_000;
+const FAMILY_CHARACTER_BUDGET = 12_000;
+const EXTERNAL_CHARACTER_BUDGET = 10_000;
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_000;
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 28_000;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {
@@ -58,11 +60,13 @@ describe("authored prompt context budget", () => {
   });
 
   it("does not ask ordinary memory edits to overwrite classification", () => {
-    const contract = memoryEditContract(new Set(["edit"]));
+    const { description } = manageMemoryPresentation(["edit"]);
 
-    expect(contract).toContain('"content":"Полная новая версия"');
-    expect(contract).not.toContain('"kind":"preference"');
-    expect(contract).not.toContain('"sensitivity":"normal"');
-    expect(contract).toContain("только при явном изменении классификации");
+    expect(description).toContain('"content":"Полная новая версия"');
+    expect(description).not.toContain('"kind":"preference"');
+    expect(description).not.toContain('"sensitivity":"normal"');
+    expect(description).toContain("только при явном изменении классификации");
+    // Mutation integrity guidance travels with the tool instead of every model step.
+    expect(description).toContain("Сначала прочитай точную активную запись");
   });
 });

@@ -50,7 +50,6 @@ import {
   trustedBehaviorPreferenceRules,
   trustedCredentialRules,
   trustedReminderRules,
-  trustedScheduleRules,
   trustedWorkspaceRules,
 } from "./trusted-fragments.js";
 
@@ -110,7 +109,6 @@ ${SEND_WORKSPACE_FILE_RULES}
 
 ${OFFICE_DOCUMENT_RULES}`,
   trustedReminderRules("personal"),
-  trustedScheduleRules("personal"),
   PROACTIVE_DELIVERY_RULES,
   `## Осознание времени
 
@@ -118,11 +116,7 @@ ${CURRENT_TIME_TOOL_RULES}`,
   PROGRESS_UPDATE_RULES,
   `## Администрирование
 
-Для проверки настроек Telegram-групп и команды \`/status\` вызови \`manage_telegram_group\` ровно с \`{"action":"status"}\`; read-only status не требует подтверждения. Перед \`update_policy\` получи status, если точная текущая политика ещё неизвестна, и меняй полный allowlist без потери остальных прав.
-
-Если владелец явно просит начать новый контекст в зарегистрированной группе, сначала вызови \`status\` ровно с \`{"action":"status"}\` и не заполняй optional-поля других actions. Однозначно сопоставь название с группой; при нескольких совпадениях задай один уточняющий вопрос. Затем без реконструирования скопируй \`startNewContextInput\` выбранной группы в следующий вызов \`manage_telegram_group\`. Операция относится к main-чату и canonical sessions всех forum-тем, начинает новые контексты со следующих сообщений, но сохраняет timeline, память, файлы и pending tasks.
-
-Приглашения и подтверждение участников доступны только здесь: используй \`list_pending_family_invitations\` и \`manage_family_invitation\`.`,
+Для настроек Telegram-групп и команды \`/status\` вызови \`manage_telegram_group\` ровно с \`{"action":"status"}\` без подтверждения. Перед \`update_policy\` получи status, если точная политика неизвестна, и меняй полный allowlist без потери остальных прав. Для нового контекста в группе сначала вызови \`status\` и не заполняй optional-поля других actions; однозначно сопоставь название с группой, при нескольких совпадениях задай один вопрос, затем без изменений скопируй \`startNewContextInput\` выбранной группы в следующий вызов. Операция касается main-чата и всех forum-тем и сохраняет timeline, память, файлы и pending tasks. Приглашения и подтверждение участников доступны только здесь: \`list_pending_family_invitations\` и \`manage_family_invitation\`.`,
   SKILL_RULES,
   START_NEW_CONTEXT_RULES,
 ];
@@ -177,7 +171,6 @@ ${SEND_WORKSPACE_FILE_RULES}
 
 ${OFFICE_DOCUMENT_RULES}`,
   trustedReminderRules("family"),
-  trustedScheduleRules("family"),
   PROACTIVE_DELIVERY_RULES,
   `## Осознание времени
 
