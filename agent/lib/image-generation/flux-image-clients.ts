@@ -2,36 +2,25 @@
  * Flux image generation providers with an ordered fallback chain.
  *
  * Exports:
- * - `createCloudflareImageClient`: Workers AI text-to-image (klein-4b, schnell for low quality or fallback).
+ * - `createCloudflareImageClient`: Workers AI text-to-image (FLUX.2 klein-4b only).
  * - `createNeuralDeepImageClient`: async task API (create → poll → download PNG).
- * - `createFallbackImageClient`: tries providers in order; quota, auth and transport failures of an
- *   earlier provider move on to the next one, a definitive rejection of the prompt does not.
+ * - `createFallbackImageClient`: tries providers in order; every failure of an earlier provider,
+ *   including its content filter, moves on to the next one. Only the last provider's verdict is final.
  * - `detectImageMediaType`: PNG / JPEG / WebP by magic bytes; anything else is rejected.
  */
 import { AppError, isAppError } from "../app-error.js";
 import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
 
 // klein-9b and flux-2-dev are deliberately absent: they burn the free Workers AI quota in a few images.
-export const CLOUDFLARE_IMAGE_MODELS = [
-  "@cf/black-forest-labs/flux-2-klein-4b",
-  "@cf/black-forest-labs/flux-1-schnell",
-] as const;
+// flux-1-schnell is absent too: it rejects width/height, so it cannot honour the requested size.
+export const CLOUDFLARE_IMAGE_MODELS = ["@cf/black-forest-labs/flux-2-klein-4b"] as const;
 type CloudflareImageModel = (typeof CLOUDFLARE_IMAGE_MODELS)[number];
 
-/** Requested quality picks the first model; each failure moves down to a cheaper one. */
-export function cloudflareModelsForQuality(quality: ImageGenerationRequest["quality"]): readonly CloudflareImageModel[] {
-  if (quality === "low") return ["@cf/black-forest-labs/flux-1-schnell"];
-  return CLOUDFLARE_IMAGE_MODELS;
-}
-
-/** FLUX.2 models accept only multipart bodies; FLUX.1 schnell accepts JSON. */
-function cloudflareRequestBody(model: CloudflareImageModel, fields: Record<string, string>): { body: BodyInit; contentType?: string } {
-  if (model === "@cf/black-forest-labs/flux-1-schnell") {
-    return { body: JSON.stringify({ height: Number(fields.height), prompt: fields.prompt, steps: Number(fields.steps), width: Number(fields.width) }), contentType: "application/json" };
-  }
+/** FLUX.2 models accept only multipart bodies. */
+function cloudflareRequestBody(fields: Record<string, string>): FormData {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
-  return { body: form };
+  return form;
 }
 export const NEURALDEEP_IMAGE_BASE_URL = "https://api.neuraldeep.ru/v1";
 const CLOUDFLARE_API_BASE_URL = "https://api.cloudflare.com/client/v4";
@@ -84,7 +73,8 @@ function rejected(provider: string, detail: string): AppError {
   console.error(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_REJECTED", detail, provider }));
   return new AppError(
     "AGENT_IMAGE_GENERATION_REJECTED",
-    "Сервис генерации изображений отклонил запрос. Измените описание и попробуйте снова",
+    "Сервис генерации изображений отклонил запрос. Уберите названия брендов, марок и персон, "
+      + "опишите объект своими словами и попробуйте снова",
   );
 }
 
@@ -93,6 +83,16 @@ function imageFromBytes(bytes: Buffer, model: string, provider: string): Generat
   const mediaType = detectImageMediaType(bytes);
   if (mediaType === null) throw unavailable(provider, "unknown image format");
   return { bytes, mediaType, model };
+}
+
+/** Error codes from a Workers AI failure body, for the log line only; the body is never shown to the model. */
+async function cloudflareErrorCodes(response: Response): Promise<string> {
+  try {
+    const payload = await response.json() as { errors?: readonly { code?: unknown }[] };
+    return (payload.errors ?? []).map((entry) => String(entry.code ?? "?")).join(",");
+  } catch {
+    return "";
+  }
 }
 
 /** Statuses after which trying another provider is safe: nothing was produced for this request. */
@@ -114,47 +114,38 @@ export function createCloudflareImageClient(
     async generate(input) {
       this.assertConfigured();
       const { height, width } = dimensions(input.size);
-      let lastError: AppError | null = null;
-      for (const model of cloudflareModelsForQuality(input.quality)) {
-        const url = `${CLOUDFLARE_API_BASE_URL}/accounts/${options.accountId}/ai/run/${model}`;
-        const { body, contentType: requestContentType } = cloudflareRequestBody(model, {
-          height: String(height), prompt: input.prompt, steps: "4", width: String(width),
+      const model: CloudflareImageModel = CLOUDFLARE_IMAGE_MODELS[0];
+      const url = `${CLOUDFLARE_API_BASE_URL}/accounts/${options.accountId}/ai/run/${model}`;
+      const body = cloudflareRequestBody({
+        height: String(height), prompt: input.prompt, steps: "4", width: String(width),
+      });
+      let response: Response;
+      try {
+        response = await fetchImplementation(url, {
+          body,
+          headers: { authorization: `Bearer ${options.token}` },
+          method: "POST",
+          signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
         });
-        let response: Response;
-        try {
-          response = await fetchImplementation(url, {
-            body,
-            headers: {
-              authorization: `Bearer ${options.token}`,
-              ...(requestContentType === undefined ? {} : { "content-type": requestContentType }),
-            },
-            method: "POST",
-            signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
-          });
-        } catch (error) {
-          lastError = unavailable("cloudflare", error instanceof Error ? error.message : String(error));
-          continue;
-        }
-        if (!response.ok) {
-          const detail = `${model} ${response.status}`;
-          if (isProviderUnavailableStatus(response.status)) { lastError = unavailable("cloudflare", detail); continue; }
-          // 400 from the first model may be a model-specific parameter issue; try the simpler model.
-          lastError = rejected("cloudflare", detail);
-          continue;
-        }
-        const contentType = response.headers.get("content-type") ?? "";
-        if (contentType.includes("application/json")) {
-          const payload = await response.json() as { result?: { image?: unknown }; success?: unknown };
-          const encoded = payload.result?.image;
-          if (typeof encoded !== "string" || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
-            lastError = unavailable("cloudflare", `${model} malformed image payload`);
-            continue;
-          }
-          return imageFromBytes(Buffer.from(encoded, "base64"), model, "cloudflare");
-        }
-        return imageFromBytes(Buffer.from(await response.arrayBuffer()), model, "cloudflare");
+      } catch (error) {
+        throw unavailable("cloudflare", error instanceof Error ? error.message : String(error));
       }
-      throw lastError ?? unavailable("cloudflare", "no model available");
+      if (!response.ok) {
+        const detail = `${model} ${response.status} ${await cloudflareErrorCodes(response)}`.trim();
+        if (isProviderUnavailableStatus(response.status)) throw unavailable("cloudflare", detail);
+        // 400 covers both bad parameters and the content filter (code 3030); the chain decides what is next.
+        throw rejected("cloudflare", detail);
+      }
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = await response.json() as { result?: { image?: unknown }; success?: unknown };
+        const encoded = payload.result?.image;
+        if (typeof encoded !== "string" || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
+          throw unavailable("cloudflare", `${model} malformed image payload`);
+        }
+        return imageFromBytes(Buffer.from(encoded, "base64"), model, "cloudflare");
+      }
+      return imageFromBytes(Buffer.from(await response.arrayBuffer()), model, "cloudflare");
     },
   };
 }
@@ -228,10 +219,13 @@ export function createFallbackImageClient(clients: readonly FluxImageClient[]): 
         try {
           return await client.generate(input);
         } catch (error) {
+          // Content filters and parameter rules differ per provider, so even a rejection moves on.
           lastError = error;
-          // A prompt the provider refused would be refused again; only availability moves on.
-          if (isAppError(error) && error.code === "AGENT_IMAGE_GENERATION_REJECTED") throw error;
-          console.error(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_FALLBACK", from: client.name }));
+          console.error(JSON.stringify({
+            code: "AGENT_IMAGE_GENERATION_FALLBACK",
+            from: client.name,
+            reason: isAppError(error) ? error.code : "unknown",
+          }));
         }
       }
       throw lastError instanceof Error ? lastError : unavailable("chain", "all providers failed");
