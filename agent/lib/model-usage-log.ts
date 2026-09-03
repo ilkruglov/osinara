@@ -24,6 +24,7 @@ export interface NormalizedProviderUsage {
 interface ResponseShape {
   contentChars: number;
   finishReason: string | null;
+  toolCalls: string[];
   webSearchCalls: number;
 }
 
@@ -141,15 +142,24 @@ function observeChoices(payload: Record<string, unknown>, shape: ResponseShape):
   if (typeof payload.type === "string" && /^response\.(completed|incomplete|failed)$/u.test(payload.type)) {
     shape.finishReason = payload.type.slice("response.".length);
   }
+  // Streamed Responses items: function calls by name, so a turn's tool choice is visible in the log.
+  if (payload.type === "response.output_item.done" && isRecord(payload.item)) {
+    const item = payload.item;
+    if (item.type === "function_call" && typeof item.name === "string") shape.toolCalls.push(item.name);
+    if (item.type === "web_search_call") shape.webSearchCalls += 1;
+  }
   // A streamed completion nests the final response; a JSON reply carries it at the top level.
   const finalResponse = isRecord(payload.response) && Array.isArray(payload.response.output)
     ? payload.response
     : payload;
   if (typeof finalResponse.status === "string" && Array.isArray(finalResponse.output)) {
     shape.finishReason = finalResponse.status;
+    // The completed event repeats every item; streamed counts above already covered them.
+    const streamed = shape.webSearchCalls > 0 || shape.toolCalls.length > 0;
     for (const item of finalResponse.output) {
       if (!isRecord(item)) continue;
-      if (item.type === "web_search_call") shape.webSearchCalls += 1;
+      if (!streamed && item.type === "web_search_call") shape.webSearchCalls += 1;
+      if (!streamed && item.type === "function_call" && typeof item.name === "string") shape.toolCalls.push(item.name);
       if (item.type === "message" && Array.isArray(item.content)) {
         for (const part of item.content) {
           if (isRecord(part) && typeof part.text === "string") shape.contentChars += part.text.length;
@@ -197,7 +207,7 @@ function observeStream(
   let pending = "";
   // Streaming providers report usage in one late chunk; the last observed value wins.
   let usage: NormalizedProviderUsage | null = null;
-  const shape: ResponseShape = { contentChars: 0, finishReason: null, webSearchCalls: 0 };
+  const shape: ResponseShape = { contentChars: 0, finishReason: null, toolCalls: [], webSearchCalls: 0 };
   const consume = (text: string, flush: boolean): void => {
     pending += text;
     const lines = pending.split(/\r?\n/u);
@@ -246,7 +256,7 @@ export function observeModelUsage(
     if (payload === null) return;
     const usage = normalizeProviderUsage(payload.usage);
     if (usage === null) return;
-    const shape: ResponseShape = { contentChars: 0, finishReason: null, webSearchCalls: 0 };
+    const shape: ResponseShape = { contentChars: 0, finishReason: null, toolCalls: [], webSearchCalls: 0 };
     observeChoices(payload, shape);
     emit(log, context, usage, shape);
   }).catch(() => undefined);
