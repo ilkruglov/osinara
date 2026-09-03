@@ -331,6 +331,7 @@ export default telegramChannel({
           batchId: reviewBatchId,
           diagnosticCode: data.code,
           eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
         });
         reviewFailureReplayed = terminal === "replayed";
       }
