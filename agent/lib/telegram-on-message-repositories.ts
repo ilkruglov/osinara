@@ -46,6 +46,7 @@ import type {
   WorkspaceScope,
 } from "./workspaces/workspace-repository.js";
 import { memoryReviewRepository } from "./memory-review/memory-review-repository.js";
+import { buildTelegramMemoryContext } from "./telegram-turn-memory-context.js";
 
 export interface TelegramMessageRepositories {
   attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
@@ -63,6 +64,8 @@ export interface TelegramMessageRepositories {
     "getByChatId" | "getByGroupId" | "syncTimelineParticipants"
   >;
   currentTime: Pick<typeof currentTimeRepository, "findUserTimezone">;
+  /** Retrieved memory for the accepted turn, delivered as context rather than as instructions. */
+  memoryContext: typeof buildTelegramMemoryContext;
   threadNotices: MemoryThreadNoticeDeliveryRepository;
   profilePolicies: Pick<
     typeof profileProjectionPolicyRepository,
@@ -91,6 +94,7 @@ export const productionTelegramMessageRepositories = {
   }),
   conversations: conversationRepository,
   currentTime: currentTimeRepository,
+  memoryContext: buildTelegramMemoryContext,
   profilePolicies: profileProjectionPolicyRepository,
   family: familyRepository,
   groupContext: { prepare: telegramGroupTurnContextPreparer },

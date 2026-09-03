@@ -10,6 +10,8 @@
 import type { TelegramContext, TelegramMessage } from "eve/channels/telegram";
 import { vi } from "vitest";
 
+import { createTelegramMemoryContextBuilder } from "./telegram-turn-memory-context.js";
+
 export const BOT_USERNAME = "osinara_bot";
 
 export function privateMessage(text: string): TelegramMessage {
@@ -45,7 +47,23 @@ export function telegramContext() {
 }
 
 export function repositories() {
+  // Memory doubles stay observable while the handler receives the production-shaped builder.
+  const memory = {
+    createProfile: vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T00:00:00.000Z",
+      profileViewRef: "view_00000000000000000000000000000001",
+      subjects: [],
+      totalCharacters: 0,
+    }),
+    retrieve: vi.fn().mockResolvedValue({
+      memories: [],
+      retrievedClaimIds: [],
+      threads: { threads: [], totalCharacters: 0 },
+    }),
+  };
   return {
+    memory,
+    memoryContext: createTelegramMemoryContextBuilder(memory),
     attachmentReferences: {
       captureReplyTarget: vi.fn().mockResolvedValue(null),
       record: vi.fn().mockResolvedValue({
@@ -106,14 +124,6 @@ export function repositories() {
     profilePolicies: {
       claimPendingGroupNotice: vi.fn().mockResolvedValue(null),
       markGroupNoticePresented: vi.fn().mockResolvedValue(undefined),
-    },
-    profiles: {
-      create: vi.fn().mockResolvedValue({
-        generatedAt: "2026-08-08T00:00:00.000Z",
-        profileViewRef: "view_00000000000000000000000000000001",
-        subjects: [],
-        totalCharacters: 0,
-      }),
     },
     journal: {
       listBefore: vi.fn().mockResolvedValue([]),

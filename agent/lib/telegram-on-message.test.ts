@@ -100,6 +100,33 @@ describe("createTelegramMessageHandler", () => {
     }
   });
 
+  it("delivers retrieved memory as turn context instead of a system instruction", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.memory.retrieve.mockResolvedValue({
+      memories: [{ content: "Любит гречку", memoryRef: "mem_1" }],
+      retrievedClaimIds: [],
+      threads: { threads: [], totalCharacters: 0 },
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, privateMessage("что купить на ужин?"));
+
+    expect(repository.memory.retrieve).toHaveBeenCalledWith(
+      expect.objectContaining({ familyId: "family-1", scopes: ["personal", "family"], userId: "user-1" }),
+      "что купить на ужин?",
+      [],
+    );
+    const context = result?.context?.join("\n") ?? "";
+    expect(context).toContain("<retrieved_long_term_memory>");
+    expect(context).toContain("Любит гречку");
+    expect(context).toContain("<verified_profile_view");
+  });
+
   it("adds unseen proactive deliveries and carries their cursor into trusted auth", async () => {
     const repository = repositories();
     repository.telegram.findIdentity.mockResolvedValue({

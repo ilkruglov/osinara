@@ -3,8 +3,8 @@
  *
  * Constructs covered:
  * - Accepted messages reactivate only the exact current timeline participant before profile read.
- * - Verified profile signals enter auth for same-turn post-retrieval profile assembly.
- * - Application policy notice is sent once without an eager, retrieval-blind profile query.
+ * - Verified profile signals enter auth and the post-retrieval profile view enters delivery context.
+ * - Application policy notice is sent once before the turn.
  */
 import { describe, expect, it } from "vitest";
 
@@ -52,7 +52,16 @@ describe("Telegram R3 profile turn", () => {
       "conversation-group-1",
       ["00000000-0000-4000-8000-000000000010"],
     );
-    expect(repository.profiles.create).not.toHaveBeenCalled();
+    // The profile view is assembled after retrieval, with the retrieval-related claim identities.
+    expect(repository.memory.createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ familyId: "family-1" }),
+      expect.objectContaining({
+        conversationId: "conversation-group-1",
+        currentTelegramUserId: "telegram-101",
+        explicitMentionTelegramUserIds: ["202"],
+        retrievalClaimIds: [],
+      }),
+    );
     expect(telegram.sendMessage).toHaveBeenCalledWith(
       "AGENT_PROFILE_PROJECTION_POLICY_NOTICE: Проекция профиля отключена.",
     );
@@ -66,7 +75,7 @@ describe("Telegram R3 profile turn", () => {
       telegramTurnStartedAt: expect.any(String),
       telegramUserId: "telegram-101",
     });
-    expect(result?.context?.join("\n")).not.toContain("verified_profile_view");
+    expect(result?.context?.join("\n")).toContain("verified_profile_view");
   });
 
   it("does not acknowledge a policy notice when Telegram delivery fails", async () => {
