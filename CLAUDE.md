@@ -180,8 +180,9 @@ Eve `0.40.0` не предоставляет все application seams для dur
 повторяет некоторые model calls на уровне Eve. `scripts/apply-eve-patches.ts` добавляет
 verified-update/drain hooks, возврат Session, application routing/HITL contracts, exact-once model
 policy (единственный повтор пустого ответа модели оставлен: у него нет side effect, а без него
-reasoning-only ответ паркует сессию), fail-closed `input.requested`, verified task-origin auth, ограничение root delegation и
-пятиминутное ожидание health при холодном старте.
+reasoning-only ответ паркует сессию), fail-closed `input.requested`, verified task-origin auth, ограничение root delegation,
+пятиминутное ожидание health при холодном старте и выбор провайдерского backend `web_search` по
+префиксу id динамической модели (иначе Eve берёт gateway Exa и OpenAI-клиент молча отбрасывает tool).
 Патч применяется автоматически через `postinstall` после каждого `npm ci`.
 Он идемпотентен, проверяет точную версию и ожидаемые artifacts; несовпадение должно останавливать сборку.
 
