@@ -214,9 +214,21 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     }
   }
 
+  // Leases alive at the first drain of this process were held by a predecessor that died
+  // mid-turn; releasing them once lets the affected chats resume in seconds instead of waiting
+  // out the full lease. A redispatched update is deduplicated by the journal, so no turn repeats.
+  let staleLeasesReleased = false;
+
   async function drain(
     dispatch: TelegramVerifiedUpdateContext["dispatch"],
   ): Promise<void> {
+    if (!staleLeasesReleased) {
+      staleLeasesReleased = true;
+      const released = await dependencies.repository.releaseStaleLeases();
+      if (released > 0) {
+        console.warn(JSON.stringify({ code: "AGENT_TELEGRAM_INGRESS_LEASES_RELEASED", released }));
+      }
+    }
     while (true) {
       const claim = await dependencies.repository.claimNext(dependencies.leaseMilliseconds);
       if (!claim) return;

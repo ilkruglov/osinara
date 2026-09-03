@@ -61,6 +61,7 @@ function repository() {
       fail: vi.fn(),
       rekeyQueue: vi.fn(),
       release: vi.fn(),
+      releaseStaleLeases: vi.fn().mockResolvedValue(0),
       renewLease: vi.fn(),
       sessionEventStreamCursor: vi.fn().mockResolvedValue(0),
       saveVoiceTranscript: vi.fn(),
@@ -69,6 +70,33 @@ function repository() {
 }
 
 describe("createTelegramDurableIngress", () => {
+  it("releases leases left by a previous process once, before the first claim of this process", async () => {
+    const storage = repository();
+    storage.value.claimNext.mockReset().mockResolvedValue(null);
+    storage.value.releaseStaleLeases.mockResolvedValue(1);
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn().mockResolvedValue(true),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    const tasks: Promise<unknown>[] = [];
+    const context = { dispatch: vi.fn(), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never;
+
+    await handle.drain(context);
+    await Promise.all(tasks);
+    await handle.drain(context);
+    await Promise.all(tasks);
+
+    expect(storage.value.releaseStaleLeases).toHaveBeenCalledTimes(1);
+    expect(storage.value.claimNext).toHaveBeenCalledTimes(2);
+    expect(storage.value.releaseStaleLeases.mock.invocationCallOrder[0]!)
+      .toBeLessThan(storage.value.claimNext.mock.invocationCallOrder[0]!);
+  });
+
   it("acknowledges after enqueue and processes voice in the background", async () => {
     const storage = repository();
     const transcribeVoice = vi.fn().mockResolvedValue("Купи молоко");

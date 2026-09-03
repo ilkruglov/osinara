@@ -282,6 +282,17 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
   },
 
+  async releaseStaleLeases() {
+    // Status stays `processing`: claimNext reclaims through its expired-lease branch, the attempt
+    // counter increments, and a redispatch is deduplicated downstream by the journal.
+    const result = await database().query(
+      `UPDATE telegram_ingress_updates
+       SET lease_expires_at = now(), updated_at = now()
+       WHERE status = 'processing' AND lease_expires_at > now()`,
+    );
+    return result.rowCount ?? 0;
+  },
+
   async renewLease(updateId, leaseToken, leaseMilliseconds) {
     requireLeaseMilliseconds(leaseMilliseconds);
     let expiresAt: Date | undefined;
