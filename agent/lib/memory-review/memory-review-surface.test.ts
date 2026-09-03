@@ -19,7 +19,7 @@ import {
   MEMORY_REVIEW_DENIED_TOOL_NAMES,
   buildMemoryReviewToolSurface,
 } from "./memory-review-tool-surface.js";
-import { MEMORY_REVIEW_INSTRUCTIONS } from "./memory-review-prompt.js";
+import { MEMORY_REVIEW_INSTRUCTIONS, formatExistingMemoryForReview } from "./memory-review-prompt.js";
 import { memoryReviewBatchIdFromContinuationToken } from "./memory-review-session.js";
 
 function externalAuth(): SessionAuth {
@@ -45,6 +45,18 @@ function externalAuth(): SessionAuth {
     initiator: null,
   };
 }
+
+describe("memory review existing memory block", () => {
+  it("renders existing memory for review as untrusted data with refs and slots", () => {
+    const block = formatExistingMemoryForReview([
+      { attribute: "работа", content: "Serje пишет книгу", kind: "profile", memoryRef: "mem_1", subjectLabel: "Serje" },
+    ]);
+    expect(block).toContain("<existing_memory>");
+    expect(block).toContain("mem_1");
+    expect(block).toContain("работа");
+    expect(formatExistingMemoryForReview([])).toBe("");
+  });
+});
 
 describe("memory review instructions", () => {
   it("describes silent review for any conversation and the personal scope choice", () => {
