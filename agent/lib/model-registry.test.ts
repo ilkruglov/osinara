@@ -13,10 +13,10 @@ import { primaryModel, visionModel, voiceTranscriptionModel } from "./model-regi
 
 describe("model registry", () => {
   it("selects the configured protocol-native text model", () => {
-    expect(modelProviderConfig.agent.transport.protocol).toBe("anthropic-messages");
+    expect(modelProviderConfig.agent.transport.protocol).toBe("deepseek-responses");
     expect(primaryModel.modelId).toBe(modelProviderConfig.agent.models.primary.id);
-    // The Anthropic provider id is what Eve inspects to expose the provider-managed web_search.
-    expect(primaryModel.provider).toBe("anthropic.messages");
+    // Eve maps the OpenAI Responses provider id to its OpenAI web_search backend.
+    expect(primaryModel.provider).toBe("openai.responses");
   });
 
   it("does not construct a model that cannot accept image input", () => {

@@ -24,6 +24,7 @@ export interface NormalizedProviderUsage {
 interface ResponseShape {
   contentChars: number;
   finishReason: string | null;
+  webSearchCalls: number;
 }
 
 export interface ModelUsageLogContext {
@@ -61,6 +62,21 @@ function mergeUsage(
 
 export function normalizeProviderUsage(usage: unknown): NormalizedProviderUsage | null {
   if (!isRecord(usage)) return null;
+
+  // DeepSeek / OpenAI Responses: input_tokens with cached detail, output_tokens with reasoning detail.
+  const inputDetails = isRecord(usage.input_tokens_details) ? usage.input_tokens_details : null;
+  const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : null;
+  const responsesInput = count(usage.input_tokens);
+  if (responsesInput !== null && (inputDetails !== null || outputDetails !== null)) {
+    const cached = count(inputDetails?.cached_tokens) ?? 0;
+    return {
+      cacheHitTokens: cached,
+      cacheMissTokens: Math.max(0, responsesInput - cached),
+      completionTokens: count(usage.output_tokens),
+      promptTokens: responsesInput,
+      reasoningTokens: count(outputDetails?.reasoning_tokens),
+    };
+  }
 
   const anthropicInput = count(usage.input_tokens);
   if (anthropicInput !== null) {
@@ -118,6 +134,25 @@ function parseJson(text: string): Record<string, unknown> | null {
 
 /** Reads finish reason and content text from one chat-completions chunk or full response. */
 function observeChoices(payload: Record<string, unknown>, shape: ResponseShape): void {
+  // Responses API: streamed text deltas and the terminal response status.
+  if (payload.type === "response.output_text.delta" && typeof payload.delta === "string") {
+    shape.contentChars += payload.delta.length;
+  }
+  if (typeof payload.type === "string" && /^response\.(completed|incomplete|failed)$/u.test(payload.type)) {
+    shape.finishReason = payload.type.slice("response.".length);
+  }
+  if (typeof payload.status === "string" && Array.isArray(payload.output)) {
+    shape.finishReason = payload.status;
+    for (const item of payload.output) {
+      if (!isRecord(item)) continue;
+      if (item.type === "web_search_call") shape.webSearchCalls += 1;
+      if (item.type === "message" && Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (isRecord(part) && typeof part.text === "string") shape.contentChars += part.text.length;
+        }
+      }
+    }
+  }
   if (!Array.isArray(payload.choices)) return;
   for (const choice of payload.choices) {
     if (!isRecord(choice)) continue;
@@ -158,7 +193,7 @@ function observeStream(
   let pending = "";
   // Streaming providers report usage in one late chunk; the last observed value wins.
   let usage: NormalizedProviderUsage | null = null;
-  const shape: ResponseShape = { contentChars: 0, finishReason: null };
+  const shape: ResponseShape = { contentChars: 0, finishReason: null, webSearchCalls: 0 };
   const consume = (text: string, flush: boolean): void => {
     pending += text;
     const lines = pending.split(/\r?\n/u);
@@ -168,8 +203,11 @@ function observeStream(
       if (payload === null) continue;
       observeChoices(payload, shape);
       // Anthropic streams input usage inside message_start.message and output usage in message_delta.
-      const nested = isRecord(payload.message) ? payload.message.usage : undefined;
+      const nested = isRecord(payload.message)
+        ? payload.message.usage
+        : isRecord(payload.response) ? payload.response.usage : undefined;
       usage = mergeUsage(usage, normalizeProviderUsage(payload.usage) ?? normalizeProviderUsage(nested));
+      if (payload.type === "response.web_search_call.completed") shape.webSearchCalls += 1;
     }
   };
   return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
@@ -204,7 +242,7 @@ export function observeModelUsage(
     if (payload === null) return;
     const usage = normalizeProviderUsage(payload.usage);
     if (usage === null) return;
-    const shape: ResponseShape = { contentChars: 0, finishReason: null };
+    const shape: ResponseShape = { contentChars: 0, finishReason: null, webSearchCalls: 0 };
     observeChoices(payload, shape);
     emit(log, context, usage, shape);
   }).catch(() => undefined);

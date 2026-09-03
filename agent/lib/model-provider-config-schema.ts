@@ -48,6 +48,15 @@ const anthropicMessagesTransportSchema = z.object({
   ]).nullable(),
 }).strict();
 
+/** Native DeepSeek Responses API: documented reasoning effort, server-side web search, exact usage. */
+const deepseekResponsesTransportSchema = z.object({
+  baseUrl: modelBaseUrlSchema,
+  protocol: z.literal("deepseek-responses"),
+  reasoning: z.object({
+    effort: z.enum(["none", "low", "high", "max"]),
+  }).strict(),
+}).strict();
+
 const openAiChatCompletionsTransportSchema = z.object({
   baseUrl: modelBaseUrlSchema,
   protocol: z.literal("openai-chat-completions"),
@@ -86,6 +95,7 @@ const modelProviderConfigSchema = z.object({
     }).strict(),
     transport: z.discriminatedUnion("protocol", [
       anthropicMessagesTransportSchema,
+      deepseekResponsesTransportSchema,
       openAiChatCompletionsTransportSchema,
     ]),
   }).strict(),
@@ -140,7 +150,8 @@ const modelProviderConfigSchema = z.object({
     const anthropicMessages = transport.protocol === "anthropic-messages" &&
       transport.compatibility === undefined &&
       new URL(transport.baseUrl).hostname === "api.deepseek.com";
-    if (!chatCompletions && !anthropicMessages) {
+    const responses = transport.protocol === "deepseek-responses";
+    if (!chatCompletions && !anthropicMessages && !responses) {
       context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
     }
   }

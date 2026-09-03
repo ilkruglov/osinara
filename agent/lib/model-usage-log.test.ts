@@ -107,6 +107,7 @@ describe("observeModelUsage", () => {
       modelId: "deepseek-v4-flash",
       promptTokens: 100,
       reasoningTokens: 1,
+      webSearchCalls: 0,
       url: "https://api.deepseek.com/chat/completions",
     });
   });
@@ -155,6 +156,41 @@ describe("observeModelUsage", () => {
       cacheMissTokens: 80,
       completionTokens: 42,
       promptTokens: 780,
+    });
+  });
+
+  it("reads Responses API usage from the completed event and counts web searches", async () => {
+    const log = vi.fn();
+    const observed = observeModelUsage(
+      sseResponse([
+        'event: response.output_item.done',
+        'data: {"type":"response.output_item.done","item":{"type":"web_search_call","status":"completed"}}',
+        "",
+        'event: response.web_search_call.completed',
+        'data: {"type":"response.web_search_call.completed","item_id":"ws_1"}',
+        "",
+        'event: response.output_text.delta',
+        'data: {"type":"response.output_text.delta","delta":"Погода +15"}',
+        "",
+        'event: response.completed',
+        'data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":3451,"input_tokens_details":{"cached_tokens":640},"output_tokens":204,"output_tokens_details":{"reasoning_tokens":85}}}}',
+        "",
+      ]),
+      { modelId: "deepseek-v4-flash", url: "https://api.deepseek.com/responses" },
+      log,
+    );
+
+    await observed.text();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({
+      cacheHitTokens: 640,
+      cacheMissTokens: 2811,
+      completionTokens: 204,
+      contentChars: 10,
+      finishReason: "completed",
+      promptTokens: 3451,
+      reasoningTokens: 85,
+      webSearchCalls: 1,
     });
   });
 
@@ -247,6 +283,7 @@ describe("configured model transport usage logging", () => {
       modelId: "deepseek-v4-flash",
       promptTokens: 42,
       reasoningTokens: 2,
+      webSearchCalls: 0,
       url: "https://api.deepseek.com/chat/completions",
     });
   });

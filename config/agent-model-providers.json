@@ -3,12 +3,10 @@
   "provider": "deepseek",
   "agent": {
     "transport": {
-      "protocol": "anthropic-messages",
-      "baseUrl": "https://api.deepseek.com/anthropic",
-      "authentication": "api-key",
+      "protocol": "deepseek-responses",
+      "baseUrl": "https://api.deepseek.com",
       "reasoning": {
-        "type": "enabled",
-        "mode": "adaptive"
+        "effort": "high"
       }
     },
     "models": {
