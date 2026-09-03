@@ -118,6 +118,40 @@ describe("parseModelProviderConfig", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
   });
 
+  it("accepts DeepSeek over its Anthropic-compatible endpoint as well as Chat Completions", () => {
+    const deepseekAnthropic = {
+      ...validConfig,
+      agent: {
+        models: {
+          primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 128_000 },
+          vision: { supportsImageInput: false },
+        },
+        transport: {
+          authentication: "api-key",
+          baseUrl: "https://api.deepseek.com/anthropic",
+          protocol: "anthropic-messages",
+          reasoning: { mode: "adaptive", type: "enabled" },
+        },
+      },
+      provider: "deepseek",
+    } as const;
+    expect(parseModelProviderConfig(deepseekAnthropic)).toEqual(deepseekAnthropic);
+    expect(() => parseModelProviderConfig({
+      ...deepseekAnthropic,
+      agent: {
+        ...deepseekAnthropic.agent,
+        transport: { ...deepseekAnthropic.agent.transport, baseUrl: "https://api.minimax.io/anthropic/v1" },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...deepseekAnthropic,
+      agent: {
+        ...deepseekAnthropic.agent,
+        transport: { ...deepseekAnthropic.agent.transport, compatibility: "minimax-anthropic" },
+      },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+  });
+
   it("accepts only the exact MiniMax Anthropic transport contract", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
     expect(() => parseModelProviderConfig({

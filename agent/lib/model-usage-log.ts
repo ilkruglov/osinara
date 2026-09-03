@@ -43,6 +43,22 @@ function count(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+/** A later partial usage record (Anthropic message_delta) keeps earlier prompt-side counts. */
+function mergeUsage(
+  previous: NormalizedProviderUsage | null,
+  next: NormalizedProviderUsage | null,
+): NormalizedProviderUsage | null {
+  if (next === null) return previous;
+  if (previous === null) return next;
+  return {
+    cacheHitTokens: next.cacheHitTokens || previous.cacheHitTokens,
+    cacheMissTokens: next.cacheMissTokens || previous.cacheMissTokens,
+    completionTokens: next.completionTokens ?? previous.completionTokens,
+    promptTokens: next.promptTokens || previous.promptTokens,
+    reasoningTokens: next.reasoningTokens ?? previous.reasoningTokens,
+  };
+}
+
 export function normalizeProviderUsage(usage: unknown): NormalizedProviderUsage | null {
   if (!isRecord(usage)) return null;
 
@@ -55,6 +71,18 @@ export function normalizeProviderUsage(usage: unknown): NormalizedProviderUsage 
       cacheMissTokens: anthropicInput + cacheWrite,
       completionTokens: count(usage.output_tokens),
       promptTokens: anthropicInput + cacheRead + cacheWrite,
+      reasoningTokens: null,
+    };
+  }
+
+  // Anthropic message_delta carries only the final output count; prompt-side counts arrive earlier.
+  const anthropicOutput = count(usage.output_tokens);
+  if (anthropicOutput !== null) {
+    return {
+      cacheHitTokens: 0,
+      cacheMissTokens: 0,
+      completionTokens: anthropicOutput,
+      promptTokens: 0,
       reasoningTokens: null,
     };
   }
@@ -139,7 +167,9 @@ function observeStream(
       const payload = sseDataPayload(line);
       if (payload === null) continue;
       observeChoices(payload, shape);
-      usage = normalizeProviderUsage(payload.usage) ?? usage;
+      // Anthropic streams input usage inside message_start.message and output usage in message_delta.
+      const nested = isRecord(payload.message) ? payload.message.usage : undefined;
+      usage = mergeUsage(usage, normalizeProviderUsage(payload.usage) ?? normalizeProviderUsage(nested));
     }
   };
   return body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({

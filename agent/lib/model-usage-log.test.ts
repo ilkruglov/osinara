@@ -133,6 +133,31 @@ describe("observeModelUsage", () => {
     });
   });
 
+  it("merges Anthropic message_start input usage with message_delta output usage", async () => {
+    const log = vi.fn();
+    const observed = observeModelUsage(
+      sseResponse([
+        'event: message_start',
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":30,"cache_read_input_tokens":700,"cache_creation_input_tokens":50,"output_tokens":1}}}',
+        "",
+        'event: message_delta',
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":42}}',
+        "",
+      ]),
+      { modelId: "m", url: "https://example.test/anthropic/v1/messages" },
+      log,
+    );
+
+    await observed.text();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(log.mock.calls[0]![0] as string)).toMatchObject({
+      cacheHitTokens: 700,
+      cacheMissTokens: 80,
+      completionTokens: 42,
+      promptTokens: 780,
+    });
+  });
+
   it("logs once for a JSON response", async () => {
     const log = vi.fn();
     const body = JSON.stringify({ choices: [], usage: { completion_tokens: 3, prompt_tokens: 20 } });
