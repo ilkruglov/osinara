@@ -13,6 +13,7 @@ import type { ProfileSelection, ProfileSubjectPriority } from "./profile-selecti
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 
 export interface ProfileViewClaim {
+  attribute: string | null;
   confirmation: MemoryConfirmation;
   content: string;
   evidenceKind: "explicit" | "firsthand" | "inferred" | "reported" | "unresolved";
@@ -72,6 +73,7 @@ export function toProfileView(input: {
     profileViewRef: input.profileViewRef,
     subjects: input.selection.subjects.map((subject) => ({
       claims: subject.claims.map((claim) => ({
+        attribute: claim.attribute,
         confirmation: claim.confirmation,
         content: claim.content,
         evidenceKind: claim.evidenceKind,

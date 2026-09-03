@@ -55,6 +55,7 @@ interface ClaimRow {
   claim_status: "active" | "duplicate" | "superseded";
   confirmation: MemoryConfirmation;
   content: string;
+  attribute: string | null;
   evidence_kind: "firsthand" | "inferred" | "reported" | "unresolved";
   id: string;
   kind: MemoryKind;
@@ -204,7 +205,7 @@ async function loadClaims(
     subject.subject_participant_id ? [subject.subject_participant_id] : []
   );
   const result = await client.query<ClaimRow>(
-    `SELECT claim.id, ref.memory_ref, claim.content, claim.kind, claim.confirmation,
+    `SELECT claim.id, ref.memory_ref, claim.content, claim.kind, claim.attribute, claim.confirmation,
             claim.sensitivity, claim.claim_status, claim.profile_eligible, claim.updated_at,
              claim.subject_user_id, claim.subject_participant_id,
              claim_subject.linked_user_id AS linked_subject_user_id,
@@ -272,6 +273,7 @@ export const profileViewRepository = {
           : subjectByUser.get(claim.subject_user_id ?? claim.linked_subject_user_id ?? "");
         if (!subject) return [];
         return [{
+          attribute: claim.attribute,
           claimStatus: claim.claim_status,
           confirmation: claim.confirmation,
           content: claim.content,
@@ -320,13 +322,14 @@ export const profileViewRepository = {
             `INSERT INTO profile_view_claims
                (profile_view_id, subject_ordinal, claim_ordinal, claim_id, memory_ref_snapshot,
                  content_snapshot, kind, confirmation, origin_scope, origin_label_snapshot,
-                 evidence_kind, observed_at, source_author_label_snapshot, rendered_characters)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+                 evidence_kind, observed_at, source_author_label_snapshot, rendered_characters,
+                 attribute_snapshot)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
             [view.id, subjectOrdinal, claimOrdinal, sourceClaim.id, selectedClaim.memoryRef,
               selectedClaim.content, selectedClaim.kind, selectedClaim.confirmation,
               selectedClaim.originScope, selectedClaim.originLabel, selectedClaim.evidenceKind,
               selectedClaim.observedAt, selectedClaim.sourceAuthorLabel,
-              selectedClaim.renderedText.length],
+              selectedClaim.renderedText.length, selectedClaim.attribute],
           );
         }
       }
@@ -361,6 +364,7 @@ export const profileViewRepository = {
       const rows = await client.query<{
         claim_ordinal: number;
         confirmation: MemoryConfirmation;
+        attribute_snapshot: string | null;
         content_snapshot: string;
         evidence_kind: ProfileViewClaim["evidenceKind"];
         kind: MemoryKind;
@@ -381,7 +385,8 @@ export const profileViewRepository = {
                 selected.claim_ordinal, selected.memory_ref_snapshot,
                 selected.content_snapshot, selected.kind, selected.confirmation,
                 selected.origin_scope, selected.origin_label_snapshot, selected.evidence_kind,
-                selected.observed_at, selected.source_author_label_snapshot
+                selected.observed_at, selected.source_author_label_snapshot,
+                selected.attribute_snapshot
          FROM profile_view_subjects AS subject
          JOIN profile_view_claims AS selected ON selected.profile_view_id = subject.profile_view_id
            AND selected.subject_ordinal = subject.ordinal
@@ -424,6 +429,7 @@ export const profileViewRepository = {
           totalCharacters: row.subject_total_characters,
         };
         subject.claims.push({
+          attribute: row.attribute_snapshot,
           confirmation: row.confirmation,
           content: row.content_snapshot,
           evidenceKind: row.evidence_kind,
