@@ -10,6 +10,7 @@ import type { PoolClient } from "pg";
 import type { TelegramGroupJournalEntry } from "../telegram-group-journal-context.js";
 import {
   MEMORY_REVIEW_BATCH_SIZE,
+  MEMORY_REVIEW_CONTEXT_LIMIT,
   MEMORY_REVIEW_IDLE_MILLISECONDS,
   MEMORY_REVIEW_IDLE_MIN_SOURCES,
 } from "./memory-review-config.js";
@@ -17,7 +18,11 @@ import {
   memoryReviewDispatchTerminalRepository,
   terminalizeStaleMemoryReviewBatches,
 } from "./memory-review-dispatch-terminal-repository.js";
-import { formatMemoryReviewBatchPrompt } from "./memory-review-prompt.js";
+import {
+  formatExistingMemoryForReview,
+  formatMemoryReviewBatchPrompt,
+  type ReviewMemoryContextItem,
+} from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
 
 interface SourceRow {
@@ -32,6 +37,7 @@ interface SourceRow {
   sender_username: string | null;
   sent_at: Date;
   sequence_id: string;
+  telegram_user_id: string | null;
 }
 
 function project(row: SourceRow): TelegramGroupJournalEntry {
@@ -123,6 +129,30 @@ async function lockedLanes(client: PoolClient, groupOnly: boolean): Promise<Lane
   return result.rows;
 }
 
+async function loadReviewMemoryContext(client: PoolClient, input: {
+  authorTelegramUserIds: readonly string[];
+  familyId: string;
+  scope: "family" | "group" | "personal";
+  scopePartitionKey: string;
+}): Promise<ReviewMemoryContextItem[]> {
+  // Claims about the batch authors plus subject-less claims of the same partition.
+  const result = await client.query<ReviewMemoryContextItem>(
+    `SELECT ref.memory_ref AS "memoryRef", item.kind::text AS kind, item.attribute, item.content,
+            COALESCE(participant.display_name_snapshot, item.subject_label) AS "subjectLabel"
+       FROM memory_items AS item
+       JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
+       LEFT JOIN conversation_participants AS participant
+         ON participant.id = item.subject_participant_id
+      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
+        AND item.claim_status = 'active' AND item.sensitivity = 'normal'
+        AND (participant.telegram_user_id = ANY($4::text[]) OR item.subject_participant_id IS NULL)
+      ORDER BY item.updated_at DESC LIMIT $5`,
+    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds,
+      MEMORY_REVIEW_CONTEXT_LIMIT],
+  );
+  return result.rows;
+}
+
 async function materializeReadyBatches(client: PoolClient): Promise<void> {
   // This is the crash-recovery path for a committed 50th message whose inline observer did not run.
   for (const lane of await lockedLanes(client, true)) {
@@ -169,6 +199,7 @@ export const memoryReviewDispatchRepository = {
       await materializeIdleBatches(client, input.now);
       const claimed = await client.query<{
         conversation_chat_id: string; conversation_id: string; family_id: string;
+        scope_partition_key: string;
         group_id: string | null; group_type: "external" | "family_private" | null; id: string;
         lease_token: string; message_thread_id: string | null;
         scope: "family" | "group" | "personal"; source_count: number;
@@ -210,6 +241,7 @@ export const memoryReviewDispatchRepository = {
          RETURNING batch.id, batch.conversation_id, batch.through_sequence::text,
                    batch.source_count, batch.lease_token::text, lane.message_thread_id::text,
                    conversation.family_id, conversation.scope::text,
+                   conversation.scope_partition_key,
                    conversation.telegram_chat_id AS conversation_chat_id,
                    telegram_group.id AS group_id, telegram_group.type::text AS group_type,
                    telegram_group.telegram_chat_id,
@@ -231,7 +263,7 @@ export const memoryReviewDispatchRepository = {
           `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
                   message.message_thread_id::text, message.sender_username,
                   message.sender_display_name, message.message_kind, message.content_text,
-                  message.reply_to_sequence_id::text, message.sent_at
+                  message.reply_to_sequence_id::text, message.sent_at, message.telegram_user_id
              FROM memory_review_batch_sources AS source
              JOIN telegram_group_messages AS message ON message.id = source.timeline_entry_id
             WHERE source.batch_id = $1 ORDER BY source.timeline_sequence`,
@@ -242,6 +274,13 @@ export const memoryReviewDispatchRepository = {
           "Пакет проверки памяти не содержит ожидаемые сообщения",
         );
         const entries = sources.rows.map(project);
+        const existing = await loadReviewMemoryContext(client, {
+          authorTelegramUserIds: [...new Set(sources.rows.flatMap((source) =>
+            source.telegram_user_id === null ? [] : [source.telegram_user_id]))],
+          familyId: row.family_id,
+          scope: row.scope,
+          scopePartitionKey: row.scope_partition_key,
+        });
         claims.push({
           batchId: row.id, conversationId: row.conversation_id, entries,
           familyId: row.family_id,
@@ -250,7 +289,9 @@ export const memoryReviewDispatchRepository = {
           leaseToken: row.lease_token, messageThreadId: row.message_thread_id,
           memoryScopes: personal ? ["personal", "family"] : [row.scope],
           ownerTelegramUserId: row.sponsor_telegram_user_id, ownerUserId: row.sponsor_user_id,
-          prompt: formatMemoryReviewBatchPrompt(entries),
+          prompt: [formatExistingMemoryForReview(existing), formatMemoryReviewBatchPrompt(entries)]
+            .filter((block) => block.length > 0)
+            .join("\n\n"),
           role: row.group_type === "external" ? "external" : personal ? row.sponsor_role : "owner",
           scope: row.scope,
           sourceCount: entries.length, sourceEntryIds: sources.rows.map((source) => source.id),

@@ -14,6 +14,7 @@ import {
   createMainAgentPrivateMemoryFixture,
 } from "../memory-agent-write.integration-fixtures.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
+import { memoryRepository } from "../memory-repository.js";
 import { memoryReviewRepository } from "./memory-review-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
@@ -207,5 +208,45 @@ describeWithDatabase("idle memory review", () => {
       toolAllowlist: [],
     });
     expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["1", "2", "3"]);
+  });
+
+  it("shows already stored claims of the conversation to the review", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryRepository.create(fixture.auth, {
+      attribute: "работа",
+      confirmation: "model_high",
+      content: "Анна работает логистом",
+      explicitSource: {
+        conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
+        timelineEntryId: fixture.timelineEntryId,
+      },
+      kind: "profile",
+      operationKey: "review-context-1",
+      provenance: { sessionId: "eve-session-ctx", turnId: "eve-turn-ctx" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:eve-session-ctx:eve-turn-ctx",
+    });
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    await insertUserMessage({
+      conversationId: fixture.conversationId, groupId: fixture.groupId,
+      sentAt: "2026-09-03T09:00:00.000Z", sequence: 2,
+    });
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000,
+      limit: 10,
+      now: new Date("2026-09-03T10:00:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.prompt).toContain("<existing_memory>");
+    expect(claims[0]!.prompt).toContain("Анна работает логистом");
+    expect(claims[0]!.prompt).toContain("работа");
   });
 });
