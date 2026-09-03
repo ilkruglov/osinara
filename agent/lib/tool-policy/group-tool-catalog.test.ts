@@ -71,9 +71,10 @@ describe("external group tool catalog", () => {
     }
   });
 
-  it("offers only locally enforceable web access as a persisted grant", () => {
+  it("offers web access as persisted grants that stay denied until granted", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
-    expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
+    // Provider web_search is released per model step from the live policy, never at execution time.
+    expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
     expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("agent");
   });
