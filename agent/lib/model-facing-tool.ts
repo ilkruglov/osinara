@@ -7,9 +7,29 @@
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
 
+import { isAppError } from "./app-error.js";
 import { normalizeModelFacingError } from "./model-facing-error.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
+type ApprovalPolicyFunction = (ctx: unknown) => unknown;
+
+/**
+ * Eve treats an exception thrown by an approval policy as a failed model call and parks the whole
+ * session for a manual retry. Input validation inside a policy is an ordinary correctable error,
+ * so it becomes a denial with the reason the model can act on.
+ */
+function wrapApprovalPolicy(approval: unknown): unknown {
+  if (typeof approval !== "function") return approval;
+  const policy = approval as ApprovalPolicyFunction;
+  return async (ctx: unknown) => {
+    try {
+      return await policy(ctx);
+    } catch (error) {
+      if (isAppError(error)) return { reason: error.message, type: "denied" };
+      throw error;
+    }
+  };
+}
 
 // Generic call discipline lives once in `agent/instructions.md`; repeating it in every descriptor
 // added roughly 17k characters to each model call without adding information.
@@ -19,6 +39,9 @@ export function wrapModelFacingTool(
 ): AnyToolDefinition {
   return defineTool({
     ...definition,
+    ...(definition.approval === undefined
+      ? {}
+      : { approval: wrapApprovalPolicy(definition.approval) as AnyToolDefinition["approval"] }),
     async execute(input, ctx) {
       try {
         return await definition.execute(input, ctx);
