@@ -17,7 +17,7 @@ export const EXTERNAL_IMAGE_GENERATION_TOOL_PRESENTATION: Pick<
   "description" | "inputSchema"
 > = {
   description: [
-    "Создать одно raster-изображение через GPT-Image-2, сохранить его в group workspace и сразу отправить как photo в текущую внешнюю группу.",
+    "Создать одно raster-изображение (Flux или GPT-Image), сохранить его в group workspace и сразу отправить как photo в текущую внешнюю группу.",
     "В prompt опиши назначение, сцену, объект, композицию, стиль и запреты. Для unspecified size, quality или background передай auto.",
     "Не используй для SVG, code-native диаграмм, редактирования существующего файла или фоновой генерации.",
     "Если ошибка сообщает unknown status, не повторяй вызов автоматически: лимит подписки мог быть списан.",

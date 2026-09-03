@@ -12,6 +12,8 @@
  */
 import { AppError } from "../app-error.js";
 import { modelProviderConfig } from "../model-provider-config.js";
+import { createFallbackImageClient } from "./flux-image-clients.js";
+import { resolveFluxImageProviders } from "./image-generation-availability.js";
 
 export type ImageBackground = "auto" | "opaque" | "transparent";
 export type ImageQuality = "auto" | "high" | "low" | "medium";
@@ -24,10 +26,12 @@ export interface ImageGenerationRequest {
   size: ImageSize;
 }
 
+export type ImageMediaType = "image/jpeg" | "image/png" | "image/webp";
+
 export interface GeneratedImage {
   bytes: Buffer;
-  mediaType: "image/webp";
-  model: "gpt-image-2";
+  mediaType: ImageMediaType;
+  model: string;
   revisedPrompt?: string;
 }
 
@@ -253,12 +257,16 @@ export function createImageGenerationClient(options: ImageGenerationClientOption
   };
 }
 
-function productionClient(): ReturnType<typeof createImageGenerationClient> {
+function productionClient(): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
   if (modelProviderConfig.provider !== "codex-subscription") {
-    throw new AppError(
-      "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
-      "Генерация изображений доступна только при подключённой Codex-подписке",
-    );
+    const chain = resolveFluxImageProviders(process.env);
+    if (chain.length === 0) {
+      throw new AppError(
+        "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
+        "Не настроен ни один сервис генерации изображений",
+      );
+    }
+    return createFallbackImageClient(chain);
   }
   const apiKey = process.env.MODEL_API_KEY;
   if (typeof apiKey !== "string" || apiKey.length === 0) {
