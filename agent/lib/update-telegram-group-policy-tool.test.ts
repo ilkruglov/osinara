@@ -93,7 +93,9 @@ describe("manage_telegram_group.update_policy", () => {
     expect(manageTelegramGroup.description).toContain(
       "добавь или удали только выбранную capability",
     );
-    expect(manageTelegramGroup.description).toContain("сохраняет её ID, название, тип, историю, workspace, память и сессии");
+    expect(manageTelegramGroup.description).toContain(
+      "группа, её история, workspace, память и файлы сохраняются",
+    );
   });
 
   it("ignores known sibling fields materialized beside the complete policy", async () => {
