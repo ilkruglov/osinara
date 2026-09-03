@@ -14,6 +14,7 @@
  * - Telegram dispatch extensions: Session return, message/token override, reply routing, and HITL auth.
  * - Telegram topic normalization: accepts thread IDs only on explicit forum-topic updates.
  * - Telegram public types: exposes only the reviewed application seams.
+ * - Provider web search: dynamic provider models select the native backend by provider prefix.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -39,6 +40,7 @@ const runtimePaths = {
   dispatchRuntimeActionsSharedTypes: resolve(
     "node_modules/eve/dist/src/execution/dispatch-runtime-actions-shared.d.ts",
   ),
+  providerTools: resolve("node_modules/eve/dist/src/harness/provider-tools.js"),
   productionStart: resolve(
     "node_modules/eve/dist/src/internal/nitro/host/start-production-server.js",
   ),
@@ -367,6 +369,15 @@ await replaceExact(
   runtimePaths.workflowSteps,
   "j=await runStep(c,g,async e=>{let t=resolveEffectiveOutputSchema(",
   "j=await runStep(c,g,async e=>{v.sessionStarted&&await refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C,event:createSessionStartedEvent({runtime:O}),messages:e.history,runtimeRevision});let t=resolveEffectiveOutputSchema(",
+);
+
+// A dynamic model selection carries no authored `source`, so Eve fell back to the gateway Exa
+// backend even for a direct OpenAI- or Anthropic-protocol provider, and the provider client then
+// dropped the unknown tool. Select the native backend from the provider prefix of the model id.
+await replaceExact(
+  runtimePaths.providerTools,
+  "function resolveWebSearchBackend(e,t=`exa`){if(e.source===void 0)return t;let n=e.id.split(`/`)[0]??``;",
+  "function resolveWebSearchBackend(e,t=`exa`){let n=e.id.split(`/`)[0]??``;if(e.source===void 0&&!(n===`openai`||n.startsWith(`openai.`)||n===`anthropic`||n.startsWith(`anthropic.`)||n.startsWith(`google.`)))return t;",
 );
 
 // Verified webhooks can be durably acknowledged before native dispatch; drain reuses that dispatcher.
