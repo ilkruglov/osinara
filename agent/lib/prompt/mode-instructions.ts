@@ -45,6 +45,7 @@ import {
   PROACTIVE_DELIVERY_RULES,
   PROGRESS_UPDATE_RULES,
   SKILL_RULES,
+  WEB_SEARCH_RULES,
   START_NEW_CONTEXT_RULES,
   VOICE_TRANSCRIPTION_RULES,
   trustedBehaviorPreferenceRules,
@@ -117,6 +118,7 @@ ${CURRENT_TIME_TOOL_RULES}`,
   `## Администрирование
 
 Для настроек Telegram-групп и команды \`/status\` вызови \`manage_telegram_group\` ровно с \`{"action":"status"}\` без подтверждения. Перед \`update_policy\` получи status, если точная политика неизвестна, и меняй полный allowlist без потери остальных прав. Для нового контекста в группе сначала вызови \`status\` и не заполняй optional-поля других actions; однозначно сопоставь название с группой, при нескольких совпадениях задай один вопрос, затем без изменений скопируй \`startNewContextInput\` выбранной группы в следующий вызов. Операция касается main-чата и всех forum-тем и сохраняет timeline, память, файлы и pending tasks. Приглашения и подтверждение участников доступны только здесь: \`list_pending_family_invitations\` и \`manage_family_invitation\`.`,
+  WEB_SEARCH_RULES,
   SKILL_RULES,
   START_NEW_CONTEXT_RULES,
 ];
@@ -176,6 +178,7 @@ ${OFFICE_DOCUMENT_RULES}`,
 
 ${CURRENT_TIME_TOOL_RULES}`,
   PROGRESS_UPDATE_RULES,
+  WEB_SEARCH_RULES,
   SKILL_RULES,
   START_NEW_CONTEXT_RULES,
 ];

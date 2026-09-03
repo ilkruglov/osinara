@@ -3,13 +3,12 @@
   "provider": "deepseek",
   "agent": {
     "transport": {
-      "protocol": "openai-chat-completions",
-      "baseUrl": "https://api.deepseek.com",
-      "providerName": "deepseek",
+      "protocol": "anthropic-messages",
+      "baseUrl": "https://api.deepseek.com/anthropic",
+      "authentication": "api-key",
       "reasoning": {
-        "type": "effort",
-        "effort": "low",
-        "format": "deepseek"
+        "type": "enabled",
+        "mode": "adaptive"
       }
     },
     "models": {

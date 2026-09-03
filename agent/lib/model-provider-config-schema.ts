@@ -99,7 +99,9 @@ const modelProviderConfigSchema = z.object({
   const transport = config.agent.transport;
   const expectedBaseUrl = {
     "codex-subscription": CODEX_SUBSCRIPTION_BASE_URL,
-    deepseek: "https://api.deepseek.com",
+    deepseek: transport.protocol === "anthropic-messages"
+      ? "https://api.deepseek.com/anthropic"
+      : "https://api.deepseek.com",
     groq: "https://api.groq.com/openai/v1",
     minimax: "https://api.minimax.io/anthropic/v1",
     neuraldeep: "https://api.neuraldeep.ru/v1",
@@ -129,11 +131,19 @@ const modelProviderConfigSchema = z.object({
       path: ["agent", "transport"],
     });
   }
-  if (config.provider === "deepseek" && (
-    transport.protocol !== "openai-chat-completions" ||
-    transport.providerName !== "deepseek" ||
-    transport.reasoning !== null && transport.reasoning.format !== "deepseek"
-  )) context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
+  if (config.provider === "deepseek") {
+    // DeepSeek serves the same models over Chat Completions and over an Anthropic-compatible
+    // endpoint; only the latter exposes the provider-managed web_search tool.
+    const chatCompletions = transport.protocol === "openai-chat-completions" &&
+      transport.providerName === "deepseek" &&
+      (transport.reasoning === null || transport.reasoning.format === "deepseek");
+    const anthropicMessages = transport.protocol === "anthropic-messages" &&
+      transport.compatibility === undefined &&
+      new URL(transport.baseUrl).hostname === "api.deepseek.com";
+    if (!chatCompletions && !anthropicMessages) {
+      context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
+    }
+  }
   if (config.provider === "groq" && (
     transport.protocol !== "openai-chat-completions" ||
     transport.providerName !== "groq" ||
