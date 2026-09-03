@@ -107,6 +107,7 @@ describe("observeModelUsage", () => {
       modelId: "deepseek-v4-flash",
       promptTokens: 100,
       reasoningTokens: 1,
+      toolCalls: [],
       webSearchCalls: 0,
       url: "https://api.deepseek.com/chat/completions",
     });
@@ -283,6 +284,7 @@ describe("configured model transport usage logging", () => {
       modelId: "deepseek-v4-flash",
       promptTokens: 42,
       reasoningTokens: 2,
+      toolCalls: [],
       webSearchCalls: 0,
       url: "https://api.deepseek.com/chat/completions",
     });
