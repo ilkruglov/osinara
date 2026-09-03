@@ -238,6 +238,9 @@ describe("external group tool surface", () => {
       }),
     ).toContain("remember");
     expect(names({ capabilities: new Set(), environment: "external" })).toContain("web_search");
+    // A granted provider web_search releases Eve's own descriptor instead of a denial stub.
+    expect(names({ capabilities: new Set(["web_search"]), environment: "external" })).not.toContain("web_search");
+    expect(names({ capabilities: new Set(["web_search"]), environment: "external", scheduledRun: true } as never)).toContain("web_search");
     expect(
       names({
         capabilities: new Set(["web_fetch"]),

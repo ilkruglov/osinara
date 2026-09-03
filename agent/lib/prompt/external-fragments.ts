@@ -7,6 +7,7 @@ const ALWAYS_AVAILABLE_PURPOSE =
 const CAPABILITY_PURPOSES: readonly (readonly [ExternalGroupToolName, string])[] = [
   ["import_telegram_attachment", "читать текстовые вложения этого чата"],
   ["web_fetch", "открывать публичную страницу по ссылке"],
+  ["web_search", "искать свежие сведения в интернете"],
   ["search_memories", "находить прошлые обсуждения группы"],
   ["list_memories", "перечислять память группы"],
   ["remember", "сохранять полезные сведения для группы"],

@@ -334,11 +334,15 @@ function buildExternalToolSurface(
   // Eve always registers its own built-ins, and 0.40.0 cannot hide a framework descriptor, so the
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
-    if (toolName === "web_fetch") {
-      if (!allowed.has(toolName)) surface[toolName] = deniedTool(toolName);
+    if (toolName === "web_fetch" || toolName === "web_search") {
+      // web_fetch is replaced by a controlled wrapper when granted; provider-native web_search has
+      // no local executor, so a grant simply releases Eve's descriptor. The surface is rebuilt on
+      // every step from the live policy, which is the revocation boundary for both.
+      if (!allowed.has(toolName) || scheduledRun && toolName === "web_search") {
+        surface[toolName] = deniedTool(toolName);
+      }
       continue;
     }
-    // Provider-native web_search has no local execution hook, so it is never grantable externally.
     surface[toolName] = deniedTool(toolName);
   }
   const effectiveSurface = scheduledRun
