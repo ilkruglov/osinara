@@ -14,7 +14,6 @@ import type { ReferencedMemoryItem, ReferencedMemoryRow } from "./memory-record.
 import { rowToReferencedMemory } from "./memory-record.js";
 import {
   MEMORY_REF_PATTERN,
-  memoryEvidenceNotice,
   type ModelMemoryEvidence,
 } from "./model-memory.js";
 
@@ -109,7 +108,6 @@ export const memoryListRepository = {
         sourceEvidence: {
           authorLabel: row.source_author_label,
           kind: row.source_evidence_kind,
-          notice: memoryEvidenceNotice(row.source_evidence_kind),
           observedAt: row.source_observed_at.toISOString(),
         },
       })),

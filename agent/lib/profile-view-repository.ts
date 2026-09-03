@@ -19,7 +19,6 @@ import {
   type ProfileSubjectPriority,
 } from "./profile-selection.js";
 import {
-  profileSourceNotice,
   toProfileView,
   type CreateProfileViewInput,
   type ProfileView,
@@ -438,7 +437,6 @@ export const profileViewRepository = {
           observedAt: row.observed_at.toISOString(),
           origin: { label: row.origin_label_snapshot, scope: row.origin_scope },
           sourceAuthorLabel: row.source_author_label_snapshot,
-          sourceNotice: profileSourceNotice(row.evidence_kind),
         });
         subjects.set(row.subject_ordinal, subject);
       }

@@ -72,7 +72,8 @@ const internalMemory = {
   scope: "personal",
   sensitivity: "normal",
   source: "eve:session-internal:turn-internal",
-  updatedAt: "2026-08-01T10:00:00.000Z",
+  // Запись менялась после создания, поэтому updatedAt обязан доехать до модели.
+  updatedAt: "2026-08-02T11:30:00.000Z",
   sourceEvidence: {
     authorLabel: "Анна",
     kind: "reported",

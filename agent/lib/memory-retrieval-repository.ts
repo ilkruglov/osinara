@@ -28,7 +28,7 @@ import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { ReferencedMemoryRow } from "./memory-record.js";
 import { rowToReferencedMemory } from "./memory-record.js";
 import { externalProfileProjectionPredicate } from "./external-profile-projection-predicate.js";
-import { memoryEvidenceNotice, type ModelMemoryEvidence } from "./model-memory.js";
+import type { ModelMemoryEvidence } from "./model-memory.js";
 import {
   collapseExactDuplicateRetrievalResults,
   type ScoredMemoryRetrievalResult,
@@ -154,7 +154,6 @@ function rowToScoredResult(row: RetrievalRow): ScoredMemoryRetrievalResult {
     sourceEvidence: {
       authorLabel: row.source_author_label,
       kind: row.source_evidence_kind,
-      notice: memoryEvidenceNotice(row.source_evidence_kind),
       observedAt: row.source_observed_at.toISOString(),
     },
   };

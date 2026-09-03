@@ -5,7 +5,12 @@
  * - `MEMORY_REF_PATTERN`: validates opaque refs accepted at model-facing boundaries.
  * - `ModelMemory`: allowlisted DTO used by tools and automatic prompt retrieval.
  * - `ModelMemoryEvidence`: safe provenance attached to repository retrieval results.
+ * - `EVIDENCE_KIND_LEGEND`: one shared explanation of every evidence kind.
  * - `toModelMemory`: removes database, identity, source, thread, and indexing metadata.
+ *
+ * Key construct:
+ * - The provenance sentence is a pure function of the evidence kind, so it is stated once per
+ *   block instead of being repeated on every record and every profile claim.
  */
 import type { MemoryScope } from "./memory-context.js";
 import type {
@@ -27,23 +32,22 @@ export interface ModelMemory {
   occurredAt: string | null;
   scope: MemoryScope;
   sensitivity: MemorySensitivity;
-  updatedAt: string;
+  /** Present only when the record actually changed after it was written. */
+  updatedAt?: string;
   evidence?: ModelMemoryEvidence;
 }
 
 export interface ModelMemoryEvidence {
   authorLabel: string;
   kind: "firsthand" | "inferred" | "reported" | "unresolved";
-  notice: string;
   observedAt: string;
 }
 
-export function memoryEvidenceNotice(kind: ModelMemoryEvidence["kind"]): string {
-  if (kind === "reported") return "Сообщено другим участником; не является подтверждением субъекта.";
-  if (kind === "inferred") return "Выведено моделью из источника; не является прямым заявлением субъекта.";
-  if (kind === "firsthand") return "Прямое заявление проверенного автора источника.";
-  return "Происхождение источника не установлено.";
-}
+export const EVIDENCE_KIND_LEGEND =
+  "Значение evidence kind: firsthand это прямое заявление проверенного автора источника; " +
+  "reported это сообщено другим участником и не является подтверждением субъекта; " +
+  "inferred это выведено моделью из источника и не является прямым заявлением субъекта; " +
+  "explicit это явно сохранено пользователем; unresolved это происхождение не установлено.";
 
 export function toModelMemory(
   memory: ReferencedMemoryItem,
@@ -60,7 +64,7 @@ export function toModelMemory(
     occurredAt: memory.occurredAt,
     scope: memory.scope,
     sensitivity: memory.sensitivity,
-    updatedAt: memory.updatedAt,
+    ...(memory.updatedAt === memory.createdAt ? {} : { updatedAt: memory.updatedAt }),
     ...(evidence === undefined ? {} : { evidence }),
   };
 }
