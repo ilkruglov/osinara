@@ -116,6 +116,7 @@ const POST_V0101_MIGRATIONS = [
   "082_telegram_chat_reaction_policies.sql",
   "083_remove_group_skill_allowlist.sql",
   "084_idle_memory_review.sql",
+  "085_profile_view_attribute.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
