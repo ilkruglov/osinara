@@ -30,10 +30,21 @@ import { formatCurrentTimeContext } from "./current-time.js";
 const context = { callId: "call-1" } as ToolContext;
 
 describe("formatCurrentTimeContext", () => {
-  it("formats an unambiguous turn-start UTC snapshot", () => {
-    expect(formatCurrentTimeContext(new Date("2026-07-30T15:24:18.000Z"))).toBe([
+  it("formats an unambiguous turn-start UTC snapshot when no timezone is configured", () => {
+    expect(formatCurrentTimeContext(new Date("2026-07-30T15:24:18.000Z"), null)).toBe([
       "<current_time>",
       "captured_at_utc: 2026-07-30T15:24:18.000Z",
+      "local: timezone не настроена, при необходимости уточни её",
+      "precision: turn_start",
+      "</current_time>",
+    ].join("\n"));
+  });
+
+  it("adds local civil time so the model answers 'сегодня' without a tool call", () => {
+    expect(formatCurrentTimeContext(new Date("2026-07-30T15:24:18.000Z"), "Europe/Moscow")).toBe([
+      "<current_time>",
+      "captured_at_utc: 2026-07-30T15:24:18.000Z",
+      "local: 2026-07-30 18:24 четверг, Europe/Moscow (+03:00)",
       "precision: turn_start",
       "</current_time>",
     ].join("\n"));
