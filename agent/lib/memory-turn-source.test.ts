@@ -4,7 +4,7 @@
  * Constructs covered:
  * - `bindMemoryTurnSources`: accepts only an exact durable HITL resume and ignores scheduled runs.
  * - `resolveMemoryTurnSource`: current source default and visible group-delta sequence selection.
- * - Personal turns reject historical source selection even if a sequence is supplied.
+ * - Ordinary personal turns reject historical source selection; a personal silent review may select one.
  * - A selected source must remain bound to the same verified caller and memory partition.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -135,16 +135,57 @@ describe("turn-bound memory source selection", () => {
     });
   });
 
-  it("rejects sourceSequence in a personal turn before repository access", async () => {
+  it("rejects sourceSequence in an ordinary personal turn", async () => {
     resolve.mockClear();
+    resolve.mockResolvedValueOnce({
+      conversationId: "conversation-9",
+      invokingActorId: "caller-1",
+      invokingActorKind: "telegram_user",
+      isCurrent: false,
+      isReview: false,
+      messageThreadId: null,
+      scope: "personal",
+      scopePartitionKey: "user-1",
+      sourceMessageId: "420",
+      timelineEntryId: "entry-42",
+    });
     const personal: MemoryAuthorization = {
       ...groupAuthorization,
       groupId: null,
+      role: "owner",
       scopes: ["personal"],
+      userId: "user-1",
     };
 
     await expect(resolveMemoryTurnSource(context, personal, "42")).rejects.toMatchObject({ code: "AGENT_MEMORY_EXPLICIT_SOURCE_INVALID" });
-    expect(resolve).not.toHaveBeenCalled();
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a personal review source selected by sequence", async () => {
+    resolve.mockResolvedValueOnce({
+      conversationId: "conversation-9",
+      invokingActorId: "caller-1",
+      invokingActorKind: "telegram_user",
+      isCurrent: false,
+      isReview: true,
+      messageThreadId: null,
+      scope: "personal",
+      scopePartitionKey: "user-1",
+      sourceMessageId: "77",
+      timelineEntryId: "entry-7",
+    });
+    const personal: MemoryAuthorization = {
+      ...groupAuthorization,
+      groupId: null,
+      role: "owner",
+      scopes: ["personal", "family"],
+      userId: "user-1",
+    };
+
+    await expect(resolveMemoryTurnSource(context, personal, "7")).resolves.toMatchObject({
+      isReview: true,
+      timelineEntryId: "entry-7",
+    });
   });
 
   it("rejects a source bound to another invoking Telegram caller", async () => {
