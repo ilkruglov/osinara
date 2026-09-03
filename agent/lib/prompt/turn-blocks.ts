@@ -69,13 +69,13 @@ export interface TurnBlockContext {
 }
 
 /**
- * Retrieved records are volatile per-turn data, so they enter durable history as a user-role
- * message and leave the cacheable system prefix untouched. Fail-closed notices stay system-role:
- * they are short, rare, and must outrank untrusted data.
+ * The memory block is delivered as a system instruction. A user-role delivery was tried and
+ * reverted: Eve exposes pending user-role instructions to later turn.started handlers as the
+ * newest user message, which broke every reader that expects the Telegram envelope there.
  */
 export interface MemoryBlock {
   readonly markdown: string;
-  readonly role: "system" | "user";
+  readonly role: "system";
 }
 
 type CapabilityLoader = (identity: {
@@ -230,7 +230,7 @@ export function createMemoryBlockResolver(dependencies: {
           ...(profile === null ? [] : [formatProfileViewContext(profile)]),
           formatRetrievedMemoryInstructions(context.memories, context.threads),
         ].join("\n\n"),
-        role: "user",
+        role: "system",
       };
     } catch (error) {
       logBlockFailure("AGENT_MEMORY_UNAVAILABLE", error);

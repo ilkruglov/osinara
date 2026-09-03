@@ -6,10 +6,10 @@
  *
  * Key constructs:
  * - The runtime event supplies the durable turn ID used to bind writable profile subject refs.
- * - Records enter durable history as a user-role message before the current delivery. The system
- *   prefix therefore stays byte-identical between turns and the provider prompt cache covers the
- *   whole conversation instead of only the permanent instructions.
- * - Fail-closed notices remain system-role so they outrank untrusted data.
+ * - The block is a system instruction ordered last by filename, so the volatile payload sits after
+ *   every stable instruction. A user-role delivery was reverted: Eve hands pending user-role
+ *   instructions to later turn.started handlers as the newest user message, which broke readers
+ *   that expect the Telegram envelope there.
  */
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
