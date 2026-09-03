@@ -28,6 +28,7 @@ describe("toModelMemory", () => {
       scope: "personal",
       sensitivity: "normal",
       source: "eve:session-internal:turn-internal",
+      occurredAt: null,
       updatedAt: "2026-08-01T11:00:00.000Z",
     });
 
@@ -40,6 +41,7 @@ describe("toModelMemory", () => {
       memoryRef: "mem_0123456789abcdef0123456789abcdef",
       scope: "personal",
       sensitivity: "normal",
+      occurredAt: null,
       updatedAt: "2026-08-01T11:00:00.000Z",
     });
     expect(JSON.stringify(projected)).not.toMatch(

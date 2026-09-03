@@ -113,7 +113,7 @@ async function existingCreate(
   const result = await client.query<ReferencedMemoryRow>(
     `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
             item.content, item.source, item.confirmation, item.sensitivity, item.message_thread_id,
-            item.embedding_status, item.created_at, item.updated_at, ref.memory_ref
+            item.embedding_status, item.created_at, item.updated_at, item.occurred_at, ref.memory_ref
      FROM memory_items AS item
      JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
      WHERE item.id = $1 AND item.family_id = $2 AND (
@@ -354,12 +354,13 @@ export async function createMemoryClaim(
           sensitivity, operation_key, origin_conversation_id, subject_participant_id,
            subject_conversation_id, subject_user_id, subject_label, memory_project_id, save_approved,
            endorsed_by_user_id, endorsed_at, provenance_state, content_normalized, profile_eligible,
-           claim_status, duplicate_of, attribute)
+           claim_status, duplicate_of, attribute, occurred_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                 $15, $16, $17, $18, $19, $20, $21, $22,
-                CASE WHEN $22::uuid IS NULL THEN NULL ELSE now() END, $23, $24, $25, $26, $27, $28)
+                CASE WHEN $22::uuid IS NULL THEN NULL ELSE now() END, $23, $24, $25, $26, $27, $28,
+                $29::timestamptz)
        RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
-                 confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at`,
+                 confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
       [auth.familyId, ownerUserId, groupId, authorUserId,
         prepared?.primaryAuthorTelegramUserId ?? (input.scope === "group" ? auth.telegramUserId : null),
         input.scope, input.kind, input.content, input.source, input.sourceEventId ?? null,
@@ -374,7 +375,8 @@ export async function createMemoryClaim(
             (prepared.subjectUserId !== null || prepared.subjectParticipantId !== null),
           "active",
           null,
-          input.attribute ?? null],
+          input.attribute ?? null,
+          input.occurredAt ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new AppError("AGENT_MEMORY_WRITE_FAILED", "Не удалось сохранить запись памяти");

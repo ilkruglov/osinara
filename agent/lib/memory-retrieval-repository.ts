@@ -155,12 +155,19 @@ function rowToScoredResult(row: RetrievalRow): ScoredMemoryRetrievalResult {
   };
 }
 
+/** Optional inclusive date window over the event date, falling back to creation time. */
+export interface MemoryRetrievalWindow {
+  occurredAfter?: string;
+  occurredBefore?: string;
+}
+
 export const memoryRetrievalRepository = {
   async search(
     auth: MemoryAuthorization,
     query: string,
     queryEmbedding: readonly number[],
     limit = MEMORY_RETRIEVAL_LIMIT,
+    window: MemoryRetrievalWindow = {},
   ): Promise<ScoredMemoryRetrievalResult[]> {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) {
@@ -178,6 +185,8 @@ export const memoryRetrievalRepository = {
           JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
            WHERE item.family_id = $1 AND item.claim_status = 'active'
              AND ${authorizedClaimPredicate("item")}
+             AND ($16::timestamptz IS NULL OR COALESCE(item.occurred_at, item.created_at) >= $16::timestamptz)
+             AND ($17::timestamptz IS NULL OR COALESCE(item.occurred_at, item.created_at) <= $17::timestamptz)
        ),
        simple_evidence AS (
          SELECT id, updated_at, relevance
@@ -243,7 +252,7 @@ export const memoryRetrievalRepository = {
        SELECT authorized.id, authorized.author_user_id, authorized.author_telegram_user_id,
               authorized.scope, authorized.kind, authorized.content, authorized.source,
                authorized.confirmation, authorized.sensitivity, authorized.message_thread_id,
-               authorized.embedding_status, authorized.created_at, authorized.updated_at,
+               authorized.embedding_status, authorized.created_at, authorized.updated_at, authorized.occurred_at,
                authorized.memory_ref, authorized.scope_partition_key, authorized.subject_family_id,
                authorized.subject_user_id, authorized.subject_participant_id,
                authorized.memory_project_id, authorized.subject_label,
@@ -264,7 +273,7 @@ export const memoryRetrievalRepository = {
                 COALESCE(1.0 / ($12::double precision + russian_morphology.ordinal), 0) +
                 COALESCE(1.0 / ($12::double precision + semantic.ordinal), 0) +
                 CASE WHEN authorized.confirmation = 'user_confirmed' THEN $13::double precision ELSE 0 END +
-                $14::double precision / (1 + EXTRACT(EPOCH FROM (now() - authorized.updated_at)) / $15))
+                $14::double precision / (1 + EXTRACT(EPOCH FROM (now() - COALESCE(authorized.occurred_at, authorized.updated_at))) / $15))
                  AS fused_score
        FROM candidates
        JOIN authorized USING (id)
@@ -295,6 +304,8 @@ export const memoryRetrievalRepository = {
         MEMORY_RETRIEVAL_CONFIRMATION_BOOST,
         MEMORY_RETRIEVAL_RECENCY_BOOST,
         MEMORY_RETRIEVAL_RECENCY_DECAY_SECONDS,
+        window.occurredAfter ?? null,
+        window.occurredBefore ?? null,
       ],
     );
     // Duplicate collapse is read-only and happens after global rank, preserving its representative.
@@ -306,12 +317,13 @@ export const memoryRetrievalRepository = {
     query: string,
     queryEmbedding: readonly number[],
     limit = MEMORY_RETRIEVAL_LIMIT,
+    window: MemoryRetrievalWindow = {},
   ): Promise<{
     conflicts: MemoryConflictGroup[];
     relatedClaimIds: string[];
     results: ScoredMemoryRetrievalResult[];
   }> {
-    const results = await memoryRetrievalRepository.search(auth, query, queryEmbedding, limit);
+    const results = await memoryRetrievalRepository.search(auth, query, queryEmbedding, limit, window);
     const selectedIds = results.map((result) => result.memory.id);
     if (selectedIds.length === 0) return { conflicts: [], relatedClaimIds: [], results };
 

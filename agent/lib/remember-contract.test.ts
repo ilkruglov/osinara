@@ -75,4 +75,18 @@ describe("externalRememberInputSchema", () => {
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "работа", kind: "episode" }).success).toBe(false);
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "x".repeat(65), kind: "profile" }).success).toBe(false);
   });
+
+  it("accepts occurredAt only for episodes and only as an ISO date", () => {
+    const base = {
+      basis: "agent_inferred",
+      content: "Serje едет в Питер",
+      scope: "group",
+      sensitivity: "normal",
+      subject: { kind: "current_author" },
+    };
+    expect(externalRememberInputSchema.safeParse({ ...base, kind: "episode", occurredAt: "2026-09-08" }).success).toBe(true);
+    expect(externalRememberInputSchema.safeParse({ ...base, kind: "episode", occurredAt: "2026-09-08T10:00:00Z" }).success).toBe(true);
+    expect(externalRememberInputSchema.safeParse({ ...base, kind: "fact", occurredAt: "2026-09-08" }).success).toBe(false);
+    expect(externalRememberInputSchema.safeParse({ ...base, kind: "episode", occurredAt: "8 сентября" }).success).toBe(false);
+  });
 });

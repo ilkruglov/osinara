@@ -74,6 +74,8 @@ retrieval и thread activation используют только локальн�
 Профильные записи имеют необязательный слот `attribute`; новая запись того же субъекта и слота
 помечает прежнюю `superseded` (`memory-slot-supersede.ts`), а тихий review видит уже сохранённые
 записи разговора в блоке `<existing_memory>`, чтобы версионировать слот, а не дублировать.
+События (`kind: episode`) несут `occurred_at`; retrieval учитывает дату события в recency-boost,
+а `search_memories` принимает окно `occurredAfter`/`occurredBefore` для вопросов о периоде.
 
 ## Как проходит Telegram update
 

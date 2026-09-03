@@ -12,6 +12,7 @@ import { closeDatabase, database } from "./database.js";
 import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-fixtures.js";
 import type { CreateMemoryInput } from "./memory-record.js";
 import { memoryRepository } from "./memory-repository.js";
+import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
   ? describe
@@ -106,5 +107,37 @@ describeWithDatabase("memory slots", () => {
       "SELECT claim_status::text, reinforcement_count FROM memory_items WHERE id = $1",
       [first.id],
     )).resolves.toMatchObject({ rows: [{ claim_status: "active", reinforcement_count: 1 }] });
+  });
+
+  it("stores the event date of an episode and filters retrieval by a date window", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const episode = await memoryRepository.create(fixture.auth, {
+      confirmation: "model_high",
+      content: "Анна ездила в Питер на конференцию",
+      explicitSource: {
+        conversationId: fixture.conversationId,
+        subject: { kind: "current_author" },
+        timelineEntryId: fixture.timelineEntryId,
+      },
+      kind: "episode",
+      occurredAt: "2026-09-08",
+      operationKey: "episode-1",
+      provenance: { sessionId: "eve-session-ep", turnId: "eve-turn-ep" },
+      scope: "family",
+      sensitivity: "normal",
+      source: "eve:eve-session-ep:eve-turn-ep",
+    });
+
+    expect(episode.occurredAt).toBe("2026-09-08T00:00:00.000Z");
+    const zero = Array.from({ length: 384 }, () => 0);
+    const inside = await memoryRetrievalRepository.search(fixture.auth, "Питер", zero, 12, {
+      occurredAfter: "2026-09-01",
+      occurredBefore: "2026-09-30",
+    });
+    const outside = await memoryRetrievalRepository.search(fixture.auth, "Питер", zero, 12, {
+      occurredAfter: "2026-10-01",
+    });
+    expect(inside.map((result) => result.memory.id)).toContain(episode.id);
+    expect(outside.map((result) => result.memory.id)).not.toContain(episode.id);
   });
 });

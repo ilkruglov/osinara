@@ -47,7 +47,7 @@ export async function reinforceExactClaim(
   const duplicate = await client.query<ReferencedMemoryRow>(
     `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope,
             item.kind, item.content, item.source, item.confirmation, item.sensitivity,
-            item.message_thread_id, item.embedding_status, item.created_at, item.updated_at,
+            item.message_thread_id, item.embedding_status, item.created_at, item.updated_at, item.occurred_at,
             ref.memory_ref
      FROM memory_items AS item
      JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
