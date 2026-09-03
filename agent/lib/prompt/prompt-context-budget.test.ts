@@ -10,8 +10,8 @@ import { modeInstructions } from "./mode-instructions.js";
 // The mode block is re-sent on every model step: rules that only matter when a specific tool is
 // called belong in that tool's descriptor or skill, not here.
 const CORE_CHARACTER_BUDGET = 11_000;
-const PRIVATE_CHARACTER_BUDGET = 11_000;
-const FAMILY_CHARACTER_BUDGET = 12_000;
+const PRIVATE_CHARACTER_BUDGET = 11_500;
+const FAMILY_CHARACTER_BUDGET = 12_500;
 const EXTERNAL_CHARACTER_BUDGET = 10_000;
 const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_000;
 const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_000;
