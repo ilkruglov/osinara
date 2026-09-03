@@ -55,13 +55,13 @@ const EXPECTED_TOOL_MODULES = [
 
 const EXPECTED_DISCOVERED_TOOL_FILES = ["capabilities.ts"] as const;
 
-// A family assistant ships no developer-docs lookup and no brokerage skill by default; the
-// brokerage package is restorable from git history when a household actually uses T-Invest.
 const EXPECTED_SKILL_DIRECTORIES = [
   "agent-browser",
   "behavior-preferences",
   "docx",
+  "find-docs",
   "pdf",
+  "t-invest",
   "xlsx",
 ] as const;
 
