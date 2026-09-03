@@ -3,10 +3,14 @@
 ## Что это за проект
 
 Osinara — семейный Telegram-агент на TypeScript, Eve `0.40.0`, PostgreSQL и Groq.
-Основная модель по умолчанию — DeepSeek V4 Flash через Anthropic-совместимый endpoint
-(`api.deepseek.com/anthropic`, `anthropic-messages`): только там DeepSeek отдаёт провайдерский
-`web_search`, который Eve выставляет в личном и семейном чатах; во внешних группах и в тихом review
-он перекрыт отказом. Chat Completions-транспорт DeepSeek остаётся допустимым в схеме.
+Основная модель по умолчанию — DeepSeek V4 Flash через родной Responses API
+(`api.deepseek.com/responses`, транспорт `deepseek-responses`, `agent/lib/deepseek/`): запрос
+приводится к документированной таблице совместимости DeepSeek (неподдерживаемые поля убираются,
+`reasoning.effort` none/low/high/max берётся из конфига и реально меняет глубину рассуждений),
+документированные HTTP-статусы становятся стабильными кодами, usage читает `cached_tokens` и
+`reasoning_tokens`. Серверный `web_search` DeepSeek Eve выставляет в личном и семейном чатах; во
+внешних группах и в тихом review он перекрыт отказом. Chat Completions и Anthropic-совместимый
+транспорты DeepSeek остаются допустимыми в схеме.
 Он обслуживает личные чаты, закрытые семейные группы и изолированные внешние группы.
 Главная задача приложения — сохранять строгие границы между пользователями, семьями и группами.
 

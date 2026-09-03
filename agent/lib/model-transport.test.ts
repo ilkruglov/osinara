@@ -102,6 +102,85 @@ describe("createConfiguredLanguageModel", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("speaks the native DeepSeek Responses contract: endpoint, effort, stripped fields, errors", async () => {
+    let request: { body: Record<string, unknown>; headers: Headers; url: string } | undefined;
+    const model = createConfiguredLanguageModel({
+      apiKey: "model-secret",
+      fetch: async (input, init) => {
+        request = {
+          body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+          headers: new Headers(init?.headers),
+          url: String(input),
+        };
+        return jsonResponse({
+          id: "resp_1",
+          model: "deepseek-v4-flash",
+          object: "response",
+          output: [{
+            content: [{ annotations: [], text: "Готово", type: "output_text" }],
+            id: "msg_1",
+            role: "assistant",
+            status: "completed",
+            type: "message",
+          }],
+          status: "completed",
+          usage: {
+            input_tokens: 20,
+            input_tokens_details: { cached_tokens: 8 },
+            output_tokens: 5,
+            output_tokens_details: { reasoning_tokens: 2 },
+            total_tokens: 25,
+          },
+        });
+      },
+      maxOutputTokens: 32_000,
+      modelId: "deepseek-v4-flash",
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "deepseek-responses",
+        reasoning: { effort: "high" },
+      },
+    });
+
+    await expect(model.doGenerate({
+      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+    } as LanguageModelV4CallOptions)).resolves.toMatchObject({
+      content: [{ text: "Готово", type: "text" }],
+    });
+    expect(model.provider).toBe("openai.responses");
+    expect(request?.url).toBe("https://api.deepseek.com/responses");
+    expect(request?.body).toMatchObject({
+      max_output_tokens: 32_000,
+      model: "deepseek-v4-flash",
+      reasoning: { effort: "high" },
+    });
+    for (const field of ["store", "include", "truncation", "parallel_tool_calls", "metadata"]) {
+      expect(request?.body, field).not.toHaveProperty(field);
+    }
+    expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
+  });
+
+  it("turns a documented terminal DeepSeek status into a stable application error", async () => {
+    const model = createConfiguredLanguageModel({
+      apiKey: "model-secret",
+      fetch: async () => new Response(JSON.stringify({ error: { message: "Insufficient Balance" } }), {
+        headers: { "content-type": "application/json" },
+        status: 402,
+      }),
+      maxOutputTokens: 1_000,
+      modelId: "deepseek-v4-flash",
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        protocol: "deepseek-responses",
+        reasoning: { effort: "low" },
+      },
+    });
+
+    await expect(model.doGenerate({
+      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+    } as LanguageModelV4CallOptions)).rejects.toMatchObject({ code: "AGENT_MODEL_BALANCE_EXHAUSTED" });
+  });
+
   it("selects a generic OpenAI-compatible model strictly by protocol", async () => {
     let request: { body: Record<string, unknown>; headers: Headers; url: string } | undefined;
     const model = createConfiguredLanguageModel({

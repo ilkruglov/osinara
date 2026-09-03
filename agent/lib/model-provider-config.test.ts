@@ -118,6 +118,34 @@ describe("parseModelProviderConfig", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
   });
 
+  it("accepts the native DeepSeek Responses transport only on the DeepSeek host", () => {
+    const responses = {
+      ...validConfig,
+      agent: {
+        models: {
+          primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 128_000 },
+          vision: { supportsImageInput: false },
+        },
+        transport: {
+          baseUrl: "https://api.deepseek.com",
+          protocol: "deepseek-responses",
+          reasoning: { effort: "none" },
+        },
+      },
+      provider: "deepseek",
+    } as const;
+    expect(parseModelProviderConfig(responses)).toEqual(responses);
+    expect(() => parseModelProviderConfig({
+      ...responses,
+      agent: { ...responses.agent, transport: { ...responses.agent.transport, baseUrl: "https://api.deepseek.com/anthropic" } },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({
+      ...responses,
+      agent: { ...responses.agent, transport: { ...responses.agent.transport, reasoning: { effort: "medium" } } },
+    })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+    expect(() => parseModelProviderConfig({ ...responses, provider: "groq" })).toThrow("AGENT_MODEL_PROVIDER_CONFIG_INVALID");
+  });
+
   it("accepts DeepSeek over its Anthropic-compatible endpoint as well as Chat Completions", () => {
     const deepseekAnthropic = {
       ...validConfig,

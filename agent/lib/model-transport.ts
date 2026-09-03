@@ -13,6 +13,7 @@
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGroq } from "@ai-sdk/groq";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
   LanguageModelV4FinishReason,
@@ -27,6 +28,8 @@ import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
 import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
 import { observeModelUsage } from "./model-usage-log.js";
+import { describeDeepSeekHttpError } from "./deepseek/deepseek-errors.js";
+import { normalizeDeepSeekResponsesRequest } from "./deepseek/deepseek-responses-request.js";
 
 export interface ConfiguredLanguageModelOptions {
   readonly apiKey: string;
@@ -74,6 +77,14 @@ function normalizeDeepSeekThinkingRequest(
   return { ...init, body: JSON.stringify(body) };
 }
 
+function normalizeDeepSeekResponsesTransportRequest(
+  options: ConfiguredLanguageModelOptions,
+  init: RequestInit | undefined,
+): RequestInit | undefined {
+  if (options.transport.protocol !== "deepseek-responses") return init;
+  return normalizeDeepSeekResponsesRequest(init, { effort: options.transport.reasoning.effort });
+}
+
 function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): FetchFunction {
   return async (input, init) => {
     if (!options.apiKey || /\s/u.test(options.apiKey)) {
@@ -84,8 +95,22 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
     }
     const response = await (options.fetch ?? globalThis.fetch)(
       input,
-      normalizeDeepSeekThinkingRequest(options, init),
+      normalizeDeepSeekResponsesTransportRequest(options, normalizeDeepSeekThinkingRequest(options, init)),
     );
+    // Documented DeepSeek statuses become stable application errors; retryable ones keep flowing to
+    // the AI SDK retry policy below, terminal ones stop the call with a human-readable reason.
+    if (options.transport.protocol === "deepseek-responses" && !response.ok) {
+      const described = describeDeepSeekHttpError(response.status);
+      if (described !== null && !described.retryable) {
+        console.error(JSON.stringify({
+          code: described.code,
+          modelId: options.modelId,
+          statusCode: response.status,
+          url: modelRequestUrl(input),
+        }));
+        throw new AppError(described.code, described.message);
+      }
+    }
     if (isRetryableModelResponse(response)) {
       console.error(JSON.stringify({
         code: "AGENT_MODEL_TRANSIENT_RESPONSE",
@@ -113,6 +138,8 @@ function configuredProviderOptions(
       },
     };
   }
+  // DeepSeek Responses reasoning is applied on the wire from the documented contract.
+  if (transport.protocol === "deepseek-responses") return {};
   if (transport.reasoning == null) return {};
   const reasoning = transport.reasoning;
   if (reasoning.format === "reasoning-object") {
@@ -201,7 +228,8 @@ function createTransportDefaultsMiddleware(
       return {
         ...params,
         maxOutputTokens: params.maxOutputTokens ?? maxOutputTokens,
-        prompt: transport.protocol === "openai-chat-completions"
+        prompt: transport.protocol === "openai-chat-completions" ||
+            transport.protocol === "deepseek-responses"
           ? removeUnresolvedOpenAIToolCalls(params.prompt)
           : params.prompt,
         providerOptions: {
@@ -269,6 +297,18 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
     return wrapLanguageModel({
       middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
       model: provider(options.modelId),
+    });
+  }
+
+  if (transport.protocol === "deepseek-responses") {
+    const provider = createOpenAI({
+      apiKey: options.apiKey,
+      baseURL: transport.baseUrl,
+      fetch: guardedFetch,
+    });
+    return wrapLanguageModel({
+      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
+      model: provider.responses(options.modelId),
     });
   }
 
