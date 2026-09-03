@@ -60,6 +60,9 @@ export function repositories() {
     attachments: {
       persist: vi.fn().mockResolvedValue([]),
     },
+    currentTime: {
+      findUserTimezone: vi.fn().mockResolvedValue(null),
+    },
     conversations: {
       getByChatId: vi.fn().mockResolvedValue({
         familyId: "family-1",

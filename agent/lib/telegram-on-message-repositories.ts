@@ -18,6 +18,7 @@ import {
 } from "./attachments/telegram-workspace-attachments.js";
 import { conversationRepository } from "./conversation-repository.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
+import { currentTimeRepository } from "./current-time-repository.js";
 import { familyRepository, type FamilyRepository } from "./family-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 import { proactiveDeliveryRepository } from "./proactive-deliveries/proactive-delivery-repository.js";
@@ -61,6 +62,7 @@ export interface TelegramMessageRepositories {
     typeof conversationRepository,
     "getByChatId" | "getByGroupId" | "syncTimelineParticipants"
   >;
+  currentTime: Pick<typeof currentTimeRepository, "findUserTimezone">;
   threadNotices: MemoryThreadNoticeDeliveryRepository;
   profilePolicies: Pick<
     typeof profileProjectionPolicyRepository,
@@ -88,6 +90,7 @@ export const productionTelegramMessageRepositories = {
     writeBinary: workspaceBinaryRepository.writeBinary,
   }),
   conversations: conversationRepository,
+  currentTime: currentTimeRepository,
   profilePolicies: profileProjectionPolicyRepository,
   family: familyRepository,
   groupContext: { prepare: telegramGroupTurnContextPreparer },

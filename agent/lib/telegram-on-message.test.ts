@@ -44,6 +44,7 @@ describe("createTelegramMessageHandler", () => {
       expect(result?.context).toContain([
         "<current_time>",
         "captured_at_utc: 2026-07-30T15:24:18.000Z",
+        "local: timezone не настроена, при необходимости уточни её",
         "precision: turn_start",
         "</current_time>",
       ].join("\n"));
@@ -55,6 +56,47 @@ describe("createTelegramMessageHandler", () => {
       );
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("adds the user's local civil time when a timezone is configured", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-30T15:24:18.000Z"));
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.currentTime.findUserTimezone.mockResolvedValue("Europe/Moscow");
+    const handler = createTelegramMessageHandler(repository);
+    try {
+      const result = await handler(telegramContext().context, privateMessage("Который час?"));
+
+      expect(repository.currentTime.findUserTimezone).toHaveBeenCalledWith("user-1", "family-1");
+      expect(result?.context?.join("\n")).toContain("local: 2026-07-30 18:24 четверг, Europe/Moscow (+03:00)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the turn alive with UTC only when the timezone lookup fails", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "owner",
+      userId: "user-1",
+    });
+    repository.currentTime.findUserTimezone.mockRejectedValue(new Error("database down"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const handler = createTelegramMessageHandler(repository);
+    try {
+      const result = await handler(telegramContext().context, privateMessage("Который час?"));
+
+      expect(result?.context?.join("\n")).toContain("local: timezone не настроена");
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED"));
+    } finally {
+      log.mockRestore();
     }
   });
 

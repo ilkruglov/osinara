@@ -66,10 +66,30 @@ function utcOffset(parts: Intl.DateTimeFormatPart[]): string {
   );
 }
 
-export function formatCurrentTimeContext(currentTime: Date): string {
+const LOCAL_TIME_UNAVAILABLE = "local: timezone не настроена, при необходимости уточни её";
+
+function localTimeLine(currentTime: Date, timezone: string | null): string {
+  if (timezone === null) return LOCAL_TIME_UNAVAILABLE;
+  try {
+    const local = resolveCurrentTime(currentTime, timezone, "user_settings");
+    // Seconds add nothing to a conversational "сегодня вечером" and change on every turn.
+    const minutes = local.localTime?.slice(0, 5);
+    return `local: ${local.localDate} ${minutes} ${local.weekday}, ${local.timezone} (${local.utcOffset})`;
+  } catch {
+    // A stored timezone the runtime cannot format degrades to UTC instead of failing the turn.
+    return LOCAL_TIME_UNAVAILABLE;
+  }
+}
+
+/**
+ * Local civil time lets the model answer "сегодня", "вечером" and weekday questions from context
+ * instead of spending a tool call on every time-sensitive turn.
+ */
+export function formatCurrentTimeContext(currentTime: Date, timezone: string | null): string {
   return [
     "<current_time>",
     `captured_at_utc: ${currentTime.toISOString()}`,
+    localTimeLine(currentTime, timezone),
     "precision: turn_start",
     "</current_time>",
   ].join("\n");

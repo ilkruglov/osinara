@@ -437,6 +437,18 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         );
       }
     }
+    // Local civil time is a convenience for natural answers; a lookup failure must not cost the turn.
+    let timezone: string | null = null;
+    if (access.userId) {
+      try {
+        timezone = await repositories.currentTime.findUserTimezone(access.userId, access.familyId);
+      } catch (error) {
+        console.error(JSON.stringify({
+          code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
     const turnResult = buildTelegramTurnResult({
       access,
       actor,
@@ -452,6 +464,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       replyHandling,
       storedAttachments,
       timelineEntryId: inboundTimeline.entryId,
+      timezone,
       turnContext: groupTurnContext,
       turnStartedAt,
     });

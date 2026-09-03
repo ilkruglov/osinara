@@ -37,6 +37,7 @@ export function buildTelegramTurnResult(input: {
   replyHandling: "message" | undefined;
   storedAttachments: readonly StoredTelegramAttachment[];
   timelineEntryId: string;
+  timezone: string | null;
   turnContext: PreparedTelegramGroupTurnContext;
   turnStartedAt: Date;
 }): TelegramInboundResult {
@@ -45,7 +46,7 @@ export function buildTelegramTurnResult(input: {
     `Verified role: ${input.access.role}.`,
     `Verified Telegram actor kind: ${input.actor.kind}.`,
     "Verified Telegram delivery: reply in concise plain text by default; use supported Rich Markdown only when formatting materially improves the answer.",
-    formatCurrentTimeContext(input.turnStartedAt),
+    formatCurrentTimeContext(input.turnStartedAt, input.timezone),
   ];
   if (input.storedAttachments.length > 0) {
     context.push(formatStoredTelegramAttachments(input.storedAttachments));
