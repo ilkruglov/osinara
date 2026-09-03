@@ -20,6 +20,7 @@ import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation
 import {
   imageGenerationClient,
   type ImageGenerationRequest,
+  type ImageMediaType,
 } from "../image-generation/image-generation-client.js";
 import {
   imageGenerationOperationRepository,
@@ -38,8 +39,8 @@ interface GenerateImageDependencies {
     assertConfigured(): void;
     generate(input: ImageGenerationRequest): Promise<{
       bytes: Buffer;
-      mediaType: "image/webp";
-      model: "gpt-image-2";
+      mediaType: ImageMediaType;
+      model: string;
       revisedPrompt?: string;
     }>;
   };
@@ -106,9 +107,20 @@ function parseInput(input: unknown): GenerateImageInput {
   return parsed.data;
 }
 
+const OUTPUT_EXTENSIONS: Readonly<Record<ImageMediaType, string>> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+/** The ledger records the extension-free stem: the provider that answers decides the format. */
 function outputPath(operationKey: string): string {
   const digest = createHash("sha256").update(operationKey, "utf8").digest("hex").slice(0, 24);
-  return `generated-images/image-${digest}.webp`;
+  return `generated-images/image-${digest}`;
+}
+
+function outputFilePath(stem: string, mediaType: ImageMediaType): string {
+  return `${stem}.${OUTPUT_EXTENSIONS[mediaType]}`;
 }
 
 function inputHash(input: GenerateImageInput, scope: WorkspaceScope): string {
@@ -138,7 +150,11 @@ function assertOutputMatches(
   scope: WorkspaceScope,
   expectedPath: string,
 ): void {
-  if (file.path === expectedPath && file.scope === scope && file.mediaType === "image/webp") return;
+  if (
+    file.scope === scope &&
+    file.mediaType in OUTPUT_EXTENSIONS &&
+    file.path === outputFilePath(expectedPath, file.mediaType as ImageMediaType)
+  ) return;
   throw new AppError(
     "AGENT_IMAGE_GENERATION_REPLAY_MISMATCH",
     "Сохранённое изображение не совпадает с исходным запросом. Создайте новый запрос",
@@ -211,11 +227,11 @@ async function recoverStartedOperation(
 export function createGenerateImageTool(dependencies: GenerateImageDependencies): AnyToolDefinition {
   return defineTool({
     description: [
-      "Когда использовать: создать одно новое raster-изображение через GPT-Image-2 и сразу отправить его в текущий Telegram-чат.",
+      "Когда использовать: создать одно новое raster-изображение (Flux или GPT-Image, по настроенному провайдеру) и сразу отправить его в текущий Telegram-чат.",
       "Не использовать: для SVG, диаграмм из кода, редактирования существующего файла или незапрошенной фоновой генерации.",
       "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер или качество не заданы пользователем, передай auto.",
       "Результат: изображение сохраняется без перезаписи в generated-images и доставляется как photo; returned path можно использовать в следующих запросах.",
-      "Ошибка: status unknown означает возможное списание лимита подписки; не повторяй вызов автоматически.",
+      "Ошибка: status unknown означает возможное списание лимита провайдера; не повторяй вызов автоматически. Надписи, особенно кириллицу, модели рисуют плохо, предупреждай об этом.",
     ].join(" "),
     inputSchema,
     async execute(rawInput, ctx) {
@@ -225,7 +241,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       if (!IMAGE_GENERATION_AVAILABLE) {
         throw new AppError(
           "AGENT_IMAGE_GENERATION_UNAVAILABLE",
-          "Генерация изображений недоступна: текущая модель агента работает не через подписку OpenAI Codex",
+          "Генерация изображений недоступна: не настроен ни один провайдер",
         );
       }
       const input = parseInput(rawInput);
@@ -243,6 +259,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
 
       let file: WorkspaceFileRecord;
       let generated = false;
+      let generatedModel = "stored";
       let revisedPrompt: string | undefined;
       if (reservation.state === "completed") {
         file = reservation.file;
@@ -263,7 +280,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
             bytes: generatedImage.bytes,
             mediaType: generatedImage.mediaType,
             operationKey: ctx.callId,
-            path,
+            path: outputFilePath(path, generatedImage.mediaType),
             scope,
           });
         } catch (error) {
@@ -304,6 +321,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
           );
         }
         generated = true;
+        generatedModel = generatedImage.model;
         revisedPrompt = generatedImage.revisedPrompt;
       }
 
@@ -316,7 +334,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       return {
         ...delivery,
         generated,
-        model: "gpt-image-2",
+        model: generatedModel,
         path: file.path,
         ...(revisedPrompt === undefined ? {} : { revisedPrompt }),
       };

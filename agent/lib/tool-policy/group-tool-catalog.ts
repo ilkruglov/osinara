@@ -31,7 +31,7 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
     name: "generate_image",
     subscriptionOnly: true,
-    usage: "создавать одно GPT-Image-2 изображение в workspace текущей группы и сразу отправлять его в текущий Telegram-чат",
+    usage: "создавать одно изображение (Flux или GPT-Image) в workspace текущей группы и сразу отправлять его в текущий Telegram-чат",
   },
   {
     name: "import_telegram_attachment",

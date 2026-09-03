@@ -24,6 +24,6 @@ const instructions = readFileSync(
 
 export const IMAGE_GENERATION_SKILL_DEFINITION: SkillDefinition = defineSkill({
   description:
-    "Создание одного нового raster-изображения через GPT-Image-2 с безопасным prompt workflow, workspace persistence и Telegram delivery.",
+    "Создание одного нового raster-изображения (Flux или GPT-Image) с безопасным prompt workflow, workspace persistence и Telegram delivery.",
   markdown: instructions,
 });
