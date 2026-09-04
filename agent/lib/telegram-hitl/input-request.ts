@@ -142,15 +142,23 @@ function assertInputRequestPolicy(data: InputRequestedData, ctx: Pick<SessionCon
   const externalGroup = ctx.session.auth.current?.attributes.groupType === "external";
   if (!externalGroup) return;
 
-  // Eve authors this synthetic request outside the tool surface, so descriptor denials cannot stop it.
+  // An external group has no confirmation surface at all: a prompt there would address a public
+  // chat instead of one accountable person, and its placeholder would already be visible to
+  // everyone before any check could refuse it. Eve authors some of these requests outside the tool
+  // surface, so descriptor denials cannot stop them and this boundary is the only one that can.
   const requestsSessionBudget = data.requests.some((request) =>
     request.kind === "session-limit" ||
     request.action.toolName === SESSION_LIMIT_CONTINUATION_TOOL_NAME
   );
-  if (!requestsSessionBudget) return;
+  if (requestsSessionBudget) {
+    throw new AppError(
+      "AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN",
+      "Агент остановил слишком длинную задачу во внешней группе. Разбейте запрос на части и отправьте его заново",
+    );
+  }
   throw new AppError(
-    "AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN",
-    "Агент остановил слишком длинную задачу во внешней группе. Разбейте запрос на части и отправьте его заново",
+    "AGENT_EXTERNAL_APPROVAL_FORBIDDEN",
+    "В общем чате нельзя запрашивать подтверждение. Напишите агенту в личные сообщения",
   );
 }
 
