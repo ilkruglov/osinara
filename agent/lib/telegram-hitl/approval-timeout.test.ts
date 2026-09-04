@@ -8,6 +8,8 @@
  * - A failed Eve response releases the lease so the next sweep retries instead of freezing the chat.
  * - Neither a failed settlement nor a failed lease release abandons the rest of the leased batch.
  * - A question is answered as "no answer", not as an option the user never saw.
+ * - Every expired request of one session is cancelled in one response, and a shared prompt is
+ *   rewritten once.
  */
 import type { SessionAuthContext } from "eve/context";
 import { describe, expect, it, vi } from "vitest";
@@ -186,12 +188,37 @@ describe("createApprovalTimeoutResolver", () => {
     reported.mockRestore();
   });
 
+  it("cancels every expired request of one parked session in a single response", async () => {
+    const { respond, values } = dependencies();
+    values.repository.claimExpired.mockResolvedValue([
+      claim({ id: "approval-1", requestId: "aitxt-1", toolName: "manage_family_invitation" }),
+      claim({ id: "approval-2", requestId: "aitxt-2", toolName: "manage_family_invitation" }),
+      claim({ id: "approval-3", requestId: "aitxt-3", telegramMessageId: "2802" }),
+    ]);
+
+    const resolved = await createApprovalTimeoutResolver(values as never)(NOW);
+
+    // Eve 0.40.0 merges answers only within one delivery; three deliveries would leave it parked.
+    expect(resolved).toBe(3);
+    expect(respond).toHaveBeenCalledTimes(1);
+    const [inputResponses, options] = respond.mock.calls[0]!;
+    expect(inputResponses).toEqual([
+      { optionId: "cancel", requestId: "aitxt-1" },
+      { optionId: "cancel", requestId: "aitxt-2" },
+      { optionId: "cancel", requestId: "aitxt-3" },
+    ]);
+    expect((options as { context: string[] }).context).toHaveLength(3);
+    expect(values.repository.completeTimeout).toHaveBeenCalledTimes(3);
+    // Requests sharing one Telegram prompt rewrite it once; the other prompt is rewritten on its own.
+    expect(values.finalizePrompt).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps sweeping the batch when releasing a lease fails", async () => {
     const { respond, values } = dependencies();
     const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     values.repository.claimExpired.mockResolvedValue([
-      claim({ id: "approval-1", requestId: "aitxt-1" }),
-      claim({ id: "approval-2", requestId: "aitxt-2" }),
+      claim({ eveSessionId: "wrun_parked_1", id: "approval-1", requestId: "aitxt-1" }),
+      claim({ eveSessionId: "wrun_parked_2", id: "approval-2", requestId: "aitxt-2" }),
     ]);
     respond
       .mockRejectedValueOnce(new Error("first fails"))
@@ -211,8 +238,8 @@ describe("createApprovalTimeoutResolver", () => {
   it("keeps sweeping the batch when one Eve response fails", async () => {
     const { respond, values } = dependencies();
     values.repository.claimExpired.mockResolvedValue([
-      claim({ id: "approval-1", requestId: "aitxt-1" }),
-      claim({ id: "approval-2", requestId: "aitxt-2" }),
+      claim({ eveSessionId: "wrun_parked_1", id: "approval-1", requestId: "aitxt-1" }),
+      claim({ eveSessionId: "wrun_parked_2", id: "approval-2", requestId: "aitxt-2" }),
     ]);
     respond
       .mockRejectedValueOnce(new Error("first fails"))

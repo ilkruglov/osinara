@@ -61,6 +61,8 @@ export type TelegramHitlCallbackClaim =
       auth: SessionAuthContext;
       continuationToken: string;
       promptText: string;
+      /** Every request rendered by the claimed prompt; one delivery answers all of them. */
+      requestIds: readonly string[];
       selectedOptionId: string;
       selectedOptionLabel: string;
       status: "authorized";
@@ -93,15 +95,17 @@ interface ApprovalRow extends ApprovalAuthRow {
   continuation_token: string;
   pending_operation: boolean;
   prompt_text: string | null;
+  request_id: string;
   retired_at: Date | null;
   session_eve_session_id: string | null;
 }
 
-async function lockApproval(
+// One Telegram prompt may carry every request of a multi-approval step; rows share the message.
+async function lockApprovals(
   client: PoolClient,
   telegramChatId: string,
   telegramMessageId: string,
-): Promise<ApprovalRow | null> {
+): Promise<ApprovalRow[]> {
   const result = await client.query<ApprovalRow>(
     `SELECT a.application_session_id,
             a.callback_data,
@@ -111,6 +115,7 @@ async function lockApproval(
             a.expected_telegram_user_id,
             a.id,
             a.prompt_text,
+            a.request_id,
             a.telegram_chat_id,
             a.telegram_chat_type,
             a.telegram_message_id::text,
@@ -127,10 +132,11 @@ async function lockApproval(
        JOIN conversation_sessions s ON s.id = a.application_session_id
       WHERE a.telegram_chat_id = $1
         AND a.telegram_message_id = $2
+      ORDER BY a.created_at, a.id
       FOR UPDATE OF a, s`,
     [telegramChatId, telegramMessageId],
   );
-  return result.rows[0] ?? null;
+  return result.rows;
 }
 
 function isPendingApproval(row: ApprovalRow): boolean {
@@ -276,19 +282,23 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const row = await lockApproval(client, input.telegramChatId, input.telegramMessageId);
+      const rows = await lockApprovals(client, input.telegramChatId, input.telegramMessageId);
+      const row = rows[0];
       const selectedOption = row ? selectedCallbackOption(row, input.callbackData) : null;
+      // Every row of the prompt must still be answerable: a partially consumed prompt is stale.
       if (
         !row ||
-        !isPendingApproval(row) ||
-        !row.callback_data.includes(input.callbackData) ||
         !selectedOption ||
-        !row.prompt_text
+        rows.some((candidate) =>
+          !isPendingApproval(candidate) ||
+          !candidate.callback_data.includes(input.callbackData) ||
+          !candidate.prompt_text
+        )
       ) {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }
-      if (row.expected_telegram_user_id !== input.telegramUserId) {
+      if (rows.some((candidate) => candidate.expected_telegram_user_id !== input.telegramUserId)) {
         await client.query("ROLLBACK");
         return { status: "forbidden" };
       }
@@ -308,10 +318,10 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
       const consumed = await client.query(
         `UPDATE telegram_hitl_approvals
             SET consumed_at = now(), selected_option_id = $2, selected_option_label = $3
-          WHERE id = $1 AND consumed_at IS NULL`,
-        [row.id, selectedOption.optionId, selectedOption.label],
+          WHERE id = ANY($1::uuid[]) AND consumed_at IS NULL`,
+        [rows.map((candidate) => candidate.id), selectedOption.optionId, selectedOption.label],
       );
-      if (consumed.rowCount !== 1) {
+      if (consumed.rowCount !== rows.length) {
         await client.query("ROLLBACK");
         return { status: "expired" };
       }
@@ -348,7 +358,8 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
       return {
         auth,
         continuationToken: row.continuation_token,
-        promptText: row.prompt_text,
+        promptText: row.prompt_text!,
+        requestIds: rows.map((candidate) => candidate.request_id),
         selectedOptionId: selectedOption.optionId,
         selectedOptionLabel: selectedOption.label,
         status: "authorized",
@@ -365,7 +376,7 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const row = await lockApproval(client, input.telegramChatId, input.telegramMessageId);
+      const row = (await lockApprovals(client, input.telegramChatId, input.telegramMessageId))[0];
       if (!row) {
         const pending = await routeHasPendingOperation(client, input.baseContinuationToken);
         await client.query("ROLLBACK");

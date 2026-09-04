@@ -34,6 +34,11 @@ import {
   type TelegramHitlApprovalRepository,
 } from "./approval-repository.js";
 import {
+  combineApprovalRequests,
+  isBatchedApprovalStep,
+  type PresentedInputRequest,
+} from "./approval-batch.js";
+import {
   presentTelegramApproval,
   type TelegramApprovalPresenter,
 } from "./approval-presentation.js";
@@ -189,23 +194,30 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
     assertInputRequestPolicy(data, ctx);
 
     // Resolve trusted semantic subjects before parking so presentation failures remain recoverable.
-    const localizedRequests: Array<{
-      kind: InputRequestKind;
-      request: TelegramInputRequest;
-    }> = [];
+    const localizedRequests: PresentedInputRequest[] = [];
     for (const request of data.requests) {
       localizedRequests.push({
         kind: request.kind,
         request: await dependencies.present(request, ctx),
       });
     }
+    // Several approvals of one step share one prompt; one tap answers every member request in a
+    // single Eve delivery, which is the only way Eve 0.40.0 resolves a multi-request batch.
+    const presentations: Array<PresentedInputRequest & { members: readonly TelegramInputRequest[] }> =
+      isBatchedApprovalStep(localizedRequests)
+        ? [{
+          kind: "tool-approval",
+          members: localizedRequests.map(({ request }) => request),
+          request: combineApprovalRequests(localizedRequests),
+        }]
+        : localizedRequests.map((presented) => ({ ...presented, members: [presented.request] }));
     await dependencies.parkSession({
       applicationSessionId: appSessionId,
       pendingRequestId: firstRequest.requestId,
       requesterTelegramUserId: telegramUserId,
       requesterUserId: UUID_PATTERN.test(caller.principalId) ? caller.principalId : null,
     });
-    for (const { kind, request: localizedRequest } of localizedRequests) {
+    for (const { kind, members, request: localizedRequest } of presentations) {
       const promptChunks = splitPrompt(localizedRequest.prompt);
       const finalChunkIndex = promptChunks.length - 1;
       const rendered = renderTelegramInputRequest({
@@ -244,25 +256,28 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
       });
       // Exact prompt ownership is required for both interactive and scheduled callback/reply claims.
       await dependencies.registerMessageRoutes(channel, ctx, [...detailMessageIds, sentMessageId]);
-      await dependencies.approvals.register({
-        kind,
-        applicationSessionId: appSessionId,
-        callbackData: callbacks,
-        callbackOptions: options,
-        eveSessionId: ctx.session.id,
-        requestId: localizedRequest.requestId,
-        promptText: localizedRequest.prompt,
-        telegramChatId: chatId,
-        telegramChatType: chatType,
-        telegramMessageId: sentMessageId,
-        telegramMessageThreadId: channel.state.messageThreadId === null
-          ? null
-          : String(channel.state.messageThreadId),
-        telegramUserId,
-        toolCallId: localizedRequest.action.callId,
-        toolInputHash: memoryOperationHash(localizedRequest.action.input),
-        toolName: localizedRequest.action.toolName,
-      });
+      // Every member keeps its own evidence row (call id, tool, input hash) under the shared prompt.
+      for (const member of members) {
+        await dependencies.approvals.register({
+          kind,
+          applicationSessionId: appSessionId,
+          callbackData: callbacks,
+          callbackOptions: options,
+          eveSessionId: ctx.session.id,
+          requestId: member.requestId,
+          promptText: localizedRequest.prompt,
+          telegramChatId: chatId,
+          telegramChatType: chatType,
+          telegramMessageId: sentMessageId,
+          telegramMessageThreadId: channel.state.messageThreadId === null
+            ? null
+            : String(channel.state.messageThreadId),
+          telegramUserId,
+          toolCallId: member.action.callId,
+          toolInputHash: memoryOperationHash(member.action.input),
+          toolName: member.action.toolName,
+        });
+      }
       if (rendered.freeformRequestId) {
         registerTelegramFreeformPrompt(channel.state, {
           messageId: sentMessageId,

@@ -415,10 +415,13 @@ await replaceExact(
 );
 
 // HITL callbacks are acknowledged only after application authentication selects auth and routing.
+// The hook may answer every request of its prompt in one delivery: Eve 0.40.0 merges deferred
+// responses only within a single delivery, so answers sent one at a time never resolve a
+// multi-request batch and the parked turn waits for an unrelated message.
 await replaceExact(
   runtimePaths.telegram,
   "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}if(!e.query.message||!t.chatId)return;try{await e.from(continuationTokenFromState(t)).respond([telegramCallbackInputResponse(e.query.data)],{auth:null})}catch(e){log.error(`callback query delivery failed`,{error:e})}return}",
-  "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:i.acknowledgementText??`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.from(i.continuationToken??r).respond([telegramCallbackInputResponse(e.query.data)],{auth:i.auth})}catch(e){log.error(`callback query delivery failed`,{error:e});throw e}}",
+  "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:i.acknowledgementText??`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.from(i.continuationToken??r).respond(i.inputResponses??[telegramCallbackInputResponse(e.query.data)],{auth:i.auth})}catch(e){log.error(`callback query delivery failed`,{error:e});throw e}}",
 );
 
 // Telegram emits pseudo thread IDs on ordinary replies; only explicit topic messages define scope.
@@ -452,6 +455,8 @@ export type TelegramHitlCallbackResult = {
     readonly acknowledgementText?: string;
     readonly auth: SessionAuthContext | null;
     readonly continuationToken?: string;
+    /** Answers for every request of the claimed prompt; defaults to the tapped callback alone. */
+    readonly inputResponses?: readonly { readonly optionId?: string; readonly requestId: string; readonly text?: string; }[];
 } | null;
 `;
 await replaceExact(

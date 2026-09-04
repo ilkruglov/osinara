@@ -8,6 +8,7 @@
  * - Captionless attachments receive a non-empty factual model message after durable storage.
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
+ * - A callback whose approval settles without resuming the turn releases the drain after a grace.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -224,6 +225,147 @@ describe("createTelegramDurableIngress", () => {
       "1001",
       storage.claim.leaseToken,
       "session-reused",
+      5,
+    );
+  });
+
+  it("releases a callback dispatch when Eve settles an approval without resuming the turn", async () => {
+    const storage = repository();
+    const raw = {
+      callback_query: {
+        chat_instance: "1",
+        data: "eve:0",
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        id: "cb-1",
+        message: {
+          chat: { id: 101, type: "private" },
+          date: 1_700_000_000,
+          from: { first_name: "Мия", id: 7, is_bot: true },
+          message_id: 88,
+          text: "Подтвердите действие",
+        },
+      },
+      update_id: 1002,
+    };
+    storage.claim.payload = raw;
+    storage.claim.updateId = "1002";
+    storage.claim.voice = null as never;
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            // A partially answered batch settles one approval and then stays parked forever.
+            controller.enqueue({ type: "approval.settled" });
+          },
+        }),
+      id: "session-parked",
+    });
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      approvalSettledGraceMilliseconds: 20,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    const released = await Promise.race([
+      backgroundTask!.then(() => true),
+      new Promise<false>((resolve) => {
+        setTimeout(() => resolve(false), 1_000);
+      }),
+    ]);
+
+    expect(released).toBe(true);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1002",
+      storage.claim.leaseToken,
+      "session-parked",
+      1,
+    );
+    expect(warned.mock.calls.some(([line]) =>
+      String(line).includes("AGENT_TELEGRAM_APPROVAL_BOUNDARY_ASSUMED"))).toBe(true);
+    warned.mockRestore();
+  });
+
+  it("keeps waiting for the boundary when a settled approval resumes the turn", async () => {
+    const storage = repository();
+    const raw = {
+      callback_query: {
+        chat_instance: "1",
+        data: "eve:0",
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        id: "cb-2",
+        message: {
+          chat: { id: 101, type: "private" },
+          date: 1_700_000_000,
+          from: { first_name: "Мия", id: 7, is_bot: true },
+          message_id: 88,
+          text: "Подтвердите действие",
+        },
+      },
+      update_id: 1003,
+    };
+    storage.claim.payload = raw;
+    storage.claim.updateId = "1003";
+    storage.claim.voice = null as never;
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "approval.settled" });
+            controller.enqueue({ type: "input.resolved" });
+            controller.enqueue({ type: "turn.started" });
+            setTimeout(() => {
+              controller.enqueue({ type: "turn.completed" });
+              controller.enqueue({ type: "session.waiting" });
+            }, 60);
+          },
+        }),
+      id: "session-resumed",
+    });
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      approvalSettledGraceMilliseconds: 20,
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1003",
+      storage.claim.leaseToken,
+      "session-resumed",
       5,
     );
   });

@@ -81,6 +81,9 @@ export default telegramChannel({
   turnPolicy: "queue",
   events: {
     async "input.requested"(data, channel, ctx) {
+      // The confirmation prompt is this step's visible reply; text the model wrote next to the
+      // gated call would otherwise follow the prompt and repeat what the resumed turn says.
+      telegramProgressNoticeDeferral.discard(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
       if (isTelegramChannelSession(ctx.session.auth)) {
         throw new AppError(
           "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",

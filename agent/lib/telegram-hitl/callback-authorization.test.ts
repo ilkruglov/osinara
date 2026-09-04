@@ -49,6 +49,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
         auth,
         continuationToken: "-1001:55:88:osinara:2",
         promptText: "Возобновить расписание «Утренний дайджест ИИ»?",
+        requestIds: ["aitxt-1", "aitxt-2"],
         selectedOptionId: "approve",
         selectedOptionLabel: "Да, подтвердить",
         status: "authorized",
@@ -57,11 +58,16 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
     const authorize = createTelegramHitlCallbackAuthorizer(repository);
     const { context, answerCallbackQuery, request } = telegramContext();
 
+    // One tap answers every request rendered by the prompt in a single Eve delivery.
     await expect(authorize(context, callbackQuery(), "-1001:55:88"))
       .resolves.toEqual({
         acknowledgementText: "Решение сохранено",
         auth,
         continuationToken: "-1001:55:88:osinara:2",
+        inputResponses: [
+          { optionId: "approve", requestId: "aitxt-1" },
+          { optionId: "approve", requestId: "aitxt-2" },
+        ],
       });
     expect(repository.claimCallback).toHaveBeenCalledWith({
       baseContinuationToken: "-1001:55:88",
@@ -129,6 +135,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
         auth,
         continuationToken: "-1001:55:88:osinara:2",
         promptText: "Удалить расписание «Утренний дайджест ИИ»?",
+        requestIds: ["aitxt-1"],
         selectedOptionId: "cancel",
         selectedOptionLabel: "Нет, отклонить",
         status: "authorized",
@@ -162,6 +169,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
         },
         continuationToken: "-1001:55:88:osinara:2",
         promptText: composed,
+        requestIds: ["aitxt-1"],
         selectedOptionId: "cancel",
         selectedOptionLabel: "Нет, отменить",
         status: "authorized",

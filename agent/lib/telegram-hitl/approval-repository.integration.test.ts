@@ -8,6 +8,7 @@
  * - `authorizeReply`: atomically protects and consumes accepted text replies.
  * - Consumed prompts become ordinary ancestry for any later author without weakening pending binds.
  * - Owner-only external approvals recheck the current owner role before resuming Eve.
+ * - Several requests of one step share one prompt row set and are consumed by a single claim.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -267,6 +268,65 @@ describeWithDatabase("Telegram HITL approval repository", () => {
         telegramUserId: OWNER_TELEGRAM_ID,
       }),
     ).resolves.toMatchObject({ status: "authorized" });
+  });
+
+  it("consumes every request rendered by one shared prompt in a single claim", async () => {
+    const current = await fixture();
+    // The second request of the same step shares message 88 and its callbacks.
+    await telegramHitlApprovalRepository.register({
+      applicationSessionId: current.sessionId,
+      kind: "tool-approval" as const,
+      callbackData: ["eve:0", "eve:1"],
+      callbackOptions: [
+        { callbackData: "eve:0", label: "Да, подтвердить все", optionId: "approve" },
+        { callbackData: "eve:1", label: "Нет, отменить все", optionId: "cancel" },
+      ],
+      eveSessionId: "wrun_hitl",
+      requestId: "approval-request-2",
+      promptText: "Подтвердите тестовое действие",
+      telegramChatId: "-1001",
+      telegramChatType: "supergroup",
+      telegramMessageId: "88",
+      telegramMessageThreadId: "55",
+      telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-2",
+      toolInputHash: "b".repeat(64),
+      toolName: "test_tool",
+    });
+
+    const claim = await telegramHitlApprovalRepository.claimCallback({
+      baseContinuationToken: "-1001:55:88",
+      callbackData: "eve:0",
+      telegramChatId: "-1001",
+      telegramMessageId: "88",
+      telegramUserId: OWNER_TELEGRAM_ID,
+    });
+
+    expect(claim).toMatchObject({
+      requestIds: ["approval-request-1", "approval-request-2"],
+      selectedOptionId: "approve",
+      status: "authorized",
+    });
+    await expect(telegramHitlApprovalRepository.requireToolExecutionApproval({
+      applicationSessionId: current.sessionId,
+      eveSessionId: "wrun_hitl",
+      telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-2",
+      toolInputHash: "b".repeat(64),
+      toolName: "test_tool",
+    })).resolves.toBeUndefined();
+    await expect(telegramHitlApprovalRepository.hasPendingForSession(current.sessionId, "wrun_hitl"))
+      .resolves.toBe(false);
+    // The prompt is spent as a whole: a second tap cannot answer the other request alone.
+    await expect(
+      telegramHitlApprovalRepository.claimCallback({
+        baseContinuationToken: "-1001:55:88",
+        callbackData: "eve:1",
+        telegramChatId: "-1001",
+        telegramMessageId: "88",
+        telegramUserId: OWNER_TELEGRAM_ID,
+      }),
+    ).resolves.toEqual({ status: "expired" });
   });
 
   it("clears only approvals owned by the completed Eve root", async () => {

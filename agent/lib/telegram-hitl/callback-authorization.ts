@@ -92,10 +92,17 @@ export function createTelegramHitlCallbackAuthorizer(
           "Telegram не обновил сообщение с выбранным решением. Повторите действие",
         );
       }
+      // Every request of the prompt is answered in one Eve delivery. Eve 0.40.0 never merges
+      // answers that arrive one delivery at a time, so a step with several approvals would stay
+      // parked until an unrelated message arrived.
       return {
         acknowledgementText: "Решение сохранено",
         auth: result.auth,
         continuationToken: result.continuationToken,
+        inputResponses: result.requestIds.map((requestId) => ({
+          optionId: result.selectedOptionId,
+          requestId,
+        })),
       };
     }
 

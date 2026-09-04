@@ -49,6 +49,12 @@ interface EveSessionResult {
 }
 
 interface DurableIngressDependencies {
+  /**
+   * How long a callback dispatch waits for the parked turn to resume after `approval.settled`.
+   * A batch answered partially never resumes on its own; releasing the drain lets the next
+   * answer through instead of freezing every chat of the bot.
+   */
+  approvalSettledGraceMilliseconds?: number;
   acceptMedia(
     message: Pick<TelegramMessage, "chat">,
     updateId: string,
@@ -112,17 +118,43 @@ function voiceMetadata(raw: Record<string, unknown>) {
   };
 }
 
+const APPROVAL_SETTLED_GRACE_MS = 15_000;
+
 async function waitForSessionBoundary(
   session: EveSessionResult,
   startIndex: number,
+  options: { approvalSettledGraceMilliseconds?: number; updateId: string },
 ): Promise<number> {
   const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
   let reachedBoundary = false;
   let nextEventIndex = startIndex;
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
   try {
+    let awaitingResume = false;
     while (true) {
-      const event = await reader.read();
+      const pending = reader.read();
+      const grace = options.approvalSettledGraceMilliseconds;
+      const event: ReadableStreamReadResult<{ type: string }> | null = awaitingResume && grace !== undefined
+        ? await Promise.race([
+          pending,
+          new Promise<null>((resolve) => {
+            graceTimer = setTimeout(() => resolve(null), grace);
+          }),
+        ])
+        : await pending;
+      if (graceTimer !== undefined) clearTimeout(graceTimer);
+      if (event === null) {
+        // Eve settled an approval without resuming: the step still waits for other answers, which
+        // can only arrive through this drain. The next update completes the exchange.
+        console.warn(JSON.stringify({
+          code: "AGENT_TELEGRAM_APPROVAL_BOUNDARY_ASSUMED",
+          sessionId: session.id,
+          updateId: options.updateId,
+        }));
+        reachedBoundary = true;
+        break;
+      }
       if (event.done) break;
       nextEventIndex += 1;
       if (
@@ -133,8 +165,10 @@ async function waitForSessionBoundary(
         reachedBoundary = true;
         break;
       }
+      awaitingResume = event.value.type === "approval.settled";
     }
   } finally {
+    if (graceTimer !== undefined) clearTimeout(graceTimer);
     await reader.cancel();
     reader.releaseLock();
   }
@@ -305,7 +339,15 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         }
         // The durable cursor excludes every event from earlier turns of a reused Eve session.
         const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
-        const nextEventIndex = await waitForSessionBoundary(session, streamCursor);
+        const nextEventIndex = await waitForSessionBoundary(session, streamCursor, {
+          ...(update.kind === "callback_query"
+            ? {
+              approvalSettledGraceMilliseconds:
+                dependencies.approvalSettledGraceMilliseconds ?? APPROVAL_SETTLED_GRACE_MS,
+            }
+            : {}),
+          updateId: claim.updateId,
+        });
         if (heartbeatError) throw heartbeatError;
         await dependencies.repository.completeWithSession(
           claim.updateId,

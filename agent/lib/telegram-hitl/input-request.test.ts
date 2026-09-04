@@ -6,6 +6,7 @@
  * - `createTelegramInputRequestHandler`: persists approver identity before exposing buttons.
  * - Interactive and scheduled requests receive aliases without changing Eve's continuation hook.
  * - Long approval prompts are delivered completely before the actionable final message.
+ * - Several approvals of one step share one prompt; each keeps its own evidence row.
  */
 import type { SessionContext } from "eve/context";
 import type { TelegramEventContext } from "eve/channels/telegram";
@@ -280,6 +281,98 @@ describe("createTelegramInputRequestHandler", () => {
     expect(register.mock.invocationCallOrder[0]).toBeLessThan(
       request.mock.invocationCallOrder[1]!,
     );
+  });
+
+  it("renders every approval of one step as a single prompt with shared buttons", async () => {
+    const register = vi.fn();
+    const request = vi.fn().mockImplementation(async (method: string) => method === "sendMessage"
+      ? { body: { ok: true, result: { message_id: 90 } }, ok: true, status: 200 }
+      : { body: {}, ok: true, status: 200 });
+    const parkSession = vi.fn();
+    const handler = createTelegramInputRequestHandler({
+      approvals: { register },
+      parkSession,
+      present: async (request) => request,
+      registerMessageRoutes: vi.fn(),
+    });
+    const channel = {
+      continuationToken: "-1001:55:77",
+      state: {
+        botUsername: "osinara_bot",
+        chatId: "-1001",
+        chatType: "supergroup",
+        conversationId: "77",
+        hitlCallbacks: {},
+        messageThreadId: 55,
+        nextHitlCallbackId: 0,
+        pendingFreeformReplies: {},
+        triggeringUserId: "101",
+      },
+      telegram: { request },
+    } as unknown as TelegramEventContext;
+    const ctx = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "app-session-1",
+              telegramChatId: "-1001",
+              telegramChatType: "supergroup",
+              telegramUserId: "101",
+            },
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "wrun_hitl",
+        turn: { id: "turn-1", sequence: 1 },
+      },
+    } as unknown as SessionContext;
+    const approval = (index: number) => ({
+      action: {
+        callId: `call-${index}`,
+        input: { action: "approve", invitationId: `inv-${index}` },
+        kind: "tool-call",
+        toolName: "manage_family_invitation",
+      },
+      display: "confirmation",
+      kind: "tool-approval",
+      options: [
+        { id: "approve", label: "Approve", style: "primary" },
+        { id: "cancel", label: "Cancel", style: "default" },
+      ],
+      prompt: `Approve invitation ${index}`,
+      requestId: `request-${index}`,
+    });
+
+    await handler({ requests: [approval(1), approval(2), approval(3)] } as never, channel, ctx);
+
+    // One Telegram message; Eve 0.40.0 resolves the batch only when one delivery answers all three.
+    expect(request.mock.calls.filter(([method]) => method === "sendMessage")).toHaveLength(1);
+    expect(parkSession).toHaveBeenCalledWith(expect.objectContaining({ pendingRequestId: "request-1" }));
+    expect(register).toHaveBeenCalledTimes(3);
+    const registered = register.mock.calls.map(([input]) => input as Record<string, unknown>);
+    expect(registered.map((input) => input.requestId)).toEqual(["request-1", "request-2", "request-3"]);
+    expect(registered.map((input) => input.toolCallId)).toEqual(["call-1", "call-2", "call-3"]);
+    expect(new Set(registered.map((input) => input.toolInputHash)).size).toBe(3);
+    for (const input of registered) {
+      expect(input).toMatchObject({
+        callbackData: ["eve:0", "eve:1"],
+        callbackOptions: [
+          { callbackData: "eve:0", label: "Да, подтвердить все", optionId: "approve" },
+          { callbackData: "eve:1", label: "Нет, отменить все", optionId: "cancel" },
+        ],
+        telegramMessageId: "90",
+      });
+      expect(input.promptText).toContain("Нужно подтвердить сразу 3 действия");
+      expect(input.promptText).toContain("3. Approve invitation 3");
+    }
+    const edit = request.mock.calls.find(([method]) => method === "editMessageText")?.[1] as {
+      text: string;
+    };
+    expect(edit.text).toContain("1. Approve invitation 1");
   });
 
   it("opens ForceReply only on the non-actionable placeholder for a freeform request", async () => {
