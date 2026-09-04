@@ -26,6 +26,7 @@ import {
   type TelegramInboundMediaKind,
 } from "./telegram-message-policy.js";
 import { createTelegramVoiceAuthorizer } from "./telegram-voice-authorization.js";
+import { withRichMessageText } from "./telegram-rich-message.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
 
@@ -273,7 +274,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
 
       try {
         let payload = claim.payload;
+        // Rich messages (Bot API 10.1) carry their text in blocks; Eve reads only `text`.
         let update = parseTelegramUpdate(payload);
+        if (update) update = withRichMessageText(update);
         if (!update) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           continue;
@@ -314,6 +317,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             }
             payload = withTranscript(payload, transcript);
             update = parseTelegramUpdate(payload);
+            if (update) update = withRichMessageText(update);
             if (!update) {
               throw new AppError(
                 "AGENT_TELEGRAM_PAYLOAD_INVALID",

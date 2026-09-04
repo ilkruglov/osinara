@@ -10,6 +10,7 @@
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
  * - A callback whose approval settles while other prompts stay unanswered completes at once.
  * - Chats drain in parallel up to a bound; one long turn never holds every other chat.
+ * - A rich message (Bot API 10.1) reaches dispatch with its text unfolded from the blocks.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -446,6 +447,62 @@ describe("createTelegramDurableIngress", () => {
       "session-101",
       1,
     );
+  });
+
+  it("dispatches another bot's rich message with the text unfolded from its blocks", async () => {
+    const storage = repository();
+    const raw = {
+      message: {
+        chat: { id: -5306107028, title: "BotBattle", type: "group" },
+        date: 1_788_563_816,
+        from: { first_name: "Osinara", id: 8_748_025_221, is_bot: true, username: "osinara_bot" },
+        message_id: 557,
+        rich_message: {
+          blocks: [{
+            blocks: [{ text: "Скрытая часть ответа другого бота.", type: "paragraph" }],
+            summary: "Полный ответ",
+            type: "details",
+          }],
+        },
+      },
+      update_id: 1004,
+    };
+    storage.claim.payload = raw;
+    storage.claim.updateId = "1004";
+    storage.claim.voice = null as never;
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "session.waiting" });
+          },
+        }),
+      id: "session-rich",
+    });
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(dispatch.mock.calls[0]?.[0].message.text).toBe("Полный ответ\n\nСкрытая часть ответа другого бота.");
   });
 
   it("acknowledges rejected external media without enqueue, download, or dispatch", async () => {
