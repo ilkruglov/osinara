@@ -1,20 +1,26 @@
 /**
  * Terminal state for interactive and background memory-review batches.
  *
- * Export:
+ * Exports:
  * - `memoryReviewTerminalRepository`: replay-safe completion/failure and pre-Eve source release.
+ * - `terminalizeAbandonedReviewTurns`: last-resort exit for a turn that never reports back.
  */
 import type { PoolClient } from "pg";
 
 import { SESSION_RETENTION_DAYS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import {
+  MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE,
+  MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
+} from "./memory-review-config.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 
 export type MemoryReviewTerminalResult = "recorded" | "released" | "replayed";
 export type MemoryReviewCompletionResult = MemoryReviewTerminalResult | "failed";
 
 const SOURCE_BINDING_MISSING = "AGENT_MEMORY_REVIEW_SOURCE_BINDING_MISSING";
+const TURN_ABANDONED = "AGENT_MEMORY_REVIEW_TURN_ABANDONED";
 
 async function advanceCompletedChain(client: PoolClient, laneId: string): Promise<void> {
   const lane = await client.query<{ processed_through_sequence: string }>(
@@ -26,7 +32,8 @@ async function advanceCompletedChain(client: PoolClient, laneId: string): Promis
   while (true) {
     const next = await client.query<{ through_sequence: string }>(
       `SELECT through_sequence::text FROM memory_review_batches
-        WHERE lane_id = $1 AND predecessor_sequence = $2 AND status = 'completed'`,
+        WHERE lane_id = $1 AND predecessor_sequence = $2
+          AND status IN ('completed', 'skipped')`,
       [laneId, cursor],
     );
     const through = next.rows[0]?.through_sequence;
@@ -82,6 +89,129 @@ async function terminalizeApplicationSession(
   );
 }
 
+async function retireAbandonedReviewSession(
+  client: PoolClient,
+  applicationSessionId: string,
+  now: Date,
+): Promise<void> {
+  // Only the background review session is orphaned by an abandoned turn: `retireAbandonedTasks`
+  // covers `task` kinds and retention covers retired rows, so nothing else would ever close it,
+  // and its bound sources would hold the group timeline against pruning forever. An interactive
+  // batch shares the live chat session, whose lifecycle belongs to the Telegram channel.
+  const retired = await client.query(
+    `UPDATE conversation_sessions
+        SET pending_operation = false, task_state = 'failed', retired_at = $2,
+            delete_after = $2::timestamptz + $3 * interval '1 day'
+      WHERE id = $1 AND kind = 'proactive' AND retired_at IS NULL`,
+    [applicationSessionId, now, SESSION_RETENTION_DAYS],
+  );
+  if (retired.rowCount !== 1) return;
+  await client.query(
+    `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
+     SELECT family_id, 'session.noncanonical_retired', id,
+            jsonb_build_object('kind', kind::text, 'taskState', task_state::text)
+       FROM conversation_sessions WHERE id = $1`,
+    [applicationSessionId],
+  );
+}
+
+/**
+ * A running batch holds no lease: once its turn reaches Eve, the batch waits for that turn's own
+ * terminal event and for nothing else. A turn that never reports back — a lost event, a killed
+ * process, a restart in the middle of a pass — would hold the lane cursor forever, because
+ * `(lane_id, predecessor_sequence)` is unique and only a finished pass moves the cursor.
+ *
+ * A turn parked for a human answer is alive and is left alone: its application session carries the
+ * pending flag until the answer or the timeout arrives. A session removed by retention nulls the
+ * batch's reference to it, and such a batch has nothing left to wait for at all.
+ *
+ * Past the bound, provenance decides rather than the clock. A turn that already wrote memory counts
+ * as reviewed, because repeating it would duplicate what it stored. A turn that provably wrote
+ * nothing gives its sources back to the unreviewed tail — but only while nothing stands behind it,
+ * since later batches chain onto a stuck head and deleting that head would leave them unreachable
+ * from the cursor. With a successor present the head is skipped instead: the row stays terminal,
+ * the cursor passes through it, and the owner is told which messages no pass will ever see.
+ */
+export async function terminalizeAbandonedReviewTurns(
+  client: PoolClient,
+  now: Date,
+): Promise<void> {
+  const abandoned = await client.query<{
+    application_session_id: string | null;
+    eve_session_id: string;
+    eve_turn_id: string | null;
+    from_sequence: string;
+    has_successor: boolean;
+    id: string;
+    lane_id: string;
+    through_sequence: string;
+  }>(
+    `SELECT batch.id, batch.lane_id, batch.application_session_id, batch.eve_session_id,
+            batch.eve_turn_id, batch.from_sequence::text, batch.through_sequence::text,
+            EXISTS (
+              SELECT 1 FROM memory_review_batches AS successor
+               WHERE successor.lane_id = batch.lane_id
+                 AND successor.predecessor_sequence = batch.through_sequence
+            ) AS has_successor
+       FROM memory_review_batches AS batch
+       LEFT JOIN conversation_sessions AS session ON session.id = batch.application_session_id
+      WHERE batch.status = 'running' AND batch.eve_session_id IS NOT NULL
+        AND batch.started_at <= $1::timestamptz - $2::double precision * interval '1 millisecond'
+        AND (session.id IS NULL OR session.retired_at IS NOT NULL
+          OR session.pending_operation = false)
+      ORDER BY batch.started_at, batch.id
+      FOR UPDATE OF batch SKIP LOCKED
+      LIMIT $3`,
+    [now, MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE],
+  );
+  for (const batch of abandoned.rows) {
+    // A turn writes memory only after `turn.started` bound its id, so a batch without one cannot
+    // have written anything and needs no provenance lookup.
+    const wrote = batch.eve_turn_id === null
+      ? 0
+      : (await client.query(
+        "SELECT 1 FROM memory_items_all WHERE source = $1 LIMIT 1",
+        [`eve:${batch.eve_session_id}:${batch.eve_turn_id}`],
+      )).rowCount;
+    const outcome = wrote ? "counted" : batch.has_successor ? "skipped" : "released";
+    if (batch.application_session_id !== null) {
+      await retireAbandonedReviewSession(client, batch.application_session_id, now);
+    }
+    if (outcome === "released") {
+      await client.query("DELETE FROM memory_review_batches WHERE id = $1", [batch.id]);
+    } else {
+      await client.query(
+        `UPDATE memory_review_batches
+            SET status = $4::memory_review_batch_status, diagnostic_code = $2,
+                completed_at = $3, updated_at = $3, lease_token = NULL, lease_expires_at = NULL
+          WHERE id = $1`,
+        [batch.id, TURN_ABANDONED, now, outcome === "counted" ? "completed" : "skipped"],
+      );
+      await advanceCompletedChain(client, batch.lane_id);
+      await client.query(
+        "DELETE FROM memory_review_batch_sources WHERE batch_id = $1",
+        [batch.id],
+      );
+      // Skipped sources are lost to review for good, which the owner has to hear about. A counted
+      // pass did write memory, so it stays an operational record rather than a warning.
+      if (outcome === "skipped") {
+        await enqueueMemoryReviewOwnerAlert(client, batch.id, TURN_ABANDONED);
+      }
+    }
+    console.error(JSON.stringify({
+      batchId: batch.id,
+      code: TURN_ABANDONED,
+      eveSessionId: batch.eve_session_id,
+      eveTurnId: batch.eve_turn_id,
+      fromSequence: batch.from_sequence,
+      laneId: batch.lane_id,
+      outcome,
+      throughSequence: batch.through_sequence,
+    }));
+  }
+}
+
 export const memoryReviewTerminalRepository = {
   async completeBatch(input: {
     batchId: string;
@@ -103,19 +233,24 @@ export const memoryReviewTerminalRepository = {
         [input.batchId],
       );
       const recorded = batch.rows[0];
-      const exactTurn = recorded?.eve_session_id === input.eveSessionId &&
+      if (!recorded) {
+        // A released batch leaves no row: the repeated terminal event describes the same outcome.
+        await client.query("COMMIT");
+        return "replayed";
+      }
+      const exactTurn = recorded.eve_session_id === input.eveSessionId &&
         recorded.eve_turn_id === input.eveTurnId;
-      if (recorded?.status === "completed" && exactTurn) {
+      if (recorded.status === "completed" && exactTurn) {
         // Eve lifecycle events are at-least-once; an identical terminal replay is a no-op.
         await client.query("COMMIT");
         return "replayed";
       }
-      if (recorded?.status === "failed" && exactTurn &&
+      if (recorded.status === "failed" && exactTurn &&
         recorded.diagnostic_code === SOURCE_BINDING_MISSING) {
         await client.query("COMMIT");
         return "failed";
       }
-      if (!recorded || !exactTurn || !["running", "dispatching"].includes(recorded.status)) {
+      if (!exactTurn || !["running", "dispatching"].includes(recorded.status)) {
         throw new AppError(
           "AGENT_MEMORY_REVIEW_COMPLETION_INVALID",
           "Пакет проверки памяти завершён с другим результатом или недоступен",
