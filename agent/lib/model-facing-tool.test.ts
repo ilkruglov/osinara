@@ -2,7 +2,8 @@
  * Model-facing tool boundary tests.
  *
  * Constructs covered:
- * - `wrapModelFacingTool`: preserves successful output and normalizes thrown failures.
+ * - `wrapModelFacingTool`: preserves successful output, normalizes thrown failures, and marks a
+ *   result once the turn's pre-tool text has been delivered.
  * - `wrapModelFacingToolMap`: applies the same boundary to a complete mode surface.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
@@ -11,6 +12,11 @@ import { z } from "zod";
 
 import { AppError } from "./app-error.js";
 import { wrapModelFacingTool, wrapModelFacingToolMap } from "./model-facing-tool.js";
+import {
+  PROGRESS_NOTICE_SENT_NOTE,
+  progressNoticeKey,
+  telegramProgressNoticeDeferral,
+} from "./telegram-progress-deferral.js";
 
 function tool(execute: () => unknown) {
   return defineTool({
@@ -29,6 +35,30 @@ describe("model-facing tool boundary", () => {
     // Generic call discipline lives in the permanent instructions, not in every descriptor.
     expect(wrapped.description).toBe(source.description);
     expect(wrapped.inputSchema).toBe(source.inputSchema);
+  });
+
+  it("tells the model when its pre-tool text already reached the person", async () => {
+    const wrapped = wrapModelFacingTool("generate_image", tool(() => ({ delivered: true })));
+    const ctx = { session: { id: "wrun_1", turn: { id: "turn_5" } } } as never;
+    const key = progressNoticeKey("wrun_1", "turn_5");
+    telegramProgressNoticeDeferral.hold(key, {
+      send: async () => undefined,
+      stepIndex: 0,
+    });
+    await telegramProgressNoticeDeferral.release(key, 0, ["generate_image"]);
+    try {
+      await expect(wrapped.execute({}, ctx)).resolves.toEqual({
+        already_sent_to_user: PROGRESS_NOTICE_SENT_NOTE,
+        delivered: true,
+      });
+      // Another turn of the same session, and a non-object output, stay untouched.
+      const other = { session: { id: "wrun_1", turn: { id: "turn_6" } } } as never;
+      await expect(wrapped.execute({}, other)).resolves.toEqual({ delivered: true });
+      const text = wrapModelFacingTool("read_memory_thread", tool(() => "plain text"));
+      await expect(text.execute({}, ctx)).resolves.toBe("plain text");
+    } finally {
+      telegramProgressNoticeDeferral.forget(key);
+    }
   });
 
   it("normalizes application and raw dependency errors for every mapped tool", async () => {

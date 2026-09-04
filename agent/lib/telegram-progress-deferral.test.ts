@@ -7,6 +7,7 @@
  * - A step calling a slow tool releases the notice immediately.
  * - A turn ending with text still held flushes it as the answer.
  * - Release ignores a step index other than the held one; failures discard.
+ * - A released notice is remembered for the turn so tool results can tell the model about it.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -67,6 +68,21 @@ describe("progress notice deferral", () => {
 
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledOnce();
+  });
+
+  it("remembers a sent notice until the turn is forgotten", async () => {
+    const deferral = createProgressNoticeDeferral();
+
+    deferral.hold(key, { send: vi.fn().mockResolvedValue(undefined), stepIndex: 0 });
+    expect(deferral.wasSent(key)).toBe(false);
+    await deferral.release(key, 0, ["remember"]);
+    expect(deferral.wasSent(key)).toBe(false);
+    await deferral.release(key, 0, ["generate_image"]);
+    expect(deferral.wasSent(key)).toBe(true);
+
+    deferral.forget(key);
+    expect(deferral.wasSent(key)).toBe(false);
+    expect(deferral.heldCount()).toBe(0);
   });
 
   it("releases when the step has no named tools at all", async () => {

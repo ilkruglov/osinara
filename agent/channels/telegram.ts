@@ -314,7 +314,7 @@ export default telegramChannel({
       );
     },
     async "turn.failed"(data, channel, ctx) {
-      telegramProgressNoticeDeferral.discard(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
+      telegramProgressNoticeDeferral.forget(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
       // Terminal failure releases the temporary timeline retention after all tool writes have stopped.
       await releaseMemoryTurnSources(ctx);
       const reviewBatchId = memoryReviewBatchId(ctx);
@@ -429,7 +429,9 @@ export default telegramChannel({
     },
     async "turn.completed"(_data, channel, ctx) {
       // Text still held here was the answer: the model never wrote again after its quiet tools.
-      await telegramProgressNoticeDeferral.flush(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
+      const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
+      await telegramProgressNoticeDeferral.flush(noticeKey);
+      telegramProgressNoticeDeferral.forget(noticeKey);
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
       if (!awaitingApproval) {

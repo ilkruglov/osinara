@@ -2,13 +2,19 @@
  * Common model-facing execution boundary for Eve tools.
  *
  * Exports:
- * - `wrapModelFacingTool`: preserves a descriptor while normalizing every thrown error.
+ * - `wrapModelFacingTool`: preserves a descriptor while normalizing every thrown error and telling
+ *   the model when its pre-tool text has already been delivered.
  * - `wrapModelFacingToolMap`: applies the boundary once to a complete mode-scoped surface.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
 
 import { isAppError } from "./app-error.js";
 import { normalizeModelFacingError } from "./model-facing-error.js";
+import {
+  PROGRESS_NOTICE_SENT_NOTE,
+  progressNoticeKey,
+  telegramProgressNoticeDeferral,
+} from "./telegram-progress-deferral.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ApprovalPolicyFunction = (ctx: unknown) => unknown;
@@ -43,13 +49,30 @@ export function wrapModelFacingTool(
       ? {}
       : { approval: wrapApprovalPolicy(definition.approval) as AnyToolDefinition["approval"] }),
     async execute(input, ctx) {
+      let output: unknown;
       try {
-        return await definition.execute(input, ctx);
+        output = await definition.execute(input, ctx);
       } catch (error) {
         throw normalizeModelFacingError(error, { toolName });
       }
+      return withDeliveredNoticeNote(output, ctx);
     },
   });
+}
+
+/**
+ * The model writes its final message right after this result. Without the note it answers every
+ * topic again, and the person reads the pre-tool text twice.
+ */
+function withDeliveredNoticeNote(output: unknown, ctx: unknown): unknown {
+  if (output === null || typeof output !== "object" || Array.isArray(output)) return output;
+  const session = (ctx as { session?: { id?: unknown; turn?: { id?: unknown } } } | undefined)
+    ?.session;
+  if (typeof session?.id !== "string" || typeof session.turn?.id !== "string") return output;
+  if (!telegramProgressNoticeDeferral.wasSent(progressNoticeKey(session.id, session.turn.id))) {
+    return output;
+  }
+  return { ...output, already_sent_to_user: PROGRESS_NOTICE_SENT_NOTE };
 }
 
 export function wrapModelFacingToolMap<T extends Readonly<Record<string, AnyToolDefinition>>>(
