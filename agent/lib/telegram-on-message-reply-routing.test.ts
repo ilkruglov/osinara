@@ -348,6 +348,45 @@ describe("createTelegramMessageHandler reply routing", () => {
     expect(result).not.toBeNull();
   });
 
+  it("dispatches an addressed reply to another bot as an ordinary message", async () => {
+    const repository = familyGroupRepository();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: ["web_search"],
+      type: "external",
+    });
+    repository.session.hasRoute.mockResolvedValue(false);
+    repository.journal.record.mockResolvedValue({
+      entryId: "00000000-0000-4000-8000-000000000190",
+      replyToAgent: false,
+      replyTargetUnavailable: false,
+      replyToSequenceId: "189",
+      sequenceId: "190",
+      status: "inserted",
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage(`@${BOT_USERNAME}, подхватывай тему`),
+      messageId: "190",
+      replyToMessage: {
+        chat: { id: "group-101", type: "group" },
+        from: { firstName: "Other", id: "bot-2", isBot: true, username: "other_helper_bot" },
+        messageId: "189",
+      },
+    });
+
+    // Another bot's message can never be one of our confirmation prompts.
+    expect(repository.hitl.authorizeReply).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ replyHandling: "message" });
+    expect(repository.session.prepareTurn).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "canonical",
+    }));
+  });
+
   it("ignores a username-less reply to an unknown bot message route", async () => {
     const repository = familyGroupRepository();
     repository.session.hasRoute.mockResolvedValue(false);

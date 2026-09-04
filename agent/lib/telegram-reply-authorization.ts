@@ -4,6 +4,10 @@
  * Exports:
  * - `TelegramReplyAuthorizationResult`: accepted routing state for the remaining inbound turn.
  * - `authorizeTelegramReply`: separates channel conversation replies from human HITL approvals.
+ *
+ * Key constructs:
+ * - Only a reply to this bot's own message can be a HITL answer; a reply to another bot stays a
+ *   plain message.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
@@ -43,6 +47,16 @@ export async function authorizeTelegramReply(input: {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;
       replyHandling = "message";
     }
+  } else if (
+    replyTarget?.from?.isBot === true && !input.replyToAgent &&
+    input.message.chat.type !== "private" &&
+    typeof replyTarget.from.username === "string" &&
+    replyTarget.from.username.toLowerCase() !== input.botUsername.toLowerCase()
+  ) {
+    // A reply to another bot's message is ordinary conversation. Without this Eve's native path
+    // delivered it as a freeform answer to a prompt that never existed: no turn, no boundary,
+    // and the drain of that chat waited forever.
+    replyHandling = "message";
   } else if (replyTarget?.from?.isBot === true || input.replyToAgent) {
     if (!replyTarget) {
       throw new Error(
