@@ -9,6 +9,7 @@
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
  * - A callback whose approval settles without resuming the turn releases the drain after a grace.
+ * - A message Eve defers behind a pending approval (no events at all) releases the drain too.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -367,6 +368,104 @@ describe("createTelegramDurableIngress", () => {
       storage.claim.leaseToken,
       "session-resumed",
       5,
+    );
+  });
+
+  it("releases a message dispatch that Eve deferred behind a pending approval", async () => {
+    const storage = repository();
+    const dispatch = vi.fn().mockResolvedValue({
+      // Eve queues the message as deferred step input and emits nothing until the approval is answered.
+      getEventStream: async () => new ReadableStream({ start() {} }),
+      id: "session-awaiting-approval",
+    });
+    const raw = voicePayload();
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn().mockResolvedValue(false),
+      botUsername: "osinara_bot",
+      firstEventGraceMilliseconds: 20,
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    const released = await Promise.race([
+      backgroundTask!.then(() => true),
+      new Promise<false>((resolve) => {
+        setTimeout(() => resolve(false), 1_000);
+      }),
+    ]);
+
+    expect(released).toBe(true);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1001",
+      storage.claim.leaseToken,
+      "session-awaiting-approval",
+      0,
+    );
+    expect(warned.mock.calls.some(([line]) =>
+      String(line).includes("AGENT_TELEGRAM_DISPATCH_BOUNDARY_ASSUMED"))).toBe(true);
+    warned.mockRestore();
+  });
+
+  it("does not apply the first-event grace once the turn has started", async () => {
+    const storage = repository();
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "turn.started" });
+            setTimeout(() => {
+              controller.enqueue({ type: "turn.completed" });
+              controller.enqueue({ type: "session.waiting" });
+            }, 80);
+          },
+        }),
+      id: "session-slow-turn",
+    });
+    const raw = voicePayload();
+    const update = parseTelegramUpdate(raw);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn().mockResolvedValue(false),
+      botUsername: "osinara_bot",
+      firstEventGraceMilliseconds: 20,
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1001",
+      storage.claim.leaseToken,
+      "session-slow-turn",
+      3,
     );
   });
 

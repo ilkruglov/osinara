@@ -55,6 +55,12 @@ interface DurableIngressDependencies {
    * answer through instead of freezing every chat of the bot.
    */
   approvalSettledGraceMilliseconds?: number;
+  /**
+   * How long a dispatch waits for its first Eve event. A message delivered while the session
+   * waits for an approval is deferred by Eve until the answer arrives, without any turn or
+   * boundary event; the answer itself can only come through this drain.
+   */
+  firstEventGraceMilliseconds?: number;
   acceptMedia(
     message: Pick<TelegramMessage, "chat">,
     updateId: string,
@@ -119,11 +125,16 @@ function voiceMetadata(raw: Record<string, unknown>) {
 }
 
 const APPROVAL_SETTLED_GRACE_MS = 15_000;
+const FIRST_EVENT_GRACE_MS = 30_000;
 
 async function waitForSessionBoundary(
   session: EveSessionResult,
   startIndex: number,
-  options: { approvalSettledGraceMilliseconds?: number; updateId: string },
+  options: {
+    approvalSettledGraceMilliseconds?: number;
+    firstEventGraceMilliseconds?: number;
+    updateId: string;
+  },
 ): Promise<number> {
   const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
@@ -134,8 +145,12 @@ async function waitForSessionBoundary(
     let awaitingResume = false;
     while (true) {
       const pending = reader.read();
-      const grace = options.approvalSettledGraceMilliseconds;
-      const event: ReadableStreamReadResult<{ type: string }> | null = awaitingResume && grace !== undefined
+      const grace: number | undefined = awaitingResume
+        ? options.approvalSettledGraceMilliseconds
+        : nextEventIndex === startIndex
+        ? options.firstEventGraceMilliseconds
+        : undefined;
+      const event: ReadableStreamReadResult<{ type: string }> | null = grace !== undefined
         ? await Promise.race([
           pending,
           new Promise<null>((resolve) => {
@@ -145,10 +160,14 @@ async function waitForSessionBoundary(
         : await pending;
       if (graceTimer !== undefined) clearTimeout(graceTimer);
       if (event === null) {
-        // Eve settled an approval without resuming: the step still waits for other answers, which
-        // can only arrive through this drain. The next update completes the exchange.
+        // Either Eve settled an approval without resuming (the step still waits for other
+        // answers) or it deferred this delivery behind a pending approval without starting a
+        // turn. Both wait for an answer that can only arrive through this drain; releasing the
+        // update lets the next one complete the exchange instead of freezing every chat.
         console.warn(JSON.stringify({
-          code: "AGENT_TELEGRAM_APPROVAL_BOUNDARY_ASSUMED",
+          code: awaitingResume
+            ? "AGENT_TELEGRAM_APPROVAL_BOUNDARY_ASSUMED"
+            : "AGENT_TELEGRAM_DISPATCH_BOUNDARY_ASSUMED",
           sessionId: session.id,
           updateId: options.updateId,
         }));
@@ -346,6 +365,8 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
                 dependencies.approvalSettledGraceMilliseconds ?? APPROVAL_SETTLED_GRACE_MS,
             }
             : {}),
+          firstEventGraceMilliseconds:
+            dependencies.firstEventGraceMilliseconds ?? FIRST_EVENT_GRACE_MS,
           updateId: claim.updateId,
         });
         if (heartbeatError) throw heartbeatError;
