@@ -22,7 +22,12 @@ describe("Telegram channel draft policy", () => {
     expect(source).not.toContain("startTelegramRichThinkingDraft");
     expect(source).not.toContain('"message.appended"');
     expect(source).not.toContain('"action.result"');
-    expect(source).not.toContain('"actions.requested"');
+    // `actions.requested` may only release or keep a held progress notice, never draft text.
+    const actionsHandler = source.slice(source.indexOf('async "actions.requested"'));
+    const handlerBody = actionsHandler.slice(0, actionsHandler.indexOf('async "turn.failed"'));
+    expect(handlerBody).toContain("telegramProgressNoticeDeferral.release(");
+    expect(handlerBody).not.toContain("postTelegram");
+    expect(handlerBody).not.toContain("Draft");
   });
 
   it("records scheduled delivery confirmation before the group timeline", async () => {

@@ -124,7 +124,11 @@ retrieval и thread activation используют только локальн�
 (`agent/lib/telegram-progress-notice.ts`). Заявка в `telegram_progress_notices` по
 `(eve session, turn, step index)` делается до отправки, поэтому повтор хода не дублирует отбивку;
 сбой отправки логируется и не роняет turn, потому что ответ ещё готовится. Notices не попадают в
-timeline и не выдаются в scheduled runs.
+timeline и не выдаются в scheduled runs. Текст придерживается (`telegram-progress-deferral.ts`), пока
+`actions.requested` не назовёт инструменты шага: тихие служебные (`remember`, поиск и чтение памяти,
+`manage_skill`…) отбивку не выпускают, следующий видимый текст её отменяет, завершение хода с
+придержанным текстом отправляет его как ответ; долгий инструмент выпускает отбивку сразу. Иначе
+ответ, написанный рядом с `remember`, уходил дважды.
 
 Набор допустимых реакций задаёт Telegram, а не приложение. Канал раз в сутки на чат обновляет
 `available_reactions` через `getChat` и сохраняет ответ в `telegram_chat_reaction_policies`;
