@@ -92,6 +92,80 @@ describe("resolveConversationAccess", () => {
     });
   });
 
+  it("admits a bot participant to an external group without any account", () => {
+    const access = resolveConversationAccess({
+      actorKind: "telegram_bot",
+      chat: { id: "-2001", type: "group" },
+      identity: null,
+      registeredGroup: {
+        familyId: "family-1",
+        groupId: "group-2",
+        messageMode: "all",
+        skillAllowlist: [],
+        telegramChatId: "-2001",
+        toolAllowlist: [],
+        type: "external",
+      },
+    });
+
+    expect(access).toEqual({
+      familyId: "family-1",
+      groupId: "group-2",
+      memoryScopes: ["group"],
+      role: "external",
+      userId: null,
+    });
+  });
+
+  it("keeps a bot out of an owner-only external group", () => {
+    expect(() =>
+      resolveConversationAccess({
+        actorKind: "telegram_bot",
+        chat: { id: "-2001", type: "group" },
+        identity: null,
+        registeredGroup: {
+          familyId: "family-1",
+          groupId: "group-2",
+          messageMode: "owner_only",
+          skillAllowlist: [],
+          telegramChatId: "-2001",
+          toolAllowlist: [],
+          type: "external",
+        },
+      }),
+    ).toThrowError(/AGENT_TELEGRAM_BOT_NOT_ADMITTED/);
+  });
+
+  it("keeps a bot out of the trusted family zone", () => {
+    expect(() =>
+      resolveConversationAccess({
+        actorKind: "telegram_bot",
+        chat: { id: "-1001", type: "group" },
+        identity: null,
+        registeredGroup: {
+          familyId: "family-1",
+          groupId: "group-1",
+          messageMode: "all",
+          skillAllowlist: [],
+          telegramChatId: "-1001",
+          toolAllowlist: [],
+          type: "family_private",
+        },
+      }),
+    ).toThrowError(/AGENT_ACCESS_DENIED/);
+  });
+
+  it("keeps a bot out of private chats", () => {
+    expect(() =>
+      resolveConversationAccess({
+        actorKind: "telegram_bot",
+        chat: { id: "42", type: "private" },
+        identity: null,
+        registeredGroup: null,
+      }),
+    ).toThrowError(/AGENT_ACCESS_DENIED/);
+  });
+
   it("rejects an unregistered group before model execution", () => {
     expect(() =>
       resolveConversationAccess({

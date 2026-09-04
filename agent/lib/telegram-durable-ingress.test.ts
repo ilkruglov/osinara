@@ -8,6 +8,9 @@
  * - Captionless attachments receive a non-empty factual model message after durable storage.
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
+ * - A callback press never reaches Eve, even when no application handler claims it.
+ * - One failed item releases its own record and the drain keeps going.
+ * - A session that never reaches a boundary releases the queue within one lease.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -33,6 +36,66 @@ function voicePayload(): Record<string, unknown> {
     },
     update_id: 1001,
   };
+}
+
+function callbackPayload(): Record<string, unknown> {
+  return {
+    callback_query: {
+      chat_instance: "-100",
+      data: "su:x:0123456789abcdef",
+      from: { first_name: "Анна", id: 101, is_bot: false },
+      id: "callback-1",
+      message: {
+        chat: { id: 101, type: "private" },
+        date: 1_700_000_000,
+        from: { first_name: "Osinara", id: 900, is_bot: true },
+        message_id: 78,
+      },
+    },
+    update_id: 1002,
+  };
+}
+
+function ingress(
+  storage: ReturnType<typeof repository>,
+  overrides: {
+    dispatch: ReturnType<typeof vi.fn>;
+    handleSoftwareUpdateCallback?: () => Promise<boolean>;
+    leaseMilliseconds?: number;
+  },
+) {
+  return createTelegramDurableIngress({
+    acceptMedia: vi.fn().mockResolvedValue(true),
+    authorizeVoice: vi.fn().mockResolvedValue(true),
+    botUsername: "osinara_bot",
+    handleSoftwareUpdateCallback:
+      overrides.handleSoftwareUpdateCallback ?? vi.fn().mockResolvedValue(false),
+    leaseMilliseconds: overrides.leaseMilliseconds ?? 60_000,
+    repository: storage.value,
+    transcribeVoice: vi.fn().mockResolvedValue("Купи молоко"),
+  });
+}
+
+async function runDrain(
+  handle: ReturnType<typeof createTelegramDurableIngress>,
+  raw: Record<string, unknown>,
+  dispatch: ReturnType<typeof vi.fn>,
+): Promise<void> {
+  const update = parseTelegramUpdate(raw);
+  if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+  let backgroundTask: Promise<unknown> | undefined;
+  await handle({
+    dispatch,
+    raw,
+    update,
+    waitUntil(task) {
+      backgroundTask = task;
+    },
+  } as TelegramVerifiedUpdateContext);
+  if (!backgroundTask) {
+    throw new Error("AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain");
+  }
+  await backgroundTask;
 }
 
 function repository() {
@@ -198,6 +261,79 @@ describe("createTelegramDurableIngress", () => {
       "session-reused",
       5,
     );
+  });
+
+  it("never sends a callback press to Eve when no handler claims it", async () => {
+    const storage = repository();
+    storage.value.claimNext = vi.fn()
+      .mockResolvedValueOnce({
+        ...storage.claim,
+        payload: callbackPayload(),
+        updateId: "1002",
+        voice: null,
+      })
+      .mockResolvedValueOnce(null);
+    const dispatch = vi.fn();
+    const handleSoftwareUpdateCallback = vi.fn().mockResolvedValue(false);
+
+    await runDrain(
+      ingress(storage, { dispatch, handleSoftwareUpdateCallback }),
+      callbackPayload(),
+      dispatch,
+    );
+
+    expect(handleSoftwareUpdateCallback).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(storage.value.beginDispatch).not.toHaveBeenCalled();
+    expect(storage.value.complete).toHaveBeenCalledWith("1002", storage.claim.leaseToken);
+  });
+
+  it("keeps draining the queue after one item fails", async () => {
+    const storage = repository();
+    const second = { ...storage.claim, updateId: "1003" };
+    storage.value.claimNext = vi.fn()
+      .mockResolvedValueOnce(storage.claim)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(null);
+    const dispatch = vi.fn()
+      .mockRejectedValueOnce(new Error("Eve dispatch exploded"))
+      .mockResolvedValueOnce({
+        getEventStream: async () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: "session.waiting" });
+            },
+          }),
+        id: "session-2",
+      });
+
+    await runDrain(ingress(storage, { dispatch }), voicePayload(), dispatch);
+
+    expect(storage.value.fail).toHaveBeenCalledTimes(1);
+    expect(storage.value.fail.mock.calls[0]?.[0]).toBe("1001");
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith(
+      "1003",
+      second.leaseToken,
+      "session-2",
+      1,
+    );
+  });
+
+  it("releases the queue when a session never reaches a boundary", async () => {
+    const storage = repository();
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () => new ReadableStream({ start() {} }),
+      id: "session-3",
+    });
+
+    await runDrain(ingress(storage, { dispatch, leaseMilliseconds: 60 }), voicePayload(), dispatch);
+
+    expect(storage.value.completeWithSession).not.toHaveBeenCalled();
+    expect(storage.value.fail).toHaveBeenCalledTimes(1);
+    expect(storage.value.fail.mock.calls[0]?.[2]).toMatchObject({
+      code: "AGENT_TELEGRAM_SESSION_BOUNDARY_TIMEOUT",
+    });
   });
 
   it("acknowledges rejected external media without enqueue, download, or dispatch", async () => {

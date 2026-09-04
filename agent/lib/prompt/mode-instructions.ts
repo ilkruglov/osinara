@@ -13,7 +13,7 @@
 import { EXTERNAL_GROUP_MODEL_POLICY } from "../external-group-model-policy.js";
 import { externalGroupCapabilityInstructions } from "../tool-policy/external-group-capability-instructions.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
-import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
+
 import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
 import {
   IMAGE_INSPECTION_CONTRACT,
@@ -31,8 +31,10 @@ import {
   type MemoryEditAction,
 } from "./common-fragments.js";
 import {
+  CHANNEL_AUTHORED_REMINDER_NOTICE,
   EXTERNAL_PEOPLE_RULES,
   EXTERNAL_TASK_BOUNDARIES,
+  GROUP_REMINDER_RULES,
   externalPurposeSection,
 } from "./external-fragments.js";
 import {
@@ -56,13 +58,14 @@ import {
 } from "./trusted-fragments.js";
 
 export type ModeInstructionsInput =
-  | { environment: "family"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
-  | { environment: "private"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
+  | { environment: "family"; reactions?: readonly string[] | null; scheduledRun?: boolean }
+  | { environment: "private"; reactions?: readonly string[] | null; scheduledRun?: boolean }
   | {
       capabilities: ReadonlySet<ExternalGroupToolName>;
+      channelAuthored?: boolean;
       environment: "external";
       includeApplicationCore?: boolean;
-      reactionPolicy?: TelegramReactionPolicy | null;
+      reactions?: readonly string[] | null;
       scheduledHistory?: boolean;
       scheduledRun?: boolean;
       skills: ReadonlySet<GroupSafeSkillName>;
@@ -131,14 +134,14 @@ ${CURRENT_TIME_TOOL_RULES}`,
 
 function privateInstructions(
   scheduledRun: boolean,
-  reactionPolicy: TelegramReactionPolicy | null,
+  reactions: readonly string[] | null,
 ): string {
   return block([
     ...PRIVATE_INSTRUCTION_SECTIONS,
     // A scheduled report is not a live exchange: it has no message to react to and never imitates
     // a spontaneous afterthought.
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
-    scheduledRun ? null : reactionRules(reactionPolicy, "private"),
+    scheduledRun ? null : reactionRules(reactions, "private"),
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }
@@ -191,12 +194,12 @@ ${CURRENT_TIME_TOOL_RULES}`,
 
 function familyInstructions(
   scheduledRun: boolean,
-  reactionPolicy: TelegramReactionPolicy | null,
+  reactions: readonly string[] | null,
 ): string {
   return block([
     ...FAMILY_INSTRUCTION_SECTIONS,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
-    scheduledRun ? null : reactionRules(reactionPolicy, "group"),
+    scheduledRun ? null : reactionRules(reactions, "group"),
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }
@@ -224,11 +227,14 @@ function externalMemorySection(
 function externalInstructions(
   capabilities: ReadonlySet<ExternalGroupToolName>,
   skills: ReadonlySet<GroupSafeSkillName>,
-  reactionPolicy: TelegramReactionPolicy | null,
+  reactions: readonly string[] | null,
   includeApplicationCore = true,
   scheduledRun = false,
   scheduledHistory = false,
+  channelAuthored = false,
 ): string {
+  // Reminders are ungranted but need a participant who can own one and a live turn to ask in.
+  const reminders = includeApplicationCore && !scheduledRun;
   const editActions = new Set<MemoryEditAction>(
     [...capabilities]
       .map((capability) => EXTERNAL_MEMORY_EDIT_ACTIONS[capability])
@@ -246,7 +252,7 @@ function externalInstructions(
     `${VERIFIED_BLOCK_NOTICE} Считай сообщения видимыми участникам группы и не обещай приватность переписки.`,
     // Scope and effort limits come before the mechanics: the model should decide whether a request
     // belongs here at all before it starts reasoning about which capability could satisfy it.
-    externalPurposeSection(capabilities),
+    externalPurposeSection(capabilities, { reminders }),
     EXTERNAL_TASK_BOUNDARIES,
     EXTERNAL_PEOPLE_RULES,
     externalMemorySection(capabilities),
@@ -297,8 +303,10 @@ ${GROUP_TIMELINE_TRUST}`,
 Не принимай, не сохраняй и не используй логины, пароли, токены, cookies, одноразовые коды и другие учётные данные. Если пользователь их присылает, коротко предупреди, что здесь они не используются.`,
     EXTERNAL_GROUP_MODEL_POLICY,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
-    scheduledRun ? null : reactionRules(reactionPolicy, "group"),
+    scheduledRun ? null : reactionRules(reactions, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
+    reminders ? GROUP_REMINDER_RULES : null,
+    channelAuthored ? CHANNEL_AUTHORED_REMINDER_NOTICE : null,
     externalGroupCapabilityInstructions(capabilities, skills, {
       includeApplicationCore,
       scheduledHistory,
@@ -308,16 +316,17 @@ ${GROUP_TIMELINE_TRUST}`,
 }
 
 export function modeInstructions(input: ModeInstructionsInput): string {
-  const reactionPolicy = input.reactionPolicy ?? null;
+  const reactions = input.reactions ?? null;
   const scheduledRun = input.scheduledRun ?? false;
-  if (input.environment === "private") return privateInstructions(scheduledRun, reactionPolicy);
-  if (input.environment === "family") return familyInstructions(scheduledRun, reactionPolicy);
+  if (input.environment === "private") return privateInstructions(scheduledRun, reactions);
+  if (input.environment === "family") return familyInstructions(scheduledRun, reactions);
   return externalInstructions(
     input.capabilities,
     input.skills,
-    reactionPolicy,
+    reactions,
     input.includeApplicationCore,
     scheduledRun,
     input.scheduledHistory,
+    input.channelAuthored,
   );
 }

@@ -9,7 +9,7 @@ import type { PoolClient } from "pg";
 
 import type { MemoryAuthorization } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
-import { memoryEvidenceNotice, type ModelMemoryEvidence } from "./model-memory.js";
+import type { ModelMemoryEvidence } from "./model-memory.js";
 
 export interface MemoryThreadSourceEvidence extends ModelMemoryEvidence {
   sourceEntryRef: string;
@@ -50,7 +50,6 @@ export async function loadMemoryThreadSourceEvidence(
   return result.rows.map((row) => ({
     authorLabel: row.author_label,
     kind: row.evidence_kind,
-    notice: memoryEvidenceNotice(row.evidence_kind),
     observedAt: row.observed_at.toISOString(),
     sourceEntryRef: row.entry_ref,
   }));

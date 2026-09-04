@@ -3,9 +3,13 @@
  *
  * Constructs covered:
  * - Private, family, external, scheduled-external, subagent, and memory-review surfaces.
- * - Every emitted tool explains selection, input, output, and structured error recovery.
+ * - The shared call contract is stated once in the permanent core, not on every descriptor.
+ * - Every emitted tool still carries its own purpose and stays inside the compact size budget.
  * - External path overrides retain the narrower group-relative contract.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { buildMemoryReviewToolSurface } from "./memory-review/memory-review-tool-surface.js";
@@ -15,14 +19,15 @@ import {
   buildSubagentToolSurface,
 } from "./tool-policy/mode-tool-surface.js";
 
-const REQUIRED_DESCRIPTION_SECTIONS = [
-  "Когда использовать:",
-  "Не использовать:",
-  "Вход:",
-  "Результат:",
-  "Ошибка:",
+// The generic contract used to be appended to every descriptor. It now lives once here, so the
+// surfaces stay small while the rules the model needs are still guaranteed to reach it.
+const REQUIRED_CORE_RULES = [
+  "только когда его назначение прямо соответствует текущей задаче",
+  "Передавай только поля схемы этого инструмента",
+  "только по успешному результату инструмента",
+  "sideEffectStatus",
 ] as const;
-const TOTAL_DESCRIPTION_MAX_CHARACTERS = 40_000;
+const TOTAL_DESCRIPTION_MAX_CHARACTERS = 25_000;
 
 function surfaces() {
   const externalInput = {
@@ -59,11 +64,17 @@ describe("model-facing tool contracts", () => {
         expect(typeof definition.execute, `${surfaceName}.${toolName} executor`).toBe("function");
         expect(definition.description.length, `${surfaceName}.${toolName} prompt size`)
           .toBeLessThan(4_000);
-        for (const section of REQUIRED_DESCRIPTION_SECTIONS) {
-          expect(definition.description, `${surfaceName}.${toolName} missing ${section}`)
-            .toContain(section);
-        }
+        expect(definition.description.trim(), `${surfaceName}.${toolName} states its purpose`)
+          .not.toBe("");
       }
+    }
+  });
+
+  it("states the shared tool call contract once in the permanent core", () => {
+    const core = readFileSync(resolve("agent/instructions.md"), "utf8");
+
+    for (const rule of REQUIRED_CORE_RULES) {
+      expect(core, `permanent core missing ${rule}`).toContain(rule);
     }
   });
 

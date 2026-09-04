@@ -2,7 +2,7 @@
  * Telegram durable session actor validation tests.
  *
  * Constructs covered:
- * - Explicit Telegram user and channel auth recover their exact actor identity.
+ * - Explicit Telegram user, bot, and channel auth recover their exact actor identity.
  * - Sessions without the deployed actor contract are intentionally invalidated.
  * - Channel identity cannot be projected through a user principal or Telegram user attribute.
  */
@@ -39,6 +39,41 @@ describe("resolveTelegramSessionActor", () => {
       principalId: "telegram-channel:-1001783384254",
       principalType: "service",
     }))).toEqual({ id: "-1001783384254", kind: "telegram_channel" });
+  });
+
+  it("resolves an exact Telegram bot service actor", () => {
+    expect(resolveTelegramSessionActor(auth({
+      attributes: {
+        telegramActorId: "8123456789",
+        telegramActorKind: "telegram_bot",
+        telegramUserId: "8123456789",
+      },
+      authenticator: "telegram",
+      principalId: "telegram-bot:8123456789",
+      principalType: "service",
+    }))).toEqual({ id: "8123456789", kind: "telegram_bot" });
+  });
+
+  it.each([
+    { label: "a human principal type", principalType: "user" },
+    { label: "a channel-shaped principal id", principalId: "telegram-channel:-1001783384254" },
+    { label: "a negative actor id", actorId: "-8123456789" },
+    { label: "a mismatched Telegram user attribute", telegramUserId: "999" },
+    { label: "no Telegram user attribute", telegramUserId: null },
+  ])("rejects a bot session carrying $label", (override) => {
+    const actorId = override.actorId ?? "8123456789";
+    expect(resolveTelegramSessionActor(auth({
+      attributes: {
+        telegramActorId: actorId,
+        telegramActorKind: "telegram_bot",
+        ...(override.telegramUserId === null
+          ? {}
+          : { telegramUserId: override.telegramUserId ?? actorId }),
+      },
+      authenticator: "telegram",
+      principalId: override.principalId ?? `telegram-bot:${actorId}`,
+      principalType: override.principalType ?? "service",
+    }))).toBeNull();
   });
 
   it("invalidates a session that has only the former Telegram user attribute", () => {

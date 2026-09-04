@@ -152,7 +152,7 @@ async function sourceRows(
   const result = await client.query<SourceRow>(
     `SELECT ${SOURCE_COLUMNS}
        FROM telegram_group_messages AS message
-      WHERE message.conversation_id = $1 AND message.actor_kind = 'user'
+      WHERE message.conversation_id = $1 AND message.actor_kind IN ('user', 'telegram_bot')
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id > $3::bigint AND message.sequence_id <= $4::bigint
       ORDER BY message.sequence_id
@@ -308,7 +308,8 @@ export const memoryReviewRepository = {
       }>(
         `SELECT conversation_id, message_thread_id::text, sequence_id::text
            FROM telegram_group_messages
-          WHERE id = $1 AND group_id = $2 AND actor_kind = 'user' FOR SHARE`,
+          WHERE id = $1 AND group_id = $2
+            AND actor_kind IN ('user', 'telegram_bot') FOR SHARE`,
         [input.timelineEntryId, input.groupId],
       );
       const current = message.rows[0];
@@ -404,6 +405,24 @@ export const memoryReviewRepository = {
       "AGENT_MEMORY_REVIEW_TURN_BINDING_INVALID",
       "Не удалось связать проверку памяти с текущим ходом",
     );
+  },
+
+  /**
+   * A turn parked for a human answer resumes under the authorization of that answer, so the batch
+   * marker of the message that started the turn is no longer in context. The binding written at
+   * turn start is durable, which makes it the only source terminal handling can trust. The status
+   * is deliberately not filtered: a replayed terminal event must still recognize a review turn.
+   */
+  async batchIdForTurn(input: {
+    eveSessionId: string;
+    eveTurnId: string;
+  }): Promise<string | null> {
+    const result = await database().query<{ id: string }>(
+      `SELECT id FROM memory_review_batches
+        WHERE eve_session_id = $1 AND eve_turn_id = $2`,
+      [input.eveSessionId, input.eveTurnId],
+    );
+    return result.rows[0]?.id ?? null;
   },
 
 };

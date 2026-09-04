@@ -6,6 +6,7 @@
  * - HITL resume verification accepts only the same application session, turn, and Telegram actor.
  * - Sequence resolution returns only a source captured for that exact Eve session and turn.
  * - Rebinding the same turn with a different visible set fails instead of widening access.
+ * - A bot-invoked turn binds against its own actor kind and Telegram id.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -153,5 +154,53 @@ describeWithDatabase("turn-bound memory source repository", () => {
       eveTurnId: binding.eveTurnId,
       sourceSequence: "2",
     })).resolves.toBeNull();
+  });
+
+  it("binds a turn invoked by another bot to that bot's own identity", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const botEntry = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       VALUES ($1, $2, 903, 3, 'telegram_bot', 'telegram-bot:8123456789', '8123456789',
+               'Мия', true, 'text', 'Осинара, привет', now())
+       RETURNING id`,
+      [fixture.conversationId, fixture.groupId],
+    );
+    const appSession = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+          continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'canonical', 'bot-turn-source',
+               'bot-turn-source:0', now(), now()) RETURNING id`,
+      [fixture.familyId, fixture.groupId],
+    );
+    const binding = {
+      applicationSessionId: appSession.rows[0]!.id,
+      conversationId: fixture.conversationId,
+      currentTimelineEntryId: botEntry.rows[0]!.id,
+      eveSessionId: "eve-bot-session",
+      eveTurnId: "eve-bot-turn",
+      invokingActorId: "8123456789",
+      invokingActorKind: "telegram_bot" as const,
+      visibleTimelineEntryIds: [botEntry.rows[0]!.id],
+    };
+
+    await expect(memoryTurnSourceRepository.bind(binding)).resolves.not.toThrow();
+
+    await expect(memoryTurnSourceRepository.verifyBoundResume({
+      applicationSessionId: binding.applicationSessionId,
+      eveSessionId: binding.eveSessionId,
+      eveTurnId: binding.eveTurnId,
+      invokingActorId: binding.invokingActorId,
+      invokingActorKind: binding.invokingActorKind,
+    })).resolves.toBe(true);
+
+    // A bot must not be able to bind a turn against a channel-shaped or human identity.
+    await expect(memoryTurnSourceRepository.bind({
+      ...binding,
+      eveTurnId: "eve-bot-turn-forged",
+      invokingActorKind: "telegram_channel" as const,
+    })).rejects.toMatchObject({ code: "AGENT_MEMORY_TURN_SOURCE_SET_INVALID" });
   });
 });

@@ -138,15 +138,23 @@ export const reminderDispatchRepository = {
          SET status = 'failed', last_error_code = 'AGENT_REMINDER_DESTINATION_REVOKED',
              updated_at = $1
          WHERE reminder.status = 'active' AND (
-            NOT EXISTS (
+            (reminder.scope <> 'group' AND NOT EXISTS (
               SELECT 1 FROM family_memberships
               WHERE family_id = reminder.family_id AND user_id = reminder.author_user_id
-            ) OR (
+            )) OR (
               reminder.scope = 'family' AND NOT EXISTS (
                 SELECT 1 FROM telegram_groups AS group_row
                 WHERE group_row.id = reminder.group_id AND group_row.family_id = reminder.family_id
                   AND group_row.telegram_chat_id = reminder.telegram_chat_id
                   AND group_row.type = 'family_private'
+              )
+            ) OR (
+              -- A public-chat reminder lives only while its chat is still the same external group.
+              reminder.scope = 'group' AND NOT EXISTS (
+                SELECT 1 FROM telegram_groups AS group_row
+                WHERE group_row.id = reminder.group_id AND group_row.family_id = reminder.family_id
+                  AND group_row.telegram_chat_id = reminder.telegram_chat_id
+                  AND group_row.type = 'external'
               )
             )
           )
@@ -186,10 +194,17 @@ export const reminderDispatchRepository = {
         `WITH candidates AS (
            SELECT reminder.id
            FROM reminders AS reminder
-           JOIN family_memberships AS membership
-             ON membership.family_id = reminder.family_id AND membership.user_id = reminder.author_user_id
            WHERE reminder.status = 'active' AND reminder.available_at <= $1
              AND reminder.attempts < $4
+             AND (
+               -- A public-chat reminder has no account behind its author, so membership cannot
+               -- gate it. Its own destination is revalidated by the revocation sweep above.
+               reminder.scope = 'group' OR EXISTS (
+                 SELECT 1 FROM family_memberships AS membership
+                 WHERE membership.family_id = reminder.family_id
+                   AND membership.user_id = reminder.author_user_id
+               )
+             )
            ORDER BY reminder.available_at, reminder.id
            FOR UPDATE OF reminder SKIP LOCKED
            LIMIT $2

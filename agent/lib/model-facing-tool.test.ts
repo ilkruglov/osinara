@@ -27,7 +27,8 @@ describe("model-facing tool boundary", () => {
 
     await expect(wrapped.execute({}, {} as never)).resolves.toEqual({ ok: true });
     expect(wrapped.description).toContain(source.description);
-    expect(wrapped.description).toContain("Ошибка:");
+    // Общий контракт вызова переехал в постоянное ядро, дескриптор несёт только своё назначение.
+    expect(wrapped.description).toBe("Test tool");
     expect(wrapped.inputSchema).toBe(source.inputSchema);
   });
 

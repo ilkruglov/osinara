@@ -212,9 +212,13 @@ function assertCompleteFinishReason(finishReason: LanguageModelV4FinishReason): 
       "Модель остановила ответ из-за ограничений безопасности. Переформулируйте запрос",
     );
   }
+  // An unfinished answer means the provider stream broke, not that the request was wrong. Marking
+  // it retryable is what lets Eve reissue this one call: truncation by length and a content filter
+  // stay terminal above, because repeating either produces the same result.
   throw new AppError(
     "AGENT_MODEL_OUTPUT_INCOMPLETE",
     "Модель не завершила ответ. Попробуйте повторить запрос или сформулировать его иначе",
+    { isRetryable: true },
   );
 }
 

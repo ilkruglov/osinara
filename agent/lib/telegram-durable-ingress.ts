@@ -112,17 +112,29 @@ function voiceMetadata(raw: Record<string, unknown>) {
   };
 }
 
+// One message may hold the chat queue for at most one lease. Without this bound a session that
+// never reports its state keeps the heartbeat renewing the lease and the whole bot stays deaf.
 async function waitForSessionBoundary(
   session: EveSessionResult,
   startIndex: number,
+  timeoutMilliseconds: number,
 ): Promise<number> {
   const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
   let reachedBoundary = false;
+  let timedOut = false;
   let nextEventIndex = startIndex;
+  let deadlineTimeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    deadlineTimeout = setTimeout(() => resolve("timeout"), timeoutMilliseconds);
+  });
   try {
     while (true) {
-      const event = await reader.read();
+      const event = await Promise.race([reader.read(), deadline]);
+      if (event === "timeout") {
+        timedOut = true;
+        break;
+      }
       if (event.done) break;
       nextEventIndex += 1;
       if (
@@ -135,8 +147,15 @@ async function waitForSessionBoundary(
       }
     }
   } finally {
+    clearTimeout(deadlineTimeout);
     await reader.cancel();
     reader.releaseLock();
+  }
+  if (timedOut) {
+    throw new AppError(
+      "AGENT_TELEGRAM_SESSION_BOUNDARY_TIMEOUT",
+      "Eve не сообщил состояние сессии за отведённое время. Отправьте сообщение ещё раз",
+    );
   }
   if (!reachedBoundary) {
     throw new AppError(
@@ -240,10 +259,16 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         }
 
         // Application update decisions are durable DB transitions and never enter an Eve session.
-        if (
-          update.kind === "callback_query" &&
-          await dependencies.handleSoftwareUpdateCallback(update.callbackQuery)
-        ) {
+        // A button press is not model input either way, so an unclaimed one is recorded and
+        // completed here instead of being dispatched as if it were a message.
+        if (update.kind === "callback_query") {
+          const claimed = await dependencies.handleSoftwareUpdateCallback(update.callbackQuery);
+          if (!claimed) {
+            console.error(JSON.stringify({
+              code: "AGENT_TELEGRAM_CALLBACK_UNCLAIMED",
+              updateId: claim.updateId,
+            }));
+          }
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           continue;
         }
@@ -293,7 +318,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         }
         // The durable cursor excludes every event from earlier turns of a reused Eve session.
         const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
-        const nextEventIndex = await waitForSessionBoundary(session, streamCursor);
+        const nextEventIndex = await waitForSessionBoundary(
+          session,
+          streamCursor,
+          dependencies.leaseMilliseconds,
+        );
         if (heartbeatError) throw heartbeatError;
         await dependencies.repository.completeWithSession(
           claim.updateId,
@@ -315,8 +344,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             updateId: claim.updateId,
           }),
         );
+        // The record is terminal, but the rest of the queue is not: a rethrow here left every
+        // later message waiting for the next inbound webhook to start a new drain.
         await dependencies.repository.fail(claim.updateId, claim.leaseToken, failure);
-        throw error;
       } finally {
         heartbeatController.abort();
         await heartbeat;

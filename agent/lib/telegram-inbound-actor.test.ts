@@ -4,7 +4,8 @@
  * Constructs covered:
  * - Ordinary human senders remain Telegram user actors.
  * - Channel-authored supergroup posts use raw `sender_chat`, not Telegram's Channel_Bot identity.
- * - Ambiguous, malformed, anonymous-group, and ordinary bot senders fail closed.
+ * - Ordinary bots become explicit bot actors once Telegram delivers their group messages.
+ * - Ambiguous, malformed, and anonymous-group senders fail closed.
  */
 import { describe, expect, it } from "vitest";
 
@@ -48,14 +49,46 @@ describe("telegramInboundActor", () => {
     });
   });
 
+  it("projects an ordinary bot sender", () => {
+    expect(telegramInboundActor({
+      ...groupMessage("Осинара, привет"),
+      from: { firstName: "Мия", id: "8123456789", isBot: true, username: "mimimia_ai_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Мия", id: 8_123_456_789, is_bot: true, username: "mimimia_ai_bot" },
+      },
+    })).toEqual({
+      actorId: "telegram-bot:8123456789",
+      displayName: "Мия",
+      id: "8123456789",
+      kind: "telegram_bot",
+      timelineKind: "telegram_bot",
+      username: "mimimia_ai_bot",
+    });
+  });
+
   it.each([
     {
-      label: "ordinary bot",
-      message: {
-        ...groupMessage("bot"),
-        from: { firstName: "Bot", id: "42", isBot: true },
-      },
+      label: "a bot whose raw sender contradicts the parsed identity",
+      raw: { date: 1_787_000_000, from: { first_name: "Мия", id: 999, is_bot: true } },
     },
+    {
+      label: "a bot whose raw sender is not marked as a bot",
+      raw: { date: 1_787_000_000, from: { first_name: "Мия", id: 42, is_bot: false } },
+    },
+    {
+      label: "a bot without a raw sender",
+      raw: { date: 1_787_000_000 },
+    },
+  ])("rejects $label", ({ raw }) => {
+    expect(telegramInboundActor({
+      ...groupMessage("подделка"),
+      from: { firstName: "Мия", id: "42", isBot: true },
+      raw,
+    })).toBeNull();
+  });
+
+  it.each([
     {
       label: "anonymous supergroup sender",
       message: {

@@ -112,7 +112,9 @@ export async function searchTelegramGroupHistory(
       const visibleEntry = visibleTelegramTimelineEntry(entry, attachmentReferenceAccess);
       return {
         ...(visibleEntry.attachment === undefined ? {} : { attachment: visibleEntry.attachment }),
-        actor: entry.actorKind === "agent_self" ? "[agent:self]" : "[user]",
+        actor: entry.actorKind === "agent_self"
+          ? "[agent:self]"
+          : entry.actorKind === "telegram_bot" ? "[telegram:bot]" : "[user]",
         content: entry.contentText,
         displayName: entry.senderDisplayName,
         kind: entry.messageKind,

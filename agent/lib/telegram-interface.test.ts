@@ -501,6 +501,29 @@ describe("Telegram interface localization", () => {
     expect(sessionMessage).not.toContain("secret");
   });
 
+  it("names a spent model call as an outage and asks to wait", () => {
+    const turnMessage = formatTelegramTurnFailure({
+      code: "MODEL_CALL_FAILED",
+      details: { errorId: "47dae564-7b24-497b-a1b7-69b8fcfdf92c" },
+    });
+
+    expect(turnMessage).toContain("Нейросеть сейчас недоступна");
+    expect(turnMessage).toContain("Попробуйте повторить запрос чуть позже");
+    expect(turnMessage).not.toContain("Не удалось выполнить запрос");
+    expect(turnMessage).toContain("Код: MODEL_CALL_FAILED");
+  });
+
+  it("keeps the support code out of a shared chat", () => {
+    const turnMessage = formatTelegramTurnFailure(
+      { code: "MODEL_CALL_FAILED", details: { errorId: "47dae564-7b24-497b-a1b7-69b8fcfdf92c" } },
+      { includeDiagnostics: false },
+    );
+
+    expect(turnMessage).toContain("Нейросеть сейчас недоступна");
+    expect(turnMessage).not.toContain("Код:");
+    expect(turnMessage).not.toContain("Номер ошибки");
+  });
+
   it("shows the actionable schedule input explanation without internal details", () => {
     const turnMessage = formatTelegramTurnFailure({
       code: "AGENT_SCHEDULE_INPUT_INVALID",
@@ -533,8 +556,7 @@ describe("Telegram interface localization", () => {
         "AGENT_MINIMAX_REASONING_CONTRACT_VIOLATION: Модель вернула внутреннее рассуждение в тексте ответа",
     });
 
-    expect(turnMessage).toContain("Не удалось выполнить запрос");
-    expect(turnMessage).toContain("Модель не смогла сформировать завершённый ответ");
+    expect(turnMessage).toContain("Нейросеть сейчас недоступна");
     expect(turnMessage).toContain("Код: MODEL_CALL_FAILED");
     expect(turnMessage).toContain("Номер ошибки: 8c4eebf2-a386-4dcb-913d-4b5a28edee2f");
     expect(turnMessage).not.toContain("AGENT_MINIMAX");

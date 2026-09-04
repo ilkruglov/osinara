@@ -14,6 +14,7 @@ import manageFamilyInvitation from "./tools/manage_family_invitation.js";
 import inspectWorkspaceImage from "./tools/inspect_workspace_image.js";
 import manageMemory from "./tools/manage_memory.js";
 import manageReminder from "./tools/manage_reminder.js";
+import { EXTERNAL_GROUP_REMINDER_TOOLS } from "./tool-policy/external-group-reminder-tools.js";
 import manageTelegramGroup from "./tools/manage_telegram_group.js";
 import notificationSettings from "./tools/notification_settings.js";
 
@@ -25,6 +26,7 @@ function schemaOf(tool: { inputSchema: unknown }): z.ZodType {
 }
 
 const transportSensitiveTools = {
+  externalGroupManageReminder: EXTERNAL_GROUP_REMINDER_TOOLS.manage_reminder!,
   inspectWorkspaceImage,
   manageAgentSchedule,
   manageBehaviorPreference,

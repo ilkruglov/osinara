@@ -36,7 +36,9 @@ export async function enqueueMemoryReviewOwnerAlert(
        FROM memory_review_batches AS batch
        JOIN application_conversations AS conversation ON conversation.id = batch.conversation_id
        JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
-      WHERE batch.id = $1 AND batch.status IN ('failed', 'ambiguous')
+      -- Compared as text because migration tests exercise this insert against schemas older
+      -- than the terminal status that was added last.
+      WHERE batch.id = $1 AND batch.status::text IN ('failed', 'ambiguous', 'skipped')
      ON CONFLICT (batch_id, recovery_generation) DO NOTHING`,
     [batchId, diagnosticCode],
   );

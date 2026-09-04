@@ -116,22 +116,11 @@ await replaceExact(
   `const HEALTH_TIMEOUT_MS=${EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS.toExponential().replace("+", "")}`,
 );
 
-// Provider transport retries remain AI SDK's responsibility; Eve must never reissue a model call.
-await replaceExact(
-  runtimePaths.toolLoop,
-  "async function runModelCallWithRetries(e,t,n){for(let r=1;;r++){throwIfTurnAborted(n);try{return await e(r)}catch(e){if(throwIfTurnAborted(n),r===3||classifyModelCallError(e)!==`retry`)throw e;let i=500*2**(r-1)+Math.floor(Math.random()*250);log.warn(`model call failed transiently — retrying`,{attempt:r,delayMs:i,sessionId:t.sessionId,turnId:t.turnId,error:e}),await new Promise(e=>setTimeout(e,i))}}}",
-  "async function runModelCallWithRetries(e,t,n){throwIfTurnAborted(n);try{return await e(1)}catch(e){throwIfTurnAborted(n);throw e}}",
-);
-await replaceExact(
-  runtimePaths.toolLoop,
-  "async function attemptEmptyResponseRecovery(e){if(!(e.error instanceof EmptyModelResponseError))return{outcome:`skipped`};log.warn(`empty model response; reissuing the model call once`,{sessionId:e.sessionId,turnId:e.turnId});try{return{outcome:`recovered`,result:await e.runOneModelCall({...e.retryCallOptions,retryReason:`empty-response`,suppressStepStartedEmission:!0,trailingUserNote:buildEmptyResponseNudge(e.emptyDeliveryEnabled)})}}catch(t){return{outcome:`failed`,error:t,retryCallOptions:e.retryCallOptions}}}",
-  "async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}",
-);
-await replaceExact(
-  runtimePaths.toolLoop,
-  "async function attemptUnsupportedProviderToolRecovery(e){let t=extractUnsupportedProviderToolTypes(e.error);if(t.length===0)return{outcome:`skipped`};let n=[];for(let e of t){let t=resolveFrameworkToolFromUpstreamType(e);t!==null&&!n.includes(t)&&n.push(t)}if(n.length===0)return{outcome:`skipped`};log.warn(`disabling unsupported provider tool(s); retrying step once`,{disabled:n,sessionId:e.sessionId,turnId:e.turnId,upstreamTypes:t});let r={disabledProviderTools:new Set(n),extraSystemNote:buildDisabledToolNote(n)};try{return{outcome:`recovered`,result:await e.runOneModelCall({...r,suppressStepStartedEmission:!0})}}catch(e){return{outcome:`failed`,error:e,retryCallOptions:r}}}",
-  "async function attemptUnsupportedProviderToolRecovery(e){return{outcome:`skipped`}}",
-);
+// Eve owns model-call recovery. Its own classifier retries only transport-shaped failures (408,
+// 409, 429, 5xx, explicitly retryable and catalog-transient errors) and never an invalid request
+// or a configuration error, and the retry wraps one model call: tool calls run after that call
+// returns, so a reissue repeats no side effect. AI SDK retries cover a connection that never
+// established; only this outer layer can recover a stream that broke after the response started.
 
 // External groups and internal background review must not inherit root delegation. Match the
 // complete implicit-agent fingerprint so authored tools and declared subagents remain untouched.
@@ -312,6 +301,15 @@ await replaceExact(
   runtimePaths.telegram,
   "})],async receive",
   "}),...e.onDrain===void 0?[]:[POST(e.drainRoute??`/eve/v1/telegram-drain`,async(r,{from:a,waitUntil:o})=>{if(await verifyInbound(r,e.credentials)===null)return new Response(`unauthorized`,{status:401});let d=l=>l.kind===`message`?dispatchMessage({config:e,message:l.message,onMessage:n,uploadPolicy:t,from:a}):dispatchCallbackQuery({config:e,query:l.callbackQuery,from:a});return e.onDrain({dispatch:d,waitUntil:o})})]],async receive",
+);
+
+// Bot API 10.0 lets a bot see other bots' group messages, but Eve still drops every bot sender
+// before `onMessage` runs. Application authorization decides which chat may admit a bot; the
+// channel must not make that decision for it.
+await replaceExact(
+  runtimePaths.telegram,
+  "async function dispatchMessage(e){if(e.message.from?.isBot===!0)return;let t=stateFromMessage(e.message,e.config)",
+  "async function dispatchMessage(e){let t=stateFromMessage(e.message,e.config)",
 );
 
 // Authorized application output controls only the model-visible message and continuation address.

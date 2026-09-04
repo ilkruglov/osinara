@@ -8,7 +8,7 @@
  */
 import { createHash } from "node:crypto";
 
-export type ReminderScope = "family" | "personal";
+export type ReminderScope = "family" | "group" | "personal";
 export type ReminderStatus = "active" | "completed" | "failed" | "leased" | "paused";
 export type ReminderRecurrenceUnit = "daily" | "monthly" | "weekly";
 

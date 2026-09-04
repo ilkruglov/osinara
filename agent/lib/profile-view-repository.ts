@@ -19,7 +19,6 @@ import {
   type ProfileSubjectPriority,
 } from "./profile-selection.js";
 import {
-  profileSourceNotice,
   toProfileView,
   type CreateProfileViewInput,
   type ProfileView,
@@ -131,7 +130,8 @@ async function loadSubjects(
   const timelineReply = input.replyTelegramUserId === null && input.replyTimelineSequence
     ? await client.query<{ telegram_user_id: string }>(
         `SELECT telegram_user_id FROM telegram_group_messages
-         WHERE conversation_id = $1 AND sequence_id = $2 AND actor_kind = 'user'
+         WHERE conversation_id = $1 AND sequence_id = $2
+           AND actor_kind IN ('user', 'telegram_bot')
            AND telegram_user_id IS NOT NULL`,
         [input.conversationId, input.replyTimelineSequence],
       )
@@ -432,7 +432,6 @@ export const profileViewRepository = {
           observedAt: row.observed_at.toISOString(),
           origin: { label: row.origin_label_snapshot, scope: row.origin_scope },
           sourceAuthorLabel: row.source_author_label_snapshot,
-          sourceNotice: profileSourceNotice(row.evidence_kind),
         });
         subjects.set(row.subject_ordinal, subject);
       }

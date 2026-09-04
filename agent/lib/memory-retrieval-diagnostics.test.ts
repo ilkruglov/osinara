@@ -72,7 +72,6 @@ describe("retrieval diagnostics boundary", () => {
       memoryRef: "mem_11111111111111111111111111111111",
       scope: "personal",
       sensitivity: "normal",
-      updatedAt: "2026-07-01T10:00:00.000Z",
     }]);
     expect(JSON.stringify(result)).not.toMatch(
       /score|evidence|Similarity|Rank|00000000-0000-4000-8000-00000000000[12]/u,

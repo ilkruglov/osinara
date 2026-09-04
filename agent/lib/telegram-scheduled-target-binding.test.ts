@@ -90,6 +90,11 @@ vi.mock("./memory-turn-source.js", () => ({
   bindMemoryTurnSources: vi.fn(),
   releaseMemoryTurnSources: dependencies.releaseMemoryTurnSources,
 }));
+// A scheduled run never carries a memory-review batch, but the channel now resolves that binding
+// from the database instead of the message authorization, so the lookup has to be answered.
+vi.mock("./memory-review/memory-review-repository.js", () => ({
+  memoryReviewRepository: { batchIdForTurn: vi.fn(async () => null) },
+}));
 
 await import("../channels/telegram.js");
 const { AppError } = await import("./app-error.js");
