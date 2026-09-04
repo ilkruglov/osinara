@@ -95,7 +95,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const group = groupChatType === null
       ? null
       : await repositories.telegram.findGroup(message.chat.id, groupChatType);
-    if (actor.kind === "telegram_channel" &&
+    // Neither a channel nor another bot owns an application account. Both participate only in the
+    // untrusted external zone, and never in the mode reserved for the verified human owner.
+    if (actor.kind !== "telegram_user" &&
       (group?.type !== "external" || group.messageMode === "owner_only")) return null;
     const forumTopicId = group ? telegramForumTopicId(message) : null;
     const mediaKind = classifyTelegramInboundMedia(message);

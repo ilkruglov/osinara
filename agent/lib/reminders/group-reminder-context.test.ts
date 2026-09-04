@@ -12,14 +12,18 @@ import { describe, expect, it } from "vitest";
 import { AppError } from "../app-error.js";
 import { requireGroupReminderAuthorization } from "./group-reminder-context.js";
 
-function context(attributes: Record<string, unknown>, principalType = "user"): ToolContext {
+function context(
+  attributes: Record<string, unknown>,
+  principalType = "user",
+  servicePrincipalId = "telegram-channel:-100500",
+): ToolContext {
   return {
     session: {
       auth: {
         current: {
           attributes,
           authenticator: "telegram",
-          principalId: principalType === "user" ? "telegram-user-77" : "telegram-channel:-100500",
+          principalId: principalType === "user" ? "telegram-user-77" : servicePrincipalId,
           principalType,
         },
       },
@@ -62,6 +66,23 @@ describe("requireGroupReminderAuthorization", () => {
       groupId: "group-1",
       telegramChatId: "-1001",
       telegramUserId: "77",
+    });
+  });
+
+  it("lets another bot own a group reminder under its own Telegram id", () => {
+    const botAttributes = {
+      ...externalAttributes,
+      telegramActorId: "8123456789",
+      telegramActorKind: "telegram_bot",
+    };
+    delete (botAttributes as Record<string, unknown>).telegramUserId;
+
+    expect(requireGroupReminderAuthorization(
+      context(botAttributes, "service", "telegram-bot:8123456789"),
+    )).toMatchObject({
+      groupId: "group-1",
+      telegramChatId: "-1001",
+      telegramUserId: "8123456789",
     });
   });
 

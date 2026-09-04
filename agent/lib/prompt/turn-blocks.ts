@@ -44,7 +44,7 @@ import {
   profileViewRepository,
 } from "../profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "../profile-view.js";
-import { isTelegramChannelSession } from "../telegram-session-actor.js";
+import { isTelegramChannelSession, resolveTelegramSessionActor } from "../telegram-session-actor.js";
 import {
   TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS,
   type TelegramReactionPolicy,
@@ -275,7 +275,10 @@ function telegramProfileInput(
   retrievalClaimIds: readonly string[],
   turnId: string,
 ): CreateProfileViewInput | null {
-  if (isTelegramChannelSession(ctx.session.auth)) return null;
+  // A verified profile is built around a human participant. A channel and a bot have none, and
+  // demanding a Telegram user id from them would fail the whole memory block instead.
+  const actor = resolveTelegramSessionActor(ctx.session.auth);
+  if (actor !== null && actor.kind !== "telegram_user") return null;
   const attributes = ctx.session.auth.current?.attributes;
   const conversationId = attributes?.telegramConversationId;
   if (typeof conversationId !== "string") return null;

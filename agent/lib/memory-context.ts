@@ -53,12 +53,13 @@ export function requireMemoryAuthorization(ctx: MemoryContext): MemoryAuthorizat
     );
   }
   const groupIdValue = typeof groupId === "string" ? groupId : null;
-  const channelShapeValid = actor.kind !== "telegram_channel" || (
+  // A channel and a bot are both accountless service participants of exactly one external group.
+  const serviceShapeValid = actor.kind === "telegram_user" || (
     caller?.principalType === "service" && role === "external" && groupIdValue !== null &&
     memoryScopes.length === 1 && memoryScopes[0] === "group" && telegramUserId === undefined
   );
   const userShapeValid = actor.kind !== "telegram_user" || typeof telegramUserId === "string";
-  if (!channelShapeValid || !userShapeValid) {
+  if (!serviceShapeValid || !userShapeValid) {
     throw new AppError(
       "AGENT_MEMORY_CONTEXT_INVALID",
       "Не удалось определить разрешенную область памяти",

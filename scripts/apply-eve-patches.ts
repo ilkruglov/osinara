@@ -303,6 +303,15 @@ await replaceExact(
   "}),...e.onDrain===void 0?[]:[POST(e.drainRoute??`/eve/v1/telegram-drain`,async(r,{from:a,waitUntil:o})=>{if(await verifyInbound(r,e.credentials)===null)return new Response(`unauthorized`,{status:401});let d=l=>l.kind===`message`?dispatchMessage({config:e,message:l.message,onMessage:n,uploadPolicy:t,from:a}):dispatchCallbackQuery({config:e,query:l.callbackQuery,from:a});return e.onDrain({dispatch:d,waitUntil:o})})]],async receive",
 );
 
+// Bot API 10.0 lets a bot see other bots' group messages, but Eve still drops every bot sender
+// before `onMessage` runs. Application authorization decides which chat may admit a bot; the
+// channel must not make that decision for it.
+await replaceExact(
+  runtimePaths.telegram,
+  "async function dispatchMessage(e){if(e.message.from?.isBot===!0)return;let t=stateFromMessage(e.message,e.config)",
+  "async function dispatchMessage(e){let t=stateFromMessage(e.message,e.config)",
+);
+
 // Authorized application output controls only the model-visible message and continuation address.
 await replaceExact(
   runtimePaths.telegram,

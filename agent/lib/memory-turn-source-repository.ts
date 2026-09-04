@@ -12,6 +12,13 @@ import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import type { TelegramActorKind, TelegramTimelineActorKind } from "./telegram-inbound-actor.js";
 
+// The timeline discriminator each invoking actor kind must carry on its own current message.
+const TURN_SOURCE_ACTOR_KINDS: Record<TelegramActorKind, TelegramTimelineActorKind> = {
+  telegram_bot: "telegram_bot",
+  telegram_channel: "telegram_channel",
+  telegram_user: "user",
+};
+
 export interface BindMemoryTurnSourcesInput {
   applicationSessionId: string;
   conversationId: string;
@@ -156,8 +163,12 @@ export const memoryTurnSourceRepository = {
         [input.conversationId, entryIds],
       );
       const current = entries.rows.find((entry) => entry.id === input.currentTimelineEntryId);
-      const currentActorId = input.invokingActorKind === "telegram_user" ? current?.telegram_user_id : current?.telegram_sender_chat_id;
-      const expectedActorKind = input.invokingActorKind === "telegram_user" ? "user" : "telegram_channel";
+      // Each actor kind proves itself through its own timeline column. An exhaustive map keeps a
+      // future actor from silently inheriting the channel branch and failing every one of its turns.
+      const expectedActorKind = TURN_SOURCE_ACTOR_KINDS[input.invokingActorKind];
+      const currentActorId = expectedActorKind === "telegram_channel"
+        ? current?.telegram_sender_chat_id
+        : current?.telegram_user_id;
       if (entries.rows.length !== entryIds.length || current?.actor_kind !== expectedActorKind || currentActorId !== input.invokingActorId) {
         throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Сообщения текущего хода не принадлежат проверенному разговору или автору");
       }

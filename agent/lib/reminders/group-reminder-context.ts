@@ -37,8 +37,10 @@ export function requireGroupReminderAuthorization(
       "Напоминание этого чата можно создать только в подключённой группе",
     );
   }
+  // A group reminder belongs to the chat; its author is only provenance, and a bot participant
+  // has a Telegram id that can carry it. A channel has none, so only that case stays refused.
   const actor = resolveTelegramSessionActor(ctx.session.auth);
-  if (actor === null || actor.kind !== "telegram_user") {
+  if (actor === null || actor.kind === "telegram_channel") {
     throw new AppError(
       "AGENT_REMINDER_AUTHOR_UNIDENTIFIED",
       "Это сообщение отправлено от имени канала, поэтому напоминание не к кому привязать. " +

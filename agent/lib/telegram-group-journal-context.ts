@@ -75,12 +75,16 @@ function daySeparator(date: string): string {
   return `-- ${date} UTC --`;
 }
 
+// The label is the only signal separating a person from the agent, a channel, and another bot.
+const TIMELINE_ACTOR_LABELS: Record<TelegramGroupJournalEntry["actorKind"], string> = {
+  agent_self: "agent:self",
+  telegram_bot: "telegram:bot",
+  telegram_channel: "telegram:channel",
+  user: "user",
+};
+
 function renderEntry(entry: TelegramGroupJournalEntry): string {
-  const actor = entry.actorKind === "agent_self"
-    ? "agent:self"
-    : entry.actorKind === "telegram_channel"
-      ? "telegram:channel"
-      : "user";
+  const actor = TIMELINE_ACTOR_LABELS[entry.actorKind];
   const name = entry.senderDisplayName ?? entry.senderUsername ?? actor;
   const reply = entry.replyToSequenceId === null ? "" : ` reply:#${entry.replyToSequenceId}`;
   const attachment = entry.attachment === undefined

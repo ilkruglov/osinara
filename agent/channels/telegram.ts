@@ -67,7 +67,7 @@ import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.
 import { resolveMemoryReviewBatch } from "../lib/memory-review/memory-review-turn-binding.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
-import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
+import { accountlessActorApprovalError } from "../lib/telegram-session-actor.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -81,12 +81,8 @@ export default telegramChannel({
   turnPolicy: "queue",
   events: {
     async "input.requested"(data, channel, ctx) {
-      if (isTelegramChannelSession(ctx.session.auth)) {
-        throw new AppError(
-          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
-          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
-        );
-      }
+      const refusal = accountlessActorApprovalError(ctx.session.auth);
+      if (refusal) throw refusal;
       return await handleTelegramInputRequested(data, channel, ctx);
     },
     async "message.completed"(data, channel, ctx) {
@@ -463,12 +459,9 @@ export default telegramChannel({
       }
     },
     async "authorization.required"(_data, _channel, ctx) {
-      if (isTelegramChannelSession(ctx.session.auth)) {
-        throw new AppError(
-          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
-          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
-        );
-      }
+      // Parking a turn requires a human to come back and answer it; an accountless actor has none.
+      const refusal = accountlessActorApprovalError(ctx.session.auth);
+      if (refusal) throw refusal;
       const sessionId = applicationSessionId(ctx);
       const auth = ctx.session.auth.current;
       const telegramUserId = auth?.attributes.telegramUserId;

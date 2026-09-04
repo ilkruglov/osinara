@@ -118,6 +118,7 @@ const POST_V0101_MIGRATIONS = [
   "084_group_reminder_author.sql",
   "085_memory_review_skipped_status.sql",
   "086_memory_review_skipped_terminal.sql",
+  "087_telegram_bot_senders.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

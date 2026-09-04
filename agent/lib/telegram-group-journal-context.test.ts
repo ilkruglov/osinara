@@ -7,6 +7,7 @@
  * - Oldest messages are discarded first to satisfy the explicit character budget.
  * - Telegram identifiers that are not needed for conversation context stay private.
  * - Entries carry the time of day only, with one dated separator per calendar day.
+ * - A bot participant is labelled as a bot, so the model never reads it as a person.
  */
 import { describe, expect, it } from "vitest";
 
@@ -38,6 +39,23 @@ function entry(messageId: string, contentText: string): TelegramGroupJournalEntr
 function entryAt(sequenceId: string, sentAt: string): TelegramGroupJournalEntry {
   return { ...entry(sequenceId, `сообщение ${sequenceId}`), sentAt };
 }
+
+describe("timeline actors", () => {
+  it("labels a bot participant distinctly from a person", () => {
+    const context = formatTelegramGroupJournalContext([{
+      ...entry("1", "Осинара, привет"),
+      actorId: "telegram-bot:8123456789",
+      actorKind: "telegram_bot",
+      senderDisplayName: "Мия",
+      senderIsBot: true,
+      senderUsername: "mimimia_ai_bot",
+      telegramUserId: "8123456789",
+    }], 12_000) ?? "";
+
+    expect(context).toContain("[telegram:bot]");
+    expect(context).not.toContain("[user]");
+  });
+});
 
 describe("timeline timestamps", () => {
   it("prints the time of day instead of a full stamp", () => {
