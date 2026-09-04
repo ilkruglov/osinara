@@ -11,7 +11,10 @@ import type { PoolClient } from "pg";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { TelegramGroupJournalEntry } from "../telegram-group-journal-context.js";
-import { MEMORY_REVIEW_BATCH_SIZE } from "./memory-review-config.js";
+import {
+  MEMORY_REVIEW_BATCH_SIZE,
+  MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES,
+} from "./memory-review-config.js";
 import { formatMemoryReviewBatchPrompt } from "./memory-review-prompt.js";
 import { memoryReviewTerminalRepository } from "./memory-review-terminal-repository.js";
 
@@ -352,7 +355,9 @@ export const memoryReviewRepository = {
           upperSequence: current.sequence_id,
         });
       }
-      if (sources.length === 0) {
+      // A short tail stays for idle review: one or two replies give the model nothing to judge,
+      // and the addressed turn is busy answering.
+      if (sources.length < MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES) {
         await client.query("COMMIT");
         return null;
       }

@@ -41,6 +41,15 @@ async function insertUserMessage(input: {
   )).rows[0]!;
 }
 
+/** Eight passive messages: the shortest tail an addressed turn still reviews inline. */
+async function insertInteractiveTail(input: { conversationId: string; groupId: string }) {
+  let last: { id: string } | null = null;
+  for (let sequence = 2; sequence <= 9; sequence += 1) {
+    last = await insertUserMessage({ ...input, sequence });
+  }
+  return last!;
+}
+
 describeWithDatabase("memory review repository", () => {
   beforeEach(async () => {
     await database().query("TRUNCATE users, families CASCADE");
@@ -193,17 +202,17 @@ describeWithDatabase("memory review repository", () => {
                'review-interactive', now(), now()) RETURNING id`,
       [fixture.familyId, fixture.groupId],
     );
-    const firstSource = await insertUserMessage({
+    const firstSource = await insertInteractiveTail({
       conversationId: fixture.conversationId,
       groupId: fixture.groupId,
-      sequence: 2,
     });
     const first = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
       groupId: fixture.groupId,
       timelineEntryId: firstSource.id,
     });
-    expect(first?.sourceEntryIds).toEqual([firstSource.id]);
+    expect(first?.sourceEntryIds).toHaveLength(8);
+    expect(first?.sourceEntryIds.at(-1)).toBe(firstSource.id);
 
     await expect(database().query(
       "DELETE FROM telegram_group_messages WHERE id = $1",
@@ -226,7 +235,7 @@ describeWithDatabase("memory review repository", () => {
       invokingActorKind: "telegram_user",
       memoryReviewBatchId: first!.batchId,
       memoryReviewSourceEntryIds: first!.sourceEntryIds,
-      visibleTimelineEntryIds: [firstSource.id],
+      visibleTimelineEntryIds: first!.sourceEntryIds,
     });
     await memoryReviewRepository.completeBatch({
       batchId: first!.batchId,
@@ -238,11 +247,41 @@ describeWithDatabase("memory review repository", () => {
     await expect(memoryReviewRepository.getLaneCursor({
       conversationId: fixture.conversationId,
       messageThreadId: null,
-    })).resolves.toBe("2");
+    })).resolves.toBe("9");
     await expect(database().query(
       "DELETE FROM telegram_group_messages WHERE id = $1",
       [firstSource.id],
     )).resolves.toMatchObject({ rowCount: 1 });
+  });
+
+  it("leaves a tail shorter than eight messages to idle review", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const session = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+          continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'canonical', 'review-short-tail',
+               'review-short-tail', now(), now()) RETURNING id`,
+      [fixture.familyId, fixture.groupId],
+    );
+    let source: { id: string } | null = null;
+    for (const sequence of [2, 3]) {
+      source = await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId, sequence,
+      });
+    }
+
+    const batch = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session.rows[0]!.id,
+      groupId: fixture.groupId,
+      timelineEntryId: source!.id,
+    });
+
+    expect(batch).toBeNull();
+    await expect(database().query(
+      "SELECT count(*)::text AS count FROM memory_review_batches WHERE conversation_id = $1",
+      [fixture.conversationId],
+    )).resolves.toMatchObject({ rows: [{ count: "0" }] });
   });
 
   it("accepts replayed terminal events without changing the recorded outcome", async () => {
@@ -255,10 +294,9 @@ describeWithDatabase("memory review repository", () => {
                'review-replay', now(), now()) RETURNING id`,
       [fixture.familyId, fixture.groupId],
     );
-    const source = await insertUserMessage({
+    const source = await insertInteractiveTail({
       conversationId: fixture.conversationId,
       groupId: fixture.groupId,
-      sequence: 2,
     });
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -282,7 +320,7 @@ describeWithDatabase("memory review repository", () => {
       invokingActorKind: "telegram_user",
       memoryReviewBatchId: batch!.batchId,
       memoryReviewSourceEntryIds: batch!.sourceEntryIds,
-      visibleTimelineEntryIds: [source.id],
+      visibleTimelineEntryIds: batch!.sourceEntryIds,
     });
     const completion = {
       batchId: batch!.batchId,
@@ -315,10 +353,9 @@ describeWithDatabase("memory review repository", () => {
                'review-failure-replay', now(), now()) RETURNING id`,
       [fixture.familyId, fixture.groupId],
     );
-    const source = await insertUserMessage({
+    const source = await insertInteractiveTail({
       conversationId: fixture.conversationId,
       groupId: fixture.groupId,
-      sequence: 2,
     });
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -355,10 +392,9 @@ describeWithDatabase("memory review repository", () => {
                'review-stale', now(), now()) RETURNING id`,
       [fixture.familyId, fixture.groupId],
     );
-    const source = await insertUserMessage({
+    const source = await insertInteractiveTail({
       conversationId: fixture.conversationId,
       groupId: fixture.groupId,
-      sequence: 2,
     });
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -395,7 +431,7 @@ describeWithDatabase("memory review repository", () => {
          LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
         WHERE batch.id = $1 GROUP BY batch.id, alert.id`,
       [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ alert_status: "pending", source_count: 2 }] });
+    )).resolves.toMatchObject({ rows: [{ alert_status: "pending", source_count: 9 }] });
   });
 
 });

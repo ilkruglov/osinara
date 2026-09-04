@@ -93,12 +93,12 @@ export const memoryReviewTerminalRepository = {
     try {
       await client.query("BEGIN");
       const batch = await client.query<{
-        application_session_id: string; diagnostic_code: string | null;
+        application_session_id: string; batch_kind: string; diagnostic_code: string | null;
         eve_session_id: string | null; eve_turn_id: string | null; lane_id: string;
-        status: string;
+        source_count: number; started_at: Date | null; status: string;
       }>(
         `SELECT lane_id, application_session_id, eve_session_id, eve_turn_id,
-                status::text, diagnostic_code
+                status::text, diagnostic_code, batch_kind::text, source_count, started_at
            FROM memory_review_batches WHERE id = $1 FOR UPDATE`,
         [input.batchId],
       );
@@ -164,7 +164,25 @@ export const memoryReviewTerminalRepository = {
         "DELETE FROM memory_review_batch_sources WHERE batch_id = $1",
         [input.batchId],
       );
+      // Capture rate per batch is the one number that tells whether review earns its model call.
+      const written = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM memory_mutation_operations
+          WHERE mutation_kind = 'create' AND eve_session_id = $1 AND eve_turn_id = $2`,
+        [input.eveSessionId, input.eveTurnId],
+      );
       await client.query("COMMIT");
+      console.info(JSON.stringify({
+        code: "AGENT_MEMORY_REVIEW_RESULT",
+        batchId: input.batchId,
+        batchKind: recorded.batch_kind,
+        claimsWritten: Number(written.rows[0]?.count ?? 0),
+        durationMs: recorded.started_at === null
+          ? null
+          : input.completedAt.getTime() - recorded.started_at.getTime(),
+        eveSessionId: input.eveSessionId,
+        eveTurnId: input.eveTurnId,
+        sourceCount: recorded.source_count,
+      }));
       return "recorded";
     } catch (error) {
       await client.query("ROLLBACK");

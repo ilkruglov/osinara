@@ -3,7 +3,9 @@
  *
  * Constructs covered:
  * - Background batches may hold 1..50 sources after migration 084.
- * - Idle lanes (ten minutes of silence) and full lanes (ten sources) materialize one pending batch.
+ * - Full lanes (ten sources) materialize at once; idle lanes (ten minutes of silence) need at
+ *   least five sources, and a long-idle lane (six hours) flushes whatever it holds.
+ * - The review prompt carries already processed messages before the batch as read-only context.
  * - Personal conversations get a lazily created lane and a claimable private review batch.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -76,7 +78,7 @@ describeWithDatabase("idle memory review", () => {
     expect(columns.rows.map((row) => row.column_name).sort()).toEqual(["attribute", "occurred_at"]);
   });
 
-  it("materializes one pending batch for a group lane silent for ten minutes", async () => {
+  it("materializes one pending batch for a group lane with five sources silent for ten minutes", async () => {
     const fixture = await createMainAgentMemoryFixture();
     await memoryReviewRepository.initializeLane({
       conversationId: fixture.conversationId,
@@ -84,7 +86,7 @@ describeWithDatabase("idle memory review", () => {
       processedThroughSequence: "1",
     });
     const stale = "2026-09-03T10:00:00.000Z";
-    for (const sequence of [2, 3, 4]) {
+    for (const sequence of [2, 3, 4, 5, 6]) {
       await insertUserMessage({
         conversationId: fixture.conversationId, groupId: fixture.groupId, sentAt: stale, sequence,
       });
@@ -99,10 +101,71 @@ describeWithDatabase("idle memory review", () => {
     expect(claims).toHaveLength(1);
     expect(claims[0]).toMatchObject({
       groupId: fixture.groupId,
-      sourceCount: 3,
-      throughSequence: "4",
+      sourceCount: 5,
+      throughSequence: "6",
     });
-    expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4"]);
+    expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["2", "3", "4", "5", "6"]);
+  });
+
+  it("keeps a short idle tail waiting until the long idle window flushes it", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "1",
+    });
+    for (const sequence of [2, 3, 4]) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId,
+        sentAt: "2026-09-03T10:00:00.000Z", sequence,
+      });
+    }
+
+    const early = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:30:00.000Z"),
+    });
+    expect(early).toHaveLength(0);
+
+    const late = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T16:00:01.000Z"),
+    });
+    expect(late).toHaveLength(1);
+    expect(late[0]!.sourceCount).toBe(3);
+  });
+
+  it("gives the review the processed messages before the batch as read-only context", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await memoryReviewRepository.initializeLane({
+      conversationId: fixture.conversationId,
+      messageThreadId: null,
+      processedThroughSequence: "3",
+    });
+    for (const sequence of [2, 3]) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId,
+        sentAt: "2026-09-03T09:00:00.000Z", sequence,
+      });
+    }
+    for (const sequence of [4, 5, 6, 7, 8]) {
+      await insertUserMessage({
+        conversationId: fixture.conversationId, groupId: fixture.groupId,
+        sentAt: "2026-09-03T09:30:00.000Z", sequence,
+      });
+    }
+
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:00:00.000Z"),
+    });
+
+    expect(claims).toHaveLength(1);
+    const prompt = claims[0]!.prompt;
+    expect(claims[0]!.entries.map((entry) => entry.sequenceId)).toEqual(["4", "5", "6", "7", "8"]);
+    expect(prompt).toContain("<preceding_context>");
+    expect(prompt.indexOf("<preceding_context>")).toBeLessThan(prompt.indexOf("<untrusted_memory_review_batch>"));
+    const preceding = prompt.slice(prompt.indexOf("<preceding_context>"), prompt.indexOf("</preceding_context>"));
+    expect(preceding).toContain("Сообщение памяти 2");
+    expect(preceding).toContain("Сообщение памяти 3");
+    expect(preceding).not.toContain("Сообщение памяти 4");
   });
 
   it("waits while the newest unprocessed message is younger than the idle window", async () => {
@@ -162,14 +225,14 @@ describeWithDatabase("idle memory review", () => {
       sentAt: "2026-09-03T09:00:00.000Z", sequence: 2,
     });
     await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:10:00.000Z"),
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T16:00:00.000Z"),
     });
     await insertUserMessage({
       conversationId: fixture.conversationId, groupId: fixture.groupId,
       sentAt: "2026-09-03T09:30:00.000Z", sequence: 3,
     });
     await memoryReviewDispatchRepository.claimPending({
-      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T11:00:00.000Z"),
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T17:00:00.000Z"),
     });
 
     const batches = await database().query<{ count: string }>(
@@ -191,7 +254,7 @@ describeWithDatabase("idle memory review", () => {
     const claims = await memoryReviewDispatchRepository.claimPending({
       leaseMilliseconds: 60_000,
       limit: 10,
-      now: new Date("2026-09-03T10:00:00.000Z"),
+      now: new Date("2026-09-03T16:00:00.000Z"),
     });
 
     expect(claims).toHaveLength(1);
@@ -241,7 +304,7 @@ describeWithDatabase("idle memory review", () => {
     const claims = await memoryReviewDispatchRepository.claimPending({
       leaseMilliseconds: 60_000,
       limit: 10,
-      now: new Date("2026-09-03T10:00:00.000Z"),
+      now: new Date("2026-09-03T16:00:00.000Z"),
     });
 
     expect(claims).toHaveLength(1);
