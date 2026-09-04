@@ -63,6 +63,8 @@ export interface TelegramIngressRepository {
   ): Promise<void>;
   enqueue(input: EnqueueTelegramUpdateInput): Promise<"duplicate" | "inserted">;
   fail(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
+  /** Unanswered confirmation prompts of an Eve session; a parked step resumes only without them. */
+  hasPendingApprovals(eveSessionId: string): Promise<boolean>;
   rekeyQueue(input: {
     nextContinuationKey: string;
     previousContinuationKey: string;

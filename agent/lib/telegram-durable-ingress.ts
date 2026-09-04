@@ -49,12 +49,6 @@ interface EveSessionResult {
 }
 
 interface DurableIngressDependencies {
-  /**
-   * How long a callback dispatch waits for the parked turn to resume after `approval.settled`.
-   * A batch answered partially never resumes on its own; releasing the drain lets the next
-   * answer through instead of freezing every chat of the bot.
-   */
-  approvalSettledGraceMilliseconds?: number;
   acceptMedia(
     message: Pick<TelegramMessage, "chat">,
     updateId: string,
@@ -62,6 +56,11 @@ interface DurableIngressDependencies {
   ): Promise<boolean>;
   authorizeVoice(message: Pick<TelegramMessage, "chat" | "from">): Promise<boolean>;
   botUsername: string;
+  /**
+   * Drain loops allowed at once. `claimNext` keeps every chat/topic FIFO on its own, so parallel
+   * loops only stop one long turn from holding every other chat and every approval button.
+   */
+  maxConcurrentDrains?: number;
   handleSoftwareUpdateCallback(
     query: Extract<TelegramUpdate, { kind: "callback_query" }>["callbackQuery"],
   ): Promise<boolean>;
@@ -118,43 +117,24 @@ function voiceMetadata(raw: Record<string, unknown>) {
   };
 }
 
-const APPROVAL_SETTLED_GRACE_MS = 15_000;
+const DEFAULT_MAX_CONCURRENT_DRAINS = 3;
 
 async function waitForSessionBoundary(
   session: EveSessionResult,
   startIndex: number,
-  options: { approvalSettledGraceMilliseconds?: number; updateId: string },
+  options: {
+    /** Whether the Eve session still has unanswered prompts after the delivered answer. */
+    hasPendingApprovals?: () => Promise<boolean>;
+    updateId: string;
+  },
 ): Promise<number> {
   const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
   let reachedBoundary = false;
   let nextEventIndex = startIndex;
-  let graceTimer: ReturnType<typeof setTimeout> | undefined;
   try {
-    let awaitingResume = false;
     while (true) {
-      const pending = reader.read();
-      const grace = options.approvalSettledGraceMilliseconds;
-      const event: ReadableStreamReadResult<{ type: string }> | null = awaitingResume && grace !== undefined
-        ? await Promise.race([
-          pending,
-          new Promise<null>((resolve) => {
-            graceTimer = setTimeout(() => resolve(null), grace);
-          }),
-        ])
-        : await pending;
-      if (graceTimer !== undefined) clearTimeout(graceTimer);
-      if (event === null) {
-        // Eve settled an approval without resuming: the step still waits for other answers, which
-        // can only arrive through this drain. The next update completes the exchange.
-        console.warn(JSON.stringify({
-          code: "AGENT_TELEGRAM_APPROVAL_BOUNDARY_ASSUMED",
-          sessionId: session.id,
-          updateId: options.updateId,
-        }));
-        reachedBoundary = true;
-        break;
-      }
+      const event = await reader.read();
       if (event.done) break;
       nextEventIndex += 1;
       if (
@@ -165,10 +145,23 @@ async function waitForSessionBoundary(
         reachedBoundary = true;
         break;
       }
-      awaitingResume = event.value.type === "approval.settled";
+      if (
+        event.value.type === "approval.settled" &&
+        options.hasPendingApprovals !== undefined &&
+        await options.hasPendingApprovals()
+      ) {
+        // Eve resumes a parked step only once every prompt of the session is answered, and the
+        // remaining answers can arrive only through this drain. This delivery is complete.
+        console.info(JSON.stringify({
+          code: "AGENT_TELEGRAM_APPROVAL_BATCH_PENDING",
+          sessionId: session.id,
+          updateId: options.updateId,
+        }));
+        reachedBoundary = true;
+        break;
+      }
     }
   } finally {
-    if (graceTimer !== undefined) clearTimeout(graceTimer);
     await reader.cancel();
     reader.releaseLock();
   }
@@ -221,7 +214,8 @@ function withTranscript(payload: Record<string, unknown>, transcript: string): R
 }
 
 export function createTelegramDurableIngress(dependencies: DurableIngressDependencies) {
-  let activeDrain: Promise<void> | null = null;
+  const activeDrains = new Set<Promise<void>>();
+  const maxConcurrentDrains = dependencies.maxConcurrentDrains ?? DEFAULT_MAX_CONCURRENT_DRAINS;
 
   async function maintainLease(
     updateId: string,
@@ -342,8 +336,8 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         const nextEventIndex = await waitForSessionBoundary(session, streamCursor, {
           ...(update.kind === "callback_query"
             ? {
-              approvalSettledGraceMilliseconds:
-                dependencies.approvalSettledGraceMilliseconds ?? APPROVAL_SETTLED_GRACE_MS,
+              hasPendingApprovals: () =>
+                dependencies.repository.hasPendingApprovals(session.id),
             }
             : {}),
           updateId: claim.updateId,
@@ -379,14 +373,14 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   }
 
   function scheduleDrain(context: TelegramDrainContext): void {
-    if (!activeDrain) {
-      const running = drain(context.dispatch);
-      const scheduled = running.finally(() => {
-        if (activeDrain === scheduled) activeDrain = null;
+    // Each trigger adds at most one loop; a loop ends when no claimable update remains.
+    if (activeDrains.size < maxConcurrentDrains) {
+      const scheduled: Promise<void> = drain(context.dispatch).finally(() => {
+        activeDrains.delete(scheduled);
       });
-      activeDrain = scheduled;
+      activeDrains.add(scheduled);
     }
-    context.waitUntil(activeDrain);
+    for (const running of activeDrains) context.waitUntil(running);
   }
 
   const handleVerifiedUpdate = async function handleVerifiedUpdate(

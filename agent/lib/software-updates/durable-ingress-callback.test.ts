@@ -47,6 +47,7 @@ describe("software update callback durable ingress", () => {
       completeWithSession: vi.fn(),
       enqueue: vi.fn(),
       fail: vi.fn(),
+      hasPendingApprovals: vi.fn().mockResolvedValue(false),
       rekeyQueue: vi.fn(),
       release: vi.fn(),
       releaseStaleLeases: vi.fn().mockResolvedValue(0),

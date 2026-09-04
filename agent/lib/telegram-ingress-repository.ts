@@ -282,6 +282,18 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
   },
 
+  async hasPendingApprovals(eveSessionId) {
+    requireNonEmpty(eveSessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
+    const result = await database().query<{ pending: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM telegram_hitl_approvals
+          WHERE eve_session_id = $1 AND consumed_at IS NULL
+       ) AS pending`,
+      [eveSessionId],
+    );
+    return result.rows[0]?.pending === true;
+  },
+
   async releaseStaleLeases() {
     // Status stays `processing`: claimNext reclaims through its expired-lease branch, the attempt
     // counter increments, and a redispatch is deduplicated downstream by the journal.
