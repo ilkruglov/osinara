@@ -12,7 +12,10 @@ import {
   MEMORY_REVIEW_BATCH_SIZE,
   MEMORY_REVIEW_CONTEXT_LIMIT,
   MEMORY_REVIEW_IDLE_MILLISECONDS,
+  MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES,
   MEMORY_REVIEW_IDLE_MIN_SOURCES,
+  MEMORY_REVIEW_LONG_IDLE_MILLISECONDS,
+  MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT,
 } from "./memory-review-config.js";
 import {
   memoryReviewDispatchTerminalRepository,
@@ -21,6 +24,7 @@ import {
 import {
   formatExistingMemoryForReview,
   formatMemoryReviewBatchPrompt,
+  formatPrecedingContextForReview,
   type ReviewMemoryContextItem,
 } from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
@@ -153,6 +157,28 @@ async function loadReviewMemoryContext(client: PoolClient, input: {
   return result.rows;
 }
 
+async function precedingContext(client: PoolClient, input: {
+  conversationId: string;
+  firstSequence: string;
+  messageThreadId: string | null;
+}): Promise<TelegramGroupJournalEntry[]> {
+  // Both sides of the earlier conversation, newest first, then restored to timeline order.
+  const result = await client.query<SourceRow>(
+    `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
+            message.message_thread_id::text, message.sender_username,
+            message.sender_display_name, message.message_kind, message.content_text,
+            message.reply_to_sequence_id::text, message.sent_at, message.telegram_user_id
+       FROM telegram_group_messages AS message
+      WHERE message.conversation_id = $1
+        AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
+        AND message.sequence_id < $3::bigint AND message.content_text IS NOT NULL
+      ORDER BY message.sequence_id DESC LIMIT $4`,
+    [input.conversationId, input.messageThreadId, input.firstSequence,
+      MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT],
+  );
+  return result.rows.reverse().map(project);
+}
+
 async function materializeReadyBatches(client: PoolClient): Promise<void> {
   // This is the crash-recovery path for a committed 50th message whose inline observer did not run.
   for (const lane of await lockedLanes(client, true)) {
@@ -177,9 +203,13 @@ async function materializeIdleBatches(client: PoolClient, now: Date): Promise<vo
     const sources = await pendingSources(client, lane);
     const newest = sources.at(-1);
     if (!newest) continue;
-    const idle = now.getTime() - newest.sent_at.getTime() >= MEMORY_REVIEW_IDLE_MILLISECONDS;
+    const silence = now.getTime() - newest.sent_at.getTime();
     const full = sources.length >= MEMORY_REVIEW_IDLE_MIN_SOURCES;
-    if (!idle && !full) continue;
+    const idle = silence >= MEMORY_REVIEW_IDLE_MILLISECONDS &&
+      sources.length >= MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES;
+    // A lone remark after a long silence still deserves one look; it just does not get its own call early.
+    const longIdle = silence >= MEMORY_REVIEW_LONG_IDLE_MILLISECONDS;
+    if (!full && !idle && !longIdle) continue;
     await insertBackgroundBatch(client, lane, sources);
   }
 }
@@ -274,6 +304,11 @@ export const memoryReviewDispatchRepository = {
           "Пакет проверки памяти не содержит ожидаемые сообщения",
         );
         const entries = sources.rows.map(project);
+        const preceding = await precedingContext(client, {
+          conversationId: row.conversation_id,
+          firstSequence: sources.rows[0]!.sequence_id,
+          messageThreadId: row.message_thread_id,
+        });
         const existing = await loadReviewMemoryContext(client, {
           authorTelegramUserIds: [...new Set(sources.rows.flatMap((source) =>
             source.telegram_user_id === null ? [] : [source.telegram_user_id]))],
@@ -289,9 +324,11 @@ export const memoryReviewDispatchRepository = {
           leaseToken: row.lease_token, messageThreadId: row.message_thread_id,
           memoryScopes: personal ? ["personal", "family"] : [row.scope],
           ownerTelegramUserId: row.sponsor_telegram_user_id, ownerUserId: row.sponsor_user_id,
-          prompt: [formatExistingMemoryForReview(existing), formatMemoryReviewBatchPrompt(entries)]
-            .filter((block) => block.length > 0)
-            .join("\n\n"),
+          prompt: [
+            formatExistingMemoryForReview(existing),
+            formatPrecedingContextForReview(preceding),
+            formatMemoryReviewBatchPrompt(entries),
+          ].filter((block) => block.length > 0).join("\n\n"),
           role: row.group_type === "external" ? "external" : personal ? row.sponsor_role : "owner",
           scope: row.scope,
           sourceCount: entries.length, sourceEntryIds: sources.rows.map((source) => source.id),

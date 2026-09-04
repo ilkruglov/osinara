@@ -74,8 +74,10 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
     if (query.length === 0) return [];
     try {
       const authorization = memoryAuthorization(input);
+      const startedAt = performance.now();
       // Skill-derived thread hints came from load_skill calls in history; none are reviewed now.
       const context = await dependencies.retrieve(authorization, query, []);
+      const retrievedAt = performance.now();
       // A channel post has no human subject to build a profile for.
       const profile = input.actor.kind === "telegram_user"
         ? await dependencies.createProfile(authorization, {
@@ -91,6 +93,15 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
           retrievalClaimIds: [...context.retrievedClaimIds],
         })
         : null;
+      // Per-turn cost of memory on a small server: retrieval (FTS + E5 + pgvector) and profile view.
+      console.info(JSON.stringify({
+        code: "AGENT_MEMORY_CONTEXT",
+        memories: context.memories.length,
+        profile: profile !== null,
+        profileMs: Math.round(performance.now() - retrievedAt),
+        retrievalMs: Math.round(retrievedAt - startedAt),
+        threads: context.threads.threads.length,
+      }));
       return [
         ...(profile === null ? [] : [formatProfileViewContext(profile)]),
         formatRetrievedMemoryInstructions(context.memories, context.threads),
