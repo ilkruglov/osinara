@@ -124,6 +124,7 @@ const POST_V0101_MIGRATIONS = [
   "090_timeline_bot_participants.sql",
   "091_memory_review_bot_source_recovery.sql",
   "092_memory_review_bot_source_recovery_session.sql",
+  "093_memory_review_bot_source_recovery_token.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
