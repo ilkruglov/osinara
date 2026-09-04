@@ -31,7 +31,8 @@ function draft(name: string, changeNote = "Первая версия") {
   return {
     changeNote,
     description: "Открытка к празднику через Flux",
-    files: {},
+    // An image skill must carry its prompt template; the rubric refuses it otherwise.
+    files: { "references/card.md": "Warm greeting card, one central motif, no text, 512x512." },
     markdown: MARKDOWN,
     name,
     trialSummary: "Сгенерировала одну открытку, отправила в чат.",
