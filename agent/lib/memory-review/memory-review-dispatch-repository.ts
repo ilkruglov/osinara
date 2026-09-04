@@ -31,7 +31,7 @@ import type { MemoryReviewClaim } from "./memory-review-repository.js";
 
 interface SourceRow {
   actor_id: string;
-  actor_kind: "agent_self" | "user";
+  actor_kind: "agent_self" | "telegram_bot" | "user";
   content_text: string | null;
   id: string;
   message_kind: string;
@@ -102,7 +102,7 @@ async function pendingSources(client: PoolClient, lane: LaneRow): Promise<Pendin
   const result = await client.query<PendingSourceRow>(
     `SELECT message.id, message.sequence_id::text, message.sent_at
        FROM telegram_group_messages AS message
-      WHERE message.conversation_id = $1 AND message.actor_kind = 'user'
+      WHERE message.conversation_id = $1 AND message.actor_kind IN ('user', 'telegram_bot')
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id > $3::bigint
       ORDER BY message.sequence_id LIMIT $4`,

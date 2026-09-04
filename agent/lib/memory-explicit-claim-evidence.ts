@@ -74,9 +74,10 @@ export async function prepareExplicitClaimEvidence(
      JOIN conversation_participants AS participant
        ON participant.conversation_id = conversation.id
        AND participant.telegram_user_id = message.telegram_user_id
-      WHERE message.id = $1 AND message.conversation_id = $2 AND message.actor_kind = 'user'
+      WHERE message.id = $1 AND message.conversation_id = $2
+        AND message.actor_kind IN ('user', 'telegram_bot')
         AND (
-          conversation.scope = 'group' OR EXISTS (
+          conversation.scope = 'group' OR message.actor_kind = 'telegram_bot' OR EXISTS (
             SELECT 1 FROM family_memberships AS membership
             WHERE membership.family_id = conversation.family_id
               AND membership.user_id = participant.linked_user_id

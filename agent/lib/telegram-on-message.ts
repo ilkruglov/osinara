@@ -24,7 +24,6 @@ import { bindTelegramConversationTimeline } from "./telegram-conversation-timeli
 import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
 import { CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES } from "./memory-config.js";
-import { TELEGRAM_BOT_EXCHANGE_LIMIT } from "../config.js";
 import { handleTelegramEnrollmentBoundary } from "./telegram-enrollment-boundary.js";
 import { groupCanonicalContinuationToken } from "./sessions/group-canonical-token.js";
 import {
@@ -58,7 +57,6 @@ import {
 } from "./telegram-on-message-repositories.js";
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
 import { telegramInboundActor } from "./telegram-inbound-actor.js";
-import { telegramMessageThreadId } from "./telegram-group-message-storage.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -129,7 +127,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         if (!hasLazyGroupAttachment) return null;
       }
       if (unsupportedGroupSlashCommand) {
-        if (inboundTimeline.status === "inserted" && actor.kind === "telegram_user") {
+        if (inboundTimeline.status === "inserted" &&
+          (actor.kind === "telegram_user" || actor.kind === "telegram_bot")) {
           await repositories.memoryReview.observePassiveMessage({
             groupId: group.groupId,
             timelineEntryId: inboundTimeline.entryId,
@@ -138,22 +137,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         return null;
       }
       if (inboundTimeline.replyToAgent) addressed = true;
-      // Bot API 10.2 delivers other bots' messages. They belong in the timeline, but a pair of
-      // bots answering each other never stops on its own, so a bounded exchange is the rule.
-      if (addressed && actor.kind === "telegram_bot") {
-        const botExchange = await repositories.journal.consecutiveBotEntries(
-          group.groupId,
-          telegramMessageThreadId(message.messageThreadId),
-        );
-        if (botExchange > TELEGRAM_BOT_EXCHANGE_LIMIT) {
-          console.warn(JSON.stringify({
-            code: "AGENT_TELEGRAM_BOT_EXCHANGE_LIMIT_REACHED",
-            botExchange,
-            groupId: group.groupId,
-          }));
-          return null;
-        }
-      }
       const routeEligibleReply = message.replyToMessage &&
         (inboundTimeline.replyToAgent || message.replyToMessage.from?.isBot !== false);
       if (routeEligibleReply) {
@@ -178,10 +161,12 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       // Authorized family attachment references are retained without waking the model.
       if (!addressed && !hasLazyGroupAttachment) {
         if (inboundTimeline.status === "inserted") {
-          if (actor.kind === "telegram_user") await repositories.memoryReview.observePassiveMessage({
-            groupId: group.groupId,
-            timelineEntryId: inboundTimeline.entryId,
-          });
+          if (actor.kind === "telegram_user" || actor.kind === "telegram_bot") {
+            await repositories.memoryReview.observePassiveMessage({
+              groupId: group.groupId,
+              timelineEntryId: inboundTimeline.entryId,
+            });
+          }
         }
         return null;
       }
@@ -278,7 +263,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) {
       if (!addressed && !journalDuplicate && group && inboundTimeline &&
-        actor.kind === "telegram_user") {
+        (actor.kind === "telegram_user" || actor.kind === "telegram_bot")) {
         await repositories.memoryReview.observePassiveMessage({
           groupId: group.groupId,
           timelineEntryId: inboundTimeline.entryId,

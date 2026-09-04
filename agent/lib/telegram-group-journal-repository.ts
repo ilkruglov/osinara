@@ -63,8 +63,6 @@ export interface TimelineRecordResult {
 }
 
 export interface TelegramGroupJournalRepository {
-  /** Bot-authored entries since the last human message; the loop guard reads it before dispatch. */
-  consecutiveBotEntries(groupId: string, messageThreadId: string | null): Promise<number>;
   listIncremental(input: {
     afterSequence: string;
     anchorEntryId: string;
@@ -200,34 +198,6 @@ async function listRows(input: ListRecentInput): Promise<TelegramGroupJournalEnt
   return result.rows.map(project);
 }
 
-/**
- * Bot-authored entries appended after the last human message of this chat. Two bots addressing
- * each other never tire; a person writing anything resets the count.
- */
-async function countConsecutiveBotEntries(
-  groupId: string,
-  messageThreadId: string | null,
-): Promise<number> {
-  const result = await database().query<{ count: string }>(
-    `WITH recent AS (
-       SELECT actor_kind, sequence_id
-         FROM telegram_group_messages
-        WHERE group_id = $1
-          AND message_thread_id IS NOT DISTINCT FROM $2::bigint
-          AND actor_kind IN ('telegram_bot', 'user')
-        ORDER BY sequence_id DESC
-        LIMIT 50
-     )
-     SELECT count(*)::text AS count
-       FROM recent
-      WHERE sequence_id > coalesce(
-        (SELECT max(sequence_id) FROM recent WHERE actor_kind = 'user'), 0
-      )`,
-    [groupId, messageThreadId],
-  );
-  return Number(result.rows[0]?.count ?? 0);
-}
-
 export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
   async listIncremental(input) {
     validateList({
@@ -350,7 +320,8 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           RETURNING id`,
         [groupId, sequenceId, actor.timelineKind, actor.actorId, messageId,
-          telegramForumTopicId(message), actor.kind === "telegram_user" ? actor.id : null,
+          telegramForumTopicId(message),
+          actor.kind === "telegram_user" || actor.kind === "telegram_bot" ? actor.id : null,
           actor.kind === "telegram_channel" ? actor.id : null, actor.username, actor.displayName,
           actor.kind === "telegram_bot",
           telegramMessageKind(message), telegramMessageContent(message), replyId,
@@ -386,8 +357,6 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
       client.release();
     }
   },
-
-  consecutiveBotEntries: countConsecutiveBotEntries,
 
   recordAgentResponse: recordTelegramAgentResponse,
 

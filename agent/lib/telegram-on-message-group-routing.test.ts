@@ -5,7 +5,7 @@
  * - `createTelegramMessageHandler`: invitation, voice, HITL, and passive group routing.
  * - Unified timeline preparation retains exact forum and reply routing.
  * - Duplicate and unauthorized group updates stop before model dispatch.
- * - Another bot is journaled and answered, and the exchange stops at its bound.
+ * - Another bot is journaled, observed by the memory review, and answered like an external participant.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -199,11 +199,10 @@ describe("createTelegramMessageHandler group routing", () => {
     expect(result?.auth).toMatchObject({
       attributes: { memoryScopes: ["group"], role: "external" },
     });
-    // A bot never becomes a source of memory review material.
-    expect(repository.memoryReview.observePassiveMessage).not.toHaveBeenCalled();
+    // An addressed message starts a turn; passive observation is for messages that do not.
   });
 
-  it("stops answering another bot once the exchange exceeds its bound", async () => {
+  it("hands a passive bot message to the quiet memory review like a human one", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({
       familyId: "family-1",
@@ -211,22 +210,28 @@ describe("createTelegramMessageHandler group routing", () => {
       messageMode: "addressed_only",
       telegramChatId: "group-101",
       toolAllowlist: [],
-      type: "external",
+      type: "family_private",
     });
-    repository.journal.consecutiveBotEntries.mockResolvedValue(5);
     const handler = createTelegramMessageHandler(repository);
     const message = {
-      ...groupMessage(`@${BOT_USERNAME} и ещё одна реплика`),
-      from: { firstName: "Курсовой бот", id: "42", isBot: true, username: "rates_bot" },
+      ...groupMessage("Завтра в Москве +12 и дождь"),
+      from: { firstName: "Погодный бот", id: "42", isBot: true, username: "weather_bot" },
       raw: {
         date: 1_787_000_000,
-        from: { first_name: "Курсовой бот", id: 42, is_bot: true, username: "rates_bot" },
+        from: { first_name: "Погодный бот", id: 42, is_bot: true, username: "weather_bot" },
       },
     } as TelegramMessage;
 
-    // The message stays in the timeline; only the turn is refused, so a person still sees it.
     await expect(handler(telegramContext().context, message)).resolves.toBeNull();
-    expect(repository.journal.record).toHaveBeenCalledTimes(1);
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "42", kind: "telegram_bot" }),
+    );
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 

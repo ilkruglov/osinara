@@ -74,7 +74,7 @@ export interface TelegramMessageRepositories {
   family: Pick<FamilyRepository, "claimInvitation">;
   groupContext: { prepare: TelegramGroupTurnContextPreparer };
   hitl: Pick<TelegramHitlApprovalRepository, "authorizeReply">;
-  journal: Pick<TelegramGroupJournalRepository, "consecutiveBotEntries" | "record">;
+  journal: Pick<TelegramGroupJournalRepository, "record">;
   memoryReview: Pick<
     typeof memoryReviewRepository,
     "failInteractivePreparation" | "observePassiveMessage" | "prepareInteractiveTurn"

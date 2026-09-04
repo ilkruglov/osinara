@@ -36,7 +36,7 @@ export const MEMORY_REVIEW_INSTRUCTIONS = `
 
 function reviewEntry(entry: TelegramGroupJournalEntry) {
   return {
-    actor: entry.actorKind === "user" ? "user" : "assistant",
+    actor: entry.actorKind === "user" ? "user" : entry.actorKind === "telegram_bot" ? "bot" : "assistant",
     messageKind: entry.messageKind,
     messageThreadId: entry.messageThreadId,
     replyToSequence: entry.replyToSequenceId,
