@@ -121,7 +121,7 @@ async function requireLiveBoundary(
        ON source.id = $2
       AND source.conversation_id = conversation.id
       AND source.sequence_id = $3::bigint
-      AND source.actor_kind = 'user'
+      AND source.actor_kind IN ('user', 'telegram_bot')
       AND source.telegram_user_id = $4
      LEFT JOIN users AS app_user ON app_user.telegram_user_id = source.telegram_user_id
      WHERE conversation.id = $1

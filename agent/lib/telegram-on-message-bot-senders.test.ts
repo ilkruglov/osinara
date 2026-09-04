@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - An external group admits another bot as a group-scoped participant without any account.
- * - A bot reaches the model under exactly the trigger rules that apply to a human participant.
+ * - A bot reaches the model under exactly the rules that apply to a human participant.
  * - The trusted family zone drops a bot before the shared timeline is written.
  * - Owner-only mode never accepts a bot, because it is reserved for the verified human owner.
  * - A bot reply to Osinara stays an ordinary message and never enters HITL approval.
@@ -46,11 +46,11 @@ describe("createTelegramMessageHandler bot senders", () => {
         role: "external",
         telegramActorId: "8123456789",
         telegramActorKind: "telegram_bot",
+        telegramUserId: "8123456789",
       },
       principalId: "telegram-bot:8123456789",
       principalType: "service",
     });
-    expect(result?.auth?.attributes?.telegramUserId).toBeUndefined();
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 
@@ -68,8 +68,11 @@ describe("createTelegramMessageHandler bot senders", () => {
       expect.anything(),
       expect.objectContaining({ actorId: "telegram-bot:8123456789", kind: "telegram_bot" }),
     );
-    // Only human messages become memory evidence; a bot never proposes facts about the family.
-    expect(repository.memoryReview.observePassiveMessage).not.toHaveBeenCalled();
+    // A bot's message enters memory review exactly like a person's.
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-2",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
   });
 
   it("treats a bot reply to Osinara as a message, never as HITL approval", async () => {

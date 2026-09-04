@@ -56,8 +56,10 @@ export function requireBehaviorPreferenceAuthorization(
   const timelineEntryId = attributes?.telegramTimelineEntryId;
 
   // All mutation ordering and scope come from the current verified Telegram source, never the model.
+  // A bot tunes how the agent talks to it exactly like a person; it just holds no account, so its
+  // principal stays a service identity while the Telegram user id below does the identifying.
   if (
-    caller?.principalType !== "user" ||
+    (caller?.principalType !== "user" && caller?.principalType !== "service") ||
     caller.authenticator !== "telegram" ||
     typeof conversationId !== "string" ||
     typeof sourceSequence !== "string" ||

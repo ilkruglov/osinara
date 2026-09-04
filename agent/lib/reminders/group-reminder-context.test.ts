@@ -74,8 +74,8 @@ describe("requireGroupReminderAuthorization", () => {
       ...externalAttributes,
       telegramActorId: "8123456789",
       telegramActorKind: "telegram_bot",
+      telegramUserId: "8123456789",
     };
-    delete (botAttributes as Record<string, unknown>).telegramUserId;
 
     expect(requireGroupReminderAuthorization(
       context(botAttributes, "service", "telegram-bot:8123456789"),

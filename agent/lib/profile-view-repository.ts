@@ -130,7 +130,8 @@ async function loadSubjects(
   const timelineReply = input.replyTelegramUserId === null && input.replyTimelineSequence
     ? await client.query<{ telegram_user_id: string }>(
         `SELECT telegram_user_id FROM telegram_group_messages
-         WHERE conversation_id = $1 AND sequence_id = $2 AND actor_kind = 'user'
+         WHERE conversation_id = $1 AND sequence_id = $2
+           AND actor_kind IN ('user', 'telegram_bot')
            AND telegram_user_id IS NOT NULL`,
         [input.conversationId, input.replyTimelineSequence],
       )

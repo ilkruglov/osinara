@@ -30,12 +30,12 @@ export function resolveTelegramSessionActor(auth: SessionAuth): TelegramSessionA
       attributes.telegramUserId === undefined && caller.principalId === `telegram-channel:${actorId}`;
     return valid ? { id: actorId, kind: actorKind } : null;
   }
-  // A bot is a service participant of one external group: it never carries a Telegram user
-  // attribute, and its positive Telegram id must match the principal it was admitted under.
+  // A bot has a Telegram user id of its own and identifies itself with it, exactly like a person.
+  // It owns no application account, so its principal stays the service identity it was admitted under.
   if (actorKind === "telegram_bot") {
     const valid = caller.authenticator === "telegram" && caller.principalType === "service" &&
       typeof actorId === "string" && /^[1-9]\d*$/u.test(actorId) &&
-      attributes.telegramUserId === undefined && caller.principalId === `telegram-bot:${actorId}`;
+      attributes.telegramUserId === actorId && caller.principalId === `telegram-bot:${actorId}`;
     return valid ? { id: actorId, kind: actorKind } : null;
   }
   if (actorKind === "telegram_user") {

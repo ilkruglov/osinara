@@ -4,7 +4,7 @@
  * Constructs covered:
  * - A bot participant is persisted under its own Telegram identity, marked as a bot.
  * - Timeline reads preserve bot attribution for model context.
- * - A bot never materializes as a human conversation participant.
+ * - A bot becomes a conversation participant like a person, without an application account link.
  * - The schema rejects a bot row that claims a human-shaped identity.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
@@ -80,7 +80,7 @@ describeWithDatabase("Telegram bot journal", () => {
 
   afterAll(closeDatabase);
 
-  it("persists bot provenance without creating a human participant", async () => {
+  it("persists bot provenance and admits the bot as a participant", async () => {
     const group = await externalGroup();
     const message = botMessage();
     const actor = telegramInboundActor(message)!;
@@ -110,14 +110,19 @@ describeWithDatabase("Telegram bot journal", () => {
     });
     expect(entries).toMatchObject([{ actorKind: "telegram_bot", senderIsBot: true }]);
 
+    // A bot joins the conversation under its own Telegram id and links to no `users` row, exactly
+    // like a person in a public group who never enrolled.
     const conversation = await conversationRepository.getByGroupId(group.groupId);
-    await expect(
-      conversationRepository.syncTimelineParticipants(conversation.id, [recorded.entryId]),
-    ).resolves.toEqual([]);
+    await conversationRepository.syncTimelineParticipants(conversation.id, [recorded.entryId]);
     await expect(database().query(
-      "SELECT count(*)::integer AS count FROM conversation_participants WHERE conversation_id = $1",
+      `SELECT telegram_user_id, display_name_snapshot, linked_user_id
+         FROM conversation_participants WHERE conversation_id = $1`,
       [conversation.id],
-    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+    )).resolves.toMatchObject({ rows: [{
+      display_name_snapshot: "Мия",
+      linked_user_id: null,
+      telegram_user_id: "8123456789",
+    }] });
   });
 
   it("rejects a bot row that hides its bot identity", async () => {

@@ -102,7 +102,9 @@ export function buildTelegramTurnResult(input: {
           : { memoryReviewSourceEntryIds: input.turnContext.memoryReviewSourceEntryIds }),
         telegramActorId: input.actor.id,
         telegramActorKind: input.actor.kind,
-        ...(input.actor.kind === "telegram_user" ? { telegramUserId: input.actor.id } : {}),
+        // A bot carries a real Telegram user id, so it identifies itself exactly like a person.
+        // Only a channel has no user identity at all.
+        ...(input.actor.kind === "telegram_channel" ? {} : { telegramUserId: input.actor.id }),
         ...(input.group && input.group.type !== "family_private"
           ? { toolAllowlist: input.group.toolAllowlist }
           : {}),

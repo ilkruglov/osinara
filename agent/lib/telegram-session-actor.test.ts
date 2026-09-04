@@ -46,6 +46,7 @@ describe("resolveTelegramSessionActor", () => {
       attributes: {
         telegramActorId: "8123456789",
         telegramActorKind: "telegram_bot",
+        telegramUserId: "8123456789",
       },
       authenticator: "telegram",
       principalId: "telegram-bot:8123456789",
@@ -57,14 +58,17 @@ describe("resolveTelegramSessionActor", () => {
     { label: "a human principal type", principalType: "user" },
     { label: "a channel-shaped principal id", principalId: "telegram-channel:-1001783384254" },
     { label: "a negative actor id", actorId: "-8123456789" },
-    { label: "a Telegram user attribute", telegramUserId: "8123456789" },
+    { label: "a mismatched Telegram user attribute", telegramUserId: "999" },
+    { label: "no Telegram user attribute", telegramUserId: null },
   ])("rejects a bot session carrying $label", (override) => {
     const actorId = override.actorId ?? "8123456789";
     expect(resolveTelegramSessionActor(auth({
       attributes: {
         telegramActorId: actorId,
         telegramActorKind: "telegram_bot",
-        ...(override.telegramUserId === undefined ? {} : { telegramUserId: override.telegramUserId }),
+        ...(override.telegramUserId === null
+          ? {}
+          : { telegramUserId: override.telegramUserId ?? actorId }),
       },
       authenticator: "telegram",
       principalId: override.principalId ?? `telegram-bot:${actorId}`,
