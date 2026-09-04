@@ -147,6 +147,7 @@ describe("unavailable subscription image generation", () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
 

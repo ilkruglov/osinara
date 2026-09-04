@@ -11,6 +11,7 @@ import {
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
+import { KNOWLEDGE_SKILL_CAPABILITY, KNOWLEDGE_SKILL_NAMES } from "../group-skills/knowledge-skills.js";
 
 function modelInvocation(name: ExternalGroupToolName | string): string {
   const memoryAction = /^manage_memory\.(edit|delete|undo)$/u.exec(name)?.[1];
@@ -62,12 +63,21 @@ export function externalGroupCapabilityInstructions(
     .map(({ name, usage: description }) => `- ${modelInvocation(name)}: ${description}.`)
     .join("\n");
   const effectiveAllowlist = completeSurface.map(({ name }) => modelInvocation(name)).join(", ");
-  const effectiveSkills = IMAGE_GENERATION_AVAILABLE &&
-      !options.scheduledRun && allowed.has("generate_image")
-    ? ["imagegen"]
-    : [];
+  const effectiveSkills = [
+    ...(IMAGE_GENERATION_AVAILABLE && !options.scheduledRun && allowed.has("generate_image")
+      ? ["imagegen"]
+      : []),
+    // Analyst skills ride on the research grant: without `web_search` they would only guess.
+    ...(!options.scheduledRun && allowed.has(KNOWLEDGE_SKILL_CAPABILITY)
+      ? [...KNOWLEDGE_SKILL_NAMES]
+      : []),
+  ];
+  const skillPurpose: Readonly<Record<string, string>> = {
+    "auto-analyst": "аналитик по машинам и автопрому",
+    "policy-finance-analyst": "аналитик по политике и финансам",
+  };
   const skillUsage = [...effectiveSkills]
-    .map((name) => `- \`load_skill\` с \`skill=${name}\`: загрузить инструкции разрешённого skill \`${name}\`.`)
+    .map((name) => `- \`load_skill\` с \`skill=${name}\`: ${skillPurpose[name] ?? `загрузить инструкции разрешённого skill \`${name}\``}.`)
     .join("\n");
   const effectiveSkillNames = [...effectiveSkills].map((name) => `\`${name}\``).join(", ");
   // Naming an action-level tool that was never granted would reintroduce the capability the

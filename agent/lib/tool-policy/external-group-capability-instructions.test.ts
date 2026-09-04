@@ -101,6 +101,21 @@ describe("externalGroupCapabilityInstructions", () => {
     expect(scheduled).not.toContain("`generate_image`");
   });
 
+  it("advertises the analyst skills only with web_search and never in a scheduled run", () => {
+    const denied = externalGroupCapabilityInstructions(new Set(["web_fetch"]));
+    const granted = externalGroupCapabilityInstructions(new Set(["web_search", "web_fetch"]));
+    const scheduled = externalGroupCapabilityInstructions(new Set(["web_search"]), {
+      includeApplicationCore: false,
+      scheduledHistory: false,
+      scheduledRun: true,
+    });
+
+    expect(denied).not.toContain("auto-analyst");
+    expect(granted).toContain("`load_skill` с `skill=auto-analyst`");
+    expect(granted).toContain("`load_skill` с `skill=policy-finance-analyst`");
+    expect(scheduled).not.toContain("auto-analyst");
+  });
+
   it("marks static trusted-only Google Workspace skills as unavailable externally", () => {
     const markdown = externalGroupCapabilityInstructions(new Set());
 

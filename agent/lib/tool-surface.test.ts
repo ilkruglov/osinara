@@ -60,9 +60,11 @@ const EXPECTED_DISCOVERED_TOOL_FILES = ["capabilities.ts"] as const;
 // brokerage package is restorable from git history when a household actually uses T-Invest.
 const EXPECTED_SKILL_DIRECTORIES = [
   "agent-browser",
+  "auto-analyst",
   "behavior-preferences",
   "docx",
   "pdf",
+  "policy-finance-analyst",
   "skill-authoring",
   "xlsx",
 ] as const;

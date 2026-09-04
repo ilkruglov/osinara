@@ -4,6 +4,7 @@
  * Exports:
  * - `createExternalGroupLoadSkillTool`: injectable Eve-branded wrapper for authorization tests.
  * - `externalGroupLoadSkillTool`: production `defineTool` wrapper over Eve's native skill loader.
+ * - Knowledge skills (`auto-analyst`, `policy-finance-analyst`) open with the live `web_search` grant.
  */
 import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { loadSkill } from "eve/tools/defaults";
@@ -11,6 +12,7 @@ import { loadSkill } from "eve/tools/defaults";
 import { AppError } from "../app-error.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { isImageGenerationSkillName } from "../image-generation/image-generation-skill.js";
+import { KNOWLEDGE_SKILL_CAPABILITY, isKnowledgeSkillName } from "./knowledge-skills.js";
 import { authorizeCurrentExternalGroupCapability } from "../tool-policy/external-group-live-policy.js";
 import { resolveExternalGroupPolicyIdentity } from "../tool-policy/external-group-policy.js";
 
@@ -18,6 +20,7 @@ type AnyToolDefinition = ToolDefinition<any, any>;
 
 interface ExternalGroupLoadSkillDependencies {
   authorizeImageGeneration(ctx: ToolContext): Promise<void>;
+  authorizeKnowledgeSkills(ctx: ToolContext): Promise<void>;
   executeNative(input: unknown, ctx: ToolContext): Promise<unknown>;
 }
 
@@ -35,7 +38,14 @@ export function createExternalGroupLoadSkillTool(
     ...(loadSkill as AnyToolDefinition),
     async execute(input, ctx) {
       const skill = (input as { skill?: unknown } | null)?.skill;
-      if (typeof skill !== "string" || !isImageGenerationSkillName(skill)) throw forbidden();
+      if (typeof skill !== "string") throw forbidden();
+      // An analyst skill adds method and references, never rights; the group's research grant
+      // is re-read live so a revoked `web_search` closes the skill on the next call.
+      if (isKnowledgeSkillName(skill)) {
+        await dependencies.authorizeKnowledgeSkills(ctx);
+        return await dependencies.executeNative(input, ctx);
+      }
+      if (!isImageGenerationSkillName(skill)) throw forbidden();
 
       // Image instructions are coupled to the tool grant, so the owner changes only one policy.
       // A grant persisted under a previous model provider must not resurrect the skill, so the
@@ -56,6 +66,11 @@ export const externalGroupLoadSkillTool = createExternalGroupLoadSkillTool({
     const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
     if (!identity) throw forbidden();
     await authorizeCurrentExternalGroupCapability(identity, "generate_image");
+  },
+  authorizeKnowledgeSkills: async (ctx) => {
+    const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
+    if (!identity) throw forbidden();
+    await authorizeCurrentExternalGroupCapability(identity, KNOWLEDGE_SKILL_CAPABILITY);
   },
   executeNative: (input, ctx) => nativeLoadSkill.execute(input, ctx),
 });

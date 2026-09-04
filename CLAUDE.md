@@ -204,7 +204,13 @@ subagent, не во внешней группе; publish, rollback и retire и�
 `authored_skill_usage` по `load_skill` и после хода с 4+ вызовами инструментов (без служебных)
 кладёт строку в `conversation_skill_hints`; сборка контекста следующего хода показывает её один
 раз (TTL 24 ч), и только по ней Мия предлагает навык. Мета-навык `agent/skills/skill-authoring/`
-задаёт процедуру и справочники под DeepSeek Flash и Flux. В trusted scheduled-ходах доступны
+задаёт процедуру и справочники под DeepSeek Flash и Flux.
+Навыки-аналитики `agent/skills/auto-analyst/` (машины, автопром, тюнинг, рынок) и
+`agent/skills/policy-finance-analyst/` (политика, санкции, макро, рынки, разбор чужой аналитики):
+метод в SKILL.md плюс справочники; в доверенных чатах видны как статические навыки, во внешней
+группе `load_skill` пускает их при живом гранте `web_search` (`knowledge-skills.ts`), блок прав
+перечисляет их рядом с `imagegen`. Навык добавляет метод и знания, не права: позицию в споре
+не занимает, действий за человека не выполняет. В trusted scheduled-ходах доступны
 `generate_image` и skill `imagegen`; внешние scheduled-ходы их не получают.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.

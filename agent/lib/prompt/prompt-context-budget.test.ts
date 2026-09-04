@@ -14,7 +14,8 @@ const PRIVATE_CHARACTER_BUDGET = 12_000;
 const FAMILY_CHARACTER_BUDGET = 13_000;
 const EXTERNAL_CHARACTER_BUDGET = 10_000;
 const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_000;
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_500;
+// Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block.
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_800;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

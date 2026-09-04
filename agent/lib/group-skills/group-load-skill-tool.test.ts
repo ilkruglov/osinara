@@ -4,6 +4,7 @@
  * Constructs covered:
  * - Removed custom skills, unknown names and malformed requests fail before native loading.
  * - The capability-coupled `imagegen` skill additionally requires its active model provider.
+ * - Analyst knowledge skills open only with the live `web_search` grant.
  */
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
@@ -42,6 +43,7 @@ describe("external group load_skill", () => {
     const authorizeImageGeneration = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
 
@@ -57,6 +59,7 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
 
@@ -71,6 +74,7 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
 
@@ -79,10 +83,39 @@ describe("external group load_skill", () => {
     expect(executeNative).not.toHaveBeenCalled();
   });
 
+  it("loads an analyst skill only after the live web_search grant check", async () => {
+    const authorizeKnowledgeSkills = vi.fn().mockResolvedValue(undefined);
+    const executeNative = vi.fn().mockResolvedValue({ loaded: true });
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration: vi.fn(),
+      authorizeKnowledgeSkills,
+      executeNative,
+    });
+
+    await expect(tool.execute({ skill: "auto-analyst" }, context())).resolves.toEqual({ loaded: true });
+    await expect(tool.execute({ skill: "policy-finance-analyst" }, context()))
+      .resolves.toEqual({ loaded: true });
+    expect(authorizeKnowledgeSkills).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an analyst skill closed when the research grant is revoked", async () => {
+    const executeNative = vi.fn();
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeImageGeneration: vi.fn(),
+      authorizeKnowledgeSkills: vi.fn().mockRejectedValue(new Error("AGENT_GROUP_TOOL_FORBIDDEN")),
+      executeNative,
+    });
+
+    await expect(tool.execute({ skill: "auto-analyst" }, context()))
+      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(executeNative).not.toHaveBeenCalled();
+  });
+
   it("denies a revoked grant and an unknown skill before delegation", async () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration: vi.fn(),
+      authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
 
