@@ -7,9 +7,9 @@ services:
       POSTGRES_USER: osinara
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U osinara -d osinara"]
-      interval: 5s
+      interval: 15s
       timeout: 3s
-      retries: 20
+      retries: 7
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -71,9 +71,9 @@ services:
       WORKFLOW_QUEUE_NAMESPACE: eve6f73696e6172612d66616d696c792d6167656e74
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/eve/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 72
+      retries: 12
     restart: unless-stopped
     networks:
       - default
@@ -117,9 +117,9 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 20
+      retries: 4
     environment:
       SANDBOX_RUNTIME_IMAGE: osinara-sandbox-runtime:local
     networks:
@@ -144,9 +144,9 @@ services:
       - ALL
     healthcheck:
       test: ["CMD", "node", "-e", "require('node:net').connect(3128,'127.0.0.1').on('connect',function(){this.destroy();process.exit(0)}).on('error',()=>process.exit(1))"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 20
+      retries: 4
     networks:
       - default
       - sandbox-egress
@@ -181,9 +181,9 @@ services:
       OMP_NUM_THREADS: "2"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost/health"]
-      interval: 5s
+      interval: 15s
       timeout: 5s
-      retries: 120
+      retries: 40
     restart: unless-stopped
     volumes:
       - memory-embedding-model-e5:/data
@@ -211,9 +211,9 @@ services:
     network_mode: none
     healthcheck:
       test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
-      retries: 120
+      retries: 20
     restart: unless-stopped
 
   telegram-ingress-worker:
