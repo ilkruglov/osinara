@@ -344,7 +344,7 @@ describeWithDatabase("memory review repository", () => {
     )).resolves.toMatchObject({ rows: [{ completed_turns: 0 }] });
   });
 
-  it("keeps a failed batch blocking when its turn already wrote memory", async () => {
+  it("counts a failed turn that already wrote memory and moves the lane on", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
@@ -377,7 +377,8 @@ describeWithDatabase("memory review repository", () => {
       [fixture.familyId, "eve:eve-review-wrote:turn-review-wrote", "op-review-wrote"],
     );
 
-    // Ход мог создать запись памяти, поэтому повтор запрещён и батч остаётся терминальным.
+    // Повтор такого хода создал бы дубликат, поэтому проход засчитывается. Прежний терминал
+    // `failed` был честнее по смыслу, но занимал место на курсоре и глушил лейн навсегда.
     await expect(memoryReviewRepository.failRunning({
       batchId: batch!.batchId,
       diagnosticCode: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
@@ -385,12 +386,22 @@ describeWithDatabase("memory review repository", () => {
       eveTurnId: "turn-review-wrote",
     })).resolves.toBe("recorded");
     await expect(database().query(
-      "SELECT status::text FROM memory_review_batches WHERE id = $1",
+      `SELECT batch.status::text, batch.diagnostic_code,
+              lane.processed_through_sequence::text AS cursor
+         FROM memory_review_batches AS batch
+         JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
+        WHERE batch.id = $1`,
       [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ status: "failed" }] });
+    )).resolves.toMatchObject({
+      rows: [{
+        cursor: "2",
+        diagnostic_code: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
+        status: "completed",
+      }],
+    });
   });
 
-  it("terminalizes an interactive batch that never reached an Eve turn", async () => {
+  it("releases an interactive batch that never reached an Eve turn", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
@@ -423,24 +434,22 @@ describeWithDatabase("memory review repository", () => {
       now: new Date("2026-08-12T10:00:00.000Z"),
     });
 
+    // Без привязки к ходу пакет доказуемо ничего не записал: ждать нечего, а прежний терминал
+    // `ambiguous` держал курсор занятым навсегда и в проде останавливал проверку целой группы.
     await expect(database().query(
-      `SELECT status::text, diagnostic_code FROM memory_review_batches WHERE id = $1`,
+      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
       [batch!.batchId],
-    )).resolves.toMatchObject({
-      rows: [{
-        diagnostic_code: "AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS",
-        status: "ambiguous",
-      }],
+    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    // Источники вернулись в непроверенный хвост, и владельца незачем беспокоить.
+    const repeated = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session.rows[0]!.id,
+      groupId: fixture.groupId,
+      timelineEntryId: source.id,
     });
+    expect(repeated?.sourceCount).toBe(2);
     await expect(database().query(
-      `SELECT count(source.timeline_entry_id)::integer AS source_count,
-              alert.status::text AS alert_status
-         FROM memory_review_batches AS batch
-         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
-         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
-        WHERE batch.id = $1 GROUP BY batch.id, alert.id`,
-      [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{ alert_status: "pending", source_count: 2 }] });
+      "SELECT count(*)::integer AS alerts FROM memory_review_owner_alerts",
+    )).resolves.toMatchObject({ rows: [{ alerts: 0 }] });
   });
 
 });

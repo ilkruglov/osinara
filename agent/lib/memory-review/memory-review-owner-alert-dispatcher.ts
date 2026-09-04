@@ -39,11 +39,11 @@ interface MemoryReviewOwnerAlertDispatcherDependencies {
 
 function alertText(alert: MemoryReviewOwnerAlertClaim): string {
   const groupTitle = alert.groupTitle.replace(/\s+/gu, " ").trim();
-  if (alert.diagnosticCode === "AGENT_MEMORY_REVIEW_TURN_ABANDONED") {
+  if (alert.diagnosticCode === "AGENT_MEMORY_REVIEW_PASS_SKIPPED") {
     // These sources are released rather than held: the lane had to move on, and no later pass will
     // revisit them. Promising their safe recovery here would be false.
     return [
-      "AGENT_MEMORY_REVIEW_TURN_ABANDONED",
+      "AGENT_MEMORY_REVIEW_PASS_SKIPPED",
       `Осинара оборвала проверку памяти группы «${groupTitle}» на середине.`,
       `Сообщения ${alert.fromSequence}–${alert.throughSequence} остались непроверенными, ` +
         "и автоматически к ним никто не вернётся.",

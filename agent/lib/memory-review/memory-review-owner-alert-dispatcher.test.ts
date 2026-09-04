@@ -54,7 +54,7 @@ describe("memory review owner alert dispatcher", () => {
     const fixture = dependencies({
       claimPending: vi.fn().mockResolvedValue([{
         ...alert,
-        diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_ABANDONED",
+        diagnosticCode: "AGENT_MEMORY_REVIEW_PASS_SKIPPED",
       }]),
     });
 
@@ -63,7 +63,7 @@ describe("memory review owner alert dispatcher", () => {
     // Источники такого пакета уже отпущены, поэтому обещать их сохранность нельзя.
     const delivered = fixture.deliver.mock.calls[0]![0] as { text: string };
     expect(delivered.text).toMatch(
-      /AGENT_MEMORY_REVIEW_TURN_ABANDONED[\s\S]*Остриков пилит агентов[\s\S]*5540–5589/u,
+      /AGENT_MEMORY_REVIEW_PASS_SKIPPED[\s\S]*Остриков пилит агентов[\s\S]*5540–5589/u,
     );
     expect(delivered.text).not.toContain("сохранены");
   });
