@@ -5,6 +5,7 @@
  * - A turn resumed after a human answer still closes its batch, though its authorization lost the marker.
  * - The marker keeps answering for a replayed terminal event whose batch row was already released.
  * - An ordinary chat turn is recorded as a turn of the conversation and touches no batch.
+ * - A turn cancelled by the next message closes its batch instead of waiting for the bound.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +14,7 @@ const dependencies = vi.hoisted(() => ({
   channelConfig: null as Record<string, any> | null,
   clearApprovals: vi.fn(),
   completeBatch: vi.fn(),
+  failRunning: vi.fn(),
   hasPendingOperation: vi.fn(async () => false),
   recordTurnCompleted: vi.fn(),
   releaseMemoryTurnSources: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock("./memory-review/memory-review-repository.js", () => ({
   memoryReviewRepository: {
     batchIdForTurn: dependencies.batchIdForTurn,
     completeBatch: dependencies.completeBatch,
+    failRunning: dependencies.failRunning,
   },
 }));
 
@@ -115,6 +118,21 @@ describe("telegram memory review turn binding", () => {
       "eve-session-1",
       false,
     );
+  });
+
+  it("closes the batch of a turn cancelled by the next chat message", async () => {
+    const handler = dependencies.channelConfig?.events?.["turn.cancelled"];
+    dependencies.batchIdForTurn.mockResolvedValue("batch-4");
+
+    await handler(undefined, {}, context({ telegramUserId: "101" }));
+
+    // Отмена — самый частый исход в живом чате. Без этого обработчика пакет висел до временной
+    // границы, а следующие ходы успевали выстроиться за мёртвой головой.
+    expect(dependencies.failRunning).toHaveBeenCalledWith(expect.objectContaining({
+      batchId: "batch-4",
+      eveSessionId: "eve-session-1",
+      eveTurnId: "turn-4",
+    }));
   });
 
   it("keeps the batch open while the turn is parked on a human answer", async () => {

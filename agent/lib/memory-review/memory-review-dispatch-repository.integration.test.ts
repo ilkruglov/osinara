@@ -325,7 +325,7 @@ describeWithDatabase("memory review dispatch repository", () => {
     }] });
   });
 
-  it("atomically marks an interactive session failure and retains its sources for repair", async () => {
+  it("releases the review batch of a chat session that failed without writing memory", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
@@ -365,19 +365,29 @@ describeWithDatabase("memory review dispatch repository", () => {
       diagnosticCode: "AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS",
       eveSessionId: "eve-interactive-session-failure",
     })).resolves.toBe("recorded");
+    // Ход этой сессии ничего не записал и наследника за собой не оставил, поэтому пакет
+    // освобождается целиком. Прежний терминал `ambiguous` сохранял источники «для ремонта», но
+    // ремонта не существовало: он занимал место на курсоре и глушил лейн навсегда.
     await expect(database().query(
-      `SELECT batch.status::text, app_session.rotation_requested_at,
-              count(source.timeline_entry_id)::integer AS source_count,
-              alert.status::text AS alert_status
-         FROM memory_review_batches AS batch
-         JOIN conversation_sessions AS app_session ON app_session.id = batch.application_session_id
-         LEFT JOIN memory_review_batch_sources AS source ON source.batch_id = batch.id
-         LEFT JOIN memory_review_owner_alerts AS alert ON alert.batch_id = batch.id
-         WHERE batch.id = $1 GROUP BY batch.id, app_session.id, alert.id`,
+      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1",
       [batch!.batchId],
-    )).resolves.toMatchObject({ rows: [{
-      alert_status: "pending",
-      rotation_requested_at: expect.any(Date), source_count: 9, status: "ambiguous",
-    }] });
+    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    await expect(database().query(
+      `SELECT rotation_requested_at, pending_operation
+         FROM conversation_sessions WHERE id = $1`,
+      [session.rows[0]!.id],
+    )).resolves.toMatchObject({
+      rows: [{ pending_operation: false, rotation_requested_at: expect.any(Date) }],
+    });
+    await expect(database().query(
+      "SELECT count(*)::integer AS alerts FROM memory_review_owner_alerts",
+    )).resolves.toMatchObject({ rows: [{ alerts: 0 }] });
+    // Источники вернулись в непроверенный хвост и разберутся обычным ходом.
+    const repeated = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session.rows[0]!.id,
+      groupId: fixture.groupId,
+      timelineEntryId: source.id,
+    });
+    expect(repeated?.sourceCount).toBe(2);
   });
 });

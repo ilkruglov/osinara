@@ -14,7 +14,6 @@
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
-import type { SessionContext } from "eve/context";
 import { telegramChannel } from "eve/channels/telegram";
 
 import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js";
@@ -66,35 +65,13 @@ import {
   releaseMemoryTurnSources,
 } from "../lib/memory-turn-source.js";
 import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.js";
+import { resolveMemoryReviewBatch } from "../lib/memory-review/memory-review-turn-binding.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-
-/**
- * Which batch, if any, the finished turn was reviewing.
- *
- * The marker in the current authorization answers this for the turn that started under it, and
- * still answers it when Eve replays that turn's terminal event after the batch was released. It
- * cannot answer for a turn resumed after a human answer, because the resumed turn carries the
- * authorization of that answer; the binding written at turn start is durable and covers that case.
- */
-async function resolveMemoryReviewBatch(ctx: {
-  session: {
-    auth: SessionContext["session"]["auth"];
-    id: string;
-    turn: { id: string };
-  };
-}): Promise<string | null> {
-  const marked = memoryReviewBatchId(ctx);
-  if (marked) return marked;
-  return await memoryReviewRepository.batchIdForTurn({
-    eveSessionId: ctx.session.id,
-    eveTurnId: ctx.session.turn.id,
-  });
-}
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -423,6 +400,27 @@ export default telegramChannel({
       }
       if (!reviewBatchId) await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
+    },
+    async "turn.cancelled"(_data, _channel, ctx) {
+      // Steering by the next chat message is the most common way a turn ends in a live group. The
+      // batch used to wait for the time bound instead, while later turns chained onto a head that
+      // would never report, so their finished work stayed unreachable from the lane cursor.
+      await releaseMemoryTurnSources(ctx);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
+      if (reviewBatchId) {
+        await memoryReviewRepository.failRunning({
+          batchId: reviewBatchId,
+          diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+        });
+      }
+      // A cancelled turn is not a failure and its session keeps serving the replacement turn, so
+      // only its own approval rows are released here.
+      await telegramHitlApprovalRepository.clearForEveSession(
+        applicationSessionId(ctx),
+        ctx.session.id,
+      );
     },
     async "turn.started"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
