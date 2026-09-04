@@ -343,6 +343,16 @@ await replaceExact(
   "if(e.query.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX)===!0){if(!e.query.message||!t.chatId)return;let r=continuationTokenFromState(t),i=e.config.onHitlCallbackQuery===void 0?{auth:null,continuationToken:e.config.resolveContinuationToken===void 0?r:await e.config.resolveContinuationToken(r)}:await e.config.onHitlCallbackQuery(n,e.query,r);if(i===null)return;try{await n.telegram.answerCallbackQuery({callbackQueryId:e.query.id,text:i.acknowledgementText??`Answer received.`})}catch(e){log.warn(`Telegram callback-query acknowledgement failed`,{error:e})}try{return await e.from(i.continuationToken??r).respond([telegramCallbackInputResponse(e.query.data)],{auth:i.auth})}catch(e){log.error(`callback query delivery failed`,{error:e});throw e}}",
 );
 
+// Bot API 10.2 delivers other bots' group messages once Bot-to-Bot Communication Mode is on. Eve
+// still drops every bot-authored message before the application sees it, so the agent is blind to
+// participants the platform now shows it. Authorization is unaffected: `telegramInboundActor`
+// classifies such a sender as `telegram_bot`, which carries no family identity and no rights.
+await replaceExact(
+  runtimePaths.telegram,
+  "async function dispatchMessage(e){if(e.message.from?.isBot===!0)return;",
+  "async function dispatchMessage(e){/* bot senders are classified by the application */",
+);
+
 // Telegram emits pseudo thread IDs on ordinary replies; only explicit topic messages define scope.
 await replaceExact(
   runtimePaths.telegramInbound,

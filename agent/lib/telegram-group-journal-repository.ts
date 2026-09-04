@@ -317,11 +317,13 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
              message_thread_id, telegram_user_id, telegram_sender_chat_id, sender_username,
              sender_display_name, sender_is_bot, message_kind, content_text,
              reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14, $15, $16)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           RETURNING id`,
         [groupId, sequenceId, actor.timelineKind, actor.actorId, messageId,
-          telegramForumTopicId(message), actor.kind === "telegram_user" ? actor.id : null,
+          telegramForumTopicId(message),
+          actor.kind === "telegram_user" || actor.kind === "telegram_bot" ? actor.id : null,
           actor.kind === "telegram_channel" ? actor.id : null, actor.username, actor.displayName,
+          actor.kind === "telegram_bot",
           telegramMessageKind(message), telegramMessageContent(message), replyId,
           replyTarget?.entry_id ?? null, replyTarget?.sequence_id ?? null,
           telegramMessageSentAt(message)],

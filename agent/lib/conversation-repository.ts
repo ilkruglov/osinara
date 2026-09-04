@@ -196,7 +196,7 @@ export const conversationRepository = {
        // Every requested entry must belong to this conversation. Agent entries are valid selections
       // but never become human participants.
       const selected = await client.query<{
-        actor_kind: "agent_self" | "user";
+        actor_kind: "agent_self" | "telegram_bot" | "telegram_channel" | "user";
         sender_display_name: string | null;
         sent_at: Date;
         telegram_user_id: string | null;
@@ -213,7 +213,10 @@ export const conversationRepository = {
           "Одна или несколько записей не принадлежат выбранному разговору",
         );
       }
-      const users = selected.rows.filter((row) => row.actor_kind === "user");
+      // A bot has a Telegram user id of its own; it becomes a participant without an account link.
+      const users = selected.rows.filter((row) =>
+        row.actor_kind === "user" || row.actor_kind === "telegram_bot"
+      );
       if (users.some((row) => row.telegram_user_id === null)) {
         throw new AppError(
           "AGENT_CONVERSATION_PARTICIPANT_IDENTITY_MISSING",

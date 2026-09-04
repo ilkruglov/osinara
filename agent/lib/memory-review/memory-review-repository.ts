@@ -49,7 +49,7 @@ interface LaneRow {
 
 interface SourceRow {
   actor_id: string;
-  actor_kind: "agent_self" | "user";
+  actor_kind: "agent_self" | "telegram_bot" | "user";
   content_text: string | null;
   id: string;
   message_kind: string;
@@ -152,7 +152,7 @@ async function sourceRows(
   const result = await client.query<SourceRow>(
     `SELECT ${SOURCE_COLUMNS}
        FROM telegram_group_messages AS message
-      WHERE message.conversation_id = $1 AND message.actor_kind = 'user'
+      WHERE message.conversation_id = $1 AND message.actor_kind IN ('user', 'telegram_bot')
         AND message.message_thread_id IS NOT DISTINCT FROM $2::bigint
         AND message.sequence_id > $3::bigint AND message.sequence_id <= $4::bigint
       ORDER BY message.sequence_id
@@ -238,7 +238,7 @@ export const memoryReviewRepository = {
     try {
       await client.query("BEGIN");
       const message = await client.query<{
-        actor_kind: "agent_self" | "user";
+        actor_kind: "agent_self" | "telegram_bot" | "user";
         conversation_id: string;
         message_thread_id: string | null;
         sequence_id: string;
@@ -249,7 +249,7 @@ export const memoryReviewRepository = {
         [input.timelineEntryId, input.groupId],
       );
       const source = message.rows[0];
-      if (!source || source.actor_kind !== "user") {
+      if (!source || (source.actor_kind !== "user" && source.actor_kind !== "telegram_bot")) {
         await client.query("COMMIT");
         return null;
       }
@@ -308,7 +308,7 @@ export const memoryReviewRepository = {
       }>(
         `SELECT conversation_id, message_thread_id::text, sequence_id::text
            FROM telegram_group_messages
-          WHERE id = $1 AND group_id = $2 AND actor_kind = 'user' FOR SHARE`,
+          WHERE id = $1 AND group_id = $2 AND actor_kind IN ('user', 'telegram_bot') FOR SHARE`,
         [input.timelineEntryId, input.groupId],
       );
       const current = message.rows[0];

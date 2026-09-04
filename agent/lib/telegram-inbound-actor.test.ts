@@ -4,7 +4,8 @@
  * Constructs covered:
  * - Ordinary human senders remain Telegram user actors.
  * - Channel-authored supergroup posts use raw `sender_chat`, not Telegram's Channel_Bot identity.
- * - Ambiguous, malformed, anonymous-group, and ordinary bot senders fail closed.
+ * - Another bot is a visible participant without identity, since Bot API 10.2 delivers its messages.
+ * - Ambiguous, malformed, and anonymous-group senders fail closed.
  */
 import { describe, expect, it } from "vitest";
 
@@ -48,14 +49,25 @@ describe("telegramInboundActor", () => {
     });
   });
 
-  it.each([
-    {
-      label: "ordinary bot",
-      message: {
-        ...groupMessage("bot"),
-        from: { firstName: "Bot", id: "42", isBot: true },
+  it("projects another bot as a participant that carries no identity", () => {
+    expect(telegramInboundActor({
+      ...groupMessage("сводка погоды"),
+      from: { firstName: "Погодный бот", id: "42", isBot: true, username: "weather_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Погодный бот", id: 42, is_bot: true, username: "weather_bot" },
       },
-    },
+    })).toEqual({
+      actorId: "telegram-bot:42",
+      displayName: "Погодный бот",
+      id: "42",
+      kind: "telegram_bot",
+      timelineKind: "telegram_bot",
+      username: "weather_bot",
+    });
+  });
+
+  it.each([
     {
       label: "anonymous supergroup sender",
       message: {

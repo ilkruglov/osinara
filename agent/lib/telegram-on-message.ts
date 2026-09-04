@@ -127,7 +127,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         if (!hasLazyGroupAttachment) return null;
       }
       if (unsupportedGroupSlashCommand) {
-        if (inboundTimeline.status === "inserted" && actor.kind === "telegram_user") {
+        if (inboundTimeline.status === "inserted" &&
+          (actor.kind === "telegram_user" || actor.kind === "telegram_bot")) {
           await repositories.memoryReview.observePassiveMessage({
             groupId: group.groupId,
             timelineEntryId: inboundTimeline.entryId,
@@ -160,10 +161,12 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       // Authorized family attachment references are retained without waking the model.
       if (!addressed && !hasLazyGroupAttachment) {
         if (inboundTimeline.status === "inserted") {
-          if (actor.kind === "telegram_user") await repositories.memoryReview.observePassiveMessage({
-            groupId: group.groupId,
-            timelineEntryId: inboundTimeline.entryId,
-          });
+          if (actor.kind === "telegram_user" || actor.kind === "telegram_bot") {
+            await repositories.memoryReview.observePassiveMessage({
+              groupId: group.groupId,
+              timelineEntryId: inboundTimeline.entryId,
+            });
+          }
         }
         return null;
       }
@@ -260,7 +263,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) {
       if (!addressed && !journalDuplicate && group && inboundTimeline &&
-        actor.kind === "telegram_user") {
+        (actor.kind === "telegram_user" || actor.kind === "telegram_bot")) {
         await repositories.memoryReview.observePassiveMessage({
           groupId: group.groupId,
           timelineEntryId: inboundTimeline.entryId,

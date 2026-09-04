@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { resolveConversationAccess } from "./family-access.js";
+import { evaluateConversationAccess, resolveConversationAccess } from "./family-access.js";
 
 describe("resolveConversationAccess", () => {
   it("allows a family member to use personal and family memory in a private chat", () => {
@@ -101,5 +101,67 @@ describe("resolveConversationAccess", () => {
         registeredGroup: null,
       }),
     ).toThrowError(/AGENT_GROUP_NOT_REGISTERED/);
+  });
+});
+
+describe("evaluateConversationAccess bot participants", () => {
+  it("keeps another bot out of an owner-only external group", () => {
+    const decision = evaluateConversationAccess({
+      actorKind: "telegram_bot",
+      chat: { id: "-1001", type: "supergroup" },
+      identity: null,
+      registeredGroup: {
+        familyId: "family-1",
+        groupId: "group-1",
+        messageMode: "owner_only",
+        telegramChatId: "-1001",
+        skillAllowlist: [],
+        toolAllowlist: [],
+        type: "external",
+      },
+    });
+
+    expect(decision.allowed).toBe(false);
+  });
+
+  it("admits another bot to an ordinary external group without family rights", () => {
+    const decision = evaluateConversationAccess({
+      actorKind: "telegram_bot",
+      chat: { id: "-1001", type: "supergroup" },
+      identity: null,
+      registeredGroup: {
+        familyId: "family-1",
+        groupId: "group-1",
+        messageMode: "addressed_only",
+        telegramChatId: "-1001",
+        skillAllowlist: [],
+        toolAllowlist: [],
+        type: "external",
+      },
+    });
+
+    expect(decision).toMatchObject({
+      access: { memoryScopes: ["group"], role: "external", userId: null },
+      allowed: true,
+    });
+  });
+
+  it("never lets another bot into a family group", () => {
+    const decision = evaluateConversationAccess({
+      actorKind: "telegram_bot",
+      chat: { id: "-1002", type: "supergroup" },
+      identity: null,
+      registeredGroup: {
+        familyId: "family-1",
+        groupId: "group-2",
+        messageMode: "addressed_only",
+        telegramChatId: "-1002",
+        skillAllowlist: [],
+        toolAllowlist: [],
+        type: "family_private",
+      },
+    });
+
+    expect(decision.allowed).toBe(false);
   });
 });

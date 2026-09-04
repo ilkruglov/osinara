@@ -5,6 +5,7 @@
  * - `createTelegramMessageHandler`: invitation, voice, HITL, and passive group routing.
  * - Unified timeline preparation retains exact forum and reply routing.
  * - Duplicate and unauthorized group updates stop before model dispatch.
+ * - Another bot is journaled, observed by the memory review, and answered like an external participant.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -169,6 +170,74 @@ describe("createTelegramMessageHandler group routing", () => {
       expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
     );
     expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
+    expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
+  });
+
+  it("journals another bot and answers it while the exchange stays bounded", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      skillAllowlist: [],
+      toolAllowlist: [],
+      type: "external",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage(`@${BOT_USERNAME} курс валют на сегодня`),
+      from: { firstName: "Курсовой бот", id: "42", isBot: true, username: "rates_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Курсовой бот", id: 42, is_bot: true, username: "rates_bot" },
+      },
+    } as TelegramMessage;
+
+    const result = await handler(telegramContext().context, message);
+
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "42", kind: "telegram_bot" }),
+    );
+    expect(result?.auth).toMatchObject({
+      attributes: { memoryScopes: ["group"], role: "external" },
+    });
+    // An addressed message starts a turn; passive observation is for messages that do not.
+  });
+
+  it("hands a passive bot message to the quiet memory review like a human one", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      skillAllowlist: [],
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage("Завтра в Москве +12 и дождь"),
+      from: { firstName: "Погодный бот", id: "42", isBot: true, username: "weather_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Погодный бот", id: 42, is_bot: true, username: "weather_bot" },
+      },
+    } as TelegramMessage;
+
+    await expect(handler(telegramContext().context, message)).resolves.toBeNull();
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "42", kind: "telegram_bot" }),
+    );
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 

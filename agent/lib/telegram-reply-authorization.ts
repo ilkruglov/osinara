@@ -35,8 +35,9 @@ export async function authorizeTelegramReply(input: {
   let verifiedReplyRoute = input.verifiedReplyRoute;
   const replyTarget = input.message.replyToMessage;
 
-  // A channel can continue an ordinary group conversation but can never approve a human action.
-  if (input.actor.kind === "telegram_channel" &&
+  // A channel or another bot can continue an ordinary group conversation, but neither can ever
+  // approve a human action: only a verified person answers a confirmation prompt.
+  if ((input.actor.kind === "telegram_channel" || input.actor.kind === "telegram_bot") &&
     (replyTarget?.from?.isBot === true || input.replyToAgent)) {
     if (input.replyToAgent || isReplyToBot(input.message, input.botUsername)) {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;
