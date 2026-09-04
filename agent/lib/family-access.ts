@@ -136,6 +136,17 @@ export function evaluateConversationAccess(
     };
   }
 
+  // Another bot is a visible participant, never a person: it cannot stand in for the owner.
+  if (input.actorKind === "telegram_bot" && group.messageMode === "owner_only") {
+    return {
+      allowed: false,
+      error: new AppError(
+        "AGENT_TELEGRAM_BOT_OWNER_REQUIRED",
+        "Сообщения от другого бота недоступны в режиме только для владельца",
+      ),
+    };
+  }
+
   // External groups remain group-only, but a same-family identity is retained for owner administration.
   const familyIdentity = input.actorKind === "telegram_user" &&
     input.identity?.familyId === group.familyId ? input.identity : null;

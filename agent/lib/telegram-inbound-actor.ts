@@ -4,12 +4,20 @@
  * Exports:
  * - `TelegramInboundActor`: explicit user or channel identity derived before authorization.
  * - `TelegramTimelineActorKind`: persisted timeline actor discriminator.
- * - `telegramInboundActor`: fail-closed classifier for human and channel-authored messages.
+ * - `telegramInboundActor`: fail-closed classifier for human, bot, and channel-authored messages.
+ *
+ * Key constructs:
+ * - Bot API 10.2 delivers other bots' group messages once Bot-to-Bot Communication Mode is on, so a
+ *   bot sender is a real participant of the timeline. It never carries family identity or rights.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
-export type TelegramTimelineActorKind = "agent_self" | "telegram_channel" | "user";
-export type TelegramActorKind = "telegram_channel" | "telegram_user";
+export type TelegramTimelineActorKind =
+  | "agent_self"
+  | "telegram_bot"
+  | "telegram_channel"
+  | "user";
+export type TelegramActorKind = "telegram_bot" | "telegram_channel" | "telegram_user";
 
 export interface TelegramInboundActor {
   actorId: string;
@@ -62,6 +70,19 @@ export function telegramInboundActor(message: TelegramMessage): TelegramInboundA
       id: sender.id,
       kind: "telegram_user",
       timelineKind: "user",
+      username: sender.username ?? null,
+    };
+  }
+
+  // Another bot writing in the group: it has no sender_chat and is not the channel pseudo-user.
+  // Its message is ordinary untrusted timeline content; identity and rights stay unavailable.
+  if (sender?.isBot && senderChat === null && sender.id !== TELEGRAM_CHANNEL_BOT_ID) {
+    return {
+      actorId: `telegram-bot:${sender.id}`,
+      displayName: userDisplayName(message),
+      id: sender.id,
+      kind: "telegram_bot",
+      timelineKind: "telegram_bot",
       username: sender.username ?? null,
     };
   }

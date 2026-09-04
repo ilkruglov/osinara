@@ -5,6 +5,7 @@
  * - `createTelegramMessageHandler`: invitation, voice, HITL, and passive group routing.
  * - Unified timeline preparation retains exact forum and reply routing.
  * - Duplicate and unauthorized group updates stop before model dispatch.
+ * - Another bot is journaled and answered, and the exchange stops at its bound.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
@@ -165,6 +166,67 @@ describe("createTelegramMessageHandler group routing", () => {
       expect.objectContaining({ id: "telegram-101", kind: "telegram_user" }),
     );
     expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
+    expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
+  });
+
+  it("journals another bot and answers it while the exchange stays bounded", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage(`@${BOT_USERNAME} курс валют на сегодня`),
+      from: { firstName: "Курсовой бот", id: "42", isBot: true, username: "rates_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Курсовой бот", id: 42, is_bot: true, username: "rates_bot" },
+      },
+    } as TelegramMessage;
+
+    const result = await handler(telegramContext().context, message);
+
+    expect(repository.journal.record).toHaveBeenCalledWith(
+      "group-1",
+      message,
+      expect.objectContaining({ id: "42", kind: "telegram_bot" }),
+    );
+    expect(result?.auth).toMatchObject({
+      attributes: { memoryScopes: ["group"], role: "external" },
+    });
+    // A bot never becomes a source of memory review material.
+    expect(repository.memoryReview.observePassiveMessage).not.toHaveBeenCalled();
+  });
+
+  it("stops answering another bot once the exchange exceeds its bound", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    repository.journal.consecutiveBotEntries.mockResolvedValue(5);
+    const handler = createTelegramMessageHandler(repository);
+    const message = {
+      ...groupMessage(`@${BOT_USERNAME} и ещё одна реплика`),
+      from: { firstName: "Курсовой бот", id: "42", isBot: true, username: "rates_bot" },
+      raw: {
+        date: 1_787_000_000,
+        from: { first_name: "Курсовой бот", id: 42, is_bot: true, username: "rates_bot" },
+      },
+    } as TelegramMessage;
+
+    // The message stays in the timeline; only the turn is refused, so a person still sees it.
+    await expect(handler(telegramContext().context, message)).resolves.toBeNull();
+    expect(repository.journal.record).toHaveBeenCalledTimes(1);
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
   });
 

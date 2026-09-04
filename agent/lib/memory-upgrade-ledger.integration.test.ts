@@ -120,6 +120,8 @@ const POST_V0101_MIGRATIONS = [
   "086_authored_skills.sql",
   "087_authored_skill_description_length.sql",
   "088_memory_context_exposures.sql",
+  "089_telegram_hitl_batched_approvals.sql",
+  "090_timeline_bot_participants.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

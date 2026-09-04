@@ -58,6 +58,11 @@ export const TELEGRAM_HITL_TIMEOUT_SWEEP_TIMEOUT_MS = 180 * 1_000;
 export const AGENT_INTERNAL_SELF_BASE_URL = "http://127.0.0.1:3000";
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 12_000;
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES = 100;
+/**
+ * Consecutive bot-authored turns allowed in one chat before the agent stops answering bots.
+ * Two bots addressing each other loop for free; any human message resets the counter.
+ */
+export const TELEGRAM_BOT_EXCHANGE_LIMIT = 4;
 export const TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES = 10_000;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT = 50;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT = 50;
