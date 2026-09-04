@@ -16,6 +16,7 @@ import {
 } from "./memory-review-config.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
+import { terminalizeAbandonedReviewTurns } from "./memory-review-terminal-repository.js";
 
 const INTERACTIVE_START_AMBIGUOUS = "AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS";
 const DISPATCH_TIMEOUT_AMBIGUOUS = "AGENT_MEMORY_REVIEW_DISPATCH_TIMEOUT_AMBIGUOUS";
@@ -65,6 +66,7 @@ export async function terminalizeStaleMemoryReviewBatches(
 ): Promise<void> {
   await terminalizeStaleInteractiveBatches(client, now);
   await terminalizeStaleDispatchingBatches(client, now);
+  await terminalizeAbandonedReviewTurns(client, now);
 }
 
 export const memoryReviewDispatchTerminalRepository = {

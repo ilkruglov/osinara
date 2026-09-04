@@ -50,6 +50,24 @@ describe("memory review owner alert dispatcher", () => {
     expect(fixture.markFailed).not.toHaveBeenCalled();
   });
 
+  it("tells the owner that a skipped pass will not be revisited", async () => {
+    const fixture = dependencies({
+      claimPending: vi.fn().mockResolvedValue([{
+        ...alert,
+        diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_ABANDONED",
+      }]),
+    });
+
+    await expect(createMemoryReviewOwnerAlertDispatcher(fixture)()).resolves.toBe(1);
+
+    // Источники такого пакета уже отпущены, поэтому обещать их сохранность нельзя.
+    const delivered = fixture.deliver.mock.calls[0]![0] as { text: string };
+    expect(delivered.text).toMatch(
+      /AGENT_MEMORY_REVIEW_TURN_ABANDONED[\s\S]*Остриков пилит агентов[\s\S]*5540–5589/u,
+    );
+    expect(delivered.text).not.toContain("сохранены");
+  });
+
   it("records a definite Telegram rejection without retry", async () => {
     const fixture = dependencies({
       deliver: vi.fn().mockRejectedValue(new MemoryReviewOwnerAlertTransportError(

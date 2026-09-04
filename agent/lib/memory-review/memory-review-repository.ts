@@ -406,4 +406,22 @@ export const memoryReviewRepository = {
     );
   },
 
+  /**
+   * A turn parked for a human answer resumes under the authorization of that answer, so the batch
+   * marker of the message that started the turn is no longer in context. The binding written at
+   * turn start is durable, which makes it the only source terminal handling can trust. The status
+   * is deliberately not filtered: a replayed terminal event must still recognize a review turn.
+   */
+  async batchIdForTurn(input: {
+    eveSessionId: string;
+    eveTurnId: string;
+  }): Promise<string | null> {
+    const result = await database().query<{ id: string }>(
+      `SELECT id FROM memory_review_batches
+        WHERE eve_session_id = $1 AND eve_turn_id = $2`,
+      [input.eveSessionId, input.eveTurnId],
+    );
+    return result.rows[0]?.id ?? null;
+  },
+
 };

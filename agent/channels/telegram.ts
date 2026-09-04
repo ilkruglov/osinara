@@ -14,6 +14,7 @@
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
+import type { SessionContext } from "eve/context";
 import { telegramChannel } from "eve/channels/telegram";
 
 import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js";
@@ -69,6 +70,29 @@ import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-revi
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+/**
+ * Which batch, if any, the finished turn was reviewing.
+ *
+ * The marker in the current authorization answers this for the turn that started under it, and
+ * still answers it when Eve replays that turn's terminal event after the batch was released. It
+ * cannot answer for a turn resumed after a human answer, because the resumed turn carries the
+ * authorization of that answer; the binding written at turn start is durable and covers that case.
+ */
+async function resolveMemoryReviewBatch(ctx: {
+  session: {
+    auth: SessionContext["session"]["auth"];
+    id: string;
+    turn: { id: string };
+  };
+}): Promise<string | null> {
+  const marked = memoryReviewBatchId(ctx);
+  if (marked) return marked;
+  return await memoryReviewRepository.batchIdForTurn({
+    eveSessionId: ctx.session.id,
+    eveTurnId: ctx.session.turn.id,
+  });
+}
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -296,7 +320,7 @@ export default telegramChannel({
     async "turn.failed"(data, channel, ctx) {
       // Terminal failure releases the temporary timeline retention after all tool writes have stopped.
       await releaseMemoryTurnSources(ctx);
-      const reviewBatchId = memoryReviewBatchId(ctx);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
       let reviewFailureReplayed = false;
       if (reviewBatchId) {
         const terminal = await memoryReviewRepository.failRunning({
@@ -411,9 +435,9 @@ export default telegramChannel({
     async "turn.completed"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
       if (!awaitingApproval) {
         // Completion verifies review evidence before release; a parked HITL turn retains its source set.
-        const reviewBatchId = memoryReviewBatchId(ctx);
         if (reviewBatchId) {
           await memoryReviewRepository.completeBatch({
             batchId: reviewBatchId,
@@ -433,7 +457,7 @@ export default telegramChannel({
           new Date(),
         );
       }
-      if (!memoryReviewBatchId(ctx)) {
+      if (!reviewBatchId) {
         await sessionRepository.recordTurnCompleted(sessionId, ctx.session.id, awaitingApproval);
       }
       if (!awaitingApproval) {
