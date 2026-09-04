@@ -131,6 +131,11 @@ function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<s
   if (unknown.length > 0) {
     problems.push(`в шагах названы инструменты, которых нет в этом режиме: ${unknown.join(", ")}`);
   }
+  // An image skill without a prompt template makes the model translate a Russian paragraph into a
+  // Flux prompt on every run; the template belongs in a reference file.
+  if (stepToolNames(draft.markdown).includes("generate_image") && Object.keys(draft.files).length === 0) {
+    problems.push("навык с generate_image должен нести references/<имя>.md с английским шаблоном промпта");
+  }
   const mentioned = new Set(draft.markdown.match(REFERENCE_MENTION_PATTERN) ?? []);
   for (const path of mentioned) {
     if (!(path in draft.files)) problems.push(`markdown ссылается на ${path}, а файл не передан`);

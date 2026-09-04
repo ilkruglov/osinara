@@ -114,6 +114,16 @@ describe("authored skill contract", () => {
     expect(message).not.toContain("generate_image");
   });
 
+  it("requires a reference file for a skill that generates images", () => {
+    expect(() => assertAuthoredSkillDraft(draft({ files: {}, markdown: GOOD_MARKDOWN.replace("по references/flux-card.md", "по шаблону") }), { knownToolNames: KNOWN }))
+      .toThrow(expect.objectContaining({
+        code: "AGENT_SKILL_RUBRIC_FAILED",
+        message: expect.stringContaining("generate_image должен нести references"),
+      }));
+    const textOnly = GOOD_MARKDOWN.replace("Вызови `generate_image`", "Вызови `web_search`").replace("по references/flux-card.md", "по запросу");
+    expect(() => assertAuthoredSkillDraft(draft({ files: {}, markdown: textOnly }), { knownToolNames: new Set([...KNOWN, "web_search"]) })).not.toThrow();
+  });
+
   it("treats Eve built-ins and parameters in backticks as acceptable", () => {
     const markdown = GOOD_MARKDOWN.replace(
       "3. Отправь файл",
