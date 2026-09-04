@@ -19,7 +19,7 @@ import { AppError } from "../app-error.js";
 export const AUTHORED_SKILL_LIMITS = Object.freeze({
   activeSkillsPerFamily: 40,
   changeNoteMaxCharacters: 500,
-  descriptionMaxCharacters: 200,
+  descriptionMaxCharacters: 400,
   fileMaxCharacters: 6_000,
   filesMax: 4,
   markdownMaxCharacters: 8_000,
