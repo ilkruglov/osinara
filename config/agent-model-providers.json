@@ -6,7 +6,7 @@
       "protocol": "deepseek-responses",
       "baseUrl": "https://api.deepseek.com",
       "reasoning": {
-        "effort": "high"
+        "effort": "max"
       }
     },
     "models": {
