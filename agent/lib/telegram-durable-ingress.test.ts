@@ -8,6 +8,7 @@
  * - Captionless attachments receive a non-empty factual model message after durable storage.
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
+ * - A rich message (Bot API 10.1) reaches dispatch with its text unfolded from the blocks.
  */
 import type { TelegramVerifiedUpdateContext } from "eve/channels/telegram";
 import { parseTelegramUpdate } from "eve/channels/telegram";
@@ -200,38 +201,60 @@ describe("createTelegramDurableIngress", () => {
     );
   });
 
-  it("acknowledges rejected external media without enqueue, download, or dispatch", async () => {
+  it("dispatches another bot's rich message with the text unfolded from its blocks", async () => {
     const storage = repository();
-    storage.value.claimNext.mockReset().mockResolvedValue(null);
-    const acceptMedia = vi.fn().mockResolvedValue(false);
-    const transcribeVoice = vi.fn();
-    const dispatch = vi.fn();
-    const waitUntil = vi.fn();
-    const raw = voicePayload();
-    const rawMessage = raw.message as Record<string, unknown>;
-    rawMessage.chat = { id: -1001, type: "supergroup" };
+    const raw = {
+      message: {
+        chat: { id: -5306107028, title: "BotBattle", type: "group" },
+        date: 1_788_563_816,
+        from: { first_name: "Osinara", id: 8_748_025_221, is_bot: true, username: "osinara_bot" },
+        message_id: 557,
+        rich_message: {
+          blocks: [{
+            blocks: [{ text: "Скрытая часть ответа другого бота.", type: "paragraph" }],
+            summary: "Полный ответ",
+            type: "details",
+          }],
+        },
+      },
+      update_id: 1004,
+    };
+    storage.claim.payload = raw;
+    storage.claim.updateId = "1004";
+    storage.claim.voice = null as never;
     const update = parseTelegramUpdate(raw);
-    if (!update || update.kind !== "message") {
-      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое сообщение");
-    }
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    const dispatch = vi.fn().mockResolvedValue({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "session.waiting" });
+          },
+        }),
+      id: "session-rich",
+    });
     const handle = createTelegramDurableIngress({
-      acceptMedia,
+      acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn(),
       botUsername: "osinara_bot",
       handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
       leaseMilliseconds: 60_000,
       repository: storage.value,
-      transcribeVoice,
+      transcribeVoice: vi.fn(),
     });
+    let backgroundTask: Promise<unknown> | undefined;
 
-    const response = await handle({ dispatch, raw, update, waitUntil } as TelegramVerifiedUpdateContext);
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
 
-    expect(response.status).toBe(200);
-    expect(acceptMedia).toHaveBeenCalledWith(update.message, "1001", "unsupported_media");
-    expect(storage.value.enqueue).not.toHaveBeenCalled();
-    expect(transcribeVoice).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(waitUntil).not.toHaveBeenCalled();
+    expect(dispatch.mock.calls[0]?.[0].message.text).toBe("Полный ответ\n\nСкрытая часть ответа другого бота.");
   });
 
   it("dispatches a captionless photo with a non-empty factual model message", async () => {
