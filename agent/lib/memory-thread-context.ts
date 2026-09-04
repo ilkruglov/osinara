@@ -77,7 +77,7 @@ function sourceEvidenceFor(
 
 function sourceEvidenceCharacters(evidence: readonly MemoryThreadSourceEvidence[]): number {
   return evidence.reduce((total, item) => total + item.sourceEntryRef.length +
-    item.authorLabel.length + item.kind.length + item.notice.length + item.observedAt.length, 0);
+    item.authorLabel.length + item.kind.length + item.observedAt.length, 0);
 }
 
 export function assembleMemoryThreadContext(

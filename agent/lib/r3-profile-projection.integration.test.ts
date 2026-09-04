@@ -278,11 +278,8 @@ describeWithDatabase("R3 profile projections", () => {
     expect(enabledContents).not.toContain("Модель предположила секретный внешний факт");
     const reported = personalEnabled.subjects.flatMap((subject) => subject.claims)
       .find((claim) => claim.content === "Факт только из External A");
-    expect(reported).toMatchObject({
-      evidenceKind: "reported",
-      sourceAuthorLabel: "Анна",
-      sourceNotice: expect.stringMatching(/другим участником/iu),
-    });
+    // Происхождение объясняется один раз в шапке выборки, в записи остаётся только evidenceKind.
+    expect(reported).toMatchObject({ evidenceKind: "reported", sourceAuthorLabel: "Анна" });
     await expect(profileViewRepository.read(fixture.ownerAuth, personalEnabled.profileViewRef))
       .resolves.toEqual(personalEnabled);
 

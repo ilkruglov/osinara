@@ -30,14 +30,14 @@ describe("completedTelegramOutput", () => {
   });
 
   it("does not deliver an answer made of transport directives alone", () => {
-    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-split>" }))
+    expect(completedTelegramOutput({ finishReason: "stop", message: "[[split]]" }))
       .toBeNull();
   });
 
   it("keeps aside directives inside a final answer for the presentation layer", () => {
     expect(
-      completedTelegramOutput({ finishReason: "stop", message: "Готово\n<telegram-split>\nкстати" }),
-    ).toEqual({ kind: "message", message: "Готово\n<telegram-split>\nкстати" });
+      completedTelegramOutput({ finishReason: "stop", message: "Готово\n[[split]]\nкстати" }),
+    ).toEqual({ kind: "message", message: "Готово\n[[split]]\nкстати" });
   });
 
   it("trims surrounding whitespace from a delivered message", () => {

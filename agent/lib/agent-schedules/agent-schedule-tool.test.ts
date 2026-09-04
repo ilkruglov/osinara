@@ -194,19 +194,10 @@ describe("manage_agent_schedule", () => {
   it("documents exact create, update, and id-only payloads without a delete/recreate workaround", () => {
     expect(manageAgentSchedule.description).toContain('Create payload: {"action":"create"');
     expect(manageAgentSchedule.description).toContain(
-      'Update payload: {"action":"update","id":"<id из list_agent_schedules>"',
+      "Update передаёт id и только реально изменяемые поля",
     );
     expect(manageAgentSchedule.description).toContain(
-      'Pause payload: {"action":"pause","id":"<id из list_agent_schedules>"}',
-    );
-    expect(manageAgentSchedule.description).toContain(
-      'Resume payload: {"action":"resume","id":"<id из list_agent_schedules>"}',
-    );
-    expect(manageAgentSchedule.description).toContain(
-      'Run_now payload: {"action":"run_now","id":"<id из list_agent_schedules>"}',
-    );
-    expect(manageAgentSchedule.description).toContain(
-      'Delete payload: {"action":"delete","id":"<id из list_agent_schedules>"}',
+      "Pause, resume, run_now и delete передают только action и id",
     );
     expect(manageAgentSchedule.description).toContain("Не удаляй и не пересоздавай расписание для изменения");
   });

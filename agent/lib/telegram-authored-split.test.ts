@@ -6,6 +6,7 @@
  * - Only the delivery ceiling merges parts back; shape stays the author's decision.
  * - Directives inside fenced or indented code stay literal content of the answer.
  * - A directive written anywhere but on its own line is removed instead of reaching a person.
+ * - The retired tag-shaped spellings still separate messages and never reach a person.
  * - `stripTelegramAsideDirectives`: durable projection text without transport directives.
  */
 import { describe, expect, it } from "vitest";
@@ -76,6 +77,33 @@ describe("splitTelegramAuthoredParts", () => {
     const markdown = `Вот пример:\n\n\`\`\`\n${directive}\n\`\`\``;
 
     expect(splitTelegramAuthoredParts(markdown)).toEqual({ asides: [], main: markdown });
+  });
+
+  it.each([
+    ["retired opening tag", "<telegram-split>"],
+    ["retired closing tag", "</telegram-split>"],
+    ["retired self-closing tag", "<telegram-split/>"],
+  ])("splits on the %s so an old habit never leaks", (_kind, spelling) => {
+    expect(splitTelegramAuthoredParts(`Ответ\n${spelling}\nдобивка`)).toEqual({
+      asides: ["добивка"],
+      main: "Ответ",
+    });
+  });
+
+  it("removes a retired closing tag the model appended to the last message", () => {
+    const markdown = `Первое сообщение\n${directive}\nа вот второе. </telegram-split>`;
+
+    expect(splitTelegramAuthoredParts(markdown)).toEqual({
+      asides: ["а вот второе."],
+      main: "Первое сообщение",
+    });
+  });
+
+  it("does not treat a marker with trailing text as a separator line", () => {
+    expect(splitTelegramAuthoredParts(`${directive} и сразу текст`)).toEqual({
+      asides: [],
+      main: "и сразу текст",
+    });
   });
 
   it("keeps an indented directive as literal code content", () => {

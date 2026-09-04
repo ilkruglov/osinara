@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `BOT_USERNAME`: stable bot identity used by dispatch tests.
- * - `privateMessage` and `groupMessage`: minimal parsed Eve Telegram messages.
+ * - `privateMessage`, `groupMessage`, and `botGroupMessage`: minimal parsed Eve Telegram messages.
  * - `telegramContext`: Telegram channel context with an observable sender.
  * - `repositories`: isolated application repository doubles for message-handler tests.
  */
@@ -28,6 +28,18 @@ export function groupMessage(text: string): TelegramMessage {
   return {
     ...privateMessage(text),
     chat: { id: "group-101", title: "Группа", type: "group" },
+  };
+}
+
+/** Another bot in the same group, as Telegram delivers it under Bot-to-Bot Communication Mode. */
+export function botGroupMessage(text: string): TelegramMessage {
+  return {
+    ...groupMessage(text),
+    from: { firstName: "Мия", id: "8123456789", isBot: true, username: "mimimia_ai_bot" },
+    raw: {
+      date: 1_700_000_000,
+      from: { first_name: "Мия", id: 8_123_456_789, is_bot: true, username: "mimimia_ai_bot" },
+    },
   };
 }
 

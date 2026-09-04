@@ -11,28 +11,55 @@ import { SESSION_RETENTION_DAYS } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import {
+  MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE,
   MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
   MEMORY_REVIEW_MAX_SAFE_RECOVERY_ATTEMPTS,
 } from "./memory-review-config.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
+import {
+  resolveAbandonedReviewBatch,
+  terminalizeAbandonedReviewTurns,
+} from "./memory-review-terminal-repository.js";
 
-const INTERACTIVE_START_AMBIGUOUS = "AGENT_MEMORY_REVIEW_INTERACTIVE_START_AMBIGUOUS";
+const TURN_NEVER_STARTED = "AGENT_MEMORY_REVIEW_TURN_NEVER_STARTED";
 const DISPATCH_TIMEOUT_AMBIGUOUS = "AGENT_MEMORY_REVIEW_DISPATCH_TIMEOUT_AMBIGUOUS";
 
 async function terminalizeStaleInteractiveBatches(client: PoolClient, now: Date): Promise<void> {
-  // A committed interactive batch without an Eve root crossed an ambiguous process-crash boundary.
-  const stale = await client.query<{ id: string }>(
-    `UPDATE memory_review_batches
-        SET status = 'ambiguous', diagnostic_code = $3,
-            completed_at = $1, updated_at = $1
+  // A batch whose turn never reached Eve carries no binding at all, so it provably wrote nothing:
+  // the turn was cancelled or died before `turn.started`. The previous ending marked it ambiguous,
+  // which is a permanent freeze of the whole lane — that is what stopped the group on 2026-09-04.
+  const stale = await client.query<{
+    application_session_id: string | null;
+    id: string;
+    lane_id: string;
+  }>(
+    `SELECT id, lane_id, application_session_id FROM memory_review_batches
       WHERE batch_kind = 'interactive' AND status = 'running' AND eve_session_id IS NULL
         AND started_at <= $1::timestamptz - $2::double precision * interval '1 millisecond'
-      RETURNING id`,
-    [now, MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS, INTERACTIVE_START_AMBIGUOUS],
+      ORDER BY started_at, id
+      FOR UPDATE SKIP LOCKED
+      LIMIT $3`,
+    [now, MEMORY_REVIEW_INTERACTIVE_START_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE],
   );
   for (const batch of stale.rows) {
-    await enqueueMemoryReviewOwnerAlert(client, batch.id, INTERACTIVE_START_AMBIGUOUS);
+    const outcome = await resolveAbandonedReviewBatch(client, {
+      applicationSessionId: batch.application_session_id,
+      batchId: batch.id,
+      diagnosticCode: TURN_NEVER_STARTED,
+      eveSessionId: null,
+      eveTurnId: null,
+      laneId: batch.lane_id,
+      notifyOwner: true,
+      now,
+    });
+    console.error(JSON.stringify({
+      batchId: batch.id,
+      code: TURN_NEVER_STARTED,
+      laneId: batch.lane_id,
+      outcome,
+    }));
   }
 }
 
@@ -65,6 +92,7 @@ export async function terminalizeStaleMemoryReviewBatches(
 ): Promise<void> {
   await terminalizeStaleInteractiveBatches(client, now);
   await terminalizeStaleDispatchingBatches(client, now);
+  await terminalizeAbandonedReviewTurns(client, now);
 }
 
 export const memoryReviewDispatchTerminalRepository = {
@@ -253,14 +281,28 @@ export const memoryReviewDispatchTerminalRepository = {
         await client.query("ROLLBACK");
         return "stale";
       }
-      const result = await client.query<{ batch_id: string }>(
-        `UPDATE memory_review_batches AS batch
-             SET status = 'ambiguous', diagnostic_code = $2, completed_at = now(), updated_at = now()
-           WHERE batch.application_session_id = $3 AND batch.eve_session_id = $1
-             AND batch.batch_kind = 'interactive' AND batch.status = 'running'
-           RETURNING batch.id AS batch_id`,
-        [input.eveSessionId, input.diagnosticCode, current.id],
+      // A failed chat session leaves its review batch behind. The previous `ambiguous` ending
+      // blocked the lane at that place forever, and mid-chain it also collided with the next
+      // prepared turn on `(lane_id, predecessor_sequence)`. Provenance decides here as everywhere.
+      const result = await client.query<{ batch_id: string; eve_turn_id: string | null; lane_id: string }>(
+        `SELECT id AS batch_id, lane_id, eve_turn_id FROM memory_review_batches
+          WHERE application_session_id = $2 AND eve_session_id = $1
+            AND batch_kind = 'interactive' AND status = 'running' FOR UPDATE`,
+        [input.eveSessionId, current.id],
       );
+      const failed = result.rows[0];
+      if (failed) {
+        await resolveAbandonedReviewBatch(client, {
+          applicationSessionId: null,
+          batchId: failed.batch_id,
+          diagnosticCode: input.diagnosticCode,
+          eveSessionId: input.eveSessionId,
+          eveTurnId: failed.eve_turn_id,
+          laneId: failed.lane_id,
+          notifyOwner: true,
+          now: new Date(),
+        });
+      }
       if (result.rowCount === 0) {
         const review = await client.query(
           `SELECT 1 FROM memory_review_batches
@@ -278,9 +320,6 @@ export const memoryReviewDispatchTerminalRepository = {
           WHERE id = $1 AND eve_session_id = $2 AND retired_at IS NULL`,
         [current.id, input.eveSessionId],
       );
-      if (result.rows[0]) {
-        await enqueueMemoryReviewOwnerAlert(client, result.rows[0].batch_id, input.diagnosticCode);
-      }
       await client.query("COMMIT");
       return "recorded";
     } catch (error) {

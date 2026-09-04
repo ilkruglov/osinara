@@ -12,17 +12,22 @@
  *   limits only how many paced messages one answer can open; a part longer than the Telegram
  *   transport limit is still split further by the presentation layer, as any answer always was.
  * - The directive is transport syntax and never reaches a person: a whole-line directive splits,
- *   any other occurrence is removed. Fenced and indented code keeps its literal content.
+ *   any other occurrence is removed. The retired tag-shaped spelling counts as well, so an old
+ *   habit of the model cannot leak either. Fenced and indented code keeps its literal content.
  */
 const TELEGRAM_AUTHORED_MESSAGE_MAX_COUNT = 5;
 
-export const TELEGRAM_ASIDE_DIRECTIVE = "<telegram-split>";
+export const TELEGRAM_ASIDE_DIRECTIVE = "[[split]]";
 
+// A separator that is not shaped like a tag cannot invite a closing tag. The earlier tag-shaped
+// spelling is still recognized so a model repeating the old habit never leaks it to a person.
+const DIRECTIVE_SOURCE = "\\[\\[split\\]\\]|</?telegram-split\\s*/?>";
 // Column zero only: an indented directive belongs to a Markdown code block, not to the transport.
-const DIRECTIVE_LINE_PATTERN = new RegExp(`^${TELEGRAM_ASIDE_DIRECTIVE}[ \\t\\r]*$`, "u");
-const INLINE_DIRECTIVE_PATTERN = new RegExp(TELEGRAM_ASIDE_DIRECTIVE, "gu");
+const DIRECTIVE_LINE_PATTERN = new RegExp(`^(?:${DIRECTIVE_SOURCE})[ \\t\\r]*$`, "u");
+const INLINE_DIRECTIVE_PATTERN = new RegExp(DIRECTIVE_SOURCE, "gu");
 const FENCE_LINE_PATTERN = /^ {0,3}(?<fence>`{3,}|~{3,})(?<info>.*)$/u;
 const INDENTED_CODE_PATTERN = /^(?: {4}|\t)/u;
+const DIRECTIVE_PRESENCE_PATTERN = new RegExp(DIRECTIVE_SOURCE, "u");
 
 export interface TelegramAuthoredParts {
   readonly asides: readonly string[];
@@ -52,7 +57,7 @@ function nextFenceState(line: string, open: FenceState | null): FenceState | nul
 }
 
 function withoutInlineDirective(line: string): string {
-  if (!line.includes(TELEGRAM_ASIDE_DIRECTIVE) || INDENTED_CODE_PATTERN.test(line)) return line;
+  if (!DIRECTIVE_PRESENCE_PATTERN.test(line) || INDENTED_CODE_PATTERN.test(line)) return line;
   return line.replace(INLINE_DIRECTIVE_PATTERN, "").replace(/[ \t]{2,}/gu, " ").trimEnd();
 }
 

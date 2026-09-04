@@ -3,6 +3,10 @@
  *
  * Exports:
  * - `wrapModelFacingTool`: preserves a descriptor while normalizing every thrown error.
+ *
+ * Key construct:
+ * - The generic call contract is stated once in `agent/instructions.md`, so a descriptor carries
+ *   only what is specific to its own tool.
  * - `wrapModelFacingToolMap`: applies the boundary once to a complete mode-scoped surface.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
@@ -11,35 +15,15 @@ import { normalizeModelFacingError } from "./model-facing-error.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
+/**
+ * The shared call contract lives once in the permanent core, not on every descriptor: repeating it
+ * per tool cost about fifteen thousand characters of identical text in a single private-chat
+ * request. A tool still states its own purpose, and a denied one still says it is unavailable.
+ */
 function completeDescription(description: string): string {
-  if (/недоступен/u.test(description)) {
-    return [
-      description,
-      "Когда использовать: никогда в текущем режиме.",
-      "Не использовать: не пытайся обходить запрет другим tool.",
-      "Вход: не формируй вызов.",
-      "Результат: доступ отсутствует.",
-      "Ошибка: не повторяй и сообщи об ограничении текущего контекста.",
-    ].join(" ");
-  }
-  const sections = [
-    description.includes("Когда использовать:")
-      ? null
-      : "Когда использовать: только когда назначение выше прямо соответствует задаче пользователя.",
-    description.includes("Не использовать:")
-      ? null
-      : "Не использовать: не вызывай для действий вне описанного назначения или текущего trust zone.",
-    description.includes("Вход:")
-      ? null
-      : "Вход: передавай только поля schema; ID, cursor и opaque ref бери только из текущего контекста или результата подходящего list/search tool.",
-    description.includes("Результат:")
-      ? null
-      : "Результат: считай действие выполненным только по успешному tool result и используй только реально возвращённые поля.",
-    description.includes("Ошибка:")
-      ? null
-      : "Ошибка: следуй code, correction, retryable и sideEffectStatus; при unknown или completed не повторяй side effect автоматически.",
-  ].filter((section): section is string => section !== null);
-  return [description, ...sections].join(" ");
+  return /недоступен/u.test(description)
+    ? `${description} Не вызывай его и не пытайся обойти запрет другим инструментом.`
+    : description;
 }
 
 export function wrapModelFacingTool(

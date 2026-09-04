@@ -163,8 +163,34 @@ describe("external group tool surface", () => {
 
   it("emits only guarded baseline tools and framework denials without a grant", () => {
     expect(names({ capabilities: new Set(), environment: "external", skills: {} })).toEqual(
-      [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill", "manage_behavior_preference", "read_profile_view"].sort(),
+      [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort(),
     );
+  });
+
+  it("gives every interactive external group its own reminder tools without a grant", () => {
+    const emitted = names({ capabilities: new Set(), environment: "external", skills: {} });
+
+    expect(emitted).toEqual(expect.arrayContaining(["list_reminders", "manage_reminder"]));
+  });
+
+  it("withholds reminder tools from a scheduled run and a channel-authored turn", () => {
+    const scheduled = names({
+      capabilities: new Set(),
+      environment: "external",
+      scheduledRun: true,
+      skills: {},
+    });
+    const channelAuthored = names({
+      capabilities: new Set(),
+      environment: "external",
+      includeApplicationCore: false,
+      skills: {},
+    });
+
+    for (const emitted of [scheduled, channelAuthored]) {
+      expect(emitted).not.toContain("list_reminders");
+      expect(emitted).not.toContain("manage_reminder");
+    }
   });
 
   it("denies native child delegation in every interactive external group", async () => {
@@ -214,7 +240,7 @@ describe("external group tool surface", () => {
   it("emits no application tool outside the effective allowlist", () => {
     const applicationNames = new Set([...TRUSTED_MODE_TOOL_NAMES, ...PRIVATE_ONLY_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES]);
     const grantable = new Set<string>([...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, ""))]);
-    const alwaysExternal = new Set(["manage_behavior_preference", "read_profile_view"]);
+    const alwaysExternal = new Set(["list_reminders", "manage_behavior_preference", "manage_reminder", "read_profile_view"]);
 
     for (const emitted of names({
       capabilities: new Set(),
@@ -419,7 +445,7 @@ describe("external group tool surface", () => {
         environment: "external",
         skills: {},
       }),
-    ).toEqual([...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "load_skill", "manage_behavior_preference", "read_profile_view"].sort());
+    ).toEqual([...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort());
   });
 
   it("exposes only group scope in external shared-tool schemas and descriptions", () => {

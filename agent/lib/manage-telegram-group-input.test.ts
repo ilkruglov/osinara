@@ -154,14 +154,17 @@ describe("manage_telegram_group model input", () => {
     }, context)).resolves.toMatchObject({ groupId: "group-1" });
   });
 
-  it("documents exact action payloads and finite enums", () => {
+  it("documents exact action payloads and leaves finite enums to the schema", () => {
     for (const fragment of [
       '{"action":"status"}',
-      '{"action":"start_new_context","telegramChatId":"-1001234567890"}',
-      '{"action":"remove","telegramChatId":"-1001234567890"}',
-      "addressed_only | all | owner_only",
-      "family_private | external",
+      "остальные actions только плоские поля",
+      "никогда не угадывай telegramChatId",
       "не более одного раза",
     ]) expect(manageTelegramGroup.description).toContain(fragment);
+    // Перечисления модель получает из JSON-схемы; дублировать их прозой значит платить дважды.
+    const schema = JSON.stringify(z.toJSONSchema(manageTelegramGroup.inputSchema as z.ZodType));
+    for (const value of ["addressed_only", "owner_only", "family_private", "external"]) {
+      expect(schema).toContain(value);
+    }
   });
 });

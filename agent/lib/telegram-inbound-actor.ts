@@ -4,12 +4,12 @@
  * Exports:
  * - `TelegramInboundActor`: explicit user or channel identity derived before authorization.
  * - `TelegramTimelineActorKind`: persisted timeline actor discriminator.
- * - `telegramInboundActor`: fail-closed classifier for human and channel-authored messages.
+ * - `telegramInboundActor`: fail-closed classifier for human, bot, and channel-authored messages.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
 
-export type TelegramTimelineActorKind = "agent_self" | "telegram_channel" | "user";
-export type TelegramActorKind = "telegram_channel" | "telegram_user";
+export type TelegramTimelineActorKind = "agent_self" | "telegram_bot" | "telegram_channel" | "user";
+export type TelegramActorKind = "telegram_bot" | "telegram_channel" | "telegram_user";
 
 export interface TelegramInboundActor {
   actorId: string;
@@ -62,6 +62,23 @@ export function telegramInboundActor(message: TelegramMessage): TelegramInboundA
       id: sender.id,
       kind: "telegram_user",
       timelineKind: "user",
+      username: sender.username ?? null,
+    };
+  }
+
+  // Bot API 10.0 delivers another bot's group message once Bot-to-Bot Communication Mode is on.
+  // A bot owns no application account, so it stays a visible Telegram identity like a channel.
+  // Both identities must agree, and a second visible sender still means an anonymous or channel post.
+  if (sender?.isBot === true && senderChat === null) {
+    const rawSender = record(message.raw.from);
+    if (!rawSender || rawSender.is_bot !== true || exactIdentifier(rawSender.id) !== sender.id ||
+      !/^[1-9]\d*$/u.test(sender.id)) return null;
+    return {
+      actorId: `telegram-bot:${sender.id}`,
+      displayName: userDisplayName(message),
+      id: sender.id,
+      kind: "telegram_bot",
+      timelineKind: "telegram_bot",
       username: sender.username ?? null,
     };
   }

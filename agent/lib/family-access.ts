@@ -137,6 +137,18 @@ export function evaluateConversationAccess(
     };
   }
 
+  // A bot participates only in the untrusted external zone, and owner-only mode is reserved for the
+  // verified human owner. Neither this branch nor the family branch above can ever admit a bot.
+  if (input.actorKind === "telegram_bot" && group.messageMode === "owner_only") {
+    return {
+      allowed: false,
+      error: new AppError(
+        "AGENT_TELEGRAM_BOT_NOT_ADMITTED",
+        "Сообщения других ботов недоступны в режиме только для владельца",
+      ),
+    };
+  }
+
   // External groups remain group-only, but a same-family identity is retained for owner administration.
   const familyIdentity = input.actorKind === "telegram_user" &&
     input.identity?.familyId === group.familyId ? input.identity : null;

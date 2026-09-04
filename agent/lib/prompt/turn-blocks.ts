@@ -4,6 +4,7 @@
  * Exports:
  * - `TurnBlockContext`: the minimal Eve resolve context a block resolver reads.
  * - `createModeBlockResolver` / `resolveModeBlock`: verified mode rulebook for the current turn.
+ * - `createReactionSetBlockResolver` / `resolveReactionSetBlock`: reaction set announced in history.
  * - `createMemoryBlockResolver` / `resolveMemoryBlock`: authorized long-term memory records.
  * - `createPreferenceBlockResolver` / `resolvePreferenceBlock`: one editable chat prompt.
  *
@@ -48,6 +49,11 @@ import {
   TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS,
   type TelegramReactionPolicy,
 } from "../telegram-reaction-policy.js";
+import { resolveChatReactions } from "../telegram-reaction-set.js";
+import {
+  announcesReactionSet,
+  formatReactionSetAnnouncement,
+} from "../telegram-reaction-announcement.js";
 import { telegramReactionPolicyRepository } from "../telegram-reaction-policy-repository.js";
 import { loadCurrentExternalGroupCapabilities } from "../tool-policy/external-group-live-policy.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
@@ -151,17 +157,17 @@ export function createModeBlockResolver(dependencies: {
     // A scheduled run has no inbound message to react to, and a channel-authored turn keeps its
     // text-only surface, so neither one requests a reaction policy.
     const reactionsPossible = !scheduledRun && !isTelegramChannelSession(ctx.session.auth);
-    let reactionPolicy: TelegramReactionPolicy | null = null;
+    let reactions: readonly string[] | null = null;
     const telegramChatId = reactionsPossible ? verifiedTelegramChatId(ctx.session.auth) : null;
     if (telegramChatId !== null) {
       try {
-        reactionPolicy = await dependencies.loadReactionPolicy(telegramChatId);
+        reactions = resolveChatReactions(await dependencies.loadReactionPolicy(telegramChatId));
       } catch (error) {
         logBlockFailure("AGENT_TELEGRAM_REACTION_POLICY_LOOKUP_FAILED", error);
       }
     }
     if (environment !== "external") {
-      return modeInstructions({ environment, reactionPolicy, scheduledRun });
+      return modeInstructions({ environment, reactions, scheduledRun });
     }
 
     // Channel-authored turns can receive text only. Keep prompt instructions aligned with the
@@ -169,9 +175,10 @@ export function createModeBlockResolver(dependencies: {
     if (isTelegramChannelSession(ctx.session.auth)) {
       return modeInstructions({
         capabilities: new Set(),
+        channelAuthored: true,
         environment: "external",
         includeApplicationCore: false,
-        reactionPolicy,
+        reactions,
         scheduledRun,
         skills: new Set(),
       });
@@ -194,12 +201,38 @@ export function createModeBlockResolver(dependencies: {
       capabilities: effective.capabilities,
       environment: "external",
       includeApplicationCore: effective.includeApplicationCore,
-      reactionPolicy,
+      reactions,
       scheduledHistory: effective.includeApplicationCore &&
         scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       scheduledRun,
       skills,
     });
+  };
+}
+
+export function createReactionSetBlockResolver(dependencies: {
+  loadReactionPolicy: ReactionPolicyLoader;
+}) {
+  return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
+    // A scheduled run has no message to react to, and a channel-authored turn stays text-only.
+    if (isScheduledSession(ctx) || isTelegramChannelSession(ctx.session.auth)) return null;
+    const telegramChatId = verifiedTelegramChatId(ctx.session.auth);
+    if (telegramChatId === null) return null;
+
+    let policy: TelegramReactionPolicy | null = null;
+    try {
+      policy = await dependencies.loadReactionPolicy(telegramChatId);
+    } catch (error) {
+      logBlockFailure("AGENT_TELEGRAM_REACTION_POLICY_LOOKUP_FAILED", error);
+      return null;
+    }
+    const reactions = resolveChatReactions(policy);
+    if (reactions === null) return null;
+
+    // Absence is the only trigger: a changed set renders a different message, and compaction that
+    // replaced the old announcement also removes it.
+    const announcement = formatReactionSetAnnouncement(reactions);
+    return announcesReactionSet(ctx.messages, announcement) ? null : announcement;
   };
 }
 
@@ -296,18 +329,24 @@ export function createPreferenceBlockResolver(dependencies: {
   };
 }
 
+const reactionPolicyLoader: ReactionPolicyLoader = async (telegramChatId) => {
+  const cached = await telegramReactionPolicyRepository.read(telegramChatId);
+  if (cached === null) return null;
+  // Past the refresh window the record proves only that getChat keeps failing, so the prompt
+  // must not describe a reaction set an administrator may have already changed.
+  const age = Date.now() - cached.fetchedAt.getTime();
+  if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
+  return { allowsAll: cached.allowsAll, emoji: cached.emoji };
+};
+
 export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
-  loadReactionPolicy: async (telegramChatId) => {
-    const cached = await telegramReactionPolicyRepository.read(telegramChatId);
-    if (cached === null) return null;
-    // Past the refresh window the record proves only that getChat keeps failing, so the prompt
-    // must not describe a reaction set an administrator may have already changed.
-    const age = Date.now() - cached.fetchedAt.getTime();
-    if (age >= TELEGRAM_REACTION_POLICY_TTL_MILLISECONDS) return null;
-    return { allowsAll: cached.allowsAll, emoji: cached.emoji };
-  },
+  loadReactionPolicy: reactionPolicyLoader,
   loadSkills: (groupId) => groupSkillPolicyRepository.loadGroupSkillAllowlist(groupId),
+});
+
+export const resolveReactionSetBlock = createReactionSetBlockResolver({
+  loadReactionPolicy: reactionPolicyLoader,
 });
 
 export const resolveMemoryBlock = createMemoryBlockResolver({

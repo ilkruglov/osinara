@@ -114,6 +114,11 @@ const POST_V0101_MIGRATIONS = [
   "080_remove_personal_memory_review_artifacts.sql",
   "081_telegram_progress_notices.sql",
   "082_telegram_chat_reaction_policies.sql",
+  "083_group_reminder_scope.sql",
+  "084_group_reminder_author.sql",
+  "085_memory_review_skipped_status.sql",
+  "086_memory_review_skipped_terminal.sql",
+  "087_telegram_bot_senders.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

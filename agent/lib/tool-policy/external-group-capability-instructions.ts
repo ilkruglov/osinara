@@ -53,7 +53,11 @@ export function externalGroupCapabilityInstructions(
       { name: "read_profile_view", usage: "прочитать выданный текущему чату снимок профиля по profileViewRef" },
       ...(options.scheduledRun
         ? []
-        : [{ name: "manage_behavior_preference", usage: "прочитать или изменить стиль ответов текущего чата по явной просьбе" }]),
+        : [
+          { name: "manage_behavior_preference", usage: "прочитать или изменить стиль ответов текущего чата по явной просьбе" },
+          { name: "list_reminders", usage: "показать действующие напоминания текущего чата, включая приостановленные" },
+          { name: "manage_reminder", usage: "поставить, изменить, приостановить или удалить любое напоминание текущего чата" },
+        ]),
       ...(options.scheduledHistory
         ? [{ name: "read_scheduled_group_history", usage: "последовательно прочитать разрешённый snapshot истории scheduled run" }]
         : []),

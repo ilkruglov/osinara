@@ -95,7 +95,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const group = groupChatType === null
       ? null
       : await repositories.telegram.findGroup(message.chat.id, groupChatType);
-    if (actor.kind === "telegram_channel" &&
+    // Neither a channel nor another bot owns an application account. Both participate only in the
+    // untrusted external zone, and never in the mode reserved for the verified human owner.
+    if (actor.kind !== "telegram_user" &&
       (group?.type !== "external" || group.messageMode === "owner_only")) return null;
     const forumTopicId = group ? telegramForumTopicId(message) : null;
     const mediaKind = classifyTelegramInboundMedia(message);
@@ -127,7 +129,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         if (!hasLazyGroupAttachment) return null;
       }
       if (unsupportedGroupSlashCommand) {
-        if (inboundTimeline.status === "inserted" && actor.kind === "telegram_user") {
+        if (inboundTimeline.status === "inserted" && actor.kind !== "telegram_channel") {
           await repositories.memoryReview.observePassiveMessage({
             groupId: group.groupId,
             timelineEntryId: inboundTimeline.entryId,
@@ -160,7 +162,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       // Authorized family attachment references are retained without waking the model.
       if (!addressed && !hasLazyGroupAttachment) {
         if (inboundTimeline.status === "inserted") {
-          if (actor.kind === "telegram_user") await repositories.memoryReview.observePassiveMessage({
+          if (actor.kind !== "telegram_channel") await repositories.memoryReview.observePassiveMessage({
             groupId: group.groupId,
             timelineEntryId: inboundTimeline.entryId,
           });
@@ -260,7 +262,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const lazyAttachment = currentAttachment ?? replyAttachment;
     if (!addressed || journalDuplicate) {
       if (!addressed && !journalDuplicate && group && inboundTimeline &&
-        actor.kind === "telegram_user") {
+        actor.kind !== "telegram_channel") {
         await repositories.memoryReview.observePassiveMessage({
           groupId: group.groupId,
           timelineEntryId: inboundTimeline.entryId,
@@ -291,7 +293,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
 
     // Context snapshots and one-time notices are consumed only after reply/HITL authorization has
     // proved that this accepted message will continue into an agent turn.
-    const profileSignals = actor.kind === "telegram_user"
+    const profileSignals = actor.kind !== "telegram_channel"
       ? verifiedTelegramProfileSignals(message)
       : { explicitMentionTelegramUserIds: [], replyTelegramUserId: null };
     // Thread lifecycle is silent in shared chats; only a verified private turn may consume notices.
@@ -397,7 +399,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
       );
     }
-    const groupTurnContext = group && actor.kind === "telegram_user"
+    const groupTurnContext = group && actor.kind !== "telegram_channel"
       ? await prepareTelegramMemoryReviewTurn({
           applicationSessionId: appSession.id,
           conversationId: conversation.id,

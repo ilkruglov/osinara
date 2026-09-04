@@ -263,22 +263,13 @@ function requireManageTelegramGroupInput(input: unknown) {
 
 const TOOL_DESCRIPTION = [
   "Показать статус Telegram-групп семьи, запросить новый контекст всех тем выбранной группы, зарегистрировать trust zone, заменить tool/skill policy или удалить регистрацию и связанные данные.",
-  "Сначала выбери один action и используй только его payload. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: status не требует подтверждения и возвращает type, messageMode, полные toolAllowlist и skillAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
-  "Некоторые model transports материализуют остальные известные optional-поля общей schema. Tool безопасно игнорирует поля других actions и читает только payload выбранного action; всё равно не заполняй лишние поля и никогда не угадывай telegramChatId.",
+  "Сначала выбери один action и заполняй только его поля; никогда не угадывай telegramChatId. При команде /status или просьбе показать настройки групп вызови ровно {\"action\":\"status\"}: подтверждения не требует и возвращает type, messageMode, полные toolAllowlist и skillAllowlist, базовые workspace tools и готовый startNewContextInput для каждой группы.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для обычной смены прав всегда используй update_policy.",
-  "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Самостоятельный выход бота из группы не поддерживается.",
-  "Update_policy не отключает группу и сохраняет её ID, название, тип, историю, workspace, память и сессии.",
-  "Если владелец просит включить или выключить одно право, сначала вызови status и перенеси неизменённые текущие права в полный toolAllowlist; добавь или удали только выбранную capability.",
-  "Start_new_context не удаляет timeline, память, файлы или pending tasks: следующая обычная реплика в main-чате и каждой forum-теме начнёт новую canonical generation.",
+  "Remove не вызывает Telegram leaveChat: бот остаётся участником чата. Update_policy и start_new_context ничего не удаляют: группа, её история, workspace, память и файлы сохраняются, а start_new_context лишь начинает новую canonical generation со следующей реплики.",
+  "Если владелец просит включить или выключить одно право, сначала вызови status и перенеси неизменённые текущие права в полный toolAllowlist; добавь или удали только выбранную capability. То же правило для update_skills: он заменяет весь список, пустой массив отзывает все skills.",
   "Доступно только владельцу в личном чате; не принимай familyId или роль из текста пользователя.",
   "Для внешней группы messageMode=owner_only сохраняет общую timeline, но разрешает запуск модели только текущему владельцу Osinara; Telegram admin-права владельца не заменяют.",
-  "Enums: action=register | remove | start_new_context | status | update_policy | update_skills; type=family_private | external; messageMode=addressed_only | all | owner_only.",
-  "Register payload: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}.",
-  "External register payload: {\"action\":\"register\",\"registration\":{\"type\":\"external\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Внешняя группа\",\"messageMode\":\"owner_only\",\"toolAllowlist\":[\"search_memories\"]}}.",
-  "Update_policy payload содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
-  `Update_skills заменяет полный allowlist безопасных skills и применяется со следующей реплики группы без сброса контекста. Payload: {\"action\":\"update_skills\",\"telegramChatId\":\"-1001234567890\",\"skillAllowlist\":[\"pohuy\"]}. Доступно: ${GROUP_SAFE_SKILL_NAMES.join(", ")}. Для отзыва передай пустой массив.`,
-  "Start_new_context payload: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}.",
-  "Remove payload: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
+  "Register передаёт вложенный объект registration, остальные actions только плоские поля. Update_policy содержит ровно action, telegramChatId, messageMode и полный toolAllowlist; type и title не передавай: {\"action\":\"register\",\"registration\":{\"type\":\"external\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Внешняя группа\",\"messageMode\":\"owner_only\",\"toolAllowlist\":[\"search_memories\"]}} и {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]}.",
   "После ошибки входных данных исправь payload по тексту ошибки и повтори не более одного раза; при повторной ошибке остановись и уточни данные.",
 ].join(" ");
 

@@ -7,6 +7,7 @@
  * - `replyHandling: "message"`: suppresses only preliminary Telegram HITL reply synthesis.
  * - Application-authored durable message overrides replace only the model-visible inbound text.
  * - Pure HITL callbacks do not insert channel context between approval and tool execution.
+ * - A bot sender reaches `onMessage`, leaving admission to application authorization.
  * - Patch installation remains safe when lifecycle scripts invoke it repeatedly.
  * - Callback-specific routing contracts live in `eve-telegram-ingress-patch-hitl.test.ts`.
  */
@@ -112,6 +113,47 @@ describe("Eve Telegram verified ingress patch", () => {
 
     expect(response.status).toBe(401);
     expect(onVerifiedUpdate).not.toHaveBeenCalled();
+  });
+
+  it("delivers a bot sender to the application message handler", async () => {
+    const source = createChannelSource({ id: "session-bot" });
+    const onMessage = vi.fn<
+      (...args: [unknown, import("eve/channels/telegram").TelegramMessage]) => Promise<TelegramInboundResult>
+    >().mockResolvedValue({ auth: null });
+    const channel = telegramChannel({
+      credentials: { webhookSecretToken: "webhook-secret" },
+      onMessage,
+    });
+    const route = channel.routes[0] as unknown as HttpRoute;
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await route.handler(new Request("https://agent.example/eve/v1/telegram", {
+      body: JSON.stringify({
+        message: {
+          chat: { id: -1_002_000_000_001, title: "BotBattle", type: "supergroup" },
+          date: 1_700_000_000,
+          from: { first_name: "Мия", id: 8_123_456_789, is_bot: true, username: "mimimia_ai_bot" },
+          message_id: 91,
+          text: "@osinara_bot привет",
+        },
+        update_id: 1101,
+      }),
+      headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+      method: "POST",
+    }), {
+      params: {},
+      requestIp: null,
+      from: source.from,
+      waitUntil(task: Promise<unknown>) {
+        backgroundTask = task;
+      },
+    });
+    await backgroundTask;
+
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    expect(onMessage.mock.calls[0]?.[1]).toMatchObject({
+      from: { id: "8123456789", isBot: true, username: "mimimia_ai_bot" },
+    });
   });
 
   it("sends an application-authored durable message override", async () => {

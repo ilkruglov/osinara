@@ -68,14 +68,18 @@ export async function setTelegramMessageReaction(
     throw error;
   }
 
-  const body = response.body as { ok?: unknown; result?: unknown } | null;
+  const body = response.body as { description?: unknown; ok?: unknown; result?: unknown } | null;
   if (response.ok && body?.ok === true && body.result === true) return "applied";
 
   // Disabled or restricted chat reactions are an expected presentation limitation, not turn failure.
+  // The refused emoji and the provider description are what separate an unsupported symbol from a
+  // chat that forbids reactions outright; without them both look identical in the journal.
   if (body?.ok === false && TELEGRAM_REACTION_DECLINED_STATUSES.has(response.status)) {
     console.error(JSON.stringify({
       code: "AGENT_TELEGRAM_REACTION_UNAVAILABLE",
+      emoji,
       method: "setMessageReaction",
+      providerDescription: typeof body.description === "string" ? body.description : null,
       providerStatus: response.status,
     }));
     return "unavailable";
@@ -83,7 +87,9 @@ export async function setTelegramMessageReaction(
 
   console.error(JSON.stringify({
     code: "AGENT_TELEGRAM_REACTION_DELIVERY_FAILED",
+    emoji,
     method: "setMessageReaction",
+    providerDescription: typeof body?.description === "string" ? body.description : null,
     providerStatus: response.status,
   }));
   throw new AppError(

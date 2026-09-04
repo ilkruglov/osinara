@@ -17,7 +17,7 @@ import {
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
-import { memoryEvidenceNotice, type ModelMemoryEvidence } from "./model-memory.js";
+import type { ModelMemoryEvidence } from "./model-memory.js";
 
 export const THREAD_REF_PATTERN = /^thread_[0-9a-f]{32}$/u;
 export const THREAD_ENTRY_REF_PATTERN = /^entry_[0-9a-f]{32}$/u;
@@ -246,7 +246,6 @@ export const memoryThreadQueryRepository = {
         sourceEvidence: {
           authorLabel: row.source_author_label,
           kind: row.source_evidence_kind,
-          notice: memoryEvidenceNotice(row.source_evidence_kind),
           observedAt: row.source_observed_at.toISOString(),
         },
         sourceType: row.source_type,

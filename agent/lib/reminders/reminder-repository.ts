@@ -27,6 +27,11 @@ import {
   selectReminder,
 } from "./reminder-repository-helpers.js";
 import {
+  applyReminderUpdate,
+  recordReminderOperation,
+  requireReminderNotLeased,
+} from "./reminder-mutation.js";
+import {
   type NotificationSettingsInput,
   requireQuietHours,
   requireReminderContent,
@@ -39,7 +44,8 @@ export interface ReminderCreateInput {
   firstRunAt: Date;
   operationKey: string;
   recurrence: ReminderRecurrence | null;
-  scope: ReminderScope;
+  /** The group scope has its own boundary: it carries a Telegram author instead of an account. */
+  scope: Exclude<ReminderScope, "group">;
   timezone: string;
 }
 
@@ -125,7 +131,7 @@ export const reminderRepository = {
     try {
       await client.query("BEGIN");
       await requireCurrentMembership(client, auth);
-      const replay = await findReminderOperation(client, auth, input.operationKey, "create", inputHash);
+      const replay = await findReminderOperation(client, auth.familyId, input.operationKey, "create", inputHash);
       if (replay !== undefined) {
         if (!replay) {
           throw new AppError(
@@ -208,12 +214,13 @@ export const reminderRepository = {
         ],
       );
       const reminder = inserted.rows[0]!;
-      await client.query(
-        `INSERT INTO reminder_operations
-           (family_id, operation_key, operation_kind, input_hash, reminder_id)
-         VALUES ($1, $2, 'create', $3, $4)`,
-        [auth.familyId, input.operationKey, inputHash, reminder.id],
-      );
+      await recordReminderOperation(client, {
+        familyId: auth.familyId,
+        inputHash,
+        operationKey: input.operationKey,
+        operationKind: "create",
+        reminderId: reminder.id,
+      });
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'reminder.created', $3,
@@ -283,7 +290,7 @@ export const reminderRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const replay = await findReminderOperation(client, auth, input.operationKey, "update", inputHash);
+      const replay = await findReminderOperation(client, auth.familyId, input.operationKey, "update", inputHash);
       if (replay) {
         const existing = await selectReminder(client, auth.familyId, replay);
         if (!existing) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание уже удалено");
@@ -293,64 +300,26 @@ export const reminderRepository = {
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
       await requireReminderMutationAccess(client, auth, reminder);
-      if (reminder.status === "leased") {
-        throw new AppError(
-          "AGENT_REMINDER_DELIVERY_IN_PROGRESS",
-          "Напоминание сейчас отправляется. Повторите изменение после завершения доставки",
-        );
-      }
-      if (input.enabled === true && reminder.status === "completed" && !firstRunAt) {
-        throw new AppError(
-          "AGENT_REMINDER_TIME_REQUIRED",
-          "Для повторного запуска завершённого напоминания укажите новое время",
-        );
-      }
-      const scheduleChanged = firstRunAt !== undefined || recurrence !== undefined;
-      const nextDue = firstRunAt ?? reminder.due_at;
-      const nextRecurrence = recurrence === undefined
-        ? reminder.recurrence_unit && reminder.recurrence_interval
-          ? { interval: reminder.recurrence_interval, unit: reminder.recurrence_unit }
-          : null
-        : recurrence;
-      const updated = await client.query<ReminderRow>(
-        `UPDATE reminders
-         SET content = $2,
-             recurrence_unit = $3, recurrence_interval = $4,
-             recurrence_anchor_local = CASE WHEN $5 THEN $6::timestamptz AT TIME ZONE timezone ELSE recurrence_anchor_local END,
-             occurrence_index = CASE WHEN $5 THEN 0 ELSE occurrence_index END,
-             due_at = CASE WHEN $5 THEN $6 ELSE due_at END,
-             available_at = CASE WHEN $5 THEN $6 ELSE available_at END,
-             delayed_by_quiet_hours = CASE WHEN $5 THEN false ELSE delayed_by_quiet_hours END,
-              status = CASE WHEN $7 = false THEN 'paused'::reminder_status
-                           WHEN $7 = true THEN 'active'::reminder_status ELSE status END,
-             attempts = CASE WHEN $5 OR $7 = true THEN 0 ELSE attempts END,
-             last_error_code = CASE WHEN $5 OR $7 = true THEN NULL ELSE last_error_code END,
-             updated_at = now()
-         WHERE id = $1
-         RETURNING ${REMINDER_COLUMNS}`,
-        [
-          id,
-          content ?? reminder.content,
-          nextRecurrence?.unit ?? null,
-          nextRecurrence?.interval ?? null,
-          scheduleChanged,
-          nextDue,
-          input.enabled ?? null,
-        ],
-      );
-      await client.query(
-        `INSERT INTO reminder_operations
-           (family_id, operation_key, operation_kind, input_hash, reminder_id)
-         VALUES ($1, $2, 'update', $3, $4)`,
-        [auth.familyId, input.operationKey, inputHash, id],
-      );
+      const updated = await applyReminderUpdate(client, reminder, {
+        ...(content === undefined ? {} : { content }),
+        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+        ...(firstRunAt === undefined ? {} : { firstRunAt }),
+        ...(recurrence === undefined ? {} : { recurrence }),
+      });
+      await recordReminderOperation(client, {
+        familyId: auth.familyId,
+        inputHash,
+        operationKey: input.operationKey,
+        operationKind: "update",
+        reminderId: id,
+      });
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'reminder.updated', $3, '{}'::jsonb)`,
         [auth.familyId, auth.userId, id],
       );
       await client.query("COMMIT");
-      return rowToReminder(updated.rows[0]!);
+      return rowToReminder(updated);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -364,7 +333,7 @@ export const reminderRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const replay = await findReminderOperation(client, auth, operationKey, "delete", inputHash);
+      const replay = await findReminderOperation(client, auth.familyId, operationKey, "delete", inputHash);
       if (replay !== undefined) {
         await client.query("COMMIT");
         return true;
@@ -372,18 +341,14 @@ export const reminderRepository = {
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
       await requireReminderMutationAccess(client, auth, reminder);
-      if (reminder.status === "leased") {
-        throw new AppError(
-          "AGENT_REMINDER_DELIVERY_IN_PROGRESS",
-          "Напоминание сейчас отправляется. Повторите удаление после завершения доставки",
-        );
-      }
-      await client.query(
-        `INSERT INTO reminder_operations
-           (family_id, operation_key, operation_kind, input_hash, reminder_id)
-         VALUES ($1, $2, 'delete', $3, $4)`,
-        [auth.familyId, operationKey, inputHash, id],
-      );
+      requireReminderNotLeased(reminder, "delete");
+      await recordReminderOperation(client, {
+        familyId: auth.familyId,
+        inputHash,
+        operationKey,
+        operationKind: "delete",
+        reminderId: id,
+      });
       await client.query(
         `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
          VALUES ($1, $2, 'reminder.deleted', $3, jsonb_build_object('scope', $4::text))`,

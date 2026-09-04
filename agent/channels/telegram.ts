@@ -64,9 +64,10 @@ import {
   releaseMemoryTurnSources,
 } from "../lib/memory-turn-source.js";
 import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.js";
+import { resolveMemoryReviewBatch } from "../lib/memory-review/memory-review-turn-binding.js";
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
-import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
+import { accountlessActorApprovalError } from "../lib/telegram-session-actor.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -80,12 +81,8 @@ export default telegramChannel({
   turnPolicy: "queue",
   events: {
     async "input.requested"(data, channel, ctx) {
-      if (isTelegramChannelSession(ctx.session.auth)) {
-        throw new AppError(
-          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
-          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
-        );
-      }
+      const refusal = accountlessActorApprovalError(ctx.session.auth);
+      if (refusal) throw refusal;
       return await handleTelegramInputRequested(data, channel, ctx);
     },
     async "message.completed"(data, channel, ctx) {
@@ -296,13 +293,14 @@ export default telegramChannel({
     async "turn.failed"(data, channel, ctx) {
       // Terminal failure releases the temporary timeline retention after all tool writes have stopped.
       await releaseMemoryTurnSources(ctx);
-      const reviewBatchId = memoryReviewBatchId(ctx);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
       let reviewFailureReplayed = false;
       if (reviewBatchId) {
         const terminal = await memoryReviewRepository.failRunning({
           batchId: reviewBatchId,
           diagnosticCode: data.code,
           eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
         });
         reviewFailureReplayed = terminal === "replayed";
       }
@@ -349,7 +347,8 @@ export default telegramChannel({
         }
       }
       // Terminal diagnostics are private-only even when the failed turn belonged to a shared chat.
-      notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel);
+      const privateChat = channel.state.chatType === "private";
+      notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel, data.code);
       // A final send that started may already be visible; never append a second failure message.
       const finalDeliveryMayBeVisible = notifyFailure &&
         await telegramFinalDeliveryRepository.shouldSuppressFailureMessage(
@@ -362,7 +361,7 @@ export default telegramChannel({
           : telegramTurnReplyParameters(channel.state, ctx);
         const failureMessageId = await postTelegramMessageWithoutContinuationChange(channel, {
           ...(replyParameters === undefined ? {} : { reply_parameters: replyParameters }),
-          text: formatTelegramTurnFailure(data),
+          text: formatTelegramTurnFailure(data, { includeDiagnostics: privateChat }),
         });
         if (!isScheduledSession(ctx)) {
           await registerTelegramDeliveredMessageRoutes(channel, ctx, [failureMessageId]);
@@ -370,6 +369,27 @@ export default telegramChannel({
       }
       if (!reviewBatchId) await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
+    },
+    async "turn.cancelled"(_data, _channel, ctx) {
+      // Steering by the next chat message is the most common way a turn ends in a live group. The
+      // batch used to wait for the time bound instead, while later turns chained onto a head that
+      // would never report, so their finished work stayed unreachable from the lane cursor.
+      await releaseMemoryTurnSources(ctx);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
+      if (reviewBatchId) {
+        await memoryReviewRepository.failRunning({
+          batchId: reviewBatchId,
+          diagnosticCode: "AGENT_MEMORY_REVIEW_TURN_CANCELLED",
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+        });
+      }
+      // A cancelled turn is not a failure and its session keeps serving the replacement turn, so
+      // only its own approval rows are released here.
+      await telegramHitlApprovalRepository.clearForEveSession(
+        applicationSessionId(ctx),
+        ctx.session.id,
+      );
     },
     async "turn.started"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
@@ -409,9 +429,9 @@ export default telegramChannel({
     async "turn.completed"(_data, channel, ctx) {
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
+      const reviewBatchId = await resolveMemoryReviewBatch(ctx);
       if (!awaitingApproval) {
         // Completion verifies review evidence before release; a parked HITL turn retains its source set.
-        const reviewBatchId = memoryReviewBatchId(ctx);
         if (reviewBatchId) {
           await memoryReviewRepository.completeBatch({
             batchId: reviewBatchId,
@@ -431,7 +451,7 @@ export default telegramChannel({
           new Date(),
         );
       }
-      if (!memoryReviewBatchId(ctx)) {
+      if (!reviewBatchId) {
         await sessionRepository.recordTurnCompleted(sessionId, ctx.session.id, awaitingApproval);
       }
       if (!awaitingApproval) {
@@ -439,12 +459,9 @@ export default telegramChannel({
       }
     },
     async "authorization.required"(_data, _channel, ctx) {
-      if (isTelegramChannelSession(ctx.session.auth)) {
-        throw new AppError(
-          "AGENT_TELEGRAM_CHANNEL_APPROVAL_FORBIDDEN",
-          "Сообщение от имени канала не может подтверждать действия. Напишите от личного аккаунта",
-        );
-      }
+      // Parking a turn requires a human to come back and answer it; an accountless actor has none.
+      const refusal = accountlessActorApprovalError(ctx.session.auth);
+      if (refusal) throw refusal;
       const sessionId = applicationSessionId(ctx);
       const auth = ctx.session.auth.current;
       const telegramUserId = auth?.attributes.telegramUserId;
