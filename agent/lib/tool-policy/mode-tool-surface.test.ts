@@ -140,6 +140,15 @@ describe("trusted mode tool surfaces", () => {
     }
   });
 
+  it("keeps the authored-skill library to interactive trusted roots", () => {
+    expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ environment: "family" })).toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ environment: "private", scheduledRun: true })).not.toHaveProperty("manage_skill");
+    expect(buildSubagentToolSurface({ environment: "family" })).not.toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ capabilities: new Set(), environment: "external" })).not.toHaveProperty("manage_skill");
+    expect(buildModeToolSurface({ environment: "family" }).manage_skill?.approval).toBeTypeOf("function");
+  });
+
   it("keeps root-owned durable writes off subagents", () => {
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("remember");
     expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("remember");

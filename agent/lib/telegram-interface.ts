@@ -22,6 +22,11 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
   manage_google_workspace_connection: {
     disconnect: "отключить Google Workspace от текущей области",
   },
+  manage_skill: {
+    publish: "опубликовать навык Мии",
+    retire: "убрать навык Мии из употребления",
+    rollback: "откатить навык Мии к прежней версии",
+  },
   manage_agent_schedule: {
     create: "создать агентное расписание",
     delete: "удалить агентное расписание",
@@ -246,6 +251,20 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...(input.action === "create" ? line("Часовой пояс", "timezone") : []),
         ...(input.action === "create" ? line("Область", "scope") : []),
         ...reminderRecurrenceLines(input.recurrence),
+      ];
+    case "manage_skill":
+      return [
+        ...line("Навык", "name"),
+        ...(typeof input.version === "number" ? [`Вернуться к версии: ${input.version}`] : []),
+        ...line("Описание", "description"),
+        ...line("Что изменилось", "changeNote"),
+        ...line("Пробный прогон", "trialSummary"),
+        ...(typeof input.markdown === "string"
+          ? [`Текст навыка: ${safe(input.markdown.split("\n").slice(0, 6).join(" ").slice(0, 300))}${input.markdown.length > 300 ? "…" : ""}`]
+          : []),
+        ...(input.files && typeof input.files === "object"
+          ? [`Файлы: ${Object.keys(input.files as Record<string, unknown>).map(safe).join(", ") || "нет"}`]
+          : []),
       ];
     case "remove_group_file":
       return line("Путь", "path");

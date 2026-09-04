@@ -117,6 +117,7 @@ const POST_V0101_MIGRATIONS = [
   "083_remove_group_skill_allowlist.sql",
   "084_idle_memory_review.sql",
   "085_profile_view_attribute.sql",
+  "086_authored_skills.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

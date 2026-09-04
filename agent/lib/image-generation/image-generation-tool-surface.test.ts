@@ -60,8 +60,11 @@ describe("image generation tool surface", () => {
 
     expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("generate_image");
     expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("generate_image");
+    // A trusted scheduled turn (morning greeting card) may generate; an external one still may not.
     expect(buildModeToolSurface({ environment: "private", scheduledRun: true }))
-      .not.toHaveProperty("generate_image");
+      .toHaveProperty("generate_image");
+    expect(buildModeToolSurface({ environment: "family", scheduledRun: true }))
+      .toHaveProperty("generate_image");
     expect(buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",

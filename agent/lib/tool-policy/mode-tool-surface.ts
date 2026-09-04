@@ -370,8 +370,8 @@ const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>
   Object.entries(TRUSTED_SURFACES).map(([environment, surface]) => {
     // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
     const {
-      generate_image: _generateImage,
       manage_behavior_preference: _manageBehaviorPreference,
+      manage_skill: _manageSkill,
       remember: _remember,
       ...readOnlyPromptSurface
     } = surface;
@@ -418,6 +418,7 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const {
     generate_image: _generateImage,
     manage_behavior_preference: _manageBehaviorPreference,
+    manage_skill: _manageSkill,
     remember: _remember,
     ...surface
   } = buildModeToolSurface(effectiveInput);

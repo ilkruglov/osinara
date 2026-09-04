@@ -25,9 +25,11 @@ interface ConversationSkillResolverOptions {
 
 function imageGenerationSkill(
   options: ConversationSkillResolverOptions,
+  scheduledAllowed = false,
 ): Record<string, SkillDefinition> {
+  // A trusted scheduled run (a morning greeting card) may generate; an external one still may not.
   return IMAGE_GENERATION_AVAILABLE &&
-      options.scheduledRun !== true && options.subagent !== true
+      (scheduledAllowed || options.scheduledRun !== true) && options.subagent !== true
     ? { [IMAGE_GENERATION_SKILL_NAME]: IMAGE_GENERATION_SKILL_DEFINITION }
     : {};
 }
@@ -39,7 +41,7 @@ export function resolveTrustedSessionSkills(
   const environment = resolveConversationEnvironment(auth);
   if (environment === "external") return {};
   return {
-    ...imageGenerationSkill(options),
+    ...imageGenerationSkill(options, true),
     // Nineteen packages are uploaded into the sandbox per session; skip them when nobody can
     // connect a Google account anyway.
     ...(GOOGLE_WORKSPACE_AVAILABLE ? TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS : {}),

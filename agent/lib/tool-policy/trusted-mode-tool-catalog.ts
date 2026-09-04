@@ -16,6 +16,7 @@ import getCurrentTime from "../tools/get_current_time.js";
 import getMemorySource from "../tools/get_memory_source.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
+import manageSkill from "../tools/manage_skill.js";
 import listAgentSchedules from "../tools/list_agent_schedules.js";
 import listGroupHistory from "../tools/list_group_history.js";
 import listMemories from "../tools/list_memories.js";
@@ -81,6 +82,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
     : {}),
   get_current_time: getCurrentTime as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
+  manage_skill: manageSkill as unknown as AnyToolDefinition,
   list_agent_schedules: listAgentSchedules as unknown as AnyToolDefinition,
   list_memories: listMemories as unknown as AnyToolDefinition,
   list_memory_threads: listMemoryThreads as unknown as AnyToolDefinition,
