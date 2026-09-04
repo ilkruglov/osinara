@@ -32,7 +32,7 @@ import {
   isTelegramSlashCommand,
 } from "./telegram-message-policy.js";
 import { parseExternalGroupToolAllowlist } from "./tool-policy/group-tool-catalog.js";
-import { telegramForumTopicId } from "./telegram-group-message-storage.js";
+import { telegramForumTopicId, telegramInboundText } from "./telegram-group-message-storage.js";
 import { deliverPendingMemoryThreadNotice } from "./telegram-memory-thread-notice.js";
 import { verifiedTelegramProfileSignals } from "./telegram-profile-subjects.js";
 import { sameTelegramGroupPolicy } from "./telegram-group-policy-snapshot.js";
@@ -71,7 +71,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     if (!botUsername) {
       throw new Error("AGENT_TELEGRAM_CONFIG_MISSING: Не задано имя Telegram-бота");
     }
-    const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
+    const dispatchText = telegramInboundText(message);
     const routingText = Object.hasOwn(message.raw, "voice") ? message.caption : dispatchText;
     let addressed = isMessageAddressedToBot({ ...message, text: routingText }, botUsername);
     const unsupportedGroupSlashCommand = message.chat.type !== "private" &&

@@ -2,7 +2,7 @@
  * Telegram HITL input rendering tests.
  *
  * Constructs covered:
- * - External groups reject framework session-budget prompts before any Telegram or durable side effect.
+ * - External groups reject every confirmation prompt before any Telegram or durable side effect.
  * - `createTelegramInputRequestHandler`: persists approver identity before exposing buttons.
  * - Interactive and scheduled requests receive aliases without changing Eve's continuation hook.
  * - Long approval prompts are delivered completely before the actionable final message.
@@ -16,16 +16,31 @@ import { createTelegramInputRequestHandler } from "./input-request.js";
 describe("createTelegramInputRequestHandler", () => {
   it.each([
     {
+      code: "AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN",
       kind: "session-limit",
-      signal: "request kind",
+      signal: "session budget by request kind",
       toolName: "manage_agent_schedule",
     },
     {
+      code: "AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN",
       kind: "tool-approval",
-      signal: "synthetic tool name",
+      signal: "session budget by synthetic tool name",
       toolName: "session_limit_continuation",
     },
-  ])("rejects an external-group session-limit prompt by $signal before side effects", async ({
+    {
+      code: "AGENT_EXTERNAL_APPROVAL_FORBIDDEN",
+      kind: "tool-approval",
+      signal: "a framework question Eve authors outside the tool surface",
+      toolName: "ask_question",
+    },
+    {
+      code: "AGENT_EXTERNAL_APPROVAL_FORBIDDEN",
+      kind: "tool-approval",
+      signal: "an ordinary application tool approval",
+      toolName: "manage_reminder",
+    },
+  ])("rejects an external-group prompt: $signal, before side effects", async ({
+    code,
     kind,
     toolName,
   }) => {
@@ -94,7 +109,7 @@ describe("createTelegramInputRequestHandler", () => {
         prompt: "Approve a fresh token budget",
         requestId: "wrun_child:limit:input:36140505",
       }],
-    } as never, channel, ctx)).rejects.toThrow("AGENT_EXTERNAL_SESSION_LIMIT_FORBIDDEN");
+    } as never, channel, ctx)).rejects.toThrow(code);
     expect(present).not.toHaveBeenCalled();
     expect(parkSession).not.toHaveBeenCalled();
     expect(registerMessageRoutes).not.toHaveBeenCalled();
@@ -198,7 +213,7 @@ describe("createTelegramInputRequestHandler", () => {
           current: {
             attributes: {
               applicationSessionId: "app-session-1",
-              groupType: "external",
+              groupType: "family_private",
               telegramChatId: "-1001",
               telegramChatType: "supergroup",
               telegramReplyToMessageId: "77",

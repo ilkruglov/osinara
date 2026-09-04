@@ -139,6 +139,13 @@ retrieval и thread activation используют только локальн�
 сбой отправки логируется и не роняет turn, потому что ответ ещё готовится. Notices не попадают в
 timeline и не выдаются в scheduled runs.
 
+Входящее rich-сообщение приходит без `text` и `caption`: содержимое лежит в `rich_message` как дерево
+блоков и рекурсивного `RichText`. `agent/lib/telegram-rich-inbound.ts` разворачивает его в плоский
+текст, и этот же текст решает, адресовано ли сообщение агенту, поэтому упоминание внутри вёрстки
+работает как обычное. Обходятся только объявленные контейнеры текста, поэтому типы блоков, url и
+id эмодзи в содержимое не попадают; свёрнутый блок читается целиком вместе с заголовком. Медиа
+внутри rich остаётся медиа и во внешней группе отклоняется прежним правилом.
+
 Набор допустимых реакций задаёт Telegram, а не приложение. Канал раз в сутки на чат обновляет
 `available_reactions` через `getChat` и сохраняет ответ в `telegram_chat_reaction_policies`;
 отсутствующее поле документировано как разрешение любых эмодзи, и этот случай объявляется полным
@@ -218,7 +225,7 @@ Subscription-backed `generate_image` существует только при а
 Eve `0.40.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Grantable `pohuy` остаётся вне static discovery и выдаётся turn-scoped resolver только разрешённым группам; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
-Нативный Eve `agent` используется для сложной работы только в trusted private/family режимах, где полезен свежий контекст. Во внешней группе same-name dynamic denial не позволяет запускать child и delegation prompt не выдаётся. Trusted child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен. Synthetic `session-limit` из Eve никогда не показывается во внешней группе: channel boundary завершает такой turn до parking, persistence и Telegram delivery.
+Нативный Eve `agent` используется для сложной работы только в trusted private/family режимах, где полезен свежий контекст. Во внешней группе same-name dynamic denial не позволяет запускать child и delegation prompt не выдаётся. Trusted child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен. Во внешней группе не показывается ни один запрос подтверждения: у общего чата нет одного ответственного собеседника, которому его можно адресовать. `assertInputRequestPolicy` отклоняет любой `input.requested` до presentation, parking, persistence и Telegram delivery, потому что HITL сначала публикует заглушку и только потом заменяет её текстом, а из чата её уже не убрать. Synthetic `session-limit` и `ask_question` Eve авторует мимо tool surface, поэтому descriptor denial их не останавливает и этот boundary — единственный. Сбой такого хода наружу не уходит: `shouldNotifyTelegramFailure` молчит в общих чатах.
 
 ## Структура проекта
 

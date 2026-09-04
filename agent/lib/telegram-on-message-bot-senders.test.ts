@@ -7,6 +7,7 @@
  * - The trusted family zone drops a bot before the shared timeline is written.
  * - Owner-only mode never accepts a bot, because it is reserved for the verified human owner.
  * - A bot reply to Osinara stays an ordinary message and never enters HITL approval.
+ * - A natively formatted rich message is read like any other text, including its mention.
  * - A private message from a bot is dropped silently, without an enrollment hint to answer.
  */
 import { describe, expect, it } from "vitest";
@@ -52,6 +53,31 @@ describe("createTelegramMessageHandler bot senders", () => {
       principalType: "service",
     });
     expect(repository.telegram.findIdentity).not.toHaveBeenCalled();
+  });
+
+  it("reads a rich formatted bot message and reacts to the mention inside it", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue(externalGroup);
+    const handler = createTelegramMessageHandler(repository);
+    const { context } = telegramContext();
+    const message = {
+      ...botGroupMessage(""),
+      raw: {
+        date: 1_700_000_000,
+        from: { first_name: "Мия", id: 8_123_456_789, is_bot: true, username: "mimimia_ai_bot" },
+        rich_message: {
+          blocks: [{
+            text: [{ text: `@${BOT_USERNAME}`, type: "mention" }, " смотри что нашла"],
+            type: "paragraph",
+          }],
+        },
+      },
+      text: "",
+    };
+
+    const result = await handler(context, message);
+
+    expect(result?.auth).toMatchObject({ attributes: { telegramActorKind: "telegram_bot" } });
   });
 
   it("journals an unaddressed bot message without waking the model", async () => {
