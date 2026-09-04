@@ -122,6 +122,7 @@ const POST_V0101_MIGRATIONS = [
   "088_memory_context_exposures.sql",
   "089_telegram_hitl_batched_approvals.sql",
   "090_timeline_bot_participants.sql",
+  "091_memory_review_bot_source_recovery.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
