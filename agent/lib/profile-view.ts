@@ -49,6 +49,8 @@ export interface CreateProfileViewInput {
   replyTelegramUserId: string | null;
   replyTimelineSequence?: string | null;
   retrievalClaimIds: readonly string[];
+  /** The author's own card was shown recently; include them only as a reply or mention subject. */
+  suppressCurrentAuthor?: boolean;
 }
 
 export function profileSourceNotice(evidenceKind: ProfileViewClaim["evidenceKind"]): string {

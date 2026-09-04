@@ -115,7 +115,7 @@ function signalPriority(
   const add = (value: string, priority: ProfileSubjectPriority) => {
     if (!result.has(value)) result.set(value, priority);
   };
-  add(input.currentTelegramUserId, "current_author");
+  if (input.suppressCurrentAuthor !== true) add(input.currentTelegramUserId, "current_author");
   if (resolvedReplyTelegramUserId) add(resolvedReplyTelegramUserId, "reply_subject");
   for (const telegramUserId of input.explicitMentionTelegramUserIds) {
     add(telegramUserId, "explicit_mention");

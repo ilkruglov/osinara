@@ -120,6 +120,7 @@ describe("createTelegramMessageHandler", () => {
       expect.objectContaining({ familyId: "family-1", scopes: ["personal", "family"], userId: "user-1" }),
       "что купить на ужин?",
       [],
+      { excludeMemoryRefs: expect.any(Set) },
     );
     const context = result?.context?.join("\n") ?? "";
     expect(context).toContain("<retrieved_long_term_memory>");

@@ -63,7 +63,58 @@ describe("createTelegramMemoryContextBuilder", () => {
       }),
       "что купить?",
       [],
+      { excludeMemoryRefs: new Set() },
     );
+  });
+
+  it("keeps recently shown records out of retrieval, hides a repeated author card and records exposures", async () => {
+    const exposures = {
+      authorCardShownRecently: vi.fn().mockResolvedValue(true),
+      recentlyShownMemoryRefs: vi.fn().mockResolvedValue(new Set(["mem_seen"])),
+      record: vi.fn().mockResolvedValue(undefined),
+      sessionTurn: vi.fn().mockResolvedValue(12),
+    };
+    const retrieve = vi.fn().mockResolvedValue({
+      ...emptyRetrieval,
+      memories: [{ content: "Любит гречку", memoryRef: "mem_fresh" }],
+    });
+    const createProfile = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_1", totalCharacters: 10,
+      subjects: [{ claims: [{ memoryRef: "mem_reply" }], label: "Женя", priority: "reply_subject", subjectRef: "s1", totalCharacters: 10 }],
+    });
+    const build = createTelegramMemoryContextBuilder({ createProfile, exposures, retrieve });
+
+    await build(input({ replyTelegramUserId: "202" }));
+
+    expect(retrieve).toHaveBeenCalledWith(expect.anything(), "что купить?", [], { excludeMemoryRefs: new Set(["mem_seen"]) });
+    expect(exposures.authorCardShownRecently).toHaveBeenCalledWith("app-session-1", "101", 12);
+    expect(createProfile.mock.calls[0]![1]).toMatchObject({ suppressCurrentAuthor: true });
+    expect(exposures.record).toHaveBeenCalledWith({
+      applicationSessionId: "app-session-1", authorTelegramUserId: null,
+      memoryRefs: ["mem_fresh", "mem_reply"], sessionTurn: 12,
+    });
+  });
+
+  it("shows the author card again when the author is the reply subject and records it", async () => {
+    const exposures = {
+      authorCardShownRecently: vi.fn().mockResolvedValue(true),
+      recentlyShownMemoryRefs: vi.fn().mockResolvedValue(new Set()),
+      record: vi.fn().mockResolvedValue(undefined),
+      sessionTurn: vi.fn().mockResolvedValue(3),
+    };
+    const createProfile = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_2", totalCharacters: 10,
+      subjects: [{ claims: [{ memoryRef: "mem_me" }], label: "Илья", priority: "current_author", subjectRef: "s2", totalCharacters: 10 }],
+    });
+    const build = createTelegramMemoryContextBuilder({
+      createProfile, exposures, retrieve: vi.fn().mockResolvedValue(emptyRetrieval),
+    });
+
+    await build(input({ explicitMentionTelegramUserIds: ["101"] }));
+
+    expect(exposures.authorCardShownRecently).not.toHaveBeenCalled();
+    expect(createProfile.mock.calls[0]![1]).toMatchObject({ suppressCurrentAuthor: false });
+    expect(exposures.record).toHaveBeenCalledWith(expect.objectContaining({ authorTelegramUserId: "101", memoryRefs: ["mem_me"] }));
   });
 
   it("adds nothing when the message carries no text", async () => {
@@ -99,6 +150,7 @@ describe("createTelegramMemoryContextBuilder", () => {
       replyTelegramUserId: "203",
       replyTimelineSequence: "44",
       retrievalClaimIds: ["claim-related"],
+      suppressCurrentAuthor: false,
     });
     expect(blocks).toHaveLength(2);
     expect(blocks[0]).toContain("<verified_profile_view");

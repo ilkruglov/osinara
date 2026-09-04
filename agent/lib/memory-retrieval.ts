@@ -100,10 +100,16 @@ export async function retrieveRelevantMemories(
   ];
 }
 
+export interface MemoryTurnContextOptions {
+  /** Refs already shown to the model recently in this session; kept out of the automatic block. */
+  excludeMemoryRefs?: ReadonlySet<string>;
+}
+
 export async function retrieveMemoryTurnContext(
   auth: MemoryAuthorization,
   query: string,
   skillHints: readonly string[],
+  options: MemoryTurnContextOptions = {},
 ): Promise<MemoryTurnContext> {
   const embedding = await embedMemoryQuery(query);
   // Automatic context is deliberately narrower than `search_memories`, which the model can call.
@@ -113,8 +119,11 @@ export async function retrieveMemoryTurnContext(
     embedding,
     MEMORY_TURN_RETRIEVAL_LIMIT,
   );
+  const exclude = options.excludeMemoryRefs ?? new Set<string>();
   const memories: ModelMemoryContextItem[] = [
-    ...retrieval.results.map((result) => toModelMemory(result.memory, result.sourceEvidence)),
+    ...retrieval.results
+      .map((result) => toModelMemory(result.memory, result.sourceEvidence))
+      .filter((memory) => !exclude.has(memory.memoryRef)),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
   const threads = await memoryThreadBriefRepository.activate({
