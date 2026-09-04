@@ -58,6 +58,8 @@ describe("group skill policy", () => {
     expect(skills).not.toHaveProperty("pohuy");
     expect(resolveTrustedSessionSkills(auth("private"), { subagent: true }))
       .not.toHaveProperty("imagegen");
+    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true }))
+      .toHaveProperty("imagegen");
     for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).toHaveProperty(name);
   });
 

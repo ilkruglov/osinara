@@ -41,6 +41,7 @@ const EXPECTED_TOOL_MODULES = [
   "manage_memory_thread.ts",
   "manage_profile_projection.ts",
   "manage_reminder.ts",
+  "manage_skill.ts",
   "manage_telegram_group.ts",
   "notification_settings.ts",
   "read_memory_thread.ts",
@@ -61,6 +62,7 @@ const EXPECTED_SKILL_DIRECTORIES = [
   "docx",
   "find-docs",
   "pdf",
+  "skill-authoring",
   "t-invest",
   "xlsx",
 ] as const;
@@ -98,7 +100,7 @@ describe("agent capability surface", () => {
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
       .sort();
-    expect(skillFiles).toEqual(["external.ts", "scoped.ts"]);
+    expect(skillFiles).toEqual(["authored.ts", "external.ts", "scoped.ts"]);
   });
 
   it("requires every native skill package to declare SKILL.md", async () => {

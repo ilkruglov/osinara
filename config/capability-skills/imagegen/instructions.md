@@ -20,8 +20,8 @@ edit to an existing image. Never generate an image merely to decorate an answer.
    an explicit value.
 7. Use one `generate_image` call for one requested final. For variants, make one call per variant.
 
-The tool saves a non-overwriting WebP in the authorized workspace and sends it to the current
-Telegram chat. Report the returned path after successful delivery.
+The tool saves a non-overwriting image file (WebP, PNG or JPEG depending on the provider) in the
+authorized workspace and sends it to the current Telegram chat. Report the returned path after successful delivery.
 
-If the tool reports an unknown status, stop. Do not call it again automatically because the Codex
-subscription limit may already have been charged.
+If the tool reports an unknown status, stop. Do not call it again automatically because the
+provider may already have been charged.

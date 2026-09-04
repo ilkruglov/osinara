@@ -23,6 +23,7 @@ import {
   retrieveMemoryTurnContext,
   type MemoryTurnContext,
 } from "./memory-retrieval.js";
+import { formatSkillHint, skillHintRepository, type SkillHint } from "./authored-skills/skill-hint-repository.js";
 import { formatProfileViewContext, profileViewRepository } from "./profile-view-repository.js";
 import type { CreateProfileViewInput, ProfileView } from "./profile-view.js";
 import type { TelegramActorKind } from "./telegram-inbound-actor.js";
@@ -42,6 +43,8 @@ export interface TelegramMemoryContextInput {
 
 interface TelegramMemoryContextDependencies {
   createProfile(auth: MemoryAuthorization, input: CreateProfileViewInput): Promise<ProfileView | null>;
+  /** Pending repeat-task hint for this conversation; consumed once shown. */
+  takeSkillHint?(conversationId: string): Promise<SkillHint | null>;
   retrieve(
     auth: MemoryAuthorization,
     query: string,
@@ -102,9 +105,13 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         retrievalMs: Math.round(retrievedAt - startedAt),
         threads: context.threads.threads.length,
       }));
+      const hint = dependencies.takeSkillHint === undefined
+        ? null
+        : await dependencies.takeSkillHint(input.conversationId);
       return [
         ...(profile === null ? [] : [formatProfileViewContext(profile)]),
         formatRetrievedMemoryInstructions(context.memories, context.threads),
+        ...(hint === null ? [] : [formatSkillHint(hint)]),
       ];
     } catch (error) {
       console.error(JSON.stringify({
@@ -119,4 +126,5 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
 export const buildTelegramMemoryContext = createTelegramMemoryContextBuilder({
   createProfile: profileViewRepository.create,
   retrieve: retrieveMemoryTurnContext,
+  takeSkillHint: (conversationId) => skillHintRepository.take(conversationId),
 });
