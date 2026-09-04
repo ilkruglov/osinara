@@ -78,6 +78,7 @@ describe("parseModelProviderConfig", () => {
           vision: {
             id: "qwen/qwen3.8-27b",
             maxOutputTokens: 16_384,
+            reasoningEffort: "low",
             supportsImageInput: true,
           },
         },

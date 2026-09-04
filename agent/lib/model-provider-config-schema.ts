@@ -79,6 +79,9 @@ const visionModelSchema = z.discriminatedUnion("supportsImageInput", [
   z.object({
     id: modelIdSchema,
     maxOutputTokens: maxOutputTokensSchema,
+    // The vision model may need a different reasoning depth than the text model: DeepSeek
+    // vision-exp at effort max spent 28k reasoning tokens and four minutes on one photo.
+    reasoningEffort: z.enum(["none", "low", "high", "max"]).optional(),
     supportsImageInput: z.literal(true),
   }).strict(),
 ]);

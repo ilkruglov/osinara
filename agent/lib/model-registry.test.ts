@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { modelProviderConfig } from "./model-provider-config.js";
-import { primaryModel, visionModel, voiceTranscriptionModel } from "./model-registry.js";
+import { primaryModel, visionModel, visionTransport, voiceTranscriptionModel } from "./model-registry.js";
 
 describe("model registry", () => {
   it("selects the configured protocol-native text model", () => {
@@ -31,5 +31,24 @@ describe("model registry", () => {
     }
     expect(voiceTranscriptionModel?.modelId).toBe(modelProviderConfig.voice.transcriptionModelId);
     expect(voiceTranscriptionModel?.provider).toBe("groq.transcription");
+  });
+
+  it("gives the vision model its own reasoning effort only on the DeepSeek Responses transport", () => {
+    const transport = {
+      baseUrl: "https://api.deepseek.com",
+      protocol: "deepseek-responses" as const,
+      reasoning: { effort: "max" as const },
+    };
+    const vision = { id: "deepseek-v4-flash-vision-exp", maxOutputTokens: 128_000, reasoningEffort: "high" as const, supportsImageInput: true as const };
+    expect(visionTransport(transport, vision)).toEqual({ ...transport, reasoning: { effort: "high" } });
+    expect(visionTransport(transport, { ...vision, reasoningEffort: undefined })).toBe(transport);
+    expect(visionTransport(transport, { supportsImageInput: false })).toBe(transport);
+    const chat = {
+      baseUrl: "https://api.groq.com/openai/v1",
+      protocol: "openai-chat-completions" as const,
+      providerName: "groq" as const,
+      reasoning: { effort: "low" as const, format: "reasoning-effort" as const, type: "effort" as const },
+    };
+    expect(visionTransport(chat as never, vision)).toBe(chat);
   });
 });
