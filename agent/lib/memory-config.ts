@@ -88,3 +88,9 @@ export const MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE = 8;
 export const MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS = 400;
 export const MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS = 280;
 export const MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS = 80;
+
+// A record shown to the model in the last N turns of the same session stays out of the automatic
+// context; the model can still search for it. Production showed the same three facts 50 times a day.
+export const MEMORY_EXPOSURE_WINDOW_TURNS = 10;
+// The current author's own profile card returns after this many turns unless they became the subject.
+export const PROFILE_AUTHOR_CARD_WINDOW_TURNS = 20;

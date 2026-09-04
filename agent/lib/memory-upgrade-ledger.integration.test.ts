@@ -119,6 +119,7 @@ const POST_V0101_MIGRATIONS = [
   "085_profile_view_attribute.sql",
   "086_authored_skills.sql",
   "087_authored_skill_description_length.sql",
+  "088_memory_context_exposures.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

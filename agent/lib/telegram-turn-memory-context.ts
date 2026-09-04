@@ -18,10 +18,12 @@
  */
 import type { ConversationAccess } from "./family-access.js";
 import type { MemoryAuthorization } from "./memory-context.js";
+import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import {
   formatRetrievedMemoryInstructions,
   retrieveMemoryTurnContext,
   type MemoryTurnContext,
+  type MemoryTurnContextOptions,
 } from "./memory-retrieval.js";
 import { formatSkillHint, skillHintRepository, type SkillHint } from "./authored-skills/skill-hint-repository.js";
 import { formatProfileViewContext, profileViewRepository } from "./profile-view-repository.js";
@@ -41,14 +43,29 @@ export interface TelegramMemoryContextInput {
   readonly turnStartedAt: Date;
 }
 
+interface ExposureLedger {
+  authorCardShownRecently(applicationSessionId: string, telegramUserId: string, sessionTurn: number): Promise<boolean>;
+  recentlyShownMemoryRefs(applicationSessionId: string, sessionTurn: number): Promise<Set<string>>;
+  record(input: {
+    applicationSessionId: string;
+    authorTelegramUserId: string | null;
+    memoryRefs: readonly string[];
+    sessionTurn: number;
+  }): Promise<void>;
+  sessionTurn(applicationSessionId: string): Promise<number>;
+}
+
 interface TelegramMemoryContextDependencies {
   createProfile(auth: MemoryAuthorization, input: CreateProfileViewInput): Promise<ProfileView | null>;
+  /** What this session already showed; absent in tests that do not care about repetition. */
+  exposures?: ExposureLedger;
   /** Pending repeat-task hint for this conversation; consumed once shown. */
   takeSkillHint?(conversationId: string): Promise<SkillHint | null>;
   retrieve(
     auth: MemoryAuthorization,
     query: string,
     skillHints: readonly string[],
+    options?: MemoryTurnContextOptions,
   ): Promise<MemoryTurnContext>;
 }
 
@@ -78,11 +95,23 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
     try {
       const authorization = memoryAuthorization(input);
       const startedAt = performance.now();
+      // The same three facts shown fifty times a day read as a stuck record; what this session
+      // already showed recently stays out of the automatic block (the model can still search).
+      const exposures = dependencies.exposures;
+      const sessionTurn = exposures ? await exposures.sessionTurn(input.applicationSessionId) : 0;
+      const excludeMemoryRefs = exposures
+        ? await exposures.recentlyShownMemoryRefs(input.applicationSessionId, sessionTurn)
+        : new Set<string>();
       // Skill-derived thread hints came from load_skill calls in history; none are reviewed now.
-      const context = await dependencies.retrieve(authorization, query, []);
+      const context = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs });
       const retrievedAt = performance.now();
+      const isUser = input.actor.kind === "telegram_user";
+      const authorIsSubject = input.replyTelegramUserId === input.actor.id ||
+        input.explicitMentionTelegramUserIds.includes(input.actor.id);
+      const suppressCurrentAuthor = isUser && exposures !== undefined && !authorIsSubject &&
+        await exposures.authorCardShownRecently(input.applicationSessionId, input.actor.id, sessionTurn);
       // A channel post has no human subject to build a profile for.
-      const profile = input.actor.kind === "telegram_user"
+      const profile = isUser
         ? await dependencies.createProfile(authorization, {
           conversationId: input.conversationId,
           currentTelegramUserId: input.actor.id,
@@ -94,8 +123,21 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
             ? {}
             : { replyTimelineSequence: input.replyTimelineSequence }),
           retrievalClaimIds: [...context.retrievedClaimIds],
+          suppressCurrentAuthor,
         })
         : null;
+      if (exposures) {
+        const shownAuthorCard = profile?.subjects.some((subject) => subject.priority === "current_author") === true;
+        await exposures.record({
+          applicationSessionId: input.applicationSessionId,
+          authorTelegramUserId: shownAuthorCard ? input.actor.id : null,
+          memoryRefs: [
+            ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
+            ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
+          ],
+          sessionTurn,
+        });
+      }
       // Per-turn cost of memory on a small server: retrieval (FTS + E5 + pgvector) and profile view.
       console.info(JSON.stringify({
         code: "AGENT_MEMORY_CONTEXT",
@@ -125,6 +167,7 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
 
 export const buildTelegramMemoryContext = createTelegramMemoryContextBuilder({
   createProfile: profileViewRepository.create,
+  exposures: memoryContextExposureRepository,
   retrieve: retrieveMemoryTurnContext,
   takeSkillHint: (conversationId) => skillHintRepository.take(conversationId),
 });
