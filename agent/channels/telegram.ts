@@ -22,6 +22,7 @@ import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput } from "../lib/telegram-progress.js";
 import { deliverTelegramProgressNotice } from "../lib/telegram-progress-notice.js";
+import { progressNoticeKey, telegramProgressNoticeDeferral } from "../lib/telegram-progress-deferral.js";
 import { refreshTelegramReactionPolicy } from "../lib/telegram-reaction-policy.js";
 import { asidePauseMilliseconds } from "../lib/telegram-aside-pacing.js";
 import { stripTelegramAsideDirectives } from "../lib/telegram-authored-split.js";
@@ -95,17 +96,24 @@ export default telegramChannel({
       if (!output) return;
       const sessionId = applicationSessionId(ctx);
       if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
+      const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
       if (output.kind === "progress") {
-        await deliverTelegramProgressNotice({
-          applicationSessionId: sessionId,
-          channel,
-          eveSessionId: ctx.session.id,
-          eveTurnId: ctx.session.turn.id,
-          message: output.message,
+        // Held until the step names its tools: an answer written beside `remember` must not go
+        // out twice, while text before a slow tool still reaches the person at once.
+        telegramProgressNoticeDeferral.hold(noticeKey, {
+          send: () => deliverTelegramProgressNotice({
+            applicationSessionId: sessionId,
+            channel,
+            eveSessionId: ctx.session.id,
+            eveTurnId: ctx.session.turn.id,
+            message: output.message,
+            stepIndex: data.stepIndex,
+          }),
           stepIndex: data.stepIndex,
         });
         return;
       }
+      telegramProgressNoticeDeferral.discard(noticeKey);
       const currentAttributes = ctx.session.auth.current?.attributes;
       const scheduledDelivery = scheduledDeliveryMetadata(ctx);
       if (output.kind === "reaction") {
@@ -293,7 +301,17 @@ export default telegramChannel({
         agentScheduleDispatchRepository,
       );
     },
+    async "actions.requested"(data, _channel, ctx) {
+      await telegramProgressNoticeDeferral.release(
+        progressNoticeKey(ctx.session.id, ctx.session.turn.id),
+        data.stepIndex,
+        data.actions.map((action) => action.kind === "tool-call"
+          ? action.toolName
+          : action.kind === "load-skill" ? "load_skill" : action.kind),
+      );
+    },
     async "turn.failed"(data, channel, ctx) {
+      telegramProgressNoticeDeferral.discard(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
       // Terminal failure releases the temporary timeline retention after all tool writes have stopped.
       await releaseMemoryTurnSources(ctx);
       const reviewBatchId = memoryReviewBatchId(ctx);
@@ -407,6 +425,8 @@ export default telegramChannel({
       }
     },
     async "turn.completed"(_data, channel, ctx) {
+      // Text still held here was the answer: the model never wrote again after its quiet tools.
+      await telegramProgressNoticeDeferral.flush(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
       if (!awaitingApproval) {
