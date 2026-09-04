@@ -166,7 +166,7 @@ describe("Telegram interface localization", () => {
       requestId: "request-skill-publish",
     });
 
-    expect(request.prompt).toContain("Подтверждение: опубликовать навык Мии.");
+    expect(request.prompt).toContain("Подтверждение: опубликовать навык агента.");
     expect(request.prompt).toContain("Навык: birthday-card");
     expect(request.prompt).toContain("Описание: Открытка к празднику через Flux");
     expect(request.prompt).toContain("Пробный прогон: Сделала открытку для Жени");

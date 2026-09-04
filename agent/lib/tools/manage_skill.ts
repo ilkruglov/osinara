@@ -1,5 +1,5 @@
 /**
- * Owner-only library of Mia's authored skills.
+ * Owner-only library of the agent's authored skills.
  *
  * Export:
  * - `manage_skill`: list / read the family library, publish, roll back or retire a skill through
@@ -26,7 +26,7 @@ import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../famil
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const TOOL_DESCRIPTION = [
-  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome. Только владелец, только в личном чате владельца или семейной группе.",
+  "Библиотека собственных навыков агента, одна на семью: list, read, publish, rollback, retire, record_outcome. Только владелец, только в личном чате владельца или семейной группе.",
   "Когда применять: владелец просит создать, улучшить, откатить или убрать навык; ты предлагаешь сохранить повторяемую задачу как навык по служебной подсказке; после применения навыка владелец сказал, что вышло хорошо или плохо. Сначала загрузи skill-authoring через load_skill: он задаёт порядок работы и рубрику.",
   "Когда не применять: стиль общения это manage_behavior_preference; факт о человеке это remember; разовая задача просто выполняется без навыка; расписание это manage_agent_schedule.",
   "Publish требует пробного прогона: выполни навык на одном реальном примере в этом ходу и опиши результат в trialSummary, иначе отказ. Publish, rollback и retire требуют кнопки владельца. Опубликованный навык доступен со следующего хода.",

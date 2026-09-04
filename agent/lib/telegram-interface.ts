@@ -23,9 +23,9 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     disconnect: "отключить Google Workspace от текущей области",
   },
   manage_skill: {
-    publish: "опубликовать навык Мии",
-    retire: "убрать навык Мии из употребления",
-    rollback: "откатить навык Мии к прежней версии",
+    publish: "опубликовать навык агента",
+    retire: "убрать навык агента из употребления",
+    rollback: "откатить навык агента к прежней версии",
   },
   manage_agent_schedule: {
     create: "создать агентное расписание",

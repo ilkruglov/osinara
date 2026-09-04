@@ -42,8 +42,8 @@ export const EVE_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
-  "agent-browser", "authored", "behavior-preferences", "docx", "imagegen", "pdf",
-  "skill-authoring", "xlsx",
+  "agent-browser", "authored", "behavior-preferences", "docx", "find-docs", "imagegen", "pdf",
+  "skill-authoring", "t-invest", "xlsx",
 ]);
 const RESERVED_PREFIXES = ["authored-", "gws-"] as const;
 
