@@ -148,6 +148,23 @@ await replaceExact(
   "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;let r=t.get(AuthKey),i=n.get(`agent`),a=r?.authenticator===`memory-review`&&r.attributes.memoryReviewMode===`background`||r?.authenticator===`telegram`&&r.attributes.groupType===`external`;a&&i?.runtimeAction?.kind===`subagent-call`&&i.runtimeAction.nodeId===`__root__`&&i.runtimeAction.subagentName===`agent`&&n.delete(`agent`);",
 );
 
+// Delivery `context` (memory, timeline, profile card) is authored for one turn, but Eve 0.40.0
+// keeps those user messages in the session history, so every later turn carries every earlier
+// turn's context: prompts grew by 5–10k tokens per turn and reached 345k in a private chat.
+// Each context message is stamped with its turn id, and the prompt of a turn drops stamped
+// messages of other turns before the model call; the durable history is rebuilt from that prompt,
+// so stale context leaves the session for good while the history prefix stays cache-friendly.
+await replaceExact(
+  runtimePaths.toolLoop,
+  "let H=[...B.messages.slice(0,me),...V,...B.messages.slice(me)],U=await applySessionLimitContinuation(",
+  "let H=[...B.messages.slice(0,me),...V,...B.messages.slice(me)].filter(e=>e.role!==`user`||e.providerOptions?.osinara?.turnContext===void 0||e.providerOptions.osinara.turnContext===O.turnId),U=await applySessionLimitContinuation(",
+);
+await replaceExact(
+  runtimePaths.toolLoop,
+  "if(I?.context!==void 0&&B.deferredContext!==!0)for(let e of I.context)H.push({content:e,role:`user`});",
+  "if(I?.context!==void 0&&B.deferredContext!==!0)for(let e of I.context)H.push({content:e,role:`user`,providerOptions:{osinara:{turnContext:O.turnId}}});",
+);
+
 // Compaction may shrink the local recent window, but it may not buy another summary model call.
 await replaceExact(
   runtimePaths.compaction,
