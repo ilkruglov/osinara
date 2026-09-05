@@ -12,6 +12,7 @@
  * - Telegram dispatch extensions: Session return, message/token override, reply routing, and HITL auth.
  * - Telegram topic normalization: accepts thread IDs only on explicit forum-topic updates.
  * - Telegram public types: exposes only the reviewed application seams.
+ * - Dynamic instructions: previews the current message before it is appended to durable history.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -20,6 +21,7 @@ const EXPECTED_EVE_VERSION = "0.40.0";
 const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
 
 const runtimePaths = {
+  approvalDelivery: resolve("node_modules/eve/dist/src/harness/approval-delivery-coordinator.js"),
   channelAdapter: resolve("node_modules/eve/dist/src/channel/adapter.js"),
   channelAdapterTypes: resolve("node_modules/eve/dist/src/channel/adapter.d.ts"),
   compaction: resolve("node_modules/eve/dist/src/harness/compaction.js"),
@@ -128,6 +130,43 @@ await replaceExact(
   runtimePaths.toolLoop,
   "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;",
   "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;let r=t.get(AuthKey),i=n.get(`agent`),a=r?.authenticator===`memory-review`&&r.attributes.memoryReviewMode===`background`;a&&i?.runtimeAction?.kind===`subagent-call`&&i.runtimeAction.nodeId===`__root__`&&i.runtimeAction.subagentName===`agent`&&n.delete(`agent`);",
+);
+
+// Eve 0.40.0 emits turn.started before appending I.message/I.context to history. Its public
+// instruction resolver otherwise sees only the previous turn, breaking current-message retrieval
+// after a plain-text reply or compaction and silently searching by an old question on other turns.
+// Preview only: the native history append below the preamble remains the sole persisted copy.
+await replaceExact(
+  runtimePaths.toolLoop,
+  "function buildHarnessToolsWithDynamicSubagents(e,t){",
+  "function osinaraInstructionTurnMessages(e,t){let n=normalizeUserContent(t?.message);return n===void 0?e:[...e,...(t?.context??[]).map(e=>({content:e,role:`user`})),{content:n,role:`user`}]}function buildHarnessToolsWithDynamicSubagents(e,t){",
+);
+await replaceExact(
+  runtimePaths.toolLoop,
+  "prepareDynamicInstructionPreamble(k,B.session.history)",
+  "prepareDynamicInstructionPreamble(k,osinaraInstructionTurnMessages(B.session.history,I))",
+);
+await replaceExact(
+  runtimePaths.toolLoop,
+  "prepareDynamicInstructionPreamble(k,e.history)",
+  "prepareDynamicInstructionPreamble(k,osinaraInstructionTurnMessages(e.history,I))",
+);
+
+// A partial answer to a multi-request HITL batch is durably deferred without a new turn. Report
+// that it is still waiting, otherwise FIFO cannot reach the next button needed to finish the batch.
+// Do not complete a turn or duplicate the epilogue already emitted after resolved runtime actions.
+await replaceExact(
+  runtimePaths.toolLoop,
+  "if(B.outcome===`unresolved`){let e=",
+  "if(B.outcome===`unresolved`){if(M&&t.mode===`conversation`&&(I?.inputResponses?.length??0)>0&&P.outcome!==`resolved`)await M(createSessionWaitingEvent());let e=",
+);
+
+// On a second direct decision Eve removes the already-settled first response from k. Its early
+// return must put h back, as the normal return below does, or a multi-request batch never completes.
+await replaceExact(
+  runtimePaths.approvalDelivery,
+  "if(E)return deliveryResult(d,k,`continue`,[],w);",
+  "if(E)return deliveryResult(d,appendSettledResponses(k,h),`continue`,[],w);",
 );
 
 // Compaction may shrink the local recent window, but it may not buy another summary model call.
