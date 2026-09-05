@@ -8,7 +8,7 @@
  * - Captionless attachments receive a non-empty factual model message after durable storage.
  * - FIFO releases at a waiting boundary even though the durable session stream remains open.
  * - Reused Eve sessions start at the persisted stream cursor and ignore an old waiting boundary.
- * - A callback press never reaches Eve, even when no application handler claims it.
+ * - An unknown non-HITL callback never reaches Eve when no application handler claims it.
  * - One failed item releases its own record and the drain keeps going.
  * - A session that never reaches a boundary releases the queue within one lease.
  */
@@ -263,7 +263,7 @@ describe("createTelegramDurableIngress", () => {
     );
   });
 
-  it("never sends a callback press to Eve when no handler claims it", async () => {
+  it("never sends an unknown non-HITL callback to Eve when no handler claims it", async () => {
     const storage = repository();
     storage.value.claimNext = vi.fn()
       .mockResolvedValueOnce({

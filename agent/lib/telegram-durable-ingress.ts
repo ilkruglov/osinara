@@ -12,7 +12,11 @@ import type {
   TelegramUpdate,
   TelegramVerifiedUpdateContext,
 } from "eve/channels/telegram";
-import { parseTelegramUpdate, telegramContinuationToken } from "eve/channels/telegram";
+import {
+  parseTelegramUpdate,
+  telegramContinuationToken,
+  TELEGRAM_HITL_CALLBACK_PREFIX,
+} from "eve/channels/telegram";
 import { z } from "zod";
 
 import { TELEGRAM_INGRESS_LEASE_MS } from "../config.js";
@@ -201,19 +205,21 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           continue;
         }
 
-        // Application update decisions are durable DB transitions and never enter an Eve session.
-        // A button press is not model input either way, so an unclaimed one is recorded and
-        // completed here instead of being dispatched as if it were a message.
+        // Software updates are application-owned. Native HITL buttons must reach Eve's existing
+        // onHitlCallbackQuery guard, which checks the exact pending request and current approver.
         if (update.kind === "callback_query") {
           const claimed = await dependencies.handleSoftwareUpdateCallback(update.callbackQuery);
-          if (!claimed) {
-            console.error(JSON.stringify({
-              code: "AGENT_TELEGRAM_CALLBACK_UNCLAIMED",
-              updateId: claim.updateId,
-            }));
+          const nativeHitl = update.callbackQuery.data?.startsWith(TELEGRAM_HITL_CALLBACK_PREFIX) === true;
+          if (claimed || !nativeHitl) {
+            if (!claimed) {
+              console.error(JSON.stringify({
+                code: "AGENT_TELEGRAM_CALLBACK_UNCLAIMED",
+                updateId: claim.updateId,
+              }));
+            }
+            await dependencies.repository.complete(claim.updateId, claim.leaseToken);
+            continue;
           }
-          await dependencies.repository.complete(claim.updateId, claim.leaseToken);
-          continue;
         }
 
         if (claim.voice && update.kind === "message" && shouldTranscribeVoice(update.message, dependencies.botUsername)) {
