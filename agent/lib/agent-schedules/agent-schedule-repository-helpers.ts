@@ -119,11 +119,26 @@ export async function selectAgentSchedule(
   return result.rows[0] ?? null;
 }
 
+/**
+ * Whether the current chat may see a schedule at all. A personal schedule carries its owner's
+ * scenario prompt and request: private text that must not enter the family group's context even
+ * when the owner asks there. The audience rule precedes every author or role check.
+ */
+export function agentScheduleVisibleInChat(
+  auth: Pick<AgentScheduleAuthorization, "telegramChatType">,
+  schedule: { scope: string },
+): boolean {
+  return schedule.scope !== "personal" || auth.telegramChatType === "private";
+}
+
 export async function requireAgentScheduleMutationAccess(
   client: PoolClient,
   auth: AgentScheduleAuthorization,
   schedule: MutableAgentScheduleRow,
 ): Promise<void> {
+  if (!agentScheduleVisibleInChat(auth, schedule)) {
+    throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
+  }
   const role = await requireCurrentScheduleMembership(client, auth);
   const allowed = schedule.scope === "personal"
     ? schedule.author_user_id === auth.userId

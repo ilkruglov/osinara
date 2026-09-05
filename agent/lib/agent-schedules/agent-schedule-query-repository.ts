@@ -15,7 +15,7 @@ import {
   type AgentScheduleRow,
   rowToAgentSchedule,
 } from "./agent-schedule-record.js";
-import { AGENT_SCHEDULE_COLUMNS } from "./agent-schedule-repository-helpers.js";
+import { AGENT_SCHEDULE_COLUMNS, agentScheduleVisibleInChat } from "./agent-schedule-repository-helpers.js";
 
 export async function listAgentSchedules(
   auth: AgentScheduleAuthorization,
@@ -38,13 +38,14 @@ export async function listAgentSchedules(
            WHERE family_id = $1 AND user_id = $2
         )
         AND (
-          (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
+          (schedule.scope = 'personal' AND schedule.owner_user_id = $2 AND $6::boolean) OR
           schedule.scope = 'family'
         )
         AND ($3::timestamptz IS NULL OR (schedule.created_at, schedule.id) < ($3, $4::uuid))
       ORDER BY schedule.created_at DESC, schedule.id DESC
       LIMIT $5`,
-    [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
+    [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1,
+      agentScheduleVisibleInChat(auth, { scope: "personal" })],
   );
   const hasNext = result.rows.length > options.limit;
   const rows = result.rows.slice(0, options.limit);
@@ -68,10 +69,10 @@ export async function findAgentScheduleById(
            WHERE family_id = $1 AND user_id = $2
         )
         AND (
-          (schedule.scope = 'personal' AND schedule.owner_user_id = $2) OR
+          (schedule.scope = 'personal' AND schedule.owner_user_id = $2 AND $4::boolean) OR
           schedule.scope = 'family'
         )`,
-    [auth.familyId, auth.userId, id],
+    [auth.familyId, auth.userId, id, agentScheduleVisibleInChat(auth, { scope: "personal" })],
   );
   return result.rows[0] ? rowToAgentSchedule(result.rows[0]) : null;
 }

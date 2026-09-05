@@ -93,11 +93,26 @@ export async function selectReminder(
   return result.rows[0] ?? null;
 }
 
+/**
+ * Whether the current chat may see a reminder at all. A personal reminder belongs to its owner's
+ * private chat: naming it in the family group would put private text into shared model context,
+ * even for the owner asking there. The audience rule precedes every author or role check.
+ */
+export function reminderVisibleInChat(
+  auth: Pick<ReminderAuthorization, "telegramChatType">,
+  reminder: { scope: string },
+): boolean {
+  return reminder.scope !== "personal" || auth.telegramChatType === "private";
+}
+
 export async function requireReminderMutationAccess(
   client: PoolClient,
   auth: ReminderAuthorization,
   reminder: MutableReminderRow,
 ): Promise<void> {
+  if (!reminderVisibleInChat(auth, reminder)) {
+    throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
+  }
   const role = await requireCurrentMembership(client, auth);
   const allowed = reminder.scope === "personal"
     ? reminder.author_user_id === auth.userId

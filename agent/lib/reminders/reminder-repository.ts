@@ -251,13 +251,15 @@ export const reminderRepository = {
            WHERE family_id = $1 AND user_id = $2
          )
           AND (
-             (reminder.scope = 'personal' AND reminder.owner_user_id = $2) OR
+             (reminder.scope = 'personal' AND reminder.owner_user_id = $2 AND $6::boolean) OR
              reminder.scope = 'family'
            )
           AND ($3::timestamptz IS NULL OR (reminder.created_at, reminder.id) < ($3, $4::uuid))
         ORDER BY reminder.created_at DESC, reminder.id DESC
         LIMIT $5`,
-      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1],
+      [auth.familyId, auth.userId, cursor?.timestamp ?? null, cursor?.id ?? null, options.limit + 1,
+        // Personal reminders are private-chat text; the family group lists only shared ones.
+        auth.telegramChatType === "private"],
     );
     const hasNext = result.rows.length > options.limit;
     const rows = result.rows.slice(0, options.limit);

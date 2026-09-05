@@ -126,6 +126,40 @@ describeWithDatabase("reminder repositories", () => {
     });
   });
 
+  it("keeps a personal reminder out of the family group's list and mutations", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    await reminderRepository.configureNotifications(auth, { quietEnd: "07:00", quietStart: "23:00", timezone: "Europe/Moscow" });
+    const personal = await reminderRepository.create(auth, {
+      content: "Купить подарок жене втайне",
+      firstRunAt: new Date("2026-07-13T06:00:00.000Z"),
+      operationKey: "personal-secret",
+      recurrence: null,
+      scope: "personal",
+      timezone: "Europe/Moscow",
+    });
+    const family = await reminderRepository.create(familyAuth(fixture, "member"), {
+      content: "Вынести мусор",
+      firstRunAt: new Date("2026-07-13T07:00:00.000Z"),
+      operationKey: "family-chore",
+      recurrence: null,
+      scope: "family",
+      timezone: "Europe/Moscow",
+    });
+
+    // The same member asked from the family group: private text must not enter the shared context.
+    await expect(reminderRepository.list(familyAuth(fixture, "member"), { limit: 100 }))
+      .resolves.toEqual({ items: [family], nextCursor: null });
+    await expect(reminderRepository.update(familyAuth(fixture, "member"), personal.id, {
+      content: "изменено из группы", operationKey: "personal-from-group",
+    })).rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+    await expect(reminderRepository.delete(familyAuth(fixture, "member"), personal.id, "delete-from-group"))
+      .rejects.toThrowError(/AGENT_REMINDER_NOT_FOUND/);
+    // The private chat still sees both areas.
+    await expect(reminderRepository.list(auth, { limit: 100 }))
+      .resolves.toMatchObject({ items: [family, personal] });
+  });
+
   it("allows a family reminder to be changed only by its author or current owner", async () => {
     const fixture = await createFixture();
     const member = familyAuth(fixture, "member");

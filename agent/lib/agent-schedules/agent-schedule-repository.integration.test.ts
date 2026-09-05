@@ -123,6 +123,29 @@ describeWithDatabase("agent schedule repositories", () => {
     ).resolves.toBeNull();
   });
 
+  it("keeps a personal schedule out of the family group's list, lookup and mutations", async () => {
+    const fixture = await createFixture();
+    const auth = privateAuth(fixture, "member");
+    const personal = await agentScheduleRepository.create(auth, {
+      firstRunAt: new Date("2026-07-17T06:00:00.000Z"),
+      operationKey: "create-personal-private",
+      recurrence: { daysOfWeek: [1], interval: 1, kind: "weekly" },
+      scenarioPrompt: "Напомнить про терапию и спросить о самочувствии.",
+      scope: "personal",
+      timezone: "Europe/Moscow",
+      title: "Терапия",
+      userRequest: "По понедельникам напоминай про терапию",
+    });
+    const group = familyAuth(fixture, "member");
+
+    // The scenario prompt and request are private text: the family group must not receive them.
+    await expect(agentScheduleRepository.list(group, { limit: 100 })).resolves.toEqual({ items: [], nextCursor: null });
+    await expect(agentScheduleRepository.findById(group, personal.id)).resolves.toBeNull();
+    await expect(agentScheduleRepository.update(group, personal.id, { enabled: false, operationKey: "pause-from-group" }))
+      .rejects.toThrowError(/AGENT_SCHEDULE_NOT_FOUND/);
+    await expect(agentScheduleRepository.findById(auth, personal.id)).resolves.toEqual(personal);
+  });
+
   it("requires a verified family group destination for family schedules", async () => {
     const fixture = await createFixture();
 
