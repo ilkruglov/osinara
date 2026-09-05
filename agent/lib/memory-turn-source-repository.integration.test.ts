@@ -11,6 +11,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-fixtures.js";
+import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryRepository } from "./memory-repository.js";
 import { memoryTurnSourceRepository } from "./memory-turn-source-repository.js";
 
@@ -24,6 +25,87 @@ describeWithDatabase("turn-bound memory source repository", () => {
   });
 
   afterAll(closeDatabase);
+
+  it("lets a turn started by another bot save that bot's message as memory of the external group", async () => {
+    const family = await database().query<{ id: string }>(
+      "INSERT INTO families (name) VALUES ('Bot memory') RETURNING id",
+    );
+    const familyId = family.rows[0]!.id;
+    const group = await database().query<{ id: string }>(
+      `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
+       VALUES ($1, '-100-bot-memory', 'BotBattle', 'external', 'all', ARRAY['remember']::text[]) RETURNING id`,
+      [familyId],
+    );
+    const groupId = group.rows[0]!.id;
+    const conversation = await database().query<{ id: string }>(
+      "SELECT id FROM application_conversations WHERE telegram_group_id = $1",
+      [groupId],
+    );
+    const conversationId = conversation.rows[0]!.id;
+    await database().query(
+      `INSERT INTO conversation_participants
+         (conversation_id, family_id, scope, scope_partition_key, telegram_user_id,
+          linked_user_id, display_name_snapshot, first_observed_at, last_observed_at)
+       VALUES ($1, $2, 'group', $3, '7000000001', NULL, 'Osinara', now(), now())`,
+      [conversationId, familyId, groupId],
+    );
+    const botMessage = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       VALUES ($1, $2, 1, 1, 'telegram_bot', 'telegram-bot:7000000001', '7000000001',
+               'Osinara', true, 'text', 'Я предпочитаю работать в группе, а не один на один', now())
+       RETURNING id`,
+      [conversationId, groupId],
+    );
+    const appSession = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+          continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'group', 'canonical', 'bot-memory-source',
+               'bot-memory-source:0', now(), now()) RETURNING id`,
+      [familyId, groupId],
+    );
+    await memoryTurnSourceRepository.bind({
+      applicationSessionId: appSession.rows[0]!.id,
+      conversationId,
+      currentTimelineEntryId: botMessage.rows[0]!.id,
+      eveSessionId: "eve-bot-memory-session",
+      eveTurnId: "eve-bot-memory-turn",
+      invokingActorId: "7000000001",
+      invokingActorKind: "telegram_bot",
+      visibleTimelineEntryIds: [botMessage.rows[0]!.id],
+    });
+
+    // The same authorization a turn started by another bot carries in an external group.
+    const botAuth: MemoryAuthorization = {
+      familyId,
+      groupId,
+      role: "external",
+      scopes: ["group"],
+      telegramActorId: "7000000001",
+      telegramActorKind: "telegram_bot",
+      telegramUserId: null,
+      userId: null,
+    };
+    const saved = await memoryRepository.create(botAuth, {
+      confirmation: "model_high",
+      content: "Осинара предпочитает работать в группе, а не один на один",
+      explicitSource: {
+        conversationId,
+        subject: { kind: "label", label: "Осинара" },
+        timelineEntryId: botMessage.rows[0]!.id,
+      },
+      kind: "preference",
+      operationKey: "op-bot-memory-1",
+      provenance: { sessionId: "eve-bot-memory-session", turnId: "eve-bot-memory-turn" },
+      scope: "group",
+      sensitivity: "normal",
+      source: "eve:eve-bot-memory-session:eve-bot-memory-turn",
+    });
+    expect(saved.scope).toBe("group");
+    expect(saved.kind).toBe("preference");
+  });
 
   it("binds a turn started by another bot to its exact bot message", async () => {
     const fixture = await createMainAgentMemoryFixture();
