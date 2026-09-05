@@ -129,6 +129,7 @@ const POST_V0101_MIGRATIONS = [
   "095_authored_skill_loop.sql",
   "096_memory_review_skipped_status.sql",
   "097_memory_review_skipped_terminal.sql",
+  "098_memory_review_heal_stuck_lanes.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

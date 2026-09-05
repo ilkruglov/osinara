@@ -395,10 +395,9 @@ describeWithDatabase("memory review repository", () => {
                'review-failure-wrote', now(), now()) RETURNING id`,
       [fixture.familyId, fixture.groupId],
     );
-    const source = await insertUserMessage({
+    const source = await insertInteractiveTail({
       conversationId: fixture.conversationId,
       groupId: fixture.groupId,
-      sequence: 2,
     });
     const batch = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
@@ -435,7 +434,7 @@ describeWithDatabase("memory review repository", () => {
       [batch!.batchId],
     )).resolves.toMatchObject({
       rows: [{
-        cursor: "2",
+        cursor: "9",
         diagnostic_code: "AGENT_MEMORY_REVIEW_MODEL_FAILED",
         status: "completed",
       }],
@@ -486,7 +485,7 @@ describeWithDatabase("memory review repository", () => {
       groupId: fixture.groupId,
       timelineEntryId: source.id,
     });
-    expect(repeated?.sourceCount).toBe(2);
+    expect(repeated?.sourceCount).toBe(9);
     await expect(database().query(
       "SELECT count(*)::integer AS alerts FROM memory_review_owner_alerts",
     )).resolves.toMatchObject({ rows: [{ alerts: 0 }] });

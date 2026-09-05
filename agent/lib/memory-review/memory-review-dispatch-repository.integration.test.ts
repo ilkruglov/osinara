@@ -386,8 +386,8 @@ describeWithDatabase("memory review dispatch repository", () => {
     const repeated = await memoryReviewRepository.prepareInteractiveTurn({
       applicationSessionId: session.rows[0]!.id,
       groupId: fixture.groupId,
-      timelineEntryId: source.id,
+      timelineEntryId: source!.id,
     });
-    expect(repeated?.sourceCount).toBe(2);
+    expect(repeated?.sourceCount).toBe(9);
   });
 });
