@@ -253,7 +253,7 @@ Eve `0.40.0` не умеет скрывать собственные built-ins p
 Eve `0.40.0` materializes dynamic skill packages и supporting files в sandbox. Стабильные trusted Google Workspace skills выдаются на `session.started`, чтобы не загружать 19 пакетов перед каждым ходом, и только при заданных `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` (`GOOGLE_WORKSPACE_AVAILABLE`, тот же gate прячет три Google-инструмента); внешний capability-coupled `imagegen` остаётся на `turn.started`, поскольку grant может измениться между репликами. Trusted HOME хранится в persistent tools volume, поэтому `agent/sandbox.ts` на session lifecycle удаляет только точный legacy package path `.agents/skills/pohuy`; не расширять этот cleanup на соседние skills.
 Авторские навыки (`agent/lib/authored-skills/`, миграция 086): Мия пишет себе навыки из доступных
 инструментов, одна библиотека на семью. `manage_skill` (list, read, publish, rollback, retire,
-record_outcome) выдаётся только владельцу в личном чате и семейной группе, не в scheduled, не
+record_outcome, grant, revoke, add_example, remove_example) выдаётся только владельцу в личном чате и семейной группе, не в scheduled, не
 subagent, не во внешней группе; publish, rollback и retire идут через HITL с повторной проверкой
 роли, `operationKey` = call id делает повтор безопасным. Backend-рубрика
 (`authored-skill-contract.ts`) проверяет структуру: разделы «Когда применять», «Шаги», «Проверка
@@ -268,6 +268,32 @@ subagent, не во внешней группе; publish, rollback и retire и�
 кладёт строку в `conversation_skill_hints`; сборка контекста следующего хода показывает её один
 раз (TTL 24 ч), и только по ней Мия предлагает навык. Мета-навык `agent/skills/skill-authoring/`
 задаёт процедуру и справочники под DeepSeek Flash и Flux.
+Замкнутая петля навыков (6 сентября 2026, миграция 095, план в
+`.tmp/plans/2026-09-05-skills-loop-plan.md`). Рубрика делит находки на blocking и warnings
+(`rubricChecklist`: нет «Когда не применять», меньше двух шагов, description без вариантов
+формулировки, markdown длиннее 150 строк); warnings возвращаются из publish, а rollback снова
+прогоняет рубрику по содержимому старой версии. Автоисход: хук бэклога (`improvement-signals.ts`)
+хранит имена из `load_skill` в фактах хода и при упавшем инструменте, упавшем ходе или 8+ шагах
+ставит `failed` последнему использованию каждого загруженного авторского навыка и пишет пункт
+бэклога категории `skill` (отпечаток навык + код) без вызова модели и вне лимита рефлексий.
+Подсказка из бэклога: пункт `workflow`, повторившийся второй раз в доверенном чате, кладёт в
+`conversation_skill_hints` строку вида `backlog` с summary (`kind` repeat|backlog); внешняя группа
+подсказок не получает. Гранты: `manage_skill grant/revoke` (кнопка владельца, группа по названию
+или chat id, до 10 навыков на группу) пишут `authored_skill_group_grants`; навык прав не добавляет:
+`externalGroupMissingTools` сверяет инструменты из «Шагов» с allowlist группы плюс базовые
+файловые при grant, в резолвере `resolveExternalTurnSkills` (теперь async,
+`authored-skill-grant-repository.ts`) и в обёртке `load_skill` по живому allowlist; отозванная
+capability молча закрывает навык. Блок прав внешней группы перечисляет выданные навыки с
+описаниями (`turn-blocks.ts` грузит их отдельно, сбой лишает только навыков). Дескриптор
+`load_skill` во внешней группе теперь есть во всех интерактивных ходах (обёртка fail-closed по
+имени), раньше он выдавался только при гранте `generate_image`, и навыки-аналитики без него были
+недостижимы; scheduled-ходы и сабагенты навыков не получают. Загрузки во внешней группе пишутся в
+`authored_skill_usage` с conversation группы. Эвалы: пробный прогон publish (`trialRequest` +
+`trialSummary`) становится первым примером навыка (`authored_skill_examples`, до пяти активных,
+`add_example` / `remove_example` без кнопки); версия 2+ требует `trials` по каждому активному
+примеру, иначе `AGENT_SKILL_EVAL_MISSING`; прогоны хранятся в `authored_skill_versions.trials`,
+rollback их не требует. Владелец семьи проверяется общим `requireCurrentOwner`
+(`authored-skill-owner.ts`).
 Навыки-аналитики `agent/skills/auto-analyst/` (машины, автопром, тюнинг, рынок) и
 `agent/skills/policy-finance-analyst/` (политика, санкции, макро, рынки, разбор чужой аналитики):
 метод в SKILL.md плюс справочники; в доверенных чатах видны как статические навыки, во внешней
