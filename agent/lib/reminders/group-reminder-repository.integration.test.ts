@@ -9,7 +9,7 @@
  * - The trusted private-chat boundary never reaches a reminder of a public chat.
  * - No anchor may sit far in the past, and an in-flight delivery is never removed.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { GROUP_REMINDER_MAX_PER_CHAT, GROUP_REMINDER_TIMEZONE } from "./reminder-config.js";
@@ -119,11 +119,14 @@ async function create(
 
 describeWithDatabase("group reminder repository", () => {
   beforeEach(async () => {
+    // These scenarios use fixed schedule dates; wall-clock validation must use the same test day.
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-04T08:59:00.000Z"));
     await database().query(
       "TRUNCATE reminders, user_notification_settings, telegram_groups, family_memberships, users, families CASCADE",
     );
   });
   afterAll(async () => closeDatabase());
+  afterEach(() => vi.restoreAllMocks());
 
   it("stores a Telegram-authored reminder in the fixed public-chat timezone", async () => {
     const fixture = await createFixture();

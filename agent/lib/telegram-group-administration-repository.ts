@@ -16,6 +16,8 @@ import {
 } from "../config.js";
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import { stopGroupSandboxes, updateGroupPermissions } from "./telegram-group-policy-repository.js";
+import { skillRequiresBash } from "./group-skills/group-skill-catalog.js";
 import type {
   RegisteredGroupType,
   StandardTelegramGroupMessageMode,
@@ -165,8 +167,8 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       );
 
       // A type change crosses a trust boundary, so replace the row and cascade all scoped data.
-      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType }>(
-        `SELECT id, family_id, type
+      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType; skill_allowlist: string[]; tool_allowlist: string[] }>(
+        `SELECT id, family_id, type, skill_allowlist, tool_allowlist
          FROM telegram_groups
          WHERE telegram_chat_id = $1
          FOR UPDATE`,
@@ -179,6 +181,9 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
           "Группа уже принадлежит другой семье",
         );
       }
+      if (current && (current.type !== input.type || JSON.stringify(current.tool_allowlist) !== JSON.stringify(input.toolAllowlist))) {
+        await stopGroupSandboxes(client, current.id);
+      }
       if (current && current.type !== input.type) {
         await client.query("DELETE FROM telegram_groups WHERE id = $1", [current.id]);
       }
@@ -186,12 +191,13 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       // A conflicting chat owned by another family is never reassigned through an upsert.
       const result = await client.query<{ id: string }>(
         `INSERT INTO telegram_groups
-           (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode)
-         VALUES ($1, $2, $3, $4, $5, $6)
+           (family_id, telegram_chat_id, title, type, tool_allowlist, message_mode, skill_allowlist)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (telegram_chat_id)
          DO UPDATE SET title = EXCLUDED.title,
                        type = EXCLUDED.type,
-                       tool_allowlist = EXCLUDED.tool_allowlist,
+                        tool_allowlist = EXCLUDED.tool_allowlist,
+                        skill_allowlist = EXCLUDED.skill_allowlist,
                        message_mode = EXCLUDED.message_mode
          WHERE telegram_groups.family_id = EXCLUDED.family_id
          RETURNING id`,
@@ -202,6 +208,9 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
           input.type,
           input.toolAllowlist,
           input.messageMode,
+          current?.type === input.type
+            ? current.skill_allowlist.filter((name) => input.toolAllowlist.includes("bash") || !skillRequiresBash(name))
+            : [],
         ],
       );
       const row = result.rows[0];
@@ -318,6 +327,11 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       );
 
       // Both group keys remain mandatory so another family's registration is never deleted.
+      const existing = await client.query<{ id: string }>(
+        "SELECT id FROM telegram_groups WHERE family_id=$1 AND telegram_chat_id=$2 FOR UPDATE",
+        [input.familyId, input.telegramChatId],
+      );
+      if (existing.rows[0]) await stopGroupSandboxes(client, existing.rows[0].id);
       const result = await client.query<{ id: string }>(
         `DELETE FROM telegram_groups
          WHERE family_id = $1 AND telegram_chat_id = $2
@@ -341,121 +355,6 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
     }
   },
 
-  async updatePolicy(input) {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-
-      // Recheck current ownership under a shared row lock after HITL and before any side effect.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
-
-      // Serialize against registration, removal, and receipt-time trust decisions for this chat.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
-
-      // Lock the existing identity in place; policy updates never replace a trust-zone row.
-      const existing = await client.query<{ family_id: string; id: string; type: RegisteredGroupType }>(
-        `SELECT id, family_id, type
-         FROM telegram_groups
-         WHERE telegram_chat_id = $1
-         FOR UPDATE`,
-        [input.telegramChatId],
-      );
-      const group = existing.rows[0];
-      if (!group || group.family_id !== input.familyId) {
-        throw new AppError(
-          "AGENT_GROUP_NOT_FOUND",
-          "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
-        );
-      }
-      if (group.type === "family_private") {
-        throw new AppError(
-          "AGENT_GROUP_POLICY_UPDATE_UNSUPPORTED",
-          "Политику инструментов можно изменить только у существующей внешней группы",
-        );
-      }
-
-      // One statement replaces both policy fields atomically without firing deletion cascades.
-      const result = await client.query<{ id: string }>(
-        `UPDATE telegram_groups
-         SET message_mode = $1, tool_allowlist = $2
-         WHERE id = $3
-         RETURNING id`,
-        [input.messageMode, input.toolAllowlist, group.id],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new AppError(
-          "AGENT_GROUP_POLICY_UPDATE_FAILED",
-          "Не удалось обновить политику группы. Повторите попытку",
-        );
-      }
-
-      await client.query("COMMIT");
-      return { groupId: row.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
-
-  async updateSkills(input) {
-    const client = await database().connect();
-    try {
-      await client.query("BEGIN");
-
-      // Recheck current ownership after HITL so a parked approval cannot outlive role revocation.
-      const owner = await client.query(
-        `SELECT 1
-           FROM family_memberships
-          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-          FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
-
-      // Serialize with trust-zone replacement/removal before replacing the complete skill policy.
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
-        [input.telegramChatId, TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED],
-      );
-      const result = await client.query<{ id: string }>(
-        `UPDATE telegram_groups
-            SET skill_allowlist = $1
-          WHERE family_id = $2 AND telegram_chat_id = $3
-          RETURNING id`,
-        [input.skillAllowlist, input.familyId, input.telegramChatId],
-      );
-      const row = result.rows[0];
-      if (!row) {
-        throw new AppError(
-          "AGENT_GROUP_NOT_FOUND",
-          "Группа не найдена в вашей семье. Проверьте идентификатор Telegram-чата",
-        );
-      }
-
-      await client.query("COMMIT");
-      return { groupId: row.id };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  },
+  updatePolicy: updateGroupPermissions,
+  updateSkills: updateGroupPermissions,
 };

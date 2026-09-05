@@ -9,6 +9,7 @@ import type { SessionContext } from "eve/context";
 
 import { AppError } from "../app-error.js";
 import { resolveSessionCaller } from "../session-auth.js";
+import { resolveTelegramSessionActor } from "../telegram-session-actor.js";
 import type { WorkspaceAuthorization } from "./workspace-repository.js";
 
 export function requireWorkspaceAuthorization(
@@ -18,9 +19,17 @@ export function requireWorkspaceAuthorization(
   const attributes = caller?.attributes;
   const role = attributes?.role;
   const chatType = attributes?.telegramChatType;
+  // Accountless participants use the same group workspace, never personal or family mounts.
+  const externalParticipant = caller?.principalType === "service" &&
+    resolveTelegramSessionActor(ctx.session.auth) !== null &&
+    attributes?.groupType === "external" && role === "external" &&
+    typeof attributes.groupId === "string" && attributes.groupId.length > 0 &&
+    (chatType === "group" || chatType === "supergroup") &&
+    Array.isArray(attributes.memoryScopes) && attributes.memoryScopes.length === 1 &&
+    attributes.memoryScopes[0] === "group";
   if (
     caller?.authenticator !== "telegram" ||
-    caller.principalType !== "user" ||
+    (caller.principalType !== "user" && !externalParticipant) ||
     typeof attributes?.familyId !== "string" ||
     !["group", "private", "supergroup"].includes(String(chatType)) ||
     !["external", "member", "owner", "recovery_owner"].includes(String(role))

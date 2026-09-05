@@ -122,12 +122,12 @@ await replaceExact(
 // returns, so a reissue repeats no side effect. AI SDK retries cover a connection that never
 // established; only this outer layer can recover a stream that broke after the response started.
 
-// External groups and internal background review must not inherit root delegation. Match the
+// Internal background review must not inherit root delegation. Match the
 // complete implicit-agent fingerprint so authored tools and declared subagents remain untouched.
 await replaceExact(
   runtimePaths.toolLoop,
   "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;",
-  "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;let r=t.get(AuthKey),i=n.get(`agent`),a=r?.authenticator===`memory-review`&&r.attributes.memoryReviewMode===`background`||r?.authenticator===`telegram`&&r.attributes.groupType===`external`;a&&i?.runtimeAction?.kind===`subagent-call`&&i.runtimeAction.nodeId===`__root__`&&i.runtimeAction.subagentName===`agent`&&n.delete(`agent`);",
+  "function buildHarnessToolsWithDynamicSubagents(e,t){let n=new Map(e);if(t===void 0)return n;let r=t.get(AuthKey),i=n.get(`agent`),a=r?.authenticator===`memory-review`&&r.attributes.memoryReviewMode===`background`;a&&i?.runtimeAction?.kind===`subagent-call`&&i.runtimeAction.nodeId===`__root__`&&i.runtimeAction.subagentName===`agent`&&n.delete(`agent`);",
 );
 
 // Compaction may shrink the local recent window, but it may not buy another summary model call.

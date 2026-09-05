@@ -63,6 +63,17 @@ afterEach(async () => {
 });
 
 describe("sandbox runner HTTP server", () => {
+  it("reports revoked instance identity without losing its stable error code", async () => {
+    const engine = fakeEngine();
+    vi.mocked(engine.runProcess).mockRejectedValue(new Error("AGENT_SANDBOX_RUNNER_INSTANCE_STALE: changed"));
+    const baseUrl = await start(engine);
+    const response = await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/processes`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command: "touch /workspace/group/marker", expectedInstanceId: "a".repeat(64) }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "AGENT_SANDBOX_RUNNER_INSTANCE_STALE" });
+  });
   it("validates and delegates exact credentialed GWS argv", async () => {
     const engine = fakeEngine();
     const baseUrl = await start(engine);

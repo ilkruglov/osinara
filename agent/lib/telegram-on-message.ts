@@ -399,7 +399,8 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
       );
     }
-    const groupTurnContext = group && actor.kind !== "telegram_channel"
+    // An authorized response resumes the existing turn and source set; no new turn will bind a batch.
+    const groupTurnContext = group && actor.kind !== "telegram_channel" && !resumesPendingTask
       ? await prepareTelegramMemoryReviewTurn({
           applicationSessionId: appSession.id,
           conversationId: conversation.id,

@@ -1,54 +1,46 @@
-/**
- * Runtime definitions for code-reviewed group-grantable skills.
- *
- * Exports:
- * - `GROUP_SAFE_SKILL_DEFINITIONS`: complete dynamic Eve skill packages keyed by stable ID.
- * - `selectGroupSafeSkillDefinitions`: projects an exact validated grant set for Eve.
- */
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
-import { defineSkill, type SkillDefinition } from "eve/skills";
-
+/** One installed skill catalog for all conversation modes, outside static Eve discovery. */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { defineSkill, type SkillDefinition, type SkillFileContent } from "eve/skills";
 import { AppError } from "../app-error.js";
-import type { GroupSafeSkillName } from "./group-skill-catalog.js";
+import { GROUP_SAFE_SKILL_NAMES, SKILL_CATALOG_ROOT, type GroupSafeSkillName } from "./group-skill-catalog.js";
 
-const POHUY_ROOT = resolve("config/group-skills/pohuy");
-
-function text(relativePath: string): string {
-  const path = resolve(POHUY_ROOT, relativePath);
-  if (!existsSync(path)) {
-    throw new AppError(
-      "AGENT_GROUP_SKILL_PACKAGE_MISSING",
-      `Не найден обязательный файл безопасного skill package: ${relativePath}`,
-    );
+function loadSkill(name: string): SkillDefinition {
+  const root = join(SKILL_CATALOG_ROOT, name);
+  const source = readFileSync(join(root, "SKILL.md"), "utf8");
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/u.exec(source);
+  const rawDescription = frontmatter?.[1].match(/^description:\s*(.+)$/mu)?.[1].trim();
+  const declaredName = frontmatter?.[1].match(/^name:\s*(.+)$/mu)?.[1].trim();
+  if (!frontmatter || !rawDescription || [">", "|"].includes(rawDescription) || (declaredName && declaredName !== name)) {
+    throw new AppError("AGENT_SKILL_PACKAGE_INVALID", `Повреждён установленный пакет скилла ${name}`);
   }
-  return readFileSync(path, "utf8");
+  const description: unknown = rawDescription.startsWith('"') ? JSON.parse(rawDescription) : rawDescription;
+  if (typeof description !== "string" || !description.trim()) {
+    throw new AppError("AGENT_SKILL_PACKAGE_INVALID", `Не задано описание скилла ${name}`);
+  }
+  const files: Record<string, SkillFileContent> = {};
+  const pending = [""];
+  while (pending.length > 0) {
+    const relative = pending.pop()!;
+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "__pycache__" || entry.name.endsWith(".pyc")) continue;
+      const path = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) throw new AppError("AGENT_SKILL_PACKAGE_INVALID", `Скилл ${name} содержит символическую ссылку`);
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile() && path !== "SKILL.md") files[path] = readFileSync(join(root, path));
+    }
+  }
+  const license = frontmatter[1].match(/^license:\s*(.+)$/mu)?.[1].trim();
+  return defineSkill({ description, markdown: frontmatter[2].trimStart(), files, ...(license ? { license } : {}) });
 }
 
-export const GROUP_SAFE_SKILL_DEFINITIONS: Readonly<
-  Record<GroupSafeSkillName, SkillDefinition>
-> = {
-  pohuy: defineSkill({
-    description:
-      "Режим ответов с русским матом: техническая точность и живая инженерная лексика. " +
-      "Загружай только по явной просьбе отвечать матом; не используй для публичных текстов, " +
-      "документации, кода и коммитов.",
-    files: {
-      "LICENSE.txt": text("LICENSE.txt"),
-      "references/ontologia.md": text("references/ontologia.md"),
-      "references/sceny.md": text("references/sceny.md"),
-      "references/slovar.md": text("references/slovar.md"),
-    },
-    license: "MIT, см. LICENSE.txt",
-    markdown: text("instructions.md"),
-  }),
-};
+export const GROUP_SAFE_SKILL_DEFINITIONS: Readonly<Record<GroupSafeSkillName, SkillDefinition>> =
+  Object.fromEntries(GROUP_SAFE_SKILL_NAMES.map((name) => [name, loadSkill(name)]));
 
-export function selectGroupSafeSkillDefinitions(
-  names: ReadonlySet<GroupSafeSkillName>,
-): Record<string, SkillDefinition> {
-  return Object.fromEntries(
-    [...names].map((name) => [name, GROUP_SAFE_SKILL_DEFINITIONS[name]]),
-  );
+export function selectGroupSafeSkillDefinitions(names: ReadonlySet<GroupSafeSkillName>): Record<string, SkillDefinition> {
+  return Object.fromEntries([...names].map((name) => {
+    const definition = GROUP_SAFE_SKILL_DEFINITIONS[name];
+    if (!definition) throw new AppError("AGENT_GROUP_SKILL_FORBIDDEN", "Этот скилл не установлен в приложении");
+    return [name, definition];
+  }));
 }

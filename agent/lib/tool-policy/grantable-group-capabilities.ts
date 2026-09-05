@@ -21,7 +21,7 @@ import {
 // Only subscription-backed image generation is provider-coupled today. Resolving the flag once at
 // module load matches the validated runtime config, which cannot change without a process restart.
 function isGrantableCapability(name: ExternalGroupToolName): boolean {
-  return !isSubscriptionOnlyExternalGroupToolName(name) || IMAGE_GENERATION_AVAILABLE;
+  return name !== "web_fetch" && (!isSubscriptionOnlyExternalGroupToolName(name) || IMAGE_GENERATION_AVAILABLE);
 }
 
 /**
@@ -61,6 +61,8 @@ export function selectGrantableExternalGroupTools(
   const effective: ExternalGroupToolName[] = [];
   const unavailable: string[] = [];
   for (const name of persisted) {
+    // Existing saved grants for page reading became baseline access, not an unavailable service.
+    if (name === "web_fetch") continue;
     if (isGrantableExternalGroupToolName(name)) effective.push(name);
     else unavailable.push(name);
   }

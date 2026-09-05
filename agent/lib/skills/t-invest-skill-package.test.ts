@@ -10,7 +10,7 @@ import { access, readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-const skillRoot = new URL("../../skills/t-invest/", import.meta.url);
+const skillRoot = new URL("../../../config/skills/t-invest/", import.meta.url);
 const skillFile = new URL("SKILL.md", skillRoot);
 const referenceFile = new URL("references/json-fields.md", skillRoot);
 const cliFile = new URL("scripts/tinvest.cjs", skillRoot);

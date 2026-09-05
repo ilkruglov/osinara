@@ -28,6 +28,7 @@ function capabilityNames<const Catalog extends readonly ExternalGroupCapability[
 
 // Persisted grants are action-level where one static descriptor contains distinct side effects.
 export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
+  { name: "bash", usage: "выполнять команды в изолированном окружении текущей группы с доступом только к её файлам и публичной сети" },
   {
     name: "generate_image",
     subscriptionOnly: true,
@@ -122,19 +123,23 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
   SANDBOX_FILE_CAPABILITY_CATALOG,
 );
 
+export const EXTERNAL_GROUP_BASE_TOOLS = [
+  { name: "web_search", usage: "искать актуальную информацию в интернете с источниками" },
+  { name: "web_fetch", usage: "читать публичную страницу по ссылке" },
+  { name: "get_current_time", usage: "узнать текущую дату и время" },
+  { name: "todo", usage: "вести план шагов текущей задачи" },
+] as const;
+
 // Application tools are emitted per mode, so an external group never sees a descriptor it cannot
 // use. Eve 0.40.0 allows same-name overrides but not per-mode removal, so forbidden built-ins still
 // receive explicit denial definitions while file built-ins receive guarded same-name wrappers.
-// `web_fetch` is conditionally denied because a local controlled override is grantable.
-// Provider-native `web_search` has no execution hook and therefore stays unconditionally denied.
+// Search and page reading use application-controlled baseline wrappers, never provider-native search.
 export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
-  "agent",
   "ask_question",
   "bash",
-  "todo",
-  "web_fetch",
-  "web_search",
 ] as const;
+
+export const UNVERIFIED_CONTEXT_DENIALS = ["agent", "todo", "web_fetch", "web_search"] as const;
 
 export function isExternalGroupToolName(value: string): value is ExternalGroupToolName {
   return (EXTERNAL_GROUP_TOOL_NAMES as readonly string[]).includes(value);

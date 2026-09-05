@@ -112,6 +112,14 @@ describe("memoryRetrievalQuery", () => {
     expect(query).toBe("что я просил купить?");
   });
 
+  it("uses a delegated task as the query without demanding the parent's Telegram envelope", () => {
+    expect(memoryRetrievalQuery(
+      auth({ groupType: "external", telegramTimelineSequence: "100" }),
+      [{ content: "Compare the group's saved project constraints", role: "user" }] as ModelMessage[],
+      true,
+    )).toBe("Compare the group's saved project constraints");
+  });
+
   it("ignores a stale legacy timeline attribute without the current turn coordinate", () => {
     const query = memoryRetrievalQuery(
       auth({ telegramChatType: "private", telegramGroupTimelineSequence: "stale" }),

@@ -12,6 +12,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createTelegramApprovalPresenter } from "./approval-presentation.js";
+import { GROUP_SKILLS_BASH_CONSEQUENCE, GROUP_TOOLS_NO_BASH_CONSEQUENCE } from "./approval-consequences.js";
 
 const SCHEDULE_ID = "5042f71c-4a61-429e-8519-b1e7d0f18fe9";
 
@@ -54,6 +55,36 @@ const schedule = {
 };
 
 describe("Telegram approval presentation", () => {
+  it.each([
+    ["owner_only", "Запуск только по обращению владельца; контекст всех сообщений (owner_only)"],
+    ["addressed_only", "Запуск по обращению любого участника; контекст всех сообщений (addressed_only)"],
+    ["all", "Запуск по обращению любого участника; контекст всех сообщений (all)"],
+  ])("shows the exact proposed message mode %s", async (messageMode, explanation) => {
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule: vi.fn() });
+    const result = await present({
+      action: { callId: "group-call", kind: "tool-call", toolName: "manage_telegram_group",
+        input: { action: "update_policy", telegramChatId: "-100123", messageMode, toolAllowlist: [] } },
+      display: "confirmation", prompt: "Approval", requestId: "group-request",
+      options: [{ id: "approve", label: "Yes", style: "primary" }],
+    }, context());
+    expect(result.prompt).toContain(`Режим сообщений: ${explanation}`);
+  });
+  it("shows executable dependencies and their revocation from the exact group input", async () => {
+    const present = createTelegramApprovalPresenter({ findGmailMessage: vi.fn(), findSchedule: vi.fn() });
+    for (const [input, consequence] of [
+      [{ action: "update_skills", telegramChatId: "-100123", skillAllowlist: ["agent-browser"] }, GROUP_SKILLS_BASH_CONSEQUENCE],
+      [{ action: "update_policy", telegramChatId: "-100123", messageMode: "all", toolAllowlist: [] }, GROUP_TOOLS_NO_BASH_CONSEQUENCE],
+    ] as const) {
+      const result = await present({
+        action: { callId: "group-call", kind: "tool-call", toolName: "manage_telegram_group", input },
+        display: "confirmation", prompt: "No permission changes", requestId: "group-request",
+        options: [{ id: "approve", label: "Yes", style: "primary" }],
+      }, context());
+      expect(result.prompt).toContain(consequence);
+      expect(result.prompt).toContain("-100123");
+      expect(result.prompt).not.toContain("No permission changes");
+    }
+  });
   it.each([
     ["trash", "Переместить письмо в корзину Gmail", "можно будет восстановить", "Переместить в корзину"],
     ["delete", "Безвозвратно удалить письмо Gmail", "нельзя будет восстановить", "Удалить навсегда"],

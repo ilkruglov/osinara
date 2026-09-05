@@ -23,6 +23,7 @@ vi.mock("./telegram-group-administration-repository.js", () => ({
 
 import manageTelegramGroup from "./tools/manage_telegram_group.js";
 import { modeInstructions } from "./prompt/mode-instructions.js";
+import { GROUP_SAFE_SKILL_NAMES } from "./group-skills/group-skill-catalog.js";
 
 function context(): ToolContext {
   const caller = {
@@ -78,11 +79,19 @@ describe("manage_telegram_group.status", () => {
 
   it("returns every configured policy in one read-only result", async () => {
     await expect(manageTelegramGroup.execute({ action: "status" }, context())).resolves.toEqual({
-      availableSafeSkills: ["pohuy"],
+      availableSafeSkills: [...GROUP_SAFE_SKILL_NAMES],
+      skillRequirements: expect.objectContaining({
+        "agent-browser": { tools: ["bash"] },
+        pohuy: { tools: [] },
+        "t-invest": { tools: ["bash"], connectionRequired: true, externalConnectionAvailable: false },
+        "gws-gmail": { tools: [], connectionRequired: true, externalConnectionAvailable: false },
+      }),
       groups: [
         expect.objectContaining({
           builtInWorkspaceTools: ["glob", "grep", "read_file", "write_file"],
-          effectiveConfiguredTools: ["glob", "grep", "read_file", "write_file", "search_memories"],
+          alwaysAvailableTools: ["glob", "grep", "read_file", "write_file", "web_search", "web_fetch", "get_current_time", "todo", "agent"],
+          effectiveConfiguredTools: ["glob", "grep", "read_file", "write_file", "web_search", "web_fetch", "get_current_time", "todo", "agent", "search_memories"],
+          effectiveSkills: ["pohuy"],
           policySummary: "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
           toolAccessMode: "external_allowlist",
           toolAllowlist: ["search_memories"],
@@ -93,6 +102,7 @@ describe("manage_telegram_group.status", () => {
         }),
         expect.objectContaining({
           builtInWorkspaceTools: [],
+          effectiveSkills: [...GROUP_SAFE_SKILL_NAMES],
           policySummary: "Инструменты назначаются семейным режимом; отдельный allowlist не настраивается.",
           toolAccessMode: "family_policy",
           toolAllowlist: [],

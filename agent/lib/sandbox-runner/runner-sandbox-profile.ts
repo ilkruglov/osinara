@@ -39,7 +39,11 @@ export function sandboxHome(
   access: SandboxAccess,
   mounts: readonly WorkspaceSandboxMount[],
 ): string {
-  if (access !== "trusted") return "/tmp/home";
+  if (access === "restricted") return "/tmp/home";
+  if (access === "group-tools") {
+    if (mounts.length !== 1 || mounts[0]?.mountPoint !== "group") throw new Error("AGENT_SANDBOX_RUNNER_SCOPE_INVALID: Group tools require a group workspace");
+    return "/tools/group/home";
+  }
   const primary = mounts.find((mount) => mount.mountPoint === "personal") ?? mounts[0];
   if (!primary || primary.mountPoint === "group") {
     throw new Error("AGENT_SANDBOX_RUNNER_SCOPE_INVALID: Trusted home scope is missing");

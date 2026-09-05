@@ -62,7 +62,7 @@ export interface TelegramIngressRepository {
     nextEventIndex: number,
   ): Promise<void>;
   enqueue(input: EnqueueTelegramUpdateInput): Promise<"duplicate" | "inserted">;
-  fail(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
+  fail(updateId: string, leaseToken: string, failure: TelegramIngressFailure, eveSessionId?: string): Promise<void>;
   rekeyQueue(input: {
     nextContinuationKey: string;
     previousContinuationKey: string;

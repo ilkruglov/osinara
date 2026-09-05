@@ -34,7 +34,7 @@ describe("grantable external group capabilities without a Codex subscription", (
 
   it("keeps every other catalog capability grantable", () => {
     expect([...GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES]).toEqual(
-      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !isSubscriptionOnlyExternalGroupToolName(name)),
+      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => name !== "web_fetch" && !isSubscriptionOnlyExternalGroupToolName(name)),
     );
     expect(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES.length).toBeGreaterThan(0);
   });
@@ -47,7 +47,7 @@ describe("grantable external group capabilities without a Codex subscription", (
 
   it("splits a persisted allowlist into effective and inert grants", () => {
     expect(selectGrantableExternalGroupTools(["remember", "generate_image", "web_fetch"])).toEqual({
-      effective: ["remember", "web_fetch"],
+      effective: ["remember"],
       unavailable: ["generate_image"],
     });
     expect(selectGrantableExternalGroupTools(["remember"])).toEqual({

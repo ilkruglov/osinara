@@ -88,14 +88,14 @@ describe("agent capability surface", () => {
     expect(toolModules).toEqual([...EXPECTED_TOOL_MODULES]);
   });
 
-  it("keeps static packages separate from the dynamic policy resolver", async () => {
+  it("keeps all packages outside static discovery and exposes only the policy resolver", async () => {
     const entries = await readdir(`${AGENT_ROOT}/skills`, { withFileTypes: true });
     const skillDirectories = entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
 
-    expect(skillDirectories).toEqual([...EXPECTED_SKILL_DIRECTORIES]);
+    expect(skillDirectories).toEqual([]);
     const skillFiles = entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
       .map((entry) => entry.name)
@@ -104,15 +104,11 @@ describe("agent capability surface", () => {
   });
 
   it("keeps the opt-in profanity package outside static discovery", async () => {
-    const packageRoot = resolve(AGENT_ROOT, "../config/group-skills/pohuy");
-    const skill = await readFile(`${packageRoot}/instructions.md`, "utf8");
-    const definitions = await readFile(
-      `${AGENT_ROOT}/lib/group-skills/group-skill-definitions.ts`,
-      "utf8",
-    );
+    const packageRoot = resolve(AGENT_ROOT, "../config/skills/pohuy");
+    const skill = await readFile(`${packageRoot}/SKILL.md`, "utf8");
 
     // Activation guidance is emitted only when policy grants this dynamic skill.
-    expect(definitions).toContain("Загружай только по явной просьбе");
+    expect(skill).toContain("Загружай только по явной просьбе");
 
     // The dynamic definition ships all sibling references with the sandbox package.
     const references = await readdir(`${packageRoot}/references`);
@@ -125,7 +121,7 @@ describe("agent capability surface", () => {
   it("requires every native skill package to declare SKILL.md", async () => {
     await Promise.all(
       EXPECTED_SKILL_DIRECTORIES.map(async (skillName) => {
-        const files = await readdir(`${AGENT_ROOT}/skills/${skillName}`);
+        const files = await readdir(resolve(AGENT_ROOT, `../config/skills/${skillName}`));
 
         expect(files).toContain("SKILL.md");
       }),

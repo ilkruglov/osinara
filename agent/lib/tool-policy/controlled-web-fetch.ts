@@ -293,7 +293,7 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
   };
 }
 
-const executeControlledWebFetch = createControlledWebFetch({
+export const executeControlledWebFetch = createControlledWebFetch({
   dispatcher: controlledWebFetchDispatcher,
   fetch: undiciFetch,
 });

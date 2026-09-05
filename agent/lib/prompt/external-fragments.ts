@@ -29,7 +29,7 @@ const ALWAYS_AVAILABLE_PURPOSE =
 // Catalog order keeps the rendered list deterministic for prompt caching.
 const CAPABILITY_PURPOSES: readonly (readonly [ExternalGroupToolName, string])[] = [
   ["import_telegram_attachment", "читать текстовые файлы из сообщений этого чата"],
-  ["web_fetch", "открывать и пересказывать страницу по ссылке из чата"],
+  ["bash", "выполнять команды и готовить файлы в отдельном окружении этой группы"],
   ["search_memories", "вспоминать и находить то, что уже обсуждали в этой группе"],
   ["list_memories", "перечислять, что сохранено в памяти этой группы"],
   ["remember", "сохранять то, что участники просят запомнить для группы"],
@@ -44,10 +44,11 @@ const CAPABILITY_PURPOSES: readonly (readonly [ExternalGroupToolName, string])[]
 
 export function externalPurposeSection(
   capabilities: ReadonlySet<ExternalGroupToolName>,
-  options: { reminders: boolean },
+  options: { reminders: boolean; web?: boolean },
 ): string {
   const purposes = [
     ALWAYS_AVAILABLE_PURPOSE,
+    ...(options.web ? ["искать актуальную информацию в интернете, проверять источники и читать страницы по ссылкам"] : []),
     ...(options.reminders ? [REMINDER_PURPOSE] : []),
     ...CAPABILITY_PURPOSES
       .filter(([capability]) => capabilities.has(capability))

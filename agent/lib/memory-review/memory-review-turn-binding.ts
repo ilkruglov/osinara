@@ -2,7 +2,7 @@
  * Which memory-review batch a finishing Telegram turn belongs to.
  *
  * Export:
- * - `resolveMemoryReviewBatch`: marker first, durable turn binding second.
+ * - `resolveMemoryReviewBatch`: exact durable turn binding before a caller's batch marker.
  */
 import type { SessionContext } from "eve/context";
 
@@ -24,10 +24,11 @@ export async function resolveMemoryReviewBatch(ctx: {
     turn: { id: string };
   };
 }): Promise<string | null> {
-  const marked = memoryReviewBatchId(ctx);
-  if (marked) return marked;
-  return await memoryReviewRepository.batchIdForTurn({
+  const bound = await memoryReviewRepository.batchIdForTurn({
     eveSessionId: ctx.session.id,
     eveTurnId: ctx.session.turn.id,
   });
+  if (bound) return bound;
+  // Released batches have no row; their original marker keeps a repeated terminal event a no-op.
+  return memoryReviewBatchId(ctx);
 }

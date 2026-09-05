@@ -16,6 +16,7 @@ import {
   MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
 } from "./memory-review-config.js";
 import { enqueueMemoryReviewOwnerAlert } from "./memory-review-owner-alert-repository.js";
+import { terminalizeApplicationSession } from "./memory-review-session-terminal.js";
 
 export type MemoryReviewTerminalResult = "recorded" | "released" | "replayed" | "skipped";
 export type MemoryReviewCompletionResult = MemoryReviewTerminalResult | "failed";
@@ -48,48 +49,6 @@ async function advanceCompletedChain(client: PoolClient, laneId: string): Promis
     `UPDATE memory_review_lanes SET processed_through_sequence = $2, updated_at = now()
       WHERE id = $1`,
     [laneId, cursor],
-  );
-}
-
-async function terminalizeApplicationSession(
-  client: PoolClient,
-  input: {
-    applicationSessionId: string;
-    completedAt: Date;
-    eveSessionId: string;
-    outcome: "completed" | "failed";
-  },
-): Promise<void> {
-  const result = await client.query(
-    `UPDATE conversation_sessions
-        SET completed_turns = completed_turns + CASE WHEN $4 = 'completed' THEN 1 ELSE 0 END,
-            last_activity_at = $3, pending_operation = false, eve_session_id = $2,
-            task_state = CASE
-              WHEN kind <> 'canonical' THEN $4::conversation_task_state
-              ELSE task_state
-            END,
-            retired_at = CASE WHEN kind <> 'canonical' THEN $3 ELSE retired_at END,
-            delete_after = CASE
-              WHEN kind <> 'canonical' THEN $3 + $5 * interval '1 day'
-              ELSE delete_after
-            END
-      WHERE id = $1 AND retired_at IS NULL
-        AND (eve_session_id IS NULL OR eve_session_id = $2)`,
-    [input.applicationSessionId, input.eveSessionId, input.completedAt, input.outcome,
-      SESSION_RETENTION_DAYS],
-  );
-  if (result.rowCount !== 1) throw new AppError(
-    "AGENT_MEMORY_REVIEW_SESSION_TERMINAL_INVALID",
-    "Не удалось завершить контекст проверки памяти",
-  );
-  // Review sessions have no route, but retain the standard noncanonical retirement audit contract.
-  await client.query(
-    `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
-     SELECT family_id, 'session.noncanonical_retired', id,
-            jsonb_build_object('kind', kind::text, 'taskState', task_state::text)
-       FROM conversation_sessions
-      WHERE id = $1 AND retired_at IS NOT NULL AND kind <> 'canonical'`,
-    [input.applicationSessionId],
   );
 }
 

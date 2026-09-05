@@ -10,10 +10,12 @@ import { z } from "zod";
 import { resolveCurrentTime } from "../current-time.js";
 import { currentTimeRepository } from "../current-time-repository.js";
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
+import { GROUP_REMINDER_TIMEZONE } from "../reminders/reminder-config.js";
 
 const TOOL_DESCRIPTION = [
   "Получить точные текущие дату и время из системных часов.",
   "Без timezone использует настроенный IANA timezone текущего пользователя; если он не настроен, возвращает только UTC.",
+  "Во внешней группе без timezone использует общий часовой пояс группы, не личные настройки участника.",
   "Для времени в другом часовом поясе передай timezone, например {\"timezone\":\"Asia/Tokyo\"}.",
   "Используй для уточнения текущего времени, даты, дня недели, timezone или после долгой операции; не угадывай эти значения.",
 ].join(" ");
@@ -25,6 +27,10 @@ export default defineTool({
     // Explicit timezone questions do not require or expose persisted user settings.
     if (input.timezone !== undefined) {
       return resolveCurrentTime(new Date(), input.timezone, "explicit");
+    }
+
+    if (ctx.session.auth.current?.attributes.groupType === "external") {
+      return resolveCurrentTime(new Date(), GROUP_REMINDER_TIMEZONE, "group_config");
     }
 
     // The persisted timezone is scoped to the verified current family identity.

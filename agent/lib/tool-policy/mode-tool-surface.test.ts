@@ -22,7 +22,7 @@ vi.mock("./external-group-live-policy.js", () => ({
 }));
 
 import { FAMILY_ONLY_TOOL_NAMES, PRIVATE_ONLY_TOOL_NAMES, TRUSTED_MODE_TOOL_NAMES, buildModeToolSurface, buildSubagentToolSurface } from "./mode-tool-surface.js";
-import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, EXTERNAL_GROUP_TOOL_NAMES, FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, type ExternalGroupToolName } from "./group-tool-catalog.js";
+import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, EXTERNAL_GROUP_BASE_TOOLS, EXTERNAL_GROUP_TOOL_NAMES, FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, type ExternalGroupToolName } from "./group-tool-catalog.js";
 
 function names(input: Parameters<typeof buildModeToolSurface>[0]): string[] {
   return Object.keys(buildModeToolSurface(input)).sort();
@@ -94,7 +94,7 @@ describe("trusted mode tool surfaces", () => {
 
     expect(ordinary).not.toContain("read_scheduled_group_history");
     expect(scheduled).toContain("read_scheduled_group_history");
-    expect(scheduled).toContain("agent");
+    expect(scheduled).not.toContain("agent");
   });
 
   it("never exposes another zone's tools", () => {
@@ -163,7 +163,7 @@ describe("external group tool surface", () => {
 
   it("emits only guarded baseline tools and framework denials without a grant", () => {
     expect(names({ capabilities: new Set(), environment: "external", skills: {} })).toEqual(
-      [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort(),
+      [...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, ...EXTERNAL_GROUP_BASE_TOOLS.map((tool) => tool.name), "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort(),
     );
   });
 
@@ -193,16 +193,14 @@ describe("external group tool surface", () => {
     }
   });
 
-  it("denies native child delegation in every interactive external group", async () => {
+  it("does not shadow native child delegation in an interactive external group", () => {
     const surface = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
       skills: {},
     });
 
-    expect(surface).toHaveProperty("agent");
-    await expect(surface.agent!.execute({ message: "Run a long task" }, {} as never))
-      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(surface).not.toHaveProperty("agent");
   });
 
   it("makes load_skill executable only when the current turn has a granted skill", async () => {
@@ -240,7 +238,7 @@ describe("external group tool surface", () => {
   it("emits no application tool outside the effective allowlist", () => {
     const applicationNames = new Set([...TRUSTED_MODE_TOOL_NAMES, ...PRIVATE_ONLY_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES]);
     const grantable = new Set<string>([...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, ""))]);
-    const alwaysExternal = new Set(["list_reminders", "manage_behavior_preference", "manage_reminder", "read_profile_view"]);
+    const alwaysExternal = new Set(["list_reminders", "manage_behavior_preference", "manage_reminder", "read_profile_view", ...EXTERNAL_GROUP_BASE_TOOLS.map((tool) => tool.name)]);
 
     for (const emitted of names({
       capabilities: new Set(),
@@ -251,7 +249,7 @@ describe("external group tool surface", () => {
     }
   });
 
-  it("emits a granted capability but always denies provider-native search", () => {
+  it("emits a granted capability alongside baseline application web search", () => {
     expect(
       names({
         capabilities: new Set(["remember"]),
@@ -335,7 +333,7 @@ describe("external group tool surface", () => {
       skills: {},
     });
 
-    for (const toolName of ["agent", "ask_question", "bash", "todo", "web_fetch"]) {
+    for (const toolName of ["ask_question", "bash"]) {
       await expect(surface[toolName]!.execute({}, {} as never), `${toolName} must be denied`).rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/);
     }
   });
@@ -445,7 +443,7 @@ describe("external group tool surface", () => {
         environment: "external",
         skills: {},
       }),
-    ).toEqual([...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort());
+    ).toEqual([...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES, ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS, ...EXTERNAL_GROUP_BASE_TOOLS.map((tool) => tool.name), "list_reminders", "load_skill", "manage_behavior_preference", "manage_reminder", "read_profile_view"].sort());
   });
 
   it("exposes only group scope in external shared-tool schemas and descriptions", () => {

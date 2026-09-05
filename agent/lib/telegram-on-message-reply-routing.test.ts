@@ -254,6 +254,7 @@ describe("createTelegramMessageHandler reply routing", () => {
     }));
     expect(result).not.toBeNull();
     expect(result).not.toHaveProperty("replyHandling");
+    expect(repository.memoryReview.prepareInteractiveTurn).not.toHaveBeenCalled();
   });
 
   it("continues a sender-less reply to an exact known Osinara route", async () => {

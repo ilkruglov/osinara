@@ -11,8 +11,14 @@
  */
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
+import type { SandboxSpawnOptions } from "eve/sandbox";
 
 import { z } from "zod";
+
+/** Authored Bash adds this requirement; native file helpers remain available without Bash. */
+export interface GroupSandboxCommandOptions extends SandboxSpawnOptions {
+  requiredGroupCapability?: "bash";
+}
 
 export const SANDBOX_RUNNER_API_PREFIX = "/v1";
 export const SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS = 100_000;
@@ -59,7 +65,7 @@ export function sandboxSeedDigest(
 }
 
 const createSandboxRequestSchema = z.strictObject({
-  access: z.enum(["restricted", "trusted"]),
+  access: z.enum(["restricted", "group-tools", "trusted"]),
   eveSessionId: eveSessionIdSchema,
   mounts: z.array(workspaceMountSchema).min(1).max(2),
   sandboxSessionId: sessionIdSchema,
@@ -80,9 +86,10 @@ const createSandboxRequestSchema = z.strictObject({
   for (const [index, path] of seedPaths.entries()) {
     const workspacePath = /^\/workspace\/.+/u.test(path);
     const trustedToolPath = request.access === "trusted" && /^\/tools\/(?:family|personal)\/.+/u.test(path);
+    const groupToolPath = request.access === "group-tools" && /^\/tools\/group\/.+/u.test(path);
     const isolatedHomePath = request.access !== "trusted" && /^\/tmp\/home\/.+/u.test(path);
     if (
-      (!workspacePath && !trustedToolPath && !isolatedHomePath) ||
+      (!workspacePath && !trustedToolPath && !groupToolPath && !isolatedHomePath) ||
       posix.normalize(path) !== path
     ) {
       context.addIssue({
@@ -97,7 +104,7 @@ const createSandboxRequestSchema = z.strictObject({
   }
 
   // Restricted sessions are external groups and may receive only their isolated group workspace.
-  if (request.access === "restricted") {
+  if (request.access !== "trusted") {
     if (points.length !== 1 || points[0] !== "group") {
       context.addIssue({ code: "custom", message: "Restricted scope mismatch", path: ["mounts"] });
     }
@@ -121,6 +128,7 @@ const environmentSchema = z.record(
 
 const processRequestSchema = z.strictObject({
   command: z.string().min(1).max(SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS),
+  expectedInstanceId: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   environment: environmentSchema.optional(),
   timeoutMs: z.number().int().positive().max(SANDBOX_RUNNER_TIMEOUT_MAX_MS).optional(),
   workingDirectory: z.string().min(1).max(4_096).optional(),
@@ -139,7 +147,7 @@ const removePathRequestSchema = z.strictObject({
   recursive: z.boolean().optional(),
 });
 
-export type SandboxAccess = "restricted" | "trusted";
+export type SandboxAccess = "restricted" | "group-tools" | "trusted";
 export type GoogleWorkspaceExecutionRequest = z.infer<typeof googleWorkspaceExecutionRequestSchema>;
 export type SandboxMountPoint = z.infer<typeof mountPointSchema>;
 export type SandboxRunnerCreateRequest = z.infer<typeof createSandboxRequestSchema>;
@@ -169,6 +177,7 @@ export interface SandboxRunnerSessionResponse {
   created: boolean;
   seedRequired: boolean;
   sessionId: string;
+  instanceId?: string;
 }
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, code: string): T {

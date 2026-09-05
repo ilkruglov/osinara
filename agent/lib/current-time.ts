@@ -13,7 +13,7 @@ export interface CurrentTimeResult {
   localDate: string | null;
   localTime: string | null;
   timezone: string | null;
-  timezoneSource: "explicit" | "not_configured" | "user_settings";
+  timezoneSource: "explicit" | "not_configured" | "user_settings" | "group_config";
   utcOffset: string | null;
   weekday: string | null;
 }

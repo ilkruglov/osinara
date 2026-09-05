@@ -90,7 +90,7 @@ describe("Eve implicit agent policy patch", () => {
     expect([...tools.keys()]).toEqual(["remember"]);
   });
 
-  it("removes native root delegation from an authenticated external group", async () => {
+  it("retains native root delegation in an authenticated external group", async () => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
     const buildTools = extractRuntimeToolBuilder(runtime);
 
@@ -102,7 +102,7 @@ describe("Eve implicit agent policy patch", () => {
       context("telegram", { groupType: "external" }),
     );
 
-    expect([...tools.keys()]).toEqual(["read_file"]);
+    expect([...tools.keys()]).toEqual(["agent", "read_file"]);
   });
 
   it.each([
@@ -151,8 +151,7 @@ describe("Eve implicit agent policy patch", () => {
     ]);
 
     expect(patchSource).toContain("memoryReviewMode===`background`");
-    expect(patchSource).toContain("groupType===`external`");
     expect(runtime.match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
-    expect(runtime.match(/groupType===`external`/gu)).toHaveLength(1);
+    expect(runtime.match(/groupType===`external`/gu) ?? []).toHaveLength(0);
   });
 });

@@ -14,12 +14,12 @@ import type {
   SandboxProcess,
   SandboxSeedFile,
   SandboxSession,
-  SandboxSpawnOptions,
 } from "eve/sandbox";
 import { SandboxTemplateNotProvisionedError } from "eve/sandbox";
 
 import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
 import type {
+  GroupSandboxCommandOptions,
   SandboxAccess,
   SandboxRunnerCreateRequest,
   SandboxRunnerSeedFile,
@@ -33,6 +33,7 @@ import {
   sandboxSeedDigest,
 } from "./sandbox-runner-contract.js";
 import { SandboxRunnerClient } from "./runner-client.js";
+import { withGroupSandboxAccess } from "./group-sandbox-policy.js";
 import {
   accessForMounts,
   type BackendProfile,
@@ -150,15 +151,16 @@ function seedManifest(
 function buildSession(input: {
   access: () => SandboxAccess | null;
   client: SandboxRunnerClient;
-  ensure: () => Promise<string>;
+  ensure: (requiredCapability?: "bash") => Promise<{ sessionId: string; instanceId: string }>;
   id: () => string;
 }): SandboxSession {
-  async function spawn(options: SandboxSpawnOptions): Promise<SandboxProcess> {
-    const sessionId = await input.ensure();
+  async function spawn(options: GroupSandboxCommandOptions): Promise<SandboxProcess> {
+    const { sessionId, instanceId } = await input.ensure(options.requiredGroupCapability);
     const controller = new AbortController();
     let killed = false;
     const completion = input.client.run(sessionId, {
       command: options.command,
+      expectedInstanceId: instanceId,
       environment: options.env,
       workingDirectory: options.workingDirectory,
     }, controller.signal).catch((error: unknown) => {
@@ -182,11 +184,11 @@ function buildSession(input: {
   }
 
   async function readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array | null> {
-    return await input.client.readFile(await input.ensure(), resolveSandboxPath(path), signal);
+    return await input.client.readFile((await input.ensure()).sessionId, resolveSandboxPath(path), signal);
   }
 
   async function writeBytes(path: string, content: Uint8Array, signal?: AbortSignal): Promise<void> {
-    await input.client.writeFile(await input.ensure(), resolveSandboxPath(path), content, signal);
+    await input.client.writeFile((await input.ensure()).sessionId, resolveSandboxPath(path), content, signal);
   }
 
   return {
@@ -194,9 +196,11 @@ function buildSession(input: {
       return input.id();
     },
     resolvePath: resolveSandboxPath,
-    async run(options) {
-      const result = await input.client.run(await input.ensure(), {
+    async run(options: GroupSandboxCommandOptions) {
+      const { sessionId, instanceId } = await input.ensure(options.requiredGroupCapability);
+      const result = await input.client.run(sessionId, {
         command: options.command,
+        expectedInstanceId: instanceId,
         environment: options.env,
         workingDirectory: options.workingDirectory,
       }, options.abortSignal);
@@ -232,7 +236,7 @@ function buildSession(input: {
       await writeBytes(options.path, Buffer.from(options.content, encoding), options.abortSignal);
     },
     async removePath(options) {
-      await input.client.removePath(await input.ensure(), {
+      await input.client.removePath((await input.ensure()).sessionId, {
         force: options.force,
         path: resolveSandboxPath(options.path),
         recursive: options.recursive,
@@ -315,16 +319,26 @@ function workspaceRunner(
         if (disabledSandboxSessionId) return disabledSandboxSessionId;
         return requireRequest().sandboxSessionId;
       };
-      const ensureRunner = async (): Promise<string> => {
-        const current = requireRequest();
-        const probe = await client.create({ ...current, seedFiles: undefined });
+      const ensureWithAccess = async (access: SandboxAccess): Promise<{ sessionId: string; instanceId: string }> => {
+        let current = requireRequest();
+        if (current.access !== access) {
+          request = parseCreateSandboxRequest({ ...current, access, ...seedManifest(template, access, current.mounts) });
+          current = request;
+        }
+        let probe = await client.create({ ...current, seedFiles: undefined });
         if (probe.seedRequired) {
-          const created = await client.create(current);
-          if (created.seedRequired) {
+          probe = await client.create(current);
+          if (probe.seedRequired) {
             throw new Error("AGENT_SANDBOX_RUNNER_SEED_REQUIRED: Runner rejected the seed bundle");
           }
         }
-        return current.sandboxSessionId;
+        if (!probe.instanceId) throw new Error("AGENT_SANDBOX_RUNNER_INSTANCE_MISSING: Runner did not identify the active container");
+        return { sessionId: current.sandboxSessionId, instanceId: probe.instanceId };
+      };
+      const ensureRunner = async (requiredCapability?: "bash"): Promise<{ sessionId: string; instanceId: string }> => {
+        const current = requireRequest();
+        const group = current.mounts.find((mount) => mount.mountPoint === "group");
+        return group ? withGroupSandboxAccess(group.workspaceId, ensureWithAccess, requiredCapability) : ensureWithAccess("trusted");
       };
       const session = buildSession({
         access: () => request?.access ?? null,

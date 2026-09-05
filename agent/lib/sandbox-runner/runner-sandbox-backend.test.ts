@@ -21,6 +21,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SandboxEngine } from "../../../services/sandbox-runner/sandbox-engine.js";
 import { createSandboxRunnerServer } from "../../../services/sandbox-runner/server.js";
 import { scopedWorkspaceRunner } from "./runner-sandbox-backend.js";
+import { authorizeCurrentExternalGroupCapability } from "../tool-policy/external-group-live-policy.js";
+import { externalGroupBash } from "../tool-policy/external-group-bash.js";
+
+const policy = vi.hoisted(() => ({ tools: [] as string[] }));
+vi.mock("../database.js", () => ({
+  database: () => ({ connect: async () => ({
+    query: async () => ({ rows: [{ tool_allowlist: policy.tools }] }),
+    release: () => undefined,
+  }) }),
+}));
 
 const SESSION_ID = "wrun_01JZ8K4R0W6G73VTHX9NF2QABC";
 const BACKEND_SESSION_ID =
@@ -36,6 +46,7 @@ function fakeEngine(): SandboxEngine {
       created: request.seedFiles !== undefined,
       seedRequired: request.seedFiles === undefined,
       sessionId: request.sandboxSessionId,
+      instanceId: "f".repeat(64),
     })),
     deleteToolEnvironment: vi.fn(async () => undefined),
     health: vi.fn(async () => undefined),
@@ -68,6 +79,7 @@ async function runnerUrl(engine: SandboxEngine): Promise<string> {
 }
 
 afterEach(async () => {
+  policy.tools = [];
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   ));
@@ -75,6 +87,62 @@ afterEach(async () => {
 });
 
 describe("scopedWorkspaceRunner", () => {
+  it.each([false, true])("passes the Bash requirement through Eve's public executor (revoked=%s)", async (revoked) => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
+    roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const handle = await backend.create({
+      runtimeContext: { appRoot }, sessionKey: BACKEND_SESSION_ID,
+      templateKey: null, tags: { sessionId: SESSION_ID },
+    });
+    await handle.useSessionFn({
+      mounts: [{ mountPoint: "group", workspaceId: WORKSPACE_ID }], sandboxSessionId: SANDBOX_SESSION_ID,
+    });
+    policy.tools = ["bash"];
+    const operation = externalGroupBash.execute({ command: "touch /workspace/group/marker" }, {
+      session: { auth: { current: {
+        authenticator: "telegram", principalType: "user", principalId: "telegram:101",
+        attributes: { familyId: "family", groupId: "group", groupType: "external", role: "external", telegramChatType: "supergroup" },
+      } } },
+      async getSandbox() {
+        // The first authorization already passed, but the sandbox has not been selected yet.
+        if (revoked) policy.tools = [];
+        return handle.session;
+      },
+    } as never);
+    if (revoked) {
+      await expect(operation).rejects.toThrow("AGENT_GROUP_TOOL_FORBIDDEN");
+      expect(engine.runProcess).not.toHaveBeenCalled();
+    } else {
+      await expect(operation).resolves.toMatchObject({ stdout: "ok\n", truncated: false });
+      expect(engine.createSession).toHaveBeenCalledWith(expect.objectContaining({ access: "group-tools" }));
+      expect(engine.runProcess).toHaveBeenCalledWith(SANDBOX_SESSION_ID,
+        expect.objectContaining({ expectedInstanceId: "f".repeat(64) }), expect.any(AbortSignal));
+    }
+  });
+  it.each(["run", "spawn"] as const)("rejects %s after Bash is revoked between the outer check and container selection", async (method) => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
+    roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const handle = await backend.create({
+      runtimeContext: { appRoot }, sessionKey: BACKEND_SESSION_ID,
+      templateKey: null, tags: { sessionId: SESSION_ID },
+    });
+    await handle.useSessionFn({
+      mounts: [{ mountPoint: "group", workspaceId: WORKSPACE_ID }], sandboxSessionId: SANDBOX_SESSION_ID,
+    });
+    policy.tools = ["bash"];
+    await authorizeCurrentExternalGroupCapability({ familyId: "family", groupId: "group" }, "bash");
+    policy.tools = [];
+    const command = { command: "touch /workspace/group/forbidden", requiredGroupCapability: "bash" as const };
+    await expect(handle.session[method](command)).rejects.toThrow("AGENT_GROUP_TOOL_FORBIDDEN");
+    expect(engine.createSession).not.toHaveBeenCalled();
+    expect(engine.runProcess).not.toHaveBeenCalled();
+    // Native file tools may still use internal shell commands without a user Bash grant.
+    await expect(handle.session.readTextFile({ path: "/workspace/group/kept" })).resolves.toBe("content");
+  });
   it("persists a disabled session without creating sandbox compute", async () => {
     const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
     roots.push(appRoot);

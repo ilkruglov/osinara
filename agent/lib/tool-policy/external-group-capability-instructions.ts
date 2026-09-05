@@ -8,6 +8,7 @@
 import {
   EXTERNAL_GROUP_CAPABILITY_CATALOG,
   SANDBOX_FILE_CAPABILITY_CATALOG,
+  EXTERNAL_GROUP_BASE_TOOLS,
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 import type { GroupSafeSkillName } from "../group-skills/group-skill-catalog.js";
@@ -43,13 +44,14 @@ export function externalGroupCapabilityInstructions(
   const effectiveCapabilities = [
     ...SANDBOX_FILE_CAPABILITY_CATALOG,
     ...EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(({ name }) =>
-      allowed.has(name) && !(name === "generate_image" && (
+      name !== "web_fetch" && allowed.has(name) && !(name === "generate_image" && (
         options.scheduledRun || !IMAGE_GENERATION_AVAILABLE
       ))
     ),
   ];
   const applicationCore = options.includeApplicationCore
     ? [
+      ...EXTERNAL_GROUP_BASE_TOOLS,
       { name: "read_profile_view", usage: "прочитать выданный текущему чату снимок профиля по profileViewRef" },
       ...(options.scheduledRun
         ? []
@@ -95,7 +97,8 @@ ${usage}
 
 Используй capabilities только для указанного usage. Не вызывай, не предлагай и не утверждай, что можешь использовать инструменты, не перечисленные выше.${memoryActions}
 
-Trusted-only skills Google Workspace не доступны во внешней группе: не предлагай и не используй их, даже если устаревший static descriptor оказался виден.
+${options.includeApplicationCore ? "Основной агент может делегировать сложную часть через `agent`; дочерний агент получает те же границы данных и разрешения, но не делегирует повторно и не сохраняет долговременную память." : ""}
+Разрешённый скилл не предоставляет чужую авторизацию. Если ему нужно внешнее подключение, которого здесь нет, сообщи об этом; личные и семейные подключения в группу не передаются.
 </external_group_capabilities>
 `.trim();
 }
