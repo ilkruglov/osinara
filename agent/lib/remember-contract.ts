@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import {
   MEMORY_ATTRIBUTE_MAX_CHARACTERS,
+  MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
   THREAD_PURPOSE_MAX_CHARACTERS,
   THREAD_TITLE_MAX_CHARACTERS,
 } from "./memory-config.js";
@@ -96,7 +97,7 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
     attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS).optional().describe(
-      "Слот профиля для profile/preference/fact: работа, профессия, город, семья, дети, партнёр, питомцы, машина, здоровье, привычки, увлечения, вкусы, музыка, еда, техника, прозвище, роль в чате, день рождения. Новая запись в том же слоте заменяет старую",
+      "Слот записи: для человека работа, профессия, город, семья, дети, партнёр, питомцы, машина, здоровье, привычки, увлечения, вкусы, музыка, еда, техника, прозвище, роль в чате, день рождения; для fact/family_shared о названной сущности или о чате вместе с subject.label (например «Гоша» + «содержание»); для episode только «итог обсуждения» с subject.label = тема. Новая запись в том же слоте заменяет старую",
     ),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     kind: z.enum(["profile", "preference", "fact", "episode", "family_shared"]).describe("Семантический тип записи"),
@@ -144,10 +145,11 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
         path: ["occurredAt"],
       });
     }
-    if (input.attribute !== undefined && input.kind === "episode") {
+    if (input.attribute !== undefined && input.kind === "episode" &&
+      input.attribute !== MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE) {
       context.addIssue({
         code: "custom",
-        message: "AGENT_MEMORY_INPUT_INVALID: Слот attribute не применим к событию",
+        message: `AGENT_MEMORY_INPUT_INVALID: Слот attribute для события допустим только как "${MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE}"`,
         path: ["attribute"],
       });
     }

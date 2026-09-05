@@ -91,6 +91,34 @@ describeWithDatabase("memory slots", () => {
     expect(active.rows.map((row) => row.id)).toEqual([second.id]);
   });
 
+  it("shares one slot across semantic kinds for a labelled subject, but not with episodes", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const labelled = (content: string, kind: CreateMemoryInput["kind"], attribute: string, operationKey: string): CreateMemoryInput => ({
+      ...slotInput(fixture, content, operationKey),
+      attribute,
+      explicitSource: {
+        conversationId: fixture.conversationId,
+        subject: { kind: "label", label: "Гоша" },
+        timelineEntryId: fixture.timelineEntryId,
+      },
+      kind,
+    });
+    const fact = await memoryRepository.create(fixture.auth, labelled("Гоша живёт в клетке, но его выпускают", "fact", "содержание", "gosha-1"));
+    const shared = await memoryRepository.create(fixture.auth, labelled("Гоша живёт не в клетке, а на жёрдочке", "family_shared", "содержание", "gosha-2"));
+    await expect(database().query(
+      "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
+      [fact.id],
+    )).resolves.toMatchObject({ rows: [{ claim_status: "superseded", superseded_by: shared.id }] });
+
+    // A discussion summary is an episode slot of its own and leaves the fact chain alone.
+    const summary = await memoryRepository.create(fixture.auth, labelled("Обсудили содержание Гоши: решили оставить жёрдочку", "episode", "итог обсуждения", "gosha-3"));
+    const summaryAgain = await memoryRepository.create(fixture.auth, labelled("Обсудили содержание Гоши ещё раз: жёрдочка и клетка на ночь", "episode", "итог обсуждения", "gosha-4"));
+    await expect(database().query(
+      "SELECT claim_status::text FROM memory_items_all WHERE id = ANY($1::uuid[]) ORDER BY created_at",
+      [[shared.id, summary.id, summaryAgain.id]],
+    )).resolves.toMatchObject({ rows: [{ claim_status: "active" }, { claim_status: "superseded" }, { claim_status: "active" }] });
+  });
+
   it("reinforces an identical claim in the slot instead of creating a version", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const first = await memoryRepository.create(
