@@ -79,6 +79,8 @@ export interface ReferencedMemoryItem extends MemoryItem {
 export interface CreateMemoryInput {
   attribute?: string;
   confirmation: MemoryConfirmation;
+  /** The writer has seen the near-duplicate candidates and asserts this is a different fact. */
+  distinct?: boolean;
   occurredAt?: string;
   content: string;
   explicitSource?: CreateMemoryExplicitSourceInput;

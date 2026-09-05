@@ -11,7 +11,13 @@ import { insertClaimEvidence } from "./claim-evidence-writer.js";
 import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.js";
 import { database } from "./database.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
+import { embedMemoryQuery } from "./memory-embedding-client.js";
 import { reinforceExactClaim } from "./memory-exact-reinforcement.js";
+import {
+  findNearDuplicateClaims,
+  isSemanticMemoryKind,
+  nearDuplicateError,
+} from "./memory-near-duplicate.js";
 import { supersedeSlotClaims } from "./memory-slot-supersede.js";
 import { enforceMemoryQuota } from "./memory-quota.js";
 import {
@@ -247,8 +253,13 @@ export async function createMemoryClaim(
     reservation = preflight.reservation;
   }
   let titleEmbedding: Awaited<ReturnType<typeof embedMemoryThreadTitle>>;
+  // A slot write, an asserted distinct fact, and every episode skip the neighbour gate.
+  const gateNeighbours = isSemanticMemoryKind(input.kind) && input.attribute === undefined &&
+    input.distinct !== true;
+  let contentEmbedding: number[] | null = null;
   try {
     titleEmbedding = await embedMemoryThreadTitle(input.thread);
+    if (gateNeighbours) contentEmbedding = await embedMemoryQuery(input.content);
   } catch (error) {
     // An explicit failed call may retry; a crash instead leaves a bounded lease for safe takeover.
     if (reservation) await releaseReservationAfterEmbeddingFailure(auth, reservation);
@@ -326,6 +337,26 @@ export async function createMemoryClaim(
       subjectUserId: prepared?.subjectUserId ?? null,
       systemActor: input.systemActor === true,
     });
+    if (!reinforced && contentEmbedding) {
+      const neighbours = await findNearDuplicateClaims(client, auth, {
+        embedding: contentEmbedding,
+        kind: input.kind,
+        scope: input.scope,
+        scopePartitionKey,
+        subjectLabel: prepared?.subjectLabel ?? null,
+        subjectParticipantId: prepared?.subjectParticipantId ?? null,
+        subjectUserId: prepared?.subjectUserId ?? null,
+      });
+      if (neighbours.length > 0) {
+        console.info(JSON.stringify({
+          code: "AGENT_MEMORY_NEAR_DUPLICATE",
+          candidates: neighbours.length,
+          scope: input.scope,
+          topSimilarity: Number(neighbours[0]!.similarity.toFixed(3)),
+        }));
+        throw nearDuplicateError(neighbours);
+      }
+    }
     if (reinforced) {
       if (threadWrite) {
         await materializeMemoryThreadWrite(
