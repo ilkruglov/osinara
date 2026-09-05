@@ -17,6 +17,7 @@ import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
 import {
   IMAGE_INSPECTION_CONTRACT,
   MEMORY_DEEPENING_PROTOCOL,
+  MEMORY_USED_DIRECTIVE_RULE,
   MEMORY_EXACT_DUPLICATE_HANDLING,
   GROUP_MEMORY_DELTA_CONTRACT,
   MEMORY_WRITE_CONTRACT,
@@ -91,6 +92,7 @@ const PRIVATE_INSTRUCTION_SECTIONS = [
   memoryEditContract(new Set<MemoryEditAction>(["delete", "edit", "undo"])),
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
+  MEMORY_USED_DIRECTIVE_RULE,
   trustedWorkspaceRules("personal"),
   WORKSPACE_ARTIFACT_LOOKUP,
   trustedCredentialRules("personal"),
@@ -148,6 +150,7 @@ ${GROUP_ADDRESSING}`,
   memoryEditContract(new Set<MemoryEditAction>(["delete", "edit", "undo"])),
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
+  MEMORY_USED_DIRECTIVE_RULE,
   `## История разговора
 
 ${GROUP_TIMELINE_TRUST}
@@ -244,6 +247,7 @@ function externalInstructions(
     capabilities.has("remember") ? GROUP_MEMORY_DELTA_CONTRACT : null,
     memoryEditContract(editActions),
     searchable ? MEMORY_DEEPENING_PROTOCOL : null,
+    searchable || capabilities.has("remember") ? MEMORY_USED_DIRECTIVE_RULE : null,
     searchable && editActions.has("delete") ? MEMORY_EXACT_DUPLICATE_HANDLING : null,
     scheduledHistory
       ? `## История для запланированного запуска
