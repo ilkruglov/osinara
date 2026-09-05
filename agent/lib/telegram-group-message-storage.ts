@@ -3,6 +3,7 @@
  *
  * Exports:
  * - Message field normalizers for trusted PostgreSQL writes.
+ * - `telegramInboundText`: readable text of a message, including native rich formatting.
  * - `telegramForumTopicId`: verified forum topic isolation separate from reply routing.
  * - `lockTelegramGroupJournal` and `pruneTelegramGroupJournal` transaction helpers.
  */
@@ -11,6 +12,7 @@ import type { PoolClient } from "pg";
 
 import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { memoryContentRejectionCode } from "./memory-content-policy.js";
+import { telegramRichMessageText } from "./telegram-rich-inbound.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -84,12 +86,25 @@ export function telegramMessageKind(message: TelegramMessage): string {
   }
   if (message.attachments.some((attachment) => attachment.kind === "photo")) return "photo";
   if (message.attachments.some((attachment) => attachment.kind === "document")) return "document";
-  if (message.text || message.caption) return "text";
+  if (telegramInboundText(message)) return "text";
   return "other";
 }
 
+/**
+ * A rich message carries its content in `rich_message` and arrives with no `text` or `caption`,
+ * so reading only those fields loses the message entirely.
+ */
+export function telegramInboundText(
+  message: Pick<TelegramMessage, "caption" | "raw" | "text">,
+): string {
+  return [message.text, message.caption, telegramRichMessageText(message.raw.rich_message)]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
 export function telegramMessageContent(message: TelegramMessage): string | null {
-  const content = [message.text, message.caption].filter(Boolean).join("\n").trim();
+  const content = telegramInboundText(message);
   if (!content || memoryContentRejectionCode(content)) return null;
   return content;
 }
