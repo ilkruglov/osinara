@@ -48,6 +48,7 @@ const EXPECTED_TOOL_MODULES = [
   "read_profile_view.ts",
   "read_scheduled_group_history.ts",
   "remember.ts",
+  "review_improvements.ts",
   "search_memories.ts",
   "search_memory_threads.ts",
   "send_workspace_file.ts",

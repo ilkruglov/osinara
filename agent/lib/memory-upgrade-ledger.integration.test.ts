@@ -125,6 +125,7 @@ const POST_V0101_MIGRATIONS = [
   "091_memory_review_bot_source_recovery.sql",
   "092_memory_review_bot_source_recovery_session.sql",
   "093_memory_review_bot_source_recovery_token.sql",
+  "094_agent_improvement_items.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

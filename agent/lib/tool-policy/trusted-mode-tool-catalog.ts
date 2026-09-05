@@ -17,6 +17,7 @@ import getMemorySource from "../tools/get_memory_source.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
 import manageSkill from "../tools/manage_skill.js";
+import reviewImprovements from "../tools/review_improvements.js";
 import listAgentSchedules from "../tools/list_agent_schedules.js";
 import listGroupHistory from "../tools/list_group_history.js";
 import listMemories from "../tools/list_memories.js";
@@ -107,6 +108,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
 /** Owner administration and personal-only surfaces that require the owner's private chat. */
 export const PRIVATE_ONLY_TOOLS: ToolMap = {
   export_memory: exportMemory as unknown as AnyToolDefinition,
+  review_improvements: reviewImprovements as unknown as AnyToolDefinition,
   get_memory_source: getMemorySource as unknown as AnyToolDefinition,
   list_pending_family_invitations: listPendingFamilyInvitations as unknown as AnyToolDefinition,
   manage_external_group_schedule: manageExternalGroupSchedule as unknown as AnyToolDefinition,
