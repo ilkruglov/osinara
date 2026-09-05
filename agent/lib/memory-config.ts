@@ -72,8 +72,19 @@ export const MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK = 0.05;
 export const MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY = 0.78;
 export const MEMORY_RETRIEVAL_RRF_RANK_OFFSET = 60;
 export const MEMORY_RETRIEVAL_CONFIRMATION_BOOST = 0.001;
-export const MEMORY_RETRIEVAL_RECENCY_BOOST = 0.0005;
-export const MEMORY_RETRIEVAL_RECENCY_DECAY_SECONDS = 31_557_600;
+// Retention (ACT-R / Ebbinghaus in closed form): R = exp(-age / S), S = S0 * (1 + ln(1 + n)).
+// S0 by record kind in days; only the automatic turn block applies the minimum retention.
+export const MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE = "итог обсуждения";
+export const MEMORY_STABILITY_DAYS_EPISODE = 30;
+export const MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY = 60;
+export const MEMORY_STABILITY_DAYS_SEMANTIC = 180;
+export const MEMORY_RETENTION_RANK_FLOOR = 0.3;
+export const MEMORY_AUTO_CONTEXT_MIN_RETENTION = 0.2;
+export const MEMORY_SEMANTIC_KINDS = ["profile", "preference", "fact", "family_shared"] as const;
+// Near-duplicate gate at write time; the prod embedder (multilingual-e5-small) keeps distinct facts
+// above 0.9 too, so the model decides and the gate only surfaces candidates.
+export const MEMORY_NEAR_DUPLICATE_SIMILARITY = 0.9;
+export const MEMORY_NEAR_DUPLICATE_CANDIDATES = 2;
 
 export const MEMORY_EMBEDDING_DIMENSIONS = 384;
 export const MEMORY_EMBEDDING_MODEL = "intfloat/multilingual-e5-small";
