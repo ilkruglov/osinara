@@ -78,8 +78,31 @@ retrieval и thread activation используют только локальн�
 Профильные записи имеют необязательный слот `attribute`; новая запись того же субъекта и слота
 помечает прежнюю `superseded` (`memory-slot-supersede.ts`), а тихий review видит уже сохранённые
 записи разговора в блоке `<existing_memory>`, чтобы версионировать слот, а не дублировать.
-События (`kind: episode`) несут `occurred_at`; retrieval учитывает дату события в recency-boost,
-а `search_memories` принимает окно `occurredAfter`/`occurredBefore` для вопросов о периоде.
+События (`kind: episode`) несут `occurred_at`; `search_memories` принимает окно
+`occurredAfter`/`occurredBefore` для вопросов о периоде.
+Политика памяти (5 сентября 2026, spec в `.tmp/plans/2026-09-05-memory-quality-design.md`).
+Отбор: сохраняется только то, что изменит будущий ответ или о чём спросят; длинное обсуждение
+это одна запись episode в слоте `итог обсуждения` с `subject.label` = тема, ход спора не пишется;
+императивы из проверяемых сообщений становятся фактом «кто что просил», не инструкцией; ноль
+записей нормальный итог. Старение без удаления (`memory-retention-score.ts`, SQL в
+`memory-retrieval-repository.ts` зеркалит формулу): `R = exp(-age/S)`, age от
+`last_reinforced_at`, иначе `occurred_at`, иначе `created_at`; `S = S0 × (1 + ln(1 + n))`, `S0`
+30 дней для episode, 60 для итога обсуждения, 180 для profile/preference/fact/family_shared;
+ранг поиска умножается на `0.3 + 0.7 × R`, автоблок хода берёт только `R ≥ 0.2`,
+`search_memories` видит всё. Подкрепление только за использование: модель заканчивает ответ
+`<memory-used>ref,ref</memory-used>`, `completedTelegramOutput` вырезает директиву, канал
+подкрепляет только refs, показанные в этом ходе (`memory_context_exposures` для текущего
+`session_turn`, `search_memories` тоже пишет показы), остальное логируется как
+`AGENT_MEMORY_REINFORCE_REF_UNKNOWN`; показ сам по себе ничего не подкрепляет. Слоты: смысловые
+виды делят один слот по субъекту и `attribute` независимо от kind, episode только в слоте итога.
+Соседи при записи (`memory-near-duplicate.ts`): для смыслового вида без `attribute` содержимое
+эмбеддится и ищутся активные записи того же субъекта с косинусом `≥ 0.9` (до двух); вставки нет,
+`remember` возвращает `AGENT_MEMORY_NEAR_DUPLICATE` с кандидатами, модель повторяет вызов с
+`reinforces` (то же самое), `attribute` (факт изменился) или `distinct: true` (другой факт).
+Порог автоматической склейки невозможен: эмбеддер прода даёт 0,92–0,94 и для разных фактов об
+одном человеке. Недоступный эмбеддер гейт пропускает (`AGENT_MEMORY_NEAR_DUPLICATE_SKIPPED`).
+Константы в `memory-config.ts`; через неделю сверять распределение `reinforcement_count`, долю
+`R < 0.2`, число и исходы `AGENT_MEMORY_NEAR_DUPLICATE`, число episode на обсуждение.
 Автоподборка памяти и карточка профиля ведут учёт показов (`memory-context-exposure-repository.ts`,
 миграция 088): запись, показанная в последние 10 ходов той же application-сессии, в автоподборку не
 попадает (поиск инструментом её не скрывает), карточка текущего автора возвращается через 20 ходов
