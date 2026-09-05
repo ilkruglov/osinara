@@ -1,0 +1,7 @@
+{
+  "name": "osinara-sandbox-tools",
+  "private": true,
+  "dependencies": {
+    "agent-browser": "0.36.0"
+  }
+}

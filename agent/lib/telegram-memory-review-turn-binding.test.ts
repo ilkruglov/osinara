@@ -100,7 +100,9 @@ describe("telegram memory review turn binding", () => {
     await handler(undefined, {}, context({ memoryReviewBatchId: "batch-2" }));
 
     // Пакет освобождён, строки нет, но повтор терминального события остаётся ходом проверки.
-    expect(dependencies.batchIdForTurn).not.toHaveBeenCalled();
+    expect(dependencies.batchIdForTurn).toHaveBeenCalledWith({
+      eveSessionId: "eve-session-1", eveTurnId: "turn-4",
+    });
     expect(dependencies.completeBatch).toHaveBeenCalledWith(expect.objectContaining({
       batchId: "batch-2",
     }));

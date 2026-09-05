@@ -12,6 +12,7 @@ import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
   EXTERNAL_GROUP_CAPABILITY_CATALOG,
   EXTERNAL_GROUP_TOOL_NAMES,
+  EXTERNAL_GROUP_BASE_TOOLS,
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
   SANDBOX_FILE_CAPABILITY_CATALOG,
 } from "./group-tool-catalog.js";
@@ -20,12 +21,8 @@ describe("external group tool catalog", () => {
   it("denies every framework built-in an external group must not reach", () => {
     // Application tools are emitted per mode, so only framework descriptors need an override.
     expect([...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS].sort()).toEqual([
-      "agent",
       "ask_question",
       "bash",
-      "todo",
-      "web_fetch",
-      "web_search",
     ]);
   });
 
@@ -74,8 +71,8 @@ describe("external group tool catalog", () => {
   it("offers only locally enforceable web access as a persisted grant", () => {
     expect(EXTERNAL_GROUP_TOOL_NAMES).toContain("web_fetch");
     expect(EXTERNAL_GROUP_TOOL_NAMES).not.toContain("web_search");
-    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("web_search");
-    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).toContain("agent");
+    expect(EXTERNAL_GROUP_BASE_TOOLS.map((tool) => tool.name)).toEqual(expect.arrayContaining(["web_search", "web_fetch"]));
+    expect(FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS).not.toContain("agent");
   });
 
   it("describes external memory mutations through model-safe memoryRef values", () => {

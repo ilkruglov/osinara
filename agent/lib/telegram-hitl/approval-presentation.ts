@@ -19,6 +19,8 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
+import { requireManageTelegramGroupInput } from "../tools/manage_telegram_group.js";
+import { skillRequiresBash } from "../group-skills/group-skill-catalog.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -29,6 +31,7 @@ import {
 import {
   GOOGLE_WORKSPACE_CONSEQUENCE,
   SCHEDULE_CONSEQUENCES,
+  GROUP_SKILLS_BASH_CONSEQUENCE, GROUP_SKILLS_CONSEQUENCE, GROUP_TOOLS_BASH_CONSEQUENCE, GROUP_TOOLS_NO_BASH_CONSEQUENCE,
 } from "./approval-consequences.js";
 import {
   approvalFact,
@@ -237,12 +240,40 @@ function lowerFirst(value: string): string {
   return value.charAt(0).toLowerCase() + value.slice(1);
 }
 
+const GROUP_MESSAGE_MODES = {
+  owner_only: "Запуск только по обращению владельца; контекст всех сообщений (owner_only)",
+  addressed_only: "Запуск по обращению любого участника; контекст всех сообщений (addressed_only)",
+  all: "Запуск по обращению любого участника; контекст всех сообщений (all)",
+};
 
 export function createTelegramApprovalPresenter(
   dependencies: ApprovalPresentationDependencies,
 ): TelegramApprovalPresenter {
   return async (request, ctx) => {
     const localized = localizeTelegramInputRequest(request);
+    if (request.display === "confirmation" && request.action.toolName === "manage_telegram_group") {
+      const parsed = requireManageTelegramGroupInput(request.action.input);
+      if (parsed.action === "update_skills") return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: "изменение скиллов группы",
+          facts: [...approvalFact("Группа", parsed.telegramChatId), ...approvalFact("Скиллы", parsed.skillAllowlist.join(", ") || "нет")],
+          consequence: parsed.skillAllowlist.some(skillRequiresBash) ? GROUP_SKILLS_BASH_CONSEQUENCE : GROUP_SKILLS_CONSEQUENCE,
+        }),
+      };
+      if (parsed.action === "update_policy") return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: "изменение прав группы",
+          facts: [
+            ...approvalFact("Группа", parsed.policy.telegramChatId),
+            ...approvalFact("Режим сообщений", GROUP_MESSAGE_MODES[parsed.policy.messageMode]),
+            ...approvalFact("Инструменты", parsed.policy.toolAllowlist.join(", ") || "только базовые"),
+          ],
+          consequence: parsed.policy.toolAllowlist.includes("bash") ? GROUP_TOOLS_BASH_CONSEQUENCE : GROUP_TOOLS_NO_BASH_CONSEQUENCE,
+        }),
+      };
+    }
     if (
       request.display === "confirmation" &&
       request.action.toolName === "manage_gmail_message"

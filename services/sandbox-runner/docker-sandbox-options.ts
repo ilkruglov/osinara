@@ -24,7 +24,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "9";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "10";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
@@ -70,25 +70,34 @@ export function resolveTrustedToolMount(
   return primary;
 }
 
+export function resolveSandboxToolMount(request: SandboxRunnerCreateRequest): SandboxRunnerMount {
+  if (request.access !== "group-tools") return resolveTrustedToolMount(request.mounts);
+  if (request.mounts.length !== 1 || request.mounts[0]?.mountPoint !== "group") {
+    throw new Error("AGENT_SANDBOX_RUNNER_SCOPE_INVALID: Group tools require one group workspace");
+  }
+  return request.mounts[0];
+}
+
 function toolsMount(
   runtime: SandboxDockerRuntime,
-  mounts: readonly SandboxRunnerMount[],
+  mount: SandboxRunnerMount,
 ): Docker.MountSettings {
-  const mount = resolveTrustedToolMount(mounts);
   return volumeMount(runtime.toolsVolume, `/tools/${mount.mountPoint}`, mount.workspaceId);
 }
 
-function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
-  const primary = resolveTrustedToolMount(mounts);
+function toolsEnvironment(primary: SandboxRunnerMount): string[] {
   const root = `/tools/${primary.mountPoint}`;
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
     `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
     `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,
+    `AGENT_BROWSER_PROXY=${PROXY_URL}`,
+    "AGENT_BROWSER_EXECUTABLE_PATH=/usr/local/bin/osinara-chromium",
     `HOME=${root}/home`,
     `PATH=${[...executablePaths, BASE_PATH].join(":")}`,
     `NPM_CONFIG_PREFIX=${root}/npm`,
+    `NODE_PATH=${root}/npm/lib/node_modules`,
     `NODE_EXTRA_CA_CERTS=${RUSSIAN_TRUSTED_ROOT_CA_PATH}`,
     "NODE_USE_ENV_PROXY=1",
     `PIP_CACHE_DIR=${root}/cache/pip`,
@@ -115,11 +124,17 @@ function isolatedEnvironment(): string[] {
 export function buildSandboxContainerOptions(
   runtime: SandboxDockerRuntime,
   request: SandboxRunnerCreateRequest,
+  groupNetwork?: string,
 ): Docker.ContainerCreateOptions {
   const trusted = request.access === "trusted";
+  const toolsEnabled = request.access !== "restricted";
+  if (request.access === "group-tools" && (!groupNetwork || groupNetwork === runtime.egressNetwork)) {
+    throw new Error("AGENT_SANDBOX_GROUP_NETWORK_REQUIRED: External Bash requires a dedicated group network");
+  }
+  const toolMount = toolsEnabled ? resolveSandboxToolMount(request) : null;
   const mounts = workspaceMounts(runtime, request.mounts);
-  if (trusted) {
-    mounts.push(toolsMount(runtime, request.mounts));
+  if (toolMount) {
+    mounts.push(toolsMount(runtime, toolMount));
   }
 
   return {
@@ -127,7 +142,7 @@ export function buildSandboxContainerOptions(
     AttachStdin: false,
     AttachStdout: false,
     Cmd: ["sleep", "infinity"],
-    Env: trusted ? trustedEnvironment(request.mounts) : isolatedEnvironment(),
+    Env: toolMount ? toolsEnvironment(toolMount) : isolatedEnvironment(),
     HostConfig: {
       AutoRemove: false,
       CapDrop: ["ALL"],
@@ -136,7 +151,7 @@ export function buildSandboxContainerOptions(
       Memory: SANDBOX_MEMORY_BYTES,
       Mounts: mounts,
       NanoCpus: SANDBOX_CPU_NANOSECONDS,
-      NetworkMode: trusted ? runtime.egressNetwork : "none",
+      NetworkMode: trusted ? runtime.egressNetwork : request.access === "group-tools" ? groupNetwork : "none",
       PidsLimit: SANDBOX_PIDS_LIMIT,
       Privileged: false,
       ReadonlyRootfs: false,
@@ -155,11 +170,12 @@ export function buildSandboxContainerOptions(
       "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
       "dev.osinara.sandbox.project": runtime.project,
       "dev.osinara.sandbox.session-id": request.sandboxSessionId,
+      ...(request.access === "group-tools" ? { "dev.osinara.sandbox.group-workspace-id": request.mounts[0]!.workspaceId } : {}),
     },
     OpenStdin: false,
     StdinOnce: false,
     Tty: false,
-    WorkingDir: "/workspace",
+    WorkingDir: trusted ? "/workspace" : "/workspace/group",
   };
 }
 

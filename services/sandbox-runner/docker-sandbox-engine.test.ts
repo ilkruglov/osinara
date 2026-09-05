@@ -90,7 +90,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "9",
+      "dev.osinara.sandbox.policy-version": "10",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -189,6 +189,28 @@ describe("buildSandboxContainerOptions", () => {
         expect.stringContaining(forbiddenEnvironmentFragment),
       ]));
     }
+  });
+
+  it("gives an enabled group its own tools and dedicated proxy-only network, not the trusted network", () => {
+    const request = {
+      access: "group-tools" as const,
+      eveSessionId: EVE_SESSION_ID,
+      mounts: [{ mountPoint: "group" as const, workspaceId: GROUP_WORKSPACE_ID }],
+      sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
+    };
+    const groupNetwork = `osinara-group-egress-${GROUP_WORKSPACE_ID}`;
+    const options = buildSandboxContainerOptions(runtime, request, groupNetwork);
+    expect(options.HostConfig?.NetworkMode).toBe(groupNetwork);
+    expect(options.HostConfig?.NetworkMode).not.toBe(runtime.egressNetwork);
+    expect(options.HostConfig?.Mounts).toEqual([
+      expect.objectContaining({ Target: "/workspace/group", VolumeOptions: { Subpath: GROUP_WORKSPACE_ID } }),
+      expect.objectContaining({ Target: "/tools/group", VolumeOptions: { Subpath: GROUP_WORKSPACE_ID } }),
+    ]);
+    expect(options.Env).toContain("HOME=/tools/group/home");
+    expect(options.Env).toContain("AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128");
+    expect(options.Env?.join("\n")).not.toMatch(/\/tools\/(personal|family)|GOOGLE_WORKSPACE_CLI_TOKEN/u);
+    expect(() => buildSandboxContainerOptions(runtime, request)).toThrow("AGENT_SANDBOX_GROUP_NETWORK_REQUIRED");
   });
 
   it("replaces stale policy compute while preserving named-volume data", async () => {
@@ -301,6 +323,7 @@ describe("buildSandboxContainerOptions", () => {
     } as const;
     const docker = {
       getContainer: vi.fn((id: keyof typeof containers) => containers[id]),
+      listNetworks: vi.fn(async () => []),
       listContainers: vi.fn(async () => [
         {
           Id: "running-idle",
@@ -384,6 +407,7 @@ describe("buildSandboxContainerOptions", () => {
           ? { remove: removeGoogleWorkspaceOrphan }
           : sessionContainer
       ),
+      listNetworks: vi.fn(async () => []),
       listContainers: vi.fn(async () => [
         {
           Id: "shutdown-orphan",

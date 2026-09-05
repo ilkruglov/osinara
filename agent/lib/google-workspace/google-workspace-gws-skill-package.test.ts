@@ -44,7 +44,7 @@ const apiSurfaceSkills = [
 
 async function readSkill(skillName: string): Promise<string> {
   return await readFile(
-    new URL(`../../../config/trusted-skills/${skillName}/SKILL.md`, import.meta.url),
+    new URL(`../../../config/skills/${skillName}/SKILL.md`, import.meta.url),
     "utf8",
   );
 }

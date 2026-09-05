@@ -91,6 +91,7 @@ export class SandboxRunnerClient {
     if (
       typeof body.created !== "boolean" ||
       typeof body.seedRequired !== "boolean" ||
+      (!body.seedRequired && (typeof body.instanceId !== "string" || !/^[a-f0-9]{64}$/u.test(body.instanceId))) ||
       body.sessionId !== request.sandboxSessionId
     ) {
       throw new Error("AGENT_SANDBOX_RUNNER_RESPONSE_INVALID: Session response is malformed");
@@ -177,6 +178,7 @@ export class SandboxRunnerClient {
     await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/stop"), {
       dispatcher: runnerDispatcher,
       method: "POST",
+      signal: AbortSignal.timeout(15_000),
     }));
   }
 

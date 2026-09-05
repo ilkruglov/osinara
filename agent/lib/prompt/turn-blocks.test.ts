@@ -189,7 +189,7 @@ describe("mode block resolution", () => {
     const markdown = await resolve(context(externalAuth));
 
     expect(markdown).toContain("`remember`");
-    expect(markdown).not.toContain("`web_fetch`");
+    expect(markdown).toContain("`web_fetch`");
   });
 
   it("matches the external skill prompt to the current persisted grants", async () => {

@@ -28,6 +28,7 @@ import {
 import { createTelegramVoiceAuthorizer } from "./telegram-voice-authorization.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
+import { waitForSessionBoundary, type EveSessionResult } from "./telegram-session-boundary.js";
 
 const telegramUpdateIdSchema = z.union([z.number().int().nonnegative().safe(), z.string().regex(/^\d+$/)]);
 const telegramVoiceSchema = z.object({
@@ -42,11 +43,6 @@ const telegramVoiceSchema = z.object({
     .passthrough(),
   update_id: telegramUpdateIdSchema,
 });
-
-interface EveSessionResult {
-  getEventStream(options?: { startIndex?: number }): Promise<ReadableStream<{ type: string }>>;
-  id: string;
-}
 
 interface DurableIngressDependencies {
   acceptMedia(
@@ -110,60 +106,6 @@ function voiceMetadata(raw: Record<string, unknown>) {
     ...(voice.file_size === undefined ? {} : { fileSize: voice.file_size }),
     ...(voice.mime_type === undefined ? {} : { mimeType: voice.mime_type }),
   };
-}
-
-// One message may hold the chat queue for at most one lease. Without this bound a session that
-// never reports its state keeps the heartbeat renewing the lease and the whole bot stays deaf.
-async function waitForSessionBoundary(
-  session: EveSessionResult,
-  startIndex: number,
-  timeoutMilliseconds: number,
-): Promise<number> {
-  const stream = await session.getEventStream({ startIndex });
-  const reader = stream.getReader();
-  let reachedBoundary = false;
-  let timedOut = false;
-  let nextEventIndex = startIndex;
-  let deadlineTimeout: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<"timeout">((resolve) => {
-    deadlineTimeout = setTimeout(() => resolve("timeout"), timeoutMilliseconds);
-  });
-  try {
-    while (true) {
-      const event = await Promise.race([reader.read(), deadline]);
-      if (event === "timeout") {
-        timedOut = true;
-        break;
-      }
-      if (event.done) break;
-      nextEventIndex += 1;
-      if (
-        event.value.type === "session.waiting" ||
-        event.value.type === "session.completed" ||
-        event.value.type === "session.failed"
-      ) {
-        reachedBoundary = true;
-        break;
-      }
-    }
-  } finally {
-    clearTimeout(deadlineTimeout);
-    await reader.cancel();
-    reader.releaseLock();
-  }
-  if (timedOut) {
-    throw new AppError(
-      "AGENT_TELEGRAM_SESSION_BOUNDARY_TIMEOUT",
-      "Eve не сообщил состояние сессии за отведённое время. Отправьте сообщение ещё раз",
-    );
-  }
-  if (!reachedBoundary) {
-    throw new AppError(
-      "AGENT_TELEGRAM_SESSION_BOUNDARY_MISSING",
-      "Eve завершил поток без подтверждения состояния сессии Telegram",
-    );
-  }
-  return nextEventIndex;
 }
 
 function shouldTranscribeVoice(message: TelegramMessage, botUsername: string): boolean {
@@ -249,6 +191,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         .catch((error: unknown) => {
           heartbeatError = error;
         });
+      let dispatchedSessionId: string | undefined;
 
       try {
         let payload = claim.payload;
@@ -316,6 +259,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           continue;
         }
+        dispatchedSessionId = session.id;
         // The durable cursor excludes every event from earlier turns of a reused Eve session.
         const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
         const nextEventIndex = await waitForSessionBoundary(
@@ -346,7 +290,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         );
         // The record is terminal, but the rest of the queue is not: a rethrow here left every
         // later message waiting for the next inbound webhook to start a new drain.
-        await dependencies.repository.fail(claim.updateId, claim.leaseToken, failure);
+        // A lost observer has no trustworthy cursor. Do not reuse that canonical session and
+        // accidentally consume its late waiting event as the next message's completion.
+        await dependencies.repository.fail(claim.updateId, claim.leaseToken, failure, dispatchedSessionId);
       } finally {
         heartbeatController.abort();
         await heartbeat;

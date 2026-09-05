@@ -68,10 +68,12 @@ import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
+  readonly channel?: { readonly kind?: string };
   readonly messages: readonly ModelMessage[];
   readonly session: {
     readonly auth: SessionAuth;
     readonly id: string;
+    readonly parent?: unknown;
   };
 }
 
@@ -248,7 +250,8 @@ export function createMemoryBlockResolver(dependencies: {
   return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<string | null> {
     try {
       const authorization = dependencies.authorize(ctx);
-      const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages);
+      const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages,
+        ctx.channel?.kind === "subagent" || Boolean(ctx.session.parent));
       if (query === null) return null;
       const context = await dependencies.retrieve(
         authorization,

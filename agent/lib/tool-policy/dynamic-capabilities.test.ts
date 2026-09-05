@@ -25,6 +25,8 @@ import capabilities from "../../tools/capabilities.js";
 import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+  EXTERNAL_GROUP_BASE_TOOLS,
+  UNVERIFIED_CONTEXT_DENIALS,
 } from "./group-tool-catalog.js";
 
 const EVE_TOOL_BRAND = Symbol.for("eve:tool-brand");
@@ -121,6 +123,7 @@ describe("dynamic capability resolver", () => {
         "manage_reminder",
         "read_profile_view",
         "remember",
+        ...EXTERNAL_GROUP_BASE_TOOLS.map((tool) => tool.name),
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
       ].sort(),
     );
@@ -265,6 +268,7 @@ describe("dynamic capability resolver", () => {
         ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
         "load_skill",
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+        ...UNVERIFIED_CONTEXT_DENIALS,
       ].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(
@@ -319,6 +323,7 @@ describe("dynamic capability resolver", () => {
         ...ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
         "load_skill",
         ...FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+        ...UNVERIFIED_CONTEXT_DENIALS,
       ].sort(),
     );
     expect(consoleError).toHaveBeenCalledWith(

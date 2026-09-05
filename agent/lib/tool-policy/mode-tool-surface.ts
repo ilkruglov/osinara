@@ -16,6 +16,7 @@
 import type { SkillDefinition } from "eve/skills";
 import { defineTool, type ToolContext, type ToolDefinition } from "eve/tools";
 import { z } from "zod";
+import { todo } from "eve/tools/defaults";
 
 import { AppError } from "../app-error.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
@@ -30,6 +31,9 @@ import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT, THREAD_HISTORY_PAGE_M
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
 import { externalRememberInputSchema } from "../remember-contract.js";
 import generateImage from "../tools/generate_image.js";
+import getCurrentTime from "../tools/get_current_time.js";
+import { conversationWebFetch, conversationWebSearch } from "./conversation-web-tools.js";
+import { externalGroupBash } from "./external-group-bash.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
 import listGroupHistory from "../tools/list_group_history.js";
@@ -59,6 +63,7 @@ import { EXTERNAL_GROUP_REMINDER_TOOLS } from "./external-group-reminder-tools.j
 import { scheduledExternalTool } from "./scheduled-external-tool.js";
 import {
   FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS,
+  UNVERIFIED_CONTEXT_DENIALS,
   isExternalGroupToolName,
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
@@ -175,6 +180,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
 };
 
 const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
+  bash: externalGroupBash,
   generate_image: generateImage as unknown as AnyToolDefinition,
   import_telegram_attachment: importTelegramAttachment as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
@@ -308,6 +314,10 @@ function buildExternalToolSurface(
       : deniedTool("load_skill"),
   };
   if (includeApplicationCore) {
+    surface.web_search = conversationWebSearch as AnyToolDefinition;
+    surface.web_fetch = conversationWebFetch as AnyToolDefinition;
+    surface.get_current_time = getCurrentTime as AnyToolDefinition;
+    surface.todo = todo;
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
     if (!scheduledRun) {
       surface.manage_behavior_preference = manageBehaviorPreference as unknown as AnyToolDefinition;
@@ -321,6 +331,8 @@ function buildExternalToolSurface(
   }
   // Granted application capabilities are re-checked at execution against the live policy.
   for (const capability of allowed) {
+    // Page reading is now a baseline capability, including for persisted pre-matrix grants.
+    if (capability === "web_fetch") continue;
     // A scheduled prompt has no current user message that can back a new memory claim.
     if (scheduledRun && capability === "remember") continue;
     // Billable image generation requires a current interactive request, never a background run.
@@ -343,12 +355,11 @@ function buildExternalToolSurface(
   // Eve always registers its own built-ins, and 0.40.0 cannot hide a framework descriptor, so the
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
-    if (toolName === "web_fetch") {
-      if (!allowed.has(toolName)) surface[toolName] = deniedTool(toolName);
-      continue;
-    }
-    // Provider-native web_search has no local execution hook, so it is never grantable externally.
+    if (toolName === "bash" && includeApplicationCore && allowed.has("bash")) continue;
     surface[toolName] = deniedTool(toolName);
+  }
+  if (!includeApplicationCore) {
+    for (const name of UNVERIFIED_CONTEXT_DENIALS) surface[name] = deniedTool(name);
   }
   const effectiveSurface = scheduledRun
     ? Object.fromEntries(Object.entries(surface).map(([name, definition]) => [name, scheduledExternalTool(definition)]))

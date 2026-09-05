@@ -101,11 +101,31 @@ describeWithDatabase("Telegram group skill policy repository", () => {
     })).rejects.toThrowError(/AGENT_GROUP_NOT_FOUND/u);
   });
 
-  it("rejects an unreviewed skill at the storage boundary", async () => {
+  it("rejects an uninstalled skill at the application boundary and malformed stored names", async () => {
     const current = await fixture("4404");
+    await expect(telegramGroupAdministrationRepository.updateSkills({
+      familyId: current.familyId, requestedBy: current.ownerId,
+      skillAllowlist: ["unknown"], telegramChatId: current.telegramChatId,
+    })).rejects.toThrow("AGENT_GROUP_POLICY_INVALID");
     await expect(database().query(
-      "UPDATE telegram_groups SET skill_allowlist = ARRAY['unknown'] WHERE id = $1",
+      "UPDATE telegram_groups SET skill_allowlist = ARRAY['../escape'] WHERE id = $1",
       [current.groupId],
     )).rejects.toThrow();
+  });
+
+  it("saves browser prerequisites once and removes dependent skills when Bash is revoked", async () => {
+    const current = await fixture("4405");
+    await telegramGroupAdministrationRepository.updateSkills({
+      familyId: current.familyId, requestedBy: current.ownerId,
+      skillAllowlist: ["agent-browser", "pohuy"], telegramChatId: current.telegramChatId,
+    });
+    expect((await database().query("SELECT tool_allowlist,skill_allowlist FROM telegram_groups WHERE id=$1", [current.groupId])).rows)
+      .toEqual([{ tool_allowlist: ["bash"], skill_allowlist: ["agent-browser", "pohuy"] }]);
+    await telegramGroupAdministrationRepository.updatePolicy({
+      familyId: current.familyId, requestedBy: current.ownerId, telegramChatId: current.telegramChatId,
+      messageMode: "all", toolAllowlist: ["remember"],
+    });
+    expect((await database().query("SELECT tool_allowlist,skill_allowlist FROM telegram_groups WHERE id=$1", [current.groupId])).rows)
+      .toEqual([{ tool_allowlist: ["remember"], skill_allowlist: ["pohuy"] }]);
   });
 });

@@ -80,12 +80,14 @@ export function latestUserText(messages: readonly ModelMessage[]): string | null
 export function memoryRetrievalQuery(
   auth: SessionAuth,
   messages: readonly ModelMessage[],
+  delegated = false,
 ): string | null {
   const text = latestUserText(messages);
   if (text === null) return null;
   const carriesGroupTimeline =
     typeof auth.current?.attributes.telegramTimelineSequence === "string";
-  if (!carriesGroupTimeline) return text;
+  // A native child inherits authorization, not the parent's incoming Telegram message format.
+  if (delegated || !carriesGroupTimeline) return text;
   return currentTelegramMessageText(text).trim() || null;
 }
 

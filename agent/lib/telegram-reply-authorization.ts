@@ -30,7 +30,9 @@ export async function authorizeTelegramReply(input: {
   sendMessage(text: string): Promise<unknown>;
   verifiedReplyRoute: string | undefined;
 }): Promise<TelegramReplyAuthorizationResult> {
-  let replyHandling: "message" | undefined;
+  // Eve synthesizes HITL responses for replies to any bot unless explicitly told otherwise.
+  // Only a DB-authorized human reply may leave the ordinary-message path.
+  let replyHandling: "message" | undefined = "message";
   let resumesPendingTask = false;
   let verifiedReplyRoute = input.verifiedReplyRoute;
   const replyTarget = input.message.replyToMessage;
@@ -41,7 +43,6 @@ export async function authorizeTelegramReply(input: {
     (replyTarget?.from?.isBot === true || input.replyToAgent)) {
     if (input.replyToAgent || isReplyToBot(input.message, input.botUsername)) {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;
-      replyHandling = "message";
     }
   } else if (replyTarget?.from?.isBot === true || input.replyToAgent) {
     if (!replyTarget) {
@@ -71,9 +72,11 @@ export async function authorizeTelegramReply(input: {
       isReplyToBot(input.message, input.botUsername);
     if (authorization === "not_applicable" && ordinaryAgentReply) {
       if (!input.hasResumableReplyRoute) verifiedReplyRoute = input.exactReplyRoute;
-      replyHandling = "message";
     }
-    if (authorization === "authorized") resumesPendingTask = true;
+    if (authorization === "authorized") {
+      replyHandling = undefined;
+      resumesPendingTask = true;
+    }
   }
 
   return { accepted: true, replyHandling, resumesPendingTask, verifiedReplyRoute };

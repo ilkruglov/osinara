@@ -17,8 +17,8 @@ import {
   parseGroupSkillAllowlist,
 } from "./group-skill-catalog.js";
 import { GROUP_SAFE_SKILL_DEFINITIONS } from "./group-skill-definitions.js";
-import { TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES } from "./trusted-google-workspace-skills.js";
-import { createConversationSkillResolver } from "./group-skill-resolver.js";
+import { resolveConversationSkills } from "./group-skill-resolver.js";
+const TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES = GROUP_SAFE_SKILL_NAMES.filter((name) => name.startsWith("gws-"));
 
 function auth(
   environment: "external" | "family" | "private",
@@ -48,36 +48,42 @@ function auth(
 }
 
 describe("group skill policy", () => {
-  it("starts with only the reviewed pohuy skill and rejects corrupt persisted lists", () => {
-    expect(GROUP_SAFE_SKILL_NAMES).toEqual(["pohuy"]);
+  it("lists installed skills and rejects corrupt persisted lists", () => {
+    expect(GROUP_SAFE_SKILL_NAMES).toEqual(expect.arrayContaining(["pohuy", "agent-browser", "docx", "pdf", "xlsx"]));
     expect(parseGroupSkillAllowlist(["pohuy"])).toEqual(new Set(["pohuy"]));
     expect(parseGroupSkillAllowlist(["unknown"])).toBeNull();
     expect(parseGroupSkillAllowlist(["pohuy", "pohuy"])).toBeNull();
   });
 
+  it("gives private and family conversations all installed skills while external grants stay exact", async () => {
+    const resolve = resolveConversationSkills;
+    for (const mode of ["private", "family"] as const) {
+      const skills = await resolve(auth(mode));
+      for (const name of GROUP_SAFE_SKILL_NAMES) expect(skills).toHaveProperty(name);
+    }
+    expect(Object.keys(await resolve(auth("external", ["agent-browser", "pdf"])))).toEqual(["agent-browser", "pdf"]);
+    expect(await resolve(auth("external"))).toEqual({});
+  });
+
   it("uses the verified external grant snapshot for the whole turn", async () => {
-    const loadGroupSkillAllowlist = vi.fn();
-    const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist });
+    const resolve = resolveConversationSkills;
 
     await expect(resolve(auth("external", ["pohuy"]))).resolves.toHaveProperty("pohuy");
     await expect(resolve(auth("external"))).resolves.toEqual({});
-    expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
   });
 
   it("keeps safe skills available in private chat without a group database lookup", async () => {
-    const loadGroupSkillAllowlist = vi.fn();
-    const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist });
+    const resolve = resolveConversationSkills;
 
     await expect(resolve(auth("private"))).resolves.toHaveProperty("pohuy");
     const skills = await resolve(auth("private"));
     expect(skills).toHaveProperty("imagegen");
     await expect(resolve(auth("private"), { subagent: true })).resolves.not.toHaveProperty("imagegen");
     for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).toHaveProperty(name);
-    expect(loadGroupSkillAllowlist).not.toHaveBeenCalled();
   });
 
   it("ties external imagegen instructions to the generate_image capability", async () => {
-    const resolve = createConversationSkillResolver({ loadGroupSkillAllowlist: vi.fn() });
+    const resolve = resolveConversationSkills;
 
     await expect(resolve(auth("external", [], ["generate_image"])))
       .resolves.toHaveProperty("imagegen");
@@ -89,9 +95,7 @@ describe("group skill policy", () => {
   });
 
   it("does not advertise trusted-only Google Workspace skills to an external group", async () => {
-    const resolve = createConversationSkillResolver({
-      loadGroupSkillAllowlist: vi.fn().mockResolvedValue(new Set(["pohuy"])),
-    });
+    const resolve = resolveConversationSkills;
 
     const skills = await resolve(auth("external", ["pohuy"]));
 
@@ -102,13 +106,15 @@ describe("group skill policy", () => {
   });
 
   it("keeps every source file of a grantable external skill free of artificial punctuation", () => {
-    const skill = GROUP_SAFE_SKILL_DEFINITIONS.pohuy as unknown as {
+    for (const [name, definition] of Object.entries(GROUP_SAFE_SKILL_DEFINITIONS)) {
+    const skill = definition as unknown as {
       description: string;
       files: Readonly<Record<string, string>>;
       markdown: string;
     };
     const authoredText = [skill.description, skill.markdown, ...Object.values(skill.files)].join("\n");
 
-    expect(authoredText).not.toMatch(/[—–«»]/u);
+    expect(authoredText, name).not.toMatch(/[—–«»]/u);
+    }
   });
 });

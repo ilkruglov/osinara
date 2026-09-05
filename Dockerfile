@@ -37,6 +37,8 @@ FROM dependencies AS test
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes jq \
     && rm -rf /var/lib/apt/lists/*
+COPY stress/telegram-conversation/package.json stress/telegram-conversation/package-lock.json ./stress/telegram-conversation/
+RUN npm ci --ignore-scripts --prefix stress/telegram-conversation
 COPY . .
 CMD ["npm", "test"]
 
@@ -114,6 +116,17 @@ RUN apt-get update \
 COPY --from=production-dependencies \
   /app/node_modules/@googleworkspace/cli/bin/gws \
   /opt/osinara/gws
+COPY infra/sandbox-tools/package.json infra/sandbox-tools/package-lock.json /opt/sandbox-tools/
+RUN npm ci --ignore-scripts --prefix /opt/sandbox-tools \
+    && node /opt/sandbox-tools/node_modules/agent-browser/scripts/postinstall.js \
+    && ln -s /opt/sandbox-tools/node_modules/.bin/agent-browser /usr/local/bin/agent-browser \
+    && curl --fail --show-error --location \
+      https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.82/linux64/chrome-linux64.zip \
+      --output /tmp/chrome-linux64.zip \
+    && printf '%s  %s\n' 0704631fb3e4f741092e08f55272f90abc3e307f991f05f332924364415b02e0 /tmp/chrome-linux64.zip | sha256sum --check - \
+    && unzip -q /tmp/chrome-linux64.zip -d /opt/sandbox-tools \
+    && rm /tmp/chrome-linux64.zip \
+    && ln -s /opt/sandbox-tools/chrome-linux64/chrome /usr/local/bin/osinara-chromium
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
 

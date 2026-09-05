@@ -336,6 +336,43 @@ describe("createTelegramDurableIngress", () => {
     });
   });
 
+  it.each(["open", "cancel"] as const)("does not block later messages when stream %s hangs", async (phase) => {
+    const storage = repository();
+    storage.value.claimNext = vi.fn()
+      .mockResolvedValueOnce(storage.claim)
+      .mockResolvedValueOnce({ ...storage.claim, updateId: "1003" })
+      .mockResolvedValueOnce(null);
+    let unblock!: () => void;
+    const blocked = new Promise<void>((resolve) => { unblock = resolve; });
+    const cancel = vi.fn(async () => { if (phase === "cancel") await blocked; });
+    const dispatch = vi.fn().mockResolvedValueOnce({
+      id: "session-stuck",
+      async getEventStream() {
+        if (phase === "open") await blocked;
+        return new ReadableStream({
+          start(controller) { controller.enqueue({ type: "session.waiting" }); },
+          cancel,
+        });
+      },
+    }).mockResolvedValueOnce(null);
+    const running = runDrain(ingress(storage, { dispatch, leaseMilliseconds: 60 }), voicePayload(), dispatch);
+    const settled = await Promise.race([
+      running.then(() => true),
+      new Promise<false>((resolve) => { setTimeout(() => resolve(false), 180); }),
+    ]);
+    unblock();
+    await running;
+    expect(settled).toBe(true);
+    if (phase === "open") {
+      expect(storage.value.fail.mock.calls[0]?.[2]).toMatchObject({ code: "AGENT_TELEGRAM_SESSION_BOUNDARY_TIMEOUT" });
+    } else {
+      expect(storage.value.fail).not.toHaveBeenCalled();
+      expect(storage.value.completeWithSession).toHaveBeenCalledWith("1001", storage.claim.leaseToken, "session-stuck", 1);
+    }
+    expect(storage.value.complete).toHaveBeenCalledWith("1003", storage.claim.leaseToken);
+    await vi.waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+  });
+
   it("acknowledges rejected external media without enqueue, download, or dispatch", async () => {
     const storage = repository();
     storage.value.claimNext.mockReset().mockResolvedValue(null);

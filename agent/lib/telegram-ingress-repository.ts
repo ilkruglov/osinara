@@ -329,17 +329,28 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     });
   },
 
-  async fail(updateId, leaseToken, failure) {
+  async fail(updateId, leaseToken, failure, eveSessionId) {
     requireFailure(failure);
+    if (eveSessionId !== undefined) {
+      requireNonEmpty(eveSessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
+    }
     await requireActiveLease(updateId, leaseToken, async () => {
       const result = await database().query(
-        `UPDATE telegram_ingress_updates
-         SET status = 'failed', lease_token = NULL, lease_expires_at = NULL,
-             last_error_code = $3, last_error_message = $4,
-             completed_at = now(), updated_at = now()
-         WHERE update_id = $1 AND status = 'processing' AND lease_token = $2
-           AND lease_expires_at > now()`,
-        [updateId, leaseToken, failure.code, failure.message],
+        `WITH failed AS (
+           UPDATE telegram_ingress_updates
+           SET status = 'failed', lease_token = NULL, lease_expires_at = NULL,
+               last_error_code = $3, last_error_message = $4, eve_session_id = $5,
+               completed_at = now(), updated_at = now()
+           WHERE update_id = $1 AND status = 'processing' AND lease_token = $2
+             AND lease_expires_at > now()
+           RETURNING update_id, eve_session_id
+         ), rotated AS (
+           UPDATE conversation_sessions AS session SET rotation_requested_at = now()
+           FROM failed WHERE session.eve_session_id = failed.eve_session_id
+             AND session.kind = 'canonical' AND session.retired_at IS NULL
+           RETURNING session.id
+         ) SELECT update_id FROM failed`,
+        [updateId, leaseToken, failure.code, failure.message, eveSessionId ?? null],
       );
       return result.rowCount ?? 0;
     });

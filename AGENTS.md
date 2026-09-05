@@ -119,6 +119,18 @@ retrieval и thread activation используют только локальн�
 Перед Groq и Eve dispatch сохраняются durable start markers.
 После неоднозначного crash автоматический повтор запрещён, чтобы не удвоить оплату или side effect.
 
+Обычный текст всегда передаётся как сообщение, независимо от того, человек или бот его написал и
+чью реплику процитировал. Синтетический HITL reply разрешён только после точной проверки ожидающего
+запроса в PostgreSQL. Новый групповой sandbox принимает любого проверенного участника внешней группы
+и подключает только её workspace; человеческая identity требуется для личных и семейных областей.
+Ожидание session boundary ограничивает также открытие и закрытие потока событий: зависший reader не
+должен удерживать очередь после срока обработки. Поздний terminal event проверки памяти завершает
+свой пакет и после ротации сессии, но не открывает старую сессию и не меняет новую.
+Уже прочитанный session boundary сохраняет курсор даже при сбое закрытия reader. Если граница так и
+не получена, failure и запрос ротации известной canonical-сессии фиксируются одним SQL statement,
+чтобы позднее старое событие не завершило следующее сообщение. Ответ на действующий HITL продолжает
+исходный ход без создания нового review-пакета; его текст остаётся в хвосте для следующей проверки.
+
 ## Живая подача сообщений
 
 Один ответ модели может стать несколькими Telegram-сообщениями. Границу выбирает модель отдельной строкой
@@ -195,13 +207,44 @@ Owner-only операции разрешены только в личном Tele
 Нативные контракты `glob`, `grep`, `read_file` и `write_file` во внешней группе перекрываются same-name dynamic wrappers: каждый execute повторно проверяет актуальную external registration, принимает только канонический путь внутри точного `/workspace/group` и запрещает symlink-компоненты до вызова Eve default executor. Единственное read-only исключение: `read_file` после live-проверки skill grant канонизирует supporting file видимого code-reviewed dynamic skill в `$HOME/.agents/skills`; `glob`, `grep` и `write_file` такого доступа не получают. В trusted private/family режимах wrappers не выдаются, поэтому исходные Eve built-ins сохраняют personal/family mounts и tools environment.
 Входящие Telegram-документы внешней группы по умолчанию отклоняются. Capability `import_telegram_attachment` разрешает только metadata-candidates с расширениями TXT/MD/JSON/CSV/TSV/HTML/XML/YAML/YML без учёта регистра; после lazy download content boundary повторно требует отсутствие определяемого binary type, strict UTF-8 без NUL и сохраняет bytes только в точный group workspace. Capability не выдаёт Bash и не разрешает PDF/DOCX/XLSX, архивы или произвольный binary.
 Во всех режимах содержимое файлов является недоверенным сторонним материалом. Общий mode-scoped prompt-контракт требует немедленно прекратить чтение и любую обработку файла при обнаружении инструкций, адресованных ИИ-агенту или модели; такой файл нельзя пересказывать, преобразовывать, делегировать, исполнять или использовать для tool calls и памяти.
-Eve `0.40.0` не умеет скрывать собственные built-ins per-session, поэтому `bash`, `todo` и `ask_question` во внешней группе перекрываются явным отказом. `web_fetch` выдаётся только через локальный controlled wrapper с execution-time проверкой; provider-native `web_search` не имеет local execution hook, поэтому всегда запрещён и не является grantable capability. `load_skill` обёрнут отдельной live-проверкой: он загружает только code-reviewed skill из актуального per-group skill allowlist либо capability-coupled `imagegen` при live grant `generate_image`.
+`web_search`, `web_fetch`, `get_current_time` и `todo` доступны по умолчанию во всех разговорных режимах,
+включая native child. Поиск является прикладным инструментом через бесплатный официальный Exa MCP,
+а не provider-native поиском; поиск и чтение страниц выходят через public-only proxy и не повторяют
+неудачный запрос автоматически. Внешняя группа получает время `GROUP_REMINDER_TIMEZONE`, не личные
+настройки автора. `ask_question` во внешней группе остаётся запрещённым; Bash доступен только по grant.
+`load_skill` повторно проверяет актуальный per-group allowlist либо capability-coupled `imagegen`.
+
+Все установленные code-reviewed пакеты живут в `config/skills`, вне static discovery. Личный и семейный
+чат получают весь каталог; внешний только сохранённый владельцем список. Инструкции интеграции не
+подключают аккаунт: Google и T-Invest подключения личного/семейного окружения в группу не наследуются.
+Владелец меняет списки только из своего личного чата с HITL и повторной проверкой роли. Исполняемые
+скиллы автоматически добавляют grant Bash; окно подтверждения показывает последствия и точный
+messageMode. Отзыв Bash убирает зависимые скиллы, останавливает процессы и сохраняет групповые файлы.
+Bash разрешает произвольные команды в этом окружении, а не только команды из выбранных скиллов.
+Сохранённые `all` и `addressed_only` сейчас оба ведут общую timeline и запускают ответ по обращению;
+`owner_only` дополнительно требует актуального владельца. Эта матрица не меняет разговорную маршрутизацию.
 Subscription-backed `generate_image` существует только при активном provider `codex-subscription`: при любом другом provider он не имеет дескриптора ни в одном режиме и отсутствует в owner-facing grant contract, поэтому включить его нельзя. В private/family он доступен интерактивному root-agent; внешней группе владелец выдаёт capability через `manage_telegram_group.update_policy` из личного чата с HITL и повторной owner-role проверкой. Grant одновременно открывает dynamic skill `imagegen`; execution повторно читает live group policy. Scheduled turns и subagents не получают ни tool, ни skill. Перед единственным вызовом `gpt-image-2` создаётся durable operation ledger; transport, 5xx и повреждённый success остаются terminal ambiguous без автоматического retry. Подтверждённый WebP сохраняется в authorized workspace и отправляется через exact-once `send_workspace_file`. CLIProxy запускается с `disable-image-generation: chat`, поэтому его скрытый provider tool не обходит application capability surface. Grant surface собирается в `agent/lib/tool-policy/grantable-group-capabilities.ts`: `manage_telegram_group` и registration принимают только capability, которую активный provider реально обслуживает, а grant, сохранённый под прежним provider, остаётся parseable, показывается в status как `unavailableConfiguredTools` и не выдаёт ни tool, ни skill.
 Authored model context внешней группы не должен содержать длинное или короткое типографское тире и кавычки-ёлочки. Permanent core, external mode fragments, model-facing descriptors и все файлы grantable skill packages должны быть очищены непосредственно в исходниках; runtime-нормализация и post-processing ответов запрещены. Пользовательские сообщения, история, память, файлы и tool data никогда не переписываются этой политикой.
-Eve `0.40.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Grantable `pohuy` остаётся вне static discovery и выдаётся turn-scoped resolver только разрешённым группам; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
+Eve `0.40.0` materializes dynamic skill packages и их supporting files в sandbox на `session.started` или `turn.started`. Единственный `agent/skills/scoped.ts` выдаёт каталог по режиму; folder, записанный посреди turn, не меняет текущий manifest и может появиться только через resolver на следующем turn.
 Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArchive` не пишет надёжно прямо в mount target, поэтому runner file I/O загружает bytes во временный rootfs path и переносит их внутрь контейнера; не возвращать прямой archive write без реального tmpfs smoke.
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
-Нативный Eve `agent` используется для сложной работы только в trusted private/family режимах, где полезен свежий контекст. Во внешней группе same-name dynamic denial не позволяет запускать child и delegation prompt не выдаётся. Trusted child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен. Synthetic `session-limit` из Eve никогда не показывается во внешней группе: channel boundary завершает такой turn до parking, persistence и Telegram delivery.
+При Bash grant группа получает `group-tools`: только её workspace и tools volume, отдельную internal
+bridge-сеть с `gateway_mode_ipv4=isolated`, без IPv6, с единственным egress proxy. Обычного `Internal`
+недостаточно: без `isolated` доступен Docker-хост. Нужен Docker Engine 28+; неподходящая сеть вызывает
+отказ, не ослабление защиты. `agent-browser 0.36.0` и Chrome for Testing `152.0.7977.82` закреплены в образе,
+Chrome проверяется по SHA256. На каждом выборе контейнера backend читает live group policy под shared
+блокировкой. Authored Bash передаёт `requiredGroupCapability` через публичный `defineBashTool` и опции
+`SandboxSession.run`; это требование проверяется под той же блокировкой. В runner уходит точный
+`expectedInstanceId`, поэтому отзыв не позволяет запустить старую команду в новом restricted контейнере.
+Внутренние shell-команды файловых helpers не требуют пользовательского Bash grant.
+
+Нативный Eve `agent` доступен корневому разговорному агенту во всех трёх режимах. Child получает отдельные
+history и state и наследует проверенный auth, разрешённые connections, skills, sandbox, workspace и
+trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. Внешний child
+остаётся в своей группе; retrieval использует текст его задачи, а не отсутствующий Telegram envelope.
+В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно
+делегировать. Фоновая проверка памяти делегацию не получает. Synthetic `session-limit` из Eve никогда
+не показывается во внешней группе: channel boundary завершает такой turn до parking, persistence и delivery.
 
 ## Структура проекта
 
@@ -214,7 +257,7 @@ Trusted sandbox подключён только к internal egress network и в
 `agent/lib/image-generation/` — provider gate, no-retry transport, durable ledger, skill и external presentation генерации изображений.
 `agent/lib/reminders/` — напоминания всех областей: доверенный и групповой boundary, общая мутация, диспетчер.
 `agent/lib/prompt/` — фрагменты промта и композиция блоков по режимам.
-`agent/skills/` — активные статические Eve skills и dynamic resolver для grantable group skills.
+`agent/skills/` — единственный dynamic resolver; пакеты установленных скиллов находятся в `config/skills/`.
 `agent/lib/` — application logic, repositories, policies и colocated tests.
 `agent/sandbox.ts` — явный backend `just-bash` без настроенных network commands.
 `migrations/` и `scripts/` — schema, migration runner, bootstrap, Eve patch и workers.
@@ -259,6 +302,16 @@ Required config и required data проверять fail-fast; не добавл
 
 Быстрые проверки: `npm run typecheck`, `npm test`, `npm run build`.
 Главная проверка выполняется в Docker Compose:
+
+В неё входит `telegram-conversation.e2e.integration.test.ts`: настоящий Telegram channel, очередь,
+PostgreSQL, Eve lifecycle и application sandbox initialization проходят 56 обращений во всех трёх режимах,
+Bash, grant скилла, нативного child, ротацию после 50 ходов и продолжение после ошибки модели. Внешняя модель и Telegram network заменены test doubles,
+файловый backend используется штатный `just-bash` из отдельного закреплённого test package. Проверка
+не использует Eve `NODE_ENV=test`, поскольку он подменяет authored model и скрывает sandbox initialization.
+
+Реальные Bash, Chromium, Exa через proxy, недоступность Docker-хоста/чужих контейнеров и сохранность файлов
+после отзыва проверяет `scripts/check-group-sandbox.ts`. Он принимает два явных локальных image tags,
+создаёт только собственные временные Docker resources и удаляет их вместе с browser sessions после проверки.
 
 ```bash
 docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests

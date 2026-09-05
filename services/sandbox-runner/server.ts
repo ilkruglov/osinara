@@ -81,7 +81,7 @@ function requiredPath(url: URL): string {
 }
 
 function requestError(error: unknown): boolean {
-  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
+  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|INSTANCE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
     .test(error.message);
 }
 
@@ -201,6 +201,13 @@ export function createSandboxRunnerServer(dependencies: ServerDependencies) {
         path: request.url,
       });
       if (response.destroyed) return;
+      if (error instanceof Error && error.message.startsWith("AGENT_SANDBOX_RUNNER_INSTANCE_STALE:")) {
+        sendJson(response, 409, {
+          code: "AGENT_SANDBOX_RUNNER_INSTANCE_STALE",
+          message: "Окружение изменилось до запуска команды. Проверьте актуальные права группы",
+        });
+        return;
+      }
       sendJson(response, invalidRequest ? 400 : 500, {
         code: invalidRequest
           ? "AGENT_SANDBOX_RUNNER_REQUEST_INVALID"

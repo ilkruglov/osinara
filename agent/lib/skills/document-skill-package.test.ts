@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 async function skillFile(skill: string, file = "SKILL.md"): Promise<string> {
-  return await readFile(new URL(`../../skills/${skill}/${file}`, import.meta.url), "utf8");
+  return await readFile(new URL(`../../../config/skills/${skill}/${file}`, import.meta.url), "utf8");
 }
 
 describe("document skill packages", () => {

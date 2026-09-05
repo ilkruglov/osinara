@@ -39,10 +39,11 @@ import { reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
 import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
   buildSandboxContainerOptions,
-  resolveTrustedToolMount,
+  resolveSandboxToolMount,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
+import { cleanupGroupNetworks, ensureGroupNetwork, removeUnusedGroupNetwork } from "./group-egress-network.js";
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
@@ -101,8 +102,8 @@ async function ensureToolDirectories(
   container: Docker.Container,
   request: SandboxRunnerCreateRequest,
 ): Promise<void> {
-  if (request.access !== "trusted") return;
-  const mount = resolveTrustedToolMount(request.mounts);
+  if (request.access === "restricted") return;
+  const mount = resolveSandboxToolMount(request);
   const root = `/tools/${mount.mountPoint}`;
   const directories = [`${root}/bin`, `${root}/cache`, `${root}/home`, `${root}/npm`];
   const python = `${root}/python`;
@@ -132,11 +133,15 @@ async function inspectContainer(
   }
 }
 
-async function requireRunningContainer(docker: Docker, sessionId: string): Promise<Docker.Container> {
+async function requireRunningContainer(docker: Docker, sessionId: string, expectedInstanceId?: string): Promise<Docker.Container> {
   const existing = await inspectContainer(docker, sessionId);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
-  if (!existing.inspection.State.Running) await existing.container.start();
-  return existing.container;
+  if (expectedInstanceId !== undefined && existing.inspection.Id !== expectedInstanceId) {
+    throw new Error("AGENT_SANDBOX_RUNNER_INSTANCE_STALE: Sandbox permissions changed before command execution");
+  }
+  const container = expectedInstanceId ? docker.getContainer(expectedInstanceId) : existing.container;
+  if (!existing.inspection.State.Running) await container.start();
+  return container;
 }
 
 export function createDockerSandboxEngine(input: {
@@ -161,9 +166,9 @@ export function createDockerSandboxEngine(input: {
             "AGENT_SANDBOX_RUNNER_WORKSPACE_MISSING",
           );
         }
-        if (request.access === "trusted") {
+        if (request.access !== "restricted") {
           // Exactly one verified scope owns HOME and the read-only Google profile mount.
-          const toolMount = resolveTrustedToolMount(request.mounts);
+          const toolMount = resolveSandboxToolMount(request);
           const toolsPath = `${input.roots.toolsRoot}/${toolMount.workspaceId}`;
           await mkdir(toolsPath, { recursive: true });
           await requireDirectory(toolsPath, "AGENT_SANDBOX_RUNNER_TOOLS_MISSING");
@@ -183,34 +188,46 @@ export function createDockerSandboxEngine(input: {
           existing = null;
         }
         if (existing) {
+          if (request.access === "group-tools") {
+            const workspaceId = request.mounts[0]!.workspaceId;
+            await activity.runExclusive(`network:${workspaceId}`, () =>
+              ensureGroupNetwork(input.docker, input.runtime.project, workspaceId));
+          }
           if (!existing.inspection.State.Running) await existing.container.start();
-          return { created: false, seedRequired: false, sessionId };
+          return { created: false, seedRequired: false, sessionId, instanceId: existing.inspection.Id };
         }
         if (request.seedFiles === undefined) {
           return { created: false, seedRequired: true, sessionId };
         }
 
-        const options = buildSandboxContainerOptions(input.runtime, request);
-        options.name = sandboxContainerName(sessionId);
-        options.Labels = {
-          ...options.Labels,
-          [SANDBOX_REQUEST_HASH_LABEL]: sandboxRequestHash(request),
+        const create = async (groupNetwork?: string) => {
+          const options = buildSandboxContainerOptions(input.runtime, request, groupNetwork);
+          options.name = sandboxContainerName(sessionId);
+          options.Labels = {
+            ...options.Labels,
+            [SANDBOX_REQUEST_HASH_LABEL]: sandboxRequestHash(request),
+          };
+          const container = await input.docker.createContainer(options);
+          try {
+            await container.start();
+            await ensureToolDirectories(input.docker, container, request);
+            await writeSandboxSeedArchive(container, request.seedFiles);
+          } catch (error) {
+            await container.remove({ force: true, v: true }).catch(() => undefined);
+            throw error;
+          }
+          return { created: true, seedRequired: false, sessionId, instanceId: container.id };
         };
-        const container = await input.docker.createContainer(options);
-        try {
-          await container.start();
-          await ensureToolDirectories(input.docker, container, request);
-          await writeSandboxSeedArchive(container, request.seedFiles);
-        } catch (error) {
-          await container.remove({ force: true, v: true }).catch(() => undefined);
-          throw error;
-        }
-        return { created: true, seedRequired: false, sessionId };
+        if (request.access !== "group-tools") return create();
+        const workspaceId = request.mounts[0]!.workspaceId;
+        return activity.runExclusive(`network:${workspaceId}`, async () => create(
+          await ensureGroupNetwork(input.docker, input.runtime.project, workspaceId),
+        ));
       }));
     },
     async runProcess(sessionId, request, signal) {
       return await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId);
+        const container = await requireRunningContainer(input.docker, sessionId, request.expectedInstanceId);
         const processRequest = request.workingDirectory
           ? { ...request, workingDirectory: resolvePath(request.workingDirectory) }
           : request;
@@ -345,6 +362,7 @@ export function createDockerSandboxEngine(input: {
       });
     },
     async stopSession(sessionId) {
+      await activity.runExclusive(sessionId, async () => {
       const existing = await inspectContainer(input.docker, sessionId);
       if (existing) {
         await existing.container.remove({ force: true, v: true }).catch((error) => {
@@ -352,16 +370,22 @@ export function createDockerSandboxEngine(input: {
         });
       }
       activity.forget(sessionId);
+      const workspaceId = existing?.inspection.Config.Labels?.["dev.osinara.sandbox.group-workspace-id"];
+      if (workspaceId) await activity.runExclusive(`network:${workspaceId}`, () =>
+        removeUnusedGroupNetwork(input.docker, input.runtime.project, workspaceId));
+      });
     },
     async reconcileIdleSessions(now) {
       const cutoffMs = now.getTime() - SANDBOX_IDLE_TIMEOUT_MS;
-      return await reconcileSandboxContainers({
+      const result = await reconcileSandboxContainers({
         activity,
         docker: input.docker,
         idleCutoffMs: cutoffMs,
         nowMs: now.getTime(),
         project: input.runtime.project,
       });
+      await cleanupGroupNetworks(input.docker, input.runtime.project, activity.runExclusive);
+      return result;
     },
     async stopAllSessions() {
       const containers = await input.docker.listContainers({
@@ -380,6 +404,7 @@ export function createDockerSandboxEngine(input: {
         });
       }));
       activity.clear();
+      await cleanupGroupNetworks(input.docker, input.runtime.project, activity.runExclusive);
     },
     async deleteToolEnvironment(workspaceId) {
       await rm(`${input.roots.toolsRoot}/${workspaceId}`, { force: true, recursive: true });

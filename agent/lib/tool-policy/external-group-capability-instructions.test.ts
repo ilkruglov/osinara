@@ -106,10 +106,10 @@ describe("externalGroupCapabilityInstructions", () => {
     expect(scheduled).not.toContain("`generate_image`");
   });
 
-  it("marks static trusted-only Google Workspace skills as unavailable externally", () => {
+  it("omits ungranted skill identifiers and includes explicitly granted installed skills", () => {
     const markdown = externalGroupCapabilityInstructions(new Set(), new Set());
 
-    expect(markdown).toMatch(/Google Workspace.*не доступны.*внешн/iu);
     expect(markdown).not.toMatch(/`gws-[^`]+`/u);
+    expect(externalGroupCapabilityInstructions(new Set(), new Set(["gws-gmail"]))).toContain("skill=gws-gmail");
   });
 });

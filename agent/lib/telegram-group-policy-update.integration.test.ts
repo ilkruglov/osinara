@@ -7,7 +7,12 @@
  * - Existing group identity, metadata, timeline, workspace, memory, and sessions remain attached.
  * - Family trust zones and callers whose owner role was revoked are rejected transactionally.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { stopSandbox } = vi.hoisted(() => ({ stopSandbox: vi.fn() }));
+vi.mock("./sandbox-runner/runner-client.js", () => ({
+  SandboxRunnerClient: class { stop = stopSandbox; },
+}));
 
 import { closeDatabase, database } from "./database.js";
 import { telegramGroupAdministrationRepository } from "./telegram-group-administration-repository.js";
@@ -35,6 +40,7 @@ async function ownedFamily() {
 
 describeWithDatabase("Telegram group policy update repository", () => {
   beforeEach(async () => {
+    stopSandbox.mockReset().mockResolvedValue(undefined);
     await database().query("TRUNCATE telegram_groups, family_memberships, users, families CASCADE");
   });
   afterAll(async () => closeDatabase());
@@ -52,13 +58,13 @@ describeWithDatabase("Telegram group policy update repository", () => {
     const groupId = group.rows[0]!.id;
 
     // Seed every group-owned durable boundary that a delete/re-register implementation would damage.
-    const session = await database().query<{ id: string }>(
+    const session = await database().query<{ id: string; thread_id: string }>(
       `INSERT INTO conversation_sessions
          (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
            continuation_token, eve_session_id, started_at, last_activity_at, group_timeline_cursor)
        VALUES (gen_random_uuid(), 0, $1, $2, 'group', 'canonical', '-100-policy::', '-100-policy::',
                'wrun_policy', now(), now(), 1)
-       RETURNING id`,
+        RETURNING id, thread_id`,
       [fixture.familyId, groupId],
     );
     const timeline = await database().query<{ id: string }>(
@@ -92,6 +98,7 @@ describeWithDatabase("Telegram group policy update repository", () => {
       telegramChatId: "-100-policy",
       toolAllowlist: ["list_group_history", "search_memories"],
     })).resolves.toEqual({ groupId });
+    expect(stopSandbox).toHaveBeenCalledExactlyOnceWith(session.rows[0]!.thread_id);
 
     const persistedGroup = await database().query(
       `SELECT id, title, type::text, message_mode::text, tool_allowlist, created_at
@@ -118,6 +125,15 @@ describeWithDatabase("Telegram group policy update repository", () => {
         rowCount: 1,
       });
     }
+
+    stopSandbox.mockRejectedValueOnce(new Error("TEST_RUNNER_UNAVAILABLE"));
+    await expect(telegramGroupAdministrationRepository.updatePolicy({
+      familyId: fixture.familyId, requestedBy: fixture.ownerId, telegramChatId: "-100-policy",
+      messageMode: "all", toolAllowlist: [],
+    })).rejects.toThrow("TEST_RUNNER_UNAVAILABLE");
+    expect((await database().query(
+      "SELECT message_mode,tool_allowlist FROM telegram_groups WHERE id=$1", [groupId],
+    )).rows).toEqual([{ message_mode: "owner_only", tool_allowlist: ["list_group_history", "search_memories"] }]);
   });
 
   it("rejects a family group without changing its policy", async () => {

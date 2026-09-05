@@ -27,7 +27,7 @@ vi.mock("./reminders/reminder-context.js", () => ({
 import getCurrentTime from "./tools/get_current_time.js";
 import { formatCurrentTimeContext } from "./current-time.js";
 
-const context = { callId: "call-1" } as ToolContext;
+const context = { callId: "call-1", session: { auth: { current: null } } } as ToolContext;
 
 describe("formatCurrentTimeContext", () => {
   it("formats an unambiguous turn-start UTC snapshot", () => {
@@ -41,6 +41,25 @@ describe("formatCurrentTimeContext", () => {
 });
 
 describe("get_current_time", () => {
+  it.each([false, true])("uses group time without a personal account (child=%s)", async (child) => {
+    const external = {
+      ...context,
+      parent: child ? { session: { id: "parent" } } : null,
+      session: { auth: { current: {
+        attributes: { groupType: "external", memoryScopes: ["group"] },
+        principalType: "service", principalId: "telegram-bot-1",
+      } } },
+    } as unknown as ToolContext;
+    await expect(getCurrentTime.execute({}, external)).resolves.toMatchObject({
+      capturedAtUtc: "2026-07-30T15:24:18.000Z", localTime: "18:24:18",
+      timezone: "Europe/Moscow", timezoneSource: "group_config",
+    });
+    await expect(getCurrentTime.execute({ timezone: "Asia/Tokyo" }, external)).resolves.toMatchObject({
+      localTime: "00:24:18", timezoneSource: "explicit",
+    });
+    expect(dependencies.requireReminderAuthorization).not.toHaveBeenCalled();
+    expect(dependencies.findUserTimezone).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-30T15:24:18.000Z"));
