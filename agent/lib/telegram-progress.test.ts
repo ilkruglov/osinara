@@ -29,6 +29,21 @@ describe("completedTelegramOutput", () => {
     ).toBeNull();
   });
 
+  it("delivers nothing for the silence directive, even wrapped in whitespace or prose remnants", () => {
+    // The model cannot return a truly empty answer: Eve retries an empty step once and the retry
+    // comes back as a placeholder such as "(пусто)". The directive is the explicit way to be quiet.
+    expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-silent>" })).toBeNull();
+    expect(completedTelegramOutput({ finishReason: "stop", message: "\n <telegram-silent> \n" })).toBeNull();
+    expect(completedTelegramOutput({
+      finishReason: "stop",
+      message: "<telegram-silent>\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+    })).toBeNull();
+    // A directive next to visible text is a model mistake: the text wins, the directive vanishes.
+    expect(completedTelegramOutput({ finishReason: "stop", message: "Ладно, молчу. <telegram-silent>" }))
+      .toEqual({ kind: "message", memoryUsedRefs: [], message: "Ладно, молчу." });
+    expect(completedTelegramOutput({ finishReason: "tool-calls", message: "<telegram-silent>" })).toBeNull();
+  });
+
   it("does not deliver an answer made of transport directives alone", () => {
     expect(completedTelegramOutput({ finishReason: "stop", message: "<telegram-split>" }))
       .toBeNull();

@@ -20,6 +20,12 @@ const TOOL_CALLS_FINISH_REASON = "tool-calls";
 const TELEGRAM_REACTION_DIRECTIVE_PATTERN =
   /^<telegram-reaction>(?<emoji>[^<]*)<\/telegram-reaction>$/u;
 const TELEGRAM_REACTION_DIRECTIVE_FRAGMENT = "telegram-reaction";
+/**
+ * The model's explicit way to say nothing. A genuinely empty answer is not available to it: Eve
+ * retries an empty model step once, and the retry came back as a placeholder such as "(пусто)"
+ * that went to the chat as a message. The directive is transport syntax and never reaches anyone.
+ */
+export const TELEGRAM_SILENT_DIRECTIVE = "<telegram-silent>";
 
 export type CompletedTelegramOutput =
   | { emoji: TelegramMessageReactionEmoji; kind: "reaction" }
@@ -33,7 +39,9 @@ export function completedTelegramOutput(data: {
   // Only completed visible assistant text should become a durable Telegram message.
   const raw = data.message === undefined || data.message === null ? "" : data.message.trim();
   // The memory-used directive is bookkeeping for the final answer; it never reaches Telegram.
-  const { memoryRefs: memoryUsedRefs, message } = extractMemoryUsedDirective(raw);
+  const { memoryRefs: memoryUsedRefs, message: spoken } = extractMemoryUsedDirective(raw);
+  // Silence wins only when it is all the model said; text next to the directive is the answer.
+  const message = spoken.split(TELEGRAM_SILENT_DIRECTIVE).join("").trim();
   if (!message) return null;
 
   // Text authored before a tool call is what a person reads while a long task runs.
