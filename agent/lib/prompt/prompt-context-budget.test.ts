@@ -11,14 +11,15 @@ import { modeInstructions } from "./mode-instructions.js";
 // called belong in that tool's descriptor or skill, not here.
 const CORE_CHARACTER_BUDGET = 11_000;
 const PRIVATE_CHARACTER_BUDGET = 12_000;
-const FAMILY_CHARACTER_BUDGET = 13_000;
+// Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance.
+const FAMILY_CHARACTER_BUDGET = 13_400;
 const EXTERNAL_CHARACTER_BUDGET = 10_000;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot.
 const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_400;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
-// then by 400 the same day for the memory policy.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 30_200;
+// then by 600 the same day for the memory policy (used-memory directive, selection criterion).
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 30_400;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

@@ -59,6 +59,14 @@ describe("memory review existing memory block", () => {
 });
 
 describe("memory review instructions", () => {
+  it("selects by future usefulness and folds a discussion into one record", () => {
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("изменит будущий ответ");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("одна запись episode");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("итог обсуждения");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("всё, что пригодится");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("от 3 до 10 записей");
+  });
+
   it("describes silent review for any conversation and the personal scope choice", () => {
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("тихая проверка памяти разговора");
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("памяти группы");
