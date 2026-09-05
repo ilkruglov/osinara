@@ -320,16 +320,25 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     while (true) {
       const claim = await dependencies.repository.claimNext(dependencies.leaseMilliseconds);
       if (!claim) return;
-      const heartbeatController = new AbortController();
+      // One heartbeat per leased update, stopped right before that update's terminal transition:
+      // a heartbeat that outlived its completed series member kept renewing a released lease,
+      // failed after the next tick, and that failure sank the whole series minutes later.
+      const heartbeatControllers = new Map<string, AbortController>();
       let heartbeatError: unknown;
       const heartbeats: Promise<void>[] = [];
       const startHeartbeat = (leased: TelegramIngressClaim): void => {
+        const controller = new AbortController();
+        heartbeatControllers.set(leased.updateId, controller);
         heartbeats.push(
-          maintainLease(leased.updateId, leased.leaseToken, heartbeatController.signal)
+          maintainLease(leased.updateId, leased.leaseToken, controller.signal)
             .catch((error: unknown) => {
               heartbeatError = error;
             }),
         );
+      };
+      const stopHeartbeat = (updateId: string): void => {
+        heartbeatControllers.get(updateId)?.abort();
+        heartbeatControllers.delete(updateId);
       };
       startHeartbeat(claim);
       // Every leased update that has not reached a terminal state yet; a failure marks them all.
@@ -354,6 +363,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           withCaptionlessAttachmentText(outbound),
         )) as EveSessionResult | null | undefined;
         if (!session) {
+          stopHeartbeat(leased.updateId);
           await dependencies.repository.complete(leased.updateId, leased.leaseToken);
           return;
         }
@@ -369,6 +379,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           updateId: leased.updateId,
         });
         if (heartbeatError) throw heartbeatError;
+        stopHeartbeat(leased.updateId);
         await dependencies.repository.completeWithSession(
           leased.updateId,
           leased.leaseToken,
@@ -477,11 +488,12 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           }),
         );
         for (const leased of pending) {
+          stopHeartbeat(leased.updateId);
           await dependencies.repository.fail(leased.updateId, leased.leaseToken, failure);
         }
         throw error;
       } finally {
-        heartbeatController.abort();
+        for (const controller of heartbeatControllers.values()) controller.abort();
         await Promise.all(heartbeats);
       }
     }

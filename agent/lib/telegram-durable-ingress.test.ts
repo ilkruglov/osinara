@@ -665,6 +665,62 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.beginDispatch.mock.calls.map((call) => call[0])).toEqual(["4001"]);
   });
 
+  it("stops a series member's heartbeat before its completion so a long last turn survives", async () => {
+    const storage = repository();
+    const head = seriesClaim(storage, 5001, "первое");
+    const second = seriesClaim(storage, 5002, "Мия, второе");
+    storage.claim.payload = head.payload;
+    storage.claim.updateId = head.updateId;
+    storage.claim.voice = null as never;
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.claimFollowing = vi.fn().mockResolvedValue([second]);
+    const completed = new Set<string>();
+    storage.value.complete = vi.fn(async (updateId: string) => {
+      completed.add(updateId);
+    });
+    // A released lease cannot be renewed: the repository fails the way production does.
+    storage.value.renewLease = vi.fn(async (updateId: string) => {
+      if (completed.has(updateId)) throw new Error("AGENT_TELEGRAM_INGRESS_LEASE_LOST");
+      return new Date(Date.now() + 300);
+    });
+    // The last turn outlives several heartbeat ticks (lease 300 ms, tick every 100 ms).
+    const dispatch = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            setTimeout(() => controller.enqueue({ type: "session.waiting" }), 450);
+          },
+        }),
+      id: "session-long",
+    });
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 300,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+    const update = parseTelegramUpdate(head.payload);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw: head.payload,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(storage.value.completeWithSession).toHaveBeenCalledWith("5002", second.leaseToken, "session-long", 1);
+    expect(storage.value.fail).not.toHaveBeenCalled();
+    expect(storage.value.renewLease.mock.calls.map((call) => call[0])).not.toContain("5001");
+  });
+
   it("fails the rest of a series when one dispatch throws and keeps the finished part completed", async () => {
     const storage = repository();
     const head = seriesClaim(storage, 3001, "первое");
