@@ -7,6 +7,7 @@
  * - `writeSingleFileArchive`: writes one bounded file through Docker's archive API.
  */
 import { posix } from "node:path";
+import type { Readable } from "node:stream";
 
 import type Docker from "dockerode";
 import tar from "tar-stream";
@@ -14,7 +15,7 @@ import tar from "tar-stream";
 import { WORKSPACE_MAX_FILE_BYTES } from "../../agent/config.js";
 
 export async function collectLimitedStream(
-  stream: NodeJS.ReadableStream,
+  stream: Readable,
   limit: number,
 ): Promise<Buffer> {
   const chunks: Buffer[] = [];

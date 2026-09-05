@@ -350,6 +350,24 @@ Restricted group sandbox держит `$HOME` на Docker tmpfs. Docker `putArch
 Trusted sandbox подключён только к internal egress network и выходит наружу через `sandbox-egress-proxy`. Для Node CLI runtime задаёт `NODE_USE_ENV_PROXY=1`; официальный Russian Trusted Root CA закреплён в sandbox image и передаётся через `NODE_EXTRA_CA_CERTS`, чтобы T-Invest HTTPS проходил проверку без отключения TLS. Restricted group sandbox не получает эти переменные и остаётся без сети.
 Нативный Eve `agent` используется для сложной работы только в trusted private/family режимах, где полезен свежий контекст. Во внешней группе same-name dynamic denial не позволяет запускать child и delegation prompt не выдаётся. Trusted child получает отдельные history и state и наследует проверенный auth, connections, skills, sandbox, workspace и trust-zone tools текущего parent turn, кроме root-owned `remember` и `generate_image`. В Eve `0.40.0` implicit `agent` доступен только root runtime node, поэтому child не может рекурсивно делегировать и удалённый `maxSubagentDepth` больше не нужен. Synthetic `session-limit` из Eve никогда не показывается во внешней группе: channel boundary завершает такой turn до parking, persistence и Telegram delivery.
 
+Ревью 6 сентября 2026 (`CODE_REVIEW_2026-09-06.md`, девять пунктов, все закрыты). Пути в
+командах sandbox-runner идут только через `shellQuote` (POSIX одинарные кавычки,
+`docker-sandbox-commands.ts`), управляющие символы отклоняются до сборки команды; `JSON.stringify`
+оставлял живыми `$(...)` и обратные кавычки, и имя файла из внешней группы могло исполниться в
+контейнере. Чтение файла проверяет существование и размер в контейнере до `cp` (коды выхода 44 и
+45), staging лежит внутри `try/finally`. Личные напоминания и расписания видны только в личном
+чате: `reminderVisibleInChat` и `agentScheduleVisibleInChat` применяются в list, чтении по id и
+мутациях, иначе `personal` текст попадал в контекст семейной группы. Heartbeat аренды ingress живёт
+на каждый claim и останавливается перед его terminal-переходом: раньше heartbeat завершённых
+сообщений серии через пять минут пытался продлить снятую аренду и ронял последний ход серии.
+Правка записи памяти переносит `attribute` и `occurred_at` в новую версию; точное подкрепление
+(`memory-exact-reinforcement.ts`) сверяет ещё `kind`, `attribute` и `occurred_at`, иначе два события
+с одинаковым текстом в разные даты сливались в одну запись. Голова лейна review в `failed` или
+`ambiguous` старше часа освобождается минутной чисткой (`terminalizeBlockedReviewHeads`), а не
+только `running`. Подавление карточки текущего автора действует и в личном чате
+(`profile-view-repository.ts`). `tsconfig.json` включает `services/**/*.ts`, поэтому typecheck
+покрывает runner и egress proxy.
+
 ## Структура проекта
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.

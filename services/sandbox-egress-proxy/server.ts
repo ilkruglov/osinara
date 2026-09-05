@@ -13,6 +13,7 @@
  */
 import { createServer, request as httpRequest, type IncomingHttpHeaders } from "node:http";
 import { connect, type Socket } from "node:net";
+import type { Duplex } from "node:stream";
 
 import { resolvePublicInternetAddress } from "./public-dns-resolver.js";
 
@@ -38,7 +39,7 @@ interface ResolvedTarget {
 
 type ConnectPhase = "connect" | "request" | "resolution" | "tunnel";
 
-export function bindTunnelLifecycle(clientSocket: Socket, upstream: Socket): void {
+export function bindTunnelLifecycle(clientSocket: Duplex, upstream: Socket): void {
   let upstreamTerminated = upstream.destroyed;
   let clientTerminated = clientSocket.destroyed || clientSocket.writableEnded;
   const destroyUpstream = () => {
@@ -92,11 +93,11 @@ function filteredHeaders(headers: IncomingHttpHeaders): IncomingHttpHeaders {
   );
 }
 
-function rejectSocket(socket: Socket, status: number, message: string): void {
+function rejectSocket(socket: Duplex, status: number, message: string): void {
   socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
 }
 
-function guardClientSocket(socket: Socket, phase: () => ConnectPhase): () => boolean {
+function guardClientSocket(socket: Duplex, phase: () => ConnectPhase): () => boolean {
   let unavailable = socket.destroyed;
   // Browser cancellation commonly surfaces as EPIPE while a CONNECT tunnel is being piped.
   // The socket is request-scoped, so closing it must never terminate the shared proxy process.

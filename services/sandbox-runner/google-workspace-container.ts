@@ -5,7 +5,7 @@
  * - `executeGoogleWorkspaceContainer`: exact argv execution with isolated mounts and bounded output.
  */
 import { randomUUID } from "node:crypto";
-import { PassThrough } from "node:stream";
+import { PassThrough, type Duplex } from "node:stream";
 
 import type Docker from "dockerode";
 
@@ -41,9 +41,10 @@ export async function executeGoogleWorkspaceContainer(input: {
   ];
   options.name = `osinara-gws-${randomUUID()}`;
   const container = await input.docker.createContainer(options);
-  let stream: NodeJS.ReadWriteStream | null = null;
+  let stream: Duplex | null = null;
   try {
-    stream = await container.attach({ stream: true, stderr: true, stdout: true });
+    // dockerode types the attach connection as a plain ReadWriteStream; it is a destroyable socket.
+    stream = (await container.attach({ stream: true, stderr: true, stdout: true })) as Duplex;
     const stdout = new PassThrough();
     const stderr = new PassThrough();
     stdout.on("error", () => undefined);

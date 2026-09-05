@@ -5,7 +5,7 @@
  * - `executeSandboxProcess`: runs one command, collects bounded output, and removes orphaned compute.
  */
 import { randomUUID } from "node:crypto";
-import { PassThrough } from "node:stream";
+import { PassThrough, type Duplex } from "node:stream";
 
 import type Docker from "dockerode";
 
@@ -75,9 +75,10 @@ export async function executeSandboxProcess(
   });
   const startedAt = Date.now();
 
-  let stream: NodeJS.ReadWriteStream;
+  let stream: Duplex;
   try {
-    stream = await exec.start({ Tty: false, abortSignal: signal });
+    // dockerode types the exec connection as a plain ReadWriteStream; it is a destroyable socket.
+    stream = (await exec.start({ Tty: false, abortSignal: signal })) as Duplex;
   } catch (error) {
     await removeAfterPrimaryFailure(container, error);
     throw error;
