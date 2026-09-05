@@ -5,6 +5,7 @@
  * - `supersedeSlotClaims`: retires older active claims of the same subject and attribute slot.
  */
 import type { PoolClient } from "pg";
+import { MEMORY_SEMANTIC_KINDS } from "./memory-config.js";
 
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import type { MemoryKind } from "./memory-record.js";
@@ -27,17 +28,20 @@ export async function supersedeSlotClaims(
   input: SlotSupersedeInput,
 ): Promise<string[]> {
   // The slot is one subject in one partition; a label-only subject is still one slot per label.
+  // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
+  // version chain); an episode slot only ever holds episodes.
+  const slotKinds = input.kind === "episode" ? ["episode"] : [...MEMORY_SEMANTIC_KINDS];
   const previous = await client.query<{ id: string }>(
     `SELECT item.id FROM memory_items AS item
       WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
         AND item.claim_status = 'active' AND item.id <> $4
-        AND item.attribute = $5 AND item.kind = $6
+        AND item.attribute = $5 AND item.kind = ANY($6::memory_kind[])
         AND item.subject_participant_id IS NOT DISTINCT FROM $7::uuid
         AND item.subject_user_id IS NOT DISTINCT FROM $8::uuid
         AND item.subject_label IS NOT DISTINCT FROM $9::text
       ORDER BY item.created_at, item.id FOR UPDATE OF item`,
     [auth.familyId, input.scope, input.scopePartitionKey, input.newClaimId, input.attribute,
-      input.kind, input.subjectParticipantId, input.subjectUserId, input.subjectLabel],
+      slotKinds, input.subjectParticipantId, input.subjectUserId, input.subjectLabel],
   );
   const ids = previous.rows.map((row) => row.id);
   for (const previousId of ids) {

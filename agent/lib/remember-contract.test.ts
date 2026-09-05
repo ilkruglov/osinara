@@ -73,6 +73,9 @@ describe("externalRememberInputSchema", () => {
     };
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "работа", kind: "profile" }).success).toBe(true);
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "работа", kind: "episode" }).success).toBe(false);
+    expect(externalRememberInputSchema.safeParse({
+      ...base, attribute: "итог обсуждения", kind: "episode", subject: { kind: "label", label: "архитектура агента" },
+    }).success).toBe(true);
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "x".repeat(65), kind: "profile" }).success).toBe(false);
   });
 
