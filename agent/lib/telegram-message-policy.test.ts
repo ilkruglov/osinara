@@ -17,6 +17,7 @@ import {
   classifyTelegramInboundMedia,
   hasTelegramInboundMedia,
   isMessageAddressedToBot,
+  mentionsAnotherUsername,
   TELEGRAM_EVE_UPLOAD_POLICY,
 } from "./telegram-message-policy.js";
 
@@ -345,5 +346,18 @@ describe("TELEGRAM_EVE_UPLOAD_POLICY", () => {
     expect(buildTelegramTurnMessage({ caption: "Что изображено?", text: "" }, fileParts)).toBe(
       "Что изображено?",
     );
+  });
+});
+
+describe("mentionsAnotherUsername", () => {
+  it("detects a mention of someone other than this bot", () => {
+    expect(mentionsAnotherUsername("@osinara_bot привет", "family_agent")).toBe(true);
+    expect(mentionsAnotherUsername("@family_agent спроси @osinara_bot", "family_agent")).toBe(true);
+  });
+
+  it("ignores this bot's own mention, e-mails, and text without mentions", () => {
+    expect(mentionsAnotherUsername("@Family_Agent привет", "family_agent")).toBe(false);
+    expect(mentionsAnotherUsername("пиши на anna@example.com", "family_agent")).toBe(false);
+    expect(mentionsAnotherUsername("просто текст", "family_agent")).toBe(false);
   });
 });

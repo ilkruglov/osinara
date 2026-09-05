@@ -533,6 +533,78 @@ describe("createTelegramMessageHandler", () => {
     expect(modelContext).toContain("\\u003c/system\\u003e.pdf");
   });
 
+  it("journals a series context message without a turn and answers the run from the last one", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "all",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    repository.telegram.findIdentity.mockResolvedValue({
+      familyId: "family-1",
+      role: "member",
+      userId: "user-1",
+    });
+    repository.journal.findSeriesSequences.mockResolvedValue(["41", "42"]);
+    const handler = createTelegramMessageHandler(repository as never);
+
+    const context = await handler(telegramContext().context, {
+      ...groupMessage("Мия, посмотри"),
+      raw: { date: 1_700_000_000, osinara_series: { role: "context" } },
+    });
+
+    expect(context).toBeNull();
+    expect(repository.journal.record).toHaveBeenCalledTimes(1);
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledTimes(1);
+    expect(repository.session.prepareTurn).not.toHaveBeenCalled();
+
+    const current = await handler(telegramContext().context, {
+      ...groupMessage("и ещё вот это"),
+      messageId: "3",
+      raw: {
+        date: 1_700_000_000,
+        osinara_series: { addressed: true, role: "current", telegramMessageIds: ["1", "2"] },
+      },
+    });
+
+    expect(current).not.toBeNull();
+    expect(repository.journal.findSeriesSequences).toHaveBeenCalledWith({
+      actorId: "telegram:telegram-101",
+      conversationId: "conversation-group-1",
+      telegramMessageIds: ["1", "2"],
+    });
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ seriesSequenceIds: ["41", "42"] }),
+    );
+  });
+
+  it("does not let an unaddressed series wake the model", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "all",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "family_private",
+    });
+    const handler = createTelegramMessageHandler(repository as never);
+
+    const result = await handler(telegramContext().context, {
+      ...groupMessage("просто разговор"),
+      raw: {
+        date: 1_700_000_000,
+        osinara_series: { addressed: false, role: "current", telegramMessageIds: ["1"] },
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(repository.session.prepareTurn).not.toHaveBeenCalled();
+  });
+
   it("starts a group turn for an agent name with the verified group policy", async () => {
     const repository = repositories();
     repository.telegram.findGroup.mockResolvedValue({

@@ -282,6 +282,86 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
   },
 
+  async claimFollowing(input) {
+    requireLeaseMilliseconds(input.leaseMilliseconds);
+    requireUpdateId(input.afterUpdateId);
+    if (!Number.isSafeInteger(input.limit) || input.limit <= 0) return [];
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      // The head of this queue is leased by the caller, so every later item is still pending;
+      // the row locks keep a concurrent drain from interleaving a claim into the run.
+      const candidates = await client.query<{
+        payload: Record<string, unknown>;
+        update_id: string;
+        voice_file_id: string | null;
+      }>(
+        `SELECT update_id::text, payload, voice_file_id
+         FROM telegram_ingress_updates
+         WHERE queue_id = $1 AND update_id > $2::bigint AND status = 'pending'
+         ORDER BY update_id
+         LIMIT $3
+         FOR UPDATE`,
+        [input.queueId, input.afterUpdateId, input.limit],
+      );
+      const accepted: string[] = [];
+      for (const candidate of candidates.rows) {
+        if (candidate.voice_file_id !== null || !input.accept(candidate.payload)) break;
+        accepted.push(candidate.update_id);
+      }
+      if (accepted.length === 0) {
+        await client.query("COMMIT");
+        return [];
+      }
+      const claimed = await client.query<ClaimRow>(
+        `WITH claimed AS (
+           UPDATE telegram_ingress_updates item
+           SET status = 'processing',
+               attempt_count = attempt_count + 1,
+               lease_token = gen_random_uuid(),
+               lease_expires_at = now() + ($2 * interval '1 millisecond'),
+               last_error_code = NULL,
+               last_error_message = NULL,
+               updated_at = now()
+           WHERE item.update_id = ANY($1::bigint[]) AND item.status = 'pending'
+           RETURNING item.*
+         )
+         SELECT claimed.update_id::text, claimed.queue_id, claimed.ingress_continuation_key,
+           claimed.payload, claimed.attempt_count, claimed.lease_token::text,
+           claimed.lease_expires_at, claimed.voice_file_id, claimed.voice_file_size::text,
+           claimed.voice_mime_type, claimed.voice_transcript, queue.current_continuation_key
+         FROM claimed
+         JOIN telegram_ingress_queues queue ON queue.id = claimed.queue_id
+         ORDER BY claimed.update_id`,
+        [accepted, input.leaseMilliseconds],
+      );
+      if (claimed.rowCount !== accepted.length) {
+        throw new AppError(
+          "AGENT_TELEGRAM_SERIES_CLAIM_FAILED",
+          "Не удалось захватить серию сообщений Telegram целиком",
+        );
+      }
+      await client.query("COMMIT");
+      return claimed.rows.map(mapTelegramIngressClaim);
+    } catch (error) {
+      return rollbackAndRethrow(client, error);
+    } finally {
+      client.release();
+    }
+  },
+
+  async hasPendingApprovalsInChat(telegramChatId) {
+    requireNonEmpty(telegramChatId, "AGENT_TELEGRAM_CHAT_INVALID", "Не задан идентификатор Telegram-чата");
+    const result = await database().query<{ pending: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM telegram_hitl_approvals
+          WHERE telegram_chat_id = $1 AND consumed_at IS NULL AND timed_out_at IS NULL
+       ) AS pending`,
+      [telegramChatId],
+    );
+    return result.rows[0]?.pending === true;
+  },
+
   async hasPendingApprovals(eveSessionId) {
     requireNonEmpty(eveSessionId, "AGENT_TELEGRAM_SESSION_INVALID", "Eve не вернул идентификатор сессии");
     const result = await database().query<{ pending: boolean }>(

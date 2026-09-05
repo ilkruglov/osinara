@@ -126,6 +126,7 @@ export function repositories() {
       markGroupNoticePresented: vi.fn().mockResolvedValue(undefined),
     },
     journal: {
+      findSeriesSequences: vi.fn().mockResolvedValue([]),
       listBefore: vi.fn().mockResolvedValue([]),
       listRecent: vi.fn().mockResolvedValue([]),
       record: vi.fn().mockResolvedValue({

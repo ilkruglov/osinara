@@ -92,6 +92,17 @@ describe("Telegram group turn context", () => {
     ]);
   });
 
+  it("names the earlier messages of a series inside the current message envelope", async () => {
+    const deps = dependencies(null);
+    deps.journal.listRecent.mockResolvedValue([entry("98", "Первое"), entry("99", "Второе")]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({ ...input, seriesSequenceIds: ["98", "99"] });
+
+    expect(result.currentMessageEnvelope).toContain('"earlierMessagesInSeries":["98","99"]');
+    expect((await prepare(input)).currentMessageEnvelope).not.toContain("earlierMessagesInSeries");
+  });
+
   it("embeds the bootstrap timeline and reply ancestry into a new durable turn", async () => {
     const deps = dependencies(null);
     deps.journal.listRecent.mockResolvedValue([entry("98", "Казань"), entry("99", "Тула")]);

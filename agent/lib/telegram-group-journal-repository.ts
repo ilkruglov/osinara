@@ -73,6 +73,12 @@ export interface TelegramGroupJournalRepository {
     messageThreadId: string | null;
   }): Promise<{ entries: TelegramGroupJournalEntry[]; omittedBeforeSequence: string | null }>;
   listRecent(input: ListRecentInput): Promise<TelegramGroupJournalEntry[]>;
+  /** Sequences of this author's journaled messages, by Telegram message id, in timeline order. */
+  findSeriesSequences(input: {
+    actorId: string;
+    conversationId: string;
+    telegramMessageIds: readonly string[];
+  }): Promise<string[]>;
   record(
     groupId: string,
     message: TelegramMessage,
@@ -257,6 +263,21 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
         ? result.rows[0]?.selected_boundary ?? input.beforeSequence
         : null,
     };
+  },
+
+  async findSeriesSequences(input) {
+    if (input.telegramMessageIds.length === 0) return [];
+    const messageIds = input.telegramMessageIds.map((id) =>
+      requireTelegramPositiveBigint(id, "message_id")
+    );
+    const result = await database().query<{ sequence_id: string }>(
+      `SELECT sequence_id::text
+       FROM telegram_group_messages
+       WHERE conversation_id = $1 AND actor_id = $2 AND telegram_message_id = ANY($3::bigint[])
+       ORDER BY sequence_id`,
+      [input.conversationId, input.actorId, messageIds],
+    );
+    return result.rows.map((row) => row.sequence_id);
   },
 
   async record(groupId, message, actor) {

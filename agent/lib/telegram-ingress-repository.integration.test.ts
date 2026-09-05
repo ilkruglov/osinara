@@ -283,6 +283,34 @@ describeWithDatabase("telegramIngressRepository", () => {
     });
   });
 
+  it("leases the accepted run behind a claimed head and leaves the rest pending", async () => {
+    await telegramIngressRepository.enqueue(updateInput("2101", "telegram:private:101", "раз"));
+    await telegramIngressRepository.enqueue(updateInput("2102", "telegram:private:101", "два"));
+    await telegramIngressRepository.enqueue(updateInput("2103", "telegram:private:101", "три"));
+    await telegramIngressRepository.enqueue(updateInput("2104", "telegram:private:101", "четыре"));
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    expect(head?.updateId).toBe("2101");
+
+    const followers = await telegramIngressRepository.claimFollowing({
+      accept: (payload) => (payload.message as { text: string }).text !== "четыре",
+      afterUpdateId: head!.updateId,
+      leaseMilliseconds: LEASE_MILLISECONDS,
+      limit: 4,
+      queueId: head!.queueId,
+    });
+
+    expect(followers.map((claim) => claim.updateId)).toEqual(["2102", "2103"]);
+    expect(new Set(followers.map((claim) => claim.leaseToken)).size).toBe(2);
+    // The refused item stays pending behind the leased run and becomes the next head later.
+    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toBeNull();
+    for (const claim of [head!, ...followers]) {
+      await telegramIngressRepository.complete(claim.updateId, claim.leaseToken);
+    }
+    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toMatchObject({
+      updateId: "2104",
+    });
+  });
+
   it("persists a monotonic Eve event cursor atomically with ingress completion", async () => {
     const continuationKey = "telegram:private:cursor";
     const sessionId = "eve-session-cursor";

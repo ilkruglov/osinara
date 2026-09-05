@@ -57,6 +57,7 @@ import {
 } from "./telegram-on-message-repositories.js";
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
 import { telegramInboundActor } from "./telegram-inbound-actor.js";
+import { readTelegramSeriesMarker } from "./telegram-message-series.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -74,6 +75,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
     const routingText = Object.hasOwn(message.raw, "voice") ? message.caption : dispatchText;
     let addressed = isMessageAddressedToBot({ ...message, text: routingText }, botUsername);
+    // A series marker comes from the durable ingress, never from Telegram: earlier messages of a
+    // run are journaled without a turn, and the last one answers the whole run.
+    const series = readTelegramSeriesMarker(message.raw);
+    const seriesContext = series?.role === "context";
+    if (series?.role === "current" && series.addressed) addressed = true;
     const unsupportedGroupSlashCommand = message.chat.type !== "private" &&
       isTelegramSlashCommand(routingText);
     let verifiedReplyRoute: string | undefined;
@@ -159,7 +165,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         );
       }
       // Authorized family attachment references are retained without waking the model.
-      if (!addressed && !hasLazyGroupAttachment) {
+      if ((!addressed || seriesContext) && !hasLazyGroupAttachment) {
         if (inboundTimeline.status === "inserted") {
           if (actor.kind === "telegram_user" || actor.kind === "telegram_bot") {
             await repositories.memoryReview.observePassiveMessage({
@@ -261,7 +267,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       )
       : null;
     const lazyAttachment = currentAttachment ?? replyAttachment;
-    if (!addressed || journalDuplicate) {
+    if (!addressed || journalDuplicate || seriesContext) {
       if (!addressed && !journalDuplicate && group && inboundTimeline &&
         (actor.kind === "telegram_user" || actor.kind === "telegram_bot")) {
         await repositories.memoryReview.observePassiveMessage({
@@ -371,6 +377,14 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const replyTargetSnapshot = inboundTimeline?.replyTargetUnavailable
       ? telegramReplyTargetSnapshot(message)
       : null;
+    // Only this author's own journaled messages can be named; a foreign id resolves to nothing.
+    const seriesSequenceIds = series?.role === "current" && series.telegramMessageIds.length > 0
+      ? await repositories.journal.findSeriesSequences({
+          actorId: actor.actorId,
+          conversationId: conversation.id,
+          telegramMessageIds: series.telegramMessageIds,
+        })
+      : [];
     const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
@@ -393,6 +407,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           ...(replyTargetSnapshot === null ? {} : { replyTargetSnapshot }),
           replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
           replyToSequenceId: inboundTimeline.replyToSequenceId,
+          ...(seriesSequenceIds.length === 0 ? {} : { seriesSequenceIds }),
         })
       : null;
     if (!preparedGroupTurnContext) {

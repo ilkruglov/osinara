@@ -45,6 +45,8 @@ interface PrepareTelegramGroupTurnContextInput {
   replyTargetSnapshot?: TelegramReplyTargetSnapshot | null;
   replyTargetUnavailable: boolean;
   replyToSequenceId: string | null;
+  /** Earlier messages of the same author answered by this turn (see `telegram-message-series.ts`). */
+  seriesSequenceIds?: readonly string[];
 }
 
 interface TelegramGroupTurnContextDependencies {
@@ -97,6 +99,7 @@ function currentTelegramMessageEnvelope(
     | "replyTargetSnapshot"
     | "replyTargetUnavailable"
     | "replyToSequenceId"
+    | "seriesSequenceIds"
   >,
 ): string {
   const snapshotConflict = input.replyTargetSnapshot !== null &&
@@ -116,6 +119,9 @@ function currentTelegramMessageEnvelope(
         ? { replyTargetUnavailable: true }
         : {}),
     ...(input.replyToSequenceId === null ? {} : { replyToSequenceId: input.replyToSequenceId }),
+    ...(input.seriesSequenceIds && input.seriesSequenceIds.length > 0
+      ? { earlierMessagesInSeries: [...input.seriesSequenceIds] }
+      : {}),
     text: input.messageText,
   });
   return `${CURRENT_MESSAGE_OPEN_TAG}\n${currentMessage}\n${CURRENT_MESSAGE_CLOSE_TAG}`;

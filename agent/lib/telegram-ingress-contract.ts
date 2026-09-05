@@ -53,6 +53,17 @@ export interface TelegramIngressRepository {
   }): Promise<boolean>;
   beginVoiceTranscription(updateId: string, leaseToken: string): Promise<"completed" | "started">;
   beginDispatch(updateId: string, leaseToken: string): Promise<void>;
+  /**
+   * Leases the pending updates that directly follow `afterUpdateId` in one queue, in order, for as
+   * long as `accept` admits each payload; the first refusal or voice item ends the run unleased.
+   */
+  claimFollowing(input: {
+    accept: (payload: Record<string, unknown>) => boolean;
+    afterUpdateId: string;
+    leaseMilliseconds: number;
+    limit: number;
+    queueId: string;
+  }): Promise<TelegramIngressClaim[]>;
   claimNext(leaseMilliseconds: number): Promise<TelegramIngressClaim | null>;
   complete(updateId: string, leaseToken: string): Promise<void>;
   completeWithSession(
@@ -65,6 +76,8 @@ export interface TelegramIngressRepository {
   fail(updateId: string, leaseToken: string, failure: TelegramIngressFailure): Promise<void>;
   /** Unanswered confirmation prompts of an Eve session; a parked step resumes only without them. */
   hasPendingApprovals(eveSessionId: string): Promise<boolean>;
+  /** Unanswered confirmation prompts in a Telegram chat; a reply to one must stay its own update. */
+  hasPendingApprovalsInChat(telegramChatId: string): Promise<boolean>;
   rekeyQueue(input: {
     nextContinuationKey: string;
     previousContinuationKey: string;

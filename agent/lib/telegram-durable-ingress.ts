@@ -18,7 +18,7 @@ import { z } from "zod";
 import { TELEGRAM_INGRESS_LEASE_MS } from "../config.js";
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
-import { type TelegramIngressRepository } from "./telegram-ingress-contract.js";
+import type { TelegramIngressClaim, TelegramIngressRepository } from "./telegram-ingress-contract.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
 import {
   classifyTelegramInboundMedia,
@@ -26,6 +26,13 @@ import {
   type TelegramInboundMediaKind,
 } from "./telegram-message-policy.js";
 import { createTelegramVoiceAuthorizer } from "./telegram-voice-authorization.js";
+import {
+  TELEGRAM_SERIES_MAX_MESSAGES,
+  continuesSeries,
+  isSeriesEligible,
+  type TelegramSeriesMarker,
+  withSeriesMarker,
+} from "./telegram-message-series.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
@@ -248,6 +255,52 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   // out the full lease. A redispatched update is deduplicated by the journal, so no turn repeats.
   let staleLeasesReleased = false;
 
+  type LeasedUpdate = { claim: TelegramIngressClaim; update: TelegramUpdate };
+
+  // A run of consecutive messages from the author of `head` is leased together so one turn can
+  // answer it; anything else stays in the queue and forms the next claim.
+  async function claimSeriesFollowers(
+    head: TelegramIngressClaim,
+    update: TelegramUpdate,
+  ): Promise<LeasedUpdate[]> {
+    if (!isSeriesEligible(update, dependencies.botUsername) || update.kind !== "message") return [];
+    if (await dependencies.repository.hasPendingApprovalsInChat(update.message.chat.id)) return [];
+    const followers = await dependencies.repository.claimFollowing({
+      accept: (payload) => {
+        const candidate = parseTelegramUpdate(payload);
+        return candidate !== null &&
+          continuesSeries(update, withRichMessageText(candidate), dependencies.botUsername);
+      },
+      afterUpdateId: head.updateId,
+      leaseMilliseconds: dependencies.leaseMilliseconds,
+      limit: TELEGRAM_SERIES_MAX_MESSAGES - 1,
+      queueId: head.queueId,
+    });
+    return followers.map((claim) => {
+      const parsed = parseTelegramUpdate(claim.payload);
+      if (!parsed) {
+        throw new AppError(
+          "AGENT_TELEGRAM_PAYLOAD_INVALID",
+          "Не удалось подготовить сообщение серии для обработки",
+        );
+      }
+      return { claim, update: withRichMessageText(parsed) };
+    });
+  }
+
+  function seriesMarker(series: readonly LeasedUpdate[], index: number): TelegramSeriesMarker | null {
+    if (series.length === 1) return null;
+    if (index < series.length - 1) return { role: "context" };
+    const messages = series.map((item) => (item.update as { message: TelegramMessage }).message);
+    return {
+      addressed: messages.some((message) =>
+        isMessageAddressedToBot(message, dependencies.botUsername)
+      ),
+      role: "current",
+      telegramMessageIds: messages.slice(0, -1).map((message) => message.messageId),
+    };
+  }
+
   async function drain(
     dispatch: TelegramVerifiedUpdateContext["dispatch"],
   ): Promise<void> {
@@ -263,14 +316,54 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       if (!claim) return;
       const heartbeatController = new AbortController();
       let heartbeatError: unknown;
-      const heartbeat = maintainLease(
-          claim.updateId,
-          claim.leaseToken,
-          heartbeatController.signal,
-        )
-        .catch((error: unknown) => {
-          heartbeatError = error;
+      const heartbeats: Promise<void>[] = [];
+      const startHeartbeat = (leased: TelegramIngressClaim): void => {
+        heartbeats.push(
+          maintainLease(leased.updateId, leased.leaseToken, heartbeatController.signal)
+            .catch((error: unknown) => {
+              heartbeatError = error;
+            }),
+        );
+      };
+      startHeartbeat(claim);
+      // Every leased update that has not reached a terminal state yet; a failure marks them all.
+      const pending: TelegramIngressClaim[] = [claim];
+
+      async function dispatchLeased(
+        leased: TelegramIngressClaim,
+        update: TelegramUpdate,
+        marker: TelegramSeriesMarker | null,
+      ): Promise<void> {
+        await dependencies.repository.beginDispatch(leased.updateId, leased.leaseToken);
+        const outbound = marker !== null && update.kind === "message"
+          ? withSeriesMarker(update, marker)
+          : update;
+        const session = (await dispatch(
+          withCaptionlessAttachmentText(outbound),
+        )) as EveSessionResult | null | undefined;
+        if (!session) {
+          await dependencies.repository.complete(leased.updateId, leased.leaseToken);
+          return;
+        }
+        // The durable cursor excludes every event from earlier turns of a reused Eve session.
+        const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
+        const nextEventIndex = await waitForSessionBoundary(session, streamCursor, {
+          ...(update.kind === "callback_query"
+            ? {
+              hasPendingApprovals: () =>
+                dependencies.repository.hasPendingApprovals(session.id),
+            }
+            : {}),
+          updateId: leased.updateId,
         });
+        if (heartbeatError) throw heartbeatError;
+        await dependencies.repository.completeWithSession(
+          leased.updateId,
+          leased.leaseToken,
+          session.id,
+          nextEventIndex,
+        );
+      }
 
       try {
         let payload = claim.payload;
@@ -279,6 +372,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         if (update) update = withRichMessageText(update);
         if (!update) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
+          pending.shift();
           continue;
         }
 
@@ -288,6 +382,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           await dependencies.handleSoftwareUpdateCallback(update.callbackQuery)
         ) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
+          pending.shift();
           continue;
         }
 
@@ -327,32 +422,24 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           }
         }
 
-        await dependencies.repository.beginDispatch(claim.updateId, claim.leaseToken);
-        const session = (await dispatch(
-          withCaptionlessAttachmentText(update),
-        )) as EveSessionResult | null | undefined;
-        if (!session) {
-          await dependencies.repository.complete(claim.updateId, claim.leaseToken);
-          continue;
+        const series: LeasedUpdate[] = [{ claim, update }];
+        for (const follower of await claimSeriesFollowers(claim, update)) {
+          series.push(follower);
+          pending.push(follower.claim);
+          startHeartbeat(follower.claim);
         }
-        // The durable cursor excludes every event from earlier turns of a reused Eve session.
-        const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
-        const nextEventIndex = await waitForSessionBoundary(session, streamCursor, {
-          ...(update.kind === "callback_query"
-            ? {
-              hasPendingApprovals: () =>
-                dependencies.repository.hasPendingApprovals(session.id),
-            }
-            : {}),
-          updateId: claim.updateId,
-        });
-        if (heartbeatError) throw heartbeatError;
-        await dependencies.repository.completeWithSession(
-          claim.updateId,
-          claim.leaseToken,
-          session.id,
-          nextEventIndex,
-        );
+        if (series.length > 1) {
+          console.info(JSON.stringify({
+            code: "AGENT_TELEGRAM_SERIES_CLAIMED",
+            messages: series.length,
+            updateIds: series.map((item) => item.claim.updateId),
+          }));
+        }
+        for (let index = 0; index < series.length; index += 1) {
+          const item = series[index]!;
+          await dispatchLeased(item.claim, item.update, seriesMarker(series, index));
+          pending.shift();
+        }
       } catch (error) {
         const failure = {
           code: isAppError(error) ? error.code : "AGENT_TELEGRAM_INGRESS_FAILED",
@@ -364,14 +451,17 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           JSON.stringify({
             code: failure.code,
             error: error instanceof Error ? error.message : String(error),
-            updateId: claim.updateId,
+            updateId: pending[0]?.updateId ?? claim.updateId,
+            ...(pending.length > 1 ? { seriesUpdateIds: pending.map((item) => item.updateId) } : {}),
           }),
         );
-        await dependencies.repository.fail(claim.updateId, claim.leaseToken, failure);
+        for (const leased of pending) {
+          await dependencies.repository.fail(leased.updateId, leased.leaseToken, failure);
+        }
         throw error;
       } finally {
         heartbeatController.abort();
-        await heartbeat;
+        await Promise.all(heartbeats);
       }
     }
   }

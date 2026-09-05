@@ -164,6 +164,13 @@ export function isReplyToBot(
   );
 }
 
+export function mentionsAnotherUsername(text: string, botUsername: string): boolean {
+  // A message that names someone else by @username is addressed to them, not to this bot.
+  return Array.from(text.matchAll(TELEGRAM_MENTION_PATTERN)).some(
+    (match) => match.groups?.target?.toLowerCase() !== botUsername.toLowerCase(),
+  );
+}
+
 export function isAgentNameMentioned(text: string): boolean {
   return AGENT_NAME_PATTERN.test(text);
 }
