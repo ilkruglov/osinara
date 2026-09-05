@@ -3,7 +3,8 @@
  *
  * Export:
  * - `memoryContextExposureRepository`: which memory refs and which author cards this application
- *   session has already shown, keyed by the session's completed-turn counter.
+ *   session has already shown, keyed by the session's completed-turn counter; also the exact set
+ *   shown in one turn, which bounds what a `<memory-used>` directive may reinforce.
  *
  * Key construct:
  * - The window is measured in turns of the same application session, not in time: a quiet chat
@@ -27,6 +28,16 @@ export const memoryContextExposureRepository = {
       `SELECT memory_ref FROM memory_context_exposures
         WHERE application_session_id = $1 AND session_turn > $2`,
       [applicationSessionId, sessionTurn - MEMORY_EXPOSURE_WINDOW_TURNS],
+    );
+    return new Set(result.rows.map((row) => row.memory_ref));
+  },
+
+  /** Refs shown to the model in exactly this turn (automatic block or explicit search). */
+  async shownMemoryRefsForTurn(applicationSessionId: string, sessionTurn: number): Promise<Set<string>> {
+    const result = await database().query<{ memory_ref: string }>(
+      `SELECT memory_ref FROM memory_context_exposures
+        WHERE application_session_id = $1 AND session_turn = $2`,
+      [applicationSessionId, sessionTurn],
     );
     return new Set(result.rows.map((row) => row.memory_ref));
   },

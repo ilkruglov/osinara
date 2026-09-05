@@ -12,7 +12,9 @@ import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 
 import { MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
+import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import { embedMemoryQuery } from "./memory-embedding-client.js";
+import { isRetainedForAutomaticContext } from "./memory-retention-score.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import type { ModelMemory } from "./model-memory.js";
 import { toModelMemory } from "./model-memory.js";
@@ -88,14 +90,30 @@ export function memoryRetrievalQuery(
   return currentTelegramMessageText(text).trim() || null;
 }
 
+export interface MemorySearchExposure {
+  applicationSessionId: string;
+  sessionTurn: number;
+}
+
 export async function retrieveRelevantMemories(
   auth: MemoryAuthorization,
   query: string,
+  exposure?: MemorySearchExposure,
 ): Promise<ModelMemoryContextItem[]> {
   const embedding = await embedMemoryQuery(query);
   const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(auth, query, embedding);
+  const memories = retrieval.results.map((result) => toModelMemory(result.memory, result.sourceEvidence));
+  // Explicit search shows records too: only a shown ref may later be reinforced as used.
+  if (exposure && memories.length > 0) {
+    await memoryContextExposureRepository.record({
+      applicationSessionId: exposure.applicationSessionId,
+      authorTelegramUserId: null,
+      memoryRefs: memories.map((memory) => memory.memoryRef),
+      sessionTurn: exposure.sessionTurn,
+    });
+  }
   return [
-    ...retrieval.results.map((result) => toModelMemory(result.memory, result.sourceEvidence)),
+    ...memories,
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
 }
@@ -121,7 +139,9 @@ export async function retrieveMemoryTurnContext(
   );
   const exclude = options.excludeMemoryRefs ?? new Set<string>();
   const memories: ModelMemoryContextItem[] = [
+    // A faded record stays searchable but no longer enters the block on its own.
     ...retrieval.results
+      .filter((result) => isRetainedForAutomaticContext(result.retention))
       .map((result) => toModelMemory(result.memory, result.sourceEvidence))
       .filter((memory) => !exclude.has(memory.memoryRef)),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
