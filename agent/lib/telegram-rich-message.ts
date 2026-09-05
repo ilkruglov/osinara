@@ -9,7 +9,8 @@
  * - Bot API 10.1 (June 2026) delivers rich messages in `message.rich_message`; `message.text` is
  *   absent or holds only a plain fallback. Eve 0.40.0 parses `text` and `caption` alone, so a
  *   collapsed "Полный ответ" from another bot arrived as an empty message. Block order is kept;
- *   a details block contributes its summary and its nested blocks.
+ *   a details block contributes its summary and its nested blocks; rich text given as parts
+ *   (strings and link entities) is joined.
  */
 import type { TelegramUpdate } from "eve/channels/telegram";
 
@@ -21,11 +22,16 @@ function record(value: unknown): JsonRecord | null {
     : null;
 }
 
-/** RichText arrives as a string or as `{ text, entities }`; entities are not needed for reading. */
+/**
+ * RichText arrives as a string, as `{ text, entities }`, or as an array of parts: plain strings
+ * mixed with typed entities such as `{ type: "url", text, url }`. Only the readable text matters,
+ * so parts are joined in order; an array that was ignored here dropped every paragraph with a link.
+ */
 function richText(value: unknown): string {
   if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(richText).join("");
   const text = record(value)?.text;
-  return typeof text === "string" ? text : "";
+  return typeof text === "string" || Array.isArray(text) ? richText(text) : "";
 }
 
 function blocksText(value: unknown): string[] {

@@ -4,6 +4,7 @@
  * Constructs covered:
  * - A collapsed details block yields its summary and every nested paragraph in order.
  * - Quotations, lists, tables and media captions contribute their text; unknown blocks are skipped.
+ * - Rich text given as an array of parts (strings and link entities) is joined, not dropped.
  * - An update with plain text is left untouched; one without rich content stays as it is.
  */
 import type { TelegramUpdate } from "eve/channels/telegram";
@@ -43,6 +44,23 @@ describe("richMessagePlainText", () => {
         ],
       },
     })).toBe("Цитата.\n\nпункт один\n\nпункт два\n\nа | б\n\nподпись к фото");
+  });
+
+  it("keeps a paragraph whose rich text is a list of parts with inline links", () => {
+    // Bot API RichText may arrive as an array: plain strings mixed with typed entities. A bot that
+    // writes file names as links produced paragraphs that vanished whole.
+    expect(richMessagePlainText({
+      rich_message: {
+        blocks: [
+          { text: ["Задачи живут в ", { text: "tasks.md", type: "url", url: "tasks.md" }, " в корне."], type: "paragraph" },
+          {
+            blocks: [{ text: [{ text: "AGENTS.md", type: "url", url: "AGENTS.md" }, " - инструкция."], type: "paragraph" }],
+            summary: "Полный ответ",
+            type: "details",
+          },
+        ],
+      },
+    })).toBe("Задачи живут в tasks.md в корне.\n\nПолный ответ\n\nAGENTS.md - инструкция.");
   });
 
   it("returns null without rich content and falls back to the plain rich text", () => {
