@@ -13,6 +13,8 @@
  * - `operationKey` (the Eve tool call id) is unique per family among versions, so a replayed
  *   approved call returns the version it already created instead of creating another.
  * - Rollback and retire are new versions or a status flip; rows are never deleted.
+ * - Version 2 and later pass the eval gate of `authored-skill-example-repository.ts`: every stored
+ *   example rerun, the reruns saved with the version; the publish's own trial becomes an example.
  */
 import type { PoolClient } from "pg";
 
@@ -25,6 +27,14 @@ import {
   assertStoredSkillContent,
   type AuthoredSkillDraft,
 } from "./authored-skill-contract.js";
+import {
+  activeExamples,
+  insertExample,
+  requireTrials,
+  type AuthoredSkillExample,
+  type AuthoredSkillTrial,
+} from "./authored-skill-example-repository.js";
+import { requireCurrentOwner } from "./authored-skill-owner.js";
 
 export type AuthoredSkillOutcome = "failed" | "ok" | "unknown";
 
@@ -40,8 +50,12 @@ export interface AuthoredSkillSummary {
 
 export interface AuthoredSkillContent extends AuthoredSkillSummary {
   changeNote: string;
+  /** Active examples of the skill; every one of them must be rerun before the next version. */
+  examples: AuthoredSkillExample[];
   files: Readonly<Record<string, string>>;
   markdown: string;
+  /** Reruns recorded with the version being read. */
+  trials: AuthoredSkillTrial[];
   trialSummary: string;
 }
 
@@ -60,9 +74,21 @@ export interface AuthoredSkillProvenance {
 export interface PublishAuthoredSkillResult {
   /** Advisory rubric findings; empty when the content is clean. */
   warnings?: string[];
+  /** Example created from this publish's trial request, when the cap allowed one. */
+  exampleAdded?: AuthoredSkillExample | null;
   name: string;
   replayed: boolean;
   version: number;
+}
+
+export interface PublishAuthoredSkillOptions {
+  knownToolNames: ReadonlySet<string>;
+  operationKey: string;
+  provenance: AuthoredSkillProvenance;
+  /** The request of the trial run; stored as a new example when given. */
+  trialRequest?: string;
+  /** Reruns of the stored examples; mandatory for every active example from version 2 on. */
+  trials?: readonly AuthoredSkillTrial[];
 }
 
 interface SkillRow {
@@ -74,23 +100,6 @@ interface SkillRow {
   status: "active" | "retired";
   updated_at: Date;
   version: number;
-}
-
-export async function requireCurrentOwner(client: PoolClient, caller: FamilyCaller): Promise<void> {
-  if (caller.role !== "owner") {
-    throw new AppError("AGENT_SKILL_FORBIDDEN", "Создавать и менять навыки может только владелец семьи");
-  }
-  const owner = await client.query(
-    `SELECT 1 FROM family_memberships
-      WHERE family_id = $1 AND user_id = $2 AND role = 'owner' FOR SHARE`,
-    [caller.familyId, caller.userId],
-  );
-  if (!owner.rowCount) {
-    throw new AppError(
-      "AGENT_SKILL_FORBIDDEN",
-      "Права владельца больше не действуют. Обновите чат и повторите действие",
-    );
-  }
 }
 
 async function lockFamilyLibrary(client: PoolClient, familyId: string): Promise<void> {
@@ -131,18 +140,19 @@ async function insertVersion(client: PoolClient, input: {
   operationKey: string;
   provenance: AuthoredSkillProvenance;
   skillId: string;
+  trials: readonly AuthoredSkillTrial[];
   trialSummary: string;
   version: number;
 }): Promise<void> {
   await client.query(
     `INSERT INTO authored_skill_versions
        (skill_id, family_id, version, description, markdown, files, change_note, trial_summary,
-        operation_key, eve_session_id, eve_turn_id, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)`,
+        operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
     [input.skillId, input.caller.familyId, input.version, input.content.description,
       input.content.markdown, JSON.stringify(input.content.files), input.changeNote,
       input.trialSummary, input.operationKey, input.provenance.eveSessionId,
-      input.provenance.eveTurnId, input.caller.userId],
+      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials)],
   );
 }
 
@@ -171,13 +181,10 @@ export const authoredSkillRepository = {
   async publish(
     caller: FamilyCaller,
     draft: AuthoredSkillDraft,
-    input: {
-      knownToolNames: ReadonlySet<string>;
-      operationKey: string;
-      provenance: AuthoredSkillProvenance;
-    },
+    input: PublishAuthoredSkillOptions,
   ): Promise<PublishAuthoredSkillResult> {
     const warnings = assertAuthoredSkillDraft(draft, { knownToolNames: input.knownToolNames });
+    const trials = input.trials ?? [];
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -194,6 +201,8 @@ export const authoredSkillRepository = {
       if (existing) {
         version = existing.version + 1;
         skillId = existing.id;
+        // The eval gate: a new version is accepted only after every stored example was rerun.
+        requireTrials(await activeExamples(client, skillId), trials);
         await client.query(
           `UPDATE authored_skills
               SET description = $2, markdown = $3, files = $4::jsonb, version = $5, updated_at = now()
@@ -223,14 +232,22 @@ export const authoredSkillRepository = {
       }
       await insertVersion(client, {
         caller, changeNote: draft.changeNote, content: draft, operationKey: input.operationKey,
-        provenance: input.provenance, skillId, trialSummary: draft.trialSummary, version,
+        provenance: input.provenance, skillId, trials, trialSummary: draft.trialSummary, version,
       });
+      // The trial run of this publish becomes a stored example, so the next version reruns it.
+      const exampleAdded = typeof input.trialRequest === "string" && input.trialRequest.trim().length > 0
+        ? await insertExample(client, {
+          createdByUserId: caller.userId, expected: draft.trialSummary, familyId: caller.familyId,
+          request: input.trialRequest, skillId,
+        })
+        : null;
       await client.query("COMMIT");
       console.info(JSON.stringify({
         code: "AGENT_SKILL_PUBLISHED", familyId: caller.familyId, name: draft.name, version,
         markdownChars: draft.markdown.length, fileCount: Object.keys(draft.files).length,
+        trials: trials.length, exampleAdded: exampleAdded !== null,
       }));
-      return { name: draft.name, replayed: false, version, warnings };
+      return { exampleAdded, name: draft.name, replayed: false, version, warnings };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -279,10 +296,11 @@ export const authoredSkillRepository = {
           WHERE id = $1`,
         [skill.id, content.description, content.markdown, JSON.stringify(content.files), version],
       );
+      // A rollback restores content that already passed its examples; no rerun is demanded.
       await insertVersion(client, {
         caller, changeNote: `Откат к версии ${input.version}`, content,
         operationKey: input.operationKey, provenance: input.provenance, skillId: skill.id,
-        trialSummary: `Возврат содержимого версии ${input.version} без изменений`, version,
+        trials: [], trialSummary: `Возврат содержимого версии ${input.version} без изменений`, version,
       });
       await client.query("COMMIT");
       console.info(JSON.stringify({
@@ -341,20 +359,29 @@ export const authoredSkillRepository = {
     const wanted = version ?? skill.version;
     const stored = await database().query<{
       change_note: string; description: string; files: Record<string, string>; markdown: string;
-      trial_summary: string;
+      trial_summary: string; trials: AuthoredSkillTrial[];
     }>(
-      `SELECT description, markdown, files, change_note, trial_summary
+      `SELECT description, markdown, files, change_note, trial_summary, trials
          FROM authored_skill_versions WHERE skill_id = $1 AND version = $2`,
       [skill.id, wanted],
     );
     const content = stored.rows[0];
     if (!content) throw new AppError("AGENT_SKILL_VERSION_NOT_FOUND", `У навыка ${name} нет версии ${wanted}`);
+    const examples = await database().query<{ created_at: Date; expected: string; id: string; request: string }>(
+      `SELECT id, request, expected, created_at FROM authored_skill_examples
+        WHERE skill_id = $1 AND active ORDER BY created_at`,
+      [skill.id],
+    );
     return {
       ...summary(skill),
       changeNote: content.change_note,
       description: content.description,
+      examples: examples.rows.map((row) => ({
+        createdAt: row.created_at.toISOString(), expected: row.expected, id: row.id, request: row.request,
+      })),
       files: content.files,
       markdown: content.markdown,
+      trials: content.trials,
       trialSummary: content.trial_summary,
       version: wanted,
     };

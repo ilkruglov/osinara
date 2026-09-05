@@ -7,6 +7,7 @@
  * - Only a current owner may mutate; a member of the family is refused.
  * - The active-skill limit is enforced per family.
  * - Usage rows come from observed loads and take the latest outcome per conversation.
+ * - The publish trial becomes an example; version 2+ needs a rerun of every active example.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -14,6 +15,7 @@ import { closeDatabase, database } from "../database.js";
 import type { FamilyCaller } from "../family-context.js";
 import { createMainAgentMemoryFixture } from "../memory-agent-write.integration-fixtures.js";
 import { AUTHORED_SKILL_LIMITS } from "./authored-skill-contract.js";
+import { AUTHORED_SKILL_EXAMPLES_MAX, authoredSkillExampleRepository } from "./authored-skill-example-repository.js";
 import { authoredSkillRepository } from "./authored-skill-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
@@ -77,6 +79,55 @@ describeWithDatabase("authored skill repository", () => {
     expect(listed[0]).toMatchObject({ name: "birthday-card", usageCount: 0, version: 2 });
     const read = await authoredSkillRepository.read(familyId, "birthday-card", 1);
     expect(read).toMatchObject({ changeNote: "Первая версия", version: 1 });
+  });
+
+  it("stores the trial as an example and demands a rerun of every example before a new version", async () => {
+    const first = await authoredSkillRepository.publish(owner, draft("birthday-card"), {
+      knownToolNames: KNOWN, operationKey: "call-1", provenance, trialRequest: "Открытка Жене",
+    });
+    expect(first.exampleAdded).toMatchObject({ expected: "Сгенерировала одну открытку, отправила в чат.", request: "Открытка Жене" });
+    const second = await authoredSkillExampleRepository.add(owner, {
+      expected: "Тюльпаны без текста", name: "birthday-card", request: "Открытка маме на 8 марта",
+    });
+    await expect(authoredSkillExampleRepository.add({ ...owner, role: "member" }, {
+      expected: "x", name: "birthday-card", request: "y",
+    })).rejects.toMatchObject({ code: "AGENT_SKILL_FORBIDDEN" });
+
+    // Version 2 without reruns, with a partial rerun, and with an unknown example id are refused.
+    await expect(authoredSkillRepository.publish(owner, draft("birthday-card", "Короче шаги"), {
+      knownToolNames: KNOWN, operationKey: "call-2", provenance,
+    })).rejects.toMatchObject({ code: "AGENT_SKILL_EVAL_MISSING", message: expect.stringContaining("Открытка маме") });
+    await expect(authoredSkillRepository.publish(owner, draft("birthday-card", "Короче шаги"), {
+      knownToolNames: KNOWN, operationKey: "call-2", provenance,
+      trials: [{ exampleId: first.exampleAdded!.id, summary: "Прошло" }],
+    })).rejects.toMatchObject({ code: "AGENT_SKILL_EVAL_MISSING" });
+    await expect(authoredSkillRepository.publish(owner, draft("birthday-card", "Короче шаги"), {
+      knownToolNames: KNOWN, operationKey: "call-2", provenance,
+      trials: [{ exampleId: "00000000-0000-4000-8000-000000000099", summary: "Прошло" }],
+    })).rejects.toMatchObject({ code: "AGENT_SKILL_EVAL_UNKNOWN_EXAMPLE" });
+
+    const trials = [
+      { exampleId: first.exampleAdded!.id, summary: "Открытка без текста" },
+      { exampleId: second.id, summary: "Тюльпаны, без текста" },
+    ];
+    const published = await authoredSkillRepository.publish(owner, draft("birthday-card", "Короче шаги"), {
+      knownToolNames: KNOWN, operationKey: "call-2", provenance, trials,
+    });
+    expect(published).toMatchObject({ exampleAdded: null, version: 2 });
+    const read = await authoredSkillRepository.read(familyId, "birthday-card");
+    expect(read.trials).toEqual(trials);
+    expect(read.examples.map((example) => example.request)).toEqual(["Открытка Жене", "Открытка маме на 8 марта"]);
+
+    // A removed example is no longer demanded; the cap holds at five active examples.
+    await authoredSkillExampleRepository.remove(owner, { exampleId: second.id, name: "birthday-card" });
+    await expect(authoredSkillExampleRepository.remove(owner, { exampleId: second.id, name: "birthday-card" }))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_EXAMPLE_NOT_FOUND" });
+    for (let index = 0; index < AUTHORED_SKILL_EXAMPLES_MAX - 1; index += 1) {
+      await authoredSkillExampleRepository.add(owner, { expected: "ок", name: "birthday-card", request: `Пример ${index}` });
+    }
+    await expect(authoredSkillExampleRepository.add(owner, { expected: "ок", name: "birthday-card", request: "лишний" }))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_EXAMPLE_LIMIT_REACHED" });
+    await expect(authoredSkillExampleRepository.list(familyId, "birthday-card")).resolves.toHaveLength(AUTHORED_SKILL_EXAMPLES_MAX);
   });
 
   it("rolls back by creating a new version with the old content and retires from packages", async () => {

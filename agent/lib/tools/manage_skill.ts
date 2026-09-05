@@ -22,18 +22,23 @@ import {
   AUTHORED_SKILL_REQUIRED_SECTIONS,
   EVE_BUILTIN_TOOL_NAMES,
 } from "../authored-skills/authored-skill-contract.js";
+import {
+  AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS,
+  AUTHORED_SKILL_EXAMPLES_MAX,
+  authoredSkillExampleRepository,
+} from "../authored-skills/authored-skill-example-repository.js";
 import { authoredSkillGrantRepository } from "../authored-skills/authored-skill-grant-repository.js";
 import { authoredSkillRepository } from "../authored-skills/authored-skill-repository.js";
 import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../family-context.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const TOOL_DESCRIPTION = [
-  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome, grant, revoke. Только владелец, только в личном чате владельца или семейной группе.",
+  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome, grant, revoke, add_example, remove_example. Только владелец, только в личном чате владельца или семейной группе.",
   "Когда применять: владелец просит создать, улучшить, откатить или убрать навык; ты предлагаешь сохранить повторяемую задачу как навык по служебной подсказке; после применения навыка владелец сказал, что вышло хорошо или плохо. Сначала загрузи skill-authoring через load_skill: он задаёт порядок работы и рубрику.",
   "Когда не применять: стиль общения это manage_behavior_preference; факт о человеке это remember; разовая задача просто выполняется без навыка; расписание это manage_agent_schedule.",
-  "Publish требует пробного прогона: выполни навык на одном реальном примере в этом ходу и опиши результат в trialSummary, иначе отказ. Publish, rollback и retire требуют кнопки владельца. Опубликованный навык доступен со следующего хода.",
+  "Publish требует пробного прогона: выполни навык на одном реальном примере в этом ходу, передай сам запрос в trialRequest и результат в trialSummary, иначе отказ; эта пара сохраняется как пример навыка. У навыка до 5 примеров (read показывает их с id); перед публикацией версии 2 и выше прогони каждый пример заново и передай trials: [{exampleId, summary}] по всем, иначе AGENT_SKILL_EVAL_MISSING. Publish, rollback и retire требуют кнопки владельца. Опубликованный навык доступен со следующего хода.",
   `Markdown навыка без frontmatter, обязательные разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.map((section) => `«${section}»`).join(", ")}; в шагах имена инструментов в обратных кавычках только из текущего режима; навык с generate_image обязан нести references/<имя>.md с английским шаблоном промпта. Лимиты: markdown ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов, до ${AUTHORED_SKILL_LIMITS.filesMax} файлов references/<имя>.md по ${AUTHORED_SKILL_LIMITS.fileMaxCharacters} символов, ${AUTHORED_SKILL_LIMITS.activeSkillsPerFamily} активных навыков на семью.`,
-  "Publish: {\"action\":\"publish\",\"name\":\"birthday-card\",\"description\":\"Открытка к празднику через Flux: поздравление с картинкой, подарочная карточка\",\"markdown\":\"## Когда применять\\n…\\n## Шаги\\n1. Вызови `generate_image`…\\n## Проверка результата\\n…\",\"files\":{\"references/flux-card.md\":\"…\"},\"changeNote\":\"Первая версия\",\"trialSummary\":\"Сделала открытку для Жени, отправила в чат\"}.",
+  "Publish: {\"action\":\"publish\",\"name\":\"birthday-card\",\"description\":\"Открытка к празднику через Flux: поздравление с картинкой, подарочная карточка\",\"markdown\":\"## Когда применять\\n…\\n## Шаги\\n1. Вызови `generate_image`…\\n## Проверка результата\\n…\",\"files\":{\"references/flux-card.md\":\"…\"},\"changeNote\":\"Первая версия\",\"trialRequest\":\"Сделай открытку Жене на день рождения\",\"trialSummary\":\"Сделала открытку для Жени, отправила в чат\"}. Версия 2: то же плюс \"trials\":[{\"exampleId\":\"…\",\"summary\":\"Открытка вышла без текста, отправлена\"}]. Add_example: {\"action\":\"add_example\",\"name\":\"birthday-card\",\"request\":\"Открытка маме на 8 марта\",\"expected\":\"Картинка с тюльпанами без текста и поздравление в два предложения\"}. Remove_example: {\"action\":\"remove_example\",\"name\":\"birthday-card\",\"exampleId\":\"…\"}.",
   "Rollback: {\"action\":\"rollback\",\"name\":\"birthday-card\",\"version\":1}. Retire: {\"action\":\"retire\",\"name\":\"birthday-card\"}. Read: {\"action\":\"read\",\"name\":\"birthday-card\",\"version\":2} (version необязателен). Record_outcome: {\"action\":\"record_outcome\",\"name\":\"birthday-card\",\"outcome\":\"failed\",\"note\":\"на картинке появился текст\"}.",
   `Grant выдаёт навык внешней группе по её названию или chat id, revoke забирает; оба через кнопку владельца, до ${AUTHORED_SKILL_LIMITS.grantsPerGroup} навыков на группу. Навык прав не добавляет: если в его шагах есть инструмент, не выданный группе, grant откажет и перечислит недостающие. Grant: {\"action\":\"grant\",\"name\":\"weekly-digest\",\"group\":\"Клуб бегунов\"}. Revoke: {\"action\":\"revoke\",\"name\":\"weekly-digest\",\"group\":\"-1001234567890\"}. List показывает выданные гранты.`,
 ].join(" ");
@@ -41,11 +46,14 @@ const TOOL_DESCRIPTION = [
 const MUTATING_ACTIONS = new Set(["grant", "publish", "retire", "revoke", "rollback"]);
 
 const manageSkillSchema = z.object({
-  action: z.enum(["grant", "list", "publish", "read", "record_outcome", "retire", "revoke", "rollback"]),
+  action: z.enum(["add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
   changeNote: z.string().max(AUTHORED_SKILL_LIMITS.changeNoteMaxCharacters).optional()
     .describe("publish: что изменилось и зачем"),
   description: z.string().max(AUTHORED_SKILL_LIMITS.descriptionMaxCharacters).optional()
     .describe("publish: триггер загрузки, задача плюс косвенные формулировки"),
+  exampleId: z.uuid().optional().describe("remove_example: id примера из read"),
+  expected: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
+    .describe("add_example: каким должен быть правильный результат"),
   files: z.record(z.string(), z.string()).optional()
     .describe("publish: справочные файлы references/<имя>.md"),
   group: z.string().max(200).optional()
@@ -55,6 +63,15 @@ const manageSkillSchema = z.object({
   name: z.string().max(40).optional().describe("Имя навыка: строчные латинские буквы, цифры, дефис"),
   note: z.string().max(500).optional().describe("record_outcome: что именно вышло не так или хорошо"),
   outcome: z.enum(["failed", "ok"]).optional().describe("record_outcome: исход последнего применения"),
+  request: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
+    .describe("add_example: запрос человека, на котором навык проверяется"),
+  trialRequest: z.string().max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS).optional()
+    .describe("publish: запрос, на котором выполнен пробный прогон; сохраняется как пример"),
+  trials: z.array(z.object({
+    exampleId: z.uuid(),
+    summary: z.string().min(1).max(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS),
+  }).strict()).max(AUTHORED_SKILL_EXAMPLES_MAX).optional()
+    .describe("publish версии 2+: прогон каждого сохранённого примера и что получилось"),
   trialSummary: z.string().max(AUTHORED_SKILL_LIMITS.trialSummaryMaxCharacters).optional()
     .describe("publish: что выполнено в пробном прогоне и что получилось"),
   version: z.number().int().min(1).optional().describe("read: версия; rollback: к какой версии вернуться"),
@@ -76,10 +93,14 @@ function requireGroup(input: ManageSkillInput): string {
   return input.group;
 }
 
-function requireField(input: ManageSkillInput, key: "changeNote" | "description" | "markdown" | "trialSummary"): string {
+function requireField(
+  input: ManageSkillInput,
+  key: "changeNote" | "description" | "expected" | "markdown" | "request" | "trialRequest" | "trialSummary",
+  action = "publish",
+): string {
   const value = input[key];
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new AppError("AGENT_SKILL_INPUT_INVALID", `Для publish обязательно поле ${key}`);
+    throw new AppError("AGENT_SKILL_INPUT_INVALID", `Для ${action} обязательно поле ${key}`);
   }
   return value;
 }
@@ -141,12 +162,25 @@ export default defineTool({
           name: requireName(input),
           trialSummary: requireField(input, "trialSummary"),
         };
+        const trialRequest = requireField(input, "trialRequest");
         // Owner role and the exact Telegram approval are both revalidated at the mutation boundary.
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.publish(caller, draft, {
           knownToolNames: await knownToolNames(owner), operationKey: ctx.callId, provenance,
+          trialRequest, trials: input.trials ?? [],
         });
         return { ...result, note: nextTurnNote };
+      }
+      case "add_example":
+        return await authoredSkillExampleRepository.add(caller, {
+          expected: requireField(input, "expected", "add_example"), name: requireName(input),
+          request: requireField(input, "request", "add_example"),
+        });
+      case "remove_example": {
+        if (input.exampleId === undefined) {
+          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для remove_example укажи exampleId из read");
+        }
+        return await authoredSkillExampleRepository.remove(caller, { exampleId: input.exampleId, name: requireName(input) });
       }
       case "rollback": {
         if (input.version === undefined) {

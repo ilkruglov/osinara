@@ -16,7 +16,8 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { FamilyCaller } from "../family-context.js";
 import { AUTHORED_SKILL_LIMITS, externalGroupMissingTools } from "./authored-skill-contract.js";
-import { type AuthoredSkillPackage, requireCurrentOwner } from "./authored-skill-repository.js";
+import { requireCurrentOwner } from "./authored-skill-owner.js";
+import type { AuthoredSkillPackage } from "./authored-skill-repository.js";
 
 export interface AuthoredSkillGrant {
   groupTitle: string;

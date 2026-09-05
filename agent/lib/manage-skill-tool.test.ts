@@ -25,6 +25,11 @@ const grants = vi.hoisted(() => ({
   grants: vi.fn(),
   revoke: vi.fn(),
 }));
+const examples = vi.hoisted(() => ({
+  add: vi.fn(),
+  list: vi.fn(),
+  remove: vi.fn(),
+}));
 const { requireApprovalEvidence, requireOwner } = vi.hoisted(() => ({
   requireApprovalEvidence: vi.fn(),
   requireOwner: vi.fn(),
@@ -32,6 +37,11 @@ const { requireApprovalEvidence, requireOwner } = vi.hoisted(() => ({
 
 vi.mock("./authored-skills/authored-skill-repository.js", () => ({ authoredSkillRepository: repository }));
 vi.mock("./authored-skills/authored-skill-grant-repository.js", () => ({ authoredSkillGrantRepository: grants }));
+vi.mock("./authored-skills/authored-skill-example-repository.js", () => ({
+  AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS: 1_000,
+  AUTHORED_SKILL_EXAMPLES_MAX: 5,
+  authoredSkillExampleRepository: examples,
+}));
 vi.mock("./family-context.js", () => ({ requireTrustedTelegramOwner: requireOwner }));
 vi.mock("./require-tool-approval-evidence.js", () => ({
   requireToolApprovalEvidence: requireApprovalEvidence,
@@ -58,6 +68,7 @@ describe("manage_skill", () => {
   beforeEach(() => {
     for (const mock of Object.values(repository)) mock.mockReset();
     for (const mock of Object.values(grants)) mock.mockReset();
+    for (const mock of Object.values(examples)) mock.mockReset();
     grants.grants.mockResolvedValue([]);
     requireApprovalEvidence.mockReset();
     requireApprovalEvidence.mockResolvedValue(undefined);
@@ -88,7 +99,8 @@ describe("manage_skill", () => {
     const input = {
       action: "publish" as const, changeNote: "Первая версия", description: "Открытка",
       files: { "references/a.md": "x" }, markdown: "## Шаги", name: "birthday-card",
-      trialSummary: "Сделала открытку",
+      trialRequest: "Открытка Жене", trialSummary: "Сделала открытку",
+      trials: [{ exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", summary: "Прошло" }],
     };
 
     const result = await manageSkill.execute(input, context);
@@ -104,6 +116,8 @@ describe("manage_skill", () => {
     });
     expect(options.operationKey).toBe("skill-call-1");
     expect(options.provenance).toEqual({ eveSessionId: "eve-session-1", eveTurnId: "turn-7" });
+    expect(options.trialRequest).toBe("Открытка Жене");
+    expect(options.trials).toEqual([{ exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", summary: "Прошло" }]);
     expect([...options.knownToolNames]).toEqual(expect.arrayContaining([
       "generate_image", "send_workspace_file", "list_group_history", "web_search", "bash",
     ]));
@@ -111,10 +125,31 @@ describe("manage_skill", () => {
     expect(result).toMatchObject({ name: "birthday-card", note: expect.stringMatching(/следующего хода/u), version: 1 });
   });
 
-  it("rejects publish without a trial summary before asking for approval", async () => {
+  it("rejects publish without a trial summary or trial request before asking for approval", async () => {
     await expect(manageSkill.execute({
       action: "publish", changeNote: "x", description: "d", markdown: "m", name: "birthday-card",
     }, context)).rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
+    await expect(manageSkill.execute({
+      action: "publish", changeNote: "x", description: "d", markdown: "m", name: "birthday-card", trialSummary: "s",
+    }, context)).rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
+    expect(requireApprovalEvidence).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes examples without approval", async () => {
+    examples.add.mockResolvedValue({ createdAt: "2026-09-06T00:00:00.000Z", expected: "Тюльпаны", id: "e1", request: "Маме" });
+    examples.remove.mockResolvedValue({ exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", name: "birthday-card" });
+
+    await manageSkill.execute({ action: "add_example", expected: "Тюльпаны", name: "birthday-card", request: "Маме" }, context);
+    await manageSkill.execute({ action: "remove_example", exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", name: "birthday-card" }, context);
+
+    expect(examples.add).toHaveBeenCalledWith(
+      { familyId: "family-1", role: "owner", userId: "user-1" }, { expected: "Тюльпаны", name: "birthday-card", request: "Маме" },
+    );
+    expect(examples.remove).toHaveBeenCalledWith(
+      { familyId: "family-1", role: "owner", userId: "user-1" }, { exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", name: "birthday-card" },
+    );
+    await expect(manageSkill.execute({ action: "add_example", name: "birthday-card", request: "Маме" }, context))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
     expect(requireApprovalEvidence).not.toHaveBeenCalled();
   });
 
@@ -176,5 +211,7 @@ describe("manage_skill", () => {
     expect(approval({ toolInput: { action: "revoke" } })).toBe("user-approval");
     expect(approval({ toolInput: { action: "list" } })).toBe("not-applicable");
     expect(approval({ toolInput: { action: "record_outcome" } })).toBe("not-applicable");
+    expect(approval({ toolInput: { action: "add_example" } })).toBe("not-applicable");
+    expect(approval({ toolInput: { action: "remove_example" } })).toBe("not-applicable");
   });
 });

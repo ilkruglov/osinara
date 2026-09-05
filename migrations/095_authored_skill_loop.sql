@@ -32,3 +32,26 @@ CREATE TABLE authored_skill_group_grants (
 );
 
 CREATE INDEX authored_skill_group_grants_group ON authored_skill_group_grants (group_id);
+
+-- 4. Эвалы навыка: сохранённые примеры «запрос → ожидаемый результат» (до пяти активных на навык)
+--    и прогон каждого перед публикацией новой версии; прогоны хранятся вместе с версией.
+CREATE TABLE authored_skill_examples (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  skill_id uuid NOT NULL REFERENCES authored_skills(id) ON DELETE CASCADE,
+  family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  request text NOT NULL CHECK (char_length(request) BETWEEN 1 AND 1000),
+  expected text NOT NULL CHECK (char_length(expected) BETWEEN 1 AND 1000),
+  active boolean NOT NULL DEFAULT true,
+  created_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  removed_at timestamptz,
+  CONSTRAINT authored_skill_examples_removed_shape CHECK (
+    (active AND removed_at IS NULL) OR (NOT active AND removed_at IS NOT NULL)
+  )
+);
+
+CREATE INDEX authored_skill_examples_skill_active
+  ON authored_skill_examples (skill_id, created_at) WHERE active;
+
+ALTER TABLE authored_skill_versions
+  ADD COLUMN trials jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(trials) = 'array');

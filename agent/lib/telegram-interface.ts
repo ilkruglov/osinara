@@ -23,8 +23,10 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     disconnect: "отключить Google Workspace от текущей области",
   },
   manage_skill: {
+    grant: "выдать навык Мии внешней группе",
     publish: "опубликовать навык Мии",
     retire: "убрать навык Мии из употребления",
+    revoke: "забрать навык Мии у внешней группы",
     rollback: "откатить навык Мии к прежней версии",
   },
   manage_agent_schedule: {
@@ -258,7 +260,10 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         ...(typeof input.version === "number" ? [`Вернуться к версии: ${input.version}`] : []),
         ...line("Описание", "description"),
         ...line("Что изменилось", "changeNote"),
+        ...line("Пробный запрос", "trialRequest"),
         ...line("Пробный прогон", "trialSummary"),
+        ...(Array.isArray(input.trials) ? [`Прогнано примеров: ${input.trials.length}`] : []),
+        ...line("Группа", "group"),
         ...(typeof input.markdown === "string"
           ? [`Текст навыка: ${safe(input.markdown.split("\n").slice(0, 6).join(" ").slice(0, 300))}${input.markdown.length > 300 ? "…" : ""}`]
           : []),

@@ -154,7 +154,9 @@ describe("Telegram interface localization", () => {
           files: { "references/flux-card.md": "…" },
           markdown: "## Когда применять\nКогда просят открытку.\n## Шаги\n1. `generate_image`",
           name: "birthday-card",
+          trialRequest: "Сделай открытку Жене",
           trialSummary: "Сделала открытку для Жени",
+          trials: [{ exampleId: "e1", summary: "Прошло" }, { exampleId: "e2", summary: "Прошло" }],
         },
         kind: "tool-call" as const,
         toolName: "manage_skill",
@@ -169,7 +171,9 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Подтверждение: опубликовать навык Мии.");
     expect(request.prompt).toContain("Навык: birthday-card");
     expect(request.prompt).toContain("Описание: Открытка к празднику через Flux");
+    expect(request.prompt).toContain("Пробный запрос: Сделай открытку Жене");
     expect(request.prompt).toContain("Пробный прогон: Сделала открытку для Жени");
+    expect(request.prompt).toContain("Прогнано примеров: 2");
     expect(request.prompt).toContain("Файлы: references/flux-card.md");
     expect(request.prompt).toContain("Текст навыка: ## Когда применять");
   });
