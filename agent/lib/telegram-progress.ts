@@ -9,6 +9,7 @@
  * policy never receives.
  */
 import { AppError } from "./app-error.js";
+import { extractMemoryUsedDirective } from "./memory-used-directive.js";
 import { stripTelegramAsideDirectives } from "./telegram-authored-split.js";
 import {
   isTelegramMessageReactionEmoji,
@@ -22,7 +23,7 @@ const TELEGRAM_REACTION_DIRECTIVE_FRAGMENT = "telegram-reaction";
 
 export type CompletedTelegramOutput =
   | { emoji: TelegramMessageReactionEmoji; kind: "reaction" }
-  | { kind: "message"; message: string }
+  | { kind: "message"; memoryUsedRefs: string[]; message: string }
   | { kind: "progress"; message: string };
 
 export function completedTelegramOutput(data: {
@@ -30,8 +31,9 @@ export function completedTelegramOutput(data: {
   message?: string | null;
 }): CompletedTelegramOutput | null {
   // Only completed visible assistant text should become a durable Telegram message.
-  const message =
-    data.message === undefined || data.message === null ? "" : data.message.trim();
+  const raw = data.message === undefined || data.message === null ? "" : data.message.trim();
+  // The memory-used directive is bookkeeping for the final answer; it never reaches Telegram.
+  const { memoryRefs: memoryUsedRefs, message } = extractMemoryUsedDirective(raw);
   if (!message) return null;
 
   // Text authored before a tool call is what a person reads while a long task runs.
@@ -55,5 +57,5 @@ export function completedTelegramOutput(data: {
   }
   // An answer made of transport directives alone has no visible content to deliver.
   if (!stripTelegramAsideDirectives(message)) return null;
-  return { kind: "message", message };
+  return { kind: "message", memoryUsedRefs, message };
 }
