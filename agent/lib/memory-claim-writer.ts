@@ -257,9 +257,19 @@ export async function createMemoryClaim(
   const gateNeighbours = isSemanticMemoryKind(input.kind) && input.attribute === undefined &&
     input.distinct !== true;
   let contentEmbedding: number[] | null = null;
+  if (gateNeighbours) {
+    try {
+      contentEmbedding = await embedMemoryQuery(input.content);
+    } catch (error) {
+      // The gate is advisory: an unavailable embedder must not block a memory write.
+      console.warn(JSON.stringify({
+        code: "AGENT_MEMORY_NEAR_DUPLICATE_SKIPPED",
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
   try {
     titleEmbedding = await embedMemoryThreadTitle(input.thread);
-    if (gateNeighbours) contentEmbedding = await embedMemoryQuery(input.content);
   } catch (error) {
     // An explicit failed call may retry; a crash instead leaves a bounded lease for safe takeover.
     if (reservation) await releaseReservationAfterEmbeddingFailure(auth, reservation);
