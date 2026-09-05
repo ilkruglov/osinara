@@ -9,7 +9,10 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 
-import type { BehaviorPreferenceAuthorization } from "./behavior-preference-context.js";
+import type {
+  BehaviorPreferenceAuthorization,
+  BehaviorPreferenceBotReadAuthorization,
+} from "./behavior-preference-context.js";
 import { behaviorPreferenceRepository } from "./behavior-preference-repository.js";
 import { closeDatabase, database } from "./database.js";
 
@@ -123,6 +126,37 @@ async function source(
   };
 }
 
+async function botSource(
+  conversationId: string,
+  telegramBotId: string,
+): Promise<BehaviorPreferenceBotReadAuthorization> {
+  const conversation = await database().query<{
+    sequence_id: string;
+    telegram_group_id: string | null;
+  }>(
+    `UPDATE application_conversations SET next_timeline_sequence = next_timeline_sequence + 1
+     WHERE id = $1 RETURNING next_timeline_sequence::text AS sequence_id, telegram_group_id`,
+    [conversationId],
+  );
+  const current = conversation.rows[0]!;
+  const entry = await database().query<{ id: string }>(
+    `INSERT INTO telegram_group_messages
+       (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+     VALUES ($1, $2, $3, $3, 'telegram_bot', $4, $5, 'Other bot', true, 'text',
+             'Привет от другого бота', now()) RETURNING id`,
+    [conversationId, current.telegram_group_id, current.sequence_id,
+      `telegram-bot:${telegramBotId}`, telegramBotId],
+  );
+  return {
+    conversationId,
+    kind: "bot",
+    sourceSequence: current.sequence_id,
+    telegramBotId,
+    timelineEntryId: entry.rows[0]!.id,
+  };
+}
+
 describeWithDatabase("behaviorPreferenceRepository", () => {
   afterAll(closeDatabase);
 
@@ -195,6 +229,29 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [fixture.externalGroupId]);
     await expect(behaviorPreferenceRepository.get(external)).rejects.toThrowError(
+      /AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u,
+    );
+  });
+
+  it("lets a turn started by another bot read the external chat prompt without writing it", async () => {
+    const fixture = await createFixture("bot-reader");
+    const author = await source(fixture.externalConversationId, fixture.externalTelegramUserId);
+    await behaviorPreferenceRepository.mutate(author, {
+      action: "replace",
+      content: "Только обычный текст, без rich-разметки.",
+      expectedRevision: 0,
+    });
+
+    const bot = await botSource(fixture.externalConversationId, "7000000001");
+    await expect(behaviorPreferenceRepository.get(bot)).resolves.toMatchObject({
+      content: "Только обычный текст, без rich-разметки.",
+      revision: 1,
+    });
+    // The bot row is bound to its exact message: a user identity or another chat is refused.
+    await expect(behaviorPreferenceRepository.get({ ...bot, telegramBotId: "7000000002" }))
+      .rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+    const familyBot = await botSource(fixture.familyConversationId, "7000000001");
+    await expect(behaviorPreferenceRepository.get(familyBot)).rejects.toThrowError(
       /AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u,
     );
   });

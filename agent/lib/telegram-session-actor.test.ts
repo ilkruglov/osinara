@@ -41,6 +41,35 @@ describe("resolveTelegramSessionActor", () => {
     }))).toEqual({ id: "-1001783384254", kind: "telegram_channel" });
   });
 
+  it("resolves another bot as an exact service actor", () => {
+    expect(resolveTelegramSessionActor(auth({
+      attributes: {
+        telegramActorId: "7000000001",
+        telegramActorKind: "telegram_bot",
+      },
+      authenticator: "telegram",
+      principalId: "telegram-bot:7000000001",
+      principalType: "service",
+    }))).toEqual({ id: "7000000001", kind: "telegram_bot" });
+  });
+
+  it.each([
+    { principalId: "telegram-bot:7000000001", principalType: "user", telegramUserId: undefined },
+    { principalId: "telegram-bot:7000000001", principalType: "service", telegramUserId: "7000000001" },
+    { principalId: "user-1", principalType: "service", telegramUserId: undefined },
+  ])("rejects a bot with conflicting principal shape: %o", ({ principalId, principalType, telegramUserId }) => {
+    expect(resolveTelegramSessionActor(auth({
+      attributes: {
+        telegramActorId: "7000000001",
+        telegramActorKind: "telegram_bot",
+        ...(telegramUserId === undefined ? {} : { telegramUserId }),
+      },
+      authenticator: "telegram",
+      principalId,
+      principalType,
+    }))).toBeNull();
+  });
+
   it("invalidates a session that has only the former Telegram user attribute", () => {
     expect(resolveTelegramSessionActor(auth({
       attributes: { telegramUserId: "101" },

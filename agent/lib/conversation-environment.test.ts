@@ -54,6 +54,23 @@ describe("resolveConversationEnvironment", () => {
     }))).toBe("external");
   });
 
+  it("selects the external profile for a turn started by another bot", () => {
+    const current: SessionAuthContext = {
+      attributes: {
+        groupType: "external",
+        memoryScopes: ["group"],
+        role: "external",
+        telegramActorId: "7000000001",
+        telegramActorKind: "telegram_bot",
+        telegramChatType: "supergroup",
+      },
+      authenticator: "telegram",
+      principalId: "telegram-bot:7000000001",
+      principalType: "service",
+    };
+    expect(resolveConversationEnvironment({ current, initiator: null })).toBe("external");
+  });
+
   it("rejects contradictory chat type, group type, and memory scopes", () => {
     expect(() => resolveConversationEnvironment(auth({
       groupType: "family_private",

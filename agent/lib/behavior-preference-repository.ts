@@ -17,6 +17,7 @@ import type { PoolClient } from "pg";
 import { AppError } from "./app-error.js";
 import type {
   BehaviorPreferenceAuthorization,
+  BehaviorPreferenceBotReadAuthorization,
   BehaviorPreferenceReadAuthorization,
   BehaviorPreferenceScheduledReadAuthorization,
 } from "./behavior-preference-context.js";
@@ -165,6 +166,37 @@ async function requireLiveBoundary(
   return { actorUserId: row.actor_user_id, familyId: row.family_id };
 }
 
+// Another bot proves only that its verified message is in a registered external group;
+// no membership exists for it, so the boundary stays read-only.
+async function requireBotBoundary(
+  client: PoolClient,
+  auth: BehaviorPreferenceBotReadAuthorization,
+): Promise<string> {
+  const source = await client.query(
+    `SELECT 1
+     FROM application_conversations AS conversation
+     JOIN telegram_group_messages AS source
+       ON source.id = $2
+      AND source.conversation_id = conversation.id
+      AND source.sequence_id = $3::bigint
+      AND source.actor_kind = 'telegram_bot'
+      AND source.telegram_user_id = $4
+     JOIN telegram_groups AS chat
+       ON chat.id = conversation.telegram_group_id
+      AND chat.family_id = conversation.family_id
+      AND chat.type = 'external'
+     WHERE conversation.id = $1 AND conversation.scope = 'group'`,
+    [auth.conversationId, auth.timelineEntryId, auth.sourceSequence, auth.telegramBotId],
+  );
+  if (source.rowCount !== 1) {
+    throw new AppError(
+      "AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED",
+      "Не удалось подтвердить доступ к оперативным инструкциям этого чата",
+    );
+  }
+  return auth.conversationId;
+}
+
 function operationHash(input: BehaviorPreferenceMutation): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
@@ -197,9 +229,11 @@ export const behaviorPreferenceRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      const conversationId = "kind" in auth
-        ? await requireScheduledBoundary(client, auth)
-        : (await requireLiveBoundary(client, auth), auth.conversationId);
+      const conversationId = !("kind" in auth)
+        ? (await requireLiveBoundary(client, auth), auth.conversationId)
+        : auth.kind === "bot"
+          ? await requireBotBoundary(client, auth)
+          : await requireScheduledBoundary(client, auth);
       const row = await currentPrompt(client, conversationId);
       await client.query("COMMIT");
       return project(row);

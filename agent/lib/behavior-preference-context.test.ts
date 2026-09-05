@@ -69,6 +69,41 @@ describe("requireBehaviorPreferenceAuthorization", () => {
     }
   });
 
+  it("projects a turn started by another bot as read-only authorization", () => {
+    const bot = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              telegramActorId: "7000000001",
+              telegramActorKind: "telegram_bot",
+              telegramConversationId: "conversation-1",
+              telegramTimelineEntryId: "entry-1",
+              telegramTimelineSequence: "42",
+            },
+            authenticator: "telegram",
+            principalId: "telegram-bot:7000000001",
+            principalType: "service",
+          },
+          initiator: undefined,
+        },
+        id: "session-1",
+        turn: { id: "turn-1" },
+      },
+    } as unknown as ToolContext;
+
+    expect(requireBehaviorPreferenceReadAuthorization(bot)).toEqual({
+      conversationId: "conversation-1",
+      kind: "bot",
+      sourceSequence: "42",
+      telegramBotId: "7000000001",
+      timelineEntryId: "entry-1",
+    });
+    expect(() => requireBehaviorPreferenceAuthorization(bot)).toThrowError(
+      /AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID/u,
+    );
+  });
+
   it("projects a scheduled chat as read-only authorization without a timeline source", () => {
     const scheduledAttributes = {
       applicationSessionId: "application-session-1",

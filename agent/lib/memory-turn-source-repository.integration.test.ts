@@ -25,6 +25,59 @@ describeWithDatabase("turn-bound memory source repository", () => {
 
   afterAll(closeDatabase);
 
+  it("binds a turn started by another bot to its exact bot message", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const botMessage = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
+         (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+          telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+       VALUES ($1, $2, 903, 2, 'telegram_bot', 'telegram-bot:7000000001', '7000000001',
+               'Другой бот', true, 'text', 'Привет, Мия', now())
+       RETURNING id`,
+      [fixture.conversationId, fixture.groupId],
+    );
+    const appSession = await database().query<{ id: string }>(
+      `INSERT INTO conversation_sessions
+         (thread_id, generation, family_id, group_id, scope, kind, conversation_key,
+          continuation_token, started_at, last_activity_at)
+       VALUES (gen_random_uuid(), 0, $1, $2, 'family', 'canonical', 'bot-turn-source',
+               'bot-turn-source:0', now(), now()) RETURNING id`,
+      [fixture.familyId, fixture.groupId],
+    );
+    const binding = {
+      applicationSessionId: appSession.rows[0]!.id,
+      conversationId: fixture.conversationId,
+      currentTimelineEntryId: botMessage.rows[0]!.id,
+      eveSessionId: "eve-bot-source-session",
+      eveTurnId: "eve-bot-source-turn",
+      invokingActorId: "7000000001",
+      invokingActorKind: "telegram_bot" as const,
+      visibleTimelineEntryIds: [fixture.timelineEntryId, botMessage.rows[0]!.id],
+    };
+
+    // The bot id must match the message author; a user identity cannot claim a bot message.
+    await expect(memoryTurnSourceRepository.bind({ ...binding, invokingActorId: "7000000002" }))
+      .rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
+    await expect(memoryTurnSourceRepository.bind({
+      ...binding,
+      invokingActorId: "agent-memory-author",
+      invokingActorKind: "telegram_user",
+    })).rejects.toThrowError(/AGENT_MEMORY_TURN_SOURCE_SET_INVALID/u);
+
+    await memoryTurnSourceRepository.bind(binding);
+    await expect(memoryTurnSourceRepository.resolve({
+      eveSessionId: binding.eveSessionId,
+      eveTurnId: binding.eveTurnId,
+      sourceSequence: null,
+    })).resolves.toMatchObject({
+      conversationId: fixture.conversationId,
+      invokingActorId: "7000000001",
+      invokingActorKind: "telegram_bot",
+      isCurrent: true,
+      timelineEntryId: botMessage.rows[0]!.id,
+    });
+  });
+
   it("binds and resolves only the immutable visible source set", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const secondUser = await database().query<{ id: string }>(

@@ -156,8 +156,14 @@ export const memoryTurnSourceRepository = {
         [input.conversationId, entryIds],
       );
       const current = entries.rows.find((entry) => entry.id === input.currentTimelineEntryId);
-      const currentActorId = input.invokingActorKind === "telegram_user" ? current?.telegram_user_id : current?.telegram_sender_chat_id;
-      const expectedActorKind = input.invokingActorKind === "telegram_user" ? "user" : "telegram_channel";
+      // A user and another bot are both identified by telegram_user_id; only a channel post
+      // carries its identity in sender_chat.
+      const currentActorId = input.invokingActorKind === "telegram_channel"
+        ? current?.telegram_sender_chat_id
+        : current?.telegram_user_id;
+      const expectedActorKind = input.invokingActorKind === "telegram_user"
+        ? "user"
+        : input.invokingActorKind;
       if (entries.rows.length !== entryIds.length || current?.actor_kind !== expectedActorKind || currentActorId !== input.invokingActorId) {
         throw new AppError("AGENT_MEMORY_TURN_SOURCE_SET_INVALID", "Сообщения текущего хода не принадлежат проверенному разговору или автору");
       }

@@ -3,7 +3,8 @@
  *
  * Exports:
  * - `BehaviorPreferenceAuthorization`: exact conversation, actor, source, and sequence.
- * - `BehaviorPreferenceReadAuthorization`: interactive source or server-authored scheduled target.
+ * - `BehaviorPreferenceBotReadAuthorization`: read-only source for a turn started by another bot.
+ * - `BehaviorPreferenceReadAuthorization`: interactive, bot, or server-authored scheduled target.
  * - `requireBehaviorPreferenceAuthorization`: projects trusted Telegram auth or fails closed.
  * - `requireBehaviorPreferenceReadAuthorization`: also admits read-only scheduled delivery auth.
  */
@@ -13,6 +14,7 @@ import type { DynamicResolveContext } from "eve/instructions";
 import { scheduledDeliveryMetadata } from "./agent-schedules/scheduled-session.js";
 import { AppError } from "./app-error.js";
 import { resolveSessionCaller } from "./session-auth.js";
+import { resolveTelegramSessionActor } from "./telegram-session-actor.js";
 
 export interface BehaviorPreferenceAuthorization {
   conversationId: string;
@@ -30,8 +32,17 @@ export interface BehaviorPreferenceScheduledReadAuthorization {
   telegramChatId: string;
 }
 
+export interface BehaviorPreferenceBotReadAuthorization {
+  conversationId: string;
+  kind: "bot";
+  sourceSequence: string;
+  telegramBotId: string;
+  timelineEntryId: string;
+}
+
 export type BehaviorPreferenceReadAuthorization =
   | BehaviorPreferenceAuthorization
+  | BehaviorPreferenceBotReadAuthorization
   | BehaviorPreferenceScheduledReadAuthorization;
 
 type PreferenceContext =
@@ -104,5 +115,29 @@ export function requireBehaviorPreferenceReadAuthorization(
       telegramChatId: scheduled.telegramChatId,
     };
   }
+  // A turn started by another bot reads the chat's instructions but can never rewrite them.
+  const bot = botReadAuthorization(ctx);
+  if (bot) return bot;
   return requireBehaviorPreferenceAuthorization(ctx);
+}
+
+function botReadAuthorization(ctx: PreferenceContext): BehaviorPreferenceBotReadAuthorization | null {
+  const caller = resolveSessionCaller(ctx);
+  const attributes = caller?.attributes;
+  if (attributes?.telegramActorKind !== "telegram_bot") return null;
+  const actor = resolveTelegramSessionActor(ctx.session.auth);
+  const conversationId = attributes.telegramConversationId;
+  const sourceSequence = attributes.telegramTimelineSequence;
+  const timelineEntryId = attributes.telegramTimelineEntryId;
+  if (
+    actor === null ||
+    caller?.authenticator !== "telegram" ||
+    typeof conversationId !== "string" ||
+    typeof sourceSequence !== "string" ||
+    !/^\d+$/u.test(sourceSequence) ||
+    typeof timelineEntryId !== "string"
+  ) {
+    throw contextError();
+  }
+  return { conversationId, kind: "bot", sourceSequence, telegramBotId: actor.id, timelineEntryId };
 }
