@@ -44,6 +44,7 @@ function result(
       simpleLexicalRank: 0.1,
     },
     memory,
+    retention: 1,
     score,
   };
 }
