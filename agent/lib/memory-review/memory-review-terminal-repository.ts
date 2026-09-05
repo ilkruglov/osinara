@@ -5,6 +5,7 @@
  * - `memoryReviewTerminalRepository`: replay-safe completion/failure and pre-Eve source release.
  * - `resolveAbandonedReviewBatch`: the one terminal decision for a turn that never reports.
  * - `terminalizeAbandonedReviewTurns`: last-resort time bound for a turn that went silent.
+ * - `terminalizeBlockedReviewHeads`: the same bound for a failed or ambiguous head at the cursor.
  */
 import type { PoolClient } from "pg";
 
@@ -25,6 +26,7 @@ const BATCH_RESOLVED = "AGENT_MEMORY_REVIEW_BATCH_RESOLVED";
 const PASS_SKIPPED = "AGENT_MEMORY_REVIEW_PASS_SKIPPED";
 const TURN_CANCELLED = "AGENT_MEMORY_REVIEW_TURN_CANCELLED";
 const TURN_ABANDONED = "AGENT_MEMORY_REVIEW_TURN_ABANDONED";
+const HEAD_UNBLOCKED = "AGENT_MEMORY_REVIEW_HEAD_UNBLOCKED";
 
 async function advanceCompletedChain(client: PoolClient, laneId: string): Promise<void> {
   const lane = await client.query<{ processed_through_sequence: string }>(
@@ -256,6 +258,68 @@ export async function terminalizeAbandonedReviewTurns(
       fromSequence: batch.from_sequence,
       laneId: batch.lane_id,
       outcome,
+      throughSequence: batch.through_sequence,
+    }));
+  }
+}
+
+/**
+ * A `failed` or `ambiguous` batch at the lane cursor still blocks the lane: `laneBlocked` refuses
+ * to reuse its place and `coveredThrough` stops at it. Session failures and handoff timeouts
+ * still end that way, so after the same time bound the head is resolved by provenance like an
+ * abandoned turn: counted when it wrote memory, released when nothing stands behind it, skipped
+ * otherwise. A missing source binding stays manual: that is a data defect, not lost traffic.
+ */
+export async function terminalizeBlockedReviewHeads(
+  client: PoolClient,
+  now: Date,
+): Promise<void> {
+  const blocked = await client.query<{
+    application_session_id: string | null;
+    diagnostic_code: string | null;
+    eve_session_id: string | null;
+    eve_turn_id: string | null;
+    from_sequence: string;
+    id: string;
+    lane_id: string;
+    status: string;
+    through_sequence: string;
+  }>(
+    `SELECT batch.id, batch.lane_id, batch.application_session_id, batch.eve_session_id,
+            batch.eve_turn_id, batch.status::text, batch.diagnostic_code,
+            batch.from_sequence::text, batch.through_sequence::text
+       FROM memory_review_batches AS batch
+       JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
+      WHERE batch.status IN ('failed', 'ambiguous')
+        AND batch.predecessor_sequence = lane.processed_through_sequence
+        AND batch.diagnostic_code IS DISTINCT FROM $4
+        AND batch.completed_at <= $1::timestamptz - $2::double precision * interval '1 millisecond'
+      ORDER BY batch.completed_at, batch.id
+      FOR UPDATE OF batch SKIP LOCKED
+      LIMIT $3`,
+    [now, MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS,
+      MEMORY_REVIEW_ABANDONED_TURN_BATCH_SIZE, SOURCE_BINDING_MISSING],
+  );
+  for (const batch of blocked.rows) {
+    const outcome = await resolveAbandonedReviewBatch(client, {
+      applicationSessionId: batch.application_session_id,
+      batchId: batch.id,
+      diagnosticCode: HEAD_UNBLOCKED,
+      eveSessionId: batch.eve_session_id,
+      eveTurnId: batch.eve_turn_id,
+      laneId: batch.lane_id,
+      notifyOwner: true,
+      now,
+    });
+    console.error(JSON.stringify({
+      batchId: batch.id,
+      code: BATCH_RESOLVED,
+      diagnosticCode: HEAD_UNBLOCKED,
+      fromSequence: batch.from_sequence,
+      laneId: batch.lane_id,
+      outcome,
+      previousDiagnosticCode: batch.diagnostic_code,
+      previousStatus: batch.status,
       throughSequence: batch.through_sequence,
     }));
   }

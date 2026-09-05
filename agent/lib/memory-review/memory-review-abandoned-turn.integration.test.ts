@@ -124,6 +124,95 @@ describeWithDatabase("abandoned memory review turns", () => {
     expect(repeated?.sourceCount).toBe(9);
   });
 
+  it("resolves an ambiguous head at the cursor by provenance after the time bound", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-ambiguous-head");
+    const source = await insertReviewTail(fixture, 2);
+    const batch = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session,
+      groupId: fixture.groupId,
+      timelineEntryId: source.id,
+    });
+    await memoryReviewRepository.bindEveTurn({
+      applicationSessionId: session,
+      batchId: batch!.batchId,
+      eveSessionId: "eve-ambiguous",
+      eveTurnId: "turn-ambiguous",
+    });
+    // A session failure or a handoff timeout still ends this way; the lane cursor cannot pass it.
+    await database().query(
+      `UPDATE memory_review_batches
+          SET status = 'ambiguous', diagnostic_code = 'AGENT_MEMORY_REVIEW_SESSION_FAILED_AMBIGUOUS',
+              completed_at = '2026-08-12T09:00:00.000Z', updated_at = '2026-08-12T09:00:00.000Z'
+        WHERE id = $1`,
+      [batch!.batchId],
+    );
+    await expect(memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: source.id,
+    })).resolves.toBeNull();
+
+    // Ten minutes later the head is still fresh and still blocks the lane.
+    await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T09:10:00.000Z"),
+    });
+    await expect(database().query(
+      "SELECT status::text FROM memory_review_batches WHERE id = $1", [batch!.batchId],
+    )).resolves.toMatchObject({ rows: [{ status: "ambiguous" }] });
+
+    // Past the bound it wrote nothing and nothing stands behind it: released to the tail.
+    await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T11:00:00.000Z"),
+    });
+    await expect(database().query(
+      "SELECT count(*)::integer AS batches FROM memory_review_batches WHERE id = $1", [batch!.batchId],
+    )).resolves.toMatchObject({ rows: [{ batches: 0 }] });
+    const repeated = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: source.id,
+    });
+    expect(repeated?.sourceCount).toBe(9);
+  });
+
+  it("skips a failed head at the cursor that already has a completed successor", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-failed-head");
+    const head = await insertReviewTail(fixture, 2);
+    const failed = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: head.id,
+    });
+    await memoryReviewRepository.bindEveTurn({
+      applicationSessionId: session, batchId: failed!.batchId, eveSessionId: "eve-failed-head", eveTurnId: "turn-failed-head",
+    });
+    const successorSource = await insertReviewTail(fixture, 10);
+    const successor = await memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: session, groupId: fixture.groupId, timelineEntryId: successorSource.id,
+    });
+    await memoryReviewRepository.bindEveTurn({
+      applicationSessionId: session, batchId: successor!.batchId, eveSessionId: "eve-successor", eveTurnId: "turn-successor",
+    });
+    await database().query(
+      `UPDATE memory_review_batches
+          SET status = CASE WHEN id = $1 THEN 'failed'::memory_review_batch_status ELSE 'completed'::memory_review_batch_status END,
+              diagnostic_code = CASE WHEN id = $1 THEN 'AGENT_MEMORY_REVIEW_MODEL_FAILED' ELSE NULL END,
+              completed_at = '2026-08-12T09:00:00.000Z', updated_at = '2026-08-12T09:00:00.000Z'
+        WHERE id IN ($1, $2)`,
+      [failed!.batchId, successor!.batchId],
+    );
+
+    await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-08-12T11:00:00.000Z"),
+    });
+
+    await expect(database().query(
+      `SELECT batch.status::text, lane.processed_through_sequence::text AS cursor
+         FROM memory_review_batches AS batch JOIN memory_review_lanes AS lane ON lane.id = batch.lane_id
+        WHERE batch.id = $1`,
+      [failed!.batchId],
+    )).resolves.toMatchObject({ rows: [{ cursor: "17", status: "skipped" }] });
+    await expect(database().query(
+      "SELECT batch_diagnostic_code FROM memory_review_owner_alerts WHERE batch_id = $1", [failed!.batchId],
+    )).resolves.toMatchObject({ rows: [{ batch_diagnostic_code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED" }] });
+  });
+
   it("keeps a running batch whose turn is still parked on a human answer", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const session = await insertReviewSession(fixture.familyId, fixture.groupId, "review-parked");
