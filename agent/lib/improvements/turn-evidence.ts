@@ -2,7 +2,8 @@
  * Facts about one Eve turn that may justify an improvement item.
  *
  * Exports:
- * - `TurnEvidence`: tool names, failed tool results, step count, and the turn failure, if any.
+ * - `TurnEvidence`: tool names, loaded skills, failed tool results, step count, and the turn
+ *   failure, if any.
  * - `createTurnEvidenceCollector`: bounded in-memory ledger keyed by session and turn.
  * - `shouldReflectOnTurn`: deterministic trigger (tool error, turn failure, or a heavy turn).
  * - `improvementFingerprint`: stable identity of one recurring problem.
@@ -26,15 +27,18 @@ export interface TurnToolFailure {
 
 export interface TurnEvidence {
   failedTools: TurnToolFailure[];
+  /** Names passed to `load_skill` this turn, in order; static and authored skills alike. */
+  loadedSkills: string[];
   stepCount: number;
   toolNames: string[];
   turnFailure: { code: string; message: string } | null;
 }
 
-export type ImprovementCategory = "memory" | "other" | "prompt" | "tool_error" | "workflow";
+/** `skill` is written by the application only (a loaded authored skill in a failed or heavy turn). */
+export type ImprovementCategory = "memory" | "other" | "prompt" | "skill" | "tool_error" | "workflow";
 
 function emptyEvidence(): TurnEvidence {
-  return { failedTools: [], stepCount: 0, toolNames: [], turnFailure: null };
+  return { failedTools: [], loadedSkills: [], stepCount: 0, toolNames: [], turnFailure: null };
 }
 
 function clip(text: string): string {
@@ -72,13 +76,18 @@ export function createTurnEvidenceCollector() {
 
   return {
     actionsRequested(input: {
-      actions: readonly { callId?: string; kind: string; toolName?: string }[];
+      actions: readonly { callId?: string; input?: unknown; kind: string; toolName?: string }[];
       sessionId: string;
       turnId: string;
     }): void {
       const evidence = evidenceFor(key(input.sessionId, input.turnId));
       evidence.stepCount += 1;
       for (const action of input.actions) {
+        if (action.kind === "load-skill") {
+          const skill = (action.input as { skill?: unknown } | undefined)?.skill;
+          if (typeof skill === "string" && skill.length > 0) evidence.loadedSkills.push(skill);
+          continue;
+        }
         if (action.kind !== "tool-call" || typeof action.toolName !== "string") continue;
         evidence.toolNames.push(action.toolName);
         if (typeof action.callId === "string") {

@@ -2,18 +2,31 @@
  * Improvement backlog signals.
  *
  * Export:
- * - Eve hook that turns a failed or heavy turn into reviewed backlog items for the owner.
+ * - Eve hook that turns a failed or heavy turn into reviewed backlog items for the owner, marks
+ *   loaded authored skills failed and leaves a skill hint when a workflow problem recurs.
  *
  * Key construct:
  * - Failures are logged, never thrown: a bookkeeping hook must not fail a Telegram turn.
  */
 import { defineHook } from "eve/hooks";
 
+import { authoredSkillRepository } from "../lib/authored-skills/authored-skill-repository.js";
+import { skillHintRepository } from "../lib/authored-skills/skill-hint-repository.js";
 import { improvementBacklogRepository } from "../lib/improvements/improvement-backlog-repository.js";
 import { createImprovementSignalHandlers } from "../lib/improvements/improvement-signals.js";
 
 const handlers = createImprovementSignalHandlers({
+  // An external group has no owner conversation here; its skills arrive with the group grants.
+  conversationId: (identity) => identity.chatKind === "external" || identity.userId === null
+    ? Promise.resolve(null)
+    : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, userId: identity.userId }),
+  isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),
+  recordSkillOutcome: (input) => authoredSkillRepository.recordOutcome(
+    { familyId: input.familyId },
+    { conversationId: input.conversationId, name: input.name, note: input.note, outcome: "failed" },
+  ),
+  saveHint: (input) => skillHintRepository.save(input),
 });
 
 function report(stage: string, error: unknown): void {

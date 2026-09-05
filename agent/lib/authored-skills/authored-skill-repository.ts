@@ -4,7 +4,8 @@
  * Exports:
  * - `AuthoredSkillSummary`, `AuthoredSkillContent`, `AuthoredSkillPackage`: read models.
  * - `authoredSkillRepository`: publish / rollback / retire (owner, replay-safe), list / read,
- *   `activePackages` for the Eve resolver, `recordUsage` / `recordOutcome` for the feedback loop.
+ *   `activePackages` for the Eve resolver, `recordUsage` / `recordOutcome` / `isAuthoredSkill` for
+ *   the feedback loop.
  *
  * Key constructs:
  * - Every mutation re-reads the owner role from `family_memberships` inside the transaction; the
@@ -412,8 +413,17 @@ export const authoredSkillRepository = {
     return (result.rowCount ?? 0) > 0;
   },
 
+  /** Whether the family has an active authored skill with this name (static skills are not ours). */
+  async isAuthoredSkill(familyId: string, name: string): Promise<boolean> {
+    const result = await database().query(
+      "SELECT 1 FROM authored_skills WHERE family_id = $1 AND name = $2 AND status = 'active'",
+      [familyId, name],
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
   /** Sets the outcome of the latest usage of the skill, in this conversation when one is known. */
-  async recordOutcome(caller: FamilyCaller, input: {
+  async recordOutcome(caller: Pick<FamilyCaller, "familyId">, input: {
     conversationId: string | null;
     name: string;
     note: string | null;

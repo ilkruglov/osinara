@@ -2,11 +2,16 @@
  * Eve event handling behind the improvement backlog.
  *
  * Export:
- * - `createImprovementSignalHandlers`: collects turn evidence, decides on the trigger, runs the
- *   reflection and records the resulting items for the family.
+ * - `createImprovementSignalHandlers`: collects turn evidence, decides on the trigger, closes the
+ *   loop for loaded authored skills, runs the reflection and records the items for the family.
  *
- * Silent memory review, scheduled runs and subagents never reflect; an external group does,
- * because most tool failures happen there, but its evidence carries no message text either.
+ * Key constructs:
+ * - Silent memory review, scheduled runs and subagents never reflect; an external group does,
+ *   because most tool failures happen there, but its evidence carries no message text either.
+ * - An authored skill loaded in a failed or heavy turn gets a `failed` outcome and a `skill` item
+ *   from the application alone: no model call, and outside the reflection budget.
+ * - A `workflow` item recurring the second time in a trusted chat leaves a backlog hint for the
+ *   next turn, so the model can offer a skill once. Later recurrences stay silent.
  */
 import type { SessionAuth } from "eve/context";
 
@@ -14,19 +19,52 @@ import { isMemoryReviewSession } from "../memory-review/memory-review-session.js
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import type { ImprovementItemInput } from "./improvement-backlog-repository.js";
 import { createReflectionRateLimiter, type ReflectionGenerate, reflectOnTurn } from "./reflection.js";
-import { createTurnEvidenceCollector, shouldReflectOnTurn, type TurnEvidence } from "./turn-evidence.js";
+import {
+  createTurnEvidenceCollector,
+  improvementFingerprint,
+  shouldReflectOnTurn,
+  type TurnEvidence,
+} from "./turn-evidence.js";
+
+type ChatKind = "external" | "family" | "private";
+
+/** Recurrence at which a workflow problem is worth one skill offer. */
+export const BACKLOG_HINT_RECURRENCE = 2;
 
 interface SignalContext {
   channel: { kind?: string };
   session: { auth: SessionAuth; id: string };
 }
 
-interface ImprovementSignalDependencies {
-  generate?: ReflectionGenerate;
-  record(input: ImprovementItemInput): Promise<{ recurred: boolean }>;
+export interface ImprovementIdentity {
+  chatKind: ChatKind;
+  familyId: string;
+  userId: string | null;
 }
 
-function reflectionIdentity(ctx: SignalContext): { chatKind: "external" | "family" | "private"; familyId: string } | null {
+interface ImprovementSignalDependencies {
+  /** Application conversation of the chat, when the identity maps to one. */
+  conversationId(identity: ImprovementIdentity): Promise<string | null>;
+  generate?: ReflectionGenerate;
+  isAuthoredSkill(familyId: string, name: string): Promise<boolean>;
+  record(input: ImprovementItemInput): Promise<{ item: { recurrenceCount: number }; recurred: boolean }>;
+  recordSkillOutcome(input: {
+    conversationId: string | null;
+    familyId: string;
+    name: string;
+    note: string;
+  }): Promise<{ usageFound: boolean }>;
+  saveHint(input: {
+    conversationId: string;
+    eveSessionId: string;
+    eveTurnId: string;
+    familyId: string;
+    kind: "backlog";
+    summary: string;
+  }): Promise<void>;
+}
+
+function reflectionIdentity(ctx: SignalContext): ImprovementIdentity | null {
   if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx) || isScheduledSession(ctx)) return null;
   const attributes = ctx.session.auth.current?.attributes;
   if (ctx.session.auth.current?.authenticator !== "telegram" || !attributes) return null;
@@ -35,17 +73,79 @@ function reflectionIdentity(ctx: SignalContext): { chatKind: "external" | "famil
   const chatKind = attributes.telegramChatType === "private"
     ? "private"
     : attributes.groupType === "family_private" ? "family" : "external";
-  return { chatKind, familyId };
+  const principalId = ctx.session.auth.current?.principalId;
+  const userId = ctx.session.auth.current?.principalType === "user" && typeof principalId === "string"
+    ? principalId
+    : null;
+  return { chatKind, familyId, userId };
+}
+
+/** What went wrong in the turn, in tool and code terms; the heavy-turn case names the step count. */
+function failureNote(evidence: TurnEvidence): string {
+  const codes = [
+    ...evidence.failedTools.map((failure) => `${failure.toolName}: ${failure.code}`),
+    ...(evidence.turnFailure ? [`ход: ${evidence.turnFailure.code}`] : []),
+  ];
+  return codes.length > 0 ? codes.join("; ") : `${evidence.stepCount} шагов инструментов`;
+}
+
+function skillItemSummary(name: string, evidence: TurnEvidence): string {
+  const failure = evidence.failedTools[0];
+  if (failure) return `Навык ${name} не справился: ${failure.toolName} упал с ${failure.code}`;
+  if (evidence.turnFailure) return `Навык ${name} не справился: ход упал с ${evidence.turnFailure.code}`;
+  return `Навык ${name}: ход занял ${evidence.stepCount} шагов инструментов`;
 }
 
 export function createImprovementSignalHandlers(dependencies: ImprovementSignalDependencies) {
   const collector = createTurnEvidenceCollector();
   const limiter = createReflectionRateLimiter();
 
+  function turnEvidence(ctx: SignalContext, turnId: string, evidence: TurnEvidence): Record<string, unknown> {
+    return {
+      eveSessionId: ctx.session.id,
+      eveTurnId: turnId,
+      failedTools: evidence.failedTools,
+      loadedSkills: evidence.loadedSkills,
+      stepCount: evidence.stepCount,
+      toolNames: evidence.toolNames,
+      turnFailure: evidence.turnFailure,
+    };
+  }
+
+  async function closeSkillLoop(
+    ctx: SignalContext, turnId: string, identity: ImprovementIdentity, evidence: TurnEvidence,
+    conversationId: string | null,
+  ): Promise<void> {
+    for (const name of new Set(evidence.loadedSkills)) {
+      if (!await dependencies.isAuthoredSkill(identity.familyId, name)) continue;
+      const note = failureNote(evidence);
+      const outcome = await dependencies.recordSkillOutcome({ conversationId, familyId: identity.familyId, name, note });
+      const failure = evidence.failedTools[0];
+      const errorCode = failure?.code ?? evidence.turnFailure?.code ?? "HEAVY_TURN";
+      const summary = skillItemSummary(name, evidence);
+      const result = await dependencies.record({
+        category: "skill",
+        evidence: { ...turnEvidence(ctx, turnId, evidence), errorCode, skillName: name, toolName: failure?.toolName ?? null },
+        familyId: identity.familyId,
+        fingerprint: improvementFingerprint({ category: "skill", errorCode, summary, toolName: name }),
+        priority: "medium",
+        summary,
+      });
+      console.info(JSON.stringify({
+        code: "AGENT_IMPROVEMENT_SKILL_OUTCOME",
+        name,
+        recurrenceCount: result.item.recurrenceCount,
+        usageFound: outcome.usageFound,
+      }));
+    }
+  }
+
   async function finish(ctx: SignalContext, turnId: string, evidence: TurnEvidence | null): Promise<void> {
     if (!evidence || !shouldReflectOnTurn(evidence)) return;
     const identity = reflectionIdentity(ctx);
     if (!identity) return;
+    const conversationId = await dependencies.conversationId(identity);
+    await closeSkillLoop(ctx, turnId, identity, evidence, conversationId);
     if (!limiter.admit(identity.familyId)) {
       console.info(JSON.stringify({ code: "AGENT_IMPROVEMENT_SKIPPED", reason: "rate_limit", familyId: identity.familyId }));
       return;
@@ -62,16 +162,7 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
     for (const item of items) {
       const result = await dependencies.record({
         category: item.category,
-        evidence: {
-          errorCode: item.errorCode,
-          eveSessionId: ctx.session.id,
-          eveTurnId: turnId,
-          failedTools: evidence.failedTools,
-          stepCount: evidence.stepCount,
-          toolName: item.toolName,
-          toolNames: evidence.toolNames,
-          turnFailure: evidence.turnFailure,
-        },
+        evidence: { ...turnEvidence(ctx, turnId, evidence), errorCode: item.errorCode, toolName: item.toolName },
         familyId: identity.familyId,
         fingerprint: item.fingerprint,
         priority: item.priority,
@@ -83,11 +174,21 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
         fingerprint: item.fingerprint,
         recurred: result.recurred,
       }));
+      const hintWorthy = item.category === "workflow" &&
+        result.item.recurrenceCount === BACKLOG_HINT_RECURRENCE &&
+        identity.chatKind !== "external" &&
+        conversationId !== null;
+      if (!hintWorthy) continue;
+      await dependencies.saveHint({
+        conversationId, eveSessionId: ctx.session.id, eveTurnId: turnId, familyId: identity.familyId,
+        kind: "backlog", summary: item.summary,
+      });
+      console.info(JSON.stringify({ code: "AGENT_IMPROVEMENT_HINT_SAVED", fingerprint: item.fingerprint }));
     }
   }
 
   return {
-    actionsRequested(event: { data: { actions: readonly { callId?: string; kind: string; toolName?: string }[]; turnId: string } }, ctx: SignalContext): void {
+    actionsRequested(event: { data: { actions: readonly { callId?: string; input?: unknown; kind: string; toolName?: string }[]; turnId: string } }, ctx: SignalContext): void {
       collector.actionsRequested({ actions: event.data.actions, sessionId: ctx.session.id, turnId: event.data.turnId });
     },
     actionResult(event: { data: { error?: { code: string; message: string }; result: { callId?: string; kind: string; toolName?: string }; status: "completed" | "failed" | "rejected"; turnId: string } }, ctx: SignalContext): void {

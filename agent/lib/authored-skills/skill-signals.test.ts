@@ -86,7 +86,7 @@ describe("skill signals", () => {
 
     expect(dependencies.saveHint).toHaveBeenCalledWith({
       conversationId: "conversation-1", eveSessionId: "eve-1", eveTurnId: "turn_6",
-      familyId: "family-1", stepCount: 4, toolNames: ["web_search", "web_fetch", "bash", "send_workspace_file"],
+      familyId: "family-1", kind: "repeat", stepCount: 4, toolNames: ["web_search", "web_fetch", "bash", "send_workspace_file"],
     });
   });
 

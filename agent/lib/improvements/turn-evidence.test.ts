@@ -2,7 +2,8 @@
  * Turn evidence tests.
  *
  * Constructs covered:
- * - Tool names and step count accumulate per session and turn; failed results attach to the tool.
+ * - Tool names, loaded skills and step count accumulate per session and turn; failed results
+ *   attach to the tool.
  * - The trigger fires on a failed tool, a failed turn, or a heavy turn, never on a quiet one.
  * - The fingerprint is stable for the same tool and code and ignores summary wording then.
  */
@@ -18,7 +19,7 @@ describe("turn evidence collector", () => {
   it("collects tool calls, failures by call id, and the turn failure", () => {
     const collector = createTurnEvidenceCollector();
     collector.actionsRequested({
-      actions: [{ callId: "c1", kind: "tool-call", toolName: "generate_image" }, { kind: "load-skill" }],
+      actions: [{ callId: "c1", kind: "tool-call", toolName: "generate_image" }, { input: { skill: "birthday-card" }, kind: "load-skill" }],
       sessionId: "s", turnId: "t",
     });
     collector.actionsRequested({ actions: [{ callId: "c2", kind: "tool-call", toolName: "remember" }], sessionId: "s", turnId: "t" });
@@ -28,6 +29,7 @@ describe("turn evidence collector", () => {
 
     expect(collector.take("s", "t")).toEqual({
       failedTools: [{ code: "AGENT_IMAGE_PROVIDER_FAILED", message: "провайдер упал", toolName: "generate_image" }],
+      loadedSkills: ["birthday-card"],
       stepCount: 2,
       toolNames: ["generate_image", "remember"],
       turnFailure: { code: "MODEL_CALL_FAILED", message: "x" },
@@ -36,7 +38,7 @@ describe("turn evidence collector", () => {
   });
 
   it("triggers on a failure or a heavy turn only", () => {
-    const quiet = { failedTools: [], stepCount: 3, toolNames: ["remember"], turnFailure: null };
+    const quiet = { failedTools: [], loadedSkills: [], stepCount: 3, toolNames: ["remember"], turnFailure: null };
     expect(shouldReflectOnTurn(quiet)).toBe(false);
     expect(shouldReflectOnTurn({ ...quiet, failedTools: [{ code: "X", message: "", toolName: "bash" }] })).toBe(true);
     expect(shouldReflectOnTurn({ ...quiet, turnFailure: { code: "X", message: "" } })).toBe(true);

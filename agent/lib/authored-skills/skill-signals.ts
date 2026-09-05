@@ -46,6 +46,7 @@ interface SkillSignalDependencies {
     eveSessionId: string;
     eveTurnId: string;
     familyId: string;
+    kind: "repeat";
     stepCount: number;
     toolNames: readonly string[];
   }): Promise<void>;
@@ -122,7 +123,7 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
       if (conversationId === null) return;
       await dependencies.saveHint({
         conversationId, eveSessionId: ctx.session.id, eveTurnId: event.data.turnId,
-        familyId: identity.familyId, stepCount: names.length, toolNames: [...new Set(names)],
+        familyId: identity.familyId, kind: "repeat", stepCount: names.length, toolNames: [...new Set(names)],
       });
     },
   };

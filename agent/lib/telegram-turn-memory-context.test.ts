@@ -68,7 +68,7 @@ describe("createTelegramMemoryContextBuilder", () => {
   });
 
   it("appends the pending repeat-task hint once and after the memory block", async () => {
-    const takeSkillHint = vi.fn().mockResolvedValue({ stepCount: 5, toolNames: ["web_search", "generate_image"] });
+    const takeSkillHint = vi.fn().mockResolvedValue({ kind: "repeat", stepCount: 5, toolNames: ["web_search", "generate_image"] });
     const build = createTelegramMemoryContextBuilder({
       createProfile: vi.fn().mockResolvedValue(null),
       retrieve: vi.fn().mockResolvedValue(emptyRetrieval),

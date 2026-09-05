@@ -46,12 +46,13 @@ export function buildReflectionPrompt(input: ReflectionInput): string {
   const facts = {
     chatKind: input.chatKind,
     failedTools: input.evidence.failedTools,
+    loadedSkills: input.evidence.loadedSkills,
     stepCount: input.evidence.stepCount,
     toolNames: input.evidence.toolNames,
     turnFailure: input.evidence.turnFailure,
   };
   return [
-    "Ты Мия, Telegram-ассистент семьи. Ниже факты об одном твоём ходе: какие инструменты ты вызывала, какие из них упали с каким кодом, сколько шагов заняла работа и упал ли ход целиком. Текста сообщений людей здесь нет и он не нужен.",
+    "Ты Мия, Telegram-ассистент семьи. Ниже факты об одном твоём ходе: какие инструменты ты вызывала, какие навыки загружала, какие инструменты упали с каким кодом, сколько шагов заняла работа и упал ли ход целиком. Текста сообщений людей здесь нет и он не нужен.",
     "Задача: решить, есть ли в этих фактах повторяемая проблема твоей работы, которую стоит записать в бэклог улучшений для владельца. Пиши про себя и свои инструменты, промпты, память и порядок действий, не про людей. Не выдумывай причин, которых не видно в фактах; если проблема разовая или объяснима (например, пользователь отменил подтверждение), верни пустой список.",
     "Категории: tool_error (инструмент падает или возвращает не то), prompt (инструкции не покрывают ситуацию), memory (память подвела), workflow (слишком много шагов, лишние вызовы, зацикливание), other.",
     `Верни только JSON без пояснений: {"items":[{"category":"tool_error","toolName":"generate_image","errorCode":"AGENT_IMAGE_PROVIDER_FAILED","summary":"Одно предложение: что не так и что стоит поправить","priority":"medium"}]}. До ${MAX_ITEMS_PER_REFLECTION} пунктов, summary до ${SUMMARY_MAX_CHARACTERS} символов, toolName и errorCode только если они есть в фактах, иначе null.`,

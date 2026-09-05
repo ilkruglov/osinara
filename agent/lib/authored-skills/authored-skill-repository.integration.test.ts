@@ -165,5 +165,8 @@ describeWithDatabase("authored skill repository", () => {
     ]);
     const listed = await authoredSkillRepository.list(familyId);
     expect(listed[0]).toMatchObject({ lastOutcome: "unknown", usageCount: 2 });
+
+    await expect(authoredSkillRepository.isAuthoredSkill(familyId, "birthday-card")).resolves.toBe(true);
+    await expect(authoredSkillRepository.isAuthoredSkill(familyId, "imagegen")).resolves.toBe(false);
   });
 });
