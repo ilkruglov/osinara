@@ -3,7 +3,8 @@
  *
  * Export:
  * - `manage_skill`: list / read the family library, publish, roll back or retire a skill through
- *   Telegram HITL, and record how the last application of a skill went.
+ *   Telegram HITL, grant or revoke it for an external group, and record how the last application
+ *   of a skill went.
  *
  * Key constructs:
  * - A skill adds procedure, never rights: the rubric refuses tool names outside the current mode.
@@ -21,30 +22,34 @@ import {
   AUTHORED_SKILL_REQUIRED_SECTIONS,
   EVE_BUILTIN_TOOL_NAMES,
 } from "../authored-skills/authored-skill-contract.js";
+import { authoredSkillGrantRepository } from "../authored-skills/authored-skill-grant-repository.js";
 import { authoredSkillRepository } from "../authored-skills/authored-skill-repository.js";
 import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../family-context.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const TOOL_DESCRIPTION = [
-  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome. Только владелец, только в личном чате владельца или семейной группе.",
+  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome, grant, revoke. Только владелец, только в личном чате владельца или семейной группе.",
   "Когда применять: владелец просит создать, улучшить, откатить или убрать навык; ты предлагаешь сохранить повторяемую задачу как навык по служебной подсказке; после применения навыка владелец сказал, что вышло хорошо или плохо. Сначала загрузи skill-authoring через load_skill: он задаёт порядок работы и рубрику.",
   "Когда не применять: стиль общения это manage_behavior_preference; факт о человеке это remember; разовая задача просто выполняется без навыка; расписание это manage_agent_schedule.",
   "Publish требует пробного прогона: выполни навык на одном реальном примере в этом ходу и опиши результат в trialSummary, иначе отказ. Publish, rollback и retire требуют кнопки владельца. Опубликованный навык доступен со следующего хода.",
   `Markdown навыка без frontmatter, обязательные разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.map((section) => `«${section}»`).join(", ")}; в шагах имена инструментов в обратных кавычках только из текущего режима; навык с generate_image обязан нести references/<имя>.md с английским шаблоном промпта. Лимиты: markdown ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов, до ${AUTHORED_SKILL_LIMITS.filesMax} файлов references/<имя>.md по ${AUTHORED_SKILL_LIMITS.fileMaxCharacters} символов, ${AUTHORED_SKILL_LIMITS.activeSkillsPerFamily} активных навыков на семью.`,
   "Publish: {\"action\":\"publish\",\"name\":\"birthday-card\",\"description\":\"Открытка к празднику через Flux: поздравление с картинкой, подарочная карточка\",\"markdown\":\"## Когда применять\\n…\\n## Шаги\\n1. Вызови `generate_image`…\\n## Проверка результата\\n…\",\"files\":{\"references/flux-card.md\":\"…\"},\"changeNote\":\"Первая версия\",\"trialSummary\":\"Сделала открытку для Жени, отправила в чат\"}.",
   "Rollback: {\"action\":\"rollback\",\"name\":\"birthday-card\",\"version\":1}. Retire: {\"action\":\"retire\",\"name\":\"birthday-card\"}. Read: {\"action\":\"read\",\"name\":\"birthday-card\",\"version\":2} (version необязателен). Record_outcome: {\"action\":\"record_outcome\",\"name\":\"birthday-card\",\"outcome\":\"failed\",\"note\":\"на картинке появился текст\"}.",
+  `Grant выдаёт навык внешней группе по её названию или chat id, revoke забирает; оба через кнопку владельца, до ${AUTHORED_SKILL_LIMITS.grantsPerGroup} навыков на группу. Навык прав не добавляет: если в его шагах есть инструмент, не выданный группе, grant откажет и перечислит недостающие. Grant: {\"action\":\"grant\",\"name\":\"weekly-digest\",\"group\":\"Клуб бегунов\"}. Revoke: {\"action\":\"revoke\",\"name\":\"weekly-digest\",\"group\":\"-1001234567890\"}. List показывает выданные гранты.`,
 ].join(" ");
 
-const MUTATING_ACTIONS = new Set(["publish", "retire", "rollback"]);
+const MUTATING_ACTIONS = new Set(["grant", "publish", "retire", "revoke", "rollback"]);
 
 const manageSkillSchema = z.object({
-  action: z.enum(["list", "publish", "read", "record_outcome", "retire", "rollback"]),
+  action: z.enum(["grant", "list", "publish", "read", "record_outcome", "retire", "revoke", "rollback"]),
   changeNote: z.string().max(AUTHORED_SKILL_LIMITS.changeNoteMaxCharacters).optional()
     .describe("publish: что изменилось и зачем"),
   description: z.string().max(AUTHORED_SKILL_LIMITS.descriptionMaxCharacters).optional()
     .describe("publish: триггер загрузки, задача плюс косвенные формулировки"),
   files: z.record(z.string(), z.string()).optional()
     .describe("publish: справочные файлы references/<имя>.md"),
+  group: z.string().max(200).optional()
+    .describe("grant, revoke: название внешней группы или её отрицательный chat id"),
   markdown: z.string().max(AUTHORED_SKILL_LIMITS.markdownMaxCharacters).optional()
     .describe("publish: тело SKILL.md без frontmatter"),
   name: z.string().max(40).optional().describe("Имя навыка: строчные латинские буквы, цифры, дефис"),
@@ -62,6 +67,13 @@ function requireName(input: ManageSkillInput): string {
     throw new AppError("AGENT_SKILL_INPUT_INVALID", "Укажи name навыка");
   }
   return input.name;
+}
+
+function requireGroup(input: ManageSkillInput): string {
+  if (typeof input.group !== "string" || input.group.trim().length === 0) {
+    throw new AppError("AGENT_SKILL_INPUT_INVALID", "Укажи group: название внешней группы или её chat id");
+  }
+  return input.group;
 }
 
 function requireField(input: ManageSkillInput, key: "changeNote" | "description" | "markdown" | "trialSummary"): string {
@@ -95,7 +107,20 @@ export default defineTool({
 
     switch (input.action) {
       case "list":
-        return { skills: await authoredSkillRepository.list(owner.familyId) };
+        return {
+          grants: await authoredSkillGrantRepository.grants(owner.familyId),
+          skills: await authoredSkillRepository.list(owner.familyId),
+        };
+      case "grant": {
+        await requireToolApprovalEvidence(ctx, "manage_skill", input);
+        const result = await authoredSkillGrantRepository.grant(caller, { group: requireGroup(input), name: requireName(input) });
+        return { ...result, note: result.granted ? "Навык доступен группе со следующего хода" : "Навык уже был выдан этой группе" };
+      }
+      case "revoke": {
+        await requireToolApprovalEvidence(ctx, "manage_skill", input);
+        const result = await authoredSkillGrantRepository.revoke(caller, { group: requireGroup(input), name: requireName(input) });
+        return { ...result, note: "Группа больше не получает этот навык" };
+      }
       case "read":
         return await authoredSkillRepository.read(owner.familyId, requireName(input), input.version);
       case "record_outcome": {

@@ -200,16 +200,23 @@ describe("external group tool surface", () => {
       .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
   });
 
-  it("keeps framework load_skill denied without the image capability", async () => {
-    const tool = buildModeToolSurface({
+  it("keeps the fail-closed load_skill wrapper without the image capability and denies it in scheduled runs", async () => {
+    const interactive = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
     }).load_skill!;
+    const scheduled = buildModeToolSurface({
+      capabilities: new Set(),
+      environment: "external",
+      scheduledRun: true,
+    }).load_skill!;
 
-    await expect(tool.execute({ skill: "pohuy" }, {} as never)).rejects.toThrowError(
-      /AGENT_GROUP_TOOL_FORBIDDEN/u,
+    // The wrapper refuses a reserved static name before any lookup, so no database is needed.
+    await expect(interactive.execute({ skill: "gws-gmail" }, {} as never)).rejects.toThrowError(
+      /AGENT_GROUP_SKILL_FORBIDDEN/u,
     );
-    expect(tool.description).toMatch(/недоступен/iu);
+    expect(interactive.description).not.toMatch(/недоступен/iu);
+    expect(scheduled.description).toMatch(/недоступен/iu);
   });
 
   it("overrides native workspace file tools only in the external group surface", () => {

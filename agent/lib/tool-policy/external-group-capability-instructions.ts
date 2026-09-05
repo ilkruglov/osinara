@@ -23,6 +23,8 @@ function modelInvocation(name: ExternalGroupToolName | string): string {
 }
 
 export interface ExternalGroupCapabilityInstructionOptions {
+  /** Authored skills the owner granted to this group whose steps its allowlist covers. */
+  authoredSkills?: readonly { description: string; name: string }[];
   includeApplicationCore: boolean;
   scheduledHistory: boolean;
   scheduledRun: boolean;
@@ -71,10 +73,13 @@ export function externalGroupCapabilityInstructions(
     ...(!options.scheduledRun && allowed.has(KNOWLEDGE_SKILL_CAPABILITY)
       ? [...KNOWLEDGE_SKILL_NAMES]
       : []),
+    // Granted authored skills were filtered against the allowlist by the resolver's source.
+    ...(!options.scheduledRun ? (options.authoredSkills ?? []).map((skill) => skill.name) : []),
   ];
   const skillPurpose: Readonly<Record<string, string>> = {
     "auto-analyst": "аналитик по машинам и автопрому",
     "policy-finance-analyst": "аналитик по политике и финансам",
+    ...Object.fromEntries((options.authoredSkills ?? []).map((skill) => [skill.name, skill.description])),
   };
   const skillUsage = [...effectiveSkills]
     .map((name) => `- \`load_skill\` с \`skill=${name}\`: ${skillPurpose[name] ?? `загрузить инструкции разрешённого skill \`${name}\``}.`)

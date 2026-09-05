@@ -9,12 +9,14 @@
  */
 import { defineHook } from "eve/hooks";
 
+import { authoredSkillGrantRepository } from "../lib/authored-skills/authored-skill-grant-repository.js";
 import { authoredSkillRepository } from "../lib/authored-skills/authored-skill-repository.js";
 import { skillHintRepository } from "../lib/authored-skills/skill-hint-repository.js";
 import { createSkillSignalHandlers } from "../lib/authored-skills/skill-signals.js";
 
 const handlers = createSkillSignalHandlers({
   conversationId: (owner) => authoredSkillRepository.conversationId(owner),
+  groupConversationId: (groupId) => authoredSkillGrantRepository.groupConversationId(groupId),
   recordUsage: (input) => authoredSkillRepository.recordUsage(input),
   saveHint: (input) => skillHintRepository.save(input),
 });

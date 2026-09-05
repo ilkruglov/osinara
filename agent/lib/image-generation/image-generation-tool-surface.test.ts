@@ -52,7 +52,7 @@ describe("image generation tool surface", () => {
     });
   });
 
-  it("exposes generation only to interactive roots", () => {
+  it("exposes generation only to interactive roots", async () => {
     const deniedExternal = buildModeToolSurface({
       capabilities: new Set(),
       environment: "external",
@@ -79,7 +79,10 @@ describe("image generation tool surface", () => {
       environment: "external",
     }).load_skill?.description).toMatch(/недоступен/iu);
     expect(deniedExternal).not.toHaveProperty("generate_image");
-    expect(deniedExternal.load_skill?.description).toMatch(/недоступен/iu);
+    // Without the image grant load_skill stays as the fail-closed wrapper for granted skills.
+    expect(deniedExternal.load_skill?.description).not.toMatch(/недоступен/iu);
+    await expect(deniedExternal.load_skill!.execute({ skill: "gws-gmail" }, {} as never))
+      .rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
   });
 
   it("denies an external call after live capability revocation", async () => {

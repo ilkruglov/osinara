@@ -5,6 +5,7 @@
  * - Removed custom skills, unknown names and malformed requests fail before native loading.
  * - The capability-coupled `imagegen` skill additionally requires its active model provider.
  * - Analyst knowledge skills open only with the live `web_search` grant.
+ * - A granted authored skill opens after the live grant check; reserved names never reach it.
  */
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
@@ -41,7 +42,10 @@ describe("external group load_skill", () => {
   it("does not resurrect a removed custom skill from a stale grant", async () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const authorizeImageGeneration = vi.fn();
+    // A name that is neither static nor granted is refused by the live authored-skill check.
+    const authorizeAuthoredSkill = vi.fn().mockRejectedValue(new Error("AGENT_GROUP_SKILL_FORBIDDEN"));
     const tool = createExternalGroupLoadSkillTool({
+      authorizeAuthoredSkill,
       authorizeImageGeneration,
       authorizeKnowledgeSkills: vi.fn(),
       executeNative,
@@ -50,8 +54,26 @@ describe("external group load_skill", () => {
     await expect(tool.execute({ skill: "pohuy" }, context())).rejects.toThrowError(
       /AGENT_GROUP_SKILL_FORBIDDEN/u,
     );
+    expect(authorizeAuthoredSkill).toHaveBeenCalledWith(expect.anything(), "pohuy");
     expect(executeNative).not.toHaveBeenCalled();
     expect(authorizeImageGeneration).not.toHaveBeenCalled();
+  });
+
+  it("loads a granted authored skill after the live grant check and refuses reserved names outright", async () => {
+    const authorizeAuthoredSkill = vi.fn().mockResolvedValue(undefined);
+    const executeNative = vi.fn().mockResolvedValue({ loaded: true });
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeAuthoredSkill,
+      authorizeImageGeneration: vi.fn(),
+      authorizeKnowledgeSkills: vi.fn(),
+      executeNative,
+    });
+
+    await expect(tool.execute({ skill: "weekly-digest" }, context())).resolves.toEqual({ loaded: true });
+    expect(authorizeAuthoredSkill).toHaveBeenCalledWith(expect.anything(), "weekly-digest");
+    await expect(tool.execute({ skill: "gws-gmail" }, context())).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
+    await expect(tool.execute({ skill: "Bad Name" }, context())).rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
+    expect(authorizeAuthoredSkill).toHaveBeenCalledTimes(1);
   });
 
   it("loads imagegen only after the live generate_image capability check", async () => {
@@ -59,6 +81,7 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeAuthoredSkill: vi.fn(),
       authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
@@ -74,6 +97,7 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeAuthoredSkill: vi.fn(),
       authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });
@@ -87,6 +111,7 @@ describe("external group load_skill", () => {
     const authorizeKnowledgeSkills = vi.fn().mockResolvedValue(undefined);
     const executeNative = vi.fn().mockResolvedValue({ loaded: true });
     const tool = createExternalGroupLoadSkillTool({
+      authorizeAuthoredSkill: vi.fn(),
       authorizeImageGeneration: vi.fn(),
       authorizeKnowledgeSkills,
       executeNative,
@@ -101,6 +126,7 @@ describe("external group load_skill", () => {
   it("keeps an analyst skill closed when the research grant is revoked", async () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
+      authorizeAuthoredSkill: vi.fn(),
       authorizeImageGeneration: vi.fn(),
       authorizeKnowledgeSkills: vi.fn().mockRejectedValue(new Error("AGENT_GROUP_TOOL_FORBIDDEN")),
       executeNative,
@@ -115,6 +141,7 @@ describe("external group load_skill", () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration: vi.fn(),
+      authorizeAuthoredSkill: vi.fn().mockRejectedValue(new Error("AGENT_GROUP_SKILL_FORBIDDEN")),
       authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });

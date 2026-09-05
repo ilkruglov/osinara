@@ -297,9 +297,10 @@ function buildExternalToolSurface(
     !scheduledRun && allowed.has("generate_image");
   const surface: Record<string, AnyToolDefinition> = {
     ...EXTERNAL_GROUP_FILE_TOOLS,
-    load_skill: imageGenerationAllowed
-      ? externalGroupLoadSkillTool
-      : deniedTool("load_skill"),
+    // The wrapper is fail-closed per skill name (imagegen, analyst skills, granted authored
+    // skills are each re-authorized live), so the descriptor itself grants nothing. Gating it on
+    // generate_image alone left the analyst skills unreachable without an image grant.
+    load_skill: scheduledRun ? deniedTool("load_skill") : externalGroupLoadSkillTool,
   };
   if (includeApplicationCore) {
     surface.read_profile_view = readProfileView as unknown as AnyToolDefinition;
@@ -422,5 +423,9 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
     remember: _remember,
     ...surface
   } = buildModeToolSurface(effectiveInput);
-  return surface;
+  // A child never loads external skills: imagegen rides on the removed grant and authored skills
+  // belong to the root turn that the owner's grant addressed.
+  return input.environment === "external"
+    ? { ...surface, load_skill: deniedTool("load_skill") }
+    : surface;
 }

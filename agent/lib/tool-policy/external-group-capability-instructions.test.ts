@@ -116,6 +116,20 @@ describe("externalGroupCapabilityInstructions", () => {
     expect(scheduled).not.toContain("auto-analyst");
   });
 
+  it("advertises granted authored skills with their descriptions, never in a scheduled run", () => {
+    const authoredSkills = [{ description: "Сводка недели по чату", name: "weekly-digest" }];
+    const granted = externalGroupCapabilityInstructions(new Set(["web_search"]), {
+      authoredSkills, includeApplicationCore: true, scheduledHistory: false, scheduledRun: false,
+    });
+    const scheduled = externalGroupCapabilityInstructions(new Set(["web_search"]), {
+      authoredSkills, includeApplicationCore: false, scheduledHistory: false, scheduledRun: true,
+    });
+
+    expect(granted).toContain("`load_skill` с `skill=weekly-digest`: Сводка недели по чату.");
+    expect(granted).toContain("`auto-analyst`, `policy-finance-analyst`, `weekly-digest`");
+    expect(scheduled).not.toContain("weekly-digest");
+  });
+
   it("marks static trusted-only Google Workspace skills as unavailable externally", () => {
     const markdown = externalGroupCapabilityInstructions(new Set());
 

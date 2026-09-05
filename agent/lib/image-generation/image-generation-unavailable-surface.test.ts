@@ -78,7 +78,7 @@ function externalContext(): ToolContext {
 }
 
 describe("unavailable subscription image generation", () => {
-  it("omits tool, skill loading, and prompt guidance", () => {
+  it("omits tool, skill loading, and prompt guidance", async () => {
     const external = buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
       environment: "external",
@@ -87,7 +87,9 @@ describe("unavailable subscription image generation", () => {
 
     expect(buildModeToolSurface({ environment: "private" })).not.toHaveProperty("generate_image");
     expect(external).not.toHaveProperty("generate_image");
-    expect(external.load_skill?.description).toMatch(/недоступен/iu);
+    // load_skill stays as the fail-closed wrapper for other skills; imagegen itself is refused.
+    await expect(external.load_skill!.execute({ skill: "imagegen" }, externalContext()))
+      .rejects.toThrowError(/AGENT_GROUP_SKILL_FORBIDDEN/u);
     expect(instructions).not.toContain("generate_image");
     expect(instructions).not.toContain("skill=imagegen");
   });
@@ -147,6 +149,7 @@ describe("unavailable subscription image generation", () => {
     const executeNative = vi.fn();
     const tool = createExternalGroupLoadSkillTool({
       authorizeImageGeneration,
+      authorizeAuthoredSkill: vi.fn(),
       authorizeKnowledgeSkills: vi.fn(),
       executeNative,
     });

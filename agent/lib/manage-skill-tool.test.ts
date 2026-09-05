@@ -20,12 +20,18 @@ const repository = vi.hoisted(() => ({
   retire: vi.fn(),
   rollback: vi.fn(),
 }));
+const grants = vi.hoisted(() => ({
+  grant: vi.fn(),
+  grants: vi.fn(),
+  revoke: vi.fn(),
+}));
 const { requireApprovalEvidence, requireOwner } = vi.hoisted(() => ({
   requireApprovalEvidence: vi.fn(),
   requireOwner: vi.fn(),
 }));
 
 vi.mock("./authored-skills/authored-skill-repository.js", () => ({ authoredSkillRepository: repository }));
+vi.mock("./authored-skills/authored-skill-grant-repository.js", () => ({ authoredSkillGrantRepository: grants }));
 vi.mock("./family-context.js", () => ({ requireTrustedTelegramOwner: requireOwner }));
 vi.mock("./require-tool-approval-evidence.js", () => ({
   requireToolApprovalEvidence: requireApprovalEvidence,
@@ -51,6 +57,8 @@ const OWNER = {
 describe("manage_skill", () => {
   beforeEach(() => {
     for (const mock of Object.values(repository)) mock.mockReset();
+    for (const mock of Object.values(grants)) mock.mockReset();
+    grants.grants.mockResolvedValue([]);
     requireApprovalEvidence.mockReset();
     requireApprovalEvidence.mockResolvedValue(undefined);
     requireOwner.mockReset();
@@ -61,7 +69,7 @@ describe("manage_skill", () => {
     repository.list.mockResolvedValue([]);
     repository.read.mockResolvedValue({ name: "birthday-card" });
 
-    await expect(manageSkill.execute({ action: "list" }, context)).resolves.toEqual({ skills: [] });
+    await expect(manageSkill.execute({ action: "list" }, context)).resolves.toEqual({ grants: [], skills: [] });
     await manageSkill.execute({ action: "read", name: "birthday-card", version: 2 }, context);
 
     expect(repository.read).toHaveBeenCalledWith("family-1", "birthday-card", 2);
@@ -141,10 +149,31 @@ describe("manage_skill", () => {
     expect(requireApprovalEvidence).not.toHaveBeenCalled();
   });
 
+  it("grants and revokes for an external group through approval", async () => {
+    grants.grant.mockResolvedValue({ granted: true, group: { telegramChatId: "-100", title: "Клуб" }, name: "weekly-digest" });
+    grants.revoke.mockResolvedValue({ group: { telegramChatId: "-100", title: "Клуб" }, name: "weekly-digest" });
+
+    const granted = await manageSkill.execute({ action: "grant", group: "Клуб", name: "weekly-digest" }, context);
+    await manageSkill.execute({ action: "revoke", group: "-100", name: "weekly-digest" }, context);
+
+    expect(requireApprovalEvidence).toHaveBeenCalledTimes(2);
+    expect(grants.grant).toHaveBeenCalledWith(
+      { familyId: "family-1", role: "owner", userId: "user-1" }, { group: "Клуб", name: "weekly-digest" },
+    );
+    expect(grants.revoke).toHaveBeenCalledWith(
+      { familyId: "family-1", role: "owner", userId: "user-1" }, { group: "-100", name: "weekly-digest" },
+    );
+    expect(granted).toMatchObject({ granted: true, note: expect.stringMatching(/следующего хода/u) });
+    await expect(manageSkill.execute({ action: "grant", name: "weekly-digest" }, context))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
+  });
+
   it("marks only mutating actions as approval-bound", () => {
     const approval = manageSkill.approval as (input: { toolInput: unknown }) => string;
     expect(approval({ toolInput: { action: "publish" } })).toBe("user-approval");
     expect(approval({ toolInput: { action: "retire" } })).toBe("user-approval");
+    expect(approval({ toolInput: { action: "grant" } })).toBe("user-approval");
+    expect(approval({ toolInput: { action: "revoke" } })).toBe("user-approval");
     expect(approval({ toolInput: { action: "list" } })).toBe("not-applicable");
     expect(approval({ toolInput: { action: "record_outcome" } })).toBe("not-applicable");
   });

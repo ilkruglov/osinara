@@ -59,6 +59,8 @@ export type ModeInstructionsInput =
   | { environment: "family"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
   | { environment: "private"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
   | {
+      /** Authored skills granted to this group, already filtered against its allowlist. */
+      authoredSkills?: readonly { description: string; name: string }[];
       capabilities: ReadonlySet<ExternalGroupToolName>;
       environment: "external";
       includeApplicationCore?: boolean;
@@ -224,6 +226,7 @@ function externalInstructions(
   includeApplicationCore = true,
   scheduledRun = false,
   scheduledHistory = false,
+  authoredSkills: readonly { description: string; name: string }[] = [],
 ): string {
   const editActions = new Set<MemoryEditAction>(
     [...capabilities]
@@ -297,6 +300,7 @@ ${GROUP_TIMELINE_TRUST}`,
     scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
     externalGroupCapabilityInstructions(capabilities, {
+      authoredSkills,
       includeApplicationCore,
       scheduledHistory,
       scheduledRun,
@@ -315,5 +319,6 @@ export function modeInstructions(input: ModeInstructionsInput): string {
     input.includeApplicationCore,
     scheduledRun,
     input.scheduledHistory,
+    input.authoredSkills,
   );
 }

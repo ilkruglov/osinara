@@ -180,6 +180,27 @@ describe("mode block resolution", () => {
     expect(markdown).not.toContain("`web_fetch`");
   });
 
+  it("describes authored skills granted to the group and survives a failed grant lookup", async () => {
+    const loadCapabilities = vi.fn().mockResolvedValue(new Set<ExternalGroupToolName>(["remember"]));
+    const loadGrantedSkills = vi.fn()
+      .mockResolvedValueOnce([{ description: "Сводка недели по чату", name: "weekly-digest" }])
+      .mockRejectedValueOnce(new Error("database unavailable"));
+    const resolve = createModeBlockResolver({
+      loadCapabilities,
+      loadGrantedSkills,
+      loadReactionPolicy: reactionPolicy,
+    });
+
+    const granted = await resolve(context(externalAuth));
+    expect(loadGrantedSkills).toHaveBeenCalledWith({ familyId: "family-1", groupId: "group-1" });
+    expect(granted).toContain("`load_skill` с `skill=weekly-digest`: Сводка недели по чату");
+    expect(granted).toContain("Effective skills: `weekly-digest`.");
+
+    const degraded = await resolve(context(externalAuth));
+    expect(degraded).toContain("`remember`");
+    expect(degraded).not.toContain("weekly-digest");
+  });
+
   it("does not describe human capabilities or skills to a channel actor", async () => {
     const loadCapabilities = vi.fn().mockResolvedValue(new Set(["remember"]));
     const resolve = createModeBlockResolver({

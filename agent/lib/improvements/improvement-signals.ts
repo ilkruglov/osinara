@@ -39,6 +39,8 @@ interface SignalContext {
 export interface ImprovementIdentity {
   chatKind: ChatKind;
   familyId: string;
+  /** Registered Telegram group of a group chat; null in a private chat. */
+  groupId: string | null;
   userId: string | null;
 }
 
@@ -77,7 +79,8 @@ function reflectionIdentity(ctx: SignalContext): ImprovementIdentity | null {
   const userId = ctx.session.auth.current?.principalType === "user" && typeof principalId === "string"
     ? principalId
     : null;
-  return { chatKind, familyId, userId };
+  const groupId = typeof attributes.groupId === "string" ? attributes.groupId : null;
+  return { chatKind, familyId, groupId, userId };
 }
 
 /** What went wrong in the turn, in tool and code terms; the heavy-turn case names the step count. */

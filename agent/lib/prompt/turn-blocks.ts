@@ -14,6 +14,7 @@
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 
+import { authoredSkillGrantRepository } from "../authored-skills/authored-skill-grant-repository.js";
 import {
   requireBehaviorPreferenceReadAuthorization,
   type BehaviorPreferenceReadAuthorization,
@@ -54,8 +55,13 @@ type CapabilityLoader = (identity: {
   groupId: string;
 }) => Promise<ReadonlySet<ExternalGroupToolName>>;
 type ReactionPolicyLoader = (telegramChatId: string) => Promise<TelegramReactionPolicy | null>;
+type GrantedSkillLoader = (identity: {
+  familyId: string;
+  groupId: string;
+}) => Promise<readonly { description: string; name: string }[]>;
 
 interface EffectiveExternalCapabilities {
+  authoredSkills: readonly { description: string; name: string }[];
   capabilities: ReadonlySet<ExternalGroupToolName>;
   includeApplicationCore: boolean;
 }
@@ -81,11 +87,14 @@ function logBlockFailure(code: string, error: unknown): void {
 async function effectiveExternalCapabilities(
   auth: SessionAuth,
   loadCapabilities: CapabilityLoader,
+  loadGrantedSkills: GrantedSkillLoader | undefined,
+  scheduledRun: boolean,
 ): Promise<EffectiveExternalCapabilities> {
+  const none: EffectiveExternalCapabilities = { authoredSkills: [], capabilities: new Set(), includeApplicationCore: false };
   const policy = resolveExternalGroupToolPolicy(auth);
-  if (!policy.restricted) return { capabilities: new Set(), includeApplicationCore: false };
+  if (!policy.restricted) return none;
   const identity = resolveExternalGroupPolicyIdentity(auth);
-  if (!identity) return { capabilities: new Set(), includeApplicationCore: false };
+  if (!identity) return none;
 
   // An unavailable policy lookup must describe no capability at all, matching the fail-closed
   // execution boundary, instead of leaving the previous turn's wider guidance in place.
@@ -94,9 +103,20 @@ async function effectiveExternalCapabilities(
     current = await loadCapabilities(identity);
   } catch (error) {
     logBlockFailure("AGENT_GROUP_CAPABILITY_LOOKUP_FAILED", error);
-    return { capabilities: new Set(), includeApplicationCore: false };
+    return none;
+  }
+  // Granted authored skills are described only when the resolver would also emit them; a failed
+  // lookup leaves them out of the prompt the same way it leaves them out of the manifest.
+  let authoredSkills: readonly { description: string; name: string }[] = [];
+  if (loadGrantedSkills !== undefined && !scheduledRun) {
+    try {
+      authoredSkills = await loadGrantedSkills(identity);
+    } catch (error) {
+      logBlockFailure("AGENT_SKILL_GRANT_LOOKUP_FAILED", error);
+    }
   }
   return {
+    authoredSkills,
     capabilities: new Set([...policy.allowed].filter((capability) => current.has(capability))),
     includeApplicationCore: true,
   };
@@ -109,6 +129,7 @@ function verifiedTelegramChatId(auth: SessionAuth): string | null {
 
 export function createModeBlockResolver(dependencies: {
   loadCapabilities: CapabilityLoader;
+  loadGrantedSkills?: GrantedSkillLoader;
   loadReactionPolicy: ReactionPolicyLoader;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string> {
@@ -151,8 +172,11 @@ export function createModeBlockResolver(dependencies: {
     const effective = await effectiveExternalCapabilities(
       ctx.session.auth,
       dependencies.loadCapabilities,
+      dependencies.loadGrantedSkills,
+      scheduledRun,
     );
     return modeInstructions({
+      authoredSkills: effective.authoredSkills,
       capabilities: effective.capabilities,
       environment: "external",
       includeApplicationCore: effective.includeApplicationCore,
@@ -182,6 +206,8 @@ export function createPreferenceBlockResolver(dependencies: {
 
 export const resolveModeBlock = createModeBlockResolver({
   loadCapabilities: loadCurrentExternalGroupCapabilities,
+  loadGrantedSkills: async (identity) => (await authoredSkillGrantRepository.packagesForGroup(identity))
+    .map((pkg) => ({ description: pkg.description, name: pkg.name })),
   loadReactionPolicy: async (telegramChatId) => {
     const cached = await telegramReactionPolicyRepository.read(telegramChatId);
     if (cached === null) return null;

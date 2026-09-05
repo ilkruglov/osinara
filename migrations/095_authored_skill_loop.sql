@@ -17,3 +17,18 @@ ALTER TABLE conversation_skill_hints
     (kind = 'repeat' AND step_count IS NOT NULL AND summary IS NULL)
     OR (kind = 'backlog' AND summary IS NOT NULL)
   );
+
+-- 3. Владелец выдаёт авторский навык внешней группе. Навык не добавляет прав: при выдаче и при
+--    каждой загрузке шаги навыка сверяются с allowlist группы. Смена типа группы пересоздаёт её
+--    строку, и гранты уходят вместе с ней.
+CREATE TABLE authored_skill_group_grants (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  skill_id uuid NOT NULL REFERENCES authored_skills(id) ON DELETE CASCADE,
+  group_id uuid NOT NULL REFERENCES telegram_groups(id) ON DELETE CASCADE,
+  family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+  granted_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (skill_id, group_id)
+);
+
+CREATE INDEX authored_skill_group_grants_group ON authored_skill_group_grants (group_id);

@@ -76,7 +76,7 @@ interface SkillRow {
   version: number;
 }
 
-async function requireCurrentOwner(client: PoolClient, caller: FamilyCaller): Promise<void> {
+export async function requireCurrentOwner(client: PoolClient, caller: FamilyCaller): Promise<void> {
   if (caller.role !== "owner") {
     throw new AppError("AGENT_SKILL_FORBIDDEN", "Создавать и менять навыки может только владелец семьи");
   }

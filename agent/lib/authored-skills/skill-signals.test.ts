@@ -2,7 +2,8 @@
  * Skill signal handler tests.
  *
  * Constructs covered:
- * - `load_skill` of a named skill in a trusted chat records a usage row; other chats do not.
+ * - `load_skill` of a named skill in a trusted chat records a usage row; an external group records
+ *   it against its own conversation; a member's private chat and a subagent do not.
  * - Four or more non-bookkeeping tool calls in one trusted turn save a hint with unique names.
  * - Bookkeeping tools, review sessions, scheduled runs and subagents never produce a hint.
  */
@@ -34,6 +35,7 @@ function call(toolName: string) {
 describe("skill signals", () => {
   const dependencies = {
     conversationId: vi.fn(),
+    groupConversationId: vi.fn(),
     recordUsage: vi.fn(),
     saveHint: vi.fn(),
   };
@@ -41,6 +43,7 @@ describe("skill signals", () => {
   beforeEach(() => {
     for (const mock of Object.values(dependencies)) mock.mockReset();
     dependencies.conversationId.mockResolvedValue("conversation-1");
+    dependencies.groupConversationId.mockResolvedValue("conversation-group-2");
     dependencies.recordUsage.mockResolvedValue(true);
     dependencies.saveHint.mockResolvedValue(undefined);
   });
@@ -59,17 +62,32 @@ describe("skill signals", () => {
     });
   });
 
-  it("ignores loads outside trusted chats", async () => {
+  it("ignores loads in a member's private chat and in a subagent", async () => {
     const handlers = createSkillSignalHandlers(dependencies);
-    const external = { groupId: "group-2", groupType: "external", memoryScopes: ["group"], role: "external", telegramChatType: "supergroup" };
     const memberPrivate = { memoryScopes: ["personal", "family"], role: "member", telegramChatType: "private" };
     const load = { callId: "c1", input: { skill: "birthday-card" }, kind: "load-skill" };
 
-    await handlers.actionsRequested({ data: { actions: [load], turnId: "t" } }, context(external));
     await handlers.actionsRequested({ data: { actions: [load], turnId: "t" } }, context(memberPrivate));
     await handlers.actionsRequested({ data: { actions: [load], turnId: "t" } }, context(FAMILY, { channel: "subagent" }));
 
     expect(dependencies.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it("records a load in an external group against the group's conversation and never hints there", async () => {
+    const handlers = createSkillSignalHandlers(dependencies);
+    const external = { groupId: "group-2", groupType: "external", memoryScopes: ["group"], role: "external", telegramChatType: "supergroup" };
+    const load = { callId: "c1", input: { skill: "weekly-digest" }, kind: "load-skill" };
+
+    await handlers.actionsRequested({ data: { actions: [load, call("web_search"), call("web_fetch"), call("bash"), call("write_file")], turnId: "t" } }, context(external));
+    await handlers.turnCompleted({ data: { turnId: "t" } }, context(external));
+
+    expect(dependencies.groupConversationId).toHaveBeenCalledWith("group-2");
+    expect(dependencies.conversationId).not.toHaveBeenCalled();
+    expect(dependencies.recordUsage).toHaveBeenCalledWith({
+      conversationId: "conversation-group-2", eveSessionId: "eve-1", eveTurnId: "t",
+      familyId: "family-1", skillName: "weekly-digest",
+    });
+    expect(dependencies.saveHint).not.toHaveBeenCalled();
   });
 
   it("saves a hint after four real tool calls in one trusted turn", async () => {

@@ -6,6 +6,7 @@
  * - `AuthoredSkillDraft`: the exact payload a publish carries.
  * - `assertAuthoredSkillDraft`: throws a coded AppError listing every rubric problem at once.
  * - `isReservedSkillName`, `stepToolNames`: helpers shared with tests and the tool description.
+ * - `externalGroupMissingTools`: step tools an external group's allowlist does not cover.
  *
  * Key constructs:
  * - The rubric checks structure only: sections exist, tool names in the steps are real, referenced
@@ -15,6 +16,7 @@
  *   `action` or `scope` are parameters and stay unchecked.
  */
 import { AppError } from "../app-error.js";
+import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES } from "../tool-policy/group-tool-catalog.js";
 
 export const AUTHORED_SKILL_LIMITS = Object.freeze({
   activeSkillsPerFamily: 40,
@@ -22,6 +24,8 @@ export const AUTHORED_SKILL_LIMITS = Object.freeze({
   descriptionMaxCharacters: 400,
   fileMaxCharacters: 6_000,
   filesMax: 4,
+  /** Every granted skill costs one line of the external prompt and one package per turn. */
+  grantsPerGroup: 10,
   markdownMaxCharacters: 8_000,
   trialSummaryMaxCharacters: 1_000,
 });
@@ -73,6 +77,16 @@ function sectionBody(markdown: string, heading: string): string | null {
   const rest = markdown.slice(from + heading.length);
   const next = rest.search(/\n## /u);
   return next === -1 ? rest : rest.slice(0, next);
+}
+
+/** Step tools an external group cannot call: everything outside its allowlist and the baseline file tools. */
+export function externalGroupMissingTools(
+  markdown: string,
+  allowed: ReadonlySet<string>,
+): string[] {
+  return stepToolNames(markdown).filter((name) =>
+    !allowed.has(name) && !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name)
+  );
 }
 
 /** Tool names the «Шаги» section refers to, in order of first mention. */

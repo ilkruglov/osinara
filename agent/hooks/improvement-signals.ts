@@ -10,16 +10,25 @@
  */
 import { defineHook } from "eve/hooks";
 
+import { authoredSkillGrantRepository } from "../lib/authored-skills/authored-skill-grant-repository.js";
 import { authoredSkillRepository } from "../lib/authored-skills/authored-skill-repository.js";
 import { skillHintRepository } from "../lib/authored-skills/skill-hint-repository.js";
 import { improvementBacklogRepository } from "../lib/improvements/improvement-backlog-repository.js";
 import { createImprovementSignalHandlers } from "../lib/improvements/improvement-signals.js";
 
 const handlers = createImprovementSignalHandlers({
-  // An external group has no owner conversation here; its skills arrive with the group grants.
-  conversationId: (identity) => identity.chatKind === "external" || identity.userId === null
-    ? Promise.resolve(null)
-    : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, userId: identity.userId }),
+  // An external group's skills are the ones granted to it, so its outcomes bind to the group's
+  // own conversation; trusted chats bind to the owner's conversation.
+  conversationId: (identity) => {
+    if (identity.chatKind === "external") {
+      return identity.groupId === null
+        ? Promise.resolve(null)
+        : authoredSkillGrantRepository.groupConversationId(identity.groupId);
+    }
+    return identity.userId === null
+      ? Promise.resolve(null)
+      : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, userId: identity.userId });
+  },
   isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),
   recordSkillOutcome: (input) => authoredSkillRepository.recordOutcome(
