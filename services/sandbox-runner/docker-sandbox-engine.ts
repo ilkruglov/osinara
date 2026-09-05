@@ -13,6 +13,8 @@ import { posix } from "node:path";
 
 import Docker from "dockerode";
 
+import { WORKSPACE_MAX_FILE_BYTES } from "../../agent/config.js";
+
 import {
   SANDBOX_RUNNER_MAX_OUTPUT_BYTES,
   SANDBOX_RUNNER_TIMEOUT_MAX_MS,
@@ -26,6 +28,16 @@ import {
   readSingleFileArchive,
   writeSingleFileArchive,
 } from "./docker-sandbox-files.js";
+import {
+  assertShellSafePath,
+  commitStagedFileCommand,
+  FILE_MISSING_EXIT_CODE,
+  FILE_TOO_LARGE_EXIT_CODE,
+  initializeToolEnvironmentCommand,
+  prepareWriteDirectoriesCommand,
+  removeStagedFileCommand,
+  stageFileForReadCommand,
+} from "./docker-sandbox-commands.js";
 import { executeSandboxProcess } from "./docker-sandbox-process.js";
 import {
   createSandboxActivityRegistry,
@@ -47,7 +59,6 @@ import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
 const FILE_UPLOAD_STAGING_DIRECTORY = "/.osinara-sandbox-uploads";
-const FILE_MISSING_EXIT_CODE = 44;
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const SANDBOX_NETWORK_LABEL = "sandbox-egress";
@@ -81,6 +92,7 @@ function dockerStatus(error: unknown): number | undefined {
 }
 
 function resolvePath(path: string): string {
+  assertShellSafePath(path);
   const normalized = path.startsWith("/") ? posix.normalize(path) : posix.resolve("/workspace", path);
   const allowed = ["/tmp", "/tools", "/workspace"].some((root) =>
     normalized === root || normalized.startsWith(`${root}/`)
@@ -106,10 +118,7 @@ async function ensureToolDirectories(
   const root = `/tools/${mount.mountPoint}`;
   const directories = [`${root}/bin`, `${root}/cache`, `${root}/home`, `${root}/npm`];
   const python = `${root}/python`;
-  const command = [
-    `mkdir -p ${directories.map((path) => JSON.stringify(path)).join(" ")}`,
-    `(test -x ${JSON.stringify(`${python}/bin/python`)} || python3 -m venv ${JSON.stringify(python)})`,
-  ].join(" && ");
+  const command = initializeToolEnvironmentCommand({ directories, pythonRoot: python });
   const result = await executeSandboxProcess(docker, container, {
     command,
     timeoutMs: SANDBOX_RUNNER_TIMEOUT_MAX_MS,
@@ -230,33 +239,50 @@ export function createDockerSandboxEngine(input: {
         const container = await requireRunningContainer(input.docker, sessionId);
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
-        const copyResult = await executeSandboxProcess(input.docker, container, {
-          command:
-            `mkdir -p -- ${JSON.stringify(FILE_UPLOAD_STAGING_DIRECTORY)} && ` +
-            `if [ ! -f ${JSON.stringify(resolved)} ]; then exit ${FILE_MISSING_EXIT_CODE}; fi && ` +
-            `cp -T -- ${JSON.stringify(resolved)} ${JSON.stringify(stagingPath)}`,
-        });
-        if (copyResult.exitCode === FILE_MISSING_EXIT_CODE) return null;
-        if (copyResult.exitCode !== 0) {
-          throw new Error(
-            "AGENT_SANDBOX_RUNNER_FILE_STAGE_FAILED: " +
-            `Не удалось подготовить файл sandbox для чтения. ${copyResult.stderr}`,
-          );
-        }
-
         // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
         // preserves binary archive reads while keeping the sandbox mount private and ephemeral.
+        // The size check runs before the copy, and the copy sits inside the cleanup scope: a
+        // partial staging file after ENOSPC must not outlive the request.
         let readFailed = false;
+        // A refused copy leaves nothing behind, so cleanup is owed only once the copy may have run.
+        let staged = true;
         try {
+          const copyResult = await executeSandboxProcess(input.docker, container, {
+            command: stageFileForReadCommand({
+              maxBytes: WORKSPACE_MAX_FILE_BYTES,
+              resolvedPath: resolved,
+              stagingDirectory: FILE_UPLOAD_STAGING_DIRECTORY,
+              stagingPath,
+            }),
+          });
+          if (copyResult.exitCode === FILE_MISSING_EXIT_CODE) {
+            staged = false;
+            return null;
+          }
+          if (copyResult.exitCode === FILE_TOO_LARGE_EXIT_CODE) {
+            staged = false;
+            throw new Error(
+              "AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: " +
+              `Файл sandbox больше допустимых ${WORKSPACE_MAX_FILE_BYTES} байт`,
+            );
+          }
+          if (copyResult.exitCode !== 0) {
+            throw new Error(
+              "AGENT_SANDBOX_RUNNER_FILE_STAGE_FAILED: " +
+              `Не удалось подготовить файл sandbox для чтения. ${copyResult.stderr}`,
+            );
+          }
           return await readSingleFileArchive(await container.getArchive({ path: stagingPath }));
         } catch (error) {
           readFailed = true;
           throw error;
         } finally {
-          const cleanupResult = await executeSandboxProcess(input.docker, container, {
-            command: `rm -f -- ${JSON.stringify(stagingPath)}`,
-          });
-          if (cleanupResult.exitCode !== 0) {
+          const cleanupResult = staged
+            ? await executeSandboxProcess(input.docker, container, {
+              command: removeStagedFileCommand(stagingPath),
+            })
+            : null;
+          if (cleanupResult !== null && cleanupResult.exitCode !== 0) {
             console.error("Sandbox staged file cleanup failed", {
               exitCode: cleanupResult.exitCode,
               stagingPath,
@@ -278,9 +304,10 @@ export function createDockerSandboxEngine(input: {
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         const directoryResult = await executeSandboxProcess(input.docker, container, {
-          command:
-            `mkdir -p -- ${JSON.stringify(posix.dirname(resolved))} ` +
-            JSON.stringify(FILE_UPLOAD_STAGING_DIRECTORY),
+          command: prepareWriteDirectoriesCommand({
+            stagingDirectory: FILE_UPLOAD_STAGING_DIRECTORY,
+            targetDirectory: posix.dirname(resolved),
+          }),
         });
         if (directoryResult.exitCode !== 0) {
           throw new Error(
@@ -295,7 +322,7 @@ export function createDockerSandboxEngine(input: {
         try {
           await writeSingleFileArchive(container, stagingPath, content);
           const moveResult = await executeSandboxProcess(input.docker, container, {
-            command: `mv -T -- ${JSON.stringify(stagingPath)} ${JSON.stringify(resolved)}`,
+            command: commitStagedFileCommand({ resolvedPath: resolved, stagingPath }),
           });
           if (moveResult.exitCode !== 0) {
             throw new Error(
@@ -308,7 +335,7 @@ export function createDockerSandboxEngine(input: {
           if (!committed) {
             try {
               const cleanupResult = await executeSandboxProcess(input.docker, container, {
-                command: `rm -f -- ${JSON.stringify(stagingPath)}`,
+                command: removeStagedFileCommand(stagingPath),
               });
               if (cleanupResult.exitCode !== 0) {
                 console.error("Sandbox staged file cleanup failed", {

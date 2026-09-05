@@ -138,7 +138,7 @@ describe("Docker sandbox filesystem bridge", () => {
     const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
     expect(commands).toEqual([
       expect.stringMatching(/^mkdir -p -- .*\.osinara-sandbox-uploads/u),
-      expect.stringMatching(/^mv -T -- .* ".*\/tmp\/home\/\.agents\/skills\/pohuy\/LICENSE\.txt"$/u),
+      expect.stringMatching(/^mv -T -- .* '.*\/tmp\/home\/\.agents\/skills\/pohuy\/LICENSE\.txt'$/u),
     ]);
   });
 
