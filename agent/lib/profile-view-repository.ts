@@ -140,9 +140,12 @@ async function loadSubjects(
     input,
     input.replyTelegramUserId ?? timelineReply?.rows[0]?.telegram_user_id ?? null,
   );
-  const telegramUserIds = conversation.scope === "personal"
+  // A suppressed current author is out of the view entirely: not by the direct pick, and not
+  // through a retrieval-related claim about them, or the card returned on the very next turn.
+  const suppressedTelegramUserId = input.suppressCurrentAuthor === true ? input.currentTelegramUserId : null;
+  const telegramUserIds = (conversation.scope === "personal"
     ? [auth.telegramUserId]
-    : [...signals.keys()];
+    : [...signals.keys()]).filter((telegramUserId) => telegramUserId !== suppressedTelegramUserId);
   const dormantBefore = new Date(input.now.getTime() - PROFILE_SELECTION_DORMANCY_MILLISECONDS);
   await client.query(
     `UPDATE profile_subjects SET dormant_at = $2, updated_at = now()
@@ -182,8 +185,12 @@ async function loadSubjects(
          SELECT 1 FROM family_memberships AS membership
          WHERE membership.family_id = $5 AND membership.user_id = subject.subject_user_id
        ))
+       AND (CASE WHEN subject.subject_user_id IS NOT NULL
+                 THEN app_user.telegram_user_id ELSE participant.telegram_user_id END)
+           IS DISTINCT FROM $6::text
      ORDER BY subject.subject_ref`,
-    [input.conversationId, telegramUserIds, input.retrievalClaimIds, conversation.scope, auth.familyId],
+    [input.conversationId, telegramUserIds, input.retrievalClaimIds, conversation.scope, auth.familyId,
+      suppressedTelegramUserId],
   );
   return result.rows.map((row) => ({
     ...row,

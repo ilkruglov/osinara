@@ -377,6 +377,42 @@ describeWithDatabase("R3 profile projections", () => {
     expect(JSON.stringify(view)).not.toMatch(/любит кофе/u);
   });
 
+  it("keeps the current author's card out of a private-chat view while it is suppressed", async () => {
+    const fixture = await createFixture();
+    const memoryRef = await insertClaim({
+      content: "Анна встаёт в шесть утра",
+      conversationId: fixture.personalConversationId,
+      familyId: fixture.familyId,
+      ownerUserId: fixture.userId,
+      scope: "personal",
+      subjectUserId: fixture.userId,
+    });
+    const claim = await database().query<{ memory_item_id: string }>(
+      "SELECT memory_item_id FROM memory_item_refs WHERE memory_ref = $1",
+      [memoryRef],
+    );
+    const request = (suppressCurrentAuthor: boolean, turnId: string) => profileViewRepository.create({
+      ...fixture.ownerAuth,
+      scopes: ["personal", "family"],
+    }, {
+      conversationId: fixture.personalConversationId,
+      currentTelegramUserId: "9301",
+      explicitMentionTelegramUserIds: [],
+      now: new Date("2026-08-08T12:00:00.000Z"),
+      provenance: profileProvenance(turnId),
+      replyTelegramUserId: null,
+      retrievalClaimIds: [claim.rows[0]!.memory_item_id],
+      suppressCurrentAuthor,
+    });
+
+    const shown = await request(false, "private-shown");
+    expect(shown?.subjects).toEqual([expect.objectContaining({ label: "Анна", priority: "current_author" })]);
+    // Suppressed for twenty turns: neither the direct pick nor a retrieval-related hit may bring
+    // the same card back into context.
+    const suppressed = await request(true, "private-suppressed");
+    expect(suppressed?.subjects ?? []).toEqual([]);
+  });
+
   it("adds a verified retrieval-related subject to the current family profile view", async () => {
     const fixture = await createFixture();
     const petr = await database().query<{ id: string }>(
