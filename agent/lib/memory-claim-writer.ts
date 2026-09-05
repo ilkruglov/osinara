@@ -336,8 +336,11 @@ export async function createMemoryClaim(
         : auth.familyId;
     const contentNormalized = prepared?.contentNormalized ?? normalizeMemoryClaimContent(input.content);
     const reinforced = await reinforceExactClaim(client, auth, {
+      attribute: input.attribute ?? null,
       contentNormalized,
+      kind: input.kind,
       memoryProjectId: threadWrite?.identity.memoryProjectId ?? null,
+      occurredAt: input.occurredAt ?? null,
       operationKey: input.operationKey,
       prepared,
       scope: input.scope,

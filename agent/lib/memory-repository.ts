@@ -450,7 +450,7 @@ export const memoryRepository = {
              sensitivity, operation_key, provenance_state, origin_conversation_id,
              subject_family_id, subject_user_id, subject_participant_id, subject_conversation_id,
              subject_label, memory_project_id, save_approved, endorsed_by_user_id, endorsed_at,
-             content_normalized, profile_eligible)
+             content_normalized, profile_eligible, attribute, occurred_at)
           SELECT family_id, owner_user_id, group_id, $2, $3, scope, COALESCE($4, kind), $5,
                   'explicit_correction', $9, $10, 'user_confirmed',
                   COALESCE($6, sensitivity), $7, 'evidenced', $11,
@@ -458,7 +458,11 @@ export const memoryRepository = {
                  subject_conversation_id, subject_label, memory_project_id, true, $2,
                  CASE WHEN $2::uuid IS NULL THEN NULL ELSE now() END,
                   $8,
-                  profile_eligible AND COALESCE($6, sensitivity) = 'normal'
+                  profile_eligible AND COALESCE($6, sensitivity) = 'normal',
+                  -- A correction is a new version of the same record: it keeps the slot and the
+                  -- event date, or the edited episode leaves its date window and the profile claim
+                  -- leaves its slot.
+                  attribute, occurred_at
          FROM memory_items WHERE id = $1 AND claim_status = 'active'
          RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                    confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
