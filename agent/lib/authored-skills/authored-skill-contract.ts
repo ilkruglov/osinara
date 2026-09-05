@@ -150,14 +150,53 @@ function rubricProblems(draft: AuthoredSkillDraft, knownToolNames: ReadonlySet<s
   return problems;
 }
 
+const SKILL_MAX_LINES = 150;
+
+/**
+ * Advisory checklist: a skill that fails these still publishes, but the owner and the author see
+ * why it may load or run worse than it could.
+ */
+function rubricWarnings(draft: AuthoredSkillDraft): string[] {
+  const warnings: string[] = [];
+  if (sectionBody(draft.markdown, "## Когда не применять") === null) {
+    warnings.push("нет раздела «Когда не применять»: без границ навык будут загружать не по делу");
+  }
+  const steps = sectionBody(draft.markdown, "## Шаги") ?? "";
+  const stepLines = steps.split("\n").filter((line) => /^\s*(?:\d+[.)]|[-*])\s+/u.test(line));
+  if (stepLines.length < 2) warnings.push("в «Шагах» меньше двух пунктов: навык не описывает порядок действий");
+  if (!/[,;]|\bили\b/iu.test(draft.description)) {
+    warnings.push("description без косвенных формулировок: перечисли через запятую, по каким ещё просьбам навык нужен");
+  }
+  if (draft.markdown.split("\n").length > SKILL_MAX_LINES) {
+    warnings.push(`markdown длиннее ${SKILL_MAX_LINES} строк: объёмное вынеси в references/`);
+  }
+  return warnings;
+}
+
+export interface AuthoredSkillRubricReport {
+  /** Concrete trust or structure failures; a draft with any of them is refused. */
+  blocking: string[];
+  /** Quality hints; the draft still publishes, the owner sees them in the result. */
+  warnings: string[];
+}
+
+/** The explicit checklist: blocking items refuse, warnings only inform. */
+export function rubricChecklist(
+  draft: AuthoredSkillDraft,
+  knownToolNames: ReadonlySet<string>,
+): AuthoredSkillRubricReport {
+  return { blocking: rubricProblems(draft, knownToolNames), warnings: rubricWarnings(draft) };
+}
+
 /**
  * Validates a publish payload. Name and size problems are terminal for the payload; rubric
- * problems are retryable because the model can fix the text and call again.
+ * problems are retryable because the model can fix the text and call again. Returns the advisory
+ * warnings of a draft that passed.
  */
 export function assertAuthoredSkillDraft(
   draft: AuthoredSkillDraft,
   options: { knownToolNames: ReadonlySet<string> },
-): void {
+): string[] {
   if (!AUTHORED_SKILL_NAME_PATTERN.test(draft.name)) {
     throw new AppError(
       "AGENT_SKILL_NAME_INVALID",
@@ -180,8 +219,24 @@ export function assertAuthoredSkillDraft(
   if (sizes.length > 0) {
     throw new AppError("AGENT_SKILL_CONTENT_TOO_LARGE", `Навык не проходит по размеру: ${sizes.join("; ")}`);
   }
-  const rubric = rubricProblems(draft, options.knownToolNames);
-  if (rubric.length > 0) {
-    throw new AppError("AGENT_SKILL_RUBRIC_FAILED", `Навык не проходит рубрику: ${rubric.join("; ")}`);
+  const rubric = rubricChecklist(draft, options.knownToolNames);
+  if (rubric.blocking.length > 0) {
+    throw new AppError("AGENT_SKILL_RUBRIC_FAILED", `Навык не проходит рубрику: ${rubric.blocking.join("; ")}`);
   }
+  return rubric.warnings;
+}
+
+/** Rubric for stored content re-read against the current tool catalog (rollback). */
+export function assertStoredSkillContent(
+  content: { description: string; files: Readonly<Record<string, string>>; markdown: string; name: string },
+  knownToolNames: ReadonlySet<string>,
+): string[] {
+  const rubric = rubricChecklist({ ...content, changeNote: "-", trialSummary: "-" }, knownToolNames);
+  if (rubric.blocking.length > 0) {
+    throw new AppError(
+      "AGENT_SKILL_RUBRIC_FAILED",
+      `Эта версия больше не проходит рубрику в текущем режиме: ${rubric.blocking.join("; ")}`,
+    );
+  }
+  return rubric.warnings;
 }

@@ -60,17 +60,17 @@ describeWithDatabase("authored skill repository", () => {
     const first = await authoredSkillRepository.publish(owner, draft("birthday-card"), {
       knownToolNames: KNOWN, operationKey: "call-1", provenance,
     });
-    expect(first).toEqual({ name: "birthday-card", replayed: false, version: 1 });
+    expect(first).toMatchObject({ name: "birthday-card", replayed: false, version: 1 });
 
     const replay = await authoredSkillRepository.publish(owner, draft("birthday-card"), {
       knownToolNames: KNOWN, operationKey: "call-1", provenance,
     });
-    expect(replay).toEqual({ name: "birthday-card", replayed: true, version: 1 });
+    expect(replay).toMatchObject({ name: "birthday-card", replayed: true, version: 1 });
 
     const second = await authoredSkillRepository.publish(owner, draft("birthday-card", "Короче шаги"), {
       knownToolNames: KNOWN, operationKey: "call-2", provenance,
     });
-    expect(second).toEqual({ name: "birthday-card", replayed: false, version: 2 });
+    expect(second).toMatchObject({ name: "birthday-card", replayed: false, version: 2 });
 
     const listed = await authoredSkillRepository.list(familyId);
     expect(listed).toHaveLength(1);
@@ -88,9 +88,13 @@ describeWithDatabase("authored skill repository", () => {
     }, { knownToolNames: KNOWN, operationKey: "call-2", provenance });
 
     const rolled = await authoredSkillRepository.rollback(owner, {
-      name: "birthday-card", operationKey: "call-3", provenance, version: 1,
+      knownToolNames: KNOWN, name: "birthday-card", operationKey: "call-3", provenance, version: 1,
     });
-    expect(rolled).toEqual({ name: "birthday-card", replayed: false, version: 3 });
+    expect(rolled).toMatchObject({ name: "birthday-card", replayed: false, version: 3 });
+    // A version whose steps name a tool the current mode no longer has cannot come back.
+    await expect(authoredSkillRepository.rollback(owner, {
+      knownToolNames: new Set(), name: "birthday-card", operationKey: "call-3b", provenance, version: 1,
+    })).rejects.toMatchObject({ code: "AGENT_SKILL_RUBRIC_FAILED" });
     const packages = await authoredSkillRepository.activePackages(familyId);
     expect(packages).toEqual([expect.objectContaining({
       description: "Открытка к празднику через Flux", name: "birthday-card",
@@ -101,7 +105,7 @@ describeWithDatabase("authored skill repository", () => {
     await expect(authoredSkillRepository.read(familyId, "birthday-card"))
       .rejects.toMatchObject({ code: "AGENT_SKILL_NOT_FOUND" });
     await expect(authoredSkillRepository.rollback(owner, {
-      name: "birthday-card", operationKey: "call-4", provenance, version: 1,
+      knownToolNames: KNOWN, name: "birthday-card", operationKey: "call-4", provenance, version: 1,
     })).rejects.toMatchObject({ code: "AGENT_SKILL_NOT_FOUND" });
   });
 

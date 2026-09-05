@@ -21,6 +21,7 @@ import type { FamilyCaller } from "../family-context.js";
 import {
   AUTHORED_SKILL_LIMITS,
   assertAuthoredSkillDraft,
+  assertStoredSkillContent,
   type AuthoredSkillDraft,
 } from "./authored-skill-contract.js";
 
@@ -56,6 +57,8 @@ export interface AuthoredSkillProvenance {
 }
 
 export interface PublishAuthoredSkillResult {
+  /** Advisory rubric findings; empty when the content is clean. */
+  warnings?: string[];
   name: string;
   replayed: boolean;
   version: number;
@@ -173,7 +176,7 @@ export const authoredSkillRepository = {
       provenance: AuthoredSkillProvenance;
     },
   ): Promise<PublishAuthoredSkillResult> {
-    assertAuthoredSkillDraft(draft, { knownToolNames: input.knownToolNames });
+    const warnings = assertAuthoredSkillDraft(draft, { knownToolNames: input.knownToolNames });
     const client = await database().connect();
     try {
       await client.query("BEGIN");
@@ -182,7 +185,7 @@ export const authoredSkillRepository = {
       const replayed = await replayedVersion(client, caller.familyId, input.operationKey);
       if (replayed) {
         await client.query("COMMIT");
-        return replayed;
+        return { ...replayed, warnings };
       }
       const existing = await activeSkill(client, caller.familyId, draft.name);
       let skillId: string;
@@ -226,7 +229,7 @@ export const authoredSkillRepository = {
         code: "AGENT_SKILL_PUBLISHED", familyId: caller.familyId, name: draft.name, version,
         markdownChars: draft.markdown.length, fileCount: Object.keys(draft.files).length,
       }));
-      return { name: draft.name, replayed: false, version };
+      return { name: draft.name, replayed: false, version, warnings };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -237,7 +240,13 @@ export const authoredSkillRepository = {
 
   async rollback(
     caller: FamilyCaller,
-    input: { name: string; operationKey: string; provenance: AuthoredSkillProvenance; version: number },
+    input: {
+      knownToolNames: ReadonlySet<string>;
+      name: string;
+      operationKey: string;
+      provenance: AuthoredSkillProvenance;
+      version: number;
+    },
   ): Promise<PublishAuthoredSkillResult> {
     const client = await database().connect();
     try {
@@ -260,6 +269,8 @@ export const authoredSkillRepository = {
       if (!content) {
         throw new AppError("AGENT_SKILL_VERSION_NOT_FOUND", `У навыка ${input.name} нет версии ${input.version}`);
       }
+      // The old version passed the rubric of its day; the tool catalog may have changed since.
+      const warnings = assertStoredSkillContent({ ...content, name: input.name }, input.knownToolNames);
       const version = skill.version + 1;
       await client.query(
         `UPDATE authored_skills
@@ -277,7 +288,7 @@ export const authoredSkillRepository = {
         code: "AGENT_SKILL_ROLLED_BACK", familyId: caller.familyId, name: input.name,
         toVersion: input.version, version,
       }));
-      return { name: input.name, replayed: false, version };
+      return { name: input.name, replayed: false, version, warnings };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

@@ -120,7 +120,7 @@ describe("manage_skill", () => {
     expect(requireApprovalEvidence).toHaveBeenCalledTimes(2);
     expect(repository.rollback).toHaveBeenCalledWith(
       { familyId: "family-1", role: "owner", userId: "user-1" },
-      { name: "birthday-card", operationKey: "skill-call-1", provenance: { eveSessionId: "eve-session-1", eveTurnId: "turn-7" }, version: 1 },
+      { knownToolNames: expect.any(Set), name: "birthday-card", operationKey: "skill-call-1", provenance: { eveSessionId: "eve-session-1", eveTurnId: "turn-7" }, version: 1 },
     );
     expect(repository.retire).toHaveBeenCalledWith(
       { familyId: "family-1", role: "owner", userId: "user-1" }, { name: "birthday-card" },

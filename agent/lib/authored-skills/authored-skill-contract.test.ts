@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertAuthoredSkillDraft,
+  rubricChecklist,
   type AuthoredSkillDraft,
   stepToolNames,
 } from "./authored-skill-contract.js";
@@ -48,8 +49,25 @@ function draft(overrides: Partial<AuthoredSkillDraft> = {}): AuthoredSkillDraft 
 }
 
 describe("authored skill contract", () => {
-  it("accepts a complete draft", () => {
-    expect(() => assertAuthoredSkillDraft(draft(), { knownToolNames: KNOWN })).not.toThrow();
+  it("accepts a complete draft without warnings", () => {
+    expect(assertAuthoredSkillDraft(draft(), { knownToolNames: KNOWN })).toEqual([]);
+  });
+
+  it("publishes a thin draft but reports the checklist warnings", () => {
+    const thin = [
+      "## Когда применять", "Когда просят открытку.", "",
+      "## Шаги", "1. Вызови `generate_image`.", "",
+      "## Проверка результата", "Картинка есть.",
+    ].join("\n");
+    const warnings = assertAuthoredSkillDraft(draft({
+      description: "Открытка", files: { "references/flux-card.md": "Prompt template." }, markdown: thin,
+    }), { knownToolNames: KNOWN });
+    expect(warnings).toEqual([
+      expect.stringContaining("Когда не применять"),
+      expect.stringContaining("меньше двух пунктов"),
+      expect.stringContaining("косвенных формулировок"),
+    ]);
+    expect(rubricChecklist(draft(), KNOWN)).toEqual({ blocking: [], warnings: [] });
   });
 
   it("extracts tool names from the steps section only", () => {

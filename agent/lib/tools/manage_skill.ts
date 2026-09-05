@@ -129,7 +129,8 @@ export default defineTool({
         }
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.rollback(caller, {
-          name: requireName(input), operationKey: ctx.callId, provenance, version: input.version,
+          knownToolNames: await knownToolNames(owner), name: requireName(input),
+          operationKey: ctx.callId, provenance, version: input.version,
         });
         return { ...result, note: nextTurnNote };
       }
