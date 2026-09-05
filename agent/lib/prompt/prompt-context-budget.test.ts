@@ -13,8 +13,11 @@ const CORE_CHARACTER_BUDGET = 11_000;
 const PRIVATE_CHARACTER_BUDGET = 11_500;
 const FAMILY_CHARACTER_BUDGET = 12_500;
 const EXTERNAL_CHARACTER_BUDGET = 10_000;
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_000;
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_000;
+// Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
+// selection criterion with the discussion-summary slot.
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_400;
+// Raised by 400 on 5 September 2026 for the memory policy.
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 29_400;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

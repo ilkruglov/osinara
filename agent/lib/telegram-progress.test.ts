@@ -34,16 +34,31 @@ describe("completedTelegramOutput", () => {
       .toBeNull();
   });
 
+  it("separates the memory-used directive from the delivered final answer", () => {
+    expect(completedTelegramOutput({
+      finishReason: "stop",
+      message: "Гоша дома.\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+    })).toEqual({
+      kind: "message",
+      memoryUsedRefs: ["mem_0123456789abcdef0123456789abcdef"],
+      message: "Гоша дома.",
+    });
+    expect(completedTelegramOutput({
+      finishReason: "stop",
+      message: "<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
+    })).toBeNull();
+  });
+
   it("keeps aside directives inside a final answer for the presentation layer", () => {
     expect(
       completedTelegramOutput({ finishReason: "stop", message: "Готово\n<telegram-split>\nкстати" }),
-    ).toEqual({ kind: "message", message: "Готово\n<telegram-split>\nкстати" });
+    ).toEqual({ kind: "message", memoryUsedRefs: [], message: "Готово\n<telegram-split>\nкстати" });
   });
 
   it("trims surrounding whitespace from a delivered message", () => {
     expect(
       completedTelegramOutput({ finishReason: "stop", message: "\n\nГотовый ответ  " }),
-    ).toEqual({ kind: "message", message: "Готовый ответ" });
+    ).toEqual({ kind: "message", memoryUsedRefs: [], message: "Готовый ответ" });
   });
 
   it.each(["👍", "❤", "❤️", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕", "1️⃣", "🇺🇸"])(

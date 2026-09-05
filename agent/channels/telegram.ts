@@ -67,6 +67,7 @@ import { memoryReviewBatchId } from "../lib/memory-review/memory-review-session.
 import { memoryReviewRepository } from "../lib/memory-review/memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
+import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
@@ -268,6 +269,12 @@ export default telegramChannel({
           ctx,
           sentMessages.map((sent) => sent.messageId),
         );
+        // The delivered answer named the records it relied on; only refs shown this turn count.
+        await reinforceUsedMemories({
+          applicationSessionId: sessionId,
+          ctx,
+          memoryRefs: output.memoryUsedRefs ?? [],
+        });
       }
     },
     async "session.failed"(data, channel) {
