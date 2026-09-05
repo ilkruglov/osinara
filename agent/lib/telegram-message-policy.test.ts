@@ -43,13 +43,14 @@ describe("isMessageAddressedToBot", () => {
   it.each([
     "Осинар, посмотри сюда",
     "Асинара молодец",
-    "АЗИНАРЕ это понравится",
-    "Озинарой удобно пользоваться",
+    "Осинара просыпайся",
+    "чот очередь сообщений не разбирается у осинары",
+    "осинарочка, глянь",
     "Osinar help us",
     "Asinara is useful",
     "Синаара, ответь",
-  ])("accepts the agent name variant in ordinary group text: %s", (text) => {
-    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
+  ])("ignores the other agent name Osinara in ordinary group text: %s", (text) => {
+    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
   });
 
   it.each([
@@ -59,6 +60,7 @@ describe("isMessageAddressedToBot", () => {
     "Позови Мию",
     "Сделано Мией",
     "Mia, help us",
+    "Мия и Осинара, привет",
   ])("accepts the Mia name variant in ordinary group text: %s", (text) => {
     expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
   });
@@ -74,31 +76,6 @@ describe("isMessageAddressedToBot", () => {
   ])("does not match a Mia form inside one Unicode word: %s", (text) => {
     expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
   });
-
-  it.each([
-    "осинарочка, глянь",
-    "асинарачка, спасибо",
-    "озинарка тут?",
-    "Осинарушка, помоги",
-    "передайте осинарам",
-    "осинарами не пользуются",
-    "асинарке привет",
-    "osinarochka, look",
-  ])("accepts any suffix after an agent name stem: %s", (text) => {
-    expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(true);
-  });
-
-  it.each([
-    "семинар начался",
-    "квазиосинара",
-    "квазиосинарочка",
-    "не-осина-растёт",
-  ])(
-    "does not match a name stem inside another word: %s",
-    (text) => {
-      expect(isMessageAddressedToBot({ ...groupMessage, text }, "family_agent")).toBe(false);
-    },
-  );
 
   it("accepts mentions and replies to this bot", () => {
     expect(

@@ -34,8 +34,10 @@ interface TelegramDispatchMessage {
 const TELEGRAM_COMMAND_PATTERN =
   /^\/[A-Za-z0-9_]{1,32}(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u;
 const TELEGRAM_MENTION_PATTERN = /(?:^|[^A-Za-z0-9_])@(?<target>[A-Za-z0-9_]+)/gu;
+// Only this agent's own name wakes it. The upstream name "Осинара" belongs to another bot that
+// shares group chats with Mia, so its stems must not count as an address.
 const AGENT_NAME_PATTERN =
-  /(?:^|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])(?:(?:ми(?:я|и|е|ю|ей|ею)|mia)|(?:осинар|асинар|азинар|озинар|синаар|osinar|asinar)\p{L}*)(?=$|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])/iu;
+  /(?:^|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])(?:ми(?:я|и|е|ю|ей|ею)|mia)(?=$|[^\p{L}\p{M}\p{N}\p{Pc}\u200C\u200D])/iu;
 
 // The application persists authorized files and exposes trusted workspace paths. Eve must not
 // forward a second copy to the text-only primary model; vision runs through the dedicated tool.

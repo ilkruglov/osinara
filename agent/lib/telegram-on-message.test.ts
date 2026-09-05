@@ -551,7 +551,7 @@ describe("createTelegramMessageHandler", () => {
 
     const result = await createTelegramMessageHandler(repository)(
       telegramContext().context,
-      groupMessage("Осинара сегодня хорошо сработала"),
+      groupMessage("Мия сегодня хорошо сработала"),
     );
 
     expect(result?.auth?.attributes).toMatchObject({
