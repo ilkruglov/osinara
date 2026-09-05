@@ -350,6 +350,21 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     }
   },
 
+  /** Queue tail behind a leased head, oldest first: what the chat said after the current message. */
+  async listPendingAfter(input) {
+    requireUpdateId(input.afterUpdateId);
+    if (!Number.isSafeInteger(input.limit) || input.limit <= 0) return [];
+    const result = await database().query<{ payload: Record<string, unknown>; received_at: Date }>(
+      `SELECT payload, received_at
+         FROM telegram_ingress_updates
+        WHERE queue_id = $1 AND update_id > $2::bigint AND status = 'pending'
+        ORDER BY update_id
+        LIMIT $3`,
+      [input.queueId, input.afterUpdateId, input.limit],
+    );
+    return result.rows.map((row) => ({ payload: row.payload, receivedAt: row.received_at }));
+  },
+
   async hasPendingApprovalsInChat(telegramChatId) {
     requireNonEmpty(telegramChatId, "AGENT_TELEGRAM_CHAT_INVALID", "Не задан идентификатор Telegram-чата");
     const result = await database().query<{ pending: boolean }>(

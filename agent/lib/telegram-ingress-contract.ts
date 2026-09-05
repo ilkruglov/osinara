@@ -78,6 +78,12 @@ export interface TelegramIngressRepository {
   hasPendingApprovals(eveSessionId: string): Promise<boolean>;
   /** Unanswered confirmation prompts in a Telegram chat; a reply to one must stay its own update. */
   hasPendingApprovalsInChat(telegramChatId: string): Promise<boolean>;
+  /** Pending queue items behind a leased head, oldest first: the chat's newer, unanswered messages. */
+  listPendingAfter(input: {
+    afterUpdateId: string;
+    limit: number;
+    queueId: string;
+  }): Promise<{ payload: Record<string, unknown>; receivedAt: Date }[]>;
   rekeyQueue(input: {
     nextContinuationKey: string;
     previousContinuationKey: string;

@@ -283,6 +283,25 @@ describeWithDatabase("telegramIngressRepository", () => {
     });
   });
 
+  it("lists the pending tail behind a claimed head without leasing it", async () => {
+    await telegramIngressRepository.enqueue(updateInput("2201", "telegram:private:101", "раз"));
+    await telegramIngressRepository.enqueue(updateInput("2202", "telegram:private:101", "два"));
+    await telegramIngressRepository.enqueue(updateInput("2203", "telegram:private:101", "три"));
+    const head = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+
+    const tail = await telegramIngressRepository.listPendingAfter({
+      afterUpdateId: head!.updateId, limit: 1, queueId: head!.queueId,
+    });
+    expect(tail.map((row) => (row.payload.message as { text: string }).text)).toEqual(["два"]);
+    expect(tail[0]?.receivedAt).toBeInstanceOf(Date);
+    await expect(telegramIngressRepository.listPendingAfter({
+      afterUpdateId: head!.updateId, limit: 10, queueId: head!.queueId,
+    })).resolves.toHaveLength(2);
+    // Reading the tail leases nothing: the next claim still takes the second message.
+    await telegramIngressRepository.complete(head!.updateId, head!.leaseToken);
+    await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS)).resolves.toMatchObject({ updateId: "2202" });
+  });
+
   it("leases the accepted run behind a claimed head and leaves the rest pending", async () => {
     await telegramIngressRepository.enqueue(updateInput("2101", "telegram:private:101", "раз"));
     await telegramIngressRepository.enqueue(updateInput("2102", "telegram:private:101", "два"));

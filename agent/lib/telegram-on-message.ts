@@ -58,6 +58,7 @@ import {
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
 import { telegramInboundActor } from "./telegram-inbound-actor.js";
 import { readTelegramSeriesMarker } from "./telegram-message-series.js";
+import { formatPendingMessagesContext, readTelegramPendingMarker } from "./telegram-pending-messages.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -468,7 +469,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       }
     }
     // Memory travels with the delivery so the cacheable system prefix never changes between turns.
-    const memoryContext = await repositories.memoryContext({
+    const retrievedMemoryContext = await repositories.memoryContext({
       access,
       actor: { id: actor.id, kind: actor.kind },
       applicationSessionId: appSession.id,
@@ -480,6 +481,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       timelineEntryId: inboundTimeline.entryId,
       turnStartedAt,
     });
+    // What the chat said after this message and still waits in the queue, from the durable ingress.
+    const pendingBlock = formatPendingMessagesContext(readTelegramPendingMarker(message.raw));
+    const memoryContext = pendingBlock === null
+      ? retrievedMemoryContext
+      : [...retrievedMemoryContext, pendingBlock];
     const turnResult = buildTelegramTurnResult({
       access,
       actor,

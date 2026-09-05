@@ -33,6 +33,12 @@ import {
   type TelegramSeriesMarker,
   withSeriesMarker,
 } from "./telegram-message-series.js";
+import {
+  pendingMessagesFromPayloads,
+  TELEGRAM_PENDING_MESSAGES_MAX,
+  type TelegramPendingMessage,
+  withPendingMarker,
+} from "./telegram-pending-messages.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
@@ -333,11 +339,17 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         leased: TelegramIngressClaim,
         update: TelegramUpdate,
         marker: TelegramSeriesMarker | null,
+        pendingAfter: readonly TelegramPendingMessage[],
       ): Promise<void> {
         await dependencies.repository.beginDispatch(leased.updateId, leased.leaseToken);
-        const outbound = marker !== null && update.kind === "message"
+        const marked = marker !== null && update.kind === "message"
           ? withSeriesMarker(update, marker)
           : update;
+        // The turn sees what the chat said after its message: otherwise it answered a snapshot
+        // the conversation had already moved past, and two bots went in circles.
+        const outbound = pendingAfter.length > 0 && marked.kind === "message"
+          ? withPendingMarker(marked, pendingAfter)
+          : marked;
         const session = (await dispatch(
           withCaptionlessAttachmentText(outbound),
         )) as EveSessionResult | null | undefined;
@@ -435,9 +447,18 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             updateIds: series.map((item) => item.claim.updateId),
           }));
         }
+        const tail = series[series.length - 1]!;
+        const pendingAfter = tail.update.kind === "message"
+          ? pendingMessagesFromPayloads(await dependencies.repository.listPendingAfter({
+            afterUpdateId: tail.claim.updateId,
+            limit: TELEGRAM_PENDING_MESSAGES_MAX,
+            queueId: tail.claim.queueId,
+          }))
+          : [];
         for (let index = 0; index < series.length; index += 1) {
           const item = series[index]!;
-          await dispatchLeased(item.claim, item.update, seriesMarker(series, index));
+          const last = index === series.length - 1;
+          await dispatchLeased(item.claim, item.update, seriesMarker(series, index), last ? pendingAfter : []);
           pending.shift();
         }
       } catch (error) {

@@ -65,6 +65,7 @@ function repository() {
       fail: vi.fn(),
       hasPendingApprovals: vi.fn().mockResolvedValue(false),
       hasPendingApprovalsInChat: vi.fn().mockResolvedValue(false),
+      listPendingAfter: vi.fn().mockResolvedValue([]),
       rekeyQueue: vi.fn(),
       release: vi.fn(),
       releaseStaleLeases: vi.fn().mockResolvedValue(0),
@@ -616,6 +617,52 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.complete.mock.calls.map((call) => call[0])).toEqual(["2001", "2002"]);
     expect(storage.value.completeWithSession).toHaveBeenCalledWith("2003", third.leaseToken, "session-series", 1);
     expect(storage.value.fail).not.toHaveBeenCalled();
+  });
+
+  it("hands the turn the queue tail that arrived after its message", async () => {
+    const storage = repository();
+    const head = seriesClaim(storage, 4001, "Мия, что скажешь?");
+    storage.claim.payload = head.payload;
+    storage.claim.updateId = head.updateId;
+    storage.claim.voice = null as never;
+    storage.value.claimNext = vi.fn().mockResolvedValueOnce(head).mockResolvedValueOnce(null);
+    storage.value.listPendingAfter = vi.fn().mockResolvedValue([
+      { payload: seriesRaw(4002, "уже вписала", { first_name: "Осинара", id: 777, is_bot: true, username: "osinara_bot" }), receivedAt: new Date("2026-09-05T22:20:00Z") },
+      { payload: seriesRaw(4003, "и я тут", { first_name: "Илья", id: 303, is_bot: false }), receivedAt: new Date("2026-09-05T22:21:00Z") },
+    ]);
+    const dispatch = vi.fn().mockResolvedValueOnce({
+      getEventStream: async () =>
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "session.waiting" });
+          },
+        }),
+      id: "session-pending",
+    });
+    const handle = seriesIngress(storage, dispatch);
+    const update = parseTelegramUpdate(head.payload);
+    if (!update) throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое обновление");
+    let backgroundTask: Promise<unknown> | undefined;
+
+    await handle({
+      dispatch,
+      raw: head.payload,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    await backgroundTask;
+
+    expect(storage.value.listPendingAfter).toHaveBeenCalledWith({
+      afterUpdateId: "4001", limit: 10, queueId: storage.claim.queueId,
+    });
+    expect(dispatch.mock.calls[0]?.[0].message.raw.osinara_pending).toEqual([
+      expect.objectContaining({ isBot: true, messageId: "4002", senderName: "osinara_bot", text: "уже вписала" }),
+      expect.objectContaining({ isBot: false, messageId: "4003", senderName: "Илья", text: "и я тут" }),
+    ]);
+    // The queue tail is only read, never leased: those messages keep their own turns.
+    expect(storage.value.beginDispatch.mock.calls.map((call) => call[0])).toEqual(["4001"]);
   });
 
   it("fails the rest of a series when one dispatch throws and keeps the finished part completed", async () => {

@@ -13,19 +13,20 @@ import { modeInstructions } from "./mode-instructions.js";
 const CORE_CHARACTER_BUDGET = 11_300;
 const PRIVATE_CHARACTER_BUDGET = 12_000;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
-// 300 on 6 September for the addressing section with the explicit silence directive.
-const FAMILY_CHARACTER_BUDGET = 13_700;
+// 300 on 6 September for the addressing section with the explicit silence directive, then by
+// 300 the same day for the pending-messages rule in that section.
+const FAMILY_CHARACTER_BUDGET = 14_000;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive.
-const EXTERNAL_CHARACTER_BUDGET = 10_400;
+const EXTERNAL_CHARACTER_BUDGET = 10_700;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot, then by 400 on 6 September for the
 // addressing section with the explicit silence directive.
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 19_800;
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 20_100;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
 // 6 September for the addressing section with the explicit silence directive.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 31_000;
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 31_300;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {
