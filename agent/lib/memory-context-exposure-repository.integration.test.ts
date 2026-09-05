@@ -62,6 +62,21 @@ describeWithDatabase("memory context exposures", () => {
     )).resolves.toMatchObject({ rows: [{ session_turn: 30, shows: 2 }] });
   });
 
+  it("lists exactly the refs shown in one turn", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const sessionId = await createSession(fixture.familyId, fixture.groupId);
+    await memoryContextExposureRepository.record({
+      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_earlier"], sessionTurn: 29,
+    });
+    await memoryContextExposureRepository.record({
+      applicationSessionId: sessionId, authorTelegramUserId: null, memoryRefs: ["mem_block", "mem_search"], sessionTurn: 30,
+    });
+
+    const shown = await memoryContextExposureRepository.shownMemoryRefsForTurn(sessionId, 30);
+    expect([...shown].sort()).toEqual(["mem_block", "mem_search"]);
+    await expect(memoryContextExposureRepository.shownMemoryRefsForTurn(sessionId, 31)).resolves.toEqual(new Set());
+  });
+
   it("tracks the author card with its own window", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const sessionId = await createSession(fixture.familyId, fixture.groupId);
