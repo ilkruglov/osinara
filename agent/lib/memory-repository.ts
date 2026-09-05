@@ -13,6 +13,7 @@ import { insertClaimEvidence } from "./claim-evidence-writer.js";
 import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { memoryListRepository } from "./memory-list-repository.js";
+import { memoryReinforcementRepository } from "./memory-reinforcement-repository.js";
 import {
   memoryOperationHash,
   normalizeMemoryClaimContent,
@@ -222,6 +223,31 @@ export const memoryRepository = {
 
   async create(auth: MemoryAuthorization, input: CreateMemoryInput): Promise<ReferencedMemoryItem> {
     return await createMemoryClaim(auth, input);
+  },
+
+  /** The writer confirmed an existing record says the same: reinforce it instead of inserting. */
+  async reinforceByRef(
+    auth: MemoryAuthorization,
+    input: { memoryRef: string; provenance: { sessionId: string; turnId: string } },
+  ): Promise<ReferencedMemoryItem> {
+    const result = await memoryReinforcementRepository.reinforceByRefs(auth, {
+      memoryRefs: [input.memoryRef],
+      provenance: input.provenance,
+      reason: "remember_reinforces",
+    });
+    if (result.reinforced.length === 0) {
+      throw new AppError("AGENT_MEMORY_REF_INVALID", "Запись не найдена в разрешённой области памяти");
+    }
+    const client = await database().connect();
+    try {
+      const memory = await selectAuthorizedMemory(client, auth, input.memoryRef, "ref");
+      if (!memory) {
+        throw new AppError("AGENT_MEMORY_REF_INVALID", "Запись не найдена в разрешённой области памяти");
+      }
+      return rowToReferencedMemory(memory);
+    } finally {
+      client.release();
+    }
   },
 
   async deleteByRef(
