@@ -59,6 +59,12 @@ export const AGENT_INTERNAL_SELF_BASE_URL = "http://127.0.0.1:3000";
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS = 12_000;
 export const TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES = 100;
 export const TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES = 10_000;
+// An existing session sees only journal entries it has not seen, because its own turns live in
+// Eve history. Since delivery context of past turns is dropped from the prompt, a message that
+// never started a turn was visible for exactly one turn. A small recent window rides along with
+// every turn so the model keeps the last exchanges of the chat in front of it.
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES = 15;
+export const TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS = 3_000;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT = 50;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT = 50;
 export const TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED = 1;

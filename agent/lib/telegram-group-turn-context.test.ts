@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - New sessions receive a bounded bootstrap timeline with reply ancestry.
- * - Existing sessions receive only unseen entries that are not already owned by that session.
+ * - Existing sessions receive unseen entries that are not owned by that session, plus a bounded
+ *   window of the latest entries so the last exchanges stay in front of the model.
  * - Timeline context is embedded in the durable user message rather than ephemeral Eve context.
  * - The addressed message text is recoverable from the durable envelope the preparer produced.
  */
@@ -61,6 +62,54 @@ const input = {
 };
 
 describe("Telegram group turn context", () => {
+  it("keeps a bounded recent window next to the unseen entries of an existing session", async () => {
+    const deps = dependencies("90");
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [entry("99", "Новое после курсора")],
+      omittedBeforeSequence: null,
+    });
+    deps.journal.listRecent.mockResolvedValue([
+      entry("94", "x".repeat(2_000)),
+      entry("95", "Пух: слой ограничений снят"),
+      entry("96", "y".repeat(1_500)),
+      entry("99", "Новое после курсора"),
+    ]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare(input);
+
+    expect(deps.journal.listRecent).toHaveBeenCalledWith({
+      anchorEntryId: input.currentEntryId,
+      beforeSequence: input.currentSequence,
+      groupId: input.groupId,
+      limit: 15,
+      messageThreadId: null,
+    });
+    // The 3 000-character window walks back from the newest entry: #99, #96 and #95 fit, the
+    // 2 000-character #94 does not.
+    expect(result.durableMessage).toContain("#96 ");
+    expect(result.durableMessage).toContain("слой ограничений снят");
+    expect(result.durableMessage).not.toContain("#94 ");
+    expect(result.durableMessage.match(/#99 /gu)).toHaveLength(1);
+    expect(result.durableMessage.indexOf("#96 ")).toBeLessThan(result.durableMessage.indexOf("#99 "));
+  });
+
+  it("orders window and unseen entries by sequence and drops nothing that fits", async () => {
+    const deps = dependencies("90");
+    deps.journal.listIncremental.mockResolvedValue({
+      entries: [entry("97", "Не начало ход")],
+      omittedBeforeSequence: null,
+    });
+    deps.journal.listRecent.mockResolvedValue([entry("95", "Раньше"), entry("98", "Мой ответ")]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare(input);
+
+    const order = ["#95 ", "#97 ", "#98 "].map((marker) => result.durableMessage.indexOf(marker));
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect([...order].sort((left, right) => left - right)).toEqual(order);
+  });
+
   it("uses the same bounded context contract for a private conversation", async () => {
     const deps = dependencies(null);
     const privateEntry = {
@@ -146,7 +195,8 @@ describe("Telegram group turn context", () => {
       limit: 99,
       messageThreadId: null,
     });
-    expect(deps.journal.listRecent).not.toHaveBeenCalled();
+    // The recent window is the only bootstrap-style read of an existing session.
+    expect(deps.journal.listRecent).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
     expect(result.durableMessage).not.toBeNull();
     if (!result.durableMessage) throw new Error("Test expected a durable group message");
     expect(result.durableMessage).toContain("Новое сообщение участника");

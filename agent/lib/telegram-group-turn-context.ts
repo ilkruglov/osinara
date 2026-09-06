@@ -11,6 +11,8 @@
 import {
   TELEGRAM_GROUP_JOURNAL_CONTEXT_CHARACTERS,
   TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
+  TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
 } from "../config.js";
 import { AppError } from "./app-error.js";
 import { conversationTimelineRepository } from "./conversation-timeline-repository.js";
@@ -75,6 +77,36 @@ const CURRENT_MESSAGE_OPEN_TAG = "<current_telegram_message>";
 const CURRENT_MESSAGE_CLOSE_TAG = "</current_telegram_message>";
 const TURN_MESSAGE_ERROR_CODE = "AGENT_TELEGRAM_TURN_MESSAGE_INVALID";
 const CURRENT_TIMELINE_ENTRY_COUNT = 1;
+// Per-entry render overhead (sequence, kind, name, time, quotes) on top of the text itself.
+const RECENT_WINDOW_ENTRY_OVERHEAD = 80;
+
+/** The newest entries that fit the recent-window character cap, in chronological order. */
+export function recentTimelineWindow(
+  entries: readonly TelegramGroupJournalEntry[],
+  maxCharacters: number = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
+): TelegramGroupJournalEntry[] {
+  const window: TelegramGroupJournalEntry[] = [];
+  let used = 0;
+  for (const entry of [...entries].reverse()) {
+    const cost = (entry.contentText ?? "").length + RECENT_WINDOW_ENTRY_OVERHEAD;
+    if (used + cost > maxCharacters) break;
+    used += cost;
+    window.unshift(entry);
+  }
+  return window;
+}
+
+/** Unseen entries plus the recent window, without duplicates, in sequence order. */
+export function mergeTimelineEntries(
+  unseen: readonly TelegramGroupJournalEntry[],
+  window: readonly TelegramGroupJournalEntry[],
+): TelegramGroupJournalEntry[] {
+  const bySequence = new Map<string, TelegramGroupJournalEntry>();
+  for (const entry of [...window, ...unseen]) bySequence.set(entry.sequenceId, entry);
+  return [...bySequence.values()].sort((left, right) =>
+    BigInt(left.sequenceId) < BigInt(right.sequenceId) ? -1 : 1
+  );
+}
 
 function turnMessageError(reason: string, detail?: string): AppError {
   // The exact failure stays in logs; the caller only needs the stable contract error.
@@ -208,8 +240,26 @@ export function createTelegramGroupTurnContextPreparer(
             limit: TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
             messageThreadId: input.messageThreadId,
           });
+    // A session sees its own turns in Eve history, but past delivery context leaves the prompt, so
+    // a bounded window of the latest entries rides along with every incremental turn.
+    const recentWindow = cursor === null
+      ? []
+      : recentTimelineWindow(useConversationTimeline
+        ? await dependencies.timeline!.listRecent({
+            beforeSequence: input.currentSequence,
+            conversationId: input.conversationId!,
+            limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+          })
+        : await dependencies.journal.listRecent({
+            anchorEntryId: input.currentEntryId,
+            beforeSequence: input.currentSequence,
+            groupId: input.groupId!,
+            limit: TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_MESSAGES,
+            messageThreadId: input.messageThreadId,
+          }));
+    const timelineEntries = mergeTimelineEntries(page.entries, recentWindow);
     // Current capabilities filter each historical reference by its exact admitted media class.
-    const visibleEntries = page.entries.map((entry) =>
+    const visibleEntries = timelineEntries.map((entry) =>
       visibleTelegramTimelineEntry(entry, input.attachmentReferenceAccess)
     );
     const currentMessageEnvelope = currentTelegramMessageEnvelope(input);
