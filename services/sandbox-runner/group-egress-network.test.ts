@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ensureGroupNetwork } from "./group-egress-network.js";
+import { ensureGroupNetwork, removeUnusedGroupNetwork } from "./group-egress-network.js";
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
 import { sandboxRequestHash } from "./docker-sandbox-lifecycle.js";
 
@@ -23,7 +23,39 @@ function fixture(options: Record<string, string> = {}) {
 }
 
 describe("external group network isolation", () => {
-  it("connects a replacement proxy when reusing an existing group container", async () => {
+  it("retains a network referenced by a stopped group sandbox with no active endpoint", async () => {
+    const { docker, network, info } = fixture({ "com.docker.network.bridge.gateway_mode_ipv4": "isolated" });
+    info.Containers = { proxy: {} };
+    const disconnect = vi.fn(), remove = vi.fn();
+    Object.assign(network, { disconnect, remove });
+    docker.listContainers.mockImplementation(async (options?: unknown) => {
+      const filters = options as { all?: boolean; filters?: { label?: string[] } };
+      return filters.filters?.label?.includes("dev.osinara.sandbox.group-workspace-id=workspace")
+        ? [{ Id: "retained-stopped", State: "exited" }] : [{ Id: "proxy" }];
+    });
+    await removeUnusedGroupNetwork(docker as unknown as Docker, "test", "workspace");
+    expect(docker.listContainers).toHaveBeenCalledWith({ all: true, filters: { label: [
+      "dev.osinara.sandbox.project=test", "dev.osinara.sandbox.group-workspace-id=workspace",
+    ] } });
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("removes a proxy-only network only after its last retained sandbox is gone", async () => {
+    const { docker, network, info } = fixture({ "com.docker.network.bridge.gateway_mode_ipv4": "isolated" });
+    info.Containers = { proxy: {} };
+    const disconnect = vi.fn(), remove = vi.fn();
+    Object.assign(network, { disconnect, remove });
+    docker.listContainers.mockImplementation(async (options?: unknown) => {
+      const filters = options as { filters?: { label?: string[] } };
+      return filters.filters?.label?.includes("dev.osinara.sandbox.group-workspace-id=workspace") ? [] : [{ Id: "proxy" }];
+    });
+    await removeUnusedGroupNetwork(docker as unknown as Docker, "test", "workspace");
+    expect(disconnect).toHaveBeenCalledWith({ Container: "proxy", Force: true });
+    expect(remove).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])("connects a replacement proxy when reusing a group container (running: %s)", async (running) => {
     const root = await mkdtemp(join(tmpdir(), "osinara-group-network-"));
     try {
       const { docker, network, info } = fixture({ "com.docker.network.bridge.gateway_mode_ipv4": "isolated" });
@@ -34,8 +66,8 @@ describe("external group network isolation", () => {
         mounts: [{ mountPoint: "group" as const, workspaceId: "workspace" }],
         sandboxSessionId: "session", seedDigest: "a".repeat(64),
       };
-      const existing = { inspect: vi.fn().mockResolvedValue({
-        Id: "f".repeat(64), State: { Running: true }, Config: { Labels: {
+      const existing = { start: vi.fn(), inspect: vi.fn().mockResolvedValue({
+        Id: "f".repeat(64), State: { Running: running }, Config: { Labels: {
           "dev.osinara.sandbox.request-hash": sandboxRequestHash(request),
           "dev.osinara.sandbox.session-id": "session",
         } },
@@ -48,6 +80,7 @@ describe("external group network isolation", () => {
       });
       await expect(engine.createSession(request)).resolves.toMatchObject({ created: false, instanceId: "f".repeat(64) });
       expect(createContainer).not.toHaveBeenCalled();
+      expect(existing.start).toHaveBeenCalledTimes(running ? 0 : 1);
       expect(network.connect).toHaveBeenCalledWith({ Container: "new-proxy", EndpointConfig: { Aliases: ["sandbox-egress-proxy"] } });
     } finally {
       await rm(root, { force: true, recursive: true });

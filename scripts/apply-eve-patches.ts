@@ -19,6 +19,7 @@ import { resolve } from "node:path";
 import { patchWorkflowTransport } from "./eve-patches/workflow-transport.ts";
 import { patchSkillSync } from "./eve-patches/skill-sync.ts";
 import { patchHitlContext } from "./eve-patches/hitl-context.ts";
+import { patchStreamRecovery } from "./eve-patches/stream-recovery.ts";
 
 const EXPECTED_EVE_VERSION = "0.40.0";
 const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
@@ -117,6 +118,7 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
 await patchWorkflowTransport(replaceExact);
 await patchSkillSync(replaceExact);
 await patchHitlContext(replaceExact);
+await patchStreamRecovery(replaceExact);
 
 // A cold production start may prepare sandbox images before the child server becomes healthy.
 await replaceExact(
