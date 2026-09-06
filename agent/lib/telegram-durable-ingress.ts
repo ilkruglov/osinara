@@ -18,8 +18,9 @@ import {
   TELEGRAM_HITL_CALLBACK_PREFIX,
 } from "eve/channels/telegram";
 import { z } from "zod";
+import { Sema } from "async-sema";
 
-import { TELEGRAM_INGRESS_LEASE_MS } from "../config.js";
+import { TELEGRAM_INGRESS_CALLBACK_CONCURRENCY, TELEGRAM_INGRESS_LEASE_MS, TELEGRAM_INGRESS_MESSAGE_CONCURRENCY } from "../config.js";
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
 import { type TelegramIngressRepository } from "./telegram-ingress-contract.js";
@@ -152,6 +153,8 @@ function withTranscript(payload: Record<string, unknown>, transcript: string): R
 }
 
 export function createTelegramDurableIngress(dependencies: DurableIngressDependencies) {
+  const messageSlots = new Sema(TELEGRAM_INGRESS_MESSAGE_CONCURRENCY);
+  const callbackSlots = new Sema(TELEGRAM_INGRESS_CALLBACK_CONCURRENCY);
   async function maintainLease(
     updateId: string,
     leaseToken: string,
@@ -194,6 +197,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           heartbeatError = error;
         });
       let dispatchedSessionId: string | undefined;
+      let releaseSlot: (() => void) | undefined;
 
       try {
         let payload = claim.payload;
@@ -202,6 +206,15 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           continue;
         }
+
+        // SQL coalesces each queue behind its live leased head. A waiter whose lease was lost
+        // cannot dispatch after acquiring a slot; callbacks have capacity separate from model turns.
+        const slots = update.kind === "callback_query" ? callbackSlots : messageSlots;
+        const waitedForSlot = slots.tryAcquire() === undefined;
+        if (waitedForSlot) await slots.acquire();
+        releaseSlot = () => slots.release();
+        if (heartbeatError) throw heartbeatError;
+        if (waitedForSlot) await dependencies.repository.renewLease(claim.updateId, claim.leaseToken, dependencies.leaseMilliseconds);
 
         // Software updates are application-owned. Native HITL buttons must reach Eve's existing
         // onHitlCallbackQuery guard, which checks the exact pending request and current approver.
@@ -298,6 +311,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         // accidentally consume its late waiting event as the next message's completion.
         await dependencies.repository.fail(claim.updateId, claim.leaseToken, failure, dispatchedSessionId);
       } finally {
+        releaseSlot?.();
         heartbeatController.abort();
         await heartbeat;
       }

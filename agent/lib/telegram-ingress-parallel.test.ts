@@ -2,8 +2,48 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTelegramDurableIngress } from "./telegram-durable-ingress.js";
 import type { TelegramIngressRepository } from "./telegram-ingress-contract.js";
+import { TELEGRAM_INGRESS_CALLBACK_CONCURRENCY, TELEGRAM_INGRESS_MESSAGE_CONCURRENCY } from "../config.js";
 
 describe("independent Telegram queue progress", () => {
+  it.each(["none", "turn", "lease"] as const)("bounds turns and reserves callback capacity (failure: %s)", async failure => {
+    const ordinary = TELEGRAM_INGRESS_MESSAGE_CONCURRENCY + 1, callbacks = TELEGRAM_INGRESS_CALLBACK_CONCURRENCY + 1;
+    const items = Array.from({ length: ordinary + callbacks }, (_, index) => {
+      const id = index + 1, callback = index >= ordinary;
+      const from = { id: 100 + id, first_name: "User", is_bot: false };
+      const message = { message_id: id, date: 1700000000, text: "request", from,
+        chat: { id: callback ? 100 + id : -id, type: callback ? "private" : "group" } };
+      return { updateId: String(id), queueId: String(id), leaseToken: String(id), voice: null, transcript: null,
+        payload: { update_id: id, ...(callback ? { callback_query: { id: String(id), chat_instance: "chat", data: `eve:${id}`, from, message } } : { message }) } };
+    });
+    let releaseMessages!: () => void, releaseCallbacks!: () => void;
+    const gates = { message: new Promise<void>(resolve => { releaseMessages = resolve; }), callback_query: new Promise<void>(resolve => { releaseCallbacks = resolve; }) };
+    const active = { message: 0, callback_query: 0 }, maximum = { ...active };
+    const dispatched: number[] = [], completed: number[] = [], work: Promise<unknown>[] = [];
+    const repository = { claimNext: vi.fn(async () => items.shift() ?? null), beginDispatch: vi.fn(),
+      renewLease: vi.fn(async (id: string) => { if (failure === "lease" && id === String(ordinary)) throw new Error("expected test lease loss"); }),
+      sessionEventStreamCursor: vi.fn(async () => 0), completeWithSession: vi.fn(async (id: string) => { completed.push(Number(id)); }), fail: vi.fn() };
+    const handler = createTelegramDurableIngress({ repository: repository as unknown as TelegramIngressRepository,
+      botUsername: "osinara_bot", leaseMilliseconds: 60_000, acceptMedia: vi.fn(), authorizeVoice: vi.fn(),
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false), transcribeVoice: vi.fn() });
+    try {
+      for (let index = 0; index < ordinary + callbacks; index++) await handler.drain({ waitUntil: task => { work.push(task); }, dispatch: async update => {
+        const id = Number(update.kind === "message" ? update.message.messageId : update.callbackQuery.message!.messageId);
+        dispatched.push(id); active[update.kind]++; maximum[update.kind] = Math.max(maximum[update.kind], active[update.kind]);
+        return { id: String(id), getEventStream: async () => new ReadableStream({ async start(controller) {
+          await gates[update.kind]; active[update.kind]--;
+          if (failure === "turn" && id === 1) { controller.error(new Error("expected test turn failure")); return; }
+          controller.enqueue({ type: "session.waiting" }); controller.close();
+        } }) } as never;
+      } });
+      await vi.waitFor(() => expect(dispatched).toHaveLength(TELEGRAM_INGRESS_MESSAGE_CONCURRENCY + TELEGRAM_INGRESS_CALLBACK_CONCURRENCY));
+      releaseCallbacks(); await vi.waitFor(() => expect(completed.filter(id => id > ordinary)).toHaveLength(callbacks));
+      expect(dispatched.filter(id => id <= ordinary)).toHaveLength(TELEGRAM_INGRESS_MESSAGE_CONCURRENCY);
+    } finally { releaseMessages(); releaseCallbacks(); await Promise.all(work); }
+    expect(maximum).toEqual({ message: TELEGRAM_INGRESS_MESSAGE_CONCURRENCY, callback_query: TELEGRAM_INGRESS_CALLBACK_CONCURRENCY });
+    expect(repository.renewLease).toHaveBeenCalledTimes(2);
+    expect(repository.fail).toHaveBeenCalledTimes(failure === "none" ? 0 : 1);
+    expect(dispatched.includes(ordinary)).toBe(failure !== "lease");
+  });
   it("processes four private buttons before a slow group finishes without overtaking either queue", async () => {
     const items = [
       { id: 1, chat: -100, status: "pending" }, { id: 2, chat: -100, status: "pending" },

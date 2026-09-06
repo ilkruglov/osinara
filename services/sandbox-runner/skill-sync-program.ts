@@ -68,8 +68,16 @@ async function main(){
     }
     for(const name of request.removed)if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name))throw new Error('AGENT_SKILL_SYNC_NAME_INVALID');
     await verifyDirectories();
+    const staging=await directory(root,writes.length>0);
+    // A killed process cannot execute finally. Keep staging at one reserved root level so the
+    // next volume-locked pass can reclaim leftovers without scanning arbitrary package trees.
+    if(staging)for(const name of await fs.readdir('/proc/self/fd/'+staging.fd)){
+      if(!/^\.osinara-skill-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(name))continue;
+      const target=entry(staging,name),info=await fs.lstat(target);
+      if(info.isFile()||info.isSymbolicLink())await fs.unlink(target);
+    }
     for(const {target,bytes} of writes){
-      const parent=await directory(path.dirname(target),true),temporary=entry(parent,'.osinara-skill-'+crypto.randomUUID());
+      const parent=await directory(path.dirname(target),true),temporary=entry(staging,'.osinara-skill-'+crypto.randomUUID());
       try{await fs.writeFile(temporary,bytes,{flag:'wx',mode:0o644});await fs.rename(temporary,entry(parent,path.basename(target)))}finally{await fs.rm(temporary,{force:true})}
     }
     const parent=await directory(root,false);

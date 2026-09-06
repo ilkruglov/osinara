@@ -1,6 +1,6 @@
 /** Real filesystem integrity checks, with no Docker or application processes. */
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, truncate, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -16,6 +16,24 @@ async function sync(home: string, packages: unknown[], removed: string[] = [], p
 }
 
 describe("verified skill synchronization", () => {
+  it("reclaims only its orphaned temporary files after a killed write", async () => {
+    const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
+    const packages = [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }];
+    try {
+      await sync(home, packages);
+      const root = join(home, ".agents/skills"), folder = join(root, "test");
+      await writeFile(join(root, ".osinara-skill-user-note"), "kept");
+      packages[0]!.files[0]!.contentBase64 = Buffer.from("updated").toString("base64");
+      const prefix = `const testFs=require('node:fs/promises'),testRename=testFs.rename;testFs.rename=async function(from,to){if(String(from).includes('/.osinara-skill-'))process.kill(process.pid,'SIGKILL');return testRename.call(this,from,to)};`;
+      await expect(sync(home, packages, [], prefix)).rejects.toThrow();
+      const leftovers = async () => [...await readdir(root), ...await readdir(folder)].filter(name => /^\.osinara-skill-[0-9a-f]{8}-/u.test(name));
+      expect(await leftovers()).toHaveLength(1);
+      await sync(home, packages);
+      expect(await leftovers()).toHaveLength(0);
+      expect(await readFile(join(folder, "SKILL.md"), "utf8")).toBe("updated");
+      expect(await readFile(join(root, ".osinara-skill-user-note"), "utf8")).toBe("kept");
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
   it("repairs an oversized managed file without reading gigabytes into memory", async () => {
     const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
     const packages = [{ name: "test", files: [{ path: "SKILL.md", contentBase64: Buffer.from("reviewed").toString("base64") }] }];
