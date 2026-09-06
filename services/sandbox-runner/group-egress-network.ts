@@ -47,6 +47,12 @@ export async function removeUnusedGroupNetwork(docker: Docker, project: string, 
   if (info.Labels?.[GROUP_NETWORK_LABEL] !== workspaceId || info.Labels?.[PROJECT_LABEL] !== project) {
     throw new Error("AGENT_SANDBOX_GROUP_NETWORK_INVALID: Refusing to remove a foreign network");
   }
+  // Docker omits stopped containers from network endpoints, but they still retain its exact ID.
+  // Keep the network for the entire warm-container lifetime, not just while compute is running.
+  const retained = await docker.listContainers({ all: true, filters: { label: [
+    `dev.osinara.sandbox.project=${project}`, `dev.osinara.sandbox.group-workspace-id=${workspaceId}`,
+  ] } });
+  if (retained.length > 0) return;
   const containers = Object.keys(info.Containers ?? {});
   const proxies = await docker.listContainers({ all: true, filters: { label: [
     `com.docker.compose.project=${project}`, "com.docker.compose.service=sandbox-egress-proxy",
