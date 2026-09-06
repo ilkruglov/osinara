@@ -4,8 +4,8 @@
  * Constructs:
  * - `replaceExact`: fail-fast, count-checked, idempotent artifact replacement.
  * - Production startup health wait: permits bounded first-run sandbox preparation.
- * - Model exact-once policy: disables Eve reissues and multi-call compaction recovery.
- * - Restricted delegation policy: hides only the implicit root agent from external/review modes.
+ * - Workflow transport: bounded internal HTTP and a process-local fence for live redelivery.
+ * - Review delegation policy: keeps implicit root delegation out of background memory review.
  * - Adapter approval policy: propagates failed `input.requested` persistence.
  * - Background task auth: restores the verified caller that created the task on every parent wake.
  * - Telegram durable ingress: verified-update and authenticated internal-drain hooks.
@@ -13,6 +13,7 @@
  * - Telegram topic normalization: accepts thread IDs only on explicit forum-topic updates.
  * - Telegram public types: exposes only the reviewed application seams.
  * - Dynamic instructions: previews the current message before it is appended to durable history.
+ * - Skills/HITL: bulk materialization and single-pass context-only approval continuations.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

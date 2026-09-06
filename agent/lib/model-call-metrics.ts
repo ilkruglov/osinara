@@ -26,9 +26,10 @@ export function createModelCallMetrics(options: {
     if (!parsed || typeof parsed !== "object" || !("messages" in parsed) || !Array.isArray(parsed.messages)) {
       return { wireMetadataAvailable: false };
     }
-    const wire = parsed as { user?: unknown; messages: { role?: unknown }[]; tools?: unknown };
+    const wire = parsed as { user?: unknown; system?: unknown; messages: { role?: unknown }[]; tools?: unknown };
     const messages = JSON.stringify(wire.messages);
-    const system = JSON.stringify(wire.messages.filter((message) => message?.role === "system"));
+    const system = JSON.stringify(options.protocol === "anthropic-messages"
+      ? wire.system ?? [] : wire.messages.filter((message) => message?.role === "system"));
     const sample: Sample = { system: digest(system), tools: digest(JSON.stringify(wire.tools ?? [])), blocks: [] };
     for (let offset = 0; offset + BLOCK_CHARACTERS <= Math.min(messages.length, PREFIX_CHARACTERS); offset += BLOCK_CHARACTERS) {
       sample.blocks.push(digest(messages.slice(offset, offset + BLOCK_CHARACTERS)));
@@ -50,11 +51,11 @@ export function createModelCallMetrics(options: {
       prefixObservationTruncated: messages.length > PREFIX_CHARACTERS,
     };
   }
-  function usageFields(usage: LanguageModelV4Usage | undefined) {
+  function usageFields(usage: LanguageModelV4Usage | undefined, reportedUsage: unknown, outputComplete = true) {
     // Adapters normalize missing counters to zero. Only raw presence proves a measured zero;
     // raw content is inspected here but never logged.
     const count = (...path: string[]): number | null => {
-      let value: unknown = usage?.raw;
+      let value: unknown = reportedUsage;
       for (const key of path) {
         if (!value || typeof value !== "object" || Array.isArray(value)) return null;
         value = (value as Record<string, unknown>)[key];
@@ -71,13 +72,14 @@ export function createModelCallMetrics(options: {
         reasoningTokens: count("completion_tokens_details", "reasoning_tokens"),
       };
     }
+    const inputTokens = count("input_tokens") === null ? null : usage?.inputTokens.total ?? null;
+    const outputTokens = !outputComplete || count("output_tokens") === null ? null : usage?.outputTokens.total ?? null;
     return {
-      usageAvailable: usage?.inputTokens.total !== undefined && usage?.outputTokens.total !== undefined,
-      inputTokens: usage?.inputTokens.total ?? null,
-      outputTokens: usage?.outputTokens.total ?? null,
+      usageAvailable: inputTokens !== null && outputTokens !== null,
+      inputTokens, outputTokens,
       cacheReadTokens: count("cache_read_input_tokens"),
       cacheWriteTokens: count("cache_creation_input_tokens"),
-      reasoningTokens: usage?.outputTokens.reasoning ?? null,
+      reasoningTokens: count("output_tokens_details", "thinking_tokens"),
     };
   }
   return {
@@ -88,7 +90,7 @@ export function createModelCallMetrics(options: {
         const result = await doGenerate();
         log({ code: "AGENT_MODEL_CALL_METRICS", requestId, provider: options.provider, modelId: options.modelId,
           durationMs: Math.round(now() - started), finishReason: result.finishReason.unified,
-          ...wireMetadata(result.request?.body), ...usageFields(result.usage),
+          ...wireMetadata(result.request?.body), ...usageFields(result.usage, result.usage.raw),
         });
         return result;
       } catch (error) {
@@ -113,10 +115,10 @@ export function createModelCallMetrics(options: {
       let recorded = false;
       let released = false;
       const release = () => { if (!released) { released = true; reader.releaseLock(); } };
-      const record = (outcome: string, usage?: LanguageModelV4Usage) => {
+      const record = (outcome: string, usage?: LanguageModelV4Usage, reportedUsage?: unknown) => {
         if (recorded) return; recorded = true;
         log({ code: "AGENT_MODEL_CALL_METRICS", requestId, provider: options.provider, modelId: options.modelId,
-          durationMs: Math.round(now() - started), headersMs, firstDataMs, outcome, ...metadata, ...usageFields(usage) });
+          durationMs: Math.round(now() - started), headersMs, firstDataMs, outcome, ...metadata, ...usageFields(usage, reportedUsage, outcome !== "other" && outcome !== "error") });
       };
       return { ...result, stream: new ReadableStream({
         async pull(controller) {
@@ -125,7 +127,8 @@ export function createModelCallMetrics(options: {
             if (next.done) { record("stream-ended-without-usage"); release(); controller.close(); return; }
             const part = next.value;
             if (["text-delta", "reasoning-delta", "tool-input-delta"].includes(part.type)) firstDataMs ??= Math.round(now() - started);
-            if (part.type === "finish") record(part.finishReason.unified, part.usage);
+            if (part.type === "finish") record(part.finishReason.unified, part.usage, options.protocol === "anthropic-messages"
+              ? part.providerMetadata?.anthropic?.usage : part.usage.raw);
             if (part.type === "error") record("failed");
             controller.enqueue(part);
           } catch (error) { record(params.abortSignal?.aborted ? "cancelled" : "failed"); release(); controller.error(error); }

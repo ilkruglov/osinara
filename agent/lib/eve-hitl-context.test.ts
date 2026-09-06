@@ -4,9 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { resolvePendingInput, hasDeferredStepInput } from "../../node_modules/eve/dist/src/harness/input-requests.js";
 import type { HarnessSession } from "../../node_modules/eve/dist/src/harness/types.js";
 import { MockLanguageModelV4 } from "ai/test";
+import { coordinateApprovalDelivery } from "../../node_modules/eve/dist/src/harness/approval-delivery-coordinator.js";
+import { consumeDeferredStepInput } from "../../node_modules/eve/dist/src/harness/input-requests.js";
+import { ContextContainer, contextStorage } from "../../node_modules/eve/dist/src/context/container.js";
+import { AuthKey } from "../../node_modules/eve/dist/src/context/keys.js";
 
-function pendingSession(): HarnessSession {
-  const requests = ["first", "second"].map((requestId) => ({
+function pendingSession(count = 2): HarnessSession {
+  const requests = ["first", "second", "third", "fourth"].slice(0, count).map((requestId) => ({
     kind: "tool-approval", display: "confirmation", requestId, prompt: requestId,
     action: { kind: "tool-call", callId: requestId, toolName: "change", input: { id: requestId } },
     options: [{ id: "approve", label: "Approve" }, { id: "cancel", label: "Cancel" }],
@@ -24,6 +28,30 @@ function pendingSession(): HarnessSession {
 }
 
 describe("Eve approval continuation context", () => {
+  it.each(["approve", "cancel"] as const)("settles four sequential buttons once, preserving the third %s", async (third) => {
+    let session = pendingSession(4), messages: ModelMessage[] = [];
+    const context = new ContextContainer();
+    context.set(AuthKey, { authenticator: "telegram", principalId: "owner", principalType: "user", attributes: {} });
+    for (const [index, requestId] of ["first", "second", "third", "fourth"].entries()) {
+      const next = consumeDeferredStepInput({ session, input: {
+        inputResponses: [{ requestId, optionId: index === 2 ? third : "approve" }],
+        ...(index === 3 ? { context: ["Verified final response metadata"] } : {}),
+      } });
+      const coordinated = await contextStorage.run(context, () => coordinateApprovalDelivery({ session: next.session, stepInput: next.input, tools: new Map(), now: 100 + index }));
+      const resolved = resolvePendingInput({ session: coordinated.session, stepInput: coordinated.stepInput });
+      expect(resolved.outcome).toBe(index === 3 ? "resolved" : "unresolved");
+      session = resolved.session; messages = resolved.messages;
+    }
+    expect(hasDeferredStepInput(session)).toBe(false);
+    const execute = vi.fn(async (input: { id: string }) => input.id);
+    const model = new MockLanguageModelV4({ doGenerate: async () => ({
+      content: [{ type: "text", text: "Settled" }], finishReason: { unified: "stop", raw: "stop" }, warnings: [],
+      usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
+    }) });
+    await generateText({ model, messages, tools: { change: { inputSchema: jsonSchema<{ id: string }>({ type: "object", properties: { id: { type: "string" } }, required: ["id"] }), execute } } });
+    expect(execute.mock.calls.map(([input]) => input.id)).toEqual(third === "approve" ? ["first", "second", "third", "fourth"] : ["first", "second", "fourth"]);
+  });
+
   it("executes the approved action once while explaining cancellation of the other without another turn", async () => {
     const context = ["The second action timed out; it must not run."];
     const session = pendingSession();

@@ -5,6 +5,22 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createModelCallMetrics } from "./model-call-metrics.js";
 
 describe("model request measurements", () => {
+  it.each(["partial", "absent", "complete"] as const)("does not invent Anthropic stream totals (%s usage)", async kind => {
+    const log = vi.fn();
+    const chunks: unknown[] = kind === "absent" ? [] : [{ type: "message_start", message: {
+      id: "test", type: "message", role: "assistant", model: "claude-sonnet-4-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 0 },
+    } }];
+    if (kind === "complete") chunks.push({ type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 2 } });
+    chunks.push({ type: "message_stop" });
+    const provider = createAnthropic({ apiKey: "test", fetch: async () => new Response(chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join(""), { headers: { "content-type": "text/event-stream" } }) });
+    const model = wrapLanguageModel({ model: provider("claude-sonnet-4-5"), middleware: createModelCallMetrics({
+      provider: "anthropic", protocol: "anthropic-messages", modelId: "test", log,
+    }) });
+    const result = await model.doStream({ prompt: [{ role: "user", content: [{ type: "text", text: "test" }] }] });
+    for await (const _part of result.stream) {}
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ usageAvailable: kind === "complete", inputTokens: kind === "absent" ? null : 10, outputTokens: kind === "complete" ? 2 : null }));
+  });
+
   it.each([false, true])("preserves Anthropic cache counter presence (reported: %s)", async (reported) => {
     const log = vi.fn();
     const provider = createAnthropic({ apiKey: "test", fetch: async () => new Response(JSON.stringify({
@@ -16,7 +32,9 @@ describe("model request measurements", () => {
     const model = wrapLanguageModel({ model: provider("claude-sonnet-4-5"), middleware: createModelCallMetrics({
       provider: "anthropic", protocol: "anthropic-messages", modelId: "test", log,
     }) });
-    await model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "test" }] }] });
+    await model.doGenerate({ prompt: [{ role: "system", content: "stable-system" }, { role: "user", content: [{ type: "text", text: "test" }] }] });
+    expect(log.mock.calls[0]![0].systemCharacters).toBeGreaterThan("stable-system".length);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("stable-system");
     expect(log).toHaveBeenCalledWith(expect.objectContaining({ usageAvailable: true,
       cacheReadTokens: reported ? 0 : null, cacheWriteTokens: reported ? 0 : null,
     }));

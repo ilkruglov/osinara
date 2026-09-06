@@ -46,7 +46,7 @@ describe("NeuralDeep model transport", () => {
     for (const [index, request] of requests.entries()) {
       expect(request.user).toBe("synthetic-session");
       expect(request.stream_options).toEqual({ include_usage: true });
-      expect(request.messages[0]).toEqual({ role: "system", content: "Stable rules\n\n" });
+      expect(request.messages[0]).toEqual({ role: "system", content: "Stable rules" });
       expect(request.messages.at(-1)?.content).toContain("<osinara_turn_memory");
       expect(request.messages[3]!.content).toBe(index === 0 ? "first question" : "second question");
     }

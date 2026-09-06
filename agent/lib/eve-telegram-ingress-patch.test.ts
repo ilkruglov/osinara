@@ -203,6 +203,7 @@ describe("Eve Telegram verified ingress patch", () => {
       await cp(resolve("node_modules/eve"), eveTarget, { recursive: true });
       await cp(resolve("node_modules/@workflow/world-postgres"), join(root, "node_modules/@workflow/world-postgres"), { recursive: true });
       await cp(resolve("scripts/eve-runtime"), join(root, "scripts/eve-runtime"), { recursive: true });
+      await cp(resolve("scripts/runtime"), join(root, "scripts/runtime"), { recursive: true });
       const runtime = await readFile(runtimePath, "utf8");
       await writeFile(runtimePath, runtime.replace(
         "r.replyHandling!==`message`",

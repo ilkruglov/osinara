@@ -15,7 +15,13 @@ export function placeEphemeralMemoryContext(prompt: LanguageModelV4Prompt): Lang
   const block = blocks[0]!;
   const output = prompt.flatMap((message) => {
     if (message.role !== "system" || !message.content.includes(block[0])) return [message];
-    const content = message.content.replace(block[0], "");
+    const start = message.content.indexOf(block[0]);
+    let before = message.content.slice(0, start), after = message.content.slice(start + block[0].length);
+    // Eve joins system fragments with two newlines. Remove this fragment's separator as well,
+    // otherwise an absent retrieval block changes the supposedly stable system prefix.
+    if (before.endsWith("\n\n")) before = before.slice(0, -2);
+    else if (after.startsWith("\n\n")) after = after.slice(2);
+    const content = before + after;
     return content.trim() ? [{ ...message, content }] : [];
   });
   // The original question can disappear during native compaction. Appending preserves the whole

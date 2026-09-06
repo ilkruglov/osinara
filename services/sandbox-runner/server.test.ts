@@ -64,6 +64,42 @@ afterEach(async () => {
 });
 
 describe("sandbox runner HTTP server", () => {
+  it("stops admission and waits for accepted creation work before shutdown completes", async () => {
+    const engine = fakeEngine(), baseUrl = await start(engine), server = servers.at(-1)!;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    engine.createSession = vi.fn(async () => { await gate; return { created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID }; });
+    const incoming = fetch(`${baseUrl}/v1/sessions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+      access: "restricted", eveSessionId: SESSION_ID, sandboxSessionId: SANDBOX_SESSION_ID,
+      mounts: [{ mountPoint: "group", workspaceId: WORKSPACE_ID }], seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", seedFiles: [],
+    }) });
+    try {
+      await vi.waitFor(() => expect(engine.createSession).toHaveBeenCalledOnce());
+      let drained = false;
+      const closing = server.closeAndDrain().then(() => { drained = true; });
+      servers.splice(servers.indexOf(server), 1);
+      await expect(incoming).rejects.toThrow();
+      await new Promise(resolve => setTimeout(resolve, 0)); expect(drained).toBe(false);
+      await expect(fetch(`${baseUrl}/health`)).rejects.toThrow();
+      release(); await closing; expect(drained).toBe(true);
+    } finally { release(); await incoming.catch(() => undefined); }
+  });
+  it("cancels skill synchronization when its HTTP caller disconnects", async () => {
+    const engine = fakeEngine(), baseUrl = await start(engine), controller = new AbortController();
+    let deliveredSignal: AbortSignal | undefined;
+    engine.syncSkills = vi.fn(async (_id, _request, signal) => {
+      deliveredSignal = signal;
+      await new Promise<void>(resolve => signal!.addEventListener("abort", () => resolve(), { once: true }));
+      return { checked: 0, written: 0, removed: 0 };
+    });
+    const request = fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/skills`, {
+      method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
+      body: JSON.stringify({ expectedInstanceId: "a".repeat(64), packages: [], removed: [] }),
+    });
+    const rejected = expect(request).rejects.toThrow();
+    await vi.waitFor(() => expect(deliveredSignal).toBeDefined()); controller.abort();
+    await rejected; await vi.waitFor(() => expect(deliveredSignal!.aborted).toBe(true));
+  });
   it("validates a bulk skill update and refuses traversal before engine execution", async () => {
     const engine = fakeEngine(); const baseUrl = await start(engine);
     const body = { expectedInstanceId: "a".repeat(64), removed: [], packages: [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }] };
@@ -71,7 +107,7 @@ describe("sandbox runner HTTP server", () => {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     expect(response.status).toBe(200);
-    expect(engine.syncSkills).toHaveBeenCalledWith(SANDBOX_SESSION_ID, body);
+    expect(engine.syncSkills).toHaveBeenCalledWith(SANDBOX_SESSION_ID, body, expect.any(AbortSignal));
     body.packages[0]!.files[0]!.path = "../outside";
     const invalid = await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/skills`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),

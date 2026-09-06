@@ -4,10 +4,10 @@ import { createTelegramDurableIngress } from "./telegram-durable-ingress.js";
 import type { TelegramIngressRepository } from "./telegram-ingress-contract.js";
 
 describe("independent Telegram queue progress", () => {
-  it("processes private buttons before a slow group finishes without overtaking either queue", async () => {
+  it("processes four private buttons before a slow group finishes without overtaking either queue", async () => {
     const items = [
       { id: 1, chat: -100, status: "pending" }, { id: 2, chat: -100, status: "pending" },
-      { id: 3, chat: 101, status: "pending" }, { id: 4, chat: 101, status: "pending" },
+      ...[3, 4, 5, 6].map(id => ({ id, chat: 101, status: "pending" })),
     ];
     const finish = async (id: string) => { items.find((item) => String(item.id) === id)!.status = "completed"; };
     const cursors = new Map<string, number>();
@@ -75,15 +75,15 @@ describe("independent Telegram queue progress", () => {
       await Promise.resolve();
       expect(dispatched).toEqual([1, 3]);
       releasePrivate();
-      await vi.waitFor(() => expect(items[3]!.status).toBe("completed"));
+      await vi.waitFor(() => expect(items[5]!.status).toBe("completed"));
       expect(items[0]!.status).toBe("processing");
-      expect(dispatched).toEqual([1, 3, 4]);
+      expect(dispatched).toEqual([1, 3, 4, 5, 6]);
     } finally {
       releasePrivate(); releaseGroup();
       await Promise.all(work);
     }
-    expect(dispatched).toEqual([1, 3, 4, 2]);
-    expect(streamStarts).toEqual([[1, 0], [3, 0], [4, 1], [2, 1]]);
+    expect(dispatched).toEqual([1, 3, 4, 5, 6, 2]);
+    expect(streamStarts).toEqual([[1, 0], [3, 0], [4, 1], [5, 2], [6, 3], [2, 1]]);
     expect(repository.fail).not.toHaveBeenCalled();
   });
 });

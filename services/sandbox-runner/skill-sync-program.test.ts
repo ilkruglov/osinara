@@ -1,13 +1,13 @@
 /** Real filesystem integrity checks, with no Docker or application processes. */
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SKILL_SYNC_PROGRAM } from "./skill-sync-program.js";
 
-async function sync(home: string, packages: unknown[], removed: string[] = []) {
-  const process = spawn(globalThis.process.execPath, ["-e", SKILL_SYNC_PROGRAM], { env: { ...globalThis.process.env, HOME: home } });
+async function sync(home: string, packages: unknown[], removed: string[] = [], prefix = "") {
+  const process = spawn(globalThis.process.execPath, ["--max-old-space-size=64", "-e", prefix + SKILL_SYNC_PROGRAM], { env: { ...globalThis.process.env, HOME: home } });
   let stdout = "", stderr = "";
   process.stdout.on("data", (data) => { stdout += data; }); process.stderr.on("data", (data) => { stderr += data; });
   process.stdin.end(JSON.stringify({ packages, removed }));
@@ -16,6 +16,45 @@ async function sync(home: string, packages: unknown[], removed: string[] = []) {
 }
 
 describe("verified skill synchronization", () => {
+  it("repairs an oversized managed file without reading gigabytes into memory", async () => {
+    const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
+    const packages = [{ name: "test", files: [{ path: "SKILL.md", contentBase64: Buffer.from("reviewed").toString("base64") }] }];
+    try {
+      await sync(home, packages);
+      const path = join(home, ".agents/skills/test/SKILL.md");
+      await truncate(path, 4 * 1024 ** 3);
+      expect((await sync(home, packages)).written).toBe(1);
+      expect(await readFile(path, "utf8")).toBe("reviewed");
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
+
+  it("preserves supporting filenames when UTF-8 characters cross stdin chunks", async () => {
+    const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
+    const packages = [{ name: "test", files: [
+      { path: "SKILL.md", contentBase64: "b2s=" }, { path: "данные.txt", contentBase64: "b2s=" },
+    ] }];
+    const bytes = Buffer.from(JSON.stringify({ packages, removed: [] }));
+    const split = bytes.indexOf(Buffer.from("данные")) + 1;
+    const prefix = `Object.defineProperty(process,'stdin',{value:require('node:stream').Readable.from([Buffer.from('${bytes.subarray(0, split).toString("base64")}','base64'),Buffer.from('${bytes.subarray(split).toString("base64")}','base64')])});`;
+    try {
+      await sync(home, packages, [], prefix);
+      expect(await readFile(join(home, ".agents/skills/test/данные.txt"), "utf8")).toBe("ok");
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
+
+  it("does not follow a parent directory swapped to a symlink after it was opened", async () => {
+    const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
+    const packages = [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }];
+    try {
+      await sync(home, packages);
+      const original = join(home, ".agents/skills/test"), moved = join(home, "moved"), outside = join(home, "outside");
+      await mkdir(outside); await writeFile(join(outside, "SKILL.md"), "private");
+      const prefix = `const testFs=require('node:fs/promises'),testOpen=testFs.open;let testSwapped=false;testFs.open=async function(path,...args){const handle=await testOpen.call(this,path,...args);if(!testSwapped&&String(path).endsWith('/test')){testSwapped=true;await testFs.rename(${JSON.stringify(original)},${JSON.stringify(moved)});await testFs.symlink(${JSON.stringify(outside)},${JSON.stringify(original)});}return handle;};`;
+      await expect(sync(home, packages, [], prefix)).rejects.toThrow("AGENT_SKILL_SYNC_PATH_CHANGED");
+      expect(await readFile(join(outside, "SKILL.md"), "utf8")).toBe("private");
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
+
   it("does not rewrite intact files, repairs tampering, and removes revoked packages only", async () => {
     const home = await mkdtemp(join(tmpdir(), "osinara-skill-sync-"));
     const packages = [{ name: "test", files: [{ path: "SKILL.md", contentBase64: Buffer.from("reviewed").toString("base64") }] }];

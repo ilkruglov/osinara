@@ -126,8 +126,12 @@ async function route(
   const processMatch = PROCESS_ROUTE.exec(url.pathname);
   const skillMatch = new RegExp(`^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/skills$`, "u").exec(url.pathname);
   if (request.method === "POST" && skillMatch) {
+    const controller = new AbortController();
+    request.once("aborted", () => controller.abort());
+    response.once("close", () => { if (!response.writableEnded) controller.abort(); });
     const result = await dependencies.engine.syncSkills(
       parseSandboxSessionId(decodeURIComponent(skillMatch[1]!)), parseSkillSyncRequest(await readJson(request)),
+      controller.signal,
     );
     sendJson(response, 200, result);
     return;
@@ -201,8 +205,14 @@ async function route(
 }
 
 export function createSandboxRunnerServer(dependencies: ServerDependencies) {
-  return createServer((request, response) => {
-    void route(dependencies, request, response).catch((error: unknown) => {
+  const active = new Set<Promise<void>>();
+  let closing = false, closeTask: Promise<void> | undefined;
+  const server = createServer((request, response) => {
+    if (closing) {
+      sendJson(response, 503, { code: "AGENT_SANDBOX_RUNNER_SHUTTING_DOWN", message: "Runner is stopping; this request was not started" });
+      return;
+    }
+    const operation = route(dependencies, request, response).catch((error: unknown) => {
       const invalidRequest = requestError(error);
       console.error("Sandbox runner request failed", {
         error,
@@ -226,5 +236,20 @@ export function createSandboxRunnerServer(dependencies: ServerDependencies) {
           : "Runner operation failed; inspect sandbox-runner logs",
       });
     });
+    active.add(operation);
+    // The route boundary owns error reporting; shutdown waits for settlement, not for success.
+    void operation.then(() => active.delete(operation), () => active.delete(operation));
+  });
+  return Object.assign(server, {
+    closeAndDrain(): Promise<void> {
+      closeTask ??= (async () => {
+        closing = true;
+        const closed = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        server.closeAllConnections();
+        await closed;
+        await Promise.allSettled([...active]);
+      })();
+      return closeTask;
+    },
   });
 }

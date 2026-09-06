@@ -24,10 +24,10 @@ import { scopedWorkspaceRunner } from "./runner-sandbox-backend.js";
 import { authorizeCurrentExternalGroupCapability } from "../tool-policy/external-group-live-policy.js";
 import { externalGroupBash } from "../tool-policy/external-group-bash.js";
 
-const policy = vi.hoisted(() => ({ tools: [] as string[] }));
+const policy = vi.hoisted(() => ({ tools: [] as string[], skills: [] as string[] }));
 vi.mock("../database.js", () => ({
   database: () => ({ connect: async () => ({
-    query: async () => ({ rows: [{ tool_allowlist: policy.tools }] }),
+    query: async () => ({ rows: [{ tool_allowlist: policy.tools, skill_allowlist: policy.skills }] }),
     release: () => undefined,
   }) }),
 }));
@@ -42,7 +42,7 @@ const servers: Array<ReturnType<typeof createSandboxRunnerServer>> = [];
 
 function fakeEngine(): SandboxEngine {
   return {
-    syncSkills: vi.fn(async () => ({ checked: 0, written: 0, removed: 0 })),
+    syncSkills: vi.fn<SandboxEngine["syncSkills"]>(async (_id, request) => ({ checked: request.packages.reduce((count, pkg) => count + pkg.files.length, 0), written: 0, removed: 0 })),
     createSession: vi.fn(async (request) => ({
       created: request.seedFiles !== undefined,
       seedRequired: request.seedFiles === undefined,
@@ -81,6 +81,7 @@ async function runnerUrl(engine: SandboxEngine): Promise<string> {
 
 afterEach(async () => {
   policy.tools = [];
+  policy.skills = [];
   await Promise.all(servers.splice(0).map((server) =>
     new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   ));
@@ -88,6 +89,21 @@ afterEach(async () => {
 });
 
 describe("scopedWorkspaceRunner", () => {
+  it("rechecks the live group skill list before materializing a previously granted package", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-")); roots.push(appRoot);
+    const engine = fakeEngine(), backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const handle = await backend.create({ runtimeContext: { appRoot }, sessionKey: BACKEND_SESSION_ID,
+      templateKey: null, tags: { sessionId: SESSION_ID } });
+    await handle.useSessionFn({ mounts: [{ mountPoint: "group", workspaceId: WORKSPACE_ID }], sandboxSessionId: SANDBOX_SESSION_ID });
+    const session = handle.session as typeof handle.session & { syncSkillPackages(packages: unknown[], removed: string[]): Promise<void> };
+    const packages = [{ name: "pohuy", files: [{ relativePath: "SKILL.md", content: Buffer.from("ok") }] }];
+    policy.tools = ["bash"]; policy.skills = ["pohuy"];
+    await session.syncSkillPackages(packages, []);
+    expect(engine.syncSkills).toHaveBeenCalledOnce();
+    vi.mocked(engine.createSession).mockClear(); vi.mocked(engine.syncSkills).mockClear(); policy.skills = [];
+    await expect(session.syncSkillPackages(packages, [])).rejects.toThrow("AGENT_GROUP_SKILL_FORBIDDEN");
+    expect(engine.createSession).not.toHaveBeenCalled(); expect(engine.syncSkills).not.toHaveBeenCalled();
+  });
   it("forwards a complete skill batch with the exact selected container identity", async () => {
     const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-")); roots.push(appRoot);
     const engine = fakeEngine();
@@ -99,7 +115,7 @@ describe("scopedWorkspaceRunner", () => {
     await session.syncSkillPackages([{ name: "test", files: [{ relativePath: "SKILL.md", content: Buffer.from("ok") }] }], ["removed"]);
     expect(engine.syncSkills).toHaveBeenCalledWith(SANDBOX_SESSION_ID, {
       expectedInstanceId: "f".repeat(64), packages: [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }], removed: ["removed"],
-    });
+    }, expect.any(AbortSignal));
   });
   it.each([false, true])("passes the Bash requirement through Eve's public executor (revoked=%s)", async (revoked) => {
     const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));

@@ -15,7 +15,7 @@ describe("ephemeral model memory context", () => {
     ];
     const before = structuredClone(prompt);
     const result = placeEphemeralMemoryContext(prompt);
-    expect(result[0]).toEqual({ role: "system", content: "stable rules\n\n" });
+    expect(result[0]).toEqual({ role: "system", content: "stable rules" });
     expect(result.slice(1, -1)).toEqual(prompt.slice(1));
     expect(result.at(-1)).toEqual({ role: "user", content: [{ type: "text", text: block }] });
     expect(prompt).toEqual(before);
@@ -24,6 +24,18 @@ describe("ephemeral model memory context", () => {
   it("does not interpret a marker supplied as user/tool data", () => {
     const prompt = [{ role: "user" as const, content: [{ type: "text" as const, text: ephemeralMemoryContext("untrusted") }] }];
     expect(placeEphemeralMemoryContext(prompt)).toEqual(prompt);
+  });
+
+  it("preserves the exact system prefix when retrieval appears or disappears between calls", () => {
+    const block = ephemeralMemoryContext("facts");
+    for (const [authored, stable] of [
+      [`core\n\n${block}\n\nskills`, "core\n\nskills"],
+      [`core\n\n${block}`, "core"],
+      [`${block}\n\nskills`, "skills"],
+    ]) {
+      const result = placeEphemeralMemoryContext([{ role: "system", content: authored! }]);
+      expect(result[0]).toEqual({ role: "system", content: stable });
+    }
   });
 
   it("keeps current-turn retrieval when compaction has removed the original question", () => {
