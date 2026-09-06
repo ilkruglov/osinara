@@ -29,7 +29,7 @@ export const TELEGRAM_SILENT_DIRECTIVE = "<telegram-silent>";
 
 export type CompletedTelegramOutput =
   | { emoji: TelegramMessageReactionEmoji; kind: "reaction" }
-  | { kind: "message"; memoryUsedRefs: string[]; message: string }
+  | { kind: "message"; memoryUsedDeclared: boolean; memoryUsedRefs: string[]; message: string }
   | { kind: "progress"; message: string };
 
 export function completedTelegramOutput(data: {
@@ -39,10 +39,14 @@ export function completedTelegramOutput(data: {
   // Only completed visible assistant text should become a durable Telegram message.
   const raw = data.message === undefined || data.message === null ? "" : data.message.trim();
   // The memory-used directive is bookkeeping for the final answer; it never reaches Telegram.
-  const { memoryRefs: memoryUsedRefs, message: spoken } = extractMemoryUsedDirective(raw);
+  const { declared: memoryUsedDeclared, memoryRefs: memoryUsedRefs, message: spoken } = extractMemoryUsedDirective(raw);
   // Silence wins only when it is all the model said; text next to the directive is the answer.
   const message = spoken.split(TELEGRAM_SILENT_DIRECTIVE).join("").trim();
-  if (!message) return null;
+  if (!message) {
+    // The directive instead of an answer means the person gets nothing; count it, silence is deliberate.
+    if (memoryUsedDeclared && !raw.includes(TELEGRAM_SILENT_DIRECTIVE)) console.warn(JSON.stringify({ code: "AGENT_MEMORY_USED_DIRECTIVE_ONLY" }));
+    return null;
+  }
 
   // Text authored before a tool call is what a person reads while a long task runs.
   if (data.finishReason === TOOL_CALLS_FINISH_REASON) {
@@ -65,5 +69,5 @@ export function completedTelegramOutput(data: {
   }
   // An answer made of transport directives alone has no visible content to deliver.
   if (!stripTelegramAsideDirectives(message)) return null;
-  return { kind: "message", memoryUsedRefs, message };
+  return { kind: "message", memoryUsedDeclared, memoryUsedRefs, message };
 }

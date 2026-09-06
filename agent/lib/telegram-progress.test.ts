@@ -6,11 +6,13 @@
  * - Pre-tool assistant chunks remain hidden because Telegram cannot render them ephemerally.
  * - Empty model steps remain invisible to avoid technical Telegram noise.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { completedTelegramOutput } from "./telegram-progress.js";
 
 describe("completedTelegramOutput", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("delivers model-authored pre-tool text as an interim progress notice", () => {
     expect(
       completedTelegramOutput({
@@ -40,7 +42,7 @@ describe("completedTelegramOutput", () => {
     })).toBeNull();
     // A directive next to visible text is a model mistake: the text wins, the directive vanishes.
     expect(completedTelegramOutput({ finishReason: "stop", message: "Ладно, молчу. <telegram-silent>" }))
-      .toEqual({ kind: "message", memoryUsedRefs: [], message: "Ладно, молчу." });
+      .toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Ладно, молчу." });
     expect(completedTelegramOutput({ finishReason: "tool-calls", message: "<telegram-silent>" })).toBeNull();
   });
 
@@ -55,6 +57,7 @@ describe("completedTelegramOutput", () => {
       message: "Гоша дома.\n<memory-used>mem_0123456789abcdef0123456789abcdef</memory-used>",
     })).toEqual({
       kind: "message",
+      memoryUsedDeclared: true,
       memoryUsedRefs: ["mem_0123456789abcdef0123456789abcdef"],
       message: "Гоша дома.",
     });
@@ -64,16 +67,28 @@ describe("completedTelegramOutput", () => {
     })).toBeNull();
   });
 
+  it("logs an answer that is the memory-used directive alone", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(completedTelegramOutput({ finishReason: "stop", message: "<memory-used></memory-used>" })).toBeNull();
+    expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_USED_DIRECTIVE_ONLY" }));
+    warn.mockClear();
+    expect(completedTelegramOutput({
+      finishReason: "stop",
+      message: "<telegram-silent>\n<memory-used></memory-used>",
+    })).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("keeps aside directives inside a final answer for the presentation layer", () => {
     expect(
       completedTelegramOutput({ finishReason: "stop", message: "Готово\n<telegram-split>\nкстати" }),
-    ).toEqual({ kind: "message", memoryUsedRefs: [], message: "Готово\n<telegram-split>\nкстати" });
+    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Готово\n<telegram-split>\nкстати" });
   });
 
   it("trims surrounding whitespace from a delivered message", () => {
     expect(
       completedTelegramOutput({ finishReason: "stop", message: "\n\nГотовый ответ  " }),
-    ).toEqual({ kind: "message", memoryUsedRefs: [], message: "Готовый ответ" });
+    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Готовый ответ" });
   });
 
   it.each(["👍", "❤", "❤️", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕", "1️⃣", "🇺🇸"])(

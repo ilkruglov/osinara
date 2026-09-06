@@ -21,6 +21,7 @@ import type { MemoryAuthorization } from "./memory-context.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import {
   formatRetrievedMemoryInstructions,
+  MEMORY_USED_REMINDER,
   retrieveMemoryTurnContext,
   type MemoryTurnContext,
   type MemoryTurnContextOptions,
@@ -126,15 +127,16 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
           suppressCurrentAuthor,
         })
         : null;
+      const shownMemoryRefs = [
+        ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
+        ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
+      ];
       if (exposures) {
         const shownAuthorCard = profile?.subjects.some((subject) => subject.priority === "current_author") === true;
         await exposures.record({
           applicationSessionId: input.applicationSessionId,
           authorTelegramUserId: shownAuthorCard ? input.actor.id : null,
-          memoryRefs: [
-            ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
-            ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
-          ],
+          memoryRefs: shownMemoryRefs,
           sessionTurn,
         });
       }
@@ -152,7 +154,10 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         : await dependencies.takeSkillHint(input.conversationId);
       return [
         ...(profile === null ? [] : [formatProfileViewContext(profile)]),
-        formatRetrievedMemoryInstructions(context.memories, context.threads),
+        // The reminder sits right after the records: the rule in the mode block alone was ignored.
+        shownMemoryRefs.length === 0
+          ? formatRetrievedMemoryInstructions(context.memories, context.threads)
+          : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`,
         ...(hint === null ? [] : [formatSkillHint(hint)]),
       ];
     } catch (error) {

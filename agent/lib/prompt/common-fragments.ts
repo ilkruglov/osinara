@@ -11,7 +11,7 @@ export const MEMORY_DEEPENING_PROTOCOL = `## Углубление контекс
 
 // Reinforcement needs the model's own claim of use; it applies wherever memory is shown at all,
 // including an external group that can remember but not search.
-export const MEMORY_USED_DIRECTIVE_RULE = `Если ответ опёрся на запись из \`<retrieved_long_term_memory>\` или выдачи \`search_memories\`, закончи его строкой \`<memory-used>ref,ref</memory-used>\` с её memoryRef; за показ без использования не ставь.`;
+export const MEMORY_USED_DIRECTIVE_RULE = `Когда в ходе показаны записи памяти (\`<retrieved_long_term_memory>\`, карточка профиля или выдача \`search_memories\`), заканчивай ответ строкой \`<memory-used>ref,ref</memory-used>\` с memoryRef записей, на которые ответ опёрся; если ни одна не пригодилась, поставь \`<memory-used></memory-used>\`. Строка идёт после текста ответа, не вместо него: сервер её вырезает, люди её не видят.`;
 
 export const MEMORY_WRITE_CONTRACT = `## Что запоминать
 

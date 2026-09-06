@@ -4,6 +4,8 @@
  * Constructs covered:
  * - Only refs shown in the current turn reach the repository; the rest are logged as unknown.
  * - A repository failure is logged and never thrown into the delivery path.
+ * - An answer without the directive while records were shown is logged, so the share of turns
+ *   that ignore the directive can be measured in production.
  */
 import type { SessionContext } from "eve/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,7 +42,7 @@ describe("reinforceUsedMemories", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const reinforceByRefs = vi.fn().mockResolvedValue({ reinforced: ["mem_a"], unknown: [] });
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, memoryRefs: ["mem_a", "mem_b"] }, {
+    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a", "mem_b"] }, {
       exposures: {
         sessionTurn: vi.fn().mockResolvedValue(4),
         shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
@@ -55,10 +57,48 @@ describe("reinforceUsedMemories", () => {
     expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: ["mem_b"] }));
   });
 
+  it("logs a missing directive when records were shown this turn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const reinforceByRefs = vi.fn();
+    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] }, {
+      exposures: {
+        sessionTurn: vi.fn().mockResolvedValue(4),
+        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a", "mem_b"])),
+      },
+      reinforcement: { reinforceByRefs },
+    });
+    expect(reinforceByRefs).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_USED_MISSING", shown: 2 }));
+  });
+
+  it("stays silent without the directive when nothing was shown", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: false, memoryRefs: [] }, {
+      exposures: {
+        sessionTurn: vi.fn().mockResolvedValue(4),
+        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set()),
+      },
+      reinforcement: { reinforceByRefs: vi.fn() },
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("treats an empty declared directive as used nothing without a warning", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: [] }, {
+      exposures: {
+        sessionTurn: vi.fn().mockResolvedValue(4),
+        shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
+      },
+      reinforcement: { reinforceByRefs: vi.fn() },
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("swallows a repository failure after logging it", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await expect(reinforceUsedMemories({ applicationSessionId: "app-1", ctx, memoryRefs: ["mem_a"] }, {
+    await expect(reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a"] }, {
       exposures: {
         sessionTurn: vi.fn().mockResolvedValue(4),
         shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),

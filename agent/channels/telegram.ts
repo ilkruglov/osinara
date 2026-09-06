@@ -285,6 +285,7 @@ export default telegramChannel({
         await reinforceUsedMemories({
           applicationSessionId: sessionId,
           ctx,
+          declared: output.memoryUsedDeclared ?? false,
           memoryRefs: output.memoryUsedRefs ?? [],
         });
       }

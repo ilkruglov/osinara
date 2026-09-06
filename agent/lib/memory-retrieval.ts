@@ -33,6 +33,16 @@ export type ModelMemoryContextItem = ModelMemory | (MemoryConflictGroup & {
  * The block carries only data: how retrieval works and how to treat records is stated once in the
  * permanent instructions, so the per-turn payload stays as small as its JSON.
  */
+/**
+ * Placed right after the records, at the end of the prompt. A blind eval on 18 real group turns
+ * (8 September 2026): the rule in the mode block alone got the directive in 1 of 36 answers, a
+ * conditional reminder here in 2 of 36, a mandatory reminder in 20 of 36 with every ref valid, and
+ * together with the mandatory mode rule in 31 of 36; two of those answers were the directive alone,
+ * hence the explicit "after the answer, not instead of it".
+ */
+export const MEMORY_USED_REMINDER =
+  "Ответь как обычно, а последней строкой после текста добавь `<memory-used>ref,ref</memory-used>` с memoryRef записей, на которые опёрся ответ; если ни одна не пригодилась, `<memory-used></memory-used>`. Строка идёт после ответа, не вместо него: сервер её вырезает, люди её не видят.";
+
 export function formatRetrievedMemoryInstructions(
   memories: readonly ModelMemoryContextItem[],
   threads?: MemoryThreadContext,

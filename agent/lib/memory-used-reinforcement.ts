@@ -2,7 +2,8 @@
  * Reinforce the memory records a delivered answer relied on.
  *
  * Export:
- * - `reinforceUsedMemories`: accepts only refs shown in this turn, bumps them, logs the rest.
+ * - `reinforceUsedMemories`: accepts only refs shown in this turn, bumps them, logs the rest;
+ *   an answer without the directive while records were shown is logged as `AGENT_MEMORY_USED_MISSING`.
  *
  * Bookkeeping after a delivered answer: any failure is logged and never fails the turn.
  */
@@ -21,6 +22,8 @@ export async function reinforceUsedMemories(
   input: {
     applicationSessionId: string;
     ctx: Pick<SessionContext, "session">;
+    /** The model wrote the directive, possibly empty; absent means it skipped the rule. */
+    declared: boolean;
     memoryRefs: readonly string[];
   },
   dependencies: ReinforceUsedMemoriesDependencies = {
@@ -28,11 +31,16 @@ export async function reinforceUsedMemories(
     reinforcement: memoryReinforcementRepository,
   },
 ): Promise<void> {
-  if (input.memoryRefs.length === 0) return;
   try {
     const auth = requireMemoryAuthorization(input.ctx);
     const sessionTurn = await dependencies.exposures.sessionTurn(input.applicationSessionId);
     const shown = await dependencies.exposures.shownMemoryRefsForTurn(input.applicationSessionId, sessionTurn);
+    if (input.memoryRefs.length === 0) {
+      // An empty directive is a valid "used nothing"; a skipped directive while records were shown
+      // is the only production measure of how often the rule is honoured.
+      if (!input.declared && shown.size > 0) console.warn(JSON.stringify({ code: "AGENT_MEMORY_USED_MISSING", shown: shown.size }));
+      return;
+    }
     const accepted = input.memoryRefs.filter((ref) => shown.has(ref));
     const rejected = input.memoryRefs.filter((ref) => !shown.has(ref));
     if (rejected.length > 0) {

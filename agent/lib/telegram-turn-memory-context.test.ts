@@ -50,6 +50,7 @@ describe("createTelegramMemoryContextBuilder", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toContain("<retrieved_long_term_memory>");
     expect(blocks[0]).toContain("Любит гречку");
+    expect(blocks[0]).toContain("<memory-used></memory-used>");
     expect(retrieve).toHaveBeenCalledWith(
       expect.objectContaining({
         familyId: "family-1",
@@ -79,6 +80,8 @@ describe("createTelegramMemoryContextBuilder", () => {
 
     expect(takeSkillHint).toHaveBeenCalledWith("conversation-1");
     expect(blocks).toHaveLength(2);
+    // Nothing was shown, so the model is not asked to declare what it used.
+    expect(blocks[0]).not.toContain("<memory-used>");
     expect(blocks[1]).toContain("5 шагов инструментов: web_search, generate_image");
     expect(blocks[1]).toContain("предложи сохранить её как навык");
   });
