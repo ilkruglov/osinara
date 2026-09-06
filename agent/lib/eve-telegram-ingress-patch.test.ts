@@ -31,6 +31,8 @@ interface HttpRoute {
 
 const execFileAsync = promisify(execFile);
 const patchCommand = ["--experimental-strip-types", "scripts/apply-eve-patches.ts"];
+// The stream patch strips TypeScript types with Node's experimental API, which warns once on stderr.
+const patchStderr = expect.stringMatching(/^(?:\(node:\d+\) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time\n\(Use .+ to show where the warning was created\)\n)?$/u);
 
 function createChannelSource(session: Record<string, unknown> = { id: "session-test" }) {
   const send = vi.fn().mockResolvedValue(session);
@@ -41,11 +43,11 @@ function createChannelSource(session: Record<string, unknown> = { id: "session-t
 
 describe("Eve Telegram verified ingress patch", () => {
   it("can be applied repeatedly without changing its reviewed anchors", async () => {
-    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: "" });
+    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: patchStderr });
     const indexTypesPath = "node_modules/eve/dist/src/public/channels/telegram/index.d.ts";
     const before = await readFile(indexTypesPath, "utf8");
 
-    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: "" });
+    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: patchStderr });
 
     await expect(readFile(indexTypesPath, "utf8")).resolves.toBe(before);
   });
@@ -158,6 +160,9 @@ describe("Eve Telegram verified ingress patch", () => {
     );
     try {
       await cp(resolve("node_modules/eve"), eveTarget, { recursive: true });
+      // The stream patch runs first and needs the Workflow world and its runtime helpers in place.
+      await cp(resolve("node_modules/@workflow/world-postgres"), join(root, "node_modules/@workflow/world-postgres"), { recursive: true });
+      await cp(resolve("scripts/eve-runtime"), join(root, "scripts/eve-runtime"), { recursive: true });
       const runtime = await readFile(runtimePath, "utf8");
       await writeFile(runtimePath, runtime.replace(
         "r.replyHandling!==`message`",

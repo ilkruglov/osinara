@@ -18,6 +18,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { patchStreamRecovery } from "./eve-patches/stream-recovery.ts";
 
 const EXPECTED_EVE_VERSION = "0.40.0";
 const EVE_PRODUCTION_START_HEALTH_TIMEOUT_MS = 300_000;
@@ -118,6 +119,11 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
     `AGENT_EVE_PATCH_VERSION_UNSUPPORTED: Ожидалась Eve ${EXPECTED_EVE_VERSION}, установлена ${String(evePackage.version)}`,
   );
 }
+
+// Upstream v0.21.3 (6 September 2026): Postgres World loads a whole event stream per read and Eve
+// persists a cumulative snapshot per delta, which grew one production session to 155 MB and ended
+// in an out-of-memory crash. Reads become paged and demand-driven, delta persistence is paced.
+await patchStreamRecovery(replaceExact);
 
 // A cold production start may prepare sandbox images before the child server becomes healthy.
 await replaceExact(
