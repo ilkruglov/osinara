@@ -14,6 +14,8 @@ FROM first-party-node AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
+COPY scripts/eve-patches ./scripts/eve-patches
+COPY scripts/runtime ./scripts/runtime
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --ignore-scripts \
     && npm run postinstall \
@@ -48,6 +50,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
+COPY scripts/eve-patches ./scripts/eve-patches
+COPY scripts/runtime ./scripts/runtime
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --omit=dev --ignore-scripts \
     && npm run postinstall \

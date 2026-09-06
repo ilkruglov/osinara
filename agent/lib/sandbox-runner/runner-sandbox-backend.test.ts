@@ -42,6 +42,7 @@ const servers: Array<ReturnType<typeof createSandboxRunnerServer>> = [];
 
 function fakeEngine(): SandboxEngine {
   return {
+    syncSkills: vi.fn(async () => ({ checked: 0, written: 0, removed: 0 })),
     createSession: vi.fn(async (request) => ({
       created: request.seedFiles !== undefined,
       seedRequired: request.seedFiles === undefined,
@@ -87,6 +88,19 @@ afterEach(async () => {
 });
 
 describe("scopedWorkspaceRunner", () => {
+  it("forwards a complete skill batch with the exact selected container identity", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-")); roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const handle = await backend.create({ runtimeContext: { appRoot }, sessionKey: BACKEND_SESSION_ID,
+      templateKey: null, tags: { sessionId: SESSION_ID } });
+    await handle.useSessionFn({ mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }], sandboxSessionId: SANDBOX_SESSION_ID });
+    const session = handle.session as typeof handle.session & { syncSkillPackages(packages: unknown[], removed: string[]): Promise<void> };
+    await session.syncSkillPackages([{ name: "test", files: [{ relativePath: "SKILL.md", content: Buffer.from("ok") }] }], ["removed"]);
+    expect(engine.syncSkills).toHaveBeenCalledWith(SANDBOX_SESSION_ID, {
+      expectedInstanceId: "f".repeat(64), packages: [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }], removed: ["removed"],
+    });
+  });
   it.each([false, true])("passes the Bash requirement through Eve's public executor (revoked=%s)", async (revoked) => {
     const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
     roots.push(appRoot);

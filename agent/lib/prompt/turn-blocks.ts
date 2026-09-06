@@ -248,6 +248,9 @@ export function createMemoryBlockResolver(dependencies: {
   ) => Promise<MemoryTurnContext>;
 }) {
   return async function resolve(ctx: TurnBlockContext, turnId: string): Promise<string | null> {
+    const started = performance.now();
+    let outcome = "skipped";
+    let memories: number | null = null;
     try {
       const authorization = dependencies.authorize(ctx);
       const query = memoryRetrievalQuery(ctx.session.auth, ctx.messages,
@@ -258,6 +261,8 @@ export function createMemoryBlockResolver(dependencies: {
         query,
         applicationThreadSkillHints(ctx.messages),
       );
+      memories = context.memories.length;
+      outcome = "succeeded";
       const profileInput = telegramProfileInput(ctx, context.retrievedClaimIds, turnId);
       const profile = profileInput === null
         ? null
@@ -267,8 +272,12 @@ export function createMemoryBlockResolver(dependencies: {
         formatRetrievedMemoryInstructions(context.memories, context.threads),
       ].join("\n\n");
     } catch (error) {
+      outcome = "failed";
       logBlockFailure("AGENT_MEMORY_UNAVAILABLE", error);
       return MEMORY_UNAVAILABLE_BLOCK;
+    } finally {
+      console.info(JSON.stringify({ code: "AGENT_MEMORY_RETRIEVAL_METRICS", sessionId: ctx.session.id,
+        turnId, outcome, memories, durationMs: Math.round(performance.now() - started) }));
     }
   };
 }

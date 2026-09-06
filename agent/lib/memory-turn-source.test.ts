@@ -49,6 +49,14 @@ const context = {
 } as never;
 
 describe("turn-bound memory source selection", () => {
+  it("does not bind a prompt button as a new fact source", async () => {
+    bind.mockClear(); verifyBoundResume.mockClear();
+    await bindMemoryTurnSources({ session: { auth: { current: { attributes: {
+      applicationSessionId: "session", telegramApprovalContinuation: "true",
+    } } }, id: "eve", turn: { id: "turn_2" } } } as never);
+    expect(bind).not.toHaveBeenCalled();
+    expect(verifyBoundResume).not.toHaveBeenCalled();
+  });
   it("accepts an HITL resume only when its durable source binding matches", async () => {
     verifyBoundResume.mockResolvedValueOnce(true);
     const resumed = {

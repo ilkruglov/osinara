@@ -79,7 +79,15 @@ export default defineDynamic({
         });
       }
       if (environment !== "external") {
-        return buildSurface({ environment, scheduledRun: isScheduledSession(ctx) });
+        const surface = buildSurface({ environment, scheduledRun: isScheduledSession(ctx) });
+        if (auth.current?.attributes.telegramApprovalContinuation === "true") {
+          const continuation = { ...surface };
+          // A control response is not a verified new message for facts or style mutations.
+          delete continuation.remember;
+          delete continuation.manage_behavior_preference;
+          return continuation;
+        }
+        return surface;
       }
 
       // A visible channel is not a human authority. It may receive a text response in the external

@@ -82,6 +82,7 @@ export function memoryRetrievalQuery(
   messages: readonly ModelMessage[],
   delegated = false,
 ): string | null {
+  if (!delegated && auth.current?.attributes.telegramApprovalContinuation === "true") return null;
   const text = latestUserText(messages);
   if (text === null) return null;
   const carriesGroupTimeline =

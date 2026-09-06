@@ -152,8 +152,6 @@ function withTranscript(payload: Record<string, unknown>, transcript: string): R
 }
 
 export function createTelegramDurableIngress(dependencies: DurableIngressDependencies) {
-  let activeDrain: Promise<void> | null = null;
-
   async function maintainLease(
     updateId: string,
     leaseToken: string,
@@ -307,14 +305,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   }
 
   function scheduleDrain(context: TelegramDrainContext): void {
-    if (!activeDrain) {
-      const running = drain(context.dispatch);
-      const scheduled = running.finally(() => {
-        if (activeDrain === scheduled) activeDrain = null;
-      });
-      activeDrain = scheduled;
-    }
-    context.waitUntil(activeDrain);
+    // PostgreSQL leases only the first non-terminal item of each queue. Independent drainers
+    // let another chat progress while a slow turn runs, without overtaking this chat's head.
+    context.waitUntil(drain(context.dispatch));
   }
 
   const handleVerifiedUpdate = async function handleVerifiedUpdate(

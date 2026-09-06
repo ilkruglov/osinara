@@ -18,7 +18,7 @@ import { AppError } from "./app-error.js";
 import type {
   BehaviorPreferenceAuthorization,
   BehaviorPreferenceReadAuthorization,
-  BehaviorPreferenceScheduledReadAuthorization,
+  BehaviorPreferenceBoundChatReadAuthorization,
 } from "./behavior-preference-context.js";
 import {
   type ChatOperationalPrompt,
@@ -43,9 +43,9 @@ interface AuthorizedBoundary {
   familyId: string;
 }
 
-async function requireScheduledBoundary(
+async function requireBoundChatReadBoundary(
   client: PoolClient,
-  auth: BehaviorPreferenceScheduledReadAuthorization,
+  auth: BehaviorPreferenceBoundChatReadAuthorization,
 ): Promise<string> {
   const conversation = await client.query<{
     id: string;
@@ -73,7 +73,7 @@ async function requireScheduledBoundary(
     );
   }
 
-  // Scheduled output remains authorized only while its author is an active family participant.
+  // Scheduled and approval continuations are read-only and still require live family membership.
   const membership = await client.query(
     "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2 FOR SHARE",
     [auth.familyId, auth.actorUserId],
@@ -81,7 +81,7 @@ async function requireScheduledBoundary(
   if (membership.rowCount !== 1) {
     throw new AppError(
       "AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED",
-      "Доступ автора расписания к этому чату был отозван",
+      "Доступ участника к этому чату был отозван",
     );
   }
 
@@ -198,7 +198,7 @@ export const behaviorPreferenceRepository = {
     try {
       await client.query("BEGIN");
       const conversationId = "kind" in auth
-        ? await requireScheduledBoundary(client, auth)
+        ? await requireBoundChatReadBoundary(client, auth)
         : (await requireLiveBoundary(client, auth), auth.conversationId);
       const row = await currentPrompt(client, conversationId);
       await client.query("COMMIT");

@@ -120,6 +120,13 @@ describe("memoryRetrievalQuery", () => {
     )).toBe("Compare the group's saved project constraints");
   });
 
+  it("does not turn a button continuation into a fresh memory question", () => {
+    const current = auth({ telegramApprovalContinuation: "true", telegramChatType: "private" });
+    const messages = [{ role: "user" as const, content: "previous question" }];
+    expect(memoryRetrievalQuery(current, messages)).toBeNull();
+    expect(memoryRetrievalQuery(current, [{ role: "user", content: "child task" }], true)).toBe("child task");
+  });
+
   it("ignores a stale legacy timeline attribute without the current turn coordinate", () => {
     const query = memoryRetrievalQuery(
       auth({ telegramChatType: "private", telegramGroupTimelineSequence: "stale" }),

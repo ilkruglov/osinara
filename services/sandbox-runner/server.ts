@@ -20,6 +20,7 @@ import {
   SANDBOX_RUNNER_REQUEST_MAX_BYTES,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import type { SandboxEngine } from "./sandbox-engine.js";
+import { parseSkillSyncRequest } from "../../agent/lib/sandbox-runner/skill-sync-contract.js";
 
 interface ServerDependencies {
   engine: SandboxEngine;
@@ -81,7 +82,7 @@ function requiredPath(url: URL): string {
 }
 
 function requestError(error: unknown): boolean {
-  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|INSTANCE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION)/u
+  return error instanceof Error && /^AGENT_SANDBOX_RUNNER_(?:CONTENT|GOOGLE|INSTANCE|JSON|PATH|PROCESS|REQUEST|SCOPE|SESSION|SKILLS_INVALID)/u
     .test(error.message);
 }
 
@@ -123,6 +124,14 @@ async function route(
   }
 
   const processMatch = PROCESS_ROUTE.exec(url.pathname);
+  const skillMatch = new RegExp(`^${SANDBOX_RUNNER_API_PREFIX}/sessions/([^/]+)/skills$`, "u").exec(url.pathname);
+  if (request.method === "POST" && skillMatch) {
+    const result = await dependencies.engine.syncSkills(
+      parseSandboxSessionId(decodeURIComponent(skillMatch[1]!)), parseSkillSyncRequest(await readJson(request)),
+    );
+    sendJson(response, 200, result);
+    return;
+  }
   if (request.method === "POST" && processMatch) {
     const sessionId = parseSandboxSessionId(decodeURIComponent(processMatch[1]!));
     const controller = new AbortController();

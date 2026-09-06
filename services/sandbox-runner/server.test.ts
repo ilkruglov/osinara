@@ -20,6 +20,7 @@ const servers: Array<ReturnType<typeof createSandboxRunnerServer>> = [];
 
 function fakeEngine(): SandboxEngine {
   return {
+    syncSkills: vi.fn(async () => ({ checked: 1, written: 0, removed: 0 })),
     createSession: vi.fn(async () => ({
       created: true,
       seedRequired: false,
@@ -63,6 +64,21 @@ afterEach(async () => {
 });
 
 describe("sandbox runner HTTP server", () => {
+  it("validates a bulk skill update and refuses traversal before engine execution", async () => {
+    const engine = fakeEngine(); const baseUrl = await start(engine);
+    const body = { expectedInstanceId: "a".repeat(64), removed: [], packages: [{ name: "test", files: [{ path: "SKILL.md", contentBase64: "b2s=" }] }] };
+    const response = await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/skills`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(200);
+    expect(engine.syncSkills).toHaveBeenCalledWith(SANDBOX_SESSION_ID, body);
+    body.packages[0]!.files[0]!.path = "../outside";
+    const invalid = await fetch(`${baseUrl}/v1/sessions/${SANDBOX_SESSION_ID}/skills`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    expect(invalid.status).toBe(400);
+    expect(engine.syncSkills).toHaveBeenCalledOnce();
+  });
   it("reports revoked instance identity without losing its stable error code", async () => {
     const engine = fakeEngine();
     vi.mocked(engine.runProcess).mockRejectedValue(new Error("AGENT_SANDBOX_RUNNER_INSTANCE_STALE: changed"));
