@@ -24,6 +24,7 @@ Rules that keep a turn short:
 4. If `open` times out, run `agent-browser session info --json` once. Retry the same URL once only when the session check shows a startup or runtime transient; otherwise say which site did not answer and move on. The sandbox refuses a command that already timed out unchanged (`AGENT_SANDBOX_RUNNER_REPEAT_WITHOUT_PROGRESS`), so a third attempt is impossible by design.
 5. A stuck session is recovered with `close --all` and a fresh `open` in the same `osinara` session, never with a new session name. Do not call `close` before the whole user task is done: a completed CLI process or a screenshot does not close Chromium, and the configured restore state reloads cookies and localStorage on the next `open` after a real sandbox recreation.
 6. A site that shows only a login wall (LinkedIn, most social profiles) stays closed without credentials; say so instead of trying other URLs of the same site.
+7. Reading and data extraction from public pages go through the light engine: `agent-browser --session osinara-reader --engine lightpanda open <url>`, then `read` or `snapshot` with the same two flags. It starts in a second, costs a twentieth of Chromium and keeps the pid budget for the real browser. It has no cookies, logins, profiles or screenshots, and some sites (VK) call it an outdated browser: for those, for forms, for logins and for screenshots use the default Chromium session `osinara`. These two session names are the only ones that exist; each keeps its own daemon.
 
 ## Start here
 

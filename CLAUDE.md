@@ -417,11 +417,17 @@ version 11), cookies переживают это через restore.
 Образ sandbox-runtime собирается из нашего Dockerfile (цель `sandbox-runtime`, тег
 `osinara-sandbox-runtime:sha-<sha>`, переменная `SANDBOX_RUNTIME_IMAGE` в `release.env`; до
 7 сентября 2026 прод брал upstream-образ с ghcr.io). В образе зашиты agent-browser (пин версии),
-Chrome for Testing той же линии (`AGENT_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-linux64/chrome`) и
-Lightpanda (`/usr/local/bin/lightpanda`, движок `--engine lightpanda`: 96 MiB и 11 потоков против
-520 MiB и 200 у Chrome, без профилей и логинов, VK показывает «браузер устарел»). Модель ничего
-не устанавливает; старые копии в `/tools/<scope>/npm` и `/tools/<scope>/home/.agent-browser/browsers`
-можно удалять. Смена образа требует policy version (12), иначе живые контейнеры остаются на старом.
+Chrome for Testing той же линии в `/opt/chrome` с симлинком `/usr/bin/google-chrome` (там agent-browser
+ищет Chrome сам; `AGENT_BROWSER_EXECUTABLE_PATH` задавать нельзя, он применяется к любому движку и
+под видом Lightpanda запускал бы Chrome) и Lightpanda в `/usr/local/bin/lightpanda`: nightly,
+закреплённый SHA256 в Dockerfile, потому что agent-browser 0.36 передаёт `--experimental-features`,
+которого нет в тегированном 0.4.0. Навык велит читать публичные страницы через
+`--session osinara-reader --engine lightpanda` (96 MiB и 11 потоков против 520 MiB и 200 у Chrome,
+без профилей, логинов и скриншотов, VK показывает «браузер устарел»), а Chrome держать в сессии
+`osinara`; других имён сессий нет. `LIGHTPANDA_DISABLE_TELEMETRY=true` в окружении контейнера. Модель
+ничего не устанавливает; старые копии в `/tools/<scope>/npm` и `/tools/<scope>/home/.agent-browser/browsers`
+можно удалять. Смена образа или окружения требует policy version (13), иначе живые контейнеры
+остаются на старом.
 
 ## Структура проекта
 

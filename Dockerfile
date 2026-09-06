@@ -117,9 +117,13 @@ RUN apt-get update \
 # and download Chrome (480 MB) into every tools workspace in the middle of a turn, one copy per
 # family member and a version drift between them. Chrome for Testing matches the agent-browser
 # release; Lightpanda is the light engine for reading (`--engine lightpanda`, no screenshots).
+# agent-browser 0.36 launches Lightpanda with `--experimental-features`, which the tagged 0.4.0
+# rejects, so the nightly build is used and pinned by its hash: a changed nightly fails the build
+# instead of silently shipping an untested browser.
 ARG AGENT_BROWSER_VERSION=0.36.0
 ARG CHROME_FOR_TESTING_VERSION=152.0.7977.82
-ARG LIGHTPANDA_VERSION=0.4.0
+ARG LIGHTPANDA_VERSION=nightly
+ARG LIGHTPANDA_SHA256=5866fb548b2e0a0612f17a78194b074c44145e1e923834991208e33b398d30dd
 RUN npm install --global --no-fund --no-audit "agent-browser@${AGENT_BROWSER_VERSION}" \
     && curl -fsSL -o /tmp/chrome-linux64.zip \
       "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_FOR_TESTING_VERSION}/linux64/chrome-linux64.zip" \
@@ -129,10 +133,14 @@ RUN npm install --global --no-fund --no-audit "agent-browser@${AGENT_BROWSER_VER
     && rm -f /tmp/chrome-linux64.zip \
     && curl -fsSL -o /usr/local/bin/lightpanda \
       "https://github.com/lightpanda-io/browser/releases/download/${LIGHTPANDA_VERSION}/lightpanda-x86_64-linux" \
+    && printf '%s  %s\n' "${LIGHTPANDA_SHA256}" /usr/local/bin/lightpanda | sha256sum --check - \
     && chmod 0755 /usr/local/bin/lightpanda \
+    && /usr/local/bin/lightpanda version \
+    && ln -s /opt/chrome/chrome-linux64/chrome /usr/bin/google-chrome \
     && /opt/chrome/chrome-linux64/chrome --version \
     && agent-browser --version
-ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-linux64/chrome
+# No AGENT_BROWSER_EXECUTABLE_PATH: agent-browser applies it to every engine, so Lightpanda would
+# launch Chrome. The system symlink is where agent-browser looks for Chrome on its own.
 COPY --from=production-dependencies \
   /app/node_modules/@googleworkspace/cli/bin/gws \
   /opt/osinara/gws

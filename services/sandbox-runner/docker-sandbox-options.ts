@@ -24,7 +24,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "12";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "13";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
@@ -97,6 +97,8 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
     `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
     `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,
+    // Lightpanda reports usage to its vendor by default; a family sandbox reports nothing.
+    "LIGHTPANDA_DISABLE_TELEMETRY=true",
     `HOME=${root}/home`,
     `PATH=${[...executablePaths, BASE_PATH].join(":")}`,
     `NPM_CONFIG_PREFIX=${root}/npm`,

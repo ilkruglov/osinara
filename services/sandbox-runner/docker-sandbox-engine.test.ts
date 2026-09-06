@@ -90,7 +90,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "12",
+      "dev.osinara.sandbox.policy-version": "13",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -100,6 +100,7 @@ describe("buildSandboxContainerOptions", () => {
       "AGENT_BROWSER_RESTORE=osinara",
       "AGENT_BROWSER_RESTORE_SAVE=auto",
       "AGENT_BROWSER_SESSION=osinara",
+      "LIGHTPANDA_DISABLE_TELEMETRY=true",
       "HOME=/tools/personal/home",
       "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
       "NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/russian-trusted-root-ca.crt",
