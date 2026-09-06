@@ -12,11 +12,18 @@ Install: `npm i -g agent-browser && agent-browser install`
 
 ## Osinara runtime
 
+**When to use.** A page needs JavaScript, a login, a form, a click, or a screenshot. **When not to use:** a public page that only has to be read — `web_fetch` returns its text in one call with no browser; `web_search` finds pages. Reach for the browser only after `web_fetch` failed or returned an empty or truncated page.
+
 Osinara preconfigures `AGENT_BROWSER_SESSION=osinara`, `AGENT_BROWSER_RESTORE=osinara`, and a persistent scope-owned `$HOME`. Never set `AGENT_BROWSER_SESSION` yourself and never invent session names: every new name launches another Chromium (about 200 threads) inside a sandbox with a fixed thread budget, and the sandbox then stops running any command until it is reset. Each CLI invocation is only a client request to the same background daemon: separate Bash calls continue the same Chromium process, tabs, cookies, and authentication state. `batch` is optional and does not control persistence.
 
-Open once, then use separate `snapshot`, `fill`, `click`, `screenshot`, and other commands as needed. A screenshot or completed CLI process does not close Chromium. Never call `close` or `close --all` until the entire user task is complete. Before claiming the browser or authorization was lost, run `agent-browser session info --json`; after a real sandbox recreation, the configured restore state reloads cookies and localStorage on the next `open`.
+Rules that keep a turn short:
 
-Bound every CLI call with `timeout --signal=TERM --kill-after=5s 45s agent-browser ...`. Run `open`, `wait`, `eval`, and `close` as separate Bash calls; never chain multiple browser calls into one command. If `open` times out, inspect `session info --json` and report the timeout. Retry once only when the session check identifies a startup/runtime transient; otherwise switch origin instead of repeating the blocked site. A stuck session is recovered with `close --all` and a fresh `open` in the same `osinara` session, not with a new session name.
+1. One browser command per Bash call, bounded as `timeout --signal=TERM --kill-after=5s 45s agent-browser ...`. Never chain `open`, `wait`, `snapshot` in one command and never hide output with `>/dev/null`: the exit code and the error text are the only way to see what happened.
+2. After `open`, read the page with `snapshot -i -c` (interactive elements) or `read` (text). Both take a second. `wait --load networkidle` is optional and never needed for `read`.
+3. A screenshot is for visual content only: a chart, a table rendered as an image, a captcha, a layout question. Save it straight into the workspace, `agent-browser screenshot /workspace/<scope>/shots/<name>.png`, and describe it with `inspect_workspace_image` (`scope`, `path: shots/<name>.png`). Vision costs about eight seconds and a second model; `snapshot` costs one second.
+4. If `open` times out, run `agent-browser session info --json` once. Retry the same URL once only when the session check shows a startup or runtime transient; otherwise say which site did not answer and move on. The sandbox refuses a command that already timed out unchanged (`AGENT_SANDBOX_RUNNER_REPEAT_WITHOUT_PROGRESS`), so a third attempt is impossible by design.
+5. A stuck session is recovered with `close --all` and a fresh `open` in the same `osinara` session, never with a new session name. Do not call `close` before the whole user task is done: a completed CLI process or a screenshot does not close Chromium, and the configured restore state reloads cookies and localStorage on the next `open` after a real sandbox recreation.
+6. A site that shows only a login wall (LinkedIn, most social profiles) stays closed without credentials; say so instead of trying other URLs of the same site.
 
 ## Start here
 

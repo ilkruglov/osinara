@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `executeSandboxProcess`: runs one command, collects bounded output, and removes orphaned compute.
+ * - `processTimedOut`: whether a result carries the runner's timeout marker.
  */
 import { randomUUID } from "node:crypto";
 import { PassThrough, type Duplex } from "node:stream";
@@ -18,6 +19,11 @@ import {
 import { collectLimitedStream } from "./docker-sandbox-files.js";
 
 const PROCESS_KILL_GRACE_SECONDS = 5;
+export const PROCESS_TIMED_OUT_MARKER = "AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT";
+
+export function processTimedOut(result: Pick<SandboxRunnerProcessResponse, "stderr">): boolean {
+  return result.stderr.includes(PROCESS_TIMED_OUT_MARKER);
+}
 
 async function removeOrphanedCompute(container: Docker.Container): Promise<void> {
   // Compute is disposable while named-volume workspaces survive recreation on the next command.
@@ -131,7 +137,7 @@ export async function executeSandboxProcess(
   const stderrText = timedOut
     ? [
         stderrBytes.toString("utf8").trimEnd(),
-        `AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT: Command exceeded ${timeoutMs} ms`,
+        `${PROCESS_TIMED_OUT_MARKER}: Command exceeded ${timeoutMs} ms`,
       ].filter(Boolean).join("\n")
     : stderrBytes.toString("utf8");
   return {

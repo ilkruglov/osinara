@@ -9,15 +9,40 @@
 import { defineTool, type ToolDefinition } from "eve/tools";
 
 import { isAppError } from "./app-error.js";
-import { normalizeModelFacingError } from "./model-facing-error.js";
+import { ModelFacingError, normalizeModelFacingError } from "./model-facing-error.js";
 import {
   PROGRESS_NOTICE_SENT_NOTE,
   progressNoticeKey,
   telegramProgressNoticeDeferral,
 } from "./telegram-progress-deferral.js";
+import {
+  TOOL_REPEAT_WITHOUT_PROGRESS_CODE,
+  toolCallFingerprint,
+  toolRepeatGuard,
+} from "./tool-repeat-guard.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ApprovalPolicyFunction = (ctx: unknown) => unknown;
+
+function turnKey(ctx: unknown): string | null {
+  const session = (ctx as { session?: { id?: unknown; turn?: { id?: unknown } } } | undefined)
+    ?.session;
+  if (typeof session?.id !== "string" || typeof session.turn?.id !== "string") return null;
+  return `${session.id}:${session.turn.id}`;
+}
+
+function repeatWithoutProgressError(toolName: string): ModelFacingError {
+  return new ModelFacingError({
+    category: "operation",
+    code: TOOL_REPEAT_WITHOUT_PROGRESS_CODE,
+    correction:
+      `Этот вызов ${toolName} с теми же аргументами уже завершился ошибкой в этом ходе. ` +
+      "Не повторяйте его без изменений: измените аргументы или подход, либо сообщите пользователю, что не удалось, и дождитесь нового запроса.",
+    reason: "Повтор вызова с теми же аргументами после ошибки не даёт нового результата.",
+    retryable: false,
+    sideEffectStatus: "not_started",
+  });
+}
 
 /**
  * Eve treats an exception thrown by an approval policy as a failed model call and parks the whole
@@ -49,12 +74,19 @@ export function wrapModelFacingTool(
       ? {}
       : { approval: wrapApprovalPolicy(definition.approval) as AnyToolDefinition["approval"] }),
     async execute(input, ctx) {
+      const turn = turnKey(ctx);
+      const fingerprint = turn === null ? null : toolCallFingerprint(toolName, input);
+      if (turn !== null && fingerprint !== null && toolRepeatGuard.refuses(turn, fingerprint)) {
+        throw repeatWithoutProgressError(toolName);
+      }
       let output: unknown;
       try {
         output = await definition.execute(input, ctx);
       } catch (error) {
+        if (turn !== null && fingerprint !== null) toolRepeatGuard.recordFailure(turn, fingerprint);
         throw normalizeModelFacingError(error, { toolName });
       }
+      if (turn !== null && fingerprint !== null) toolRepeatGuard.recordSuccess(turn, fingerprint);
       return withDeliveredNoticeNote(output, ctx);
     },
   });

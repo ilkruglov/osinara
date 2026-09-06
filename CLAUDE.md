@@ -389,6 +389,21 @@ connect failed`. Лимит теперь 1024 (policy version 10, старые �
 сессия от бота падала. Service principal `telegram-bot:<id>` с ролью `external` в группе получает
 workspace группы без userId.
 
+Повтор без прогресса (7 сентября 2026). Счётчик попыток цикл не видит, отпечаток «инструмент +
+аргументы» видит. Обёртка `wrapModelFacingTool` (`tool-repeat-guard.ts`) помнит на ход отпечатки
+упавших вызовов и второй такой же вызов отклоняет до исполнения кодом
+`AGENT_TOOL_REPEAT_WITHOUT_PROGRESS` с указанием изменить вызов или сообщить человеку; успех
+отпечаток снимает. Нативный `bash` Eve мимо обёртки, поэтому та же логика стоит в runner
+(`sandbox-repeat-guard.ts`): команда, превысившая таймаут, при повторе без изменений в той же
+сессии в течение 15 минут отклоняется сразу с exit 125 и текстом
+`AGENT_SANDBOX_RUNNER_REPEAT_WITHOUT_PROGRESS`; ненулевой код выхода не считается, только таймаут.
+Причина: ход из 32 шагов с тремя одинаковыми `agent-browser open` по 120 с. Навык `agent-browser`
+задаёт лестницу `web_fetch` → `read`/`snapshot` → скриншот в `/workspace/<scope>/shots/` плюс
+`inspect_workspace_image` только для визуального, одна браузерная команда на `bash` без
+`>/dev/null`, одна повторная попытка `open` после `session info`. Демон agent-browser гаснет через
+10 минут простоя (`AGENT_BROWSER_IDLE_TIMEOUT_MS` в окружении trusted-контейнера, policy
+version 11), cookies переживают это через restore.
+
 ## Структура проекта
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.

@@ -24,10 +24,12 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "10";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "11";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
+// One Chromium holds about 500 MiB; the default daemon idle of one hour kept it after every turn.
+const AGENT_BROWSER_IDLE_TIMEOUT_MS = 10 * 60 * 1_000;
 const PROXY_URL = "http://sandbox-egress-proxy:3128";
 const BASE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const GOOGLE_WORKSPACE_BINARY = "/opt/osinara/gws";
@@ -90,6 +92,7 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
   const root = `/tools/${primary.mountPoint}`;
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
+    `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
     `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
     `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,

@@ -38,7 +38,13 @@ import {
   removeStagedFileCommand,
   stageFileForReadCommand,
 } from "./docker-sandbox-commands.js";
-import { executeSandboxProcess } from "./docker-sandbox-process.js";
+import { executeSandboxProcess, processTimedOut } from "./docker-sandbox-process.js";
+import {
+  createSandboxRepeatGuard,
+  SANDBOX_REPEAT_REFUSED_EXIT_CODE,
+  SANDBOX_REPEAT_REFUSED_MESSAGE,
+  sandboxCommandFingerprint,
+} from "./sandbox-repeat-guard.js";
 import {
   createSandboxActivityRegistry,
   SANDBOX_IDLE_TIMEOUT_MS,
@@ -180,6 +186,7 @@ export function createDockerSandboxEngine(input: {
   runtime: SandboxDockerRuntime;
 }): SandboxEngine {
   const activity = createSandboxActivityRegistry(Date.now);
+  const repeatGuard = createSandboxRepeatGuard(Date.now);
 
   return {
     async health() {
@@ -245,11 +252,29 @@ export function createDockerSandboxEngine(input: {
     },
     async runProcess(sessionId, request, signal) {
       return await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId);
         const processRequest = request.workingDirectory
           ? { ...request, workingDirectory: resolvePath(request.workingDirectory) }
           : request;
-        return await executeSandboxProcess(input.docker, container, processRequest, signal);
+        const fingerprint = sandboxCommandFingerprint(
+          processRequest.command,
+          processRequest.workingDirectory,
+        );
+        if (repeatGuard.refuses(sessionId, fingerprint)) {
+          console.error(JSON.stringify({
+            code: "AGENT_SANDBOX_RUNNER_REPEAT_REFUSED",
+            sessionId,
+          }));
+          return {
+            exitCode: SANDBOX_REPEAT_REFUSED_EXIT_CODE,
+            processId: randomUUID(),
+            stderr: SANDBOX_REPEAT_REFUSED_MESSAGE,
+            stdout: "",
+          };
+        }
+        const container = await requireRunningContainer(input.docker, sessionId);
+        const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
+        if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
+        return result;
       });
     },
     async runGoogleWorkspace(request, signal) {
@@ -405,6 +430,7 @@ export function createDockerSandboxEngine(input: {
         });
       }
       activity.forget(sessionId);
+      repeatGuard.forget(sessionId);
     },
     async reconcileIdleSessions(now) {
       const cutoffMs = now.getTime() - SANDBOX_IDLE_TIMEOUT_MS;
