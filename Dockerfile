@@ -121,6 +121,7 @@ ARG LIGHTPANDA_VERSION=0.4.0
 RUN npm install --global --no-fund --no-audit "agent-browser@${AGENT_BROWSER_VERSION}" \
     && curl -fsSL -o /tmp/chrome-linux64.zip \
       "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_FOR_TESTING_VERSION}/linux64/chrome-linux64.zip" \
+    && printf '%s  %s\n' 0704631fb3e4f741092e08f55272f90abc3e307f991f05f332924364415b02e0 /tmp/chrome-linux64.zip | sha256sum --check - \
     && mkdir -p /opt/chrome \
     && unzip -q /tmp/chrome-linux64.zip -d /opt/chrome \
     && rm -f /tmp/chrome-linux64.zip \

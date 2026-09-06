@@ -96,6 +96,7 @@ describe("buildSandboxContainerOptions", () => {
     });
     expect(options.Env).toEqual(expect.arrayContaining([
       "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
+      "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
       "AGENT_BROWSER_RESTORE=osinara",
       "AGENT_BROWSER_RESTORE_SAVE=auto",
       "AGENT_BROWSER_SESSION=osinara",

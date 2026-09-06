@@ -16,17 +16,21 @@ const PRIVATE_CHARACTER_BUDGET = 12_000;
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section.
 const FAMILY_CHARACTER_BUDGET = 14_000;
-// Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive.
-const EXTERNAL_CHARACTER_BUDGET = 10_700;
+// Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
+// then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
+// about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal.
+const EXTERNAL_CHARACTER_BUDGET = 12_900;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot, then by 400 on 6 September for the
-// addressing section with the explicit silence directive.
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 20_100;
+// addressing section with the explicit silence directive, then by 2 200 on 7 September for the
+// participants section ported from upstream v0.21.2.
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 22_300;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
-// 6 September for the addressing section with the explicit silence directive.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 31_300;
+// 6 September for the addressing section with the explicit silence directive, then by 2 200 on
+// 7 September for the participants section ported from upstream v0.21.2.
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 33_500;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

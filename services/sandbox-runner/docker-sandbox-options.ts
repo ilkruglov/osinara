@@ -93,6 +93,7 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
     `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
+    `AGENT_BROWSER_PROXY=${PROXY_URL}`,
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
     `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
     `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,
