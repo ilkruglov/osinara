@@ -36,6 +36,10 @@ const RUSSIAN_TRUSTED_ROOT_CA_PATH =
 const SANDBOX_CPU_NANOSECONDS = 1_000_000_000;
 const SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
 const SANDBOX_PIDS_LIMIT = 256;
+// Between commands only daemons stay alive (agent-browser and its Chromium tree). Once they take
+// half the pid budget the next `mkdir` in the container fails with EAGAIN and every turn dies in
+// its preamble, so the runner restarts the disposable compute before it reaches the hard limit.
+export const SANDBOX_PIDS_REAP_THRESHOLD = SANDBOX_PIDS_LIMIT / 2;
 const SANDBOX_SHM_BYTES = 256 * 1024 * 1024;
 
 function volumeMount(source: string, target: string, subpath: string): Docker.MountSettings {

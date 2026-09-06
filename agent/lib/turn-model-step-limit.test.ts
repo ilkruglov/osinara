@@ -34,6 +34,7 @@ describe("resolveTurnModelStepLimitSelection", () => {
       event: { data: { stepIndex: 31 }, type: "step.started" },
       maxModelSteps: 32,
       model,
+      modelContextWindowTokens: 160_000,
     })).toBeNull();
   });
 
@@ -43,9 +44,12 @@ describe("resolveTurnModelStepLimitSelection", () => {
       event: { data: { stepIndex: 32 }, type: "step.started" },
       maxModelSteps: 32,
       model,
+      modelContextWindowTokens: 160_000,
     });
 
     expect(selection).not.toBeNull();
+    // Without the window Eve rejects the selection itself and fails the session, not the turn.
+    expect(selection!.modelContextWindowTokens).toBe(160_000);
     await expect(selection!.model.doStream({} as never)).rejects.toThrow(
       "AGENT_TURN_MODEL_STEP_LIMIT_EXCEEDED",
     );
@@ -62,9 +66,12 @@ describe("resolveTurnModelStepLimitSelection", () => {
     { event: { data: { stepIndex: 0 }, type: "step.started" }, maxModelSteps: 0 },
   ])("fails closed for invalid step state %#", async ({ event, maxModelSteps }) => {
     const model = modelFixture();
-    const selection = resolveTurnModelStepLimitSelection({ event, maxModelSteps, model });
+    const selection = resolveTurnModelStepLimitSelection({
+      event, maxModelSteps, model, modelContextWindowTokens: 160_000,
+    });
 
     expect(selection).not.toBeNull();
+    expect(selection!.modelContextWindowTokens).toBe(160_000);
     await expect(selection!.model.doStream({} as never)).rejects.toThrow(
       "AGENT_TURN_MODEL_STEP_STATE_INVALID",
     );

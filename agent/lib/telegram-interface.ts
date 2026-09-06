@@ -301,6 +301,11 @@ function supportReference(details: FailureData["details"]): string | null {
 
 function publicFailureExplanation(data: FailureData): string | null {
   if (data.code === "MODEL_CALL_FAILED") {
+    // The step guard is a blocking model, so Eve reports it as a model failure; the person needs
+    // the actual reason, not a hint that the provider is down.
+    if (JSON.stringify(data.details ?? {}).includes("AGENT_TURN_MODEL_STEP_LIMIT_EXCEEDED")) {
+      return "Запрос потребовал слишком много шагов. Разбейте задачу на части и повторите.";
+    }
     return "Модель не смогла сформировать завершённый ответ.";
   }
   // Validation errors are authored by application code and already contain safe Russian guidance.

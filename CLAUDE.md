@@ -368,6 +368,21 @@ Trusted sandbox подключён только к internal egress network и в
 (`profile-view-repository.ts`). `tsconfig.json` включает `services/**/*.ts`, поэтому typecheck
 покрывает runner и egress proxy.
 
+Ночь 6 сентября 2026, личка члена семьи молчала. Три дефекта в одной цепочке. (1) Блокирующая
+модель лимита шагов (`turn-model-step-limit.ts`) отдавалась без `modelContextWindowTokens`, и Eve
+падала с `DynamicModelSelectionError` на 32-м шаге: сессия failed и ротация вместо сообщения
+«слишком много шагов»; теперь окно передаётся, а `MODEL_CALL_FAILED` с этим кодом объясняется
+человеку по-русски. (2) 35-минутный ход оставил в sandbox три `agent-browser` с деревом Chromium,
+контейнер упёрся в `PidsLimit` 256, и каждый следующий ход умирал в преамбуле на записи пакетов
+навыков (`mkdir` → EAGAIN → runner HTTP 500 → turnStep failed ×4 → session failed). Runner перед
+каждой операцией считает процессы через `docker top` (работает с хоста, форк не нужен) и при
+`SANDBOX_PIDS_REAP_THRESHOLD` (половина лимита) перезапускает контейнер:
+`AGENT_SANDBOX_RUNNER_PROCESSES_REAPED`; тома workspace и tools переживают перезапуск. (3) Ход,
+начатый сообщением другого бота во внешней группе, не проходил `requireWorkspaceAuthorization`
+(только `principalType: user`), а материализация навыков вызывает sandbox `onSession`: первая
+сессия от бота падала. Service principal `telegram-bot:<id>` с ролью `external` в группе получает
+workspace группы без userId.
+
 ## Структура проекта
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.

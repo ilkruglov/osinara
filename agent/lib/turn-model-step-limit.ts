@@ -16,10 +16,14 @@ interface TurnModelStepLimitInput {
   readonly event: unknown;
   readonly maxModelSteps: number;
   readonly model: LanguageModelV4;
+  readonly modelContextWindowTokens: number;
 }
 
 interface TurnModelStepLimitSelection {
   readonly model: LanguageModelV4;
+  // Eve refuses a dynamic selection of an unlisted model without its window: the blocking model
+  // then died as `DynamicModelSelectionError` and the whole session failed instead of the turn.
+  readonly modelContextWindowTokens: number;
 }
 
 type BlockReason = "limit" | "state";
@@ -69,14 +73,15 @@ export function resolveTurnModelStepLimitSelection({
   event,
   maxModelSteps,
   model,
+  modelContextWindowTokens,
 }: TurnModelStepLimitInput): TurnModelStepLimitSelection | null {
   const stepIndex = readStepIndex(event);
   const validLimit = Number.isSafeInteger(maxModelSteps) && maxModelSteps > 0;
 
   // Invalid runtime coordinates must never disable a production safety boundary.
   if (stepIndex === null || !validLimit) {
-    return { model: createBlockingModel(model, "state") };
+    return { model: createBlockingModel(model, "state"), modelContextWindowTokens };
   }
   if (stepIndex < maxModelSteps) return null;
-  return { model: createBlockingModel(model, "limit") };
+  return { model: createBlockingModel(model, "limit"), modelContextWindowTokens };
 }

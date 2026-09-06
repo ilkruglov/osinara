@@ -47,6 +47,7 @@ export default defineAgent({
           event,
           maxModelSteps: AGENT_MAX_MODEL_STEPS_PER_TURN,
           model: primaryModel,
+          modelContextWindowTokens: primaryModelContextWindowTokens,
         });
         if (blockedSelection !== null) return blockedSelection;
 

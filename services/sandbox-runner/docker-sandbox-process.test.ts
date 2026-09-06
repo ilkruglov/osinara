@@ -40,6 +40,7 @@ function processHarness(
   const container = {
     exec: vi.fn(async () => exec),
     inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      top: vi.fn(async () => ({ Processes: [] })),
     remove,
   };
   const docker = {

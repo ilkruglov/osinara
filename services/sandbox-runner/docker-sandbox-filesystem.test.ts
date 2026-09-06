@@ -57,6 +57,7 @@ describe("Docker sandbox filesystem bridge", () => {
       exec: vi.fn(async (_options: ExecOptions) => successfulExec()),
       getArchive: vi.fn(async () => archiveFile("staged", "skill instructions")),
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      top: vi.fn(async () => ({ Processes: [] })),
     };
     const docker = {
       getContainer: vi.fn(() => container),
@@ -92,6 +93,7 @@ describe("Docker sandbox filesystem bridge", () => {
       exec: vi.fn(async () => missingExec),
       getArchive: vi.fn(),
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      top: vi.fn(async () => ({ Processes: [] })),
     };
     const docker = {
       getContainer: vi.fn(() => container),
@@ -116,6 +118,7 @@ describe("Docker sandbox filesystem bridge", () => {
     const container = {
       exec: vi.fn(async (_options: ExecOptions) => exec),
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      top: vi.fn(async () => ({ Processes: [] })),
       putArchive: vi.fn(async () => undefined),
     };
     const docker = {
@@ -157,6 +160,7 @@ describe("Docker sandbox filesystem bridge", () => {
         };
       }),
       inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      top: vi.fn(async () => ({ Processes: [] })),
       putArchive: vi.fn(async () => undefined),
     };
     const docker = {

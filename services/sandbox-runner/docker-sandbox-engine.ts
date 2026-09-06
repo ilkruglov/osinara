@@ -52,6 +52,7 @@ import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
   buildSandboxContainerOptions,
   resolveTrustedToolMount,
+  SANDBOX_PIDS_REAP_THRESHOLD,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
@@ -141,10 +142,30 @@ async function inspectContainer(
   }
 }
 
+async function countContainerProcesses(container: Docker.Container): Promise<number> {
+  // `docker top` runs ps on the host, so it works even when the container itself cannot fork.
+  const top = (await container.top({ ps_args: "-eo pid" })) as { Processes?: unknown[] };
+  return Array.isArray(top.Processes) ? top.Processes.length : 0;
+}
+
+async function reapCrowdedContainer(container: Docker.Container, sessionId: string): Promise<void> {
+  const processes = await countContainerProcesses(container);
+  if (processes < SANDBOX_PIDS_REAP_THRESHOLD) return;
+  // Workspace and tools are named volumes; the process tree is disposable compute.
+  await container.restart({ t: 0 });
+  console.error(JSON.stringify({
+    code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
+    processes,
+    sessionId,
+    threshold: SANDBOX_PIDS_REAP_THRESHOLD,
+  }));
+}
+
 async function requireRunningContainer(docker: Docker, sessionId: string): Promise<Docker.Container> {
   const existing = await inspectContainer(docker, sessionId);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   if (!existing.inspection.State.Running) await existing.container.start();
+  else await reapCrowdedContainer(existing.container, sessionId);
   return existing.container;
 }
 
