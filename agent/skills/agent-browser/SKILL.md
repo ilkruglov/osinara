@@ -10,11 +10,11 @@ accessibility-tree snapshots and compact `@eN` element refs.
 
 Install: `npm i -g agent-browser && agent-browser install`
 
-## Osinara runtime
+## Runtime
 
 **When to use.** A page needs JavaScript, a login, a form, a click, or a screenshot. **When not to use:** a public page that only has to be read — `web_fetch` returns its text in one call with no browser; `web_search` finds pages. Reach for the browser only after `web_fetch` failed or returned an empty or truncated page.
 
-Osinara preconfigures `AGENT_BROWSER_SESSION=osinara`, `AGENT_BROWSER_RESTORE=osinara`, and a persistent scope-owned `$HOME`. Never set `AGENT_BROWSER_SESSION` yourself and never invent session names: every new name launches another Chromium (about 200 threads) inside a sandbox with a fixed thread budget, and the sandbox then stops running any command until it is reset. Each CLI invocation is only a client request to the same background daemon: separate Bash calls continue the same Chromium process, tabs, cookies, and authentication state. `batch` is optional and does not control persistence.
+The runtime preconfigures `AGENT_BROWSER_SESSION=osinara`, `AGENT_BROWSER_RESTORE=osinara`, and a persistent scope-owned `$HOME`. Never set `AGENT_BROWSER_SESSION` yourself and never invent session names: every new name launches another Chromium (about 200 threads) inside a sandbox with a fixed thread budget, and the sandbox then stops running any command until it is reset. Each CLI invocation is only a client request to the same background daemon: separate Bash calls continue the same Chromium process, tabs, cookies, and authentication state. `batch` is optional and does not control persistence.
 
 Rules that keep a turn short:
 
@@ -68,8 +68,8 @@ installed version.
 
 The dashboard runs independently of browser sessions on port 4848 and can also be opened through a proxied or forwarded URL such as `https://dashboard.agent-browser.localhost`. Agents should stay on the dashboard origin: session tabs, status, and stream traffic are proxied internally, so session ports do not need to be exposed.
 
-## Osinara: session and auth vault
+## Session and auth vault
 
-Osinara runs `agent-browser` with `AGENT_BROWSER_SESSION=osinara`; separate calls continue the same tab. Do not close the session before the task is done, and check it with `agent-browser session info --json` before treating it as lost. Cookies and localStorage live in `$HOME`; when a site session has expired, use the vault first.
+The runtime runs `agent-browser` with `AGENT_BROWSER_SESSION=osinara`; separate calls continue the same tab. Do not close the session before the task is done, and check it with `agent-browser session info --json` before treating it as lost. Cookies and localStorage live in `$HOME`; when a site session has expired, use the vault first.
 
 Persistent logins go into the `agent-browser auth vault` of the current trust zone (personal or family) through `--password-stdin`; never store OTP codes. Save an integration token only on the user's direct request and only when this skill allows the current scope: inside this skill's `$HOME`, mode `0600`, without printing or logging it.
