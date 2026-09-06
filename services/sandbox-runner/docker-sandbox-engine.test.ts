@@ -90,7 +90,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "11",
+      "dev.osinara.sandbox.policy-version": "12",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });

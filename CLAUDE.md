@@ -404,6 +404,15 @@ workspace группы без userId.
 10 минут простоя (`AGENT_BROWSER_IDLE_TIMEOUT_MS` в окружении trusted-контейнера, policy
 version 11), cookies переживают это через restore.
 
+Образ sandbox-runtime собирается из нашего Dockerfile (цель `sandbox-runtime`, тег
+`osinara-sandbox-runtime:sha-<sha>`, переменная `SANDBOX_RUNTIME_IMAGE` в `release.env`; до
+7 сентября 2026 прод брал upstream-образ с ghcr.io). В образе зашиты agent-browser (пин версии),
+Chrome for Testing той же линии (`AGENT_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-linux64/chrome`) и
+Lightpanda (`/usr/local/bin/lightpanda`, движок `--engine lightpanda`: 96 MiB и 11 потоков против
+520 MiB и 200 у Chrome, без профилей и логинов, VK показывает «браузер устарел»). Модель ничего
+не устанавливает; старые копии в `/tools/<scope>/npm` и `/tools/<scope>/home/.agent-browser/browsers`
+можно удалять. Смена образа требует policy version (12), иначе живые контейнеры остаются на старом.
+
 ## Структура проекта
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.

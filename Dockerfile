@@ -111,6 +111,25 @@ RUN apt-get update \
       zip \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# The browser stack ships in the image: the skill used to make the model install agent-browser
+# and download Chrome (480 MB) into every tools workspace in the middle of a turn, one copy per
+# family member and a version drift between them. Chrome for Testing matches the agent-browser
+# release; Lightpanda is the light engine for reading (`--engine lightpanda`, no screenshots).
+ARG AGENT_BROWSER_VERSION=0.36.0
+ARG CHROME_FOR_TESTING_VERSION=152.0.7977.82
+ARG LIGHTPANDA_VERSION=0.4.0
+RUN npm install --global --no-fund --no-audit "agent-browser@${AGENT_BROWSER_VERSION}" \
+    && curl -fsSL -o /tmp/chrome-linux64.zip \
+      "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_FOR_TESTING_VERSION}/linux64/chrome-linux64.zip" \
+    && mkdir -p /opt/chrome \
+    && unzip -q /tmp/chrome-linux64.zip -d /opt/chrome \
+    && rm -f /tmp/chrome-linux64.zip \
+    && curl -fsSL -o /usr/local/bin/lightpanda \
+      "https://github.com/lightpanda-io/browser/releases/download/${LIGHTPANDA_VERSION}/lightpanda-x86_64-linux" \
+    && chmod 0755 /usr/local/bin/lightpanda \
+    && /opt/chrome/chrome-linux64/chrome --version \
+    && agent-browser --version
+ENV AGENT_BROWSER_EXECUTABLE_PATH=/opt/chrome/chrome-linux64/chrome
 COPY --from=production-dependencies \
   /app/node_modules/@googleworkspace/cli/bin/gws \
   /opt/osinara/gws
