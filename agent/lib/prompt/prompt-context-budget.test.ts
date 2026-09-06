@@ -15,25 +15,28 @@ const PRIVATE_CHARACTER_BUDGET = 12_000;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section, then by 200 on 7 September for
-// the rule not to re-answer a question the agent already closed.
-const FAMILY_CHARACTER_BUDGET = 14_200;
+// the rule not to re-answer a question the agent already closed, then by 200 on 8 September for
+// the group length ceiling.
+const FAMILY_CHARACTER_BUDGET = 14_400;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
 // then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
 // about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal,
-// then by 200 the same day for the rule not to re-answer a closed question.
-const EXTERNAL_CHARACTER_BUDGET = 13_100;
+// then by 200 the same day for the rule not to re-answer a closed question, then by 200 on
+// 8 September for the group length ceiling.
+const EXTERNAL_CHARACTER_BUDGET = 13_300;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot, then by 400 on 6 September for the
 // addressing section with the explicit silence directive, then by 2 200 on 7 September for the
-// participants section ported from upstream v0.21.2, then by 200 for the closed-question rule.
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 22_500;
+// participants section ported from upstream v0.21.2, then by 200 for the closed-question rule,
+// then by 200 on 8 September for the group length ceiling.
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 22_700;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
 // 6 September for the addressing section with the explicit silence directive, then by 2 200 on
 // 7 September for the participants section ported from upstream v0.21.2, then by 200 for the
-// closed-question rule.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 33_700;
+// closed-question rule, then by 200 on 8 September for the group length ceiling.
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 33_900;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

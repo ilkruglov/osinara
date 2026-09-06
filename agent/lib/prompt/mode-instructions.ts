@@ -20,6 +20,7 @@ import {
   MEMORY_USED_DIRECTIVE_RULE,
   MEMORY_EXACT_DUPLICATE_HANDLING,
   GROUP_ADDRESSING_RULES,
+  GROUP_LENGTH_RULES,
   GROUP_MEMORY_DELTA_CONTRACT,
   MEMORY_WRITE_CONTRACT,
   PRIVATE_MEMORY_SOURCE_CONTRACT,
@@ -197,6 +198,7 @@ function familyInstructions(
     ...FAMILY_INSTRUCTION_SECTIONS,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : GROUP_ADDRESSING_RULES,
+    scheduledRun ? null : GROUP_LENGTH_RULES,
     scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
@@ -300,6 +302,7 @@ ${GROUP_TIMELINE_TRUST}`,
     EXTERNAL_GROUP_MODEL_POLICY,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : GROUP_ADDRESSING_RULES,
+    scheduledRun ? null : GROUP_LENGTH_RULES,
     scheduledRun ? null : reactionRules(reactionPolicy, "group"),
     includeApplicationCore && !scheduledRun ? trustedBehaviorPreferenceRules() : null,
     externalGroupCapabilityInstructions(capabilities, {
