@@ -299,7 +299,19 @@ function supportReference(details: FailureData["details"]): string | null {
   return ERROR_ID_PATTERN.exec(JSON.stringify(details))?.[0] ?? null;
 }
 
+/**
+ * A tool call that never received its result poisons every later model call of the session: the
+ * AI SDK refuses the prompt before the provider sees it. Only a new session recovers from that.
+ */
+export function isUnrecoverableHistoryFailure(data: FailureData): boolean {
+  return data.code === "MODEL_CALL_FAILED" &&
+    JSON.stringify(data.details ?? {}).includes("AI_MissingToolResultsError");
+}
+
 function publicFailureExplanation(data: FailureData): string | null {
+  if (isUnrecoverableHistoryFailure(data)) {
+    return "История этого разговора повреждена, поэтому следующее сообщение начнёт новый контекст.";
+  }
   if (data.code === "MODEL_CALL_FAILED") {
     // The step guard is a blocking model, so Eve reports it as a model failure; the person needs
     // the actual reason, not a hint that the provider is down.

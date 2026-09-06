@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatTelegramSessionFailure,
   formatTelegramTurnFailure,
+  isUnrecoverableHistoryFailure,
   localizeTelegramInputRequest,
   localizeTelegramReplyMarkup,
 } from "./telegram-interface.js";
@@ -535,6 +536,20 @@ describe("Telegram interface localization", () => {
 
     expect(turnMessage).toContain("Для recurrence передайте null");
     expect(turnMessage).toContain("Код: AGENT_REMINDER_INPUT_INVALID");
+  });
+
+  it("names a poisoned history and its recovery for the person", () => {
+    const data = {
+      code: "MODEL_CALL_FAILED",
+      details: {
+        errorId: "a8c3ddd0-02b4-42ce-b017-ccfc629b6e73",
+        message: "AI_MissingToolResultsError: Tool result is missing for tool call call_03.",
+      },
+    };
+
+    expect(isUnrecoverableHistoryFailure(data)).toBe(true);
+    expect(isUnrecoverableHistoryFailure({ code: "MODEL_CALL_FAILED", details: { errorId: "x" } })).toBe(false);
+    expect(formatTelegramTurnFailure(data)).toContain("следующее сообщение начнёт новый контекст");
   });
 
   it("keeps generic model failures from exposing internals", () => {

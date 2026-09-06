@@ -30,6 +30,13 @@ import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-co
 import { observeModelUsage } from "./model-usage-log.js";
 import { describeDeepSeekHttpError } from "./deepseek/deepseek-errors.js";
 import { normalizeDeepSeekResponsesRequest } from "./deepseek/deepseek-responses-request.js";
+import {
+  closeStrayProviderSearchCalls,
+  isStrayProviderSearchCall,
+  PROVIDER_SEARCH_FUNCTION_CALL_CODE,
+  PROVIDER_SEARCH_TOOL_NAMES,
+  strayProviderSearchResult,
+} from "./provider-search-tool-call.js";
 
 export interface ConfiguredLanguageModelOptions {
   readonly apiKey: string;
@@ -263,7 +270,10 @@ function createTransportDefaultsMiddleware(
     async wrapGenerate({ doGenerate }) {
       const result = await doGenerate();
       assertCompleteFinishReason(result.finishReason);
-      return result;
+      return {
+        ...result,
+        content: closeStrayProviderSearchCalls(result.content, (toolCallId) => logStrayProviderSearch(transport, toolCallId)),
+      };
     },
     async wrapStream({ doStream }) {
       const result = await doStream();
@@ -273,6 +283,18 @@ function createTransportDefaultsMiddleware(
           new TransformStream<LanguageModelV4StreamPart, LanguageModelV4StreamPart>({
             transform(part, controller) {
               if (part.type === "finish") assertCompleteFinishReason(part.finishReason);
+              // A provider search tool returned as a function call has no local executor; the
+              // call is re-labelled provider-executed and closed with an error result at once.
+              if (part.type === "tool-input-start" && PROVIDER_SEARCH_TOOL_NAMES.has(part.toolName) && part.providerExecuted !== true) {
+                controller.enqueue({ ...part, providerExecuted: true });
+                return;
+              }
+              if (isStrayProviderSearchCall(part)) {
+                logStrayProviderSearch(transport, part.toolCallId);
+                controller.enqueue({ ...part, providerExecuted: true });
+                controller.enqueue(strayProviderSearchResult(part));
+                return;
+              }
               controller.enqueue(part);
             },
           }),
@@ -280,6 +302,14 @@ function createTransportDefaultsMiddleware(
       };
     },
   };
+}
+
+function logStrayProviderSearch(transport: AgentModelTransport, toolCallId: string): void {
+  console.error(JSON.stringify({
+    code: PROVIDER_SEARCH_FUNCTION_CALL_CODE,
+    protocol: transport.protocol,
+    toolCallId,
+  }));
 }
 
 function assertCompleteFinishReason(finishReason: LanguageModelV4FinishReason): void {

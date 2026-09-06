@@ -17,7 +17,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { telegramChannel } from "eve/channels/telegram";
 
 import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js";
-import { formatTelegramTurnFailure } from "../lib/telegram-interface.js";
+import { formatTelegramTurnFailure, isUnrecoverableHistoryFailure } from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput } from "../lib/telegram-progress.js";
@@ -399,6 +399,16 @@ export default telegramChannel({
         }
       }
       if (!reviewBatchId) await sessionRepository.recordTurnFailed(sessionId, ctx.session.id);
+      // The next message would fail the same way on the same history, so it starts a new session.
+      if (!reviewBatchId && isUnrecoverableHistoryFailure(data)) {
+        await sessionRepository.requestRotation(sessionId);
+        console.error(JSON.stringify({
+          code: "AGENT_SESSION_HISTORY_UNRECOVERABLE",
+          applicationSessionId: sessionId,
+          eveSessionId: ctx.session.id,
+          eveTurnId: ctx.session.turn.id,
+        }));
+      }
       await telegramHitlApprovalRepository.clearForEveSession(sessionId, ctx.session.id);
     },
     async "turn.cancelled"(_data, _channel, ctx) {

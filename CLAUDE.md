@@ -429,6 +429,19 @@ Chrome for Testing той же линии в `/opt/chrome` с симлинком
 можно удалять. Смена образа или окружения требует policy version (13), иначе живые контейнеры
 остаются на старом.
 
+Отравленная история сессии (7 сентября 2026, BotBattle молчал два часа). DeepSeek выполняет `web_search`
+у себя и отчитывается элементом `web_search_call`, но однажды рядом с тремя параллельными
+вызовами вернул его как `function_call` с пустыми аргументами; локального исполнителя у имени нет,
+вызов остался без результата, и каждый следующий вызов модели в сессии падал в AI SDK с
+`AI_MissingToolResultsError` ещё до провайдера. Два слоя защиты: транспорт
+(`provider-search-tool-call.ts`, в `wrapStream` и `wrapGenerate`) помечает такой вызов
+provider-executed и тут же закрывает его ошибочным результатом с кодом
+`AGENT_MODEL_PROVIDER_SEARCH_AS_FUNCTION_CALL`; канал на `turn.failed` с этим сбоем
+(`isUnrecoverableHistoryFailure`) запрашивает ротацию сессии (`AGENT_SESSION_HISTORY_UNRECOVERABLE`),
+и следующее сообщение начинает новый контекст; в личке человек читает об этом в тексте сбоя, в
+общем чате сбой по-прежнему молчит. Ручной аналог: `UPDATE conversation_sessions SET
+rotation_requested_at = now() WHERE id = …`.
+
 ## Структура проекта
 
 `agent/agent.ts` — модель и compaction; root-only delegation задаётся нативной семантикой Eve.
