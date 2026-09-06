@@ -2,8 +2,8 @@
  * Sandbox process-pressure reaping tests.
  *
  * Constructs covered:
- * - A running container whose leftover daemons reach half the pid budget is restarted before the
- *   requested operation runs, so the operation never meets EAGAIN inside the container.
+ * - A running container whose leftover daemons' threads reach half the pid budget is restarted
+ *   before the requested operation runs, so the operation never meets EAGAIN inside the container.
  * - A container below the threshold is left alone.
  */
 import { PassThrough } from "node:stream";
@@ -16,7 +16,7 @@ import { SANDBOX_PIDS_REAP_THRESHOLD } from "./docker-sandbox-options.js";
 
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-function dockerWithProcesses(processes: number) {
+function dockerWithThreads(threads: number) {
   const container = {
     exec: vi.fn(async () => ({
       inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
@@ -24,7 +24,10 @@ function dockerWithProcesses(processes: number) {
     })),
     inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
     restart: vi.fn(async () => undefined),
-    top: vi.fn(async () => ({ Processes: Array.from({ length: processes }, (_, index) => [String(index + 1)]) })),
+    // One Chromium is a dozen processes carrying most of the threads; the cgroup counts threads.
+    top: vi.fn(async () => ({
+      Processes: [["1", "1"], ["7", "1"], ["120", String(threads - 2)]],
+    })),
   };
   const docker = {
     getContainer: vi.fn(() => container),
@@ -51,13 +54,13 @@ function dockerWithProcesses(processes: number) {
 
 describe("sandbox process reaping", () => {
   it("restarts a container crowded by leftover daemons before running the command", async () => {
-    const { container, engine } = dockerWithProcesses(SANDBOX_PIDS_REAP_THRESHOLD);
+    const { container, engine } = dockerWithThreads(SANDBOX_PIDS_REAP_THRESHOLD);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const result = await engine.runProcess(SANDBOX_SESSION_ID, { command: "true" });
 
     expect(result.exitCode).toBe(0);
-    expect(container.top).toHaveBeenCalledWith({ ps_args: "-eo pid" });
+    expect(container.top).toHaveBeenCalledWith({ ps_args: "-eo pid,nlwp" });
     expect(container.restart).toHaveBeenCalledWith({ t: 0 });
     expect(container.restart.mock.invocationCallOrder[0]).toBeLessThan(
       container.exec.mock.invocationCallOrder[0]!,
@@ -69,7 +72,7 @@ describe("sandbox process reaping", () => {
   });
 
   it("leaves a container below the threshold running as it is", async () => {
-    const { container, engine } = dockerWithProcesses(SANDBOX_PIDS_REAP_THRESHOLD - 1);
+    const { container, engine } = dockerWithThreads(SANDBOX_PIDS_REAP_THRESHOLD - 1);
 
     await engine.runProcess(SANDBOX_SESSION_ID, { command: "true" });
 

@@ -81,7 +81,7 @@ describe("buildSandboxContainerOptions", () => {
       CapDrop: ["ALL"],
       Init: true,
       NetworkMode: runtime.egressNetwork,
-      PidsLimit: 256,
+      PidsLimit: 1024,
       Privileged: false,
       ReadonlyRootfs: false,
       SecurityOpt: ["no-new-privileges:true"],
@@ -90,7 +90,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "9",
+      "dev.osinara.sandbox.policy-version": "10",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });

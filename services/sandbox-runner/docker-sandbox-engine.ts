@@ -142,21 +142,26 @@ async function inspectContainer(
   }
 }
 
-async function countContainerProcesses(container: Docker.Container): Promise<number> {
+async function countContainerTasks(container: Docker.Container): Promise<number> {
   // `docker top` runs ps on the host, so it works even when the container itself cannot fork.
-  const top = (await container.top({ ps_args: "-eo pid" })) as { Processes?: unknown[] };
-  return Array.isArray(top.Processes) ? top.Processes.length : 0;
+  // The pids cgroup counts threads, so the per-process thread count (nlwp) is what is summed.
+  const top = (await container.top({ ps_args: "-eo pid,nlwp" })) as { Processes?: unknown[] };
+  if (!Array.isArray(top.Processes)) return 0;
+  return top.Processes.reduce<number>((total, row) => {
+    const threads = Array.isArray(row) ? Number(row[1]) : Number.NaN;
+    return total + (Number.isFinite(threads) && threads > 0 ? threads : 1);
+  }, 0);
 }
 
 async function reapCrowdedContainer(container: Docker.Container, sessionId: string): Promise<void> {
-  const processes = await countContainerProcesses(container);
-  if (processes < SANDBOX_PIDS_REAP_THRESHOLD) return;
+  const tasks = await countContainerTasks(container);
+  if (tasks < SANDBOX_PIDS_REAP_THRESHOLD) return;
   // Workspace and tools are named volumes; the process tree is disposable compute.
   await container.restart({ t: 0 });
   console.error(JSON.stringify({
     code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
-    processes,
     sessionId,
+    tasks,
     threshold: SANDBOX_PIDS_REAP_THRESHOLD,
   }));
 }

@@ -24,7 +24,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "9";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "10";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
@@ -35,10 +35,13 @@ const RUSSIAN_TRUSTED_ROOT_CA_PATH =
   "/usr/local/share/ca-certificates/russian-trusted-root-ca.crt";
 const SANDBOX_CPU_NANOSECONDS = 1_000_000_000;
 const SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
-const SANDBOX_PIDS_LIMIT = 256;
-// Between commands only daemons stay alive (agent-browser and its Chromium tree). Once they take
-// half the pid budget the next `mkdir` in the container fails with EAGAIN and every turn dies in
-// its preamble, so the runner restarts the disposable compute before it reaches the hard limit.
+// The pids cgroup counts threads, not processes: one agent-browser Chromium is about 200 tasks,
+// so the former limit of 256 wedged page loads inside a single session and a second daemon hit
+// EAGAIN outright. The budget now holds a few sessions; anything beyond is leftover daemons.
+const SANDBOX_PIDS_LIMIT = 1024;
+// Between commands only daemons stay alive (agent-browser and its Chromium tree). Once their
+// threads take half the budget the next `mkdir` in the container is at risk of EAGAIN and every
+// turn would die in its preamble, so the runner restarts the disposable compute first.
 export const SANDBOX_PIDS_REAP_THRESHOLD = SANDBOX_PIDS_LIMIT / 2;
 const SANDBOX_SHM_BYTES = 256 * 1024 * 1024;
 

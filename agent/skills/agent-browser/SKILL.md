@@ -12,11 +12,11 @@ Install: `npm i -g agent-browser && agent-browser install`
 
 ## Osinara runtime
 
-Osinara preconfigures `AGENT_BROWSER_SESSION=osinara`, `AGENT_BROWSER_RESTORE=osinara`, and a persistent scope-owned `$HOME`. Each CLI invocation is only a client request to the same background daemon: separate Bash calls continue the same Chromium process, tabs, cookies, and authentication state. `batch` is optional and does not control persistence.
+Osinara preconfigures `AGENT_BROWSER_SESSION=osinara`, `AGENT_BROWSER_RESTORE=osinara`, and a persistent scope-owned `$HOME`. Never set `AGENT_BROWSER_SESSION` yourself and never invent session names: every new name launches another Chromium (about 200 threads) inside a sandbox with a fixed thread budget, and the sandbox then stops running any command until it is reset. Each CLI invocation is only a client request to the same background daemon: separate Bash calls continue the same Chromium process, tabs, cookies, and authentication state. `batch` is optional and does not control persistence.
 
 Open once, then use separate `snapshot`, `fill`, `click`, `screenshot`, and other commands as needed. A screenshot or completed CLI process does not close Chromium. Never call `close` or `close --all` until the entire user task is complete. Before claiming the browser or authorization was lost, run `agent-browser session info --json`; after a real sandbox recreation, the configured restore state reloads cookies and localStorage on the next `open`.
 
-Bound every CLI call with `timeout --signal=TERM --kill-after=5s 45s agent-browser ...`. Run `open`, `wait`, `eval`, and `close` as separate Bash calls; never chain multiple browser calls into one command. If `open` times out, inspect `session info --json` and report the timeout. Retry once only when the session check identifies a startup/runtime transient; otherwise switch origin instead of repeating the blocked site.
+Bound every CLI call with `timeout --signal=TERM --kill-after=5s 45s agent-browser ...`. Run `open`, `wait`, `eval`, and `close` as separate Bash calls; never chain multiple browser calls into one command. If `open` times out, inspect `session info --json` and report the timeout. Retry once only when the session check identifies a startup/runtime transient; otherwise switch origin instead of repeating the blocked site. A stuck session is recovered with `close --all` and a fresh `open` in the same `osinara` session, not with a new session name.
 
 ## Start here
 

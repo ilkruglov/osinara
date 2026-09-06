@@ -373,11 +373,17 @@ Trusted sandbox подключён только к internal egress network и в
 падала с `DynamicModelSelectionError` на 32-м шаге: сессия failed и ротация вместо сообщения
 «слишком много шагов»; теперь окно передаётся, а `MODEL_CALL_FAILED` с этим кодом объясняется
 человеку по-русски. (2) 35-минутный ход оставил в sandbox три `agent-browser` с деревом Chromium,
-контейнер упёрся в `PidsLimit` 256, и каждый следующий ход умирал в преамбуле на записи пакетов
-навыков (`mkdir` → EAGAIN → runner HTTP 500 → turnStep failed ×4 → session failed). Runner перед
-каждой операцией считает процессы через `docker top` (работает с хоста, форк не нужен) и при
-`SANDBOX_PIDS_REAP_THRESHOLD` (половина лимита) перезапускает контейнер:
-`AGENT_SANDBOX_RUNNER_PROCESSES_REAPED`; тома workspace и tools переживают перезапуск. (3) Ход,
+контейнер упёрся в `PidsLimit`, и каждый следующий ход умирал в преамбуле на записи пакетов
+навыков (`mkdir` → EAGAIN → runner HTTP 500 → turnStep failed ×4 → session failed). Cgroup pids
+считает потоки: один Chromium это около 200 задач, поэтому прежний лимит 256 подвешивал загрузку
+страниц уже в одной сессии (живой тест 7 сентября: 204 из 256 при одной вкладке), а второй демон
+(модель сама подменяла `AGENT_BROWSER_SESSION` своими именами) давал EAGAIN и `CDP WebSocket
+connect failed`. Лимит теперь 1024 (policy version 10, старые контейнеры пересоздаются), runner
+перед каждой операцией суммирует потоки через `docker top -eo pid,nlwp` (работает с хоста, форк
+не нужен) и при `SANDBOX_PIDS_REAP_THRESHOLD` (половина лимита) перезапускает контейнер:
+`AGENT_SANDBOX_RUNNER_PROCESSES_REAPED`; тома workspace и tools переживают перезапуск. Навык
+`agent-browser` запрещает придумывать имена сессий и велит чинить зависшую сессию через
+`close --all` в той же сессии `osinara`. (3) Ход,
 начатый сообщением другого бота во внешней группе, не проходил `requireWorkspaceAuthorization`
 (только `principalType: user`), а материализация навыков вызывает sandbox `onSession`: первая
 сессия от бота падала. Service principal `telegram-bot:<id>` с ролью `external` в группе получает
