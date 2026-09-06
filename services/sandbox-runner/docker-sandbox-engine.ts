@@ -190,10 +190,13 @@ export function createDockerSandboxEngine(input: {
         if (existing) {
           if (request.access === "group-tools") {
             const workspaceId = request.mounts[0]!.workspaceId;
-            await activity.runExclusive(`network:${workspaceId}`, () =>
-              ensureGroupNetwork(input.docker, input.runtime.project, workspaceId));
+            await activity.runExclusive(`network:${workspaceId}`, async () => {
+              await ensureGroupNetwork(input.docker, input.runtime.project, workspaceId);
+              if (!existing.inspection.State.Running) await existing.container.start();
+            });
+          } else if (!existing.inspection.State.Running) {
+            await existing.container.start();
           }
-          if (!existing.inspection.State.Running) await existing.container.start();
           return { created: false, seedRequired: false, sessionId, instanceId: existing.inspection.Id };
         }
         if (request.seedFiles === undefined) {
