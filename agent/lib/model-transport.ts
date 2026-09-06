@@ -25,6 +25,8 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
 import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
+import { placeEphemeralMemoryContext } from "./model-turn-context.js";
+import { createModelCallMetrics } from "./model-call-metrics.js";
 
 export interface ConfiguredLanguageModelOptions {
   readonly apiKey: string;
@@ -167,9 +169,9 @@ function createTransportDefaultsMiddleware(
       return {
         ...params,
         maxOutputTokens: params.maxOutputTokens ?? maxOutputTokens,
-        prompt: transport.protocol === "openai-chat-completions"
+        prompt: placeEphemeralMemoryContext(transport.protocol === "openai-chat-completions"
           ? removeUnresolvedOpenAIToolCalls(params.prompt)
-          : params.prompt,
+          : params.prompt),
         providerOptions: {
           ...params.providerOptions,
           ...configuredProviderOptions(params.providerOptions, transport),
@@ -224,6 +226,11 @@ function assertCompleteFinishReason(finishReason: LanguageModelV4FinishReason): 
 
 export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOptions) {
   const { transport } = options;
+  const metrics = createModelCallMetrics({
+    modelId: options.modelId,
+    protocol: transport.protocol,
+    provider: transport.protocol === "anthropic-messages" ? "anthropic" : transport.providerName,
+  });
   const guardedFetch = createCredentialGuardedFetch(options);
   if (transport.protocol === "anthropic-messages") {
     const fetch = transport.compatibility === "minimax-anthropic"
@@ -237,7 +244,7 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
       fetch,
     });
     return wrapLanguageModel({
-      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
+      middleware: [createTransportDefaultsMiddleware(options.maxOutputTokens, transport), metrics],
       model: provider(options.modelId),
     });
   }
@@ -247,9 +254,10 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
     baseURL: transport.baseUrl,
     fetch: guardedFetch,
     name: transport.providerName,
+    includeUsage: true,
   });
   return wrapLanguageModel({
-    middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
+    middleware: [createTransportDefaultsMiddleware(options.maxOutputTokens, transport), metrics],
     model: provider.chatModel(options.modelId),
   });
 }

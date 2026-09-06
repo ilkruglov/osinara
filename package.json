@@ -1,6 +1,6 @@
 {
   "name": "osinara-family-agent",
-  "version": "0.21.3",
+  "version": "0.21.4",
   "private": true,
   "type": "module",
   "imports": {
@@ -32,6 +32,7 @@
     "@googleworkspace/cli": "0.22.5",
     "@workflow/world-postgres": "5.0.0-beta.35",
     "ai": "7.0.60",
+    "async-sema": "3.1.1",
     "dockerode": "5.0.1",
     "eve": "0.40.0",
     "file-type": "22.0.1",

@@ -6,13 +6,14 @@
  * - Forced disposable-compute cleanup when Docker exec remains active.
  * - Multiplexed source closure when either bounded output collector fails.
  */
-import { PassThrough } from "node:stream";
+import { Duplex, PassThrough } from "node:stream";
 
 import type Docker from "dockerode";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
 import { SANDBOX_RUNNER_MAX_OUTPUT_BYTES } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
+import { executeSandboxProcess } from "./docker-sandbox-process.js";
 
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -63,6 +64,24 @@ function processHarness(
 }
 
 describe("Docker sandbox process lifecycle", () => {
+  it("cancels a hijacked exec socket after HTTP upgrade and removes only its compute", async () => {
+    const source = new Duplex({ read() {}, write(_chunk, _encoding, callback) { callback(); }, final(callback) { callback(); }, allowHalfOpen: true });
+    const controller = new AbortController(), error = new Error("caller disconnected");
+    const remove = vi.fn(), command = { start: vi.fn(async () => source), inspect: vi.fn() };
+    const container = { exec: vi.fn(async () => command), remove };
+    const demuxStream = vi.fn();
+    const work = executeSandboxProcess({ modem: { demuxStream } } as never, container as never,
+      { command: "test", stdin: Buffer.from("input") }, controller.signal);
+    // Register rejection ownership before signalling abort.
+    const rejected = expect(work).rejects.toThrow("caller disconnected");
+    try {
+      await vi.waitFor(() => expect(demuxStream).toHaveBeenCalledOnce());
+      controller.abort(error);
+      await vi.waitFor(() => expect(source.destroyed).toBe(true));
+      await rejected;
+      expect(remove).toHaveBeenCalledWith({ force: true, v: true });
+    } finally { if (!source.destroyed) source.destroy(error); await rejected; }
+  });
   it("bounds commands by default and reports GNU timeout termination", async () => {
     const harness = processHarness({ ExitCode: 124, Running: false });
 

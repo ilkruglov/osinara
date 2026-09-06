@@ -44,6 +44,7 @@ import {
 } from "./docker-sandbox-options.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
 import { cleanupGroupNetworks, ensureGroupNetwork, removeUnusedGroupNetwork } from "./group-egress-network.js";
+import { syncSandboxSkills } from "./skill-sync.js";
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
@@ -152,6 +153,10 @@ export function createDockerSandboxEngine(input: {
   const activity = createSandboxActivityRegistry(Date.now);
 
   return {
+    async syncSkills(sessionId, request, signal) {
+      return syncSandboxSkills({ docker: input.docker, activity, project: input.runtime.project,
+        toolsRoot: input.roots.toolsRoot, toolsVolume: input.runtime.toolsVolume }, sessionId, request, signal);
+    },
     async health() {
       await input.docker.ping();
       await input.docker.getImage(input.runtime.image).inspect();
@@ -402,9 +407,12 @@ export function createDockerSandboxEngine(input: {
         item.Labels[GOOGLE_WORKSPACE_EXECUTION_LABEL] === "true"
       );
       await Promise.all(owned.map(async (item) => {
-        await input.docker.getContainer(item.Id).remove({ force: true, v: true }).catch((error) => {
+        const remove = () => input.docker.getContainer(item.Id).remove({ force: true, v: true }).catch((error) => {
           if (dockerStatus(error) !== 404) throw error;
         });
+        const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
+        if (sessionId !== undefined) await activity.runExclusive(sessionId, remove);
+        else await remove();
       }));
       activity.clear();
       await cleanupGroupNetworks(input.docker, input.runtime.project, activity.runExclusive);

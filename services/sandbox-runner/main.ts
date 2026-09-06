@@ -29,14 +29,16 @@ server.listen(RUNNER_PORT, "0.0.0.0", () => {
 });
 
 // Stop idle compute for reuse, then remove expired/excess entries under an explicit hard bound.
+let idleSweepRun: Promise<void> | undefined;
 const idleSweep = setInterval(() => {
-  void engine.reconcileIdleSessions(new Date()).then(({ removed, stopped }) => {
+  if (idleSweepRun) return;
+  idleSweepRun = engine.reconcileIdleSessions(new Date()).then(({ removed, stopped }) => {
     if (removed > 0 || stopped > 0) {
       console.log("Reconciled idle sandbox compute", { removed, stopped });
     }
   }, (error: unknown) => {
     console.error("Sandbox idle reconciliation failed", { error });
-  });
+  }).finally(() => { idleSweepRun = undefined; });
 }, SANDBOX_IDLE_SWEEP_INTERVAL_MS);
 idleSweep.unref();
 
@@ -46,10 +48,10 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   shuttingDown = true;
   clearInterval(idleSweep);
   console.log("Sandbox runner stopping", { signal });
+  // Stop admission and settle accepted HTTP work before taking the final container snapshot.
+  await server.closeAndDrain();
+  await idleSweepRun;
   await engine.stopAllSessions();
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => error ? reject(error) : resolve())
-  );
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

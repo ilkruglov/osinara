@@ -13,8 +13,10 @@ import type {
   SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import type { SandboxReconciliationResult } from "./docker-sandbox-reconciliation.js";
+import type { SkillSyncRequest, SkillSyncResult } from "../../agent/lib/sandbox-runner/skill-sync-contract.js";
 
 export interface SandboxEngine {
+  syncSkills(sessionId: string, request: SkillSyncRequest, signal?: AbortSignal): Promise<SkillSyncResult>;
   createSession(request: SandboxRunnerCreateRequest): Promise<SandboxRunnerSessionResponse>;
   deleteToolEnvironment(workspaceId: string): Promise<void>;
   health(): Promise<void>;

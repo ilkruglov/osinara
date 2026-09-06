@@ -48,6 +48,16 @@ const validAttributes = {
 };
 
 describe("requireBehaviorPreferenceAuthorization", () => {
+  it("reads chat preferences on a verified approval continuation without inventing a mutation source", () => {
+    const resumed = context({ telegramApprovalContinuation: "true", telegramApprovalScope: "personal",
+      familyId: "family-1", telegramChatType: "private", telegramChatId: "101" });
+    expect(requireBehaviorPreferenceReadAuthorization(resumed)).toEqual({
+      kind: "approval", actorUserId: "user-1", familyId: "family-1", groupId: null, scope: "personal", telegramChatId: "101",
+    });
+    expect(() => requireBehaviorPreferenceAuthorization(resumed)).toThrow("AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID");
+    expect(() => requireBehaviorPreferenceReadAuthorization(context({ telegramApprovalContinuation: "true" })))
+      .toThrow("AGENT_BEHAVIOR_PREFERENCE_CONTEXT_INVALID");
+  });
   it("projects exact verified current-turn identity", () => {
     expect(requireBehaviorPreferenceAuthorization(context(validAttributes))).toEqual({
       conversationId: "conversation-1",

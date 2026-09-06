@@ -34,10 +34,17 @@ export function wrapModelFacingTool(
     ...definition,
     description: completeDescription(definition.description),
     async execute(input, ctx) {
+      const started = performance.now();
+      let outcome = "succeeded";
       try {
         return await definition.execute(input, ctx);
       } catch (error) {
+        outcome = "failed";
         throw normalizeModelFacingError(error, { toolName });
+      } finally {
+        console.info(JSON.stringify({ code: "AGENT_TOOL_CALL_METRICS", toolName, outcome,
+          sessionId: ctx?.session?.id ?? null, turnId: ctx?.session?.turn?.id ?? null,
+          callId: ctx?.callId ?? null, durationMs: Math.round(performance.now() - started) }));
       }
     },
   });

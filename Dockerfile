@@ -15,6 +15,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
 COPY scripts/eve-patches ./scripts/eve-patches
+COPY scripts/runtime ./scripts/runtime
 COPY scripts/eve-runtime ./scripts/eve-runtime
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --ignore-scripts \
@@ -51,6 +52,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
 COPY scripts/eve-patches ./scripts/eve-patches
+COPY scripts/runtime ./scripts/runtime
 COPY scripts/eve-runtime ./scripts/eve-runtime
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --omit=dev --ignore-scripts \

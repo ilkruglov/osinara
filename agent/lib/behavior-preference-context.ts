@@ -21,18 +21,18 @@ export interface BehaviorPreferenceAuthorization {
   timelineEntryId: string;
 }
 
-export interface BehaviorPreferenceScheduledReadAuthorization {
+export interface BehaviorPreferenceBoundChatReadAuthorization {
   actorUserId: string;
   familyId: string;
   groupId: string | null;
-  kind: "scheduled";
+  kind: "scheduled" | "approval";
   scope: "family" | "group" | "personal";
   telegramChatId: string;
 }
 
 export type BehaviorPreferenceReadAuthorization =
   | BehaviorPreferenceAuthorization
-  | BehaviorPreferenceScheduledReadAuthorization;
+  | BehaviorPreferenceBoundChatReadAuthorization;
 
 type PreferenceContext =
   | Pick<DynamicResolveContext, "session">
@@ -82,6 +82,20 @@ export function requireBehaviorPreferenceAuthorization(
 export function requireBehaviorPreferenceReadAuthorization(
   ctx: PreferenceContext,
 ): BehaviorPreferenceReadAuthorization {
+  const caller = resolveSessionCaller(ctx);
+  const attrs = caller?.attributes;
+  if (attrs?.telegramApprovalContinuation === "true") {
+    const scope = attrs.telegramApprovalScope;
+    if (caller?.authenticator !== "telegram" || caller.principalType !== "user" ||
+        typeof attrs.familyId !== "string" || typeof attrs.telegramChatId !== "string" ||
+        (scope !== "personal" && scope !== "family") ||
+        (scope === "personal" ? attrs.telegramChatType !== "private" : attrs.groupType !== "family_private" || typeof attrs.groupId !== "string")) {
+      throw contextError();
+    }
+    return { actorUserId: caller.principalId, familyId: attrs.familyId,
+      groupId: scope === "personal" ? null : attrs.groupId as string,
+      kind: "approval", scope, telegramChatId: attrs.telegramChatId };
+  }
   // Scheduled runs carry a server-authored delivery target but intentionally have no user message.
   const scheduled = scheduledDeliveryMetadata(ctx);
   if (scheduled) {

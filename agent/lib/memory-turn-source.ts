@@ -30,6 +30,8 @@ function sourceError(reason: string): AppError {
 
 export async function bindMemoryTurnSources(ctx: TurnContext): Promise<void> {
   const attributes = ctx.session.auth.current?.attributes;
+  // The frozen approved action is resumed, but a button/timeout is not a new message with facts.
+  if (attributes?.telegramApprovalContinuation === "true") return;
   const applicationSessionId = attributes?.applicationSessionId;
   const conversationId = attributes?.telegramConversationId;
   const currentTimelineEntryId = attributes?.telegramTimelineEntryId;

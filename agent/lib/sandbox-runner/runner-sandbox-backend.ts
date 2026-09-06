@@ -41,6 +41,7 @@ import {
   sandboxHome,
 } from "./runner-sandbox-profile.js";
 import { parseStoredSandboxMetadata } from "./runner-sandbox-state.js";
+import type { MaterializedSkillPackage } from "./skill-sync-contract.js";
 
 const TEMPLATE_SCHEMA_VERSION = 1;
 
@@ -153,7 +154,8 @@ function buildSession(input: {
   client: SandboxRunnerClient;
   ensure: (requiredCapability?: "bash") => Promise<{ sessionId: string; instanceId: string }>;
   id: () => string;
-}): SandboxSession {
+  syncSkills: (packages: readonly MaterializedSkillPackage[], removed: readonly string[]) => Promise<void>;
+}): SandboxSession & { syncSkillPackages: typeof input.syncSkills } {
   async function spawn(options: GroupSandboxCommandOptions): Promise<SandboxProcess> {
     const { sessionId, instanceId } = await input.ensure(options.requiredGroupCapability);
     const controller = new AbortController();
@@ -192,6 +194,7 @@ function buildSession(input: {
   }
 
   return {
+    syncSkillPackages: input.syncSkills,
     get id() {
       return input.id();
     },
@@ -345,6 +348,24 @@ function workspaceRunner(
         client,
         ensure: ensureRunner,
         id: runnerSessionId,
+        async syncSkills(packages, removed) {
+          if (packages.length === 0 && removed.length === 0) return;
+          const started = performance.now();
+          const sync = async (access: SandboxAccess) => {
+            const { sessionId, instanceId } = await ensureWithAccess(access);
+            return client.syncSkills(sessionId, { expectedInstanceId: instanceId,
+              packages: packages.map((pkg) => ({ name: pkg.name, files: pkg.files.map((file) => ({
+                path: file.relativePath, contentBase64: Buffer.from(file.content).toString("base64"),
+              })) })), removed: [...removed],
+            });
+          };
+          const group = requireRequest().mounts.find((mount) => mount.mountPoint === "group");
+          const result = group
+            ? await withGroupSandboxAccess(group.workspaceId, sync, undefined, packages.map((pkg) => pkg.name))
+            : await sync("trusted");
+          console.info(JSON.stringify({ code: "AGENT_SKILL_SYNC_METRICS", sessionId: eveSessionId,
+            durationMs: Math.round(performance.now() - started), ...result }));
+        },
       });
       const stopRunner = async (): Promise<void> => {
         // Both lifecycle boundaries preserve metadata; the runner operation is intentionally idempotent.

@@ -19,6 +19,8 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
+import { requirePrivateTelegramOwner } from "../family-context.js";
+import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
 import { requireManageTelegramGroupInput } from "../tools/manage_telegram_group.js";
 import { skillRequiresBash } from "../group-skills/group-skill-catalog.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
@@ -41,6 +43,7 @@ import {
 } from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
+  findGroupTitle(telegramChatId: string, ctx: Pick<SessionContext, "session">): Promise<string | null>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -253,26 +256,34 @@ export function createTelegramApprovalPresenter(
     const localized = localizeTelegramInputRequest(request);
     if (request.display === "confirmation" && request.action.toolName === "manage_telegram_group") {
       const parsed = requireManageTelegramGroupInput(request.action.input);
-      if (parsed.action === "update_skills") return {
-        ...localized,
-        prompt: buildApprovalMessage({
-          actionLabel: "изменение скиллов группы",
-          facts: [...approvalFact("Группа", parsed.telegramChatId), ...approvalFact("Скиллы", parsed.skillAllowlist.join(", ") || "нет")],
-          consequence: parsed.skillAllowlist.some(skillRequiresBash) ? GROUP_SKILLS_BASH_CONSEQUENCE : GROUP_SKILLS_CONSEQUENCE,
-        }),
-      };
-      if (parsed.action === "update_policy") return {
-        ...localized,
-        prompt: buildApprovalMessage({
-          actionLabel: "изменение прав группы",
-          facts: [
-            ...approvalFact("Группа", parsed.policy.telegramChatId),
-            ...approvalFact("Режим сообщений", GROUP_MESSAGE_MODES[parsed.policy.messageMode]),
-            ...approvalFact("Инструменты", parsed.policy.toolAllowlist.join(", ") || "только базовые"),
-          ],
-          consequence: parsed.policy.toolAllowlist.includes("bash") ? GROUP_TOOLS_BASH_CONSEQUENCE : GROUP_TOOLS_NO_BASH_CONSEQUENCE,
-        }),
-      };
+      if (parsed.action === "update_skills" || parsed.action === "update_policy") {
+        const chatId = parsed.action === "update_skills" ? parsed.telegramChatId : parsed.policy.telegramChatId;
+        const title = await dependencies.findGroupTitle(chatId, ctx);
+        if (title === null || !title.trim()) {
+          throw new AppError("AGENT_APPROVAL_GROUP_NOT_FOUND", "Группа не найдена в вашей семье. Обновите список групп и повторите запрос");
+        }
+        const group = `${title} (${chatId})`;
+        if (parsed.action === "update_skills") return {
+          ...localized,
+          prompt: buildApprovalMessage({
+            actionLabel: "изменение скиллов группы",
+            facts: [...approvalFact("Группа", group), ...approvalFact("Скиллы", parsed.skillAllowlist.join(", ") || "нет")],
+            consequence: parsed.skillAllowlist.some(skillRequiresBash) ? GROUP_SKILLS_BASH_CONSEQUENCE : GROUP_SKILLS_CONSEQUENCE,
+          }),
+        };
+        return {
+          ...localized,
+          prompt: buildApprovalMessage({
+            actionLabel: "изменение прав группы",
+            facts: [
+              ...approvalFact("Группа", group),
+              ...approvalFact("Режим сообщений", GROUP_MESSAGE_MODES[parsed.policy.messageMode]),
+              ...approvalFact("Инструменты", parsed.policy.toolAllowlist.join(", ") || "только базовые"),
+            ],
+            consequence: parsed.policy.toolAllowlist.includes("bash") ? GROUP_TOOLS_BASH_CONSEQUENCE : GROUP_TOOLS_NO_BASH_CONSEQUENCE,
+          }),
+        };
+      }
     }
     if (
       request.display === "confirmation" &&
@@ -336,6 +347,14 @@ export function createTelegramApprovalPresenter(
 }
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
+  async findGroupTitle(telegramChatId, ctx) {
+    const owner = requirePrivateTelegramOwner(ctx);
+    const groups = await telegramGroupAdministrationRepository.listStatuses({
+      familyId: owner.familyId,
+      requestedBy: owner.userId,
+    });
+    return groups.find((group) => group.telegramChatId === telegramChatId)?.title ?? null;
+  },
   findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });

@@ -5,6 +5,7 @@
  * - `SandboxRunnerClient`: session, file, process, and isolated GWS operations.
  */
 import { Agent, fetch } from "undici";
+import type { SkillSyncRequest, SkillSyncResult } from "./skill-sync-contract.js";
 
 import type {
   GoogleWorkspaceExecutionRequest,
@@ -112,6 +113,20 @@ export class SandboxRunnerClient {
       signal,
     }));
     return validateProcessResponse(await response.json());
+  }
+
+  async syncSkills(sessionId: string, request: SkillSyncRequest): Promise<SkillSyncResult> {
+    const response = await requireSuccess(await fetch(this.#sessionUrl(sessionId, "/skills"), {
+      method: "POST", dispatcher: runnerDispatcher, headers: { "content-type": "application/json" },
+      body: JSON.stringify(request), signal: AbortSignal.timeout(70_000),
+    }));
+    const result = await response.json() as SkillSyncResult;
+    if (!result || ![result.checked, result.written, result.removed].every((value) => Number.isSafeInteger(value) && value >= 0) ||
+        result.checked !== request.packages.reduce((count, pkg) => count + pkg.files.length, 0) ||
+        result.written > result.checked || result.removed > request.removed.length) {
+      throw new Error("AGENT_SANDBOX_RUNNER_SKILLS_RESPONSE_INVALID: Incomplete skill synchronization result");
+    }
+    return result;
   }
 
   async runGoogleWorkspace(

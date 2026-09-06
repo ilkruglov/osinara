@@ -7,13 +7,14 @@
  * Key construct:
  * - The runtime event supplies the durable turn ID used to bind writable profile subject refs.
  *
- * The filename orders this block last, so the volatile per-turn payload never invalidates the
- * cacheable prefix formed by the permanent instructions and the mode rulebook.
+ * The transport moves this ephemeral block after history without persisting it, so volatile
+ * retrieval does not invalidate the prefix formed by permanent instructions and past messages.
  */
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { resolveMemoryBlock } from "../lib/prompt/turn-blocks.js";
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
+import { ephemeralMemoryContext } from "../lib/model-turn-context.js";
 
 const INVALID_TURN_BLOCK = [
   "AGENT_MEMORY_TURN_CONTEXT_INVALID: Не удалось проверить идентификатор текущего хода.",
@@ -35,7 +36,8 @@ export default defineDynamic({
       const turnId = turnIdFromEvent(event);
       if (turnId === null) return defineInstructions({ markdown: INVALID_TURN_BLOCK });
       const markdown = await resolveMemoryBlock(ctx, turnId);
-      return markdown === null ? null : defineInstructions({ markdown });
+      if (markdown === null) return null;
+      return defineInstructions({ markdown: ephemeralMemoryContext(markdown) });
     },
   },
 });

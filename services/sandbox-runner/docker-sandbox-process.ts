@@ -49,7 +49,7 @@ async function removeAfterPrimaryFailure(
 export async function executeSandboxProcess(
   docker: Docker,
   container: Docker.Container,
-  request: SandboxRunnerProcessRequest,
+  request: SandboxRunnerProcessRequest & { stdin?: Uint8Array },
   signal?: AbortSignal,
 ): Promise<SandboxRunnerProcessResponse> {
   const timeoutMs = request.timeoutMs ?? SANDBOX_RUNNER_PROCESS_DEFAULT_TIMEOUT_MS;
@@ -57,6 +57,7 @@ export async function executeSandboxProcess(
   const exec = await container.exec({
     AttachStderr: true,
     AttachStdout: true,
+    ...(request.stdin === undefined ? {} : { AttachStdin: true }),
     // TERM lets cooperative children clean up; KILL guarantees the process group cannot outlive grace.
     Cmd: [
       "timeout",
@@ -77,7 +78,9 @@ export async function executeSandboxProcess(
 
   let stream: NodeJS.ReadWriteStream;
   try {
-    stream = await exec.start({ Tty: false, abortSignal: signal });
+    stream = await exec.start({ Tty: false, abortSignal: signal,
+      ...(request.stdin === undefined ? {} : { hijack: true, stdin: true }),
+    });
   } catch (error) {
     await removeAfterPrimaryFailure(container, error);
     throw error;
@@ -98,6 +101,9 @@ export async function executeSandboxProcess(
     stdout.destroy(error);
     stderr.destroy(error);
   });
+  // After Docker's HTTP upgrade the original request no longer owns the socket's lifetime.
+  const abort = () => stream.destroy(signal?.reason instanceof Error ? signal.reason : new Error("AGENT_SANDBOX_RUNNER_PROCESS_CANCELLED: Caller cancelled sandbox execution"));
+  signal?.addEventListener("abort", abort, { once: true });
 
   let stdoutBytes: Buffer;
   let stderrBytes: Buffer;
@@ -105,6 +111,10 @@ export async function executeSandboxProcess(
     [stdoutBytes, stderrBytes] = await Promise.all([
       collectLimitedStream(stdout, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
       collectLimitedStream(stderr, SANDBOX_RUNNER_MAX_OUTPUT_BYTES),
+      Promise.resolve().then(() => {
+        if (signal?.aborted) abort();
+        else if (request.stdin !== undefined) stream.end(Buffer.from(request.stdin));
+      }),
     ]);
   } catch (error) {
     // Close every side before cleanup so neither demux nor the remaining collector can stay active.
@@ -114,6 +124,8 @@ export async function executeSandboxProcess(
     // Aborted or oversized commands must not keep running detached inside a durable session.
     await removeAfterPrimaryFailure(container, error);
     throw error;
+  } finally {
+    signal?.removeEventListener("abort", abort);
   }
 
   const inspection = await exec.inspect();
