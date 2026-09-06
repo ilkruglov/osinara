@@ -26,10 +26,13 @@ if (!adminUrl || !workflowUrl) {
 }
 const admin = new URL(adminUrl);
 const workflow = new URL(workflowUrl);
+// The Docker test service reaches PostgreSQL as `postgres`; a developer runs the same disposable
+// databases on the loopback container from the host. Both stay bound to the fixed test names.
+const TEST_DATABASE_HOSTS = new Set(["postgres", "localhost", "127.0.0.1"]);
 if (
-  admin.hostname !== "postgres" ||
+  !TEST_DATABASE_HOSTS.has(admin.hostname) ||
   admin.pathname !== "/osinara_test" ||
-  workflow.hostname !== "postgres" ||
+  !TEST_DATABASE_HOSTS.has(workflow.hostname) ||
   workflow.pathname !== `/${WORKFLOW_DATABASE}` ||
   workflow.username !== WORKFLOW_ROLE
 ) {

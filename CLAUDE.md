@@ -477,6 +477,18 @@ Required config и required data проверять fail-fast; не добавл
 ## Проверка изменений
 
 Быстрые проверки: `npm run typecheck`, `npm test`, `npm run build`.
+Сквозная проверка переписки `agent/lib/telegram-conversation.e2e.integration.test.ts` (порт upstream
+v0.21.0, 7 сентября 2026) поднимает агент из `stress/telegram-conversation` командой `eve eval`:
+PostgreSQL, Telegram channel, durable очередь, сессии, память и sandbox-хуки настоящие, модель это
+`mockModel` с детерминированным сценарием, сеть Telegram и эмбеддер подменены в
+`agent/lib/telegram-transport.ts`, файловый backend `just-bash` (зависимость только этого пакета,
+`npm ci --prefix stress/telegram-conversation`). Сценарий: 54 сообщения во внешней группе от человека и
+другого бота по очереди (ротация после 50 ходов, один ход падает в модели и в общем чате остаётся
+без уведомления), затем личка владельца с делегацией child и Bash и семейная группа; каждый ход
+пробует workspace своего чата инструментом `probe_workspace`. Локально нужен
+`WORKFLOW_POSTGRES_URL` на тот же тестовый контейнер и `RUN_DATABASE_INTEGRATION_TESTS=true`;
+сброс workflow-базы разрешён только для хостов `postgres`, `localhost`, `127.0.0.1`. `NODE_ENV=test`
+не используется: в нём Eve подменяет authored model и sandbox. Прогон около двух минут.
 Главная проверка выполняется в Docker Compose:
 
 ```bash
