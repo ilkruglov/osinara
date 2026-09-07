@@ -17,6 +17,7 @@
     "start": "eve start",
     "test": "vitest run",
     "test:workflow-stress": "node --experimental-strip-types scripts/run-workflow-postgres-stress.ts",
+    "eval:prompt": "tsx stress/prompt-evals/compare.ts",
     "test:watch": "vitest",
     "typecheck": "tsc",
     "migrate": "node --experimental-strip-types scripts/migrate-workflow.ts && node --experimental-strip-types scripts/migrate.ts",
