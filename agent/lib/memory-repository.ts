@@ -7,6 +7,7 @@
  */
 import type { PoolClient } from "pg";
 import { AppError } from "./app-error.js";
+import { MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE } from "./memory-config.js";
 import { database } from "./database.js";
 import { createMemoryClaim } from "./memory-claim-writer.js";
 import { insertClaimEvidence } from "./claim-evidence-writer.js";
@@ -461,15 +462,18 @@ export const memoryRepository = {
                   profile_eligible AND COALESCE($6, sensitivity) = 'normal',
                   -- A correction is a new version of the same record: it keeps the slot and the
                   -- event date, or the edited episode leaves its date window and the profile claim
-                  -- leaves its slot.
-                  attribute, occurred_at
+                  -- leaves its slot. A kind change drops what the new kind cannot carry: only an
+                  -- episode has an event date, and an episode's only slot is the discussion summary.
+                  CASE WHEN COALESCE($4, kind) = 'episode' AND attribute IS DISTINCT FROM $12
+                       THEN NULL ELSE attribute END,
+                  CASE WHEN COALESCE($4, kind) = 'episode' THEN occurred_at ELSE NULL END
          FROM memory_items WHERE id = $1 AND claim_status = 'active'
          RETURNING id, author_user_id, author_telegram_user_id, scope, kind, content, source,
                    confirmation, sensitivity, message_thread_id, embedding_status, created_at, updated_at, occurred_at`,
         [memory.id, auth.userId, memory.scope === "group" ? auth.telegramUserId : null,
           input.kind ?? null, input.content, input.sensitivity ?? null, input.operationKey,
            normalizeMemoryClaimContent(input.content), primarySource.sourceMessageId,
-           primarySource.messageThreadId, prepared.conversationId],
+           primarySource.messageThreadId, prepared.conversationId, MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE],
       );
       const row = result.rows[0];
       if (!row) {

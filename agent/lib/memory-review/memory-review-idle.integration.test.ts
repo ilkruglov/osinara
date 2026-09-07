@@ -262,7 +262,7 @@ describeWithDatabase("idle memory review", () => {
       conversationId: fixture.conversationId,
       groupId: null,
       groupType: null,
-      memoryScopes: ["personal", "family"],
+      memoryScopes: ["personal"],
       ownerUserId: fixture.userId,
       role: "owner",
       scope: "personal",

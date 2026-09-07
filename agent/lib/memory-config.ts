@@ -23,6 +23,8 @@ export const MEMORY_LIST_MAX_LIMIT = 50;
 export const MEMORY_RETRIEVAL_LIMIT = 12;
 // Automatic per-turn context enters model input on every step, so it is narrower than tool search.
 export const MEMORY_TURN_RETRIEVAL_LIMIT = 8;
+// Candidates fetched for the automatic block before retention and exposure filters remove some.
+export const MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT = MEMORY_TURN_RETRIEVAL_LIMIT * 3;
 export const MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 40;
 
 export const CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES = 50;

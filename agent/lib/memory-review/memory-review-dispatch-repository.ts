@@ -322,7 +322,9 @@ export const memoryReviewDispatchRepository = {
           groupId: personal ? null : row.group_id,
           groupType: personal ? null : row.group_type,
           leaseToken: row.lease_token, messageThreadId: row.message_thread_id,
-          memoryScopes: personal ? ["personal", "family"] : [row.scope],
+          // A personal silent review writes personal memory only: its sources come from one
+          // person's chat, and the explicit-source check would reject a family claim anyway.
+          memoryScopes: [row.scope],
           ownerTelegramUserId: row.sponsor_telegram_user_id, ownerUserId: row.sponsor_user_id,
           prompt: [
             formatExistingMemoryForReview(existing),

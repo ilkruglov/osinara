@@ -4,8 +4,12 @@
  * Constructs covered:
  * - A faded record (retention below the automatic threshold) stays out of the turn block.
  * - Explicit search still returns it and records the shown refs for this turn.
+ * - The turn limit applies after the retention and exposure filters, so records ranked below an
+ *   excluded top still reach the block, and the block never exceeds the limit.
  */
 import { describe, expect, it, vi } from "vitest";
+
+import { MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
 
 import type { MemoryAuthorization } from "./memory-context.js";
 import type { ReferencedMemoryItem } from "./memory-record.js";
@@ -89,5 +93,27 @@ describe("automatic memory block admission", () => {
       memoryRefs: ["mem_fresh", "mem_faded"],
       sessionTurn: 7,
     });
+  });
+
+  it("fills the block from below an excluded top and caps it at the turn limit", async () => {
+    const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
+    const { retrieveMemoryTurnContext } = await import("./memory-retrieval.js");
+    const shownBefore = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT }, (_, index) => `mem_seen${index}`);
+    const fresh = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT + 2 }, (_, index) => `mem_fresh${index}`);
+    vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
+      conflicts: [],
+      relatedClaimIds: [],
+      results: [...shownBefore, ...fresh].map((ref) => scored(ref, 1)),
+    });
+
+    const context = await retrieveMemoryTurnContext(auth, "что нового", [], {
+      excludeMemoryRefs: new Set(shownBefore),
+    });
+
+    const refs = context.memories.flatMap((memory) => "memoryRef" in memory ? [memory.memoryRef] : []);
+    expect(refs).toEqual(fresh.slice(0, MEMORY_TURN_RETRIEVAL_LIMIT));
+    // The repository must be asked for more than the block holds, or the filters starve it.
+    const requested = vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[3];
+    expect(requested).toBeGreaterThan(MEMORY_TURN_RETRIEVAL_LIMIT);
   });
 });

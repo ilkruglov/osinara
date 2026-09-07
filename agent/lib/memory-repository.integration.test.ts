@@ -97,6 +97,28 @@ describeWithDatabase("memoryRepository", () => {
       "SELECT attribute, occurred_at FROM memory_items WHERE id = $1",
       [correctedProfile.id],
     )).resolves.toMatchObject({ rows: [{ attribute: "работа", occurred_at: null }] });
+
+    // A kind change drops the metadata the new kind cannot carry: a fact has no event date,
+    // an episode has no profile slot.
+    const episodeToFact = await memoryRepository.updateByRef(family.owner, {
+      content: "Анна знает конференцию в Питере по логистике",
+      kind: "fact",
+      memoryRef: correctedEpisode.memoryRef,
+      operationKey: "episode-to-fact",
+      source,
+    });
+    const profileToEpisode = await memoryRepository.updateByRef(family.owner, {
+      content: "Анна стала старшим логистом",
+      kind: "episode",
+      memoryRef: correctedProfile.memoryRef,
+      operationKey: "profile-to-episode",
+      source,
+    });
+    expect(episodeToFact.occurredAt).toBeNull();
+    await expect(database().query(
+      "SELECT kind, attribute, occurred_at FROM memory_items WHERE id = $1",
+      [profileToEpisode.id],
+    )).resolves.toMatchObject({ rows: [{ kind: "episode", attribute: null, occurred_at: null }] });
   });
 
   it("keeps episodes with the same words on different dates apart", async () => {

@@ -11,7 +11,7 @@
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 
-import { MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
+import { MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT, MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import { embedMemoryQuery } from "./memory-embedding-client.js";
 import { isRetainedForAutomaticContext } from "./memory-retention-score.js";
@@ -142,25 +142,28 @@ export async function retrieveMemoryTurnContext(
 ): Promise<MemoryTurnContext> {
   const embedding = await embedMemoryQuery(query);
   // Automatic context is deliberately narrower than `search_memories`, which the model can call.
+  // The block limit applies after the filters below: with the limit in SQL, a top made of faded
+  // or recently shown records left the block empty while fitting records sat just below it.
   const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(
     auth,
     query,
     embedding,
-    MEMORY_TURN_RETRIEVAL_LIMIT,
+    MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
   );
   const exclude = options.excludeMemoryRefs ?? new Set<string>();
-  const memories: ModelMemoryContextItem[] = [
+  const admitted = retrieval.results
     // A faded record stays searchable but no longer enters the block on its own.
-    ...retrieval.results
-      .filter((result) => isRetainedForAutomaticContext(result.retention))
-      .map((result) => toModelMemory(result.memory, result.sourceEvidence))
-      .filter((memory) => !exclude.has(memory.memoryRef)),
+    .filter((result) => isRetainedForAutomaticContext(result.retention))
+    .filter((result) => !exclude.has(result.memory.memoryRef))
+    .slice(0, MEMORY_TURN_RETRIEVAL_LIMIT);
+  const memories: ModelMemoryContextItem[] = [
+    ...admitted.map((result) => toModelMemory(result.memory, result.sourceEvidence)),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
   const threads = await memoryThreadBriefRepository.activate({
     auth,
     queryEmbedding: embedding,
-    retrievedClaimIds: retrieval.results.map((result) => result.memory.id),
+    retrievedClaimIds: admitted.map((result) => result.memory.id),
     skillHints,
   });
   return { memories, retrievedClaimIds: retrieval.relatedClaimIds, threads };

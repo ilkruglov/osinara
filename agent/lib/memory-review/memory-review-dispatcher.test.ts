@@ -107,12 +107,12 @@ describe("memory review dispatcher", () => {
     });
   });
 
-  it("starts a private review turn with personal and family scopes and no group identity", async () => {
+  it("starts a private review turn with the personal scope only and no group identity", async () => {
     const personal: ClaimedMemoryReviewBatch = {
       ...batch,
       groupId: null,
       groupType: null,
-      memoryScopes: ["personal", "family"],
+      memoryScopes: ["personal"],
       role: "member",
       scope: "personal",
       sourceCount: 3,
@@ -131,7 +131,7 @@ describe("memory review dispatcher", () => {
 
     const auth = fixture.send.mock.calls[0]![1].auth;
     expect(auth.attributes).toMatchObject({
-      memoryScopes: ["personal", "family"],
+      memoryScopes: ["personal"],
       role: "member",
       telegramChatId: "101",
       telegramChatType: "private",
