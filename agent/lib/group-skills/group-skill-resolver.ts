@@ -24,6 +24,8 @@ import {
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS } from "./trusted-google-workspace-skills.js";
+import { knowledgeSkills } from "./knowledge-skill-packages.js";
+import { KNOWLEDGE_SKILL_CAPABILITY } from "./knowledge-skills.js";
 
 interface ConversationSkillResolverOptions {
   scheduledRun?: boolean;
@@ -81,6 +83,9 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
       : {};
     // Granted authored skills follow the group's grants, not a scheduled prompt or a child agent.
     if (options.scheduledRun === true || options.subagent === true) return skills;
+    // Analyst skills ride on the research grant; the load_skill wrapper re-checks it live. Eve's
+    // public load_skill executor knows only dynamic packages, so they must reach the sandbox here.
+    if (tools.allowed.has(KNOWLEDGE_SKILL_CAPABILITY)) Object.assign(skills, knowledgeSkills());
     const identity = resolveExternalGroupPolicyIdentity(auth);
     if (!identity) return skills;
     let packages: readonly AuthoredSkillPackage[];
