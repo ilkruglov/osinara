@@ -177,7 +177,9 @@ export const memoryRetrievalRepository = {
     if (!normalizedQuery) {
       throw new AppError("AGENT_MEMORY_QUERY_INVALID", "Для поиска памяти нужен непустой запрос");
     }
-    if (!Number.isInteger(limit) || limit < 1 || limit > MEMORY_RETRIEVAL_LIMIT) {
+    // The automatic block fetches candidates beyond what it shows and filters afterwards, so the
+    // ceiling is the candidate limit of the query branches, not the size of one result page.
+    if (!Number.isInteger(limit) || limit < 1 || limit > MEMORY_RETRIEVAL_CANDIDATE_LIMIT) {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный лимит поиска памяти");
     }
 

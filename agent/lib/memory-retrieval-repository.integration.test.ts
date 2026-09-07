@@ -14,6 +14,8 @@ import { closeDatabase, database } from "./database.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
+  MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
+  MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
 } from "./memory-config.js";
 import { memoryRetention } from "./memory-retention-score.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
@@ -65,6 +67,17 @@ describeWithDatabase("memoryRetrievalRepository", () => {
   });
 
   afterAll(async () => closeDatabase());
+
+  it("accepts the automatic block's candidate limit and rejects one above the candidate ceiling", async () => {
+    // The turn context asks for more than it shows and filters afterwards; production lost its
+    // memory for hours when the repository capped the limit at the block size instead.
+    await expect(memoryRetrievalRepository.searchWithConflictClosure(
+      auth, "гречка", vector(1, 0), MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
+    )).resolves.toMatchObject({ results: [] });
+    await expect(memoryRetrievalRepository.search(
+      auth, "гречка", vector(1, 0), MEMORY_RETRIEVAL_CANDIDATE_LIMIT + 1,
+    )).rejects.toMatchObject({ code: "AGENT_MEMORY_LIMIT_INVALID" });
+  });
 
   it("finds a semantically and lexically relevant record without disclosing another user's personal record", async () => {
     const insert = async (ownerUserId: string, telegramUserId: string, content: string, embeddings: number[][], key: string) => {
