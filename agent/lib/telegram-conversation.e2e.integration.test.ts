@@ -37,6 +37,10 @@ describeWithDatabase("Telegram conversation end-to-end", () => {
     await run(process.execPath, ["--experimental-strip-types", "scripts/reset-workflow-stress-database.ts"], { env });
     await run(process.execPath, ["--experimental-strip-types", "scripts/migrate-workflow.ts"], { env });
     await cp(resolve("config"), resolve(root, "config"), { recursive: true });
+    // Analyst skill packages are read from the working directory, exactly like the trusted config.
+    for (const skill of ["auto-analyst", "policy-finance-analyst"]) {
+      await cp(resolve("agent/skills", skill), resolve(root, "agent/skills", skill), { recursive: true });
+    }
     try {
       await run(resolve("node_modules/.bin/tsc"), ["--project", resolve(root, "tsconfig.json")], { env });
       const result = await run(resolve("node_modules/.bin/eve"), [
@@ -53,7 +57,7 @@ describeWithDatabase("Telegram conversation end-to-end", () => {
       const output = error as { stdout?: string; stderr?: string };
       throw new Error(`TEST_TELEGRAM_CONVERSATION_FAILED: ${output.stdout ?? ""}\n${output.stderr ?? ""}`, { cause: error });
     } finally {
-      await Promise.all([".eve", ".output", "eval-results", "reports", "config"].map((path) =>
+      await Promise.all([".eve", ".output", "eval-results", "reports", "config", "agent/skills/auto-analyst", "agent/skills/policy-finance-analyst"].map((path) =>
         rm(resolve(root, path), { recursive: true, force: true })
       ));
     }

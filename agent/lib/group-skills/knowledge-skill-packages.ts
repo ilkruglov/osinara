@@ -13,7 +13,8 @@
  *   sandbox as packages, exactly like `imagegen`; before this they failed with
  *   AGENT_TOOL_DEPENDENCY_FAILED ("No skill named ...") on every call from a group.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineSkill, type SkillDefinition } from "eve/skills";
@@ -25,8 +26,11 @@ const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u;
 const DESCRIPTION_PATTERN = /^description:\s*(.+?)\s*$/mu;
 
 function loadDefinition(name: KnowledgeSkillName): SkillDefinition {
-  // Relative to this module, not the working directory: the e2e agent runs from another root.
-  const root = fileURLToPath(new URL(`../../skills/${name}/`, import.meta.url));
+  // Like the trusted Google packages: the working directory first (the production image and the
+  // e2e agent, which copies these directories next to `config`), the source tree as a fallback for
+  // tools run from elsewhere. `import.meta.url` alone is wrong inside an Eve build bundle.
+  const fromCwd = resolve(`agent/skills/${name}`);
+  const root = existsSync(`${fromCwd}/SKILL.md`) ? fromCwd : fileURLToPath(new URL(`../../skills/${name}/`, import.meta.url));
   const source = readFileSync(`${root}/SKILL.md`, "utf8");
   const frontmatter = FRONTMATTER_PATTERN.exec(source);
   const description = frontmatter === null ? undefined : DESCRIPTION_PATTERN.exec(frontmatter[1])?.[1];
