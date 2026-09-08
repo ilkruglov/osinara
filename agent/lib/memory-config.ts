@@ -77,6 +77,10 @@ export const MEMORY_RETRIEVAL_CONFIRMATION_BOOST = 0.001;
 // Retention (ACT-R / Ebbinghaus in closed form): R = exp(-age / S), S = S0 * (1 + ln(1 + n)).
 // S0 by record kind in days; only the automatic turn block applies the minimum retention.
 export const MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE = "итог обсуждения";
+// How a person talks to Mia and what they say about her answers; shown first on their card.
+export const MEMORY_COMMUNICATION_STYLE_ATTRIBUTE = "общение с Мией";
+// How the chat itself likes to be talked to: length, tone, what gets read and what does not.
+export const MEMORY_CHAT_MANNER_ATTRIBUTE = "как здесь принято";
 export const MEMORY_STABILITY_DAYS_EPISODE = 30;
 export const MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY = 60;
 export const MEMORY_STABILITY_DAYS_SEMANTIC = 180;

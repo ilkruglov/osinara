@@ -150,6 +150,16 @@ describe("R3 profile selection", () => {
       .toEqual(selectProfileClaims([...candidates].reverse(), NOW));
   });
 
+  it("puts the communication-style slot before every other slot", () => {
+    const selection = selectProfileClaims([
+      candidate({ attribute: "работа", content: "Логист", kind: "profile", memoryRef: "mem_1", subjectRef: "subj_1" }),
+      candidate({ attribute: "общение с Мией", content: "Просил шутки не только про логиста", kind: "profile", memoryRef: "mem_2", subjectRef: "subj_1" }),
+      candidate({ attribute: "город", content: "Тула", kind: "profile", memoryRef: "mem_3", subjectRef: "subj_1" }),
+    ], NOW);
+
+    expect(selection.subjects[0]!.claims.map((claim) => claim.memoryRef)).toEqual(["mem_2", "mem_3", "mem_1"]);
+  });
+
   it("puts attribute slots first and renders the slot name", () => {
     const selection = selectProfileClaims([
       candidate({ content: "Любит кофе", kind: "preference", memoryRef: "mem_2", subjectRef: "subj_1" }),

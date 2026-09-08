@@ -17,6 +17,7 @@ import {
   PROFILE_CONTEXT_MAX_SUBJECTS,
   PROFILE_SELECTION_DORMANCY_MILLISECONDS,
 } from "./memory-config.js";
+import { MEMORY_COMMUNICATION_STYLE_ATTRIBUTE } from "./memory-config.js";
 
 export type ProfileSubjectPriority =
   | "current_author"
@@ -89,7 +90,9 @@ function renderClaim(candidate: ProfileClaimCandidate): string {
 
 function compareClaims(left: ProfileClaimCandidate, right: ProfileClaimCandidate): number {
   // Slotted claims read as a card (работа, город, …) and go before free-form ones of the same kind.
+  // How the person talks to Mia comes first of all: it shapes the answer, the job title does not.
   return KIND_PRIORITY[left.kind] - KIND_PRIORITY[right.kind] ||
+    Number(right.attribute === MEMORY_COMMUNICATION_STYLE_ATTRIBUTE) - Number(left.attribute === MEMORY_COMMUNICATION_STYLE_ATTRIBUTE) ||
     Number(right.attribute !== null) - Number(left.attribute !== null) ||
     (left.attribute ?? "").localeCompare(right.attribute ?? "") ||
     Number(right.confirmation === "user_confirmed") - Number(left.confirmation === "user_confirmed") ||
