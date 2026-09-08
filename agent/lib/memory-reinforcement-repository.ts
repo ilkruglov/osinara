@@ -38,10 +38,15 @@ export const memoryReinforcementRepository = {
            JOIN memory_items AS item ON item.id = ref.memory_item_id
           WHERE ref.memory_ref = ANY($1::text[])
             AND item.family_id = $2 AND item.claim_status = 'active' AND item.deleted_at IS NULL
+            -- The session's scopes are a snapshot; membership and group ownership are read live,
+            -- so a revoked member cannot keep reinforcing (and reading back) family records.
             AND (
-              (item.scope = 'personal' AND 'personal' = ANY($3::memory_scope[]) AND item.owner_user_id = $4) OR
-              (item.scope = 'family' AND 'family' = ANY($3::memory_scope[])) OR
-              (item.scope = 'group' AND 'group' = ANY($3::memory_scope[]) AND item.group_id = $5)
+              (item.scope = 'personal' AND 'personal' = ANY($3::memory_scope[]) AND item.owner_user_id = $4
+                AND EXISTS (SELECT 1 FROM family_memberships WHERE family_id = $2 AND user_id = $4)) OR
+              (item.scope = 'family' AND 'family' = ANY($3::memory_scope[])
+                AND EXISTS (SELECT 1 FROM family_memberships WHERE family_id = $2 AND user_id = $4)) OR
+              (item.scope = 'group' AND 'group' = ANY($3::memory_scope[]) AND item.group_id = $5
+                AND EXISTS (SELECT 1 FROM telegram_groups WHERE id = $5 AND family_id = $2))
             )
           ORDER BY item.created_at, item.id
           FOR UPDATE OF item`,

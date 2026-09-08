@@ -116,4 +116,15 @@ describe("automatic memory block admission", () => {
     const requested = vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[3];
     expect(requested).toBeGreaterThan(MEMORY_TURN_RETRIEVAL_LIMIT);
   });
+
+  it("passes the event date window of an explicit search to the repository", async () => {
+    const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
+    const { retrieveRelevantMemories } = await import("./memory-retrieval.js");
+    vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({ conflicts: [], relatedClaimIds: [], results: [] });
+
+    await retrieveRelevantMemories(auth, "поездка", undefined, { occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
+
+    expect(vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[4])
+      .toEqual({ occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
+  });
 });

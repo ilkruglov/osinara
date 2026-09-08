@@ -64,5 +64,14 @@ describeWithDatabase("memoryReinforcementRepository", () => {
     await expect(memoryReinforcementRepository.reinforceByRefs(personalOnly, {
       memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-2" }, reason: "model_used",
     })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
+
+    // Revoked membership closes reinforcement too: the session's scopes are not a live grant.
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [fixture.familyId, fixture.userId]);
+    await expect(memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
+      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-3" }, reason: "model_used",
+    })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
+    await expect(database().query(
+      "SELECT reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id],
+    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1 }] });
   });
 });

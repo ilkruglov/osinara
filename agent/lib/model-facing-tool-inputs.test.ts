@@ -197,6 +197,22 @@ describe("model-facing tool input hardening", () => {
     } as never)).toBe("user-approval");
   });
 
+  it("resumes a completed reminder with a new time in one call", async () => {
+    toolCalls.reminderUpdate.mockResolvedValue({ enabled: true });
+
+    await manageReminder.execute({
+      action: "resume",
+      firstRunAt: "2026-09-10T09:00:00+03:00",
+      id: "00000000-0000-4000-8000-000000000001",
+    } as never, { callId: "call-resume", session: {} } as never);
+
+    // The repository requires a new time to resume a completed reminder; the tool must accept one.
+    expect(toolCalls.reminderUpdate).toHaveBeenCalledWith(expect.anything(), "00000000-0000-4000-8000-000000000001", expect.objectContaining({
+      enabled: true,
+      firstRunAt: new Date("2026-09-10T09:00:00+03:00"),
+    }));
+  });
+
   it("ignores known create-only sibling fields on a recurrence update", async () => {
     toolCalls.reminderUpdate.mockResolvedValue({ recurrence: null });
 

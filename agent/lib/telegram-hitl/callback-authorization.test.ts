@@ -184,4 +184,29 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
     expect((body as { text: string }).text).toContain("Действие не будет выполнено.");
     expect((body as { text: string }).text).toContain("Расписание: Утренний дайджест ИИ");
   });
+
+  it("delivers the decision to Eve even when Telegram refuses to edit the prompt message", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const repository = {
+      claimCallback: vi.fn().mockResolvedValue({
+        auth: { attributes: { applicationSessionId: "session-1", role: "member" }, authenticator: "telegram", principalId: "user-1", principalType: "user" as const },
+        continuationToken: "-1001:55:88:osinara:2",
+        promptText: "Удалить файл?",
+        requestIds: ["aitxt-1"],
+        selectedOptionId: "approve",
+        selectedOptionLabel: "Да, подтвердить",
+        status: "authorized",
+      }),
+    };
+    const authorize = createTelegramHitlCallbackAuthorizer(repository);
+    const { context, request } = telegramContext();
+    request.mockResolvedValueOnce({ body: {}, ok: false, status: 400 });
+
+    // The decision is already durable; a cosmetic edit failure must not make the retry "expired".
+    const result = await authorize(context, callbackQuery(), "-1001:55:88");
+
+    expect(result).toMatchObject({ inputResponses: [{ optionId: "approve", requestId: "aitxt-1" }] });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED"));
+    warn.mockRestore();
+  });
 });

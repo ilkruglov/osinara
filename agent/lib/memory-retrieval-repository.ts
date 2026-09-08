@@ -35,6 +35,7 @@ import {
 } from "./memory-retrieval-ranking.js";
 
 interface RetrievalRow extends ReferencedMemoryRow {
+  attribute: string | null;
   fused_score: number | string;
   retention: number | string;
   memory_project_id: string | null;
@@ -134,9 +135,14 @@ function rowToScoredResult(row: RetrievalRow): ScoredMemoryRetrievalResult {
       semanticSimilarity: optionalScore(row.semantic_similarity),
       simpleLexicalRank: optionalScore(row.simple_lexical_rank),
     },
+    // Two records collapse only when they are the same claim: an episode repeated on another date
+    // or a fact moved to another slot is a different record with the same wording.
     exactDuplicateIdentity: JSON.stringify([
       row.scope,
       row.scope_partition_key,
+      row.kind,
+      row.attribute ?? null,
+      row.occurred_at === null ? null : new Date(row.occurred_at).toISOString(),
       row.subject_family_id,
       row.subject_user_id,
       row.subject_participant_id,

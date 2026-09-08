@@ -66,10 +66,11 @@ async function currentAccess(
         conflict.scope_partition_key === auth.userId
       )
     : conflict.scope === "family"
-      ? currentOwner || Boolean(
+      // Authorship alone is not enough: the author must still be a member of the family.
+      ? Boolean(membership.rows[0]) && (currentOwner || Boolean(
           auth.userId && conflict.author_a_user_id === auth.userId &&
           conflict.author_b_user_id === auth.userId
-        )
+        ))
       : Boolean(
           auth.groupId === conflict.scope_partition_key &&
           (currentOwner || (

@@ -116,6 +116,31 @@ describeWithDatabase("memoryRetrievalRepository", () => {
     expect(results[0]?.evidence.russianMorphologyRank).not.toBeNull();
   });
 
+  it("keeps two events with the same wording but different dates as separate results", async () => {
+    for (const [key, occurredAt] of [["trip-aug", "2026-08-10"], ["trip-sep", "2026-09-05"]] as const) {
+      const item = await database().query<{ id: string }>(
+        `INSERT INTO memory_items
+           (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind, content, source,
+            confirmation, sensitivity, operation_key, embedding_status, occurred_at)
+         VALUES ($1, $2, $2, 'search-owner', 'personal', 'episode', 'Ездил в Питер на выходные', 'test:trip',
+                 'model_high', 'normal', $3, 'indexed', $4::date)
+         RETURNING id`,
+        [auth.familyId, auth.userId, key, occurredAt],
+      );
+      await database().query(
+        `INSERT INTO memory_embedding_chunks (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
+         VALUES ($1, 0, 'Ездил в Питер на выходные', 0, 25, $2::vector, $3)`,
+        [item.rows[0]!.id, `[${vector(1, 0).join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+      );
+    }
+
+    const found = await memoryRetrievalRepository.searchWithConflictClosure(auth, "Питер", vector(1, 0));
+
+    // The exact-duplicate collapse must not merge distinct events into one.
+    expect(found.results.map((result) => result.memory.occurredAt?.slice(0, 10)).sort())
+      .toEqual(["2026-08-10", "2026-09-05"]);
+  });
+
   it("ranks a stale unreinforced record below a fresh one and reports retention", async () => {
     const insert = async (
       content: string,

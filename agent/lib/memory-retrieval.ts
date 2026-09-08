@@ -11,14 +11,14 @@
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 
-import { MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT, MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
+import { MEMORY_RETRIEVAL_LIMIT, MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT, MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import { embedMemoryQuery } from "./memory-embedding-client.js";
 import { isRetainedForAutomaticContext } from "./memory-retention-score.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import type { ModelMemory } from "./model-memory.js";
 import { EVIDENCE_KIND_LEGEND, toModelMemory } from "./model-memory.js";
-import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
+import { type MemoryRetrievalWindow, memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 import type { MemoryConflictGroup } from "./memory-retrieval-repository.js";
 import { currentTelegramMessageText } from "./telegram-group-turn-context.js";
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
@@ -110,9 +110,10 @@ export async function retrieveRelevantMemories(
   auth: MemoryAuthorization,
   query: string,
   exposure?: MemorySearchExposure,
+  window: MemoryRetrievalWindow = {},
 ): Promise<ModelMemoryContextItem[]> {
   const embedding = await embedMemoryQuery(query);
-  const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(auth, query, embedding);
+  const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(auth, query, embedding, MEMORY_RETRIEVAL_LIMIT, window);
   const memories = retrieval.results.map((result) => toModelMemory(result.memory, result.sourceEvidence));
   // Explicit search shows records too: only a shown ref may later be reinforced as used.
   if (exposure && memories.length > 0) {

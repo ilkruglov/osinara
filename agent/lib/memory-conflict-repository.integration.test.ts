@@ -83,6 +83,26 @@ describeWithDatabase("memory conflict repository", () => {
 
     await expect(memoryConflictRepository.resolve(memberAuth, input))
       .rejects.toThrowError(/AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u);
+    // A member who authored both sides may resolve, but not after the membership is revoked.
+    const ownClaimA = await memoryRepository.create(memberAuth, {
+      confirmation: "user_confirmed", content: "Гоша ест сухой корм", kind: "fact",
+      operationKey: "conflict-own-a", scope: "family", sensitivity: "normal", source: "test",
+    });
+    const ownClaimB = await memoryRepository.create(memberAuth, {
+      confirmation: "user_confirmed", content: "Гоша ест влажный корм", kind: "fact",
+      operationKey: "conflict-own-b", scope: "family", sensitivity: "normal", source: "test",
+    });
+    const ownConflict = await database().query<{ conflict_ref: string }>(
+      `INSERT INTO claim_conflicts
+         (claim_a_id, claim_b_id, family_id, scope, scope_partition_key, detection_method)
+       VALUES (LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid), $3,
+               'family', $3, 'deterministic_guard') RETURNING conflict_ref`,
+      [ownClaimA.id, ownClaimB.id, ownerAuth.familyId],
+    );
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [ownerAuth.familyId, memberAuth.userId]);
+    await expect(memoryConflictRepository.resolve(memberAuth, {
+      action: "choose", conflictRef: ownConflict.rows[0]!.conflict_ref, memoryRef: ownClaimA.memoryRef, operationKey: "conflict-own-resolve",
+    })).rejects.toThrowError(/AGENT_MEMORY_CONFLICT_RESOLUTION_DENIED/u);
     const resolved = await memoryConflictRepository.resolve(ownerAuth, input);
     await expect(memoryConflictRepository.resolve(ownerAuth, input)).resolves.toEqual(resolved);
     await expect(memoryConflictRepository.resolve(ownerAuth, {

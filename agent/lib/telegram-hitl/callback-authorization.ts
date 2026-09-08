@@ -86,11 +86,15 @@ export function createTelegramHitlCallbackAuthorizer(
         reply_markup: { inline_keyboard: [] },
         text: resolvedApprovalText(result),
       });
+      // The decision is already durable in the repository: a failed cosmetic edit must not stop
+      // the delivery to Eve, or the person's retry would find the request already consumed.
       if (!edited.ok) {
-        throw new AppError(
-          "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
-          "Telegram не обновил сообщение с выбранным решением. Повторите действие",
-        );
+        console.warn(JSON.stringify({
+          code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
+          status: edited.status,
+          telegramChatId: message.chat.id,
+          telegramMessageId: message.messageId,
+        }));
       }
       // Every request of the prompt is answered in one Eve delivery. Eve 0.40.0 never merges
       // answers that arrive one delivery at a time, so a step with several approvals would stay

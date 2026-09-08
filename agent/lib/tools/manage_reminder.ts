@@ -146,6 +146,12 @@ function requireIdOnlyInput(input: Record<string, unknown>, action: ReminderActi
   return requireReminderId(input);
 }
 
+// A completed reminder resumes only with a new time (the repository insists), so resume takes it.
+function requireResumeInput(input: Record<string, unknown>): { firstRunAt: Date | undefined; id: string } {
+  requireOnlyFields(input, ["action", "firstRunAt", "id"], "action=resume", INPUT_ERROR_CODE);
+  return { firstRunAt: optionalIsoDate(input, "firstRunAt", INPUT_ERROR_CODE), id: requireReminderId(input) };
+}
+
 function requireManageReminderInput(input: unknown) {
   const payload = requireInputRecord(input, "manage_reminder", INPUT_ERROR_CODE);
   requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_reminder", INPUT_ERROR_CODE);
@@ -154,13 +160,14 @@ function requireManageReminderInput(input: unknown) {
   // Approval and execution share this parser so malformed model output never reaches HITL.
   if (action === "create") return { action, values: requireCreateInput(payload) } as const;
   if (action === "update") return { action, values: requireUpdateInput(payload) } as const;
+  if (action === "resume") return { action, ...requireResumeInput(payload) } as const;
   return { action, id: requireIdOnlyInput(payload, action) } as const;
 }
 
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления. Для автономного запуска агента с исследованием или отчётом используй manage_agent_schedule. Перед update/pause/resume/delete найди id через list_reminders; повторение меняй через update, не пересоздавай.",
   "Create: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}. Повтор: {\"unit\":\"daily\",\"interval\":1}, unit также weekly или monthly; без повтора recurrence=null.",
-  "Update передаёт id и только изменяемые content, firstRunAt или recurrence; pause/resume/delete только action и id. firstRunAt в ISO с UTC offset, timezone IANA.",
+  "Update передаёт id и только изменяемые content, firstRunAt или recurrence; pause/delete только action и id; resume принимает необязательный firstRunAt, обязательный для завершённого напоминания. firstRunAt в ISO с UTC offset, timezone IANA.",
 ].join(" ");
 
 export default defineTool({
@@ -189,6 +196,7 @@ export default defineTool({
     if (parsed.action === "pause" || parsed.action === "resume") {
       return await reminderRepository.update(authorization, parsed.id, {
         enabled: parsed.action === "resume",
+        ...(parsed.action === "resume" && parsed.firstRunAt !== undefined ? { firstRunAt: parsed.firstRunAt } : {}),
         operationKey: ctx.callId,
       });
     }
