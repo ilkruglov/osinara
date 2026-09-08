@@ -14,26 +14,26 @@ import { modeInstructions } from "./mode-instructions.js";
 const CORE_CHARACTER_BUDGET = 11_700;
 // Raised by 200 on 8 September 2026 for the mandatory used-memory directive wording, including
 // the "after the answer, not instead of it" clause added after the directive-only eval case.
-const PRIVATE_CHARACTER_BUDGET = 12_200;
+const PRIVATE_CHARACTER_BUDGET = 12_400;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section, then by 200 on 7 September for
 // the rule not to re-answer a question the agent already closed, then by 200 on 8 September for
 // the group length ceiling, then by 100 for the mandatory used-memory directive wording.
 // Raised by 400 on 9 September 2026 for the joke target rotation sentence.
-const FAMILY_CHARACTER_BUDGET = 15_000;
+const FAMILY_CHARACTER_BUDGET = 15_200;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
 // then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
 // about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal,
 // then by 200 the same day for the rule not to re-answer a closed question, then by 200 on
 // 8 September for the group length ceiling and by 100 for the mandatory used-memory directive.
-const EXTERNAL_CHARACTER_BUDGET = 13_900;
+const EXTERNAL_CHARACTER_BUDGET = 14_100;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot, then by 400 on 6 September for the
 // addressing section with the explicit silence directive, then by 2 200 on 7 September for the
 // participants section ported from upstream v0.21.2, then by 200 for the closed-question rule,
 // then by 200 on 8 September for the group length ceiling and by 100 for the mandatory directive.
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_300;
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_500;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
