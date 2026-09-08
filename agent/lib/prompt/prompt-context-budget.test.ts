@@ -10,7 +10,8 @@ import { modeInstructions } from "./mode-instructions.js";
 // The mode block is re-sent on every model step: rules that only matter when a specific tool is
 // called belong in that tool's descriptor or skill, not here.
 // Raised by 300 on 5 September 2026 for the owner's rule on mild, self-invented swearing.
-const CORE_CHARACTER_BUDGET = 11_300;
+// Raised by 400 on 9 September 2026: style records are a hint, not a promise; namesakes by username.
+const CORE_CHARACTER_BUDGET = 11_700;
 // Raised by 200 on 8 September 2026 for the mandatory used-memory directive wording, including
 // the "after the answer, not instead of it" clause added after the directive-only eval case.
 const PRIVATE_CHARACTER_BUDGET = 12_200;
@@ -40,7 +41,7 @@ const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_300;
 // 7 September for the participants section ported from upstream v0.21.2, then by 200 for the
 // closed-question rule, then by 200 on 8 September for the group length ceiling and by 100 for
 // the mandatory used-memory directive wording (200 in total: the worst case stacks two blocks).
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 34_600;
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 35_000;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {
