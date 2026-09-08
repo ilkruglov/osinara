@@ -27,6 +27,21 @@ const TELEGRAM_REACTION_DIRECTIVE_FRAGMENT = "telegram-reaction";
  */
 export const TELEGRAM_SILENT_DIRECTIVE = "<telegram-silent>";
 
+// DeepSeek's native tool-call markup (`<｜DSML｜calls>` … `</｜DSML｜calls>`). A model that writes
+// a call as text instead of a function call must not reach the chat with it: the span from the
+// first to the last such tag is dropped and logged, the words around it stay.
+const TOOL_MARKUP_TAG_PATTERN = /<\/?[｜|]+\s*DSML\s*[｜|]+[^>]*>/gu;
+
+function stripLeakedToolMarkup(text: string): string {
+  const tags = [...text.matchAll(TOOL_MARKUP_TAG_PATTERN)];
+  if (tags.length === 0) return text;
+  const first = tags[0]!.index;
+  const last = tags.at(-1)!;
+  const stripped = `${text.slice(0, first)}${text.slice(last.index + last[0].length)}`.replace(/\n{3,}/gu, "\n\n").trim();
+  console.warn(JSON.stringify({ code: "AGENT_MODEL_TOOL_MARKUP_LEAKED", removedChars: text.length - stripped.length, tags: tags.length }));
+  return stripped;
+}
+
 export type CompletedTelegramOutput =
   | { emoji: TelegramMessageReactionEmoji; kind: "reaction" }
   | { kind: "message"; memoryUsedDeclared: boolean; memoryUsedRefs: string[]; message: string }
@@ -37,7 +52,9 @@ export function completedTelegramOutput(data: {
   message?: string | null;
 }): CompletedTelegramOutput | null {
   // Only completed visible assistant text should become a durable Telegram message.
-  const raw = data.message === undefined || data.message === null ? "" : data.message.trim();
+  const raw = stripLeakedToolMarkup(
+    data.message === undefined || data.message === null ? "" : data.message.trim(),
+  );
   // The memory-used directive is bookkeeping for the final answer; it never reaches Telegram.
   const { declared: memoryUsedDeclared, memoryRefs: memoryUsedRefs, message: spoken } = extractMemoryUsedDirective(raw);
   // Silence wins only when it is all the model said; text next to the directive is the answer.

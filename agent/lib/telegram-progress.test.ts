@@ -67,6 +67,17 @@ describe("completedTelegramOutput", () => {
     })).toBeNull();
   });
 
+  it("strips leaked tool-call markup from a delivered answer and logs it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const leaked = "Принято.\n<｜DSML｜calls>\n<｜DSML｜invoke name=\"remember\">\n<｜DSML｜parameter name=\"kind\">profile</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜calls>";
+    // A model that writes a tool call as text must not reach the chat with it.
+    expect(completedTelegramOutput({ finishReason: "stop", message: leaked }))
+      .toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Принято." });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_MODEL_TOOL_MARKUP_LEAKED"));
+    expect(completedTelegramOutput({ finishReason: "stop", message: "<｜DSML｜calls>\n<｜DSML｜invoke name=\"remember\"></｜DSML｜invoke>\n</｜DSML｜calls>" })).toBeNull();
+    warn.mockRestore();
+  });
+
   it("logs an answer that is the memory-used directive alone", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(completedTelegramOutput({ finishReason: "stop", message: "<memory-used></memory-used>" })).toBeNull();
