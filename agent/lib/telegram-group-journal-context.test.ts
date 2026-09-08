@@ -59,6 +59,50 @@ describe("timeline timestamps", () => {
     expect(context.indexOf("-- 2026-07-12 UTC --")).toBeLessThan(context.indexOf("#1 "));
     expect(context.indexOf("#2 ")).toBeLessThan(context.indexOf("-- 2026-07-13 UTC --"));
   });
+
+  it("renders the time of day and the day separator in the given timezone", () => {
+    const context = formatTelegramGroupJournalContext(
+      [entryAt("1", "2026-09-08T15:19:00.000Z")],
+      12_000,
+      null,
+      null,
+      null,
+      "Europe/Moscow",
+    ) ?? "";
+
+    expect(context).toContain("-- 2026-09-08 Europe/Moscow (+03:00) --");
+    expect(context).toContain(" 18:19 ");
+    expect(context).not.toContain(" 15:19 ");
+  });
+
+  it("splits calendar days by the given timezone, not by UTC", () => {
+    const context = formatTelegramGroupJournalContext(
+      [entryAt("1", "2026-09-08T20:30:00.000Z"), entryAt("2", "2026-09-08T21:30:00.000Z")],
+      12_000,
+      null,
+      null,
+      null,
+      "Europe/Moscow",
+    ) ?? "";
+
+    expect(context.split("-- 2026-09-08 Europe/Moscow (+03:00) --").length - 1).toBe(1);
+    expect(context.split("-- 2026-09-09 Europe/Moscow (+03:00) --").length - 1).toBe(1);
+    expect(context.indexOf("#1 ")).toBeLessThan(context.indexOf("-- 2026-09-09 "));
+  });
+
+  it("falls back to UTC when the timezone is unknown to the runtime", () => {
+    const context = formatTelegramGroupJournalContext(
+      [entryAt("1", "2026-09-08T15:19:00.000Z")],
+      12_000,
+      null,
+      null,
+      null,
+      "Mars/Olympus",
+    ) ?? "";
+
+    expect(context).toContain("-- 2026-09-08 UTC --");
+    expect(context).toContain(" 15:19 ");
+  });
 });
 
 describe("formatTelegramGroupJournalContext", () => {

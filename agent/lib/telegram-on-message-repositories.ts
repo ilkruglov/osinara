@@ -63,7 +63,7 @@ export interface TelegramMessageRepositories {
     typeof conversationRepository,
     "getByChatId" | "getByGroupId" | "syncTimelineParticipants"
   >;
-  currentTime: Pick<typeof currentTimeRepository, "findUserTimezone">;
+  currentTime: Pick<typeof currentTimeRepository, "findTurnTimezone">;
   /** Retrieved memory for the accepted turn, delivered as context rather than as instructions. */
   memoryContext: typeof buildTelegramMemoryContext;
   threadNotices: MemoryThreadNoticeDeliveryRepository;

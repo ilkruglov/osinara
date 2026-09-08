@@ -276,9 +276,42 @@ describe("createTelegramMessageHandler group routing", () => {
       messageThreadId: "42",
       replyTargetUnavailable: false,
       replyToSequenceId: null,
+      timezone: null,
     });
     expect(result?.message).toContain("предыдущая реплика");
     expect(result?.context?.join("\n")).not.toContain("предыдущая реплика");
+  });
+
+  it("hands the resolved turn timezone to the group timeline and the local time line", async () => {
+    const repository = repositories();
+    repository.telegram.findGroup.mockResolvedValue({
+      familyId: "family-1",
+      groupId: "group-1",
+      messageMode: "addressed_only",
+      telegramChatId: "group-101",
+      toolAllowlist: [],
+      type: "external",
+    });
+    repository.currentTime.findTurnTimezone.mockResolvedValue("Europe/Moscow");
+    repository.groupContext.prepare.mockResolvedValue({
+      cursorSequence: "1",
+      durableMessage: "подведи итог",
+      currentMessageEnvelope: "подведи итог",
+      omittedBeforeSequence: null,
+      timelineOmission: null,
+      timelineTimezone: "Europe/Moscow",
+      visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
+      visibleTimelineEntries: [],
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const result = await handler(telegramContext().context, groupMessage(`@${BOT_USERNAME} подведи итог`));
+
+    expect(repository.currentTime.findTurnTimezone).toHaveBeenCalledWith(null, "family-1");
+    expect(repository.groupContext.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ timezone: "Europe/Moscow" }),
+    );
+    expect(result?.context?.join("\n")).toContain("Europe/Moscow (+03:00)");
   });
 
   it("passes the exact current reply relationship into the durable group envelope", async () => {

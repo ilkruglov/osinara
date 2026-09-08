@@ -101,6 +101,7 @@ export async function prepareTelegramMemoryReviewTurn(input: {
                 : renderTelegramGroupJournalContext(
                     combinedEntries,
                     input.preparedContext.timelineOmission,
+                    input.preparedContext.timelineTimezone ?? null,
                   ),
               input.preparedContext.currentMessageEnvelope,
             ),

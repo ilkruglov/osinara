@@ -68,12 +68,12 @@ describe("createTelegramMessageHandler", () => {
       role: "owner",
       userId: "user-1",
     });
-    repository.currentTime.findUserTimezone.mockResolvedValue("Europe/Moscow");
+    repository.currentTime.findTurnTimezone.mockResolvedValue("Europe/Moscow");
     const handler = createTelegramMessageHandler(repository);
     try {
       const result = await handler(telegramContext().context, privateMessage("Который час?"));
 
-      expect(repository.currentTime.findUserTimezone).toHaveBeenCalledWith("user-1", "family-1");
+      expect(repository.currentTime.findTurnTimezone).toHaveBeenCalledWith("user-1", "family-1");
       expect(result?.context?.join("\n")).toContain("local: 2026-07-30 18:24 четверг, Europe/Moscow (+03:00)");
     } finally {
       vi.useRealTimers();
@@ -87,7 +87,7 @@ describe("createTelegramMessageHandler", () => {
       role: "owner",
       userId: "user-1",
     });
-    repository.currentTime.findUserTimezone.mockRejectedValue(new Error("database down"));
+    repository.currentTime.findTurnTimezone.mockRejectedValue(new Error("database down"));
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const handler = createTelegramMessageHandler(repository);
     try {

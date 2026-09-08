@@ -6,7 +6,8 @@
  * - `TelegramGroupAttachmentSummary`: model-safe lazy attachment reference metadata.
  * - `TelegramTimelineOmission`: trusted rendering metadata for an omitted history prefix.
  * - `renderTelegramGroupJournalContext`: exact safe serialization of a selected entry set.
- *   Each entry carries the time of day; the date arrives once per calendar day as a separator.
+ *   Each entry carries the time of day; the date arrives once per calendar day as a separator
+ *   that names the timezone (the family's when known, else UTC).
  * - `formatTelegramGroupJournalContext`: bounded, untrusted JSON context serialization.
  * - `selectTelegramGroupJournalContext`: exact entries retained by character bounds.
  * - Entry-count bounds preserve current reply ancestry and favor the most recent coherent suffix.
@@ -56,26 +57,68 @@ const REPLY_ANCESTRY_DEPTH = 2;
 
 const ISO_STAMP_PATTERN = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/u;
 
+/** Civil time in one timezone; the label goes into the day separator so the model reads times in it. */
+interface TimelineClock {
+  format: Intl.DateTimeFormat | null;
+  label: string;
+}
+
+const UTC_CLOCK: TimelineClock = { format: null, label: "UTC" };
+
+/**
+ * Participants live in civil time, and the model quotes timeline stamps back to them ("в 15:19"
+ * for a message sent at 18:19 Moscow), so entries render in the family's timezone when one is
+ * known. A timezone the runtime cannot format degrades to UTC instead of failing the turn.
+ */
+function timelineClock(timezone: string | null): TimelineClock {
+  if (timezone === null || timezone === "UTC") return UTC_CLOCK;
+  try {
+    const format = new Intl.DateTimeFormat("en-US", {
+      calendar: "iso8601",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "longOffset",
+      year: "numeric",
+    });
+    const offset = format.formatToParts(new Date(0)).find((part) => part.type === "timeZoneName")?.value ?? "";
+    const normalized = offset === "GMT" ? "+00:00" : offset.replace(/^GMT/u, "");
+    return { format, label: `${timezone} (${normalized})` };
+  } catch {
+    return UTC_CLOCK;
+  }
+}
+
 /**
  * The window is trimmed to a character budget, so a full stamp on every line costs history depth:
  * twenty characters per entry buy nothing that the sequence number and the day separator below do
  * not already give. Stored values come from `Date.toISOString`, hence the exact expected shape.
  */
-function stamp(entry: TelegramGroupJournalEntry): { date: string; time: string } {
+function stamp(entry: TelegramGroupJournalEntry, clock: TimelineClock): { date: string; time: string } {
   const parsed = ISO_STAMP_PATTERN.exec(entry.sentAt);
   if (!parsed) {
     throw new Error(
       `AGENT_TELEGRAM_TIMELINE_STAMP_INVALID: Некорректное время записи ${entry.sequenceId}`,
     );
   }
-  return { date: parsed[1]!, time: parsed[2]! };
+  if (clock.format === null) return { date: parsed[1]!, time: parsed[2]! };
+  const parts = clock.format.formatToParts(new Date(entry.sentAt));
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((candidate) => candidate.type === type)?.value ?? "";
+  return {
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    time: `${part("hour")}:${part("minute")}`,
+  };
 }
 
-function daySeparator(date: string): string {
-  return `-- ${date} UTC --`;
+function daySeparator(date: string, clock: TimelineClock): string {
+  return `-- ${date} ${clock.label} --`;
 }
 
-function renderEntry(entry: TelegramGroupJournalEntry): string {
+function renderEntry(entry: TelegramGroupJournalEntry, clock: TimelineClock): string {
   const actor = entry.actorKind === "agent_self"
     ? "agent:self"
     : entry.actorKind === "telegram_channel"
@@ -88,20 +131,20 @@ function renderEntry(entry: TelegramGroupJournalEntry): string {
   const attachment = entry.attachment === undefined
     ? ""
     : ` attachment:${escapeUntrustedContextJson(entry.attachment)}`;
-  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${stamp(entry).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
+  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${stamp(entry, clock).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
 }
 
 /** Entries are chronological, so one dated line per calendar day carries the missing date. */
-function renderEntries(entries: readonly TelegramGroupJournalEntry[]): string[] {
+function renderEntries(entries: readonly TelegramGroupJournalEntry[], clock: TimelineClock): string[] {
   const lines: string[] = [];
   let currentDate: string | null = null;
   for (const entry of entries) {
-    const { date } = stamp(entry);
+    const { date } = stamp(entry, clock);
     if (date !== currentDate) {
-      lines.push(daySeparator(date));
+      lines.push(daySeparator(date, clock));
       currentDate = date;
     }
-    lines.push(renderEntry(entry));
+    lines.push(renderEntry(entry, clock));
   }
   return lines;
 }
@@ -109,14 +152,16 @@ function renderEntries(entries: readonly TelegramGroupJournalEntry[]): string[] 
 export function renderTelegramGroupJournalContext(
   entries: readonly TelegramGroupJournalEntry[],
   omission: TelegramTimelineOmission | null = null,
+  timezone: string | null = null,
 ): string {
+  const clock = timelineClock(timezone);
   const gap = omission === null
     ? ""
     : omission.beforeSequence === null
     ? "\nЧасть истории пропущена; при необходимости вызови list_group_history, если инструмент доступен."
     : `\nЧасть истории пропущена перед #${omission.beforeSequence}; при необходимости вызови list_group_history, если инструмент доступен.`;
   const notice = omission === null ? JOURNAL_NOTICE : JOURNAL_TRUNCATED_NOTICE;
-  return `${JOURNAL_OPEN_TAG}\n${notice}\n${renderEntries(entries).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
+  return `${JOURNAL_OPEN_TAG}\n${notice}\n${renderEntries(entries, clock).join("\n")}\n${JOURNAL_CLOSE_TAG}${gap}`;
 }
 
 function protectedReplyAncestry(
@@ -156,6 +201,7 @@ export function formatTelegramGroupJournalContext(
   omittedBeforeSequence: string | null = null,
   protectedReplyRootSequenceId: string | null = null,
   maxEntries: number | null = null,
+  timezone: string | null = null,
 ): string | null {
   return selectTelegramGroupJournalContext(
     entries,
@@ -163,6 +209,7 @@ export function formatTelegramGroupJournalContext(
     omittedBeforeSequence,
     protectedReplyRootSequenceId,
     maxEntries,
+    timezone,
   ).context;
 }
 
@@ -172,6 +219,7 @@ export function selectTelegramGroupJournalContext(
   omittedBeforeSequence: string | null = null,
   protectedReplyRootSequenceId: string | null = null,
   maxEntries: number | null = null,
+  timezone: string | null = null,
 ): {
   context: string | null;
   entries: TelegramGroupJournalEntry[];
@@ -198,17 +246,17 @@ export function selectTelegramGroupJournalContext(
     const omission = omittedBeforeSequence !== null || truncated
       ? { beforeSequence: omittedBeforeSequence }
       : null;
-    const context = renderTelegramGroupJournalContext(messages, omission);
+    const context = renderTelegramGroupJournalContext(messages, omission, timezone);
     if (context.length <= maxCharacters && (maxEntries === null || messages.length <= maxEntries)) {
       return { context, entries: messages, omission };
     }
     // Preserve a coherent reply/target pair when the gap marker alone would evict conversation
     // content from an exceptionally tight budget. The normal production budget retains both.
     if ((truncated || omittedBeforeSequence !== null) &&
-      renderTelegramGroupJournalContext(messages).length <= maxCharacters &&
+      renderTelegramGroupJournalContext(messages, null, timezone).length <= maxCharacters &&
       (maxEntries === null || messages.length <= maxEntries)) {
       return {
-        context: renderTelegramGroupJournalContext(messages),
+        context: renderTelegramGroupJournalContext(messages, null, timezone),
         entries: messages,
         omission: null,
       };
@@ -224,7 +272,7 @@ export function selectTelegramGroupJournalContext(
   }
   if (truncated || omittedBeforeSequence !== null) {
     const omission = { beforeSequence: omittedBeforeSequence };
-    const gapOnly = renderTelegramGroupJournalContext([], omission);
+    const gapOnly = renderTelegramGroupJournalContext([], omission, timezone);
     return {
       context: gapOnly.length <= maxCharacters ? gapOnly : null,
       entries: [],

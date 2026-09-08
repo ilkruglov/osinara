@@ -49,6 +49,8 @@ interface PrepareTelegramGroupTurnContextInput {
   replyToSequenceId: string | null;
   /** Earlier messages of the same author answered by this turn (see `telegram-message-series.ts`). */
   seriesSequenceIds?: readonly string[];
+  /** IANA timezone for timeline stamps; null renders UTC. */
+  timezone?: string | null;
 }
 
 interface TelegramGroupTurnContextDependencies {
@@ -65,6 +67,8 @@ export interface PreparedTelegramGroupTurnContext {
   visibleTimelineEntries: TelegramGroupJournalEntry[];
   currentMessageEnvelope: string;
   timelineOmission: TelegramTimelineOmission | null;
+  /** The timezone the timeline was rendered in, so a re-render keeps the same clock. */
+  timelineTimezone?: string | null;
   memoryReviewBatchId?: string;
   memoryReviewSourceEntryIds?: string[];
 }
@@ -278,6 +282,7 @@ export function createTelegramGroupTurnContextPreparer(
       page.omittedBeforeSequence,
       input.replyToSequenceId,
       TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES - CURRENT_TIMELINE_ENTRY_COUNT,
+      input.timezone ?? null,
     );
     const timeline = selected.context;
     // A DB-resolved reply is usable only when its protected target survived model-context bounds.
@@ -308,6 +313,7 @@ export function createTelegramGroupTurnContextPreparer(
         input.currentEntryId,
       ],
       visibleTimelineEntries: selected.entries,
+      timelineTimezone: input.timezone ?? null,
     };
   };
 }

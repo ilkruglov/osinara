@@ -94,6 +94,30 @@ describe("Telegram group turn context", () => {
     expect(result.durableMessage.indexOf("#96 ")).toBeLessThan(result.durableMessage.indexOf("#99 "));
   });
 
+  it("renders timeline stamps in the turn timezone and remembers the clock it used", async () => {
+    const deps = dependencies(null);
+    deps.journal.listRecent.mockResolvedValue([entry("99", "Вечернее сообщение")]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare({ ...input, timezone: "Europe/Moscow" });
+
+    expect(result.durableMessage).toContain("-- 2026-07-30 Europe/Moscow (+03:00) --");
+    expect(result.durableMessage).toContain('#99 [user] "Анна" 15:00 ');
+    expect(result.timelineTimezone).toBe("Europe/Moscow");
+  });
+
+  it("keeps UTC stamps when the turn has no timezone", async () => {
+    const deps = dependencies(null);
+    deps.journal.listRecent.mockResolvedValue([entry("99", "Вечернее сообщение")]);
+    const prepare = createTelegramGroupTurnContextPreparer(deps);
+
+    const result = await prepare(input);
+
+    expect(result.durableMessage).toContain("-- 2026-07-30 UTC --");
+    expect(result.durableMessage).toContain('#99 [user] "Анна" 12:00 ');
+    expect(result.timelineTimezone).toBeNull();
+  });
+
   it("orders window and unseen entries by sequence and drops nothing that fits", async () => {
     const deps = dependencies("90");
     deps.journal.listIncremental.mockResolvedValue({

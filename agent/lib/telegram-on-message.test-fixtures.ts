@@ -79,7 +79,7 @@ export function repositories() {
       persist: vi.fn().mockResolvedValue([]),
     },
     currentTime: {
-      findUserTimezone: vi.fn().mockResolvedValue(null),
+      findTurnTimezone: vi.fn().mockResolvedValue(null),
     },
     conversations: {
       getByChatId: vi.fn().mockResolvedValue({

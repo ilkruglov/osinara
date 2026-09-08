@@ -386,6 +386,17 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           telegramMessageIds: series.telegramMessageIds,
         })
       : [];
+    // Local civil time is a convenience for natural answers and the clock of the timeline stamps;
+    // a lookup failure must not cost the turn. The sender's own timezone wins, else the owner's.
+    let timezone: string | null = null;
+    try {
+      timezone = await repositories.currentTime.findTurnTimezone(access.userId ?? null, access.familyId);
+    } catch (error) {
+      console.error(JSON.stringify({
+        code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
     const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
@@ -409,6 +420,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
           replyToSequenceId: inboundTimeline.replyToSequenceId,
           ...(seriesSequenceIds.length === 0 ? {} : { seriesSequenceIds }),
+          timezone,
         })
       : null;
     if (!preparedGroupTurnContext) {
@@ -454,18 +466,6 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           conversation.id,
           additionalEntryIds.slice(offset, offset + CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES),
         );
-      }
-    }
-    // Local civil time is a convenience for natural answers; a lookup failure must not cost the turn.
-    let timezone: string | null = null;
-    if (access.userId) {
-      try {
-        timezone = await repositories.currentTime.findUserTimezone(access.userId, access.familyId);
-      } catch (error) {
-        console.error(JSON.stringify({
-          code: "AGENT_CURRENT_TIME_TIMEZONE_LOOKUP_FAILED",
-          error: error instanceof Error ? error.message : String(error),
-        }));
       }
     }
     // Memory travels with the delivery so the cacheable system prefix never changes between turns.
