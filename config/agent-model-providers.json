@@ -5,14 +5,13 @@
     "transport": {
       "protocol": "deepseek-responses",
       "baseUrl": "https://api.deepseek.com",
-      "fallbackModelId": "deepseek-v4-flash",
       "reasoning": {
         "effort": "max"
       }
     },
     "models": {
       "primary": {
-        "id": "deepseek-v4.1-flash-expires-on-0910",
+        "id": "deepseek-v4-flash",
         "contextWindowTokens": 1000000,
         "maxOutputTokens": 128000
       },
