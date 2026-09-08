@@ -31,6 +31,17 @@ export const DEEPSEEK_MODELS: readonly DeepSeekModelDescriptor[] = [
     supportsWebSearch: true,
   },
   {
+    // Preview alias of V4.1 flash seen on 9 September 2026; DeepSeek retires it on the date in
+    // the id. The transport falls back to deepseek-v4-flash when the id is gone.
+    concurrency: 2_500,
+    contextWindowTokens: 1_000_000,
+    id: "deepseek-v4.1-flash-expires-on-0910",
+    maxOutputTokens: 384_000,
+    supportsImageInput: false,
+    supportsThinking: true,
+    supportsWebSearch: true,
+  },
+  {
     concurrency: 500,
     contextWindowTokens: 1_000_000,
     id: "deepseek-v4-pro",

@@ -122,10 +122,21 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
         "Не задан корректный ключ доступа к основной модели",
       );
     }
-    const response = await (options.fetch ?? globalThis.fetch)(
-      input,
-      normalizeDeepSeekResponsesTransportRequest(options, normalizeDeepSeekThinkingRequest(options, init)),
-    );
+    const request = normalizeDeepSeekResponsesTransportRequest(options, normalizeDeepSeekThinkingRequest(options, init));
+    let response = await (options.fetch ?? globalThis.fetch)(input, request);
+    // A preview alias such as deepseek-v4.1-flash-expires-on-0910 dies on a date. When DeepSeek
+    // answers that the configured id is not a supported model name, the same request goes once
+    // more with the stable fallback, and the log says the configured id is gone.
+    const retired = await retiredModelResponse(options, response);
+    if (retired !== null) {
+      console.error(JSON.stringify({
+        code: "AGENT_MODEL_ID_RETIRED",
+        fallbackModelId: retired,
+        modelId: options.modelId,
+        url: modelRequestUrl(input),
+      }));
+      response = await (options.fetch ?? globalThis.fetch)(input, withModelId(request, retired));
+    }
     // Documented DeepSeek statuses become stable application errors; retryable ones keep flowing to
     // the AI SDK retry policy below, terminal ones stop the call with a human-readable reason.
     if (options.transport.protocol === "deepseek-responses" && !response.ok) {
@@ -152,6 +163,28 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
     // Provider-reported usage, including cache hits, is the baseline for prompt-cost work.
     return observeModelUsage(response, { modelId: options.modelId, url: modelRequestUrl(input) });
   };
+}
+
+const RETIRED_MODEL_MESSAGE = /supported API model names/iu;
+
+/** The fallback id when the provider rejected the configured model as unknown, else null. */
+async function retiredModelResponse(options: ConfiguredLanguageModelOptions, response: Response): Promise<string | null> {
+  const transport = options.transport;
+  if (transport.protocol !== "deepseek-responses" || response.status !== 400) return null;
+  const fallback = transport.fallbackModelId;
+  if (!fallback || fallback === options.modelId) return null;
+  const text = await response.clone().text().catch(() => "");
+  return RETIRED_MODEL_MESSAGE.test(text) && text.includes(options.modelId) ? fallback : null;
+}
+
+function withModelId(init: RequestInit | undefined, modelId: string): RequestInit | undefined {
+  if (typeof init?.body !== "string") return init;
+  try {
+    const body = JSON.parse(init.body) as Record<string, unknown>;
+    return { ...init, body: JSON.stringify({ ...body, model: modelId }) };
+  } catch {
+    return init;
+  }
 }
 
 function configuredProviderOptions(

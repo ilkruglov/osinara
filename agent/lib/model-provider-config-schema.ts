@@ -51,6 +51,8 @@ const anthropicMessagesTransportSchema = z.object({
 /** Native DeepSeek Responses API: documented reasoning effort, server-side web search, exact usage. */
 const deepseekResponsesTransportSchema = z.object({
   baseUrl: modelBaseUrlSchema,
+  /** Stable model to retry with once when DeepSeek answers that the configured id is unknown (preview aliases expire on a date). */
+  fallbackModelId: modelIdSchema.optional(),
   protocol: z.literal("deepseek-responses"),
   reasoning: z.object({
     effort: z.enum(["none", "low", "high", "max"]),

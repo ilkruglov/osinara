@@ -160,6 +160,46 @@ describe("createConfiguredLanguageModel", () => {
     expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
   });
 
+  it("retries once with the fallback model when DeepSeek no longer knows the configured id", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const bodies: string[] = [];
+    const model = createConfiguredLanguageModel({
+      apiKey: "model-secret",
+      fetch: async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as { model: string };
+        bodies.push(body.model);
+        if (body.model === "deepseek-v4.1-flash-expires-on-0910") {
+          return new Response(JSON.stringify({ error: { message: "The supported API model names are deepseek-v4-pro, deepseek-v4-flash, and deepseek-v4-flash-vision-exp, but you passed deepseek-v4.1-flash-expires-on-0910.", type: "invalid_request_error" } }), {
+            headers: { "content-type": "application/json" },
+            status: 400,
+          });
+        }
+        return jsonResponse({
+          id: "resp_2", model: body.model, object: "response",
+          output: [{ content: [{ annotations: [], text: "Готово", type: "output_text" }], id: "msg_2", role: "assistant", status: "completed", type: "message" }],
+          status: "completed",
+          usage: { input_tokens: 20, input_tokens_details: { cached_tokens: 0 }, output_tokens: 5, output_tokens_details: { reasoning_tokens: 0 }, total_tokens: 25 },
+        });
+      },
+      maxOutputTokens: 1_000,
+      modelId: "deepseek-v4.1-flash-expires-on-0910",
+      transport: {
+        baseUrl: "https://api.deepseek.com",
+        fallbackModelId: "deepseek-v4-flash",
+        protocol: "deepseek-responses",
+        reasoning: { effort: "low" },
+      },
+    });
+
+    // A preview alias expires on a date; the turn must survive on the stable model, not fail.
+    await expect(model.doGenerate({
+      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
+    } as LanguageModelV4CallOptions)).resolves.toMatchObject({ content: [{ text: "Готово", type: "text" }] });
+    expect(bodies).toEqual(["deepseek-v4.1-flash-expires-on-0910", "deepseek-v4-flash"]);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_MODEL_ID_RETIRED"));
+    error.mockRestore();
+  });
+
   it("turns a documented terminal DeepSeek status into a stable application error", async () => {
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
