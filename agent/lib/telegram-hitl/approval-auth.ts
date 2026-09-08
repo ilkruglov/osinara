@@ -23,8 +23,10 @@ export interface ApprovalAuthRow {
   scope: MemoryScope;
   telegram_chat_id: string;
   telegram_chat_type: TelegramChatType;
+  telegram_conversation_id?: string | null;
   telegram_message_id: string;
   telegram_message_thread_id: string | null;
+  telegram_timeline_entry_id?: string | null;
 }
 
 interface IdentityRow {
@@ -106,6 +108,9 @@ export async function resolveCurrentApprovalAuth(client: PoolClient, row: Approv
       telegramActorId: row.expected_telegram_user_id,
       telegramActorKind: "telegram_user",
       ...(row.telegram_message_thread_id === null ? {} : { telegramMessageThreadId: row.telegram_message_thread_id }),
+      // The resumed turn corrects memory and moves threads against the message that started it.
+      ...(row.telegram_conversation_id ? { telegramConversationId: row.telegram_conversation_id } : {}),
+      ...(row.telegram_timeline_entry_id ? { telegramTimelineEntryId: row.telegram_timeline_entry_id } : {}),
       telegramUserId: row.expected_telegram_user_id,
       ...(group ? { groupId: group.id, groupType: group.type } : {}),
       ...(group && group.type !== "family_private" ? { toolAllowlist: group.tool_allowlist } : {}),

@@ -64,6 +64,8 @@ describe("createTelegramInputRequestHandler", () => {
               groupType: "external",
               telegramChatId: "-1001",
               telegramChatType: "supergroup",
+              telegramConversationId: "00000000-0000-4000-8000-000000000077",
+              telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
               telegramUserId: "101",
             },
             authenticator: "telegram",
@@ -202,7 +204,9 @@ describe("createTelegramInputRequestHandler", () => {
               groupType: "external",
               telegramChatId: "-1001",
               telegramChatType: "supergroup",
+              telegramConversationId: "00000000-0000-4000-8000-000000000077",
               telegramReplyToMessageId: "77",
+              telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
               telegramUserId: "101",
             },
             authenticator: "telegram",
@@ -251,6 +255,8 @@ describe("createTelegramInputRequestHandler", () => {
     expect(registerMessageRoutes).toHaveBeenCalledWith(channel, ctx, ["88"]);
     expect(register).toHaveBeenCalledWith(expect.objectContaining({
       applicationSessionId: "app-session-1",
+      telegramConversationId: "00000000-0000-4000-8000-000000000077",
+      telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
       callbackData: ["eve:0", "eve:1"],
       callbackOptions: [
         { callbackData: "eve:0", label: "Yes", optionId: "approve" },
@@ -580,5 +586,55 @@ describe("createTelegramInputRequestHandler", () => {
     expect(register.mock.invocationCallOrder[0]).toBeLessThan(
       request.mock.invocationCallOrder.at(-1)!,
     );
+  });
+
+  it("takes the chat type from the verified caller when the scheduled channel state has none", async () => {
+    const register = vi.fn();
+    const request = vi.fn().mockImplementation(async (method: string) => method === "sendMessage"
+      ? { body: { ok: true, result: { message_id: 88 } }, ok: true, status: 200 }
+      : { body: { ok: true, result: true }, ok: true, status: 200 });
+    const handler = createTelegramInputRequestHandler({
+      approvals: { register },
+      parkSession: vi.fn(),
+      present: async (request) => request,
+      registerMessageRoutes: vi.fn(),
+    });
+    const channel = {
+      state: {
+        botUsername: "osinara_bot", chatId: "101", chatType: null, conversationId: "77", hitlCallbacks: {},
+        messageThreadId: null, nextHitlCallbackId: 0, pendingFreeformReplies: {}, triggeringUserId: "101",
+      },
+      telegram: { request },
+    } as unknown as TelegramEventContext;
+    const ctx = {
+      session: {
+        auth: {
+          current: {
+            attributes: { applicationSessionId: "app-session-1", scheduledRunId: "run-1", telegramChatId: "101", telegramChatType: "private", telegramUserId: "101" },
+            authenticator: "telegram", principalId: "user-1", principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "wrun_scheduled", turn: { id: "turn-1", sequence: 1 },
+      },
+    } as unknown as SessionContext;
+
+    // A native scheduled receive starts with no chat type in the channel state; the first question
+    // or approval of the run used to fail before it was shown.
+    await handler({
+      requests: [{
+        action: { callId: "call-1", input: { action: "create" }, kind: "tool-call", toolName: "manage_reminder" },
+        display: "confirmation",
+        kind: "tool-approval",
+        options: [
+          { id: "approve", label: "Yes", style: "primary" },
+          { id: "deny", label: "No", style: "default" },
+        ],
+        prompt: "Approve tool call",
+        requestId: "request-1",
+      }],
+    } as never, channel, ctx);
+
+    expect(register).toHaveBeenCalledWith(expect.objectContaining({ telegramChatType: "private" }));
   });
 });

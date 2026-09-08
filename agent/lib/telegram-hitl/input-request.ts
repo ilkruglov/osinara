@@ -169,7 +169,9 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
     const caller = ctx.session.auth.current;
     const telegramUserId = caller?.attributes.telegramUserId;
     const chatId = channel.state.chatId;
-    const chatType = channel.state.chatType;
+    // A native scheduled receive starts with no chat type in the channel state; the verified
+    // scheduled context carries it, and the first question of the run must still be shown.
+    const chatType = channel.state.chatType ?? caller?.attributes.telegramChatType;
     if (
       caller?.authenticator !== "telegram" ||
       typeof telegramUserId !== "string" ||
@@ -268,6 +270,8 @@ export function createTelegramInputRequestHandler(dependencies: InputRequestDepe
           promptText: localizedRequest.prompt,
           telegramChatId: chatId,
           telegramChatType: chatType,
+          ...(typeof caller.attributes.telegramConversationId === "string" ? { telegramConversationId: caller.attributes.telegramConversationId } : {}),
+          ...(typeof caller.attributes.telegramTimelineEntryId === "string" ? { telegramTimelineEntryId: caller.attributes.telegramTimelineEntryId } : {}),
           telegramMessageId: sentMessageId,
           telegramMessageThreadId: channel.state.messageThreadId === null
             ? null

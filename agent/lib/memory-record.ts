@@ -165,6 +165,10 @@ export function normalizeMemoryClaimContent(content: string): string {
   return content
     .normalize("NFKC")
     .toLocaleLowerCase("ru-RU")
+    // A sign before a number and a percent are meaning, not punctuation: "-18 °C" is not "18 °C".
+    .replace(/[-−–](?=\s*\d)/gu, " минус ")
+    .replace(/\+(?=\s*\d)/gu, " плюс ")
+    .replace(/%/gu, " процентов ")
     .replace(/[\p{P}\p{S}]+/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();

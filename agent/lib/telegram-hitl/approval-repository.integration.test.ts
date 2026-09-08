@@ -26,6 +26,7 @@ const OWNER_TELEGRAM_ID = "hitl-owner";
 
 async function fixture(
   options: {
+    kind?: "question" | "tool-approval";
     messageMode?: "addressed_only" | "owner_only";
     scope?: "family" | "group";
     type?: "external" | "family_private";
@@ -72,7 +73,7 @@ async function fixture(
   await sessionRepository.registerRouteAlias(session.id, "-1001:55:88");
   await telegramHitlApprovalRepository.register({
     applicationSessionId: session.id,
-    kind: "tool-approval" as const,
+    kind: options.kind ?? "tool-approval",
     callbackData: ["eve:0", "eve:1"],
     callbackOptions: [
       { callbackData: "eve:0", label: "Да, подтвердить", optionId: "approve" },
@@ -203,6 +204,49 @@ describeWithDatabase("Telegram HITL approval repository", () => {
         telegramUserId: "202",
       }),
     ).rejects.toThrowError(/AGENT_TOOL_APPROVAL_EVIDENCE_INVALID/u);
+  });
+
+  it("carries the conversation and timeline identity of the turn into the resumed auth", async () => {
+    const { sessionId } = await fixture();
+    await telegramHitlApprovalRepository.register({
+      applicationSessionId: sessionId,
+      kind: "tool-approval",
+      callbackData: ["eve:0", "eve:1"],
+      callbackOptions: [
+        { callbackData: "eve:0", label: "Да", optionId: "approve" },
+        { callbackData: "eve:1", label: "Нет", optionId: "deny" },
+      ],
+      eveSessionId: "wrun_hitl",
+      requestId: "approval-request-1",
+      promptText: "Подтвердите тестовое действие",
+      telegramChatId: "-1001",
+      telegramChatType: "supergroup",
+      telegramConversationId: "00000000-0000-4000-8000-000000000077",
+      telegramMessageId: "88",
+      telegramMessageThreadId: "55",
+      telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
+      telegramUserId: OWNER_TELEGRAM_ID,
+      toolCallId: "call-1",
+      toolInputHash: "a".repeat(64),
+      toolName: "test_tool",
+    });
+
+    // manage_memory corrections and thread lifecycle read the source from these attributes; the
+    // resumed turn used to lose them and reject every correction after an approval.
+    const claimed = await telegramHitlApprovalRepository.claimCallback({
+      baseContinuationToken: "-1001:55:88",
+      callbackData: "eve:0",
+      telegramChatId: "-1001",
+      telegramMessageId: "88",
+      telegramUserId: OWNER_TELEGRAM_ID,
+    });
+    expect(claimed).toMatchObject({
+      auth: { attributes: {
+        telegramConversationId: "00000000-0000-4000-8000-000000000077",
+        telegramTimelineEntryId: "00000000-0000-4000-8000-000000000078",
+      } },
+      status: "authorized",
+    });
   });
 
   it("keeps a callback claimable after the Eve turn pauses for approval", async () => {
@@ -414,8 +458,35 @@ describeWithDatabase("Telegram HITL approval repository", () => {
     ).resolves.toEqual({ status: "forbidden" });
   });
 
-  it("protects and atomically consumes a text reply from the expected identity", async () => {
+  it("leaves a button approval untouched by a text reply", async () => {
     await fixture();
+
+    // "да" typed under a button prompt is ordinary conversation: Eve does not turn it into a
+    // button decision, so consuming the row here would only kill the buttons.
+    await expect(
+      telegramHitlApprovalRepository.authorizeReply({
+        baseContinuationToken: "-1001:55:88",
+        telegramChatId: "-1001",
+        telegramMessageId: "88",
+        telegramUserId: OWNER_TELEGRAM_ID,
+      }),
+    ).resolves.toBe("not_applicable");
+    await expect(database().query(
+      "SELECT consumed_at FROM telegram_hitl_approvals WHERE telegram_message_id = 88",
+    )).resolves.toMatchObject({ rows: [{ consumed_at: null }] });
+    await expect(
+      telegramHitlApprovalRepository.claimCallback({
+        baseContinuationToken: "-1001:55:88",
+        callbackData: "eve:0",
+        telegramChatId: "-1001",
+        telegramMessageId: "88",
+        telegramUserId: OWNER_TELEGRAM_ID,
+      }),
+    ).resolves.toMatchObject({ status: "authorized" });
+  });
+
+  it("protects and atomically consumes a text reply from the expected identity", async () => {
+    await fixture({ kind: "question" });
 
     await expect(
       telegramHitlApprovalRepository.authorizeReply({

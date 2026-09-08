@@ -444,6 +444,26 @@ Trusted sandbox подключён только к internal egress network и в
 (`profile-view-repository.ts`). `tsconfig.json` включает `services/**/*.ts`, поэтому typecheck
 покрывает runner и egress proxy.
 
+Ревью Codex 9 сентября 2026 (main ac77b26, 13 пунктов, все кроме двух закрыты как есть, два с
+поправкой приоритета). Подкрепление и разрешение семейных конфликтов читают membership и
+принадлежность группы живым запросом, снимок scopes из сессии больше не даёт доступ после отзыва.
+`/.well-known/workflow/` убран с публичного edge: очередь workflow ходит к агенту по loopback,
+ingress-worker по внутреннему адресу, а обработчик проверял только форму заголовков. Пакеты
+навыков-аналитиков резолвятся от модуля, не от cwd (e2e-агент живёт в другом каталоге). Неудачный
+`editMessageText` после принятого решения не роняет доставку в Eve, только пишет
+`AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED`. Текстовый reply гасит только `question`; под кнопочным
+`tool-approval` текст остаётся обычным сообщением, кнопки живы. Подтверждение хранит
+`telegram_conversation_id` и `telegram_timeline_entry_id` (миграция 100) и возвращает их в auth
+возобновлённого хода, иначе `manage_memory` и нити падали с
+`AGENT_MEMORY_CORRECTION_SOURCE_INVALID` после каждого подтверждения. Вопрос из scheduled-хода
+берёт тип чата из проверенного контекста, когда состояние канала его ещё не знает. Ключ дубля в
+выдаче поиска включает kind, attribute и occurred_at; `search_memories` принимает окно
+`occurredAfter`/`occurredBefore`. Нормализация для точных дублей сохраняет знак числа и процент
+(«минус», «плюс», «процентов»). Resume напоминания принимает `firstRunAt`. Reap sandbox по числу
+потоков идёт только когда в сессии нет другой активной операции (`activity.activeCount`). NeuralDeep
+ограничен одним deadline на опрос, скачивание и чтение тела; принятый Cloudflare запрос с потерянным
+телом даёт `AGENT_IMAGE_GENERATION_AMBIGUOUS` и не переходит на следующего провайдера.
+
 Ночь 6 сентября 2026, личка члена семьи молчала. Три дефекта в одной цепочке. (1) Блокирующая
 модель лимита шагов (`turn-model-step-limit.ts`) отдавалась без `modelContextWindowTokens`, и Eve
 падала с `DynamicModelSelectionError` на 32-м шаге: сессия failed и ротация вместо сообщения

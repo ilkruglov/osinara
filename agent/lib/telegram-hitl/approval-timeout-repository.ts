@@ -72,6 +72,8 @@ export const approvalTimeoutRepository: ApprovalTimeoutRepository = {
                    approval.request_kind, approval.telegram_chat_id, approval.telegram_chat_type,
                    approval.telegram_message_id::text AS telegram_message_id,
                    approval.telegram_message_thread_id::text AS telegram_message_thread_id,
+                   approval.telegram_conversation_id::text AS telegram_conversation_id,
+                   approval.telegram_timeline_entry_id::text AS telegram_timeline_entry_id,
                    approval.timeout_lease_token::text AS timeout_lease_token, approval.tool_name,
                    session.family_id, session.group_id, session.owner_user_id, session.scope`,
         [

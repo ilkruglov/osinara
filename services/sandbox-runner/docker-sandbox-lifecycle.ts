@@ -26,6 +26,8 @@ interface ExistingSandboxIdentity {
 }
 
 export interface SandboxActivityRegistry {
+  /** Operations of the session currently inside `runActive`, the caller's own included. */
+  activeCount(sessionId: string): number;
   clear(): void;
   forget(sessionId: string): void;
   isIdle(sessionId: string, cutoffMs: number): boolean;
@@ -74,6 +76,9 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
   };
 
   return {
+    activeCount(sessionId) {
+      return activeCounts.get(sessionId) ?? 0;
+    },
     clear() {
       activeCounts.clear();
       creationLocks.clear();

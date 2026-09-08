@@ -33,8 +33,11 @@ export interface RegisterTelegramHitlApprovalInput {
   promptText: string;
   telegramChatId: string;
   telegramChatType: TelegramChatType;
+  /** Conversation and timeline entry of the turn, restored into the resumed auth after approval. */
+  telegramConversationId?: string;
   telegramMessageId: string;
   telegramMessageThreadId: string | null;
+  telegramTimelineEntryId?: string;
   telegramUserId: string;
   toolCallId: string;
   toolInputHash: string;
@@ -96,6 +99,7 @@ interface ApprovalRow extends ApprovalAuthRow {
   pending_operation: boolean;
   prompt_text: string | null;
   request_id: string;
+  request_kind: "question" | "session-limit" | "tool-approval" | null;
   retired_at: Date | null;
   session_eve_session_id: string | null;
 }
@@ -116,10 +120,13 @@ async function lockApprovals(
             a.id,
             a.prompt_text,
             a.request_id,
+            a.request_kind,
             a.telegram_chat_id,
             a.telegram_chat_type,
+            a.telegram_conversation_id::text,
             a.telegram_message_id::text,
             a.telegram_message_thread_id::text,
+            a.telegram_timeline_entry_id::text,
             s.continuation_token,
             s.eve_session_id AS session_eve_session_id,
             s.family_id,
@@ -206,10 +213,12 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
            telegram_chat_id, telegram_chat_type, telegram_message_id,
            telegram_message_thread_id, expected_telegram_user_id, callback_data,
             prompt_text, callback_options, tool_call_id, tool_name, tool_input_hash,
-            request_kind)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            request_kind, telegram_conversation_id, telegram_timeline_entry_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        ON CONFLICT (application_session_id, eve_session_id, request_id) DO UPDATE
          SET telegram_chat_id = EXCLUDED.telegram_chat_id,
+             telegram_conversation_id = EXCLUDED.telegram_conversation_id,
+             telegram_timeline_entry_id = EXCLUDED.telegram_timeline_entry_id,
              telegram_chat_type = EXCLUDED.telegram_chat_type,
              telegram_message_id = EXCLUDED.telegram_message_id,
              telegram_message_thread_id = EXCLUDED.telegram_message_thread_id,
@@ -245,6 +254,8 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
         input.toolName,
         input.toolInputHash,
         input.kind,
+        input.telegramConversationId ?? null,
+        input.telegramTimelineEntryId ?? null,
       ],
     );
   },
@@ -400,6 +411,13 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
       if (!routeMatches) {
         await client.query("ROLLBACK");
         return "expired";
+      }
+      // Only a freeform question is answered by text. Under a button prompt "да" is ordinary
+      // conversation: Eve never turns it into a button decision, and consuming the row here left
+      // the buttons dead and the turn waiting for its timeout.
+      if (row.request_kind !== "question") {
+        await client.query("ROLLBACK");
+        return "not_applicable";
       }
       if (row.expected_telegram_user_id !== input.telegramUserId) {
         await client.query("ROLLBACK");

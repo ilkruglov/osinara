@@ -20,7 +20,11 @@ function dockerWithThreads(threads: number) {
   const container = {
     exec: vi.fn(async () => ({
       inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
-      start: vi.fn(async () => new PassThrough()),
+      start: vi.fn(async () => {
+        const output = new PassThrough();
+        output.end();
+        return output;
+      }),
     })),
     inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
     restart: vi.fn(async () => undefined),
@@ -32,9 +36,13 @@ function dockerWithThreads(threads: number) {
   const docker = {
     getContainer: vi.fn(() => container),
     modem: {
-      demuxStream: vi.fn((_stream, stdout, stderr) => {
-        stdout.end();
-        stderr.end();
+      // Output ends when the exec stream ends, so a test can keep a command running.
+      demuxStream: vi.fn((stream: PassThrough, stdout: PassThrough, stderr: PassThrough) => {
+        stream.on("end", () => {
+          stdout.end();
+          stderr.end();
+        });
+        stream.resume();
       }),
     },
   } as unknown as Docker;
@@ -77,5 +85,33 @@ describe("sandbox process reaping", () => {
     await engine.runProcess(SANDBOX_SESSION_ID, { command: "true" });
 
     expect(container.restart).not.toHaveBeenCalled();
+  });
+
+  it("does not restart a crowded container while another command of the session is running", async () => {
+    const { container, engine } = dockerWithThreads(SANDBOX_PIDS_REAP_THRESHOLD);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const firstOutput = new PassThrough();
+    let started = 0;
+    container.exec.mockImplementation(async () => ({
+      inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
+      start: vi.fn(async () => {
+        started += 1;
+        if (started === 1) return firstOutput;
+        const output = new PassThrough();
+        output.end();
+        return output;
+      }),
+    }));
+
+    const first = engine.runProcess(SANDBOX_SESSION_ID, { command: "sleep 5" });
+    await vi.waitFor(() => expect(started).toBe(1));
+    container.restart.mockClear();
+    // The second command arrives while the first still runs: a restart would kill the first.
+    const second = await engine.runProcess(SANDBOX_SESSION_ID, { command: "true" });
+    expect(second.exitCode).toBe(0);
+    expect(container.restart).not.toHaveBeenCalled();
+    firstOutput.end();
+    await first;
+    consoleError.mockRestore();
   });
 });

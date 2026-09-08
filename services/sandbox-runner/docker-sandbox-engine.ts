@@ -172,11 +172,16 @@ async function reapCrowdedContainer(container: Docker.Container, sessionId: stri
   }));
 }
 
-async function requireRunningContainer(docker: Docker, sessionId: string): Promise<Docker.Container> {
+async function requireRunningContainer(
+  docker: Docker,
+  sessionId: string,
+  activeOperations: number,
+): Promise<Docker.Container> {
   const existing = await inspectContainer(docker, sessionId);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   if (!existing.inspection.State.Running) await existing.container.start();
-  else await reapCrowdedContainer(existing.container, sessionId);
+  // A restart kills every process of the session: only the caller may be running in it.
+  else if (activeOperations <= 1) await reapCrowdedContainer(existing.container, sessionId);
   return existing.container;
 }
 
@@ -271,7 +276,7 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const container = await requireRunningContainer(input.docker, sessionId);
+        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
@@ -287,7 +292,7 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId);
+        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
@@ -351,7 +356,7 @@ export function createDockerSandboxEngine(input: {
     },
     async writeFile(sessionId, path, content) {
       await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId);
+        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         const directoryResult = await executeSandboxProcess(input.docker, container, {
@@ -404,7 +409,7 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId);
+        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");

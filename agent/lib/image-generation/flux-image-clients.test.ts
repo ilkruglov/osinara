@@ -92,6 +92,37 @@ describe("flux image clients", () => {
     expect(neuralFetch).toHaveBeenCalledTimes(4);
   });
 
+  it("does not try the next provider when Cloudflare accepted the request but the body was lost", async () => {
+    const cloudflareFetch = vi.fn().mockResolvedValue({
+      arrayBuffer: () => Promise.reject(new Error("socket hang up")),
+      headers: new Headers({ "content-type": "image/png" }),
+      ok: true,
+      status: 200,
+    } as unknown as Response);
+    const neuralFetch = neuralDeepSuccess();
+    const chain = createFallbackImageClient([
+      createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch as never, token: "cf-token" }),
+      createNeuralDeepImageClient({ apiKey: "nd-key", fetch: neuralFetch as never, sleep: async () => {} }),
+    ]);
+
+    // The image may have been produced and billed; a second provider would double it.
+    await expect(chain.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS" });
+    expect(neuralFetch).not.toHaveBeenCalled();
+  });
+
+  it("bounds NeuralDeep polling and download by one deadline", async () => {
+    const hangingFetch = vi.fn()
+      .mockResolvedValueOnce(json({ task_uid: "1ca2c888-1a64-4fbe-99e9-23c230779a37" }))
+      .mockImplementation((_url: string, init: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }));
+    const client = createNeuralDeepImageClient({ apiKey: "nd-key", fetch: hangingFetch as never, pollTimeoutMs: 80, sleep: async () => {} });
+
+    const started = Date.now();
+    await expect(client.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
   it("reports a rejection with a wording hint when every provider refuses the prompt", async () => {
     const cloudflareFetch = vi.fn().mockResolvedValue(json({ errors: [{ code: 3030, message: "flagged" }] }, 400));
     const neuralFetch = vi.fn().mockResolvedValue(json({ error: "bad prompt" }, 422));
