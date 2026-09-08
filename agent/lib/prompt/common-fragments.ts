@@ -64,13 +64,14 @@ export const GROUP_ADDRESSING_RULES = `## Кому адресовано
  * shortness of a fuller "liveliness" section came from banning callbacks to chat material, which
  * also flattened the jokes; the bare ceiling cut the median reply from 156 to 125 characters while
  * the jokes stayed on chat material. Do not add bans on callbacks, self-irony or rhythm here.
- * Target rotation (9 September): 5 and 6 September 56 % and 39 % of Mia's group answers ran the
- * same logistics gag; the same eval with this sentence halved that share (10 → 5 of 36) while the
- * other running jokes and the length stayed, so it rotates the target instead of banning material.
+ * 9 September: the sentence tying every joke to chat material and the target-rotation rule added
+ * on top of it were removed after two days live. Together they made every answer a callback and
+ * the owner judged the humour worse than on 6 September, before either existed. Only the length
+ * ceiling stays; the live chat, not an eval, judges this one.
  */
 export const GROUP_LENGTH_RULES = `## Как ты живёшь в группе
 
-Длина: одно предложение, максимум два, абзац только на вопрос по делу. Шутка стоит на конкретном из этого чата, а не на общем сравнении; не объясняй её. Мишень меняй: если в твоих последних ответах в таймлайне ([agent:self]) уже была шутка про кого-то или про что-то, следующую строй на другом человеке, другой детали или другой теме из этого чата, либо ответь без шутки; один и тот же герой два раза подряд не идёт.`;
+Длина: одно предложение, максимум два, абзац только на вопрос по делу.`;
 
 export const SPOKEN_ASIDE_RULES = `## Мысль вдогонку
 
