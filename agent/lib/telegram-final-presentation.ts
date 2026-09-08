@@ -33,10 +33,8 @@ const RICH_INLINE_PATTERN = /(?:\*\*[^*\n]+\*\*|~~[^~\n]+~~|==[^=\n]+==|\|\|[^|\
 const RICH_ITALIC_PATTERN = /(?:^|[^\p{L}\p{N}_])(?:\*[^*\n]+\*|_[^_\n]+_)(?=$|[^\p{L}\p{N}_])/u;
 const RICH_MATH_PATTERN = /\$(?:[\\\p{L}][^$\n]*|[^$\n]*[=+*/^_-][^$\n]*)\$(?![\p{L}\p{N}])/u;
 const LONG_ANSWER_MAX_CHARACTERS = 600;
-const LONG_ANSWER_MAX_LINES = 7;
-const LONG_ANSWER_MAX_LIST_ITEMS = 5;
-const LONG_ANSWER_MAX_PARAGRAPHS = 2;
 const LONG_ANSWER_LEAD_MAX_CHARACTERS = 240;
+const LONG_ANSWER_LEAD_MAX_LINES = 2;
 const LONG_ANSWER_SUMMARY = "Полный ответ";
 
 function usesSupportedRichBlockFormatting(markdown: string): boolean {
@@ -54,18 +52,23 @@ function characterLength(value: string): number {
   return Array.from(value).length;
 }
 
+/**
+ * Long means a wall of text or a structured block (code, table) the owner wants folded. Line,
+ * paragraph and list-item counts are not length: a ten-line poem or six short bullets take less
+ * screen than one 600-character paragraph and used to hide behind "Полный ответ" anyway.
+ */
 function isLongAnswer(markdown: string): boolean {
-  const lines = markdown.split("\n");
-  const paragraphs = markdown.split(/\n\s*\n/gu).filter((part) => part.trim().length > 0);
-  const listItems = lines.filter((line) => /^\s*(?:[-+*]|\d+\.)\s/u.test(line)).length;
   const structuredBlock = /(?:^|\n)```/u.test(markdown) ||
     /(?:^|\n)\|[^\n]*\|\s*$/mu.test(markdown) ||
     GFM_TABLE_DELIMITER_PATTERN.test(markdown);
-  return characterLength(markdown) > LONG_ANSWER_MAX_CHARACTERS ||
-    lines.length > LONG_ANSWER_MAX_LINES ||
-    paragraphs.length > LONG_ANSWER_MAX_PARAGRAPHS ||
-    listItems > LONG_ANSWER_MAX_LIST_ITEMS ||
-    structuredBlock;
+  return characterLength(markdown) > LONG_ANSWER_MAX_CHARACTERS || structuredBlock;
+}
+
+/** A lead is a short prose paragraph; a column of short lines (verse, a list) is not cut in two. */
+function isProseLead(block: string): boolean {
+  return characterLength(block) <= LONG_ANSWER_LEAD_MAX_CHARACTERS &&
+    block.split("\n").length <= LONG_ANSWER_LEAD_MAX_LINES &&
+    !usesSupportedRichBlockFormatting(block);
 }
 
 function neutralizeMalformedDetails(markdown: string): string {
@@ -85,9 +88,7 @@ function collapseLongAnswer(markdown: string): string {
     : markdown;
   const blocks = safeMarkdown.split(/\n\s*\n/gu).filter((part) => part.trim().length > 0);
   const first = blocks[0]?.trim();
-  const keepLead = first !== undefined && blocks.length > 1 &&
-    characterLength(first) <= LONG_ANSWER_LEAD_MAX_CHARACTERS &&
-    !usesSupportedRichBlockFormatting(first);
+  const keepLead = first !== undefined && blocks.length > 1 && isProseLead(first);
   const body = (keepLead ? blocks.slice(1) : blocks).join("\n\n");
   const details = `<details><summary>${LONG_ANSWER_SUMMARY}</summary>\n\n${body}\n\n</details>`;
   return keepLead ? `${first}\n\n${details}` : details;

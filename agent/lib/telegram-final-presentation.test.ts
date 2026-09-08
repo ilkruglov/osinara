@@ -51,16 +51,39 @@ describe("Telegram final presentation", () => {
 
   it.each([
     "а".repeat(601),
-    Array.from({ length: 8 }, (_, index) => `строка ${index + 1}`).join("\n"),
-    "первый абзац\n\nвторой абзац\n\nтретий абзац",
-    Array.from({ length: 6 }, (_, index) => `- пункт ${index + 1}`).join("\n"),
-  ])("collapses output after any long-answer threshold", (text) => {
+    "Смотри:\n\n```js\nconsole.log(1);\n```",
+    "| a | b |\n| --- | --- |\n| 1 | 2 |",
+  ])("collapses output past 600 characters and any code block or table", (text) => {
     const chunks = formatTelegramFinalPresentation(text);
 
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toMatchObject({ format: "rich" });
     expect(chunks[0]!.text).toContain("<details><summary>Полный ответ</summary>");
     expect(chunks[0]!.text).toContain("</details>");
+  });
+
+  // Verse, a short list or a few short paragraphs take little screen space; line, paragraph and
+  // list-item counts hid a ten-line poem behind "Полный ответ" (8 сентября 2026).
+  it.each([
+    Array.from({ length: 10 }, (_, index) => `строка ${index + 1}`).join("\n"),
+    "Раз-два-три-четыре-пять,\nГруз уехал погулять.\nОн вернётся через год,\nА Илья наоборот.\n\nНе грусти, Илья, не ной:\nГруз не помер, он живой.\nОн в другом краю живёт,\nХлеб жуёт и не зовёт.",
+    "первый абзац\n\nвторой абзац\n\nтретий абзац",
+    Array.from({ length: 6 }, (_, index) => `- пункт ${index + 1}`).join("\n"),
+  ])("keeps a short answer whole whatever its line, paragraph or item count", (text) => {
+    const chunks = formatTelegramFinalPresentation(text);
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.text).not.toContain("<details>");
+    expect(chunks[0]!.text).toContain(text.split("\n")[0]!);
+  });
+
+  it("collapses a long column of short lines whole instead of leaving one stanza outside", () => {
+    const stanza = "строка стиха на восемь слов ровно тут\n".repeat(4).trim();
+    const verse = Array.from({ length: 5 }, () => stanza).join("\n\n");
+    const output = formatTelegramFinalPresentation(verse)[0]!.text;
+
+    expect(output.startsWith("<details><summary>Полный ответ</summary>")).toBe(true);
+    expect(output).toContain(stanza);
   });
 
   it("delivers an authored aside as its own paced message", () => {
