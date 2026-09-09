@@ -7,6 +7,7 @@
  * - `isTelegramMessageReactionEmoji`: strict single-emoji reaction directive guard.
  * - `TELEGRAM_REACTION_EMOJI`: the documented Bot API `ReactionTypeEmoji` set.
  * - `normalizeTelegramReactionEmoji`: canonical member of that set for a model-written emoji, or null.
+ * - `nearestTelegramReactionEmoji`: that member, or the closest allowed reaction by mood, else 👍.
  * - `setTelegramMessageReaction`: confirmed Bot API reaction on a verified inbound message.
  */
 import type { TelegramHandle } from "eve/channels/telegram";
@@ -44,6 +45,61 @@ const TELEGRAM_REACTION_EMOJI_SET = new Set(TELEGRAM_REACTION_EMOJI);
 export function normalizeTelegramReactionEmoji(value: string): TelegramMessageReactionEmoji | null {
   const canonical = value.replace(VARIATION_SELECTOR_PATTERN, "");
   return TELEGRAM_REACTION_EMOJI_SET.has(canonical) ? canonical : null;
+}
+
+/**
+ * Mood groups for emoji Telegram does not take as reactions. The model asked for an emotion, so the
+ * gesture stays a reaction of the same mood (owner's decision: a text emoji is not a reaction).
+ * Keyed by the first code point; skin tones, ZWJ sequences and selectors fall to that base.
+ */
+const REACTION_MOOD_GROUPS: ReadonlyArray<readonly [TelegramMessageReactionEmoji, string]> = [
+  ["🥰", "😺😸😹😻😼😽🙀😿😾🐱🐈🐶🐕🐾🥹☺😚😙😗🤗🫂"],
+  ["🤣", "😂😆😝😜🤪😹"],
+  ["😁", "😀😃😄😊🙂😉😋🙃🫠"],
+  ["❤", "💕💖💗💓💞💝💟♥🧡💛💚💙💜🖤🤍🤎❣💌💐🌹🌸💐"],
+  ["😢", "😔😞😟🙁☹😥😓😪🥺"],
+  ["😭", "😿"],
+  ["🤔", "🧐🤨🤔💭"],
+  ["😱", "😳😮😯😲🫢😧😦😨"],
+  ["🤯", "🫨"],
+  ["😡", "😠😤👿💢"],
+  ["👏", "🙌👐🤲🫶"],
+  ["🤝", "👋✌🤞🫰"],
+  ["🎉", "🥳🎊🎈🎁🥂🍻"],
+  ["😎", "😏😌🆗"],
+  ["🔥", "💥✨⭐🌟"],
+  ["🙏", "🛐"],
+  ["😴", "😪💤"],
+  ["🤮", "🤢🤧😷"],
+  ["🤓", "🧠📚"],
+  ["🗿", "🪨"],
+];
+
+const REACTION_BY_BASE_CODE_POINT = new Map<number, TelegramMessageReactionEmoji>();
+for (const [reaction, members] of REACTION_MOOD_GROUPS) {
+  for (const member of members) {
+    const codePoint = member.codePointAt(0);
+    if (codePoint !== undefined && !REACTION_BY_BASE_CODE_POINT.has(codePoint)) {
+      REACTION_BY_BASE_CODE_POINT.set(codePoint, reaction);
+    }
+  }
+}
+for (const reaction of TELEGRAM_REACTION_EMOJI) {
+  const codePoint = reaction.codePointAt(0);
+  if (codePoint !== undefined && !REACTION_BY_BASE_CODE_POINT.has(codePoint)) {
+    REACTION_BY_BASE_CODE_POINT.set(codePoint, reaction);
+  }
+}
+
+const DEFAULT_REACTION: TelegramMessageReactionEmoji = "👍";
+
+/** An allowed reaction for any model-written emoji: itself, the closest by mood, else 👍. */
+export function nearestTelegramReactionEmoji(value: string): TelegramMessageReactionEmoji {
+  const canonical = normalizeTelegramReactionEmoji(value);
+  if (canonical !== null) return canonical;
+  const codePoint = value.codePointAt(0);
+  const byMood = codePoint === undefined ? undefined : REACTION_BY_BASE_CODE_POINT.get(codePoint);
+  return byMood ?? DEFAULT_REACTION;
 }
 
 export type TelegramMessageReactionResult = "applied" | "unavailable";

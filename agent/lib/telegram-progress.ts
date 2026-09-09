@@ -13,7 +13,7 @@ import { extractMemoryUsedDirective } from "./memory-used-directive.js";
 import { stripTelegramAsideDirectives } from "./telegram-authored-split.js";
 import {
   isTelegramMessageReactionEmoji,
-  normalizeTelegramReactionEmoji,
+  nearestTelegramReactionEmoji,
   type TelegramMessageReactionEmoji,
 } from "./telegram-message-reaction.js";
 
@@ -77,11 +77,13 @@ export function completedTelegramOutput(data: {
   // Reaction is a terminal transport directive and can never be mixed with user-visible text.
   const reaction = TELEGRAM_REACTION_DIRECTIVE_PATTERN.exec(message)?.groups?.emoji;
   if (reaction !== undefined && isTelegramMessageReactionEmoji(reaction)) {
-    const canonical = normalizeTelegramReactionEmoji(reaction);
-    if (canonical !== null) return { emoji: canonical, kind: "reaction" };
     // Telegram refuses reactions outside its set with 400, and a refused reaction left the person
-    // with nothing (9 сентября 2026). The gesture still arrives, as a one-emoji message.
-    return { kind: "message", memoryUsedDeclared, memoryUsedRefs: [], message: reaction };
+    // with nothing (9 сентября 2026). The gesture arrives as the closest reaction Telegram takes.
+    const emoji = nearestTelegramReactionEmoji(reaction);
+    if (emoji !== reaction.replace(/\uFE0F/gu, "")) {
+      console.warn(JSON.stringify({ code: "AGENT_TELEGRAM_REACTION_SUBSTITUTED", applied: emoji, requested: reaction }));
+    }
+    return { emoji, kind: "reaction" };
   }
   if (message.includes(TELEGRAM_REACTION_DIRECTIVE_FRAGMENT)) {
     throw new AppError(

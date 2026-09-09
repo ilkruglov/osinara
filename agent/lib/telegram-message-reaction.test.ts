@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   TELEGRAM_REACTION_EMOJI,
+  nearestTelegramReactionEmoji,
   normalizeTelegramReactionEmoji,
   setTelegramMessageReaction,
 } from "./telegram-message-reaction.js";
@@ -47,6 +48,37 @@ describe("normalizeTelegramReactionEmoji", () => {
   // reaction to «молодец, хорошая кошка» never reached the chat).
   it.each(["😸", "🐱", "1️⃣", "🇺🇸", "не emoji", "", "🔥🔥"])("rejects %s", (input) => {
     expect(normalizeTelegramReactionEmoji(input)).toBeNull();
+  });
+});
+
+describe("nearestTelegramReactionEmoji", () => {
+  it("keeps an allowed reaction as itself", () => {
+    expect(nearestTelegramReactionEmoji("🔥")).toBe("🔥");
+    expect(nearestTelegramReactionEmoji("❤️")).toBe("❤");
+  });
+
+  // The person asked for an emotion, so the gesture becomes the closest reaction Telegram takes,
+  // never a text message (owner's decision, 9 сентября 2026).
+  it.each([
+    ["😸", "🥰"],
+    ["🐱", "🥰"],
+    ["😂", "🤣"],
+    ["😊", "😁"],
+    ["💕", "❤"],
+    ["🧡", "❤"],
+    ["😔", "😢"],
+    ["🥳", "🎉"],
+    ["😠", "😡"],
+    ["🧐", "🤔"],
+    ["😳", "😱"],
+    ["🙌", "👏"],
+    ["😏", "😎"],
+    ["1️⃣", "👍"],
+    ["🇺🇸", "👍"],
+    ["🦖", "👍"],
+  ])("maps %s to the closest allowed reaction %s", (input, expected) => {
+    expect(nearestTelegramReactionEmoji(input)).toBe(expected);
+    expect(TELEGRAM_REACTION_EMOJI).toContain(expected);
   });
 });
 

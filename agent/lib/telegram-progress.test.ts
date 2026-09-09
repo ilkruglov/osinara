@@ -121,15 +121,18 @@ describe("completedTelegramOutput", () => {
   });
 
   // An emoji outside Telegram's reaction set would be refused with 400 and leave the person with
-  // nothing; the gesture goes out as a one-emoji text message instead.
-  it.each(["😸", "1️⃣", "🇺🇸", "🐱"])("delivers a non-reaction emoji %s as a text message", (emoji) => {
-    expect(
-      completedTelegramOutput({
-        finishReason: "stop",
-        message: `<telegram-reaction>${emoji}</telegram-reaction>`,
-      }),
-    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: emoji });
-  });
+  // nothing; the gesture becomes the closest reaction Telegram accepts.
+  it.each([["😸", "🥰"], ["1️⃣", "👍"], ["🇺🇸", "👍"], ["😂", "🤣"]])(
+    "replaces a non-reaction emoji %s with the closest allowed reaction %s",
+    (emoji, expected) => {
+      expect(
+        completedTelegramOutput({
+          finishReason: "stop",
+          message: `<telegram-reaction>${emoji}</telegram-reaction>`,
+        }),
+      ).toEqual({ emoji: expected, kind: "reaction" });
+    },
+  );
 
   it.each([
     "<telegram-reaction>не emoji</telegram-reaction>",
