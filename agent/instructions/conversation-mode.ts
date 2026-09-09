@@ -13,13 +13,14 @@ import { defineDynamic, defineInstructions } from "eve/instructions";
 import { resolveModeBlock } from "../lib/prompt/turn-blocks.js";
 import { MEMORY_REVIEW_INSTRUCTIONS } from "../lib/memory-review/memory-review-prompt.js";
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
+import { timed } from "../lib/turn-timing.js";
 
 export default defineDynamic({
   events: {
     "turn.started": async (_event, ctx) => defineInstructions({
       markdown: isMemoryReviewSession(ctx)
         ? MEMORY_REVIEW_INSTRUCTIONS
-        : await resolveModeBlock(ctx),
+        : await timed("instructions_mode", () => resolveModeBlock(ctx)),
     }),
   },
 });

@@ -30,10 +30,11 @@ import {
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
 import { buildMemoryReviewToolSurface } from "../lib/memory-review/memory-review-tool-surface.js";
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
+import { timed } from "../lib/turn-timing.js";
 
 export default defineDynamic({
   events: {
-    "step.started": async (_event, ctx) => {
+    "step.started": (_event, ctx) => timed("tools_surface", async () => {
       if (isMemoryReviewSession(ctx)) {
         if (ctx.session.auth.current?.attributes.groupType !== "external") {
           return buildMemoryReviewToolSurface();
@@ -123,6 +124,6 @@ export default defineDynamic({
         scheduledHistory: includeApplicationCore && scheduledGroupHistoryAccess(auth) !== null,
         scheduledRun: isScheduledSession(ctx),
       });
-    },
+    }),
   },
 });

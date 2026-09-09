@@ -59,6 +59,7 @@ import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory
 import { telegramInboundActor } from "./telegram-inbound-actor.js";
 import { readTelegramSeriesMarker } from "./telegram-message-series.js";
 import { formatPendingMessagesContext, readTelegramPendingMarker } from "./telegram-pending-messages.js";
+import { logTurnTiming } from "./turn-timing.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -505,6 +506,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       timezone,
       turnContext: groupTurnContext,
       turnStartedAt,
+    });
+    // Inbound preparation ends here; `AGENT_TURN_TIMING` continues inside the Eve turn.
+    const telegramDate = (message.raw as { date?: unknown }).date;
+    logTurnTiming("inbound_prepared", Date.now() - turnStartedAt.getTime(), {
+      sinceTelegramMs: typeof telegramDate === "number" ? Date.now() - telegramDate * 1000 : null,
     });
     if (!group) return turnResult;
     if (!turnResult?.auth) {

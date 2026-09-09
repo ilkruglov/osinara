@@ -650,6 +650,13 @@ Required config и required data проверять fail-fast; не добавл
 
 ## Проверка изменений
 
+Тайминг хода (`agent/lib/turn-timing.ts`, 9 сентября 2026): между готовым контекстом входящего
+(`AGENT_MEMORY_CONTEXT`) и первым `AGENT_MODEL_REQUEST` в проде проходило 3–7 секунд без единой
+строки в логе. Теперь `AGENT_TURN_TIMING` пишет `inbound_prepared` (конец on-message, `ms` от
+старта обработчика и `sinceTelegramMs` от даты сообщения), `turn_started` и `step_started`
+(хук `model-usage.ts`), длительности `instructions_mode`, `instructions_preferences`,
+`skills_authored`, `skills_external` и `tools_surface`. Разбирать паузу по этим меткам, не гадать.
+
 Быстрые проверки: `npm run typecheck`, `npm test`, `npm run build`.
 Сквозная проверка переписки `agent/lib/telegram-conversation.e2e.integration.test.ts` (порт upstream
 v0.21.0, 7 сентября 2026) поднимает агент из `stress/telegram-conversation` командой `eve eval`:
