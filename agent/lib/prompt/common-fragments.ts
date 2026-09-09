@@ -1,4 +1,5 @@
 /** Compact prompt contracts shared by conversation trust zones. */
+import { TELEGRAM_REACTION_EMOJI } from "../telegram-message-reaction.js";
 import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
 
 export type MemoryEditAction = "delete" | "edit" | "undo";
@@ -40,8 +41,9 @@ export function reactionRules(
   scope: "group" | "private",
 ): string | null {
   if (!policy || (!policy.allowsAll && policy.emoji.length === 0)) return null;
+  // Telegram accepts only its own reaction set; a free choice produced a cat that Telegram refused.
   const allowed = policy.allowsAll
-    ? "Разрешена любая уместная Telegram-реакция."
+    ? `Разрешена ровно одна из реакций Telegram: ${TELEGRAM_REACTION_EMOJI.join(" ")}.`
     : `Разрешена ровно одна из реакций: ${policy.emoji.join(" ")}.`;
   const mention = scope === "group"
     ? " Если сообщение не к тебе, реакция тоже не нужна: действует правило «Кому адресовано»."

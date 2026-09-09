@@ -102,7 +102,7 @@ describe("completedTelegramOutput", () => {
     ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: "Готовый ответ" });
   });
 
-  it.each(["👍", "❤", "❤️", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕", "1️⃣", "🇺🇸"])(
+  it.each(["👍", "❤", "🔥", "🥰", "🤔", "🤯", "🫡", "👀", "🖕"])(
     "parses one %s emoji reaction without visible text",
     (emoji) => {
       expect(
@@ -113,6 +113,23 @@ describe("completedTelegramOutput", () => {
       ).toEqual({ emoji, kind: "reaction" });
     },
   );
+
+  it("canonicalizes a reaction written with a variation selector", () => {
+    expect(
+      completedTelegramOutput({ finishReason: "stop", message: "<telegram-reaction>❤️</telegram-reaction>" }),
+    ).toEqual({ emoji: "❤", kind: "reaction" });
+  });
+
+  // An emoji outside Telegram's reaction set would be refused with 400 and leave the person with
+  // nothing; the gesture goes out as a one-emoji text message instead.
+  it.each(["😸", "1️⃣", "🇺🇸", "🐱"])("delivers a non-reaction emoji %s as a text message", (emoji) => {
+    expect(
+      completedTelegramOutput({
+        finishReason: "stop",
+        message: `<telegram-reaction>${emoji}</telegram-reaction>`,
+      }),
+    ).toEqual({ kind: "message", memoryUsedDeclared: false, memoryUsedRefs: [], message: emoji });
+  });
 
   it.each([
     "<telegram-reaction>не emoji</telegram-reaction>",

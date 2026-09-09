@@ -129,7 +129,15 @@ export default telegramChannel({
             "Не удалось определить сообщение для реакции. Отправьте обращение ещё раз",
           );
         }
-        await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        const applied = await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        // A chat that declines reactions still gets the gesture: silence read as «не ответила».
+        if (applied === "unavailable") {
+          await postTelegramPlainMessageChunk(
+            output.emoji,
+            channel,
+            telegramTurnReplyParameters(channel.state, ctx),
+          );
+        }
         return;
       }
       const message = output.message;

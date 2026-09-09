@@ -8,7 +8,11 @@
 import type { TelegramHandle } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
-import { setTelegramMessageReaction } from "./telegram-message-reaction.js";
+import {
+  TELEGRAM_REACTION_EMOJI,
+  normalizeTelegramReactionEmoji,
+  setTelegramMessageReaction,
+} from "./telegram-message-reaction.js";
 
 function telegramHandle(response: unknown, ok = true) {
   const request = vi.fn().mockResolvedValue({ body: response, ok, status: ok ? 200 : 400 });
@@ -21,7 +25,53 @@ function telegramHandle(response: unknown, ok = true) {
   };
 }
 
+describe("normalizeTelegramReactionEmoji", () => {
+  it("lists the documented Bot API reaction set without variation selectors", () => {
+    expect(TELEGRAM_REACTION_EMOJI).toHaveLength(73);
+    expect(TELEGRAM_REACTION_EMOJI).toContain("❤");
+    expect(TELEGRAM_REACTION_EMOJI).toContain("🤷‍♀");
+    for (const emoji of TELEGRAM_REACTION_EMOJI) expect(emoji).not.toContain("\uFE0F");
+  });
+
+  it.each([
+    ["❤️", "❤"],
+    ["❤", "❤"],
+    ["🤷‍♀️", "🤷‍♀"],
+    ["👍", "👍"],
+    ["🫡", "🫡"],
+  ])("maps %s to the canonical reaction %s", (input, expected) => {
+    expect(normalizeTelegramReactionEmoji(input)).toBe(expected);
+  });
+
+  // Telegram answers 400 REACTION_INVALID to any emoji outside its set (9 сентября 2026: a cat
+  // reaction to «молодец, хорошая кошка» never reached the chat).
+  it.each(["😸", "🐱", "1️⃣", "🇺🇸", "не emoji", "", "🔥🔥"])("rejects %s", (input) => {
+    expect(normalizeTelegramReactionEmoji(input)).toBeNull();
+  });
+});
+
 describe("setTelegramMessageReaction", () => {
+  it("sends the canonical form of an emoji written with a variation selector", async () => {
+    const target = telegramHandle({ ok: true, result: true });
+
+    await expect(setTelegramMessageReaction(target.telegram, "44", "❤️")).resolves.toBe("applied");
+    expect(target.request).toHaveBeenCalledWith("setMessageReaction", expect.objectContaining({
+      reaction: [{ emoji: "❤", type: "emoji" }],
+    }));
+  });
+
+  it("logs the provider description and the emoji when the reaction is declined", async () => {
+    const target = telegramHandle({ description: "Bad Request: REACTION_INVALID", ok: false }, false);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await expect(setTelegramMessageReaction(target.telegram, "42", "👎")).resolves.toBe("unavailable");
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("REACTION_INVALID"));
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("👎"));
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("sets one small allowlisted reaction on the verified current message", async () => {
     const target = telegramHandle({ ok: true, result: true });
 

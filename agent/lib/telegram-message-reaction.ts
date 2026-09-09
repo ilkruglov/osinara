@@ -5,6 +5,8 @@
  * - `TelegramMessageReactionEmoji`: one model-selected emoji grapheme.
  * - `TelegramMessageReactionResult`: applied or provider-restricted delivery outcome.
  * - `isTelegramMessageReactionEmoji`: strict single-emoji reaction directive guard.
+ * - `TELEGRAM_REACTION_EMOJI`: the documented Bot API `ReactionTypeEmoji` set.
+ * - `normalizeTelegramReactionEmoji`: canonical member of that set for a model-written emoji, or null.
  * - `setTelegramMessageReaction`: confirmed Bot API reaction on a verified inbound message.
  */
 import type { TelegramHandle } from "eve/channels/telegram";
@@ -17,6 +19,32 @@ const KEYCAP_EMOJI_PATTERN = /^[#*0-9]\uFE0F?\u20E3$/u;
 const REGIONAL_FLAG_PATTERN = /^\p{Regional_Indicator}{2}$/u;
 const TELEGRAM_MESSAGE_ID_PATTERN = /^[1-9]\d*$/u;
 const TELEGRAM_REACTION_DECLINED_STATUSES = new Set([400, 403]);
+const VARIATION_SELECTOR_PATTERN = /\uFE0F/gu;
+
+/**
+ * Bot API `ReactionTypeEmoji.emoji` (core.telegram.org/bots/api, read 9 сентября 2026): Telegram
+ * accepts exactly these and answers 400 REACTION_INVALID to anything else, including a cat for
+ * «хорошая кошка». Written without U+FE0F, the form the documentation uses; Telegram also takes
+ * the selector, so input is compared after stripping it.
+ */
+export const TELEGRAM_REACTION_EMOJI: readonly string[] = [
+  "❤", "👍", "👎", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱",
+  "🤬", "😢", "🎉", "🤩", "🤮", "💩", "🙏", "👌", "🕊", "🤡",
+  "🥱", "🥴", "😍", "🐳", "❤‍🔥", "🌚", "🌭", "💯", "🤣", "⚡",
+  "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈",
+  "😴", "😭", "🤓", "👻", "👨‍💻", "👀", "🎃", "🙈", "😇", "😨",
+  "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿",
+  "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾", "🤷‍♂",
+  "🤷", "🤷‍♀", "😡",
+];
+
+const TELEGRAM_REACTION_EMOJI_SET = new Set(TELEGRAM_REACTION_EMOJI);
+
+/** The canonical Telegram reaction for a model-written emoji, or null when Telegram would refuse it. */
+export function normalizeTelegramReactionEmoji(value: string): TelegramMessageReactionEmoji | null {
+  const canonical = value.replace(VARIATION_SELECTOR_PATTERN, "");
+  return TELEGRAM_REACTION_EMOJI_SET.has(canonical) ? canonical : null;
+}
 
 export type TelegramMessageReactionResult = "applied" | "unavailable";
 
@@ -43,6 +71,7 @@ export async function setTelegramMessageReaction(
     );
   }
 
+  const canonical = normalizeTelegramReactionEmoji(emoji) ?? emoji;
   // The exact channel context and verified inbound message are the only reaction target.
   let response;
   try {
@@ -50,7 +79,7 @@ export async function setTelegramMessageReaction(
       chat_id: telegram.chatId,
       is_big: false,
       message_id: Number(messageId),
-      reaction: [{ emoji, type: "emoji" }],
+      reaction: [{ emoji: canonical, type: "emoji" }],
     });
   } catch (error) {
     console.error(JSON.stringify({
@@ -68,14 +97,16 @@ export async function setTelegramMessageReaction(
     throw error;
   }
 
-  const body = response.body as { ok?: unknown; result?: unknown } | null;
+  const body = response.body as { description?: unknown; ok?: unknown; result?: unknown } | null;
   if (response.ok && body?.ok === true && body.result === true) return "applied";
 
   // Disabled or restricted chat reactions are an expected presentation limitation, not turn failure.
   if (body?.ok === false && TELEGRAM_REACTION_DECLINED_STATUSES.has(response.status)) {
     console.error(JSON.stringify({
       code: "AGENT_TELEGRAM_REACTION_UNAVAILABLE",
+      emoji: canonical,
       method: "setMessageReaction",
+      providerDescription: typeof body.description === "string" ? body.description : null,
       providerStatus: response.status,
     }));
     return "unavailable";
