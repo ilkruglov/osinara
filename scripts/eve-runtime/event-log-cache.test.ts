@@ -2,7 +2,7 @@
  * Workflow event log cache tests.
  *
  * Constructs covered:
- * - Only a payload-free ascending full listing is cacheable.
+ * - Any ascending full listing is cacheable, and the resolve mode is part of the key.
  * - A stored log is returned with its cursor and survives until it is dropped.
  * - The least recently read run is evicted once the bound is reached.
  * - Every resume reports how much of the log it reused.
@@ -18,18 +18,22 @@ import {
 } from "./event-log-cache.ts";
 
 const RUN = "wrun_01M240G2QGE9TDC7NSVNY6VZAY";
+const KEY = `${RUN} all`;
 
 describe("eventLogCacheKey", () => {
-  it("accepts the resume listing", () => {
-    expect(eventLogCacheKey({ runId: RUN }, "none", "asc")).toBe(RUN);
-    expect(eventLogCacheKey({ pagination: {}, runId: RUN }, "none", "asc")).toBe(RUN);
+  it("accepts both resume listings and keeps their resolve modes apart", () => {
+    const withPayloads = eventLogCacheKey({ runId: RUN }, "all", "asc");
+    const withoutPayloads = eventLogCacheKey({ pagination: {}, runId: RUN }, "none", "asc");
+
+    expect(withPayloads).toContain(RUN);
+    expect(withoutPayloads).toContain(RUN);
+    expect(withPayloads).not.toBe(withoutPayloads);
   });
 
   it.each([
-    ["payloads requested", { runId: RUN }, "all", "asc"],
     ["reverse order", { runId: RUN }, "none", "desc"],
     ["explicit page", { pagination: { limit: 100 }, runId: RUN }, "none", "asc"],
-    ["caller cursor", { pagination: { cursor: "evnt_1" }, runId: RUN }, "none", "asc"],
+    ["caller cursor", { pagination: { cursor: "evnt_1" }, runId: RUN }, "all", "asc"],
     ["no run", { runId: "" }, "none", "asc"],
   ])("refuses %s", (_name, params, resolveData, sortOrder) => {
     expect(eventLogCacheKey(params, resolveData, sortOrder)).toBeNull();
@@ -38,41 +42,70 @@ describe("eventLogCacheKey", () => {
 
 describe("event log cache", () => {
   it("returns the stored log and its cursor, and forgets it when dropped", () => {
-    writeEventLogCache(RUN, [{ eventId: "evnt_1" }, { eventId: "evnt_2" }], "evnt_2");
+    writeEventLogCache(KEY, [{ eventId: "evnt_1" }, { eventId: "evnt_2" }], "evnt_2");
 
-    expect(readEventLogCache(RUN)).toEqual({
+    expect(readEventLogCache(KEY)).toMatchObject({
       cursor: "evnt_2",
       data: [{ eventId: "evnt_1" }, { eventId: "evnt_2" }],
     });
 
-    dropEventLogCache(RUN);
-    expect(readEventLogCache(RUN)).toBeUndefined();
+    dropEventLogCache(KEY);
+    expect(readEventLogCache(KEY)).toBeUndefined();
   });
 
   it("copies the stored log so a later caller cannot mutate it", () => {
     const events = [{ eventId: "evnt_1" }];
-    writeEventLogCache(RUN, events, "evnt_1");
+    writeEventLogCache(KEY, events, "evnt_1");
     events.push({ eventId: "evnt_2" });
 
-    expect(readEventLogCache(RUN)?.data).toHaveLength(1);
-    dropEventLogCache(RUN);
+    expect(readEventLogCache(KEY)?.data).toHaveLength(1);
+    dropEventLogCache(KEY);
   });
 
   it("evicts the least recently read run past the bound", () => {
-    for (let index = 0; index < 25; index += 1) {
+    for (let index = 0; index < 13; index += 1) {
       writeEventLogCache(`run-${index}`, [{ eventId: `evnt_${index}` }], `evnt_${index}`);
     }
 
     expect(readEventLogCache("run-0")).toBeUndefined();
-    expect(readEventLogCache("run-24")).toBeDefined();
+    expect(readEventLogCache("run-12")).toBeDefined();
 
     // Reading run-1 makes it recent, so the next write evicts run-2 instead.
     expect(readEventLogCache("run-1")).toBeDefined();
-    writeEventLogCache("run-25", [{ eventId: "evnt_25" }], "evnt_25");
+    writeEventLogCache("run-13", [{ eventId: "evnt_13" }], "evnt_13");
 
     expect(readEventLogCache("run-1")).toBeDefined();
     expect(readEventLogCache("run-2")).toBeUndefined();
-    for (let index = 0; index <= 25; index += 1) dropEventLogCache(`run-${index}`);
+    for (let index = 0; index <= 13; index += 1) dropEventLogCache(`run-${index}`);
+  });
+
+  it("refuses a log too large to keep and leaves the others in place", () => {
+    const small = [{ eventId: "evnt_1", eventData: { text: "small" } }];
+    writeEventLogCache("run-small", small, "evnt_1");
+    const huge = Array.from({ length: 400 }, (_, index) => ({
+      eventId: `evnt_${index}`,
+      eventData: { text: "x".repeat(40_000) },
+    }));
+
+    writeEventLogCache("run-huge", huge, "evnt_399");
+
+    expect(readEventLogCache("run-huge")).toBeUndefined();
+    expect(readEventLogCache("run-small")).toBeDefined();
+    dropEventLogCache("run-small");
+  });
+
+  it("counts decoded binary payloads without expanding them", () => {
+    const events = Array.from({ length: 40 }, (_, index) => ({
+      eventId: `evnt_${index}`,
+      eventData: { blob: { data: new Array(200_000).fill(7), type: "Buffer" } },
+    }));
+
+    const started = performance.now();
+    writeEventLogCache("run-binary", events, "evnt_39");
+    const elapsed = performance.now() - started;
+
+    expect(elapsed).toBeLessThan(1_000);
+    dropEventLogCache("run-binary");
   });
 });
 
