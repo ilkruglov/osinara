@@ -27,6 +27,7 @@ const runtimePaths = {
   channelAdapter: resolve("node_modules/eve/dist/src/channel/adapter.js"),
   channelAdapterTypes: resolve("node_modules/eve/dist/src/channel/adapter.d.ts"),
   compaction: resolve("node_modules/eve/dist/src/harness/compaction.js"),
+  skillPackage: resolve("node_modules/eve/dist/src/shared/skill-package.js"),
   contextKeys: resolve("node_modules/eve/dist/src/context/keys.js"),
   contextKeyTypes: resolve("node_modules/eve/dist/src/context/keys.d.ts"),
   dynamicSkillLifecycle: resolve(
@@ -184,6 +185,21 @@ await replaceExact(
   runtimePaths.compaction,
   "function shouldCompact(e,t){return e.length>0&&getInputTokenCount(e,t)+COMPACTION_PROMPT_OVERHEAD_TOKENS>t.threshold}",
   "function shouldCompact(e,t){let n=getInputTokenCount(e,t),r=e.length>0&&n+COMPACTION_PROMPT_OVERHEAD_TOKENS>t.threshold;console.info(JSON.stringify({code:\"AGENT_COMPACTION_CHECK\",compact:r,estimatedInputTokens:Math.round(n),lastKnownInputTokens:t.lastKnownInputTokens??null,lastKnownPromptMessageCount:t.lastKnownPromptMessageCount??null,messages:e.length,overheadTokens:Math.round(COMPACTION_PROMPT_OVERHEAD_TOKENS),threshold:t.threshold}));return r}",
+);
+
+// Eve rewrites every dynamic skill package on every turn and does it one file at a time. Each file
+// is a separate container round trip, which cost 2-5 seconds before the model saw a group message.
+// The files of a package are independent paths, so they travel together.
+await replaceExact(
+  runtimePaths.skillPackage,
+  "async function writeSkillPackageToSandbox(e){for(let t of e.skill.files)await e.sandbox.writeBinaryFile({content:t.content,path:await resolveSandboxSkillWritePath({name:e.skill.name,relativePath:t.relativePath,sandbox:e.sandbox})})}",
+  "async function writeSkillPackageToSandbox(e){await Promise.all(e.skill.files.map(async t=>e.sandbox.writeBinaryFile({content:t.content,path:await resolveSandboxSkillWritePath({name:e.skill.name,relativePath:t.relativePath,sandbox:e.sandbox})})))}",
+);
+
+await replaceExact(
+  runtimePaths.dynamicSkillLifecycle,
+  "for(let{skills:e}of p)for(let t of e)await writeSkillPackageToSandbox({sandbox:_,skill:t})",
+  "await Promise.all(p.flatMap(({skills:e})=>e.map(t=>writeSkillPackageToSandbox({sandbox:_,skill:t}))))",
 );
 
 // Failure to persist an approval prompt must fail the turn instead of parking it unbound.

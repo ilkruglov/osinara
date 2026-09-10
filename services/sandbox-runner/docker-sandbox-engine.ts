@@ -23,6 +23,7 @@ import {
   type SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import type { SandboxEngine } from "./sandbox-engine.js";
+import { createSandboxWriteMemo } from "./sandbox-write-memo.js";
 import {
   collectLimitedStream,
   readSingleFileArchive,
@@ -34,10 +35,15 @@ import {
   FILE_MISSING_EXIT_CODE,
   FILE_TOO_LARGE_EXIT_CODE,
   initializeToolEnvironmentCommand,
-  prepareWriteDirectoriesCommand,
+  prepareStagingDirectoryCommand,
   removeStagedFileCommand,
   stageFileForReadCommand,
 } from "./docker-sandbox-commands.js";
+import {
+  dockerStatus,
+  inspectContainer,
+  requireRunningContainer,
+} from "./docker-sandbox-container.js";
 import { executeSandboxProcess, processTimedOut } from "./docker-sandbox-process.js";
 import {
   createSandboxRepeatGuard,
@@ -94,9 +100,6 @@ export function resolveSandboxRuntimeImage(): string {
   return image;
 }
 
-function dockerStatus(error: unknown): number | undefined {
-  return (error as { statusCode?: number }).statusCode;
-}
 
 function resolvePath(path: string): string {
   assertShellSafePath(path);
@@ -135,56 +138,6 @@ async function ensureToolDirectories(
   }
 }
 
-async function inspectContainer(
-  docker: Docker,
-  sessionId: string,
-): Promise<{ container: Docker.Container; inspection: Docker.ContainerInspectInfo } | null> {
-  const container = docker.getContainer(sandboxContainerName(sessionId));
-  try {
-    return { container, inspection: await container.inspect() };
-  } catch (error) {
-    if (dockerStatus(error) === 404) return null;
-    throw error;
-  }
-}
-
-async function countContainerTasks(container: Docker.Container): Promise<number> {
-  // `docker top` runs ps on the host, so it works even when the container itself cannot fork.
-  // The pids cgroup counts threads, so the per-process thread count (nlwp) is what is summed.
-  const top = (await container.top({ ps_args: "-eo pid,nlwp" })) as { Processes?: unknown[] };
-  if (!Array.isArray(top.Processes)) return 0;
-  return top.Processes.reduce<number>((total, row) => {
-    const threads = Array.isArray(row) ? Number(row[1]) : Number.NaN;
-    return total + (Number.isFinite(threads) && threads > 0 ? threads : 1);
-  }, 0);
-}
-
-async function reapCrowdedContainer(container: Docker.Container, sessionId: string): Promise<void> {
-  const tasks = await countContainerTasks(container);
-  if (tasks < SANDBOX_PIDS_REAP_THRESHOLD) return;
-  // Workspace and tools are named volumes; the process tree is disposable compute.
-  await container.restart({ t: 0 });
-  console.error(JSON.stringify({
-    code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
-    sessionId,
-    tasks,
-    threshold: SANDBOX_PIDS_REAP_THRESHOLD,
-  }));
-}
-
-async function requireRunningContainer(
-  docker: Docker,
-  sessionId: string,
-  activeOperations: number,
-): Promise<Docker.Container> {
-  const existing = await inspectContainer(docker, sessionId);
-  if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
-  if (!existing.inspection.State.Running) await existing.container.start();
-  // A restart kills every process of the session: only the caller may be running in it.
-  else if (activeOperations <= 1) await reapCrowdedContainer(existing.container, sessionId);
-  return existing.container;
-}
-
 export function createDockerSandboxEngine(input: {
   docker: Docker;
   roots: RuntimeRoots;
@@ -192,6 +145,7 @@ export function createDockerSandboxEngine(input: {
 }): SandboxEngine {
   const activity = createSandboxActivityRegistry(Date.now);
   const repeatGuard = createSandboxRepeatGuard(Date.now);
+  const writeMemo = createSandboxWriteMemo();
 
   return {
     async health() {
@@ -276,7 +230,7 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
@@ -292,7 +246,7 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
@@ -356,20 +310,27 @@ export function createDockerSandboxEngine(input: {
     },
     async writeFile(sessionId, path, content) {
       await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container, generation } = await requireRunningContainer(
+          input.docker,
+          sessionId,
+          activity.activeCount(sessionId),
+        );
         const resolved = resolvePath(path);
+        // Eve rewrites every dynamic skill package on every turn without diffing it; identical
+        // bytes already inside this container run are that same materialization, not a new one.
+        if (writeMemo.hasSkillFile(generation, resolved, content)) return;
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
-        const directoryResult = await executeSandboxProcess(input.docker, container, {
-          command: prepareWriteDirectoriesCommand({
-            stagingDirectory: FILE_UPLOAD_STAGING_DIRECTORY,
-            targetDirectory: posix.dirname(resolved),
-          }),
-        });
-        if (directoryResult.exitCode !== 0) {
-          throw new Error(
-            "AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: " +
-            `Не удалось создать каталог для файла. ${directoryResult.stderr}`,
-          );
+        if (!writeMemo.hasStagingDirectory(generation)) {
+          const directoryResult = await executeSandboxProcess(input.docker, container, {
+            command: prepareStagingDirectoryCommand(FILE_UPLOAD_STAGING_DIRECTORY),
+          });
+          if (directoryResult.exitCode !== 0) {
+            throw new Error(
+              "AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: " +
+              `Не удалось создать каталог для файла. ${directoryResult.stderr}`,
+            );
+          }
+          writeMemo.rememberStagingDirectory(generation);
         }
 
         // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME`. Upload to
@@ -378,7 +339,11 @@ export function createDockerSandboxEngine(input: {
         try {
           await writeSingleFileArchive(container, stagingPath, content);
           const moveResult = await executeSandboxProcess(input.docker, container, {
-            command: commitStagedFileCommand({ resolvedPath: resolved, stagingPath }),
+            command: commitStagedFileCommand({
+              resolvedPath: resolved,
+              stagingPath,
+              targetDirectory: posix.dirname(resolved),
+            }),
           });
           if (moveResult.exitCode !== 0) {
             throw new Error(
@@ -387,6 +352,7 @@ export function createDockerSandboxEngine(input: {
             );
           }
           committed = true;
+          writeMemo.rememberSkillFile(generation, resolved, content);
         } finally {
           if (!committed) {
             try {
@@ -409,7 +375,7 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const container = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");
