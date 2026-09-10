@@ -5,7 +5,10 @@
  * - `SessionRetentionClaim`: exclusive Eve storage deletion lease.
  * - `sessionRetentionRepository`: claim, completion, and failure persistence operations.
  */
-import { SESSION_RETENTION_LEASE_MS } from "../../config.js";
+import {
+  SESSION_RETENTION_FAILURE_COOLDOWN_MINUTES,
+  SESSION_RETENTION_LEASE_MS,
+} from "../../config.js";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 
@@ -30,7 +33,10 @@ export const sessionRetentionRepository = {
           SELECT id FROM conversation_sessions
             WHERE retired_at IS NOT NULL AND delete_after <= $1
               AND retention_hold = false AND eve_session_id IS NOT NULL
-              AND cleanup_error_code IS NULL
+              -- A failed deletion is retried after its cooldown instead of parking forever: the
+              -- first cause, a session run that never reached a terminal status, healed itself on
+              -- a later pass, yet 36 sessions stayed stuck from 3 сентября 2026 with runs alive.
+              AND (cleanup_retry_after IS NULL OR cleanup_retry_after <= $1)
               AND (retention_lease_expires_at IS NULL OR retention_lease_expires_at <= $1)
            ORDER BY delete_after, id
            LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -57,14 +63,19 @@ export const sessionRetentionRepository = {
     }
   },
 
-  async failDeletion(id: string, leaseToken: string, errorCode: string): Promise<void> {
+  /** The cooldown is a retry deadline, not a park: the next sweep after it tries the row again. */
+  async failDeletion(id: string, leaseToken: string, errorCode: string, now: Date): Promise<void> {
+    const retryAfter = new Date(
+      now.getTime() + SESSION_RETENTION_FAILURE_COOLDOWN_MINUTES * 60 * 1_000,
+    );
     const result = await database().query(
       `UPDATE conversation_sessions
           SET cleanup_error_code = $3,
+              cleanup_retry_after = $4,
               retention_lease_token = NULL,
               retention_lease_expires_at = NULL
         WHERE id = $1 AND retention_lease_token = $2`,
-      [id, leaseToken, errorCode],
+      [id, leaseToken, errorCode, retryAfter],
     );
     if (result.rowCount !== 1) {
       throw new AppError(

@@ -3,7 +3,8 @@
  *
  * Tests:
  * - Rejects malformed and absent Eve run identities.
- * - Refuses active runs and retained hooks.
+ * - Refuses a run still being worked on and a hook whose retention window is still open.
+ * - Cancels a run parked long after the application retired its conversation, then deletes it.
  * - Deletes every public per-run table atomically before the run row.
  * - Rolls back and preserves the original database failure.
  */
@@ -38,21 +39,36 @@ describe("deletePostgresEveSession", () => {
     );
     expect(missing.query).toHaveBeenLastCalledWith("ROLLBACK");
 
-    const active = clientWithRows([[], [{ status: "running" }], []]);
+    const active = clientWithRows([[], [{ parked: false, status: "running" }], []]);
     await expect(deletePostgresEveSession(runId, active)).rejects.toThrowError(
       /AGENT_EVE_SESSION_STORAGE_ACTIVE/u,
     );
     expect(active.query).toHaveBeenLastCalledWith("ROLLBACK");
 
-    const retainedHook = clientWithRows([[], [{ status: "completed" }], [{ exists: true }], []]);
+    const retainedHook = clientWithRows([[], [{ parked: true, status: "completed" }], [{ exists: true }], []]);
     await expect(deletePostgresEveSession(runId, retainedHook)).rejects.toThrowError(
       /AGENT_EVE_SESSION_HOOK_RETENTION_ACTIVE/u,
     );
     expect(retainedHook.query).toHaveBeenLastCalledWith("ROLLBACK");
   });
 
+  // A parked run waits on a hook nobody will answer: the application retired that conversation a
+  // day earlier. Refusing to delete kept the run and the session forever, and every agent start
+  // then re-read all of their event logs (36 sessions stuck since 3 сентября 2026).
+  it("cancels a run left parked after its conversation was retired", async () => {
+    const client = clientWithRows([[], [{ parked: true, status: "running" }], [{ exists: false }]]);
+
+    await expect(deletePostgresEveSession(runId, client)).resolves.toBeUndefined();
+
+    const statements = client.query.mock.calls.map(([sql]) => sql);
+    expect(statements.some((sql) => /UPDATE workflow\.workflow_runs/u.test(sql))).toBe(true);
+    // Only an open retention window protects a hook; a parked session's hooks carry none.
+    expect(statements.some((sql) => /token_retention_until > now\(\)/u.test(sql))).toBe(true);
+    expect(statements.at(-1)).toBe("COMMIT");
+  });
+
   it("deletes all public per-run records in one transaction", async () => {
-    const client = clientWithRows([[], [{ status: "failed" }], [{ exists: false }]]);
+    const client = clientWithRows([[], [{ parked: true, status: "failed" }], [{ exists: false }]]);
 
     await expect(deletePostgresEveSession(runId, client)).resolves.toBeUndefined();
 

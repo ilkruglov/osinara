@@ -361,7 +361,23 @@ describeWithDatabase("session repository", () => {
       new Date("2026-01-03T00:00:01.000Z"),
     );
     expect(claim).toMatchObject({ eveSessionId: "wrun_expired", id: current.id });
-    await sessionRepository.completeDeletion(claim!.id, claim!.leaseToken);
+
+    // A failed deletion waits out its cooldown and is then tried again: parking it forever left
+    // sessions undeletable with their Workflow runs alive (3-10 сентября 2026).
+    await sessionRepository.failDeletion(
+      claim!.id,
+      claim!.leaseToken,
+      "AGENT_EVE_SESSION_STORAGE_ACTIVE",
+      new Date("2026-01-03T00:00:02.000Z"),
+    );
+    await expect(sessionRepository.claimExpiredForDeletion(
+      new Date("2026-01-03T00:30:00.000Z"),
+    )).resolves.toBeNull();
+    const retried = await sessionRepository.claimExpiredForDeletion(
+      new Date("2026-01-03T02:00:00.000Z"),
+    );
+    expect(retried).toMatchObject({ eveSessionId: "wrun_expired", id: current.id });
+    await sessionRepository.completeDeletion(retried!.id, retried!.leaseToken);
     await expect(database().query(
       "SELECT id FROM conversation_sessions WHERE id = $1",
       [current.id],

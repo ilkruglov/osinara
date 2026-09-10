@@ -17,6 +17,8 @@ import { AppError } from "../app-error.js";
 const { Client } = pg;
 const EVE_RUN_ID_PATTERN = /^wrun_[A-Z0-9]{26}$/u;
 const TERMINAL_RUN_STATUSES = new Set(["cancelled", "completed", "failed"]);
+// A run untouched for this long, whose conversation was retired a day earlier, is parked for good.
+const PARKED_RUN_IDLE_INTERVAL = "1 hour";
 
 interface WorkflowQueryClient {
   query(
@@ -40,8 +42,9 @@ export async function deletePostgresEveSession(
   try {
     // Lock the primary row before proving that application retirement cannot race active Workflow.
     const run = await client.query(
-      "SELECT status::text AS status FROM workflow.workflow_runs WHERE id = $1 FOR UPDATE",
-      [runId],
+      `SELECT status::text AS status, updated_at <= now() - $2::interval AS parked
+         FROM workflow.workflow_runs WHERE id = $1 FOR UPDATE`,
+      [runId, PARKED_RUN_IDLE_INTERVAL],
     );
     const status = run.rows[0]?.status;
     if (typeof status !== "string") {
@@ -51,15 +54,31 @@ export async function deletePostgresEveSession(
       );
     }
     if (!TERMINAL_RUN_STATUSES.has(status)) {
-      throw new AppError(
-        "AGENT_EVE_SESSION_STORAGE_ACTIVE",
-        `Eve-сессия ${runId} ещё выполняется и не может быть удалена`,
+      // A session run parks on a hook and stays `running` forever, so waiting for Workflow to end
+      // it kept the run and its conversation undeletable. The caller only reaches here for a
+      // conversation the application retired a day earlier, and this run has been idle since.
+      if (run.rows[0]?.parked !== true) {
+        throw new AppError(
+          "AGENT_EVE_SESSION_STORAGE_ACTIVE",
+          `Eve-сессия ${runId} ещё выполняется и не может быть удалена`,
+        );
+      }
+      await client.query(
+        `UPDATE workflow.workflow_runs
+            SET status = 'cancelled', completed_at = coalesce(completed_at, now()), updated_at = now()
+          WHERE id = $1`,
+        [runId],
       );
     }
 
-    // Hooks carry externally reusable tokens; only Workflow may end their retention window.
+    // Hooks carry externally reusable tokens, so an open retention window still blocks deletion.
+    // A window that is absent or already past is exactly what Workflow itself treats as ended, and
+    // every hook of a parked session run carries no window at all.
     const hook = await client.query(
-      "SELECT EXISTS (SELECT 1 FROM workflow.workflow_hooks WHERE run_id = $1) AS exists",
+      `SELECT EXISTS (
+         SELECT 1 FROM workflow.workflow_hooks
+          WHERE run_id = $1 AND token_retention_until IS NOT NULL AND token_retention_until > now()
+       ) AS exists`,
       [runId],
     );
     if (hook.rows[0]?.exists === true) {

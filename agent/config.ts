@@ -31,6 +31,10 @@ export const SESSION_GROUP_ROTATION_LOCK_HASH_SEED = 3;
 // below the observed Eve 240-second replay failure at 118 completed production turns.
 export const SESSION_MAX_COMPLETED_TURNS = 50;
 export const SESSION_RETENTION_LEASE_MS = 15 * 60 * 1_000;
+// A deletion that failed waits this long before the sweep tries it again. Parking such a session
+// forever left 36 of them undeletable with their Workflow runs alive, and every agent start then
+// re-read the whole event log of each one.
+export const SESSION_RETENTION_FAILURE_COOLDOWN_MINUTES = 60;
 export const SESSION_RETENTION_DAYS = 1;
 export const SESSION_TASK_ABANDONED_DAYS = 7;
 export const SESSION_TASK_MAX_ACTIVE_PER_GROUP_TOPIC = 25;

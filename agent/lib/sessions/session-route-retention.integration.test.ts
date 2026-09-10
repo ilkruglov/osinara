@@ -122,7 +122,10 @@ describeWithDatabase("session route and retention isolation", () => {
     });
   });
 
-  it("skips a poisoned retention row until its error is explicitly cleared", async () => {
+  // A failed row waits out its cooldown and is tried again. Parking it until someone cleared the
+  // error by hand left 36 sessions undeletable from 3 сентября 2026, each keeping a Workflow run
+  // alive that every agent start then re-read in full.
+  it("retries a failed retention row after its cooldown", async () => {
     const f = await fixture();
     const inserted = await database().query<{ id: string }>(
       `INSERT INTO conversation_sessions
@@ -138,10 +141,23 @@ describeWithDatabase("session route and retention isolation", () => {
       [f.familyId, f.userId],
     );
 
-    const claim = await sessionRepository.claimExpiredForDeletion(
+    // The row that failed earlier is claimed again, because its cooldown is long past.
+    const retried = await sessionRepository.claimExpiredForDeletion(
       new Date("2026-04-02T00:00:00.000Z"),
     );
+    expect(retried).toMatchObject({ eveSessionId: "wrun_poisoned", id: inserted.rows[0]!.id });
 
-    expect(claim).toMatchObject({ eveSessionId: "wrun_eligible", id: inserted.rows[1]!.id });
+    await sessionRepository.failDeletion(
+      retried!.id,
+      retried!.leaseToken,
+      "AGENT_STORAGE_CORRUPT",
+      new Date("2026-04-02T00:00:01.000Z"),
+    );
+
+    // While it cools down the sweep moves on to the next session instead of stalling on it.
+    const next = await sessionRepository.claimExpiredForDeletion(
+      new Date("2026-04-02T00:10:00.000Z"),
+    );
+    expect(next).toMatchObject({ eveSessionId: "wrun_eligible", id: inserted.rows[1]!.id });
   });
 });

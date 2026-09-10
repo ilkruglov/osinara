@@ -46,7 +46,7 @@ async function deleteExpiredSessionsUnderLock(): Promise<number> {
     } catch (error) {
       // This schedule is the boundary: persist context and rethrow so the failure is observable.
       const errorCode = isAppError(error) ? error.code : "AGENT_SESSION_RETENTION_DELETE_FAILED";
-      await sessionRepository.failDeletion(claim.id, claim.leaseToken, errorCode);
+      await sessionRepository.failDeletion(claim.id, claim.leaseToken, errorCode, new Date());
       console.error("Session retention deletion failed", {
         applicationSessionId: claim.id,
         error,
