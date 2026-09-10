@@ -664,6 +664,15 @@ Required config и required data проверять fail-fast; не добавл
 (хук `model-usage.ts`), длительности `instructions_mode`, `instructions_preferences`,
 `skills_authored`, `skills_external` и `tools_surface`. Разбирать паузу по этим меткам, не гадать.
 
+Компакция (10 сентября 2026): за три дня в потоке сессий не было ни одного `compaction.*`, хотя
+промпт рос до 133k при пороге 0,75 × 160k = 120k, и сессии обнулялись только ротацией после 50
+ходов; отдельные шаги после `bash` доходили до 300k (длинный вывод команды, следующий шаг снова
+75k). Причина не установлена. Хук `model-usage.ts` пишет `AGENT_COMPACTION_REQUESTED` (с
+`usageInputTokens`) и `AGENT_COMPACTION_COMPLETED`, а патч Eve в `shouldCompact` пишет
+`AGENT_COMPACTION_CHECK` на каждой проверке: `threshold`, `lastKnownInputTokens`,
+`lastKnownPromptMessageCount`, `estimatedInputTokens` (оценка Eve, длина JSON / 4, для русского
+текста занижает), `messages`, `compact`. По этим строкам решать, окно или оценка.
+
 Быстрые проверки: `npm run typecheck`, `npm test`, `npm run build`.
 Сквозная проверка переписки `agent/lib/telegram-conversation.e2e.integration.test.ts` (порт upstream
 v0.21.0, 7 сентября 2026) поднимает агент из `stress/telegram-conversation` командой `eve eval`:

@@ -11,7 +11,7 @@
  */
 import { defineHook } from "eve/hooks";
 
-import { formatStepUsageLog } from "../lib/model-usage-log.js";
+import { formatCompactionLog, formatStepUsageLog } from "../lib/model-usage-log.js";
 import { logTurnTiming } from "../lib/turn-timing.js";
 
 export default defineHook({
@@ -30,6 +30,12 @@ export default defineHook({
         stepIndex: event.data.stepIndex,
         turnId: event.data.turnId,
       });
+    },
+    "compaction.requested"(event) {
+      console.info(formatCompactionLog(event));
+    },
+    "compaction.completed"(event) {
+      console.info(formatCompactionLog(event));
     },
     "step.completed"(event, ctx) {
       console.info(formatStepUsageLog(event, {

@@ -178,6 +178,14 @@ await replaceExact(
   "if(evaluateThreshold(v,i,`estimate`).type===`within-limit`)return v;throw Error(`EVE_COMPACTION_OUTPUT_TOO_LARGE: Compaction result exceeds the configured threshold`)",
 );
 
+// Every compaction check reports the numbers it decided on: prod grew to 133k prompt tokens with a
+// 120k threshold and no compaction event in three days, and nothing in the log said why.
+await replaceExact(
+  runtimePaths.compaction,
+  "function shouldCompact(e,t){return e.length>0&&getInputTokenCount(e,t)+COMPACTION_PROMPT_OVERHEAD_TOKENS>t.threshold}",
+  "function shouldCompact(e,t){let n=getInputTokenCount(e,t),r=e.length>0&&n+COMPACTION_PROMPT_OVERHEAD_TOKENS>t.threshold;console.info(JSON.stringify({code:\"AGENT_COMPACTION_CHECK\",compact:r,estimatedInputTokens:Math.round(n),lastKnownInputTokens:t.lastKnownInputTokens??null,lastKnownPromptMessageCount:t.lastKnownPromptMessageCount??null,messages:e.length,overheadTokens:Math.round(COMPACTION_PROMPT_OVERHEAD_TOKENS),threshold:t.threshold}));return r}",
+);
+
 // Failure to persist an approval prompt must fail the turn instead of parking it unbound.
 await replaceExact(
   runtimePaths.channelAdapter,

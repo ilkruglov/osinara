@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createConfiguredLanguageModel } from "./model-transport.js";
 import {
+  formatCompactionLog,
   formatStepUsageLog,
   normalizeProviderUsage,
   observeModelUsage,
@@ -315,3 +316,31 @@ describe("formatStepUsageLog", () => {
     });
   });
 });
+
+describe("formatCompactionLog", () => {
+  it("projects a compaction.requested event with the usage that triggered it", () => {
+    expect(JSON.parse(formatCompactionLog({
+      data: { modelId: "deepseek-flash", sequence: 7, sessionId: "wrun_1", turnId: "turn_3", usageInputTokens: 131894 },
+      type: "compaction.requested",
+    }))).toEqual({
+      code: "AGENT_COMPACTION_REQUESTED",
+      modelId: "deepseek-flash",
+      sessionId: "wrun_1",
+      turnId: "turn_3",
+      usageInputTokens: 131894,
+    });
+  });
+
+  it("projects a compaction.completed event without usage", () => {
+    expect(JSON.parse(formatCompactionLog({
+      data: { modelId: "deepseek-flash", sequence: 8, sessionId: "wrun_1", turnId: "turn_3" },
+      type: "compaction.completed",
+    }))).toEqual({
+      code: "AGENT_COMPACTION_COMPLETED",
+      modelId: "deepseek-flash",
+      sessionId: "wrun_1",
+      turnId: "turn_3",
+    });
+  });
+});
+

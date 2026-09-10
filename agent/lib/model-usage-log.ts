@@ -297,3 +297,30 @@ export function formatStepUsageLog(
     ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }),
   });
 }
+
+export interface CompactionEvent {
+  readonly data: {
+    readonly modelId: string;
+    readonly sequence?: number;
+    readonly sessionId: string;
+    readonly turnId: string;
+    readonly usageInputTokens?: number | null;
+  };
+  readonly type: "compaction.completed" | "compaction.requested";
+}
+
+/**
+ * One line per Eve compaction event. Prod ran three days without a single compaction while prompts
+ * grew to 133k tokens (10 сентября 2026); the event log is how the fact is seen at all.
+ */
+export function formatCompactionLog(event: CompactionEvent): string {
+  const requested = event.type === "compaction.requested";
+  return JSON.stringify({
+    code: requested ? "AGENT_COMPACTION_REQUESTED" : "AGENT_COMPACTION_COMPLETED",
+    modelId: event.data.modelId,
+    sessionId: event.data.sessionId,
+    turnId: event.data.turnId,
+    ...(requested ? { usageInputTokens: event.data.usageInputTokens ?? null } : {}),
+  });
+}
+
