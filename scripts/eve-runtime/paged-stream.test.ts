@@ -65,6 +65,27 @@ describe("bounded durable stream consumption", () => {
     expect(f.page).toHaveBeenCalledOnce(); expect(f.unsubscribe).toHaveBeenCalledOnce(); reader.releaseLock();
   });
 
+  // pg carves small Buffers out of one shared 8 KB pool, and a byte-stream reader (the native
+  // abort path) may transfer an enqueued chunk's backing ArrayBuffer. Handing over the pooled view
+  // detaches memory the driver still uses for other rows, so each chunk leaves owning its own copy.
+  it("enqueues a copy instead of the driver's pooled buffer", async () => {
+    const pool = new ArrayBuffer(64);
+    new Uint8Array(pool).set([7, 9], 8);
+    const f = fixture();
+    f.page.mockResolvedValueOnce([
+      { id: "id-2", data: new Uint8Array(pool, 8, 2), eof: false },
+      { id: "id-3", data: new Uint8Array(), eof: true },
+    ]);
+    const reader = createPagedStream(f, 0).getReader();
+
+    const { value } = await reader.read();
+    expect(value).toEqual(new Uint8Array([7, 9]));
+    expect(value!.buffer).not.toBe(pool);
+    expect(value!.byteOffset).toBe(0);
+    expect(value!.buffer.byteLength).toBe(2);
+    await reader.cancel(); reader.releaseLock();
+  });
+
   it("skips future data positions but still closes at EOF", async () => {
     const f = fixture(); f.initialize.mockResolvedValue({ after: "id-1", skip: 5 });
     const reader = createPagedStream(f, 6).getReader();

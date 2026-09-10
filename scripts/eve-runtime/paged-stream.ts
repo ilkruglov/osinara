@@ -31,7 +31,9 @@ export function createPagedStream(source: StreamSource, startIndex = 0): Readabl
             const chunk = page[offset++]!; after = chunk.id;
             if (chunk.eof) { cleanup(); controller.close(); return; }
             if (skip > 0) { skip--; continue; }
-            if (chunk.data.byteLength > 0) { controller.enqueue(chunk.data); return; }
+            // Native abort readers are byte streams and transfer the backing ArrayBuffer.
+            // pg's pooled Buffer is not transferable; keep the upstream copy-on-read contract.
+            if (chunk.data.byteLength > 0) { controller.enqueue(new Uint8Array(chunk.data)); return; }
             continue;
           }
           const before = revision;
