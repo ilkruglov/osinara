@@ -23,9 +23,11 @@ Osinara — семейный Telegram-агент на TypeScript, Eve `0.40.0`, 
 из образа: compose монтирует `/opt/osinara/agent-model-providers.json` с хоста, там и живут
 v4.1 для primary и vision (алиас мультимодальный, проверено картинкой) и `fallbackModelId` в
 `transport` (в `models.primary` схема его не пускает, агент падает в crash-loop). Файл в репо
-остаётся на релизных id: его хэш проверяют bridge-тесты установщика. Как выйдет релизный id
-V4.1, поменять файл на хосте и каталог; общий fallback после отзыва алиаса уводит vision на
-слепой `deepseek-v4-flash`, поэтому vision тогда вернуть на `deepseek-v4-flash-vision-exp`. Канал вырезает утёкшую разметку вызова инструмента
+остаётся на релизных id: его хэш проверяют bridge-тесты установщика. 10 сентября 2026 DeepSeek
+выпустил V4.1 Flash под стабильным id `deepseek-flash` (в `/models` только `deepseek-flash` и
+`deepseek-v4-pro`; `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp` и алиас превью отвечают,
+но ответ приходит с `model: deepseek-flash`). На хосте primary и vision переведены на
+`deepseek-flash`, `fallbackModelId` убран; `deepseek-flash` мультимодальный, проверено картинкой. Канал вырезает утёкшую разметку вызова инструмента
 (`<｜DSML｜…>`, `AGENT_MODEL_TOOL_MARKUP_LEAKED`): в эвале без инструментов v4.1 один раз написала
 вызов `remember` текстом, с настоящими инструментами обе модели вызывают функцию штатно. У v4.1 ниже
 доля директивы памяти (38 против 55 из 60 в эвале), смотреть `AGENT_MEMORY_USED_MISSING`.
