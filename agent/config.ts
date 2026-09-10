@@ -21,6 +21,9 @@ export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
 export const GROQ_TRANSCRIPTION_TIMEOUT_MS = 60_000;
 export const GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED = 2;
 export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;
+// A query at or above this stays in the log with its shape, never its parameters: finding where a
+// turn spent its time used to require switching production statement logging on and waiting.
+export const DATABASE_SLOW_QUERY_MS = 150;
 export const SANDBOX_RUNNER_BASE_URL = "http://sandbox-runner:8080";
 export const SESSION_INACTIVITY_DAYS = 30;
 export const SESSION_GROUP_ROTATION_LOCK_HASH_SEED = 3;

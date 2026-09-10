@@ -4,6 +4,7 @@
  * Exports:
  * - `eventLogCacheKey`: the run id when this listing is the full ascending log without payloads.
  * - `readEventLogCache`, `writeEventLogCache`, `dropEventLogCache`: the cached log of one run.
+ * - `traceEventLogRead`: one line per resume with how much of the log was reused.
  *
  * Key construct:
  * - `@workflow/core` resumes a parked run by listing every event of that run, and world-postgres
@@ -69,4 +70,21 @@ export function writeEventLogCache(
 
 export function dropEventLogCache(key: string): void {
   cache.delete(key);
+}
+
+/** One line per resume read: how many events came from memory and how many from the database. */
+export function traceEventLogRead(
+  runId: string,
+  reused: number,
+  fetched: number,
+  milliseconds: number,
+  log: (line: string) => void = (line) => console.info(line),
+): void {
+  log(JSON.stringify({
+    code: "AGENT_WORKFLOW_EVENT_LOG",
+    fetched,
+    ms: Math.round(milliseconds),
+    reused,
+    runId,
+  }));
 }

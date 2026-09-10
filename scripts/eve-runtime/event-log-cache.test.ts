@@ -5,6 +5,7 @@
  * - Only a payload-free ascending full listing is cacheable.
  * - A stored log is returned with its cursor and survives until it is dropped.
  * - The least recently read run is evicted once the bound is reached.
+ * - Every resume reports how much of the log it reused.
  */
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +13,7 @@ import {
   dropEventLogCache,
   eventLogCacheKey,
   readEventLogCache,
+  traceEventLogRead,
   writeEventLogCache,
 } from "./event-log-cache.ts";
 
@@ -71,5 +73,21 @@ describe("event log cache", () => {
     expect(readEventLogCache("run-1")).toBeDefined();
     expect(readEventLogCache("run-2")).toBeUndefined();
     for (let index = 0; index <= 25; index += 1) dropEventLogCache(`run-${index}`);
+  });
+});
+
+describe("traceEventLogRead", () => {
+  it("reports reuse, tail size and duration for one resume", () => {
+    const lines: string[] = [];
+
+    traceEventLogRead(RUN, 585, 13, 4.6, (line) => lines.push(line));
+
+    expect(JSON.parse(lines[0]!)).toEqual({
+      code: "AGENT_WORKFLOW_EVENT_LOG",
+      fetched: 13,
+      ms: 5,
+      reused: 585,
+      runId: RUN,
+    });
   });
 });

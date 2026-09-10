@@ -3,7 +3,8 @@
  *
  * Constructs covered:
  * - Resuming a run reuses the log it already read and fetches only the tail.
- * - Only a listing that reached the end of the log is stored for reuse.
+ * - Only a listing that reached the end of the log is stored for reuse, and each resume is traced.
+ * - Every workflow pool query slower than the threshold names itself.
  * - The patched storage module and the installed cache stay syntactically valid.
  */
 import { execFile } from "node:child_process";
@@ -28,8 +29,21 @@ describe("workflow event log cache patch", () => {
     // A shrunk log must never be served from a stale prefix.
     expect(storage).toContain("if (total < cached.data.length) {");
     expect(storage).toContain("dropEventLogCache(cacheKey);");
-    // Only a complete listing becomes a prefix for the next resume.
-    expect(storage).toContain("if (cacheKey !== null && !hasMore) {");
+    // Only a complete listing becomes a prefix for the next resume, and every resume reports itself.
+    expect(storage).toContain("if (!hasMore) writeEventLogCache(cacheKey, data, data.at(-1)?.eventId);");
+    expect(storage).toContain("traceEventLogRead(params.runId, reusedEvents,");
+  });
+
+  it("traces slow driver queries from the one pool the driver builds", async () => {
+    const [index, trace] = await Promise.all([
+      readFile("node_modules/@workflow/world-postgres/dist/index.js", "utf8"),
+      readFile("node_modules/@workflow/world-postgres/dist/osinara-workflow-pool-trace.js", "utf8"),
+    ]);
+
+    expect(index).toContain("traceWorkflowPool(pool);");
+    expect(trace).toContain("AGENT_WORKFLOW_SLOW_QUERY");
+    // Parameter values carry the turn context of a family chat and never reach the log.
+    expect(trace).toContain("statement: statementShape(args[0])");
   });
 
   it("installs the cache module next to the driver", async () => {
