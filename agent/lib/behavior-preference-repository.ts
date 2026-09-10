@@ -106,7 +106,7 @@ async function requireScheduledBoundary(
 async function requireLiveBoundary(
   client: PoolClient,
   auth: BehaviorPreferenceAuthorization,
-  lockConversation = false,
+  mode: "read" | "write" = "read",
 ): Promise<AuthorizedBoundary> {
   const source = await client.query<{
     actor_user_id: string | null;
@@ -126,7 +126,7 @@ async function requireLiveBoundary(
       AND source.telegram_user_id = $4
      LEFT JOIN users AS app_user ON app_user.telegram_user_id = source.telegram_user_id
      WHERE conversation.id = $1
-     ${lockConversation ? "FOR UPDATE OF conversation" : ""}`,
+     ${mode === "write" ? "FOR UPDATE OF conversation" : ""}`,
     [auth.conversationId, auth.timelineEntryId, auth.sourceSequence, auth.telegramUserId],
   );
   const row = source.rows[0];
@@ -138,7 +138,10 @@ async function requireLiveBoundary(
   }
 
   // Locks keep membership or group registration live through the read/write transaction.
-  if (row.scope !== "group") {
+  // An external chat's prompt is read by every turn it starts, so its participants keep reading
+  // it. Writing is family business: until 10 сентября 2026 any participant, with no account in
+  // this system at all, could rewrite the whole prompt for everyone in the chat.
+  if (row.scope !== "group" || mode === "write") {
     const membership = await client.query(
       "SELECT 1 FROM family_memberships WHERE family_id = $1 AND user_id = $2 FOR SHARE",
       [row.family_id, row.actor_user_id],
@@ -146,7 +149,9 @@ async function requireLiveBoundary(
     if (membership.rowCount !== 1) {
       throw new AppError(
         "AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED",
-        "Доступ участника к этому чату был отозван",
+        row.scope === "group"
+          ? "Правила этого чата меняют только члены семьи"
+          : "Доступ участника к этому чату был отозван",
       );
     }
   }
@@ -253,7 +258,7 @@ export const behaviorPreferenceRepository = {
     try {
       await client.query("BEGIN");
        // The conversation row exists before the prompt row and serializes concurrent first writes.
-       const boundary = await requireLiveBoundary(client, auth, true);
+       const boundary = await requireLiveBoundary(client, auth, "write");
       const current = await currentPrompt(client, auth.conversationId, true);
       const hash = operationHash(input);
 

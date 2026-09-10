@@ -214,7 +214,10 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
     })).resolves.toEqual({ content: "", revision: 0, updatedAt: null });
   });
 
-  it("allows an external participant without family identity only in its registered chat", async () => {
+  // Every participant of a registered external group used to rewrite the whole chat prompt for
+  // everyone. In Ft86 a person with no account in this system at all added "анекдоты не сочинять и
+  // не рассказывать" on 10 сентября 2026. Reading stays open, because every turn there needs it.
+  it("lets an external participant read the prompt but leaves writing to the family", async () => {
     const fixture = await createFixture("external");
     const external = await source(
       fixture.externalConversationId,
@@ -223,9 +226,21 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
 
     await expect(behaviorPreferenceRepository.mutate(external, {
       action: "replace",
+      content: "Анекдоты не рассказывать.",
+      expectedRevision: 0,
+    })).rejects.toThrowError(/AGENT_BEHAVIOR_PREFERENCE_ACCESS_DENIED/u);
+
+    const member = await source(fixture.externalConversationId, fixture.memberTelegramUserId);
+    await expect(behaviorPreferenceRepository.mutate(member, {
+      action: "replace",
       content: "Не используй эмодзи.",
       expectedRevision: 0,
     })).resolves.toMatchObject({ content: "Не используй эмодзи.", revision: 1 });
+
+    await expect(behaviorPreferenceRepository.get(external)).resolves.toMatchObject({
+      content: "Не используй эмодзи.",
+      revision: 1,
+    });
 
     await database().query("DELETE FROM telegram_groups WHERE id = $1", [fixture.externalGroupId]);
     await expect(behaviorPreferenceRepository.get(external)).rejects.toThrowError(
@@ -235,7 +250,7 @@ describeWithDatabase("behaviorPreferenceRepository", () => {
 
   it("lets a turn started by another bot read the external chat prompt without writing it", async () => {
     const fixture = await createFixture("bot-reader");
-    const author = await source(fixture.externalConversationId, fixture.externalTelegramUserId);
+    const author = await source(fixture.externalConversationId, fixture.memberTelegramUserId);
     await behaviorPreferenceRepository.mutate(author, {
       action: "replace",
       content: "Только обычный текст, без rich-разметки.",
