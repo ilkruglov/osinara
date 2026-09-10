@@ -18,6 +18,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { patchEventLogCache } from "./eve-patches/event-log-cache.ts";
 import { patchStreamRecovery } from "./eve-patches/stream-recovery.ts";
 
 const EXPECTED_EVE_VERSION = "0.40.0";
@@ -125,6 +126,7 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
 // persists a cumulative snapshot per delta, which grew one production session to 155 MB and ended
 // in an out-of-memory crash. Reads become paged and demand-driven, delta persistence is paced.
 await patchStreamRecovery(replaceExact);
+await patchEventLogCache(replaceExact);
 
 // A cold production start may prepare sandbox images before the child server becomes healthy.
 await replaceExact(
