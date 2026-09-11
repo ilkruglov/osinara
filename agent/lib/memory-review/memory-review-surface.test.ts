@@ -63,6 +63,9 @@ describe("memory review instructions", () => {
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("изменит будущий ответ");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("одна запись episode");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("итог обсуждения");
+    // Дизраптим collected 173 records shaped "10.09 X в чате сказал, что Y" by 11 сентября 2026:
+    // the speech act was stored instead of the thing said, one record per utterance.
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Речевой акт не сведение");
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("всё, что пригодится");
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("от 3 до 10 записей");
   });
