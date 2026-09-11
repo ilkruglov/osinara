@@ -45,6 +45,7 @@ import remember from "../tools/remember.js";
 import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
+import sendWorkspaceImage from "../tools/send_workspace_image.js";
 import startNewContext from "../tools/start_new_context.js";
 import { GOOGLE_WORKSPACE_AVAILABLE } from "../google-workspace/google-workspace-availability.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
@@ -101,6 +102,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   search_memories: searchMemories as unknown as AnyToolDefinition,
   search_memory_threads: searchMemoryThreads as unknown as AnyToolDefinition,
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
+  send_workspace_image: sendWorkspaceImage as unknown as AnyToolDefinition,
   start_new_context: startNewContext as unknown as AnyToolDefinition,
   web_fetch: TRUSTED_WEB_FETCH,
 };

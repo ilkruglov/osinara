@@ -47,6 +47,7 @@ import readProfileView from "../tools/read_profile_view.js";
 import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
+import sendWorkspaceImage from "../tools/send_workspace_image.js";
 import { removeGroupFileTool } from "../workspaces/remove-group-file-tool.js";
 import { controlledWebFetchTool } from "./controlled-web-fetch.js";
 import { EXTERNAL_GROUP_FILE_TOOLS } from "./external-group-file-tools.js";
@@ -93,6 +94,21 @@ type DirectExternalToolName = Exclude<
 const EXTERNAL_IMAGE_PATH_MAX_LENGTH = 512;
 const EXTERNAL_MODEL_TEXT_MAX_LENGTH = 4_000;
 const EXTERNAL_FILE_CAPTION_MAX_LENGTH = 1_024;
+
+/** Both senders take the same input; the Telegram presentation belongs to the tool, not the model. */
+function externalWorkspaceSendInputSchema(pathExample: string) {
+  return z
+    .object({
+      caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
+      path: z
+        .string()
+        .min(1)
+        .max(EXTERNAL_IMAGE_PATH_MAX_LENGTH)
+        .describe(`Относительный путь внутри group workspace, например ${pathExample}`),
+      scope: z.literal("group").describe("Workspace текущей внешней группы"),
+    })
+    .strict();
+}
 
 // Shared executors remain unchanged, while external descriptors expose only their executable group
 // contract. This prevents the model from planning calls that external authorization must reject.
@@ -153,19 +169,13 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
   },
   send_workspace_file: {
     description:
-      "Отправить существующий файл из group workspace в текущий Telegram-чат или тему внешней группы. path всегда относительный внутри group scope, например reports/result.pdf; не передавай /workspace/group. Результат delivered=true подтверждает отправку; при sideEffectStatus completed или unknown не отправляй повторно.",
-    inputSchema: z
-      .object({
-        caption: z.string().max(EXTERNAL_FILE_CAPTION_MAX_LENGTH).optional(),
-        path: z
-          .string()
-          .min(1)
-          .max(EXTERNAL_IMAGE_PATH_MAX_LENGTH)
-          .describe("Относительный путь внутри group workspace, например reports/result.pdf"),
-        presentation: z.enum(["document", "photo"]),
-        scope: z.literal("group").describe("Workspace текущей внешней группы"),
-      })
-      .strict(),
+      "Отправить существующий файл из group workspace документом в текущий Telegram-чат или тему внешней группы. path всегда относительный внутри group scope, например reports/result.pdf; не передавай /workspace/group. Картинку показывай через send_workspace_image. Результат delivered=true подтверждает отправку; alreadySent=true значит, что эти байты уже ушли на этом ходе; при sideEffectStatus completed или unknown не отправляй повторно.",
+    inputSchema: externalWorkspaceSendInputSchema("reports/result.pdf"),
+  },
+  send_workspace_image: {
+    description:
+      "Показать фотографией картинку из group workspace в текущем Telegram-чате или теме внешней группы, в том числе только что нарисованную generate_image. path всегда относительный внутри group scope, например generated-images/image.png; не передавай /workspace/group. JPEG, PNG или WebP до 10 МБ, иначе отправляй документом через send_workspace_file. Результат delivered=true подтверждает отправку; alreadySent=true значит, что эти байты уже ушли на этом ходе.",
+    inputSchema: externalWorkspaceSendInputSchema("generated-images/image.png"),
   },
 };
 
@@ -183,6 +193,7 @@ const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefi
   search_memories: searchMemories as unknown as AnyToolDefinition,
   search_memory_threads: searchMemoryThreads as unknown as AnyToolDefinition,
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
+  send_workspace_image: sendWorkspaceImage as unknown as AnyToolDefinition,
   web_fetch: controlledWebFetchTool as unknown as AnyToolDefinition,
 };
 
@@ -192,6 +203,14 @@ function groupToolForbidden(): AppError {
     "Этот инструмент не разрешён в текущей внешней группе. Обратитесь к владельцу агента",
   );
 }
+
+// Any one of these grants authorizes the capability. Drawing into a workspace nobody can see is not
+// a capability, so the grant to generate images carries the sender that shows the result.
+const GRANTED_BY: Readonly<
+  Partial<Record<ExternalGroupToolName, readonly ExternalGroupToolName[]>>
+> = {
+  send_workspace_image: ["send_workspace_image", "generate_image"],
+};
 
 async function withExternalGroupCapability<T>(
   ctx: ToolContext,
@@ -220,7 +239,7 @@ async function withExternalGroupCapability<T>(
   // Committing this final live check is the operation's authorization linearization point. The DB
   // connection is released before repositories run so concurrent tools cannot exhaust the pool by
   // each holding an outer connection while waiting for an inner repository connection.
-  await authorizeCurrentExternalGroupCapability(identity, capability);
+  await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability);
   return await operation();
 }
 
@@ -317,12 +336,21 @@ function buildExternalToolSurface(
     if (scheduledRun && capability === "remember") continue;
     // Billable image generation requires a current interactive request, never a background run.
     if (capability === "generate_image" && !imageGenerationAllowed) continue;
+    // A granted image sender still needs its live check, which `GRANTED_BY` resolves.
     if (capability.startsWith("manage_memory.")) continue;
     if (capability.startsWith("manage_memory_thread.")) continue;
     if (!isExternalGroupToolName(capability)) continue;
     const definition = EXTERNAL_DIRECT_TOOLS[capability as DirectExternalToolName];
     if (definition === undefined) continue;
     surface[capability] = allowedDirectTool(capability as DirectExternalToolName, definition);
+  }
+  // generate_image now only saves into the workspace, so a chat allowed to draw must be able to
+  // show the result even when the owner granted nothing else.
+  if (imageGenerationAllowed && surface.send_workspace_image === undefined) {
+    surface.send_workspace_image = allowedDirectTool(
+      "send_workspace_image",
+      EXTERNAL_DIRECT_TOOLS.send_workspace_image,
+    );
   }
   const memoryActions = MANAGE_MEMORY_ACTIONS.filter((action) => allowed.has(`manage_memory.${action}`));
   if (memoryActions.length > 0) {

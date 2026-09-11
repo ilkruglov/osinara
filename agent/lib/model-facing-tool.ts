@@ -5,6 +5,7 @@
  * - `wrapModelFacingTool`: preserves a descriptor while normalizing every thrown error and telling
  *   the model when its pre-tool text has already been delivered.
  * - `wrapModelFacingToolMap`: applies the boundary once to a complete mode-scoped surface.
+ * - `turnKey`: the current session and turn as one string, for per-turn side-effect bookkeeping.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
 
@@ -24,7 +25,7 @@ import {
 type AnyToolDefinition = ToolDefinition<any, any>;
 type ApprovalPolicyFunction = (ctx: unknown) => unknown;
 
-function turnKey(ctx: unknown): string | null {
+export function turnKey(ctx: unknown): string | null {
   const session = (ctx as { session?: { id?: unknown; turn?: { id?: unknown } } } | undefined)
     ?.session;
   if (typeof session?.id !== "string" || typeof session.turn?.id !== "string") return null;

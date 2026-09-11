@@ -2,7 +2,7 @@
  * Model-facing subscription image generation tool tests.
  *
  * Constructs covered:
- * - One successful generation is persisted and delivered as a Telegram photo.
+ * - One successful generation is persisted in the workspace and never sent by itself.
  * - Completed and filesystem-recoverable calls never charge the subscription twice.
  * - Definitive and ambiguous provider outcomes become terminal durable operation states.
  * - The provider gate is asserted separately, so this suite runs the Codex-subscription runtime.
@@ -33,7 +33,6 @@ const FILE = {
 };
 const INPUT = {
   background: "opaque" as const,
-  caption: "Готовая иллюстрация",
   prompt: "A clean editorial illustration of a shared calendar",
   quality: "high" as const,
   size: "1536x1024" as const,
@@ -76,17 +75,6 @@ function dependencies() {
         revisedPrompt: "Revised prompt",
       }),
     },
-    deliver: vi.fn().mockResolvedValue({
-      delivered: true,
-      path: FILE.path,
-      persistenceCompleted: true,
-      projectionCompleted: true,
-      replayed: false,
-      retryable: false,
-      scope: "group",
-      sideEffectStatus: "completed",
-      telegramMessageId: "77",
-    }),
     operations: {
       begin: vi.fn().mockResolvedValue({ state: "execute", workspaceId: "workspace-1" }),
       complete: vi.fn().mockResolvedValue(undefined),
@@ -135,17 +123,18 @@ describe("generate_image", () => {
     expect(deps.operations.begin).not.toHaveBeenCalled();
   });
 
-  it("generates, stores, and delivers one authorized image", async () => {
+  it("generates and stores one authorized image without sending it", async () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);
 
     await expect(tool.execute(INPUT, context())).resolves.toMatchObject({
-      delivered: true,
+      delivered: false,
       generated: true,
       model: "gpt-image-2",
       path: expect.stringMatching(/^generated-images\/image-[0-9a-f]{24}\.webp$/u),
       revisedPrompt: "Revised prompt",
-      telegramMessageId: "77",
+      scope: "group",
+      sent: false,
     });
     expect(deps.client.generate).toHaveBeenCalledTimes(1);
     expect(deps.workspaces.writeBinary).toHaveBeenCalledWith(
@@ -164,15 +153,9 @@ describe("generate_image", () => {
         scope: "group",
       }),
     );
-    expect(deps.deliver).toHaveBeenCalledWith({
-      caption: "Готовая иллюстрация",
-      path: expect.stringMatching(/^generated-images\/image-[0-9a-f]{24}\.webp$/u),
-      presentation: "photo",
-      scope: "group",
-    }, expect.anything());
   });
 
-  it("delivers a completed replay without generating or writing again", async () => {
+  it("returns a completed replay without generating or writing again", async () => {
     const deps = dependencies();
     deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
     const tool = createGenerateImageTool(deps as never);
@@ -183,7 +166,6 @@ describe("generate_image", () => {
     });
     expect(deps.client.generate).not.toHaveBeenCalled();
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
-    expect(deps.deliver).toHaveBeenCalledTimes(1);
   });
 
   it("rejects completed metadata that does not match the reserved output", async () => {
@@ -197,7 +179,6 @@ describe("generate_image", () => {
     await expect(tool.execute(INPUT, context()))
       .rejects.toThrowError(/AGENT_IMAGE_GENERATION_REPLAY_MISMATCH/u);
     expect(deps.client.generate).not.toHaveBeenCalled();
-    expect(deps.deliver).not.toHaveBeenCalled();
   });
 
   it("recovers a written file after a crash before ledger completion", async () => {
@@ -228,7 +209,6 @@ describe("generate_image", () => {
       "AGENT_IMAGE_GENERATION_REJECTED",
     );
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
-    expect(deps.deliver).not.toHaveBeenCalled();
   });
 
   it("records uncertain provider completion as ambiguous without retrying", async () => {
@@ -245,7 +225,6 @@ describe("generate_image", () => {
       "call-image-1",
       "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
     );
-    expect(deps.deliver).not.toHaveBeenCalled();
   });
 
   it("marks a failed workspace write ambiguous after provider completion", async () => {
@@ -260,7 +239,6 @@ describe("generate_image", () => {
       "call-image-1",
       "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN",
     );
-    expect(deps.deliver).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 
@@ -298,6 +276,5 @@ describe("generate_image", () => {
     );
     expect(deps.client.generate).not.toHaveBeenCalled();
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
-    expect(deps.deliver).not.toHaveBeenCalled();
   });
 });

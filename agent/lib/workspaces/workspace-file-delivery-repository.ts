@@ -37,6 +37,8 @@ interface DeliveryRow {
 
 export type WorkspaceFileDeliveryReservation =
   | ({ status: "completed"; telegramMessageId: string } & WorkspaceBinaryFile)
+  // Same bytes, same chat, same turn, a different tool call: already in the chat, do not resend.
+  | ({ status: "duplicate"; telegramMessageId: string } & WorkspaceBinaryFile)
   | ({ status: "reserved" } & WorkspaceBinaryFile);
 
 function threadId(value: number | undefined): string | null {
@@ -77,14 +79,38 @@ export function createWorkspaceFileDeliveryRepository(binaryReader: BinaryReader
       path: string;
       presentation: "document" | "photo";
       scope: WorkspaceScope;
+      turnId: string | null;
     }): Promise<WorkspaceFileDeliveryReservation> {
       // Read authorization and an immutable byte snapshot before reserving the external side effect.
       const binary = await binaryReader.readBinary(auth, input.scope, input.path);
+
+      // A different call in the same turn already put these exact bytes in this chat. The call id
+      // cannot catch that: on 11 сентября 2026 one image went out as a photo and again as a
+      // document. The current call is excluded so its own replay still resolves as `completed`.
+      if (input.turnId !== null) {
+        const sent = await database().query<{ telegram_message_id: string }>(
+          `SELECT telegram_message_id FROM workspace_file_deliveries
+            WHERE telegram_chat_id = $1 AND turn_id = $2 AND content_sha256 = $3
+              AND status = 'completed' AND telegram_message_id IS NOT NULL
+              AND operation_key <> $4
+            ORDER BY completed_at LIMIT 1`,
+          [input.chatId, input.turnId, binary.file.contentSha256, input.operationKey],
+        );
+        const alreadySent = sent.rows[0];
+        if (alreadySent) {
+          return {
+            ...binary,
+            status: "duplicate",
+            telegramMessageId: alreadySent.telegram_message_id,
+          };
+        }
+      }
+
       const inserted = await database().query(
         `INSERT INTO workspace_file_deliveries
             (family_id, workspace_id, file_path, content_sha256, operation_key, requested_by,
-             telegram_chat_id, telegram_message_thread_id, presentation)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             telegram_chat_id, telegram_message_thread_id, presentation, turn_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (operation_key) DO NOTHING`,
         [
           auth.familyId,
@@ -96,6 +122,7 @@ export function createWorkspaceFileDeliveryRepository(binaryReader: BinaryReader
           input.chatId,
           input.messageThreadId ?? null,
           input.presentation,
+          input.turnId,
         ],
       );
       if (inserted.rowCount === 1) return { ...binary, status: "reserved" };

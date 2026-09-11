@@ -52,6 +52,7 @@ const EXPECTED_TOOL_MODULES = [
   "search_memories.ts",
   "search_memory_threads.ts",
   "send_workspace_file.ts",
+  "send_workspace_image.ts",
   "start_new_context.ts",
 ] as const;
 

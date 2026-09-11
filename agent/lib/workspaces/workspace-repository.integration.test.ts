@@ -224,6 +224,7 @@ describeWithDatabase("workspace repository", () => {
       path: "out/report.txt",
       presentation: "document",
       scope: "personal",
+      turnId: null,
     });
     expect(first.status).toBe("reserved");
     await deliveries.complete("delivery-operation", "77");
@@ -233,6 +234,7 @@ describeWithDatabase("workspace repository", () => {
       path: "out/report.txt",
       presentation: "document",
       scope: "personal",
+      turnId: null,
     });
 
     expect(replay).toMatchObject({
@@ -389,6 +391,7 @@ describeWithDatabase("workspace repository", () => {
       path: "shell/notes.txt",
       presentation: "document",
       scope: "personal",
+      turnId: null,
     })).resolves.toMatchObject({
       file: { path: "shell/notes.txt" },
       status: "reserved",

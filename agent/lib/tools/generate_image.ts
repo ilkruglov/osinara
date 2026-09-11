@@ -2,13 +2,14 @@
  * Subscription-backed raster image generation tool.
  *
  * Exports:
- * - `createGenerateImageTool`: dependency-injected exact-once generation and delivery workflow.
+ * - `createGenerateImageTool`: dependency-injected exact-once generation workflow.
  * - Default `generate_image`: production Eve tool using CLIProxyAPI, workspace, and Telegram.
  *
  * Key constructs:
  * - The verified workspace scope and call ID determine a stable non-overwriting output path.
  * - One durable reservation precedes the billable provider call; no failure is retried implicitly.
- * - A completed image is delivered through the existing exact-once Telegram file sender.
+ * - The image is only saved: sending it is a separate explicit step through `send_workspace_image`,
+ *   so a draft never reaches the chat on its own and one picture cannot arrive twice.
  */
 import { createHash } from "node:crypto";
 
@@ -30,7 +31,6 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/workspace-repository.js";
 import type { WorkspaceFileRecord } from "../workspaces/workspace-file-record.js";
-import sendWorkspaceFile from "./send_workspace_file.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
@@ -44,12 +44,6 @@ interface GenerateImageDependencies {
       revisedPrompt?: string;
     }>;
   };
-  deliver(input: {
-    caption?: string;
-    path: string;
-    presentation: "photo";
-    scope: WorkspaceScope;
-  }, ctx: ToolContext): Promise<unknown>;
   operations: {
     begin(input: {
       inputHash: string;
@@ -86,8 +80,6 @@ const IMAGE_BACKGROUNDS = ["transparent", "opaque", "auto"] as const;
 
 const inputSchema = z.object({
   background: z.enum(IMAGE_BACKGROUNDS).describe("transparent, opaque или auto"),
-  caption: z.string().min(1).max(IMAGE_CAPTION_MAX_LENGTH).optional()
-    .describe("Необязательная подпись к отправленному изображению"),
   prompt: z.string().min(1).max(IMAGE_PROMPT_MAX_LENGTH)
     .describe("Полная визуальная спецификация изображения без служебных инструкций"),
   quality: z.enum(IMAGE_QUALITIES).describe("low, medium, high или auto"),
@@ -227,10 +219,10 @@ async function recoverStartedOperation(
 export function createGenerateImageTool(dependencies: GenerateImageDependencies): AnyToolDefinition {
   return defineTool({
     description: [
-      "Когда использовать: создать одно новое raster-изображение (Flux или GPT-Image, по настроенному провайдеру) и сразу отправить его в текущий Telegram-чат.",
+      "Когда использовать: создать одно новое raster-изображение (Flux или GPT-Image, по настроенному провайдеру) и сохранить его в workspace.",
       "Не использовать: для SVG, диаграмм из кода, редактирования существующего файла или незапрошенной фоновой генерации.",
       "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер или качество не заданы пользователем, передай auto.",
-      "Результат: изображение сохраняется без перезаписи в generated-images и доставляется как photo; returned path можно использовать в следующих запросах.",
+      "Результат: изображение сохраняется без перезаписи в generated-images и НЕ отправляется в чат; чтобы показать его, вызови send_workspace_image с этим path. Черновик можно сначала посмотреть через inspect_workspace_image и переделать, отправив только итог.",
       "Ошибка: status unknown означает возможное списание лимита провайдера; не повторяй вызов автоматически. Надписи, особенно кириллицу, модели рисуют плохо, предупреждай об этом.",
     ].join(" "),
     inputSchema,
@@ -325,18 +317,16 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
         revisedPrompt = generatedImage.revisedPrompt;
       }
 
-      const delivery = await dependencies.deliver({
-        ...(input.caption === undefined ? {} : { caption: input.caption }),
-        path: file.path,
-        presentation: "photo",
-        scope,
-      }, ctx) as Record<string, unknown>;
+      // Saved, not sent. The picture reaches the chat only when the model asks for it, which is
+      // what lets it look at a draft, fix it, and deliver one final image instead of every attempt.
       return {
-        ...delivery,
+        delivered: false,
         generated,
         model: generatedModel,
         path: file.path,
         ...(revisedPrompt === undefined ? {} : { revisedPrompt }),
+        scope,
+        sent: false,
       };
     },
   }) as AnyToolDefinition;
@@ -344,7 +334,6 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
 
 export default createGenerateImageTool({
   client: imageGenerationClient,
-  deliver: (input, ctx) => (sendWorkspaceFile as AnyToolDefinition).execute(input, ctx),
   operations: imageGenerationOperationRepository,
   workspaces: workspaceBinaryRepository,
 });

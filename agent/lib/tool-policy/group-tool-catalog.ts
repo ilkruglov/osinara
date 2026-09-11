@@ -84,7 +84,12 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   { name: "search_memory_threads", usage: "искать нити памяти текущей группы по смыслу" },
   {
     name: "send_workspace_file",
-    usage: "отправить файл из workspace в текущий Telegram-чат или тему",
+    usage: "отправить файл из workspace документом в текущий Telegram-чат или тему",
+  },
+  {
+    // generate_image implies this one: an image that can never be shown is not a capability.
+    name: "send_workspace_image",
+    usage: "показать картинку из workspace фотографией в текущем Telegram-чате или теме",
   },
   {
     name: "web_fetch",

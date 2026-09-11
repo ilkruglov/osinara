@@ -435,7 +435,7 @@ describe("external group tool surface", () => {
 
   it("exposes only group scope in external shared-tool schemas and descriptions", () => {
     const external = buildModeToolSurface({
-      capabilities: new Set(["inspect_workspace_image", "list_memories", "list_memory_threads", "remember", "send_workspace_file"]),
+      capabilities: new Set(["inspect_workspace_image", "list_memories", "list_memory_threads", "remember", "send_workspace_file", "send_workspace_image"]),
       environment: "external",
     });
 
@@ -453,7 +453,8 @@ describe("external group tool surface", () => {
         sensitivity: "normal",
         subject: { kind: "current_author" },
       },
-      send_workspace_file: { path: "result.pdf", presentation: "document" },
+      send_workspace_file: { path: "result.pdf" },
+      send_workspace_image: { path: "poster.png" },
     } as const;
     for (const [toolName, input] of Object.entries(inputs)) {
       const tool = external[toolName]!;

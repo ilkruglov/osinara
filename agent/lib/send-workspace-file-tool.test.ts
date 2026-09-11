@@ -40,6 +40,7 @@ vi.mock("./sessions/session-context.js", () => ({
 }));
 
 import sendWorkspaceFile from "./tools/send_workspace_file.js";
+import sendWorkspaceImage from "./tools/send_workspace_image.js";
 
 function context(): ToolContext {
   const caller = {
@@ -88,11 +89,12 @@ describe("send_workspace_file group projection", () => {
     mocks.recordAgentResponse.mockResolvedValue({ entryId: "entry-1", sequenceId: "20" });
   });
 
+  // The presentation belongs to the tool now, so a picture goes out through the image sender and
+  // a document through the file sender; one file can no longer arrive twice in two shapes.
   it("records and routes a confirmed tool-delivered photo", async () => {
-    await sendWorkspaceFile.execute({
+    await sendWorkspaceImage.execute({
       caption: "Фасад ресторана",
       path: "screens/facade.png",
-      presentation: "photo",
       scope: "family",
     }, context());
 
@@ -131,7 +133,7 @@ describe("send_workspace_file group projection", () => {
     await expect(sendWorkspaceFile.execute({
       caption: "Фасад ресторана",
       path: "screens/facade.png",
-      presentation: "photo",
+      
       scope: "family",
     }, context())).resolves.toMatchObject({ delivered: true, replayed: true });
 
@@ -147,7 +149,7 @@ describe("send_workspace_file group projection", () => {
     await expect(sendWorkspaceFile.execute({
       caption: "Фасад ресторана",
       path: "screens/facade.png",
-      presentation: "photo",
+      
       scope: "family",
     }, context())).resolves.toMatchObject({
       delivered: true,
@@ -165,7 +167,7 @@ describe("send_workspace_file group projection", () => {
 
     await expect(sendWorkspaceFile.execute({
       path: "screens/facade.png",
-      presentation: "photo",
+      
       scope: "family",
     }, context())).resolves.toMatchObject({
       delivered: true,
@@ -187,7 +189,7 @@ describe("send_workspace_file group projection", () => {
 
     await expect(sendWorkspaceFile.execute({
       path: "screens/facade.png",
-      presentation: "photo",
+      
       scope: "family",
     }, context())).rejects.toThrowError(/AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS/u);
 
@@ -202,7 +204,7 @@ describe("send_workspace_file group projection", () => {
 
     await expect(sendWorkspaceFile.execute({
       path: "screens/facade.png",
-      presentation: "photo",
+      
       scope: "family",
     }, invalidContext)).rejects.toThrowError(/AGENT_TELEGRAM_FORUM_TOPIC_INVALID/u);
 
