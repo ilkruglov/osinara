@@ -14,7 +14,7 @@
  * - Telegram dispatch extensions: Session return, message/token override, reply routing, and HITL auth.
  * - Telegram topic normalization: accepts thread IDs only on explicit forum-topic updates.
  * - Telegram public types: exposes only the reviewed application seams.
- * - Provider web search: dynamic provider models select the native backend by provider prefix.
+ * - Provider web search: an explicit backend override, then the provider prefix of the model id.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -423,10 +423,14 @@ await replaceExact(
 // A dynamic model selection carries no authored `source`, so Eve fell back to the gateway Exa
 // backend even for a direct OpenAI- or Anthropic-protocol provider, and the provider client then
 // dropped the unknown tool. Select the native backend from the provider prefix of the model id.
+// A provider reached through a compatibility endpoint has no such prefix: DeepSeek serves Anthropic's
+// server-side web_search at api.deepseek.com/anthropic under the id `deepseek-flash`, while its own
+// Responses API documents web_search as ignored. `OSINARA_WEB_SEARCH_BACKEND` names the backend for
+// exactly that case; unset, the prefix rule below is unchanged.
 await replaceExact(
   runtimePaths.providerTools,
   "function resolveWebSearchBackend(e,t=`exa`){if(e.source===void 0)return t;let n=e.id.split(`/`)[0]??``;",
-  "function resolveWebSearchBackend(e,t=`exa`){let n=e.id.split(`/`)[0]??``;if(e.source===void 0&&!(n===`openai`||n.startsWith(`openai.`)||n===`anthropic`||n.startsWith(`anthropic.`)||n.startsWith(`google.`)))return t;",
+  "function resolveWebSearchBackend(e,t=`exa`){let o=process.env.OSINARA_WEB_SEARCH_BACKEND;if(o)return o;let n=e.id.split(`/`)[0]??``;if(e.source===void 0&&!(n===`openai`||n.startsWith(`openai.`)||n===`anthropic`||n.startsWith(`anthropic.`)||n.startsWith(`google.`)))return t;",
 );
 
 // Verified webhooks can be durably acknowledged before native dispatch; drain reuses that dispatcher.
