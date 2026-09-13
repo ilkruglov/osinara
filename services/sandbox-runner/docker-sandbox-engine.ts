@@ -172,10 +172,16 @@ export function createDockerSandboxEngine(input: {
 
         let existing = await inspectContainer(input.docker, sessionId);
         const labels = existing?.inspection.Config.Labels;
-        if (existing && sandboxContainerNeedsReplacement({
+        const expectedBrowserlessKey = request.access === "trusted" && input.runtime.browserlessApiKey
+          ? `BROWSERLESS_API_KEY=${input.runtime.browserlessApiKey}`
+          : undefined;
+        const existingBrowserlessKey = existing?.inspection.Config.Env?.find((entry) =>
+          entry.startsWith("BROWSERLESS_API_KEY=")
+        );
+        if (existing && (existingBrowserlessKey !== expectedBrowserlessKey || sandboxContainerNeedsReplacement({
           requestHash: labels?.[SANDBOX_REQUEST_HASH_LABEL],
           sandboxSessionId: labels?.[SANDBOX_SESSION_LABEL],
-        }, request)) {
+        }, request))) {
           if (request.seedFiles === undefined) {
             return { created: false, seedRequired: true, sessionId };
           }
@@ -476,6 +482,7 @@ export async function resolveSandboxDockerRuntime(docker: Docker): Promise<{
       workspaceRoot: MOUNT_WORKSPACES_DESTINATION,
     },
     runtime: {
+      browserlessApiKey: process.env.BROWSERLESS_API_KEY?.trim() || undefined,
       egressNetwork,
       image,
       project: composeProject,

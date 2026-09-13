@@ -10,7 +10,7 @@
  * - Stale policy replacement and bounded warm-cache reconciliation at the Docker boundary.
  * - Explicit session and runner shutdown remove compute instead of retaining exited containers.
  */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -48,6 +48,21 @@ afterEach(async () => {
 });
 
 describe("buildSandboxContainerOptions", () => {
+  it.each(["personal", "family", "group"] as const)(
+    "exposes the optional Browserless credential only to trusted %s compute",
+    (scope) => {
+      const options = buildSandboxContainerOptions({ ...runtime, browserlessApiKey: "browserless-secret" }, {
+        access: scope === "group" ? "restricted" : "trusted",
+        eveSessionId: EVE_SESSION_ID,
+        mounts: [{ mountPoint: scope, workspaceId: PERSONAL_WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: EMPTY_SEED_DIGEST,
+      });
+      expect(options.Env?.includes("BROWSERLESS_API_KEY=browserless-secret")).toBe(scope !== "group");
+      expect(options.Env?.some((entry) => entry.startsWith("AGENT_BROWSER_PROVIDER="))).toBe(false);
+    },
+  );
+
   it("keeps family files visible in private chat without exposing Google credentials", () => {
     const options = buildSandboxContainerOptions(runtime, {
       access: "trusted",
@@ -90,7 +105,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "13",
+      "dev.osinara.sandbox.policy-version": "14",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -239,6 +254,41 @@ describe("buildSandboxContainerOptions", () => {
     expect(docker.createContainer).toHaveBeenCalledOnce();
     expect(replacement.start).toHaveBeenCalledOnce();
     expect(replacement.putArchive).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { previous: undefined, current: "new-key" },
+    { previous: "old-key", current: "new-key" },
+    { previous: "old-key", current: undefined },
+  ])("requests reseeding trusted compute after Browserless credentials change: $previous -> $current", async ({ previous, current }) => {
+    await mkdir(join(process.cwd(), ".tmp/browserless-check"), { recursive: true });
+    const root = await mkdtemp(join(process.cwd(), ".tmp/browserless-check/rotation-"));
+    temporaryRoots.push(root);
+    const request = {
+      access: "trusted" as const,
+      eveSessionId: EVE_SESSION_ID,
+      mounts: [{ mountPoint: "personal" as const, workspaceId: PERSONAL_WORKSPACE_ID }],
+      sandboxSessionId: SANDBOX_SESSION_ID,
+      seedDigest: EMPTY_SEED_DIGEST,
+    };
+    const docker = {
+      getContainer: () => ({ inspect: async () => ({
+        Config: {
+          Env: previous ? [`BROWSERLESS_API_KEY=${previous}`] : [],
+          Labels: {
+            "dev.osinara.sandbox.request-hash": sandboxRequestHash(request),
+            "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
+          },
+        },
+        State: { Running: true },
+      }) }),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
+      runtime: { ...runtime, browserlessApiKey: current },
+    });
+    expect(await engine.createSession(request)).toEqual({ created: false, seedRequired: true, sessionId: SANDBOX_SESSION_ID });
   });
 
   it("restarts a matching warm container without requesting or writing seeds", async () => {

@@ -122,6 +122,7 @@ services:
       retries: 4
     environment:
       SANDBOX_RUNTIME_IMAGE: osinara-sandbox-runtime:local
+      BROWSERLESS_API_KEY: ${BROWSERLESS_API_KEY-}
     networks:
       - sandbox-control
     read_only: true

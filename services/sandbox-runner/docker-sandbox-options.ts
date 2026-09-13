@@ -17,6 +17,7 @@ import type {
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 
 export interface SandboxDockerRuntime {
+  browserlessApiKey?: string;
   egressNetwork: string;
   image: string;
   project: string;
@@ -24,7 +25,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "13";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "14";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
@@ -87,11 +88,12 @@ function toolsMount(
   return volumeMount(runtime.toolsVolume, `/tools/${mount.mountPoint}`, mount.workspaceId);
 }
 
-function trustedEnvironment(mounts: readonly SandboxRunnerMount[]): string[] {
+function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessApiKey?: string): string[] {
   const primary = resolveTrustedToolMount(mounts);
   const root = `/tools/${primary.mountPoint}`;
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
+    ...(browserlessApiKey ? [`BROWSERLESS_API_KEY=${browserlessApiKey}`] : []),
     `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
     `AGENT_BROWSER_PROXY=${PROXY_URL}`,
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
@@ -140,7 +142,7 @@ export function buildSandboxContainerOptions(
     AttachStdin: false,
     AttachStdout: false,
     Cmd: ["sleep", "infinity"],
-    Env: trusted ? trustedEnvironment(request.mounts) : isolatedEnvironment(),
+    Env: trusted ? trustedEnvironment(request.mounts, runtime.browserlessApiKey) : isolatedEnvironment(),
     HostConfig: {
       AutoRemove: false,
       CapDrop: ["ALL"],
