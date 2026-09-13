@@ -4,8 +4,7 @@
  * Exports:
  * - `createCloudflareImageClient`: Workers AI text-to-image (FLUX.2 klein-4b only).
  * - `createNeuralDeepImageClient`: async task API (create → poll → download PNG).
- * - `createFallbackImageClient`: tries providers in order; every failure of an earlier provider,
- *   including its content filter, moves on to the next one. Only the last provider's verdict is final.
+ * - `createFallbackImageClient`: advances after definitive refusals; unknown outcomes stop the chain.
  * - `detectImageMediaType`: PNG / JPEG / WebP by magic bytes; anything else is rejected.
  */
 import { AppError, isAppError } from "../app-error.js";
@@ -69,12 +68,12 @@ function unavailable(provider: string, detail: string): AppError {
   );
 }
 
-/** The provider accepted the request and may have produced (and billed) the image; never retry elsewhere. */
+/** The provider may have produced (and billed) the image; never retry an unknown outcome elsewhere. */
 function ambiguous(provider: string, detail: string): AppError {
   console.error(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS", detail, provider }));
   return new AppError(
     "AGENT_IMAGE_GENERATION_AMBIGUOUS",
-    "Сервис генерации изображений принял запрос, но результат не получен. Попробуйте позже",
+    "Не удалось подтвердить результат генерации. Проверьте результат перед новым запросом",
   );
 }
 
@@ -88,9 +87,9 @@ function rejected(provider: string, detail: string): AppError {
 }
 
 function imageFromBytes(bytes: Buffer, model: string, provider: string): GeneratedImage {
-  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw unavailable(provider, `image size ${bytes.length}`);
+  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) throw ambiguous(provider, `image size ${bytes.length}`);
   const mediaType = detectImageMediaType(bytes);
-  if (mediaType === null) throw unavailable(provider, "unknown image format");
+  if (mediaType === null) throw ambiguous(provider, "unknown image format");
   return { bytes, mediaType, model };
 }
 
@@ -106,7 +105,11 @@ async function cloudflareErrorCodes(response: Response): Promise<string> {
 
 /** Statuses after which trying another provider is safe: nothing was produced for this request. */
 function isProviderUnavailableStatus(status: number): boolean {
-  return status === 401 || status === 402 || status === 403 || status === 429 || status >= 500;
+  return status === 401 || status === 402 || status === 403 || status === 429;
+}
+
+function isAmbiguousStatus(status: number): boolean {
+  return status === 408 || status >= 500;
 }
 
 export function createCloudflareImageClient(
@@ -137,9 +140,10 @@ export function createCloudflareImageClient(
           signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
         });
       } catch (error) {
-        throw unavailable("cloudflare", error instanceof Error ? error.message : String(error));
+        throw ambiguous("cloudflare", error instanceof Error ? error.message : String(error));
       }
       if (!response.ok) {
+        if (isAmbiguousStatus(response.status)) throw ambiguous("cloudflare", `create ${response.status}`);
         const detail = `${model} ${response.status} ${await cloudflareErrorCodes(response)}`.trim();
         if (isProviderUnavailableStatus(response.status)) throw unavailable("cloudflare", detail);
         // 400 covers both bad parameters and the content filter (code 3030); the chain decides what is next.
@@ -153,7 +157,7 @@ export function createCloudflareImageClient(
           const payload = await response.json() as { result?: { image?: unknown }; success?: unknown };
           const encoded = payload.result?.image;
           if (typeof encoded !== "string" || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
-            throw unavailable("cloudflare", `${model} malformed image payload`);
+            throw ambiguous("cloudflare", `${model} malformed image payload`);
           }
           bytes = Buffer.from(encoded, "base64");
         } else {
@@ -195,23 +199,29 @@ export function createNeuralDeepImageClient(
           signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
         });
       } catch (error) {
-        throw unavailable("neuraldeep", error instanceof Error ? error.message : String(error));
+        throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
       }
       if (!created.ok) {
+        if (isAmbiguousStatus(created.status)) throw ambiguous("neuraldeep", `create ${created.status}`);
         throw isProviderUnavailableStatus(created.status)
           ? unavailable("neuraldeep", `create ${created.status}`)
           : rejected("neuraldeep", `create ${created.status}`);
       }
-      const task = await created.json() as { task_uid?: unknown };
-      if (typeof task.task_uid !== "string" || !/^[0-9a-f-]{8,64}$/u.test(task.task_uid)) {
-        throw unavailable("neuraldeep", "task id missing");
+      let task: { task_uid?: unknown } | null;
+      try {
+        task = await created.json() as typeof task;
+      } catch (error) {
+        throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
+      }
+      if (typeof task?.task_uid !== "string" || !/^[0-9a-f-]{8,64}$/u.test(task.task_uid)) {
+        throw ambiguous("neuraldeep", "task id missing");
       }
       // One deadline bounds every poll, the result download and the body read: a hanging GET used
       // to outlive the window because time was checked only after a response arrived.
       const deadline = Date.now() + pollTimeoutMs;
       const remaining = () => {
         const left = deadline - Date.now();
-        if (left <= 0) throw unavailable("neuraldeep", "poll timeout");
+        if (left <= 0) throw ambiguous("neuraldeep", "poll timeout");
         return AbortSignal.timeout(left);
       };
       const bounded = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> => {
@@ -219,20 +229,20 @@ export function createNeuralDeepImageClient(
           return await operation(remaining());
         } catch (error) {
           if (isAppError(error)) throw error;
-          throw unavailable("neuraldeep", error instanceof Error ? error.message : String(error));
+          throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
         }
       };
       for (;;) {
         await sleep(NEURALDEEP_POLL_INTERVAL_MS);
         const status = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${task.task_uid}`, { headers, method: "GET", signal }));
-        if (!status.ok) throw unavailable("neuraldeep", `status ${status.status}`);
+        if (!status.ok) throw ambiguous("neuraldeep", `status ${status.status}`);
         const state = (await bounded(() => status.json()) as { error?: unknown; status?: unknown }).status;
         if (state === "finished") break;
         if (state === "failed" || state === "error") throw rejected("neuraldeep", "task failed");
         remaining();
       }
       const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${task.task_uid}/result`, { headers, method: "GET", signal }));
-      if (!result.ok) throw unavailable("neuraldeep", `result ${result.status}`);
+      if (!result.ok) throw ambiguous("neuraldeep", `result ${result.status}`);
       return imageFromBytes(Buffer.from(await bounded(() => result.arrayBuffer())), "neuraldeep/flux", "neuraldeep");
     },
   };
@@ -255,7 +265,11 @@ export function createFallbackImageClient(clients: readonly FluxImageClient[]): 
         } catch (error) {
           // An accepted request with an unknown outcome must not be repeated elsewhere: the image
           // may already exist and be billed. Refusals and outages move on to the next provider.
-          if (isAppError(error) && error.code === "AGENT_IMAGE_GENERATION_AMBIGUOUS") throw error;
+          if (!isAppError(error)) {
+            throw ambiguous(client.name, error instanceof Error ? error.message : String(error));
+          }
+          if (error.code !== "AGENT_IMAGE_GENERATION_REJECTED" &&
+            error.code !== "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE") throw error;
           // Content filters and parameter rules differ per provider, so even a rejection moves on.
           lastError = error;
           console.error(JSON.stringify({

@@ -79,19 +79,27 @@ export function createTelegramHitlCallbackAuthorizer(
       telegramUserId: query.from.id,
     });
     if (result.status === "authorized") {
-      // Replace the exact claimed prompt before Eve resumes; an empty keyboard removes stale buttons.
-      const edited = await ctx.telegram.request("editMessageText", {
-        chat_id: message.chat.id,
-        message_id: Number(message.messageId),
-        reply_markup: { inline_keyboard: [] },
-        text: resolvedApprovalText(result),
-      });
       // The decision is already durable in the repository: a failed cosmetic edit must not stop
       // the delivery to Eve, or the person's retry would find the request already consumed.
-      if (!edited.ok) {
+      try {
+        const edited = await ctx.telegram.request("editMessageText", {
+          chat_id: message.chat.id,
+          message_id: Number(message.messageId),
+          reply_markup: { inline_keyboard: [] },
+          text: resolvedApprovalText(result),
+        });
+        if (!edited.ok) {
+          console.warn(JSON.stringify({
+            code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
+            status: edited.status,
+            telegramChatId: message.chat.id,
+            telegramMessageId: message.messageId,
+          }));
+        }
+      } catch (error) {
         console.warn(JSON.stringify({
           code: "AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED",
-          status: edited.status,
+          error: error instanceof Error ? error.name : "unknown",
           telegramChatId: message.chat.id,
           telegramMessageId: message.messageId,
         }));

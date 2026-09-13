@@ -185,7 +185,7 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
     expect((body as { text: string }).text).toContain("Расписание: Утренний дайджест ИИ");
   });
 
-  it("delivers the decision to Eve even when Telegram refuses to edit the prompt message", async () => {
+  it.each(["http", "network"])("delivers the decision to Eve after an edit %s failure", async (failure) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const repository = {
       claimCallback: vi.fn().mockResolvedValue({
@@ -200,13 +200,16 @@ describe("createTelegramHitlCallbackAuthorizer", () => {
     };
     const authorize = createTelegramHitlCallbackAuthorizer(repository);
     const { context, request } = telegramContext();
-    request.mockResolvedValueOnce({ body: {}, ok: false, status: 400 });
+    if (failure === "network") request.mockRejectedValueOnce(new TypeError("fetch failed"));
+    else request.mockResolvedValueOnce({ body: {}, ok: false, status: 400 });
 
     // The decision is already durable; a cosmetic edit failure must not make the retry "expired".
-    const result = await authorize(context, callbackQuery(), "-1001:55:88");
-
-    expect(result).toMatchObject({ inputResponses: [{ optionId: "approve", requestId: "aitxt-1" }] });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED"));
-    warn.mockRestore();
+    try {
+      const result = await authorize(context, callbackQuery(), "-1001:55:88");
+      expect(result).toMatchObject({ inputResponses: [{ optionId: "approve", requestId: "aitxt-1" }] });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("AGENT_APPROVAL_MESSAGE_FINALIZE_FAILED"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

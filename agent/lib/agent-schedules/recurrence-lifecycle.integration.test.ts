@@ -151,6 +151,20 @@ for (const target of ["reminder", "agent"] as const) {
     });
 
     if (target === "reminder") {
+      it.each(["hourly", "minutely"] as const)("upgrades a pre-migration reminder to %s with a new UTC anchor", async (unit) => {
+        const { auth, id } = await setup("daily", 1, "2026-01-01T09:00:00Z", "Europe/Berlin");
+        // Migration 103 leaves the exact anchor absent on existing calendar recurrences.
+        await database().query("UPDATE reminders SET recurrence_anchor_at = NULL WHERE id = $1", [id]);
+        const date = new Date("2026-10-25T02:30:00+02:00");
+        const changes = { firstRunAt: date, operationKey: "upgrade", recurrence: { unit, interval: unit === "hourly" ? 1 : 60 } };
+        await reminderRepository.update(auth, id, changes);
+        await reminderRepository.update(auth, id, changes);
+        const row = await database().query("SELECT recurrence_anchor_at FROM reminders WHERE id = $1", [id]);
+        expect(row.rows[0].recurrence_anchor_at.toISOString()).toBe("2026-10-25T00:30:00.000Z");
+        expect(await complete(auth, date.toISOString(), "2026-10-25T00:31:00Z"))
+          .toMatchObject({ nextRunAt: "2026-10-25T01:30:00.000Z" });
+      });
+
       it("skips missed biweekly reminders across the spring clock change", async () => {
         const { auth, id } = await setup("weekly", 2, "2026-03-15T08:00:00Z", "Europe/Berlin");
         expect(await complete(auth, "2026-03-15T08:00:00Z", "2026-03-29T07:01:00Z"))

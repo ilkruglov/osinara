@@ -3,8 +3,8 @@
  *
  * Constructs covered:
  * - Cloudflare klein-4b takes a multipart body; the media type comes from magic bytes, not from the provider.
- * - Any Cloudflare failure (quota, content filter, transport) falls through to NeuralDeep; schnell is
- *   never tried because it neither accepts dimensions nor a cheaper quality.
+ * - Definitive Cloudflare refusals fall through to NeuralDeep; unknown outcomes stop the chain.
+ *   Schnell is never tried because it neither accepts dimensions nor a cheaper quality.
  * - When every provider rejects the prompt the chain reports a rejection, not an outage.
  * - NeuralDeep creates a task, polls until finished and downloads the PNG result.
  */
@@ -35,6 +35,48 @@ function neuralDeepSuccess() {
 }
 
 describe("flux image clients", () => {
+  it.each(["network", "server", "request-timeout", "invalid-json", "invalid-base64", "invalid-image"])(
+    "does not fall back after an ambiguous Cloudflare %s result", async (failure) => {
+      const cloudflareFetch = vi.fn(async () => {
+        if (failure === "network") throw new TypeError("fetch failed after POST");
+        if (failure === "server") return json({}, 503);
+        if (failure === "request-timeout") return json({}, 408);
+        if (failure === "invalid-json") return new Response("{", { headers: { "content-type": "application/json" } });
+        if (failure === "invalid-base64") return json({ success: true, result: { image: "invalid base64" } });
+        return new Response("not an image", { headers: { "content-type": "image/png" } });
+      });
+      const neuralFetch = neuralDeepSuccess();
+      const chain = createFallbackImageClient([
+        createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch, token: "test" }),
+        createNeuralDeepImageClient({ apiKey: "test", fetch: neuralFetch, sleep: async () => {} }),
+      ]);
+      await expect(chain.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS" });
+      expect(neuralFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["network", "server", "task-json", "task-id", "poll", "download"])(
+    "keeps an ambiguous NeuralDeep %s result terminal", async (failure) => {
+      const fetch = vi.fn(async (url: string | URL | Request) => {
+        if (String(url).endsWith("/generate")) {
+          if (failure === "network") throw new TypeError("fetch failed after POST");
+          if (failure === "server") return json({}, 500);
+          if (failure === "task-json") return new Response("{");
+          if (failure === "task-id") return json({});
+          return json({ task_uid: "1ca2c888-1a64-4fbe-99e9-23c230779a37" });
+        }
+        if (failure === "poll" || String(url).endsWith("/result")) throw new TypeError("socket hang up");
+        return json({ status: "finished" });
+      });
+      const generate = vi.fn().mockResolvedValue({ bytes: PNG, mediaType: "image/png", model: "next" });
+      const chain = createFallbackImageClient([
+        createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} }),
+        { name: "next", assertConfigured() {}, generate },
+      ]);
+      await expect(chain.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS" });
+      expect(generate).not.toHaveBeenCalled();
+    },
+  );
   it("detects image formats by magic bytes", () => {
     expect(detectImageMediaType(PNG)).toBe("image/png");
     expect(detectImageMediaType(JPEG)).toBe("image/jpeg");
@@ -119,7 +161,7 @@ describe("flux image clients", () => {
     const client = createNeuralDeepImageClient({ apiKey: "nd-key", fetch: hangingFetch as never, pollTimeoutMs: 80, sleep: async () => {} });
 
     const started = Date.now();
-    await expect(client.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
+    await expect(client.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS" });
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 

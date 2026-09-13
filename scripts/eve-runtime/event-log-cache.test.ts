@@ -41,6 +41,44 @@ describe("eventLogCacheKey", () => {
 });
 
 describe("event log cache", () => {
+  it.each(["buffer", "uint8array", "arraybuffer", "subarray"])("refuses oversized %s payloads", (kind) => {
+    const backing = new ArrayBuffer(32 * 1024 * 1024);
+    const payload = kind === "buffer" ? Buffer.from(backing)
+      : kind === "uint8array" ? new Uint8Array(backing)
+      : kind === "subarray" ? new Uint8Array(backing, 0, 1) : backing;
+    try {
+      writeEventLogCache("oversized-binary", [{ eventId: "1", eventData: { payload } }], "1");
+      expect(readEventLogCache("oversized-binary")).toBeUndefined();
+    } finally {
+      dropEventLogCache("oversized-binary");
+    }
+  });
+
+  it("counts a large event between the former sampling positions", () => {
+    const events = Array.from({ length: 33 }, (_, index) => ({
+      eventId: String(index), eventData: { text: index === 1 ? "x".repeat(13 * 1024 * 1024) : "" },
+    }));
+    try {
+      writeEventLogCache("uneven-log", events, "32");
+      expect(readEventLogCache("uneven-log")).toBeUndefined();
+    } finally {
+      dropEventLogCache("uneven-log");
+    }
+  });
+
+  it("evicts by the combined size of native binary payloads", () => {
+    try {
+      for (let index = 0; index < 5; index += 1) {
+        writeEventLogCache(`binary-budget-${index}`,
+          [{ eventId: "1", eventData: { payload: Buffer.alloc(15 * 1024 * 1024) } }], "1");
+      }
+      expect(readEventLogCache("binary-budget-0")).toBeUndefined();
+      expect(readEventLogCache("binary-budget-4")).toBeDefined();
+    } finally {
+      for (let index = 0; index < 5; index += 1) dropEventLogCache(`binary-budget-${index}`);
+    }
+  });
+
   it("returns the stored log and its cursor, and forgets it when dropped", () => {
     writeEventLogCache(KEY, [{ eventId: "evnt_1" }, { eventId: "evnt_2" }], "evnt_2");
 

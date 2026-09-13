@@ -8,6 +8,7 @@
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { decodeDateUuidCursor, encodeDateUuidCursor } from "../keyset-pagination.js";
+import { applyReminderUpdate } from "./reminder-mutation.js";
 import { REMINDER_LIST_MAX_LIMIT } from "./reminder-config.js";
 import type { ReminderAuthorization } from "./reminder-context.js";
 import {
@@ -295,51 +296,9 @@ export const reminderRepository = {
       const reminder = await selectReminder(client, auth.familyId, id, true);
       if (!reminder) throw new AppError("AGENT_REMINDER_NOT_FOUND", "Напоминание не найдено");
       await requireReminderMutationAccess(client, auth, reminder);
-      if (reminder.status === "leased") {
-        throw new AppError(
-          "AGENT_REMINDER_DELIVERY_IN_PROGRESS",
-          "Напоминание сейчас отправляется. Повторите изменение после завершения доставки",
-        );
-      }
-      if (input.enabled === true && reminder.status === "completed" && !firstRunAt) {
-        throw new AppError(
-          "AGENT_REMINDER_TIME_REQUIRED",
-          "Для повторного запуска завершённого напоминания укажите новое время",
-        );
-      }
-      const scheduleChanged = firstRunAt !== undefined || recurrence !== undefined;
-      const nextDue = firstRunAt ?? reminder.due_at;
-      const nextRecurrence = recurrence === undefined
-        ? reminder.recurrence_unit && reminder.recurrence_interval
-          ? { interval: reminder.recurrence_interval, unit: reminder.recurrence_unit }
-          : null
-        : recurrence;
-      const updated = await client.query<ReminderRow>(
-        `UPDATE reminders
-         SET content = $2,
-             recurrence_unit = $3, recurrence_interval = $4,
-             recurrence_anchor_local = CASE WHEN $5 THEN $6::timestamptz AT TIME ZONE timezone ELSE recurrence_anchor_local END,
-             occurrence_index = CASE WHEN $5 THEN 0 ELSE occurrence_index END,
-             due_at = CASE WHEN $5 THEN $6 ELSE due_at END,
-             available_at = CASE WHEN $5 THEN $6 ELSE available_at END,
-             delayed_by_quiet_hours = CASE WHEN $5 THEN false ELSE delayed_by_quiet_hours END,
-              status = CASE WHEN $7 = false THEN 'paused'::reminder_status
-                           WHEN $7 = true THEN 'active'::reminder_status ELSE status END,
-             attempts = CASE WHEN $5 OR $7 = true THEN 0 ELSE attempts END,
-             last_error_code = CASE WHEN $5 OR $7 = true THEN NULL ELSE last_error_code END,
-             updated_at = now()
-         WHERE id = $1
-         RETURNING ${REMINDER_COLUMNS}`,
-        [
-          id,
-          content ?? reminder.content,
-          nextRecurrence?.unit ?? null,
-          nextRecurrence?.interval ?? null,
-          scheduleChanged,
-          nextDue,
-          input.enabled ?? null,
-        ],
-      );
+      const updated = await applyReminderUpdate(client, reminder, {
+        content, enabled: input.enabled, firstRunAt, recurrence,
+      });
       await client.query(
         `INSERT INTO reminder_operations
            (family_id, operation_key, operation_kind, input_hash, reminder_id)
@@ -352,7 +311,7 @@ export const reminderRepository = {
         [auth.familyId, auth.userId, id],
       );
       await client.query("COMMIT");
-      return rowToReminder(updated.rows[0]!);
+      return rowToReminder(updated);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
