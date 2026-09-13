@@ -133,6 +133,8 @@ const POST_V0101_MIGRATIONS = [
   "099_owner_health_digests.sql",
   "100_hitl_approval_turn_source.sql",
   "101_session_cleanup_retry.sql",
+  "102_workspace_delivery_turn.sql",
+  "103_schedule_recurrence_periods.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

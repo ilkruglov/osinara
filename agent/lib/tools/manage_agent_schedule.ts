@@ -6,7 +6,7 @@
  *
  * Key constructs:
  * - Object-shaped model schema publishes machine-visible actions without a root JSON Schema union.
- * - Exact nested recurrence variants describe once, daily, and weekly schedules.
+ * - Exact nested recurrence variants describe one-time and minute-to-year schedules.
  * - One semantic parser validates both approval and execution before trusted boundaries run.
  */
 import { defineTool } from "eve/tools";
@@ -20,11 +20,13 @@ import {
 } from "../agent-schedules/agent-schedule-config.js";
 import { requireAgentScheduleAuthorization } from "../agent-schedules/agent-schedule-context.js";
 import { agentScheduleRepository } from "../agent-schedules/agent-schedule-repository.js";
+import { AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, type AgentScheduleSimpleRecurrenceKind } from "../agent-schedules/agent-schedule-record.js";
+import { agentScheduleRecurrenceSchema } from "../agent-schedules/agent-schedule-recurrence-schema.js";
 import type { AgentScheduleInputRecurrence } from "../agent-schedules/agent-schedule-validation.js";
 import { AppError } from "../app-error.js";
 
 const TOOL_ACTIONS = ["create", "update", "pause", "resume", "run_now", "delete"] as const;
-const RECURRENCE_KINDS = ["once", "daily", "weekly"] as const;
+const RECURRENCE_KINDS = ["once", ...AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, "weekly"] as const;
 const SCOPES = ["personal", "family"] as const;
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -46,26 +48,12 @@ const TOP_LEVEL_FIELDS = [
   "userRequest",
 ] as const;
 
-// The recurrence union is nested under an object property, keeping the tool root transport-safe.
-const recurrenceSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("once") }).strict(),
-  z.object({
-    interval: z.number().int().min(1).max(AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX),
-    kind: z.literal("daily"),
-  }).strict(),
-  z.object({
-    daysOfWeek: z.array(z.number().int().min(1).max(7)).min(1).max(7),
-    interval: z.number().int().min(1).max(AGENT_SCHEDULE_RECURRENCE_INTERVAL_MAX),
-    kind: z.literal("weekly"),
-  }).strict(),
-]);
-
 const manageAgentScheduleSchema = z.object({
   action: z.enum(TOOL_ACTIONS),
   firstRunAt: z.string().optional(),
   id: z.string().optional(),
   nextRunAt: z.string().optional(),
-  recurrence: recurrenceSchema.optional(),
+  recurrence: agentScheduleRecurrenceSchema.optional(),
   scenarioPrompt: z.string().max(AGENT_SCHEDULE_PROMPT_MAX_LENGTH).optional(),
   scope: z.enum(SCOPES).optional(),
   timezone: z.string().max(AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH).optional(),
@@ -188,9 +176,9 @@ function requiredInterval(raw: unknown, example: string): number {
   ) {
     inputError(
       `Для ${example} recurrence передайте recurrence: ` +
-        (example === "daily"
-          ? "{\"kind\":\"daily\",\"interval\":1}"
-          : "{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]}"),
+        (example === "weekly"
+          ? "{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]}"
+          : JSON.stringify({ kind: example, interval: 1 })),
     );
   }
   return raw;
@@ -214,7 +202,7 @@ function requiredRecurrence(raw: unknown): AgentScheduleInputRecurrence {
   const recurrence = recurrenceObject(raw);
   const kind = recurrence.kind;
   if (typeof kind !== "string" || !RECURRENCE_KINDS.includes(kind as never)) {
-    inputError("Поле recurrence.kind должно быть once, daily или weekly");
+    inputError(`Поле recurrence.kind должно быть одним из: ${RECURRENCE_KINDS.join(", ")}`);
   }
   if (kind === "once") {
     if (recurrence.interval !== undefined || recurrence.daysOfWeek !== undefined) {
@@ -222,11 +210,11 @@ function requiredRecurrence(raw: unknown): AgentScheduleInputRecurrence {
     }
     return { kind: "once" };
   }
-  if (kind === "daily") {
+  if (kind !== "weekly") {
     if (recurrence.daysOfWeek !== undefined) {
-      inputError("Для daily recurrence не передавайте daysOfWeek; используйте recurrence: {\"kind\":\"daily\",\"interval\":1}");
+      inputError(`Для ${kind} recurrence не передавайте daysOfWeek; используйте recurrence: ${JSON.stringify({ kind, interval: 1 })}`);
     }
-    return { interval: requiredInterval(recurrence.interval, "daily"), kind: "daily" };
+    return { interval: requiredInterval(recurrence.interval, kind), kind: kind as AgentScheduleSimpleRecurrenceKind };
   }
   return {
     daysOfWeek: requiredDaysOfWeek(recurrence.daysOfWeek),
@@ -350,7 +338,7 @@ const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить, запустить сейчас или удалить агентное расписание. Это не напоминание: schedule запускает агента по сценарию и присылает итог. Существующее расписание сначала найди через list_agent_schedules; любое изменение делай через update с тем же id, не пересоздавай.",
   "Create: {\"action\":\"create\",\"title\":\"Дайджест: новые модели ИИ\",\"firstRunAt\":\"2026-07-15T23:33:00+03:00\",\"timezone\":\"Europe/Moscow\",\"recurrence\":{\"kind\":\"daily\",\"interval\":1},\"scope\":\"personal\",\"scenarioPrompt\":\"Что собрать, источники, фильтры, формат итога и когда не присылать пустой отчёт\",\"userRequest\":\"ежедневно в 23:33 МСК получать сводку\"}.",
   "Update: {\"action\":\"update\",\"id\":\"<id из list_agent_schedules>\",\"nextRunAt\":\"2026-07-16T23:33:00+03:00\",\"recurrence\":{\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]},\"title\":\"...\",\"scenarioPrompt\":\"...\",\"userRequest\":\"...\"} только с реально изменяемыми полями; firstRunAt, timezone и scope в update не передавай. Pause, resume, run_now и delete: {\"action\":\"pause\",\"id\":\"<id>\"} без других полей.",
-  "Recurrence: {\"kind\":\"once\"}, {\"kind\":\"daily\",\"interval\":1}, {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник. firstRunAt и nextRunAt в ISO с UTC offset, timezone IANA. scope: personal в личном чате, family в зарегистрированной семейной группе.",
+  "Recurrence: {\"kind\":\"once\"}; повтор {\"kind\":\"hourly\",\"interval\":1}, где kind это minutely, hourly, daily, monthly или yearly, interval целое от 1 до 365, минимум одна минута; для недель {\"kind\":\"weekly\",\"interval\":1,\"daysOfWeek\":[1,2,3,4,5]} где ISO 1=понедельник. Минуты и часы отсчитываются от первого запуска как длительность, дни, недели, месяцы и годы сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной. Проверка минутная, пропущенные периоды не догоняются, один сценарий сам с собой параллельно не запускается. firstRunAt и nextRunAt в ISO с UTC offset, timezone IANA. scope: personal в личном чате, family в зарегистрированной семейной группе.",
 ].join(" ");
 
 export default defineTool({

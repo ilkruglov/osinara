@@ -16,7 +16,11 @@ import {
   REMINDER_RECURRENCE_INTERVAL_MAX,
 } from "../reminders/reminder-config.js";
 import { requireReminderAuthorization } from "../reminders/reminder-context.js";
-import type { ReminderRecurrence, ReminderScope } from "../reminders/reminder-record.js";
+import {
+  REMINDER_RECURRENCE_UNITS,
+  type ReminderRecurrence,
+  type ReminderScope,
+} from "../reminders/reminder-record.js";
 import { reminderRepository } from "../reminders/reminder-repository.js";
 import {
   optionalIsoDate,
@@ -33,7 +37,6 @@ import {
 
 const INPUT_ERROR_CODE = "AGENT_REMINDER_INPUT_INVALID";
 const TOOL_ACTIONS = ["create", "update", "pause", "resume", "delete"] as const;
-const RECURRENCE_UNITS = ["daily", "weekly", "monthly"] as const;
 const SCOPES = ["personal", "family"] as const;
 const TOP_LEVEL_FIELDS = [
   "action",
@@ -47,7 +50,7 @@ const TOP_LEVEL_FIELDS = [
 
 const recurrenceSchema = z.object({
   interval: z.number().int().min(1).max(REMINDER_RECURRENCE_INTERVAL_MAX),
-  unit: z.enum(RECURRENCE_UNITS),
+  unit: z.enum(REMINDER_RECURRENCE_UNITS),
 }).strict();
 
 const manageReminderSchema = z.object({
@@ -72,7 +75,7 @@ function requireReminderRecurrence(raw: unknown): ReminderRecurrence | null {
   }
   const recurrence = raw as Record<string, unknown>;
   requireOnlyFields(recurrence, ["interval", "unit"], "recurrence", INPUT_ERROR_CODE);
-  const unit = requiredEnum(recurrence, "unit", RECURRENCE_UNITS, INPUT_ERROR_CODE);
+  const unit = requiredEnum(recurrence, "unit", REMINDER_RECURRENCE_UNITS, INPUT_ERROR_CODE);
   const interval = recurrence.interval;
   if (
     typeof interval !== "number" ||
@@ -166,7 +169,7 @@ function requireManageReminderInput(input: unknown) {
 
 const TOOL_DESCRIPTION = [
   "Создать, изменить, приостановить, возобновить или удалить обычное напоминание с текстом уведомления. Для автономного запуска агента с исследованием или отчётом используй manage_agent_schedule. Перед update/pause/resume/delete найди id через list_reminders; повторение меняй через update, не пересоздавай.",
-  "Create: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}. Повтор: {\"unit\":\"daily\",\"interval\":1}, unit также weekly или monthly; без повтора recurrence=null.",
+  "Create: {\"action\":\"create\",\"content\":\"Позвонить врачу\",\"firstRunAt\":\"2026-08-01T10:00:00+03:00\",\"timezone\":\"Europe/Moscow\",\"scope\":\"personal\",\"recurrence\":null}. Повтор: {\"unit\":\"daily\",\"interval\":1}; unit это minutely, hourly, daily, weekly, monthly или yearly, interval целое от 1 до 365, минимум одна минута; без повтора recurrence=null. Минуты и часы отсчитываются как длительность, остальные периоды сохраняют местное календарное время; отсутствующая дата переносится на последний день месяца без потери исходной для следующих повторов.",
   "Update передаёт id и только изменяемые content, firstRunAt или recurrence; pause/delete только action и id; resume принимает необязательный firstRunAt, обязательный для завершённого напоминания. firstRunAt в ISO с UTC offset, timezone IANA.",
 ].join(" ");
 
