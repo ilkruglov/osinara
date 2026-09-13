@@ -15,7 +15,7 @@ describe("model registry", () => {
   it("selects the configured protocol-native text model", () => {
     expect(modelProviderConfig.agent.transport.protocol).toBe("deepseek-responses");
     expect(primaryModel.modelId).toBe(modelProviderConfig.agent.models.primary.id);
-    // Eve maps the OpenAI Responses provider id to its OpenAI web_search backend.
+    // The main transport stays Responses; application web_search has a separate executor.
     expect(primaryModel.provider).toBe("openai.responses");
   });
 

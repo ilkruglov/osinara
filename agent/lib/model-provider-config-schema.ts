@@ -48,7 +48,7 @@ const anthropicMessagesTransportSchema = z.object({
   ]).nullable(),
 }).strict();
 
-/** Native DeepSeek Responses API: documented reasoning effort, server-side web search, exact usage. */
+/** Native DeepSeek Responses API: documented reasoning effort, function tools, exact usage. */
 const deepseekResponsesTransportSchema = z.object({
   baseUrl: modelBaseUrlSchema,
   /** Stable model to retry with once when DeepSeek answers that the configured id is unknown (preview aliases expire on a date). */

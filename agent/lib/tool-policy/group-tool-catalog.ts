@@ -135,8 +135,8 @@ export const ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES = capabilityNames(
 // use. Eve 0.40.0 allows same-name overrides but not per-mode removal, so forbidden built-ins still
 // receive explicit denial definitions while file built-ins receive guarded same-name wrappers.
 // `web_fetch` is conditionally denied because a local controlled override is grantable.
-// Provider-native `web_search` has no execution hook; its grant is re-read on every model step, so
-// the framework descriptor is released only while the live policy carries the grant.
+// DeepSeek web_search uses a local executor with a live grant check. Other providers retain native
+// search, whose descriptor is released only while the current step's policy carries the grant.
 export const FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS = [
   "agent",
   "ask_question",

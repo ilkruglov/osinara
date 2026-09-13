@@ -4,7 +4,7 @@
  * Constructs covered:
  * - Unsupported fields from the documented compatibility table are dropped.
  * - reasoning.effort is the only reasoning control and always comes from configuration.
- * - Unsupported tool types are removed; function and web_search tools stay.
+ * - Ignored provider tools are removed; local function tools stay.
  * - Non-JSON bodies pass through untouched.
  */
 import { describe, expect, it } from "vitest";
@@ -30,6 +30,7 @@ describe("deepseek responses request", () => {
       tool_choice: "auto",
       tools: [
         { name: "get_time", parameters: {}, type: "function" },
+        { name: "web_search", parameters: {}, type: "function" },
         { type: "web_search" },
         { type: "file_search" },
       ],
@@ -45,7 +46,7 @@ describe("deepseek responses request", () => {
       tool_choice: "auto",
       tools: [
         { name: "get_time", parameters: {}, type: "function" },
-        { type: "web_search" },
+        { name: "web_search", parameters: {}, type: "function" },
       ],
       user: "family-1",
     });

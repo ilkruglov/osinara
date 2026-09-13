@@ -109,8 +109,8 @@ describe("trusted mode tool surfaces", () => {
   it("emits no denial stubs in a trusted zone", () => {
     for (const environment of ["private", "family"] as const) {
       for (const denied of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
-        // web_fetch is the one built-in a trusted zone re-describes; it keeps Eve's executor below.
-        if (denied === "web_fetch") continue;
+        // Trusted web_fetch keeps its executor; DeepSeek web_search gets a local executor.
+        if (denied === "web_fetch" || denied === "web_search") continue;
         expect(names({ environment }), `${environment} must not override ${denied}`).not.toContain(denied);
       }
     }
@@ -246,7 +246,7 @@ describe("external group tool surface", () => {
     }
   });
 
-  it("emits a granted capability but always denies provider-native search", () => {
+  it("emits local search only for trusted modes and an interactive external grant", () => {
     expect(
       names({
         capabilities: new Set(["remember"]),
@@ -254,8 +254,12 @@ describe("external group tool surface", () => {
       }),
     ).toContain("remember");
     expect(names({ capabilities: new Set(), environment: "external" })).toContain("web_search");
-    // A granted provider web_search releases Eve's own descriptor instead of a denial stub.
-    expect(names({ capabilities: new Set(["web_search"]), environment: "external" })).not.toContain("web_search");
+    expect(names({ environment: "private" })).toContain("web_search");
+    expect(names({ environment: "family" })).toContain("web_search");
+    const granted = buildModeToolSurface({ capabilities: new Set(["web_search"]), environment: "external" });
+    expect(granted.web_search?.inputSchema).toBeInstanceOf(z.ZodObject);
+    expect((granted.web_search?.inputSchema as z.ZodObject).safeParse({ query: "Eve documentation" }).success).toBe(true);
+    expect((granted.web_search?.inputSchema as z.ZodObject).safeParse({}).success).toBe(false);
     expect(names({ capabilities: new Set(["web_search"]), environment: "external", scheduledRun: true } as never)).toContain("web_search");
     expect(
       names({

@@ -49,6 +49,7 @@ import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
 import sendWorkspaceImage from "../tools/send_workspace_image.js";
 import { removeGroupFileTool } from "../workspaces/remove-group-file-tool.js";
+import webSearch, { LOCAL_WEB_SEARCH_AVAILABLE } from "../tools/web_search.js";
 import { controlledWebFetchTool } from "./controlled-web-fetch.js";
 import { EXTERNAL_GROUP_FILE_TOOLS } from "./external-group-file-tools.js";
 import { authorizeCurrentExternalGroupCapability } from "./external-group-live-policy.js";
@@ -88,7 +89,7 @@ const DENIED_TOOL_INPUT = z.record(z.string(), z.unknown());
 
 type DirectExternalToolName = Exclude<
   ExternalGroupToolName,
-  `manage_memory.${string}` | `manage_memory_thread.${string}` | "web_search"
+  `manage_memory.${string}` | `manage_memory_thread.${string}`
 >;
 
 const EXTERNAL_IMAGE_PATH_MAX_LENGTH = 512;
@@ -195,6 +196,7 @@ const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefi
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
   send_workspace_image: sendWorkspaceImage as unknown as AnyToolDefinition,
   web_fetch: controlledWebFetchTool as unknown as AnyToolDefinition,
+  web_search: webSearch as unknown as AnyToolDefinition,
 };
 
 function groupToolForbidden(): AppError {
@@ -334,6 +336,7 @@ function buildExternalToolSurface(
   for (const capability of allowed) {
     // A scheduled prompt has no current user message that can back a new memory claim.
     if (scheduledRun && capability === "remember") continue;
+    if (capability === "web_search" && (scheduledRun || !LOCAL_WEB_SEARCH_AVAILABLE)) continue;
     // Billable image generation requires a current interactive request, never a background run.
     if (capability === "generate_image" && !imageGenerationAllowed) continue;
     // A granted image sender still needs its live check, which `GRANTED_BY` resolves.
@@ -364,9 +367,8 @@ function buildExternalToolSurface(
   // ones an external group must never reach stay overridden with an explicit denial.
   for (const toolName of FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS) {
     if (toolName === "web_fetch" || toolName === "web_search") {
-      // web_fetch is replaced by a controlled wrapper when granted; provider-native web_search has
-      // no local executor, so a grant simply releases Eve's descriptor. The surface is rebuilt on
-      // every step from the live policy, which is the revocation boundary for both.
+      // Granted local web_search and web_fetch keep their execution-time policy wrappers.
+      // Other providers retain Eve's native search descriptor, with revocation at the next step.
       if (!allowed.has(toolName) || scheduledRun && toolName === "web_search") {
         surface[toolName] = deniedTool(toolName);
       }

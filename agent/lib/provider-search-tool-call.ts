@@ -8,13 +8,13 @@
  * - `strayProviderSearchResult`: the provider-executed error result that closes such a call.
  *
  * Key construct:
- * - DeepSeek runs `web_search` on its side and normally reports it as a `web_search_call` item.
- *   Once, next to three parallel function calls, it returned `web_search` as a `function_call`
- *   with empty arguments. Nothing local executes that name, so the assistant message kept a tool
+ * - A provider-managed search may arrive incorrectly as an ordinary function call. Previously
+ *   DeepSeek returned such a call beside three parallel functions, with empty arguments. When no
+ *   local definition is offered for that name, the assistant message would keep a tool
  *   call without a result and every later model call in the session failed with
  *   `AI_MissingToolResultsError`; the chat stayed silent until the session was rotated by hand.
  *   Marking the call provider-executed and closing it with an error result keeps the history
- *   valid, and the model reads a plain error instead of an answer that never comes.
+ *   valid. Explicitly declared local search functions pass through to their real executor.
  */
 import type { LanguageModelV4Content, LanguageModelV4StreamPart } from "@ai-sdk/provider";
 
@@ -24,9 +24,13 @@ export const PROVIDER_SEARCH_FUNCTION_CALL_CODE = "AGENT_MODEL_PROVIDER_SEARCH_A
 type ToolCallPart = Extract<LanguageModelV4StreamPart, { type: "tool-call" }>;
 type ToolResultPart = Extract<LanguageModelV4StreamPart, { type: "tool-result" }>;
 
-export function isStrayProviderSearchCall(part: { type: string }): part is ToolCallPart {
+export function isStrayProviderSearchCall(
+  part: { type: string },
+  localTools: ReadonlySet<string> = new Set(),
+): part is ToolCallPart {
   return part.type === "tool-call" &&
     PROVIDER_SEARCH_TOOL_NAMES.has((part as ToolCallPart).toolName) &&
+    !localTools.has((part as ToolCallPart).toolName) &&
     (part as ToolCallPart).providerExecuted !== true;
 }
 
@@ -49,10 +53,11 @@ export function strayProviderSearchResult(call: ToolCallPart): ToolResultPart {
 export function closeStrayProviderSearchCalls(
   content: readonly LanguageModelV4Content[],
   onStray: (toolCallId: string) => void,
+  localTools: ReadonlySet<string> = new Set(),
 ): LanguageModelV4Content[] {
   const closed: LanguageModelV4Content[] = [];
   for (const part of content) {
-    if (!isStrayProviderSearchCall(part)) {
+    if (!isStrayProviderSearchCall(part, localTools)) {
       closed.push(part);
       continue;
     }

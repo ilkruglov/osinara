@@ -300,15 +300,17 @@ function createTransportDefaultsMiddleware(
         },
       };
     },
-    async wrapGenerate({ doGenerate }) {
+    async wrapGenerate({ doGenerate, params }) {
+      const localTools = new Set(params.tools?.filter((tool) => tool.type === "function").map((tool) => tool.name));
       const result = await doGenerate();
       assertCompleteFinishReason(result.finishReason);
       return {
         ...result,
-        content: closeStrayProviderSearchCalls(result.content, (toolCallId) => logStrayProviderSearch(transport, toolCallId)),
+        content: closeStrayProviderSearchCalls(result.content, (toolCallId) => logStrayProviderSearch(transport, toolCallId), localTools),
       };
     },
-    async wrapStream({ doStream }) {
+    async wrapStream({ doStream, params }) {
+      const localTools = new Set(params.tools?.filter((tool) => tool.type === "function").map((tool) => tool.name));
       const result = await doStream();
       return {
         ...result,
@@ -318,11 +320,11 @@ function createTransportDefaultsMiddleware(
               if (part.type === "finish") assertCompleteFinishReason(part.finishReason);
               // A provider search tool returned as a function call has no local executor; the
               // call is re-labelled provider-executed and closed with an error result at once.
-              if (part.type === "tool-input-start" && PROVIDER_SEARCH_TOOL_NAMES.has(part.toolName) && part.providerExecuted !== true) {
+              if (part.type === "tool-input-start" && PROVIDER_SEARCH_TOOL_NAMES.has(part.toolName) && !localTools.has(part.toolName) && part.providerExecuted !== true) {
                 controller.enqueue({ ...part, providerExecuted: true });
                 return;
               }
-              if (isStrayProviderSearchCall(part)) {
+              if (isStrayProviderSearchCall(part, localTools)) {
                 logStrayProviderSearch(transport, part.toolCallId);
                 controller.enqueue({ ...part, providerExecuted: true });
                 controller.enqueue(strayProviderSearchResult(part));

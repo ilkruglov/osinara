@@ -25,8 +25,8 @@ export const DEEPSEEK_RESPONSES_UNSUPPORTED_FIELDS = [
   "truncation",
 ] as const;
 
-/** Tool types DeepSeek executes or accepts; everything else is documented as ignored. */
-const SUPPORTED_TOOL_TYPES = new Set(["function", "web_search", "web_search_2025_08_26"]);
+/** DeepSeek ignores provider-managed search; a local web_search must be a function tool. */
+const SUPPORTED_TOOL_TYPES = new Set(["function"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
