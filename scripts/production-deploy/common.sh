@@ -9,7 +9,7 @@ readonly AGENT_MODEL_PROVIDER_CONFIG="${BASE_DIR}/agent-model-providers.json"
 readonly RELEASES_DIR="${BASE_DIR}/releases"
 readonly BACKUPS_DIR="${BASE_DIR}/backups"
 readonly GLOBAL_RELEASE_ENV="${BASE_DIR}/release.env"
-readonly CURRENT_LINK="${BASE_DIR}/current"
+readonly CURRENT_MANIFEST="${BASE_DIR}/osinara-deployment.json"
 readonly LOCK_FILE="/run/lock/osinara-production-deploy.lock"
 readonly HEALTH_URL="http://127.0.0.1:8082/eve/v1/health"
 readonly HEALTH_ATTEMPTS=60
@@ -23,7 +23,6 @@ readonly RELEASE_IMAGE_VARIABLES=(
   OSINARA_EDGE_IMAGE
 )
 
-INITIAL_MODE=0
 CLAIM_FOUND=0
 STALE_DEPLOYMENT_FOUND=0
 REQUESTED_VERSION=""
@@ -136,24 +135,12 @@ compose_candidate() {
 }
 
 set_current_release_paths() {
-  if [[ ! -L "$CURRENT_LINK" || ! -f "$GLOBAL_RELEASE_ENV" ]]; then
-    fail "DEPLOY_INITIAL_REQUIRED" "Run the first deployment with --initial VERSION"
-  fi
-  CURRENT_COMPOSE="${CURRENT_LINK}/compose.production.yaml"
-  CURRENT_ENV="${CURRENT_LINK}/release.env"
-  [[ -f "$CURRENT_COMPOSE" && -f "$CURRENT_ENV" ]] ||
-    fail "DEPLOY_CURRENT_RELEASE_INVALID" "Current release files are incomplete"
-}
-
-require_clean_initial_state() {
-  local containers
-  if [[ -e "$CURRENT_LINK" || -e "$GLOBAL_RELEASE_ENV" ]]; then
-    fail "DEPLOY_INITIAL_STATE_EXISTS" "Current release state already exists"
-  fi
-  containers="$(docker ps -a --filter \
-    label=com.docker.compose.project=osinara-production --format '{{.ID}}')"
-  [[ -z "$containers" ]] ||
-    fail "DEPLOY_INITIAL_STATE_EXISTS" "osinara-production containers already exist"
+  CURRENT_COMPOSE="${BASE_DIR}/compose.installation.json"
+  CURRENT_ENV="$GLOBAL_RELEASE_ENV"
+  [[ -f "$CURRENT_COMPOSE" && ! -L "$CURRENT_COMPOSE" &&
+     -f "$CURRENT_ENV" && ! -L "$CURRENT_ENV" &&
+     -f "$CURRENT_MANIFEST" && ! -L "$CURRENT_MANIFEST" ]] ||
+    fail "DEPLOY_CURRENT_RELEASE_INVALID" "Installed release files are incomplete; use the Mia installer"
 }
 
 wait_for_health() {

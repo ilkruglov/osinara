@@ -12,13 +12,13 @@ if [ -z "$ASSET_URL" ] || [ -z "$EXPECTED_SHA256" ]; then
   exit 64
 fi
 case "$ASSET_URL" in
-  https://github.com/nyxandro/osinara/releases/download/v*/osinara-linux-x64) ;;
+  https://github.com/ilkruglov/osinara/releases/download/v*/osinara-linux-x64) ;;
   *)
-    printf '%s\n' "OSINARA_BOOTSTRAP_URL_INVALID: CLI должен быть exact asset canonical Osinara release" >&2
+    printf '%s\n' "OSINARA_BOOTSTRAP_URL_INVALID: CLI должен быть exact asset canonical Mia release" >&2
     exit 64
     ;;
 esac
-release_version="${ASSET_URL#https://github.com/nyxandro/osinara/releases/download/v}"
+release_version="${ASSET_URL#https://github.com/ilkruglov/osinara/releases/download/v}"
 release_version="${release_version%/osinara-linux-x64}"
 case "$release_version" in
   ''|*[!0-9.]*|.*|*..*|*.)

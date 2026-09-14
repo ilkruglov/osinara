@@ -28,6 +28,7 @@ export interface CliDependencies {
 }
 
 const HELP = [
+  "Мия: установка и обслуживание",
   "Использование:",
   "  osinara install",
   "  osinara status",

@@ -13,7 +13,7 @@ import {
 } from "./host-contracts.js";
 
 const digest = (name: string, character: string): string =>
-  `ghcr.io/nyxandro/${name}@sha256:${character.repeat(64)}`;
+  `ghcr.io/ilkruglov/${name}@sha256:${character.repeat(64)}`;
 
 function manifest(): Buffer {
   return Buffer.from(JSON.stringify({
@@ -39,6 +39,11 @@ describe("production host contracts", () => {
     expect(environment).toContain(`OSINARA_APP_IMAGE=${digest("osinara-app", "a")}\n`);
     expect(environment).toContain(`OSINARA_EDGE_IMAGE=${digest("osinara-edge", "c")}\n`);
     expect(environment).not.toContain("OSINARA_CLI_PROXY_IMAGE");
+  });
+
+  it("rejects inherited upstream image references", () => {
+    const upstream = Buffer.from(manifest().toString("utf8").replaceAll("ilkruglov", "nyxandro"));
+    expect(() => releaseEnvironmentFromManifest(upstream, "0.15.3")).toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
   });
 
   it("rejects a manifest from another release", () => {

@@ -15,19 +15,19 @@ const manifestSchema = z.object({
   commitSha: z.string().regex(/^[0-9a-f]{40}$/u),
   composeSha256: z.string().regex(/^[0-9a-f]{64}$/u),
   images: z.object({
-    app: z.string().regex(new RegExp(`^ghcr\\.io/nyxandro/osinara-app@sha256:${IMAGE_DIGEST}$`, "u")),
+    app: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`, "u")),
     cliProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-cli-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-cli-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
     ),
-    edge: z.string().regex(new RegExp(`^ghcr\\.io/nyxandro/osinara-edge@sha256:${IMAGE_DIGEST}$`, "u")),
+    edge: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`, "u")),
     sandboxEgressProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
     ),
     sandboxRunner: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`, "u"),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`, "u"),
     ),
     sandboxRuntime: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`, "u"),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`, "u"),
     ),
   }).strict(),
   schemaVersion: z.literal(1),

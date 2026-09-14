@@ -40,7 +40,7 @@ function requireVerifiedAssets(assets: ReleaseAssets | null): ReleaseAssets {
   if (!assets) {
     throw new InstallerError(
       "OSINARA_INSTALL_RELEASE_ASSETS_UNAVAILABLE",
-      "Отсутствуют обязательные immutable release assets для установки Osinara",
+      "Отсутствуют обязательные immutable release assets для установки Мии",
     );
   }
   if (
@@ -201,7 +201,7 @@ export async function runInteractiveInstaller(
 ): Promise<InstallerResult> {
   const publicIpv4 = await discoverPublicIpv4(dependencies.publicIpv4Sources);
   const addressMode = await dependencies.prompts.select(
-    "Выберите публичный адрес Osinara",
+    "Выберите публичный адрес Мии",
     ADDRESS_MODE_OPTIONS,
   );
   const hostname =

@@ -21,6 +21,7 @@ import { acquireInstallationLock } from "./installation-lock.js";
 import { InstallerError } from "./errors.js";
 import { runHostCommand } from "./process-runner.js";
 import { configureTelegramWebhook } from "./telegram-webhook.js";
+import { activateInstalledUpdater, stageInstalledUpdater } from "./updater-installation.js";
 
 const BASE_DIR = "/opt/osinara";
 const ATTEMPT_DIR = `${BASE_DIR}/.install-attempt`;
@@ -137,6 +138,7 @@ async function requirePhysicalRootDirectory(path: string): Promise<void> {
 /** Creates stateful operations used by one executor invocation. */
 export function createProductionHostOperations(): HostInstallationOperations {
   let ownsBaseDirectory = false;
+  let updaterFiles: ReadonlyMap<string, Buffer> | undefined;
 
   const cleanupOwnedBaseDirectory = async (): Promise<void> => {
     if (!ownsBaseDirectory) return;
@@ -200,10 +202,18 @@ export function createProductionHostOperations(): HostInstallationOperations {
           "Этот release CLI поддерживает только GNU/Linux x86_64 на glibc",
         );
       }
+      for (const command of ["systemctl", "jq", "curl"]) {
+        await runHostCommand({ args: ["--version"], command, timeoutMs: 30_000 });
+      }
       await runHostCommand({ args: ["info"], command: "docker", timeoutMs: 30_000 });
       await runHostCommand({ args: ["compose", "version"], command: "docker", timeoutMs: 30_000 });
     },
     commit: async () => {
+      if (!updaterFiles) throw new InstallerError("OSINARA_INSTALL_BUNDLE_ENTRY_INVALID", "Updater не подготовлен");
+      await activateInstalledUpdater(updaterFiles, {
+        write: writeRootFile,
+        run: async (args) => { await runHostCommand({ command: "systemctl", args, timeoutMs: 30_000 }); },
+      });
       await rm(ATTEMPT_DIR, { force: true, recursive: true });
     },
     configureWebhook: async (input) => {
@@ -283,6 +293,13 @@ export function createProductionHostOperations(): HostInstallationOperations {
         await writeRootFile(CADDYFILE_PATH, requireFile("installation/Caddyfile"), 0o644);
         await writeRootFile(TLS_COMPOSE_PATH, requireFile("installation/compose.tls.yaml"), 0o644);
         await writeRootFile(TLS_ENV_PATH, Buffer.from(`OSINARA_HOSTNAME=${input.hostname}\n`), 0o600);
+        await stageInstalledUpdater(files, {
+          mkdir: async (path, mode) => {
+            await mkdir(path, { mode }); await chown(path, 0, 0); await chmod(path, mode);
+          },
+          write: writeRootFile,
+        });
+        updaterFiles = files;
       } catch (error) {
         await cleanupOwnedBaseDirectory();
         throw error;

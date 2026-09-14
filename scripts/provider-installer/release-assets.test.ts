@@ -28,7 +28,7 @@ describe("createReleaseAssetsResolver", () => {
       version: "0.15.2",
     });
     expect(fetch).toHaveBeenCalledWith(
-      "https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-installation.tar.gz",
+      "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-installation.tar.gz",
       { headers: { Accept: "application/octet-stream" }, signal: expect.any(AbortSignal) },
     );
   });
@@ -76,7 +76,7 @@ describe("createReleaseAssetsResolver", () => {
 
     await expect(resolveReleaseAssets()).rejects.toMatchObject({
       code: "OSINARA_INSTALL_RELEASE_DOWNLOAD_FAILED",
-      message: expect.stringContaining("Не удалось загрузить installation bundle Osinara v0.15.2"),
+      message: expect.stringContaining("Не удалось загрузить installation bundle Мии v0.15.2"),
     });
   });
 

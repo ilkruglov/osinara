@@ -33,7 +33,7 @@ bootstrap_require_metadata "/opt/osinara" "0:0:750"
 bootstrap_require_metadata "/opt/osinara/bin" "0:0:750"
 bootstrap_require_metadata "$ENTRYPOINT_PATH" "0:0:750"
 bootstrap_require_metadata "$MODULE_DIR" "0:0:750"
-for module in common database release bridge backup; do
+for module in common database release backup; do
   bootstrap_require_metadata "${MODULE_DIR}/${module}.sh" "0:0:640"
 done
 
@@ -44,8 +44,6 @@ source "${MODULE_DIR}/common.sh"
 source "${MODULE_DIR}/database.sh"
 # shellcheck source=scripts/production-deploy/release.sh
 source "${MODULE_DIR}/release.sh"
-# shellcheck source=scripts/production-deploy/bridge.sh
-source "${MODULE_DIR}/bridge.sh"
 # shellcheck source=scripts/production-deploy/backup.sh
 source "${MODULE_DIR}/backup.sh"
 
@@ -107,7 +105,7 @@ cleanup_runtime_files() {
 }
 
 send_success_notification() {
-  local message="Обновление Osinara v${REQUESTED_VERSION} успешно установлено. Код: DEPLOY_RELEASE_SUCCEEDED"
+  local message="Обновление Мии v${REQUESTED_VERSION} успешно установлено. Код: DEPLOY_RELEASE_SUCCEEDED"
   if ! send_telegram_notification "$message"; then
     # Deployment is already terminally successful; Telegram ambiguity must not rewrite that fact.
     log_event "DEPLOY_SUCCESS_NOTIFICATION_FAILED" \
@@ -116,14 +114,7 @@ send_success_notification() {
 }
 
 main() {
-  if [[ "$#" -eq 2 && "$1" == "--initial" ]]; then
-    INITIAL_MODE=1
-    REQUESTED_VERSION="$2"
-  elif [[ "$#" -ne 0 ]]; then
-    fail "DEPLOY_ARGUMENT_INVALID" \
-      "Use production-deploy.sh or production-deploy.sh --initial VERSION"
-  fi
-
+  [[ "$#" -eq 0 ]] || fail "DEPLOY_ARGUMENT_INVALID" "The updater accepts only approved database proposals"
   require_server_boundary
   require_release_environment_clean
   exec 9>"$LOCK_FILE"
@@ -133,53 +124,30 @@ main() {
   fi
   WORK_DIR="$(mktemp -d "${BASE_DIR}/.deploy.XXXXXX")"
   trap cleanup_runtime_files EXIT
-
-  if [[ "$INITIAL_MODE" -eq 1 ]]; then
-    require_semver "$REQUESTED_VERSION"
-    require_clean_initial_state
-  else
-    set_current_release_paths
-    reconcile_stale_deployments
-    [[ "$STALE_DEPLOYMENT_FOUND" -eq 0 ]] || return 0
-    claim_approved_proposal
-    [[ "$CLAIM_FOUND" -eq 1 ]] || return 0
-    require_upgrade_from_current
-    prune_old_deploy_backups
-  fi
-
+  set_current_release_paths
+  reconcile_stale_deployments
+  [[ "$STALE_DEPLOYMENT_FOUND" -eq 0 ]] || return 0
+  claim_approved_proposal
+  [[ "$CLAIM_FOUND" -eq 1 ]] || return 0
+  require_upgrade_from_current
   download_and_validate_release "$REQUESTED_VERSION"
-  if [[ "$INITIAL_MODE" -eq 0 ]]; then
-    recheck_claim_owner
-  fi
-  provision_v0152_model_bridge
-  validate_v0160_codex_bridge
-  provision_v0180_workflow_postgres_bridge
+  recheck_claim_owner
   prepare_candidate_release
   pull_release_images
-  prepare_v0160_codex_volume
-  if [[ "$INITIAL_MODE" -eq 0 ]]; then
-    recheck_claim_owner
-    preflight_backup
-    create_postgres_backup
-    stop_current_services
-    snapshot_durable_volumes
-  fi
-
+  recheck_claim_owner
+  preflight_backup
+  stop_current_services
+  create_postgres_backup
+  snapshot_durable_volumes
   MIGRATION_STARTED=1
-  provision_v0160_codex_bridge
   start_candidate_release
   wait_for_health
-  validate_v0160_codex_model
   CANDIDATE_HEALTH_VALIDATED=1
   promote_candidate_release
-  complete_v0160_codex_bridge
-  remove_retired_cutover_volume
-  if [[ "$INITIAL_MODE" -eq 1 ]]; then
-    resolve_initial_owner_chat
-  fi
   record_proposal_result "succeeded" "DEPLOY_RELEASE_SUCCEEDED" \
     "Release v${REQUESTED_VERSION} passed the production health check"
   send_success_notification
+  prune_old_deploy_backups
   prune_retired_release_images
   log_event "DEPLOY_RELEASE_SUCCEEDED" "Release v${REQUESTED_VERSION} is healthy"
 }

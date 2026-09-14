@@ -54,6 +54,15 @@ install -m 0644 "${PROJECT_ROOT}/infra/installer/Caddyfile" \
   "${WORK_DIR}/installation/Caddyfile"
 install -m 0644 "${PROJECT_ROOT}/infra/installer/compose.tls.yaml" \
   "${WORK_DIR}/installation/compose.tls.yaml"
+install -d -m 0755 "${WORK_DIR}/installation/production-deploy"
+install -m 0750 "${PROJECT_ROOT}/scripts/production-deploy.sh" "${WORK_DIR}/installation/production-deploy.sh"
+for module in common database release backup; do
+  install -m 0640 "${PROJECT_ROOT}/scripts/production-deploy/${module}.sh" "${WORK_DIR}/installation/production-deploy/${module}.sh"
+done
+for name in osinara-deploy.service osinara-deploy.timer; do
+  install -m 0644 "${PROJECT_ROOT}/infra/systemd/${name}" "${WORK_DIR}/installation/${name}"
+done
+install -m 0644 "${PROJECT_ROOT}/LICENSE" "${PROJECT_ROOT}/NOTICE" "${WORK_DIR}/installation/"
 tar --create --gzip \
   --directory "$WORK_DIR" \
   --format=gnu \

@@ -309,3 +309,15 @@ Production image собирается только из canonical repository sta
 2. Найти существующий модуль, repository и тест до создания нового файла.
 3. Для Eve API открыть локальный guide и установленный `.d.ts`.
 4. Не трогать память, deployment или persisted contract без явного scope задачи.
+
+## Собственные релизы Мии
+
+Canonical release repository: `ilkruglov/osinara`; GHCR namespace: `ghcr.io/ilkruglov`.
+Установщик и проверка обновлений не принимают релизы upstream. Версия берётся из `package.json`,
+заметки к релизу — `docs/releases/vVERSION.txt`; CI публикует immutable release после проверок.
+Свежий установщик добавляет root-owned controller и systemd timer; controller работает с тем же
+`/opt/osinara/compose.installation.json`, который использует CLI. Исторических provider/Workflow bridges
+и пустого memory-extraction-worker больше нет. Миграции БД сохраняются для установки с нуля.
+При обновлении `.env`, модель и имена существующих томов сохраняются. Сначала скачиваются образы,
+затем останавливаются обработчики и сохраняются обе БД и рабочие файлы. Ошибка после начала миграций
+считается ambiguous и не запускает автоматический повтор или восстановление БД.

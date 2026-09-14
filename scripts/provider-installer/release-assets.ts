@@ -12,7 +12,7 @@
 import type { ReleaseAssets } from "./contracts.js";
 import { InstallerError } from "./errors.js";
 
-const GITHUB_RELEASES_URL = "https://github.com/nyxandro/osinara/releases/download";
+const GITHUB_RELEASES_URL = "https://github.com/ilkruglov/osinara/releases/download";
 const INSTALLATION_ARCHIVE_NAME = "osinara-installation.tar.gz";
 const MAX_ARCHIVE_BYTES = 16 * 1024 * 1024;
 const MAX_TIMEOUT_MS = 120_000;
@@ -111,7 +111,7 @@ export function createReleaseAssetsResolver(
       if (!response.ok) {
         throw new InstallerError(
           "OSINARA_INSTALL_RELEASE_DOWNLOAD_FAILED",
-          `GitHub Release отклонил загрузку installation bundle Osinara v${dependencies.version}`,
+          `GitHub Release отклонил загрузку installation bundle Мии v${dependencies.version}`,
         );
       }
       return {
@@ -123,7 +123,7 @@ export function createReleaseAssetsResolver(
       if (error instanceof InstallerError) throw error;
       throw new InstallerError(
         "OSINARA_INSTALL_RELEASE_DOWNLOAD_FAILED",
-        `Не удалось загрузить installation bundle Osinara v${dependencies.version}. Проверьте сеть и повторите операцию`,
+        `Не удалось загрузить installation bundle Мии v${dependencies.version}. Проверьте сеть и повторите операцию`,
         { cause: error },
       );
     }

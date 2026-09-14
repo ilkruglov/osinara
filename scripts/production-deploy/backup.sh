@@ -1,29 +1,18 @@
 #!/bin/bash
 # Pre-migration backup and current-release recovery operations.
-# Dumps PostgreSQL while live, then snapshots only irreconstructible volumes while writers are stopped.
+# Dumps both PostgreSQL databases and snapshots durable volumes after writers stop.
 
 readonly BACKUP_RESERVE_BYTES=$((512 * 1024 * 1024))
-readonly RETAINED_DEPLOY_BACKUP_COUNT=1
-readonly PRE_DEPLOY_RETAINED_BACKUP_COUNT=$((RETAINED_DEPLOY_BACKUP_COUNT - 1))
-readonly LEGACY_INITIAL_MIGRATION_BACKUP_NAME="initial-migration-v0.1.1"
+readonly RETAINED_DEPLOY_BACKUP_COUNT=2
 readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-readonly LEGACY_EVE_VOLUME="osinara-production-workflow-data"
-readonly LEGACY_EVE_LOGICAL_VOLUME="workflow-data"
-readonly CURRENT_EVE_LOGICAL_VOLUME="eve-workflow-data"
-readonly POSTGRES_WORLD_CUTOVER_VOLUME="osinara-production-eve-workflow-data-v032"
 readonly DURABLE_VOLUME_BINDINGS=(
   "osinara-production-cli-proxy-auth|cli-proxy-auth"
   "osinara-production-google-workspace-credentials|google-workspace-credentials"
   "osinara-production-tool-environments|tool-environments"
-  "osinara-production-workflow-data|workflow-data"
-  "osinara-production-eve-workflow-data-v032|eve-workflow-data"
   "osinara-production-workspace-data|workspace-data"
 )
 BACKUP_DURABLE_VOLUMES=()
 CREATED_CANDIDATE_VOLUMES=()
-RETIRED_CUTOVER_VOLUME=""
-RETIRED_CUTOVER_ARCHIVED=0
-PRESERVED_WORKFLOW_CUTOVER_VOLUME=""
 CANDIDATE_HEALTH_VALIDATED=0
 
 prune_old_deploy_backups() {
@@ -41,8 +30,8 @@ prune_old_deploy_backups() {
   done
   [[ "$nullglob_was_enabled" -eq 1 ]] || shopt -u nullglob
 
-  # Reserve one slot before preflight so the newly validated snapshot restores the final count.
-  remove_count=$((${#deploy_backups[@]} - PRE_DEPLOY_RETAINED_BACKUP_COUNT))
+  # Run only after a new complete backup and successful deployment; preserve the last two snapshots.
+  remove_count=$((${#deploy_backups[@]} - RETAINED_DEPLOY_BACKUP_COUNT))
   for ((index = 0; index < remove_count; index += 1)); do
     name="${deploy_backups[index]##*/}"
     rm -rf -- "${deploy_backups[index]}" ||
@@ -50,13 +39,7 @@ prune_old_deploy_backups() {
     log_event "DEPLOY_BACKUP_PRUNED" "Removed old deploy backup: ${name}"
   done
 
-  # The rolling pre-deploy snapshot supersedes the historical bootstrap copy.
-  path="${BACKUPS_DIR}/${LEGACY_INITIAL_MIGRATION_BACKUP_NAME}"
-  if [[ -d "$path" ]]; then
-    rm -rf -- "$path" ||
-      fail "DEPLOY_BACKUP_RETENTION_FAILED" "Could not remove legacy initial migration backup"
-    log_event "DEPLOY_BACKUP_PRUNED" "Removed legacy initial migration backup"
-  fi
+
 }
 
 compose_declares_volume() {
@@ -69,6 +52,10 @@ compose_declares_volume() {
   if [[ ! -f "$compose_path" ]]; then
     fail "DEPLOY_COMPOSE_OWNERSHIP_UNKNOWN" "Compose file is absent: ${compose_path}"
     return 1
+  fi
+  if [[ "$compose_path" == *.json ]]; then
+    jq -e --arg name "$logical_volume" '.volumes | has($name)' "$compose_path" >/dev/null
+    return
   fi
   grep -Eq "^  ${logical_volume}:([[:space:]]*\\{\\})?[[:space:]]*$" "$compose_path"
 }
@@ -123,10 +110,7 @@ cleanup_created_candidate_volumes() {
 select_durable_volumes() {
   local binding volume logical_volume current_owns candidate_owns
   BACKUP_DURABLE_VOLUMES=()
-  RETIRED_CUTOVER_VOLUME=""
-  RETIRED_CUTOVER_ARCHIVED=0
-  PRESERVED_WORKFLOW_CUTOVER_VOLUME=""
-  for binding in "${DURABLE_VOLUME_BINDINGS[@]}"; do
+        for binding in "${DURABLE_VOLUME_BINDINGS[@]}"; do
     IFS='|' read -r volume logical_volume <<<"$binding"
     current_owns=0
     candidate_owns=0
@@ -134,21 +118,9 @@ select_durable_volumes() {
     compose_declares_volume "$CANDIDATE_COMPOSE" "$logical_volume" && candidate_owns=1
     [[ "$current_owns" -eq 1 || "$candidate_owns" -eq 1 ]] || continue
 
-    # Each documented world cutover must preserve a restorable snapshot before changing ownership.
     if [[ "$current_owns" -eq 1 && "$candidate_owns" -eq 0 ]]; then
-      if [[ "$volume" == "$LEGACY_EVE_VOLUME" &&
-            "$logical_volume" == "$LEGACY_EVE_LOGICAL_VOLUME" ]] &&
-        compose_declares_volume "$CANDIDATE_COMPOSE" "$CURRENT_EVE_LOGICAL_VOLUME"; then
-        RETIRED_CUTOVER_VOLUME="$volume"
-      elif [[ "$volume" == "$POSTGRES_WORLD_CUTOVER_VOLUME" &&
-              "$logical_volume" == "$CURRENT_EVE_LOGICAL_VOLUME" ]]; then
-        # PostgreSQL cutover keeps the physical v0.32 volume for immediate rollback.
-        PRESERVED_WORKFLOW_CUTOVER_VOLUME="$volume"
-      else
-        fail "DEPLOY_CANDIDATE_DURABLE_VOLUME_REMOVED" \
-          "Candidate release removes a current-owned durable volume: ${volume}"
-        return 1
-      fi
+      fail "DEPLOY_CANDIDATE_DURABLE_VOLUME_REMOVED" "Candidate release removes a current-owned durable volume: ${volume}"
+      return 1
     fi
 
     # Current ownership selects backup input; candidate-only ownership permits one clean bootstrap.
@@ -205,14 +177,14 @@ preflight_backup() {
 create_postgres_backup() {
   BACKUP_TEMP_DIR="$(mktemp -d "${BACKUPS_DIR}/.backup.XXXXXX")"
   compose_current exec -T postgres pg_dump --username osinara --dbname osinara \
-    --format=custom --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/postgres.dump"
+    --format=custom --compress=1 --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/postgres.dump"
   compose_current exec -T postgres pg_restore --list < "${BACKUP_TEMP_DIR}/postgres.dump" \
     > /dev/null
   local workflow_database_exists
   workflow_database_exists="$(psql_current --command="SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'osinara_workflow');")"
   if [[ "$workflow_database_exists" == "t" ]]; then
     compose_current exec -T postgres pg_dump --username osinara --dbname osinara_workflow \
-      --format=custom --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/workflow-postgres.dump"
+      --format=custom --compress=1 --no-owner --no-privileges > "${BACKUP_TEMP_DIR}/workflow-postgres.dump"
     compose_current exec -T postgres pg_restore --list < "${BACKUP_TEMP_DIR}/workflow-postgres.dump" \
       > /dev/null
   elif [[ "$workflow_database_exists" != "f" ]]; then
@@ -222,8 +194,11 @@ create_postgres_backup() {
 
 stop_current_services() {
   CURRENT_SERVICES_STOPPED=1
-  compose_current stop memory-extraction-worker edge telegram-ingress-worker memory-embedding-worker agent cli-proxy-api \
-    sandbox-runner sandbox-egress-proxy memory-embedding
+  local services
+  services="$(compose_current config --services | grep -v '^postgres$')"
+  local -a service_names
+  mapfile -t service_names <<< "$services"
+  compose_current stop "${service_names[@]}"
 }
 
 backup_volume() {
@@ -241,11 +216,9 @@ snapshot_durable_volumes() {
     fail "DEPLOY_BACKUP_VOLUME_SET_EMPTY" "Preflight did not select durable backup volumes"
   for volume in "${BACKUP_DURABLE_VOLUMES[@]}"; do
     backup_volume "$volume"
-    if [[ -n "$RETIRED_CUTOVER_VOLUME" && "$volume" == "$RETIRED_CUTOVER_VOLUME" ]]; then
-      RETIRED_CUTOVER_ARCHIVED=1
-    fi
   done
-  sha256sum "${BACKUP_TEMP_DIR}"/* > "${BACKUP_TEMP_DIR}/SHA256SUMS"
+  cp -p "$SERVER_ENV" "$AGENT_MODEL_PROVIDER_CONFIG" "$CURRENT_ENV" "$CURRENT_COMPOSE" "$CURRENT_MANIFEST" "$BACKUP_TEMP_DIR/"
+  (cd "$BACKUP_TEMP_DIR" && sha256sum -- .env * > SHA256SUMS)
   local timestamp final_dir
   timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
   final_dir="${BACKUPS_DIR}/${timestamp}-to-v${REQUESTED_VERSION}"
@@ -253,26 +226,6 @@ snapshot_durable_volumes() {
     fail "DEPLOY_BACKUP_DIR_EXISTS" "Final backup directory already exists"
   mv "$BACKUP_TEMP_DIR" "$final_dir"
   BACKUP_TEMP_DIR=""
-}
-
-remove_retired_cutover_volume() {
-  [[ -n "$RETIRED_CUTOVER_VOLUME" ]] || return 0
-  if [[ "$RETIRED_CUTOVER_VOLUME" != "$LEGACY_EVE_VOLUME" ||
-        "$RETIRED_CUTOVER_ARCHIVED" -ne 1 || "$CANDIDATE_HEALTH_VALIDATED" -ne 1 ]]; then
-    fail "DEPLOY_RETIRED_VOLUME_BOUNDARY_INVALID" \
-      "Legacy Eve volume retirement requires its validated archive and a healthy candidate"
-    return 1
-  fi
-
-  # This exact one-time cutover volume is retired only at the post-health success boundary.
-  if ! docker volume rm "$RETIRED_CUTOVER_VOLUME" >/dev/null; then
-    fail "DEPLOY_RETIRED_VOLUME_REMOVAL_FAILED" \
-      "Could not remove the archived legacy Eve volume: ${RETIRED_CUTOVER_VOLUME}"
-    return 1
-  fi
-  log_event "DEPLOY_RETIRED_VOLUME_REMOVED" \
-    "Removed archived legacy Eve volume: ${RETIRED_CUTOVER_VOLUME}"
-  RETIRED_CUTOVER_VOLUME=""
 }
 
 cleanup_incomplete_backup() {

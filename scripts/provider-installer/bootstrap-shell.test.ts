@@ -57,7 +57,7 @@ describe("provider installer shell bootstrap", () => {
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
+      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
       {
         encoding: "utf8",
         env: {
@@ -102,7 +102,7 @@ describe("provider installer shell bootstrap", () => {
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
+      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", checksum],
       {
         encoding: "utf8",
         env: {
@@ -134,7 +134,7 @@ describe("provider installer shell bootstrap", () => {
 
     const result = spawnSync(
       "bash",
-      [bootstrapPath, "https://github.com/nyxandro/osinara/releases/download/v0.15.2/osinara-linux-x64", "0".repeat(64)],
+      [bootstrapPath, "https://github.com/ilkruglov/osinara/releases/download/v0.15.2/osinara-linux-x64", "0".repeat(64)],
       {
         encoding: "utf8",
         env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, TEST_ASSET: assetPath },

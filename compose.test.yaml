@@ -72,20 +72,6 @@ services:
       timeout: 5s
       retries: 120
 
-  memory-extraction-worker:
-    profiles: ["workers"]
-    build:
-      context: .
-      target: runtime
-    entrypoint: ["node", ".runtime/scripts/memory-extraction-worker.js"]
-    network_mode: none
-    healthcheck:
-      test: ["CMD", "node", "-e", "const fs=require('node:fs'),p='/tmp/osinara-memory-extraction-worker-ready';if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"]
-      interval: 5s
-      timeout: 3s
-      retries: 120
-    restart: "no"
-
   memory-reranker:
     profiles: ["memory-quality"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07

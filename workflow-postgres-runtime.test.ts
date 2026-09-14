@@ -89,16 +89,13 @@ describe("PostgreSQL Workflow world", () => {
     expect(stressEval).toContain("workflow_event_count");
   });
 
-  it("generates a dedicated Workflow connection and preserves the v0.32 volume for rollback", () => {
+  it("generates a dedicated Workflow connection and backs up its database", () => {
     const installer = readProjectFile("scripts/provider-installer/host-executor.ts");
     const backup = readProjectFile("scripts/production-deploy/backup.sh");
 
     expect(installer).toContain('"WORKFLOW_POSTGRES_URL",');
     expect(installer).toContain("/osinara_workflow`");
-    expect(backup).toContain("PRESERVED_WORKFLOW_CUTOVER_VOLUME");
     expect(backup).toContain("workflow-postgres.dump");
-    expect(backup).not.toContain(
-      'docker volume rm "$PRESERVED_WORKFLOW_CUTOVER_VOLUME"',
-    );
+    expect(backup).not.toContain("PRESERVED_WORKFLOW_CUTOVER_VOLUME");
   });
 });

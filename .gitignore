@@ -18,3 +18,5 @@ __pycache__/
 # Материалы курса из экспорта Telegram (не часть проекта)
 course/
 result-chat.json
+.tmp/
+.playwright-mcp/

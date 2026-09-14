@@ -40,6 +40,10 @@ describe("installation bundle", () => {
     expect(firstBytes.equals(secondBytes)).toBe(true);
     await expect(validateInstallationBundle(firstBytes)).resolves.toBeUndefined();
     const files = await readInstallationBundle(firstBytes);
+    for (const name of ["production-deploy.sh", "production-deploy/common.sh", "production-deploy/database.sh", "production-deploy/release.sh", "production-deploy/backup.sh", "osinara-deploy.service", "osinara-deploy.timer", "LICENSE", "NOTICE"]) {
+      expect(files.has(`installation/${name}`), name).toBe(true);
+    }
+    expect(files.has("installation/production-deploy/bridge.sh")).toBe(false);
     const tlsCompose = files.get("installation/compose.tls.yaml")!.toString("utf8");
     expect(tlsCompose).toContain("      - edge-frontend\n");
     expect(tlsCompose).not.toContain("      - app-network\n");

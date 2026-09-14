@@ -17,12 +17,12 @@ function deploymentManifest(overrides: Record<string, unknown> = {}) {
     commitSha: "b".repeat(40),
     composeSha256: "c".repeat(64),
     images: {
-      app: `ghcr.io/nyxandro/osinara-app@sha256:${DIGEST}`,
-      cliProxy: `ghcr.io/nyxandro/osinara-cli-proxy@sha256:${DIGEST}`,
-      edge: `ghcr.io/nyxandro/osinara-edge@sha256:${DIGEST}`,
-      sandboxEgressProxy: `ghcr.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${DIGEST}`,
-      sandboxRunner: `ghcr.io/nyxandro/osinara-sandbox-runner@sha256:${DIGEST}`,
-      sandboxRuntime: `ghcr.io/nyxandro/osinara-sandbox-runtime@sha256:${DIGEST}`,
+      app: `ghcr.io/ilkruglov/osinara-app@sha256:${DIGEST}`,
+      cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${DIGEST}`,
+      edge: `ghcr.io/ilkruglov/osinara-edge@sha256:${DIGEST}`,
+      sandboxEgressProxy: `ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${DIGEST}`,
+      sandboxRunner: `ghcr.io/ilkruglov/osinara-sandbox-runner@sha256:${DIGEST}`,
+      sandboxRuntime: `ghcr.io/ilkruglov/osinara-sandbox-runtime@sha256:${DIGEST}`,
     },
     schemaVersion: 1,
     version: "0.2.0",
@@ -34,12 +34,12 @@ function githubRelease(overrides: Record<string, unknown> = {}) {
   return {
     assets: [{
       browser_download_url:
-        "https://github.com/nyxandro/osinara/releases/download/v0.2.0/osinara-deployment.json",
+        "https://github.com/ilkruglov/osinara/releases/download/v0.2.0/osinara-deployment.json",
       name: "osinara-deployment.json",
       state: "uploaded",
     }],
     draft: false,
-    html_url: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
+    html_url: "https://github.com/ilkruglov/osinara/releases/tag/v0.2.0",
     immutable: true,
     prerelease: false,
     tag_name: "v0.2.0",
@@ -67,17 +67,34 @@ describe("GitHub software release client", () => {
         schemaVersion: 1,
         version: "0.2.0",
       },
-      releaseUrl: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
+      releaseUrl: "https://github.com/ilkruglov/osinara/releases/tag/v0.2.0",
       version: "0.2.0",
     });
 
     // Public metadata and assets must never receive an accidental credential header.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/ilkruglov/osinara/releases/latest");
     for (const call of fetchMock.mock.calls) {
       const headers = new Headers((call[1] as RequestInit | undefined)?.headers);
       expect(headers.has("authorization")).toBe(false);
       expect((call[1] as RequestInit | undefined)?.signal).toBeInstanceOf(AbortSignal);
     }
+  });
+
+  it("rejects an upstream release even when its version is newer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(githubRelease({
+      html_url: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
+    })));
+    const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(/AGENT_SOFTWARE_RELEASE_URL_INVALID/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports no update before the first own release exists", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: "Not Found" }, 404));
+    const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
+    await expect(client.latestNewerThan("0.20.0")).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -115,7 +132,7 @@ describe("GitHub software release client", () => {
     const invalidManifest = deploymentManifest({
       images: {
         ...deploymentManifest().images,
-        app: "ghcr.io/nyxandro/osinara-app:latest",
+        app: "ghcr.io/ilkruglov/osinara-app:latest",
       },
     });
     const fetchMock = vi.fn()

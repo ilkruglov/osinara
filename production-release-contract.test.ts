@@ -17,7 +17,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   executeComposeSecurityPredicate,
-  PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND,
   resolvedComposeSecurityFixture,
 } from "./production-release-contract-fixtures.js";
 
@@ -134,26 +133,10 @@ describe("production container contract", () => {
     for (const image of requiredImages) {
       expect(compose).toContain(`image: \${${image}:?`);
     }
-    expect(compose.match(/image: \$\{OSINARA_APP_IMAGE:\?/g)).toHaveLength(5);
+    expect(compose.match(/image: \$\{OSINARA_APP_IMAGE:\?/g)).toHaveLength(4);
     expect(compose).toContain("SANDBOX_RUNTIME_IMAGE: ${SANDBOX_RUNTIME_IMAGE:?");
     expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(3);
     expect(compose).not.toContain("DATABASE_URL: postgresql://");
-  });
-
-  it("keeps the retired memory worker isolated after migrations", () => {
-    const compose = readProjectFile("compose.production.yaml");
-    const worker = service(compose, "memory-extraction-worker", "telegram-ingress-worker");
-
-    expect(worker).toContain("image: ${OSINARA_APP_IMAGE:?");
-    expect(worker).toContain("migrate:\n        condition: service_completed_successfully");
-    expect(worker).toContain('.runtime/scripts/memory-extraction-worker.js');
-    expect(worker).toContain("network_mode: none");
-    expect(worker).not.toContain("MODEL_UPSTREAM_API_KEY");
-    expect(worker).not.toContain("DATABASE_URL");
-    expect(worker).not.toContain("MEMORY_EMBEDDING_BASE_URL");
-    expect(worker).not.toContain("model-providers.json");
-    expect(worker).toContain(PRODUCTION_MEMORY_EXTRACTION_WORKER_HEALTH_COMMAND);
-    expect(worker).toContain("restart: unless-stopped");
   });
 
   it("gates the agent on migration and keeps stable state and ingress", () => {
@@ -197,7 +180,7 @@ describe("production container contract", () => {
     expect(compose).toContain("x-bounded-json-logs: &bounded-json-logs");
     expect(compose).toContain('max-size: "20m"');
     expect(compose).toContain('max-file: "5"');
-    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(13);
+    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(12);
   });
 
   it("limits Docker control to the runner and tunes pinned TEI for one CPU", () => {
@@ -247,6 +230,8 @@ describe("release workflow contract", () => {
 
   it("publishes fixed GHCR names with immutable action revisions and attestations", () => {
     const workflow = readProjectFile(".github/workflows/ci-release.yaml");
+    expect(workflow).toContain("github.repository == 'ilkruglov/osinara'");
+    expect(workflow).not.toContain("fork-app:");
     const actionUses = [...workflow.matchAll(/uses:\s+([^\s]+)/g)].map((match) => match[1]);
 
     expect(actionUses.length).toBeGreaterThan(0);
@@ -261,9 +246,9 @@ describe("release workflow contract", () => {
       "osinara-sandbox-egress-proxy",
       "osinara-edge",
     ]) {
-      expect(workflow).toContain(`ghcr.io/nyxandro/${image}`);
+      expect(workflow).toContain(`ghcr.io/ilkruglov/${image}`);
     }
-    expect(workflow.match(/actions\/attest@/g)).toHaveLength(12);
+    expect(workflow.match(/actions\/attest@/g)).toHaveLength(10);
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("attestations: write");
     expect(workflow).toContain("id-token: write");
@@ -283,7 +268,7 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("--draft");
     expect(workflow).toContain("RELEASE_NOTES_MISSING");
-    expect(workflow).toContain('RELEASE_NOTES_FILE="docs/releases/v${VERSION}.md"');
+    expect(workflow).toContain('RELEASE_NOTES_FILE="docs/releases/v${VERSION}.txt"');
     expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/);
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
@@ -314,7 +299,7 @@ describe("release workflow contract", () => {
       /gh release upload[\s\S]*?osinara-linux-x64[\s\S]*?osinara-linux-x64\.sha256/u,
     );
     expect(workflow).toContain(
-      '["agent-model-providers.json", "codex-subscription-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]',
+      '["compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]',
     );
   });
 });
@@ -326,7 +311,6 @@ describe("server deployment contract", () => {
       "source scripts/production-deploy/common.sh",
       "source scripts/production-deploy/database.sh",
       "source scripts/production-deploy/release.sh",
-      "source scripts/production-deploy/bridge.sh",
       "source scripts/production-deploy/backup.sh",
     ].join("; ")], { cwd: projectRoot })).not.toThrow();
   });
@@ -338,7 +322,7 @@ describe("server deployment contract", () => {
     expect(script).toContain("software_update_proposals");
     expect(script).toContain("fm.role = 'owner'");
     expect(script).toContain("service_completed_successfully");
-    expect(script).toContain("ghcr.io/nyxandro/osinara-app@sha256:");
+    expect(script).toContain("ghcr.io/ilkruglov/osinara-app@sha256:");
     expect(script).toContain("pg_dump");
     expect(script).toContain("backup_volume");
     expect(script).toContain("preflight_backup");
@@ -351,12 +335,12 @@ describe("server deployment contract", () => {
     expect(script).not.toMatch(/git\s+(pull|fetch|checkout)/);
     expect(script).not.toMatch(/docker\s+(compose\s+)?build/);
     const main = readProjectFile("scripts/production-deploy.sh");
-    expect(main.indexOf("prune_old_deploy_backups")).toBeLessThan(main.indexOf("preflight_backup"));
+    expect(main.indexOf("prune_old_deploy_backups")).toBeGreaterThan(main.indexOf("promote_candidate_release"));
     expect(main.indexOf("pull_release_images")).toBeLessThan(main.indexOf("create_postgres_backup"));
-    expect(main.indexOf("create_postgres_backup")).toBeLessThan(main.indexOf("stop_current_services"));
+    expect(main.indexOf("stop_current_services")).toBeLessThan(main.indexOf("create_postgres_backup"));
     expect(main.indexOf("stop_current_services")).toBeLessThan(main.indexOf("snapshot_durable_volumes"));
     const backup = readProjectFile("scripts/production-deploy/backup.sh");
-    expect(backup).toMatch(/compose_current stop[^\n]*memory-extraction-worker/u);
+    expect(backup).toContain('compose_current stop "${service_names[@]}"');
     expect(main.lastIndexOf("record_proposal_result")).toBeLessThan(
       main.lastIndexOf("prune_retired_release_images"),
     );
@@ -366,11 +350,11 @@ describe("server deployment contract", () => {
     }
   });
 
-  it("supports initial deployment and records all terminal proposal states", () => {
+  it("updates installed releases and records all terminal proposal states", () => {
     const { combined: script } = readDeployScripts();
     const main = readProjectFile("scripts/production-deploy.sh");
 
-    expect(script).toContain("--initial");
+    expect(script).not.toContain("--initial");
     for (const status of ["deploying", "succeeded", "failed", "ambiguous"]) {
       expect(script).toContain(status);
     }
@@ -399,8 +383,6 @@ describe("server deployment contract", () => {
     expect(script).toContain("DEPLOY_COMPOSE_SERVICE_SET_INVALID");
     expect(script).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
     expect(script).toContain("DEPLOY_COMPOSE_SECURITY_INVALID");
-    expect(script).toContain('.services["memory-extraction-worker"].network_mode == "none"');
-    expect(script).toContain('services["memory-extraction-worker"].healthcheck.test');
     expect(script).toContain("privileged");
     expect(script).toContain("network_mode");
     expect(script).toContain("logging.driver");
@@ -422,14 +404,14 @@ describe("server deployment contract", () => {
     expect(() => executeComposeSecurityPredicate(inheritedRunnerVolumes)).toThrow();
 
     const unsafe = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
-    unsafe.services["memory-extraction-worker"]!.volumes = [{
+    unsafe.services["memory-reranker"]!.volumes = [{
       source: "/", target: "/host", type: "bind",
     }];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
 
   });
 
-  it("rejects environment image injection, downgrade, and unsafe initial reuse", () => {
+  it("rejects environment image injection, downgrade, and incomplete installed state", () => {
     const { combined: script } = readDeployScripts();
     const example = readProjectFile(".env.example");
 
@@ -447,8 +429,8 @@ describe("server deployment contract", () => {
     expect(script).toContain("DEPLOY_RELEASE_ENV_EXPORTED");
     expect(script).toContain("version_is_greater");
     expect(script).toContain("DEPLOY_DOWNGRADE_FORBIDDEN");
-    expect(script).toContain("DEPLOY_INITIAL_STATE_EXISTS");
-    expect(script).toContain("com.docker.compose.project=osinara-production");
+    expect(script).toContain("DEPLOY_CURRENT_RELEASE_INVALID");
+    expect(script).toContain("compose.installation.json");
     expect(script).toContain("mktemp -d");
     expect(script).toContain("promote_candidate_release");
   });

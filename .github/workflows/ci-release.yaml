@@ -28,65 +28,9 @@ jobs:
       - name: Verify hybrid retrieval with pinned E5 and reranker models
         run: docker compose -f compose.test.yaml --profile memory-quality up --build --abort-on-container-exit --exit-code-from memory-evals memory-evals
 
-  fork-app:
-    name: Build fork app and sandbox runner images
-    if: github.repository != 'nyxandro/osinara' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Check out canonical source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: Build immutable app image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          build-args: |
-            OCI_SOURCE=https://github.com/${{ github.repository }}
-            OCI_VERSION=fork-${{ github.run_number }}
-            OCI_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=fork-app
-          cache-to: type=gha,mode=max,scope=fork-app
-          context: .
-          outputs: type=docker,dest=${{ runner.temp }}/osinara-app.tar
-          tags: osinara-app:sha-${{ github.sha }}
-          target: runtime
-      - name: Build immutable sandbox runner image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          build-args: |
-            OCI_SOURCE=https://github.com/${{ github.repository }}
-            OCI_VERSION=fork-${{ github.run_number }}
-            OCI_REVISION=${{ github.sha }}
-          cache-from: type=gha,scope=fork-app
-          context: .
-          outputs: type=docker,dest=${{ runner.temp }}/osinara-sandbox-runner.tar
-          tags: osinara-sandbox-runner:sha-${{ github.sha }}
-          target: sandbox-runner
-      - name: Record image checksum
-        run: |
-          cd "${RUNNER_TEMP}"
-          sha256sum osinara-app.tar > osinara-app.tar.sha256
-          sha256sum --check osinara-app.tar.sha256
-          sha256sum osinara-sandbox-runner.tar > osinara-sandbox-runner.tar.sha256
-          sha256sum --check osinara-sandbox-runner.tar.sha256
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          compression-level: 0
-          if-no-files-found: error
-          name: osinara-app-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/osinara-app.tar
-            ${{ runner.temp }}/osinara-app.tar.sha256
-            ${{ runner.temp }}/osinara-sandbox-runner.tar
-            ${{ runner.temp }}/osinara-sandbox-runner.tar.sha256
-          retention-days: 1
-
   release:
     name: Publish immutable production release
-    if: github.repository == 'nyxandro/osinara' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository == 'ilkruglov/osinara' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -96,12 +40,12 @@ jobs:
       id-token: write
       packages: write
     env:
-      APP_IMAGE: ghcr.io/nyxandro/osinara-app
-      CLI_PROXY_IMAGE: ghcr.io/nyxandro/osinara-cli-proxy
-      EDGE_IMAGE: ghcr.io/nyxandro/osinara-edge
-      EGRESS_IMAGE: ghcr.io/nyxandro/osinara-sandbox-egress-proxy
-      RUNNER_IMAGE: ghcr.io/nyxandro/osinara-sandbox-runner
-      RUNTIME_IMAGE: ghcr.io/nyxandro/osinara-sandbox-runtime
+      APP_IMAGE: ghcr.io/ilkruglov/osinara-app
+      CLI_PROXY_IMAGE: ghcr.io/ilkruglov/osinara-cli-proxy
+      EDGE_IMAGE: ghcr.io/ilkruglov/osinara-edge
+      EGRESS_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-egress-proxy
+      RUNNER_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-runner
+      RUNTIME_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-runtime
     steps:
       - name: Check out canonical source and tags
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -141,7 +85,7 @@ jobs:
             printf '%s\n' "RELEASE_VERSION_ALREADY_EXISTS: tag ${TAG} exists without a resumable draft; bump package.json" >&2
             exit 1
           fi
-          RELEASE_NOTES_FILE="docs/releases/v${VERSION}.md"
+          RELEASE_NOTES_FILE="docs/releases/v${VERSION}.txt"
           if [[ ! -s "$RELEASE_NOTES_FILE" ]]; then
             printf '%s\n' "RELEASE_NOTES_MISSING: ${RELEASE_NOTES_FILE} must contain the detailed changelog" >&2
             exit 1
@@ -349,7 +293,7 @@ jobs:
             (.services | has("cli-proxy-api") | not) and
             (.services | keys) == [
               "agent", "edge", "memory-embedding", "memory-embedding-worker",
-              "memory-extraction-worker", "migrate", "postgres", "sandbox-egress-proxy",
+              "memory-reranker", "migrate", "postgres", "sandbox-egress-proxy",
               "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
             ]
           ' compose.installation.json >/dev/null
@@ -380,7 +324,6 @@ jobs:
             --output "type=local,dest=${ARTIFACT_DIR}" .
           install -m 0755 "${ARTIFACT_DIR}/osinara-linux-x64" osinara-linux-x64
           install -m 0755 scripts/provider-installer/bootstrap.sh install.sh
-          install -m 0644 config/agent-model-providers.json agent-model-providers.json
           sha256sum osinara-linux-x64 > osinara-linux-x64.sha256
           sha256sum --check osinara-linux-x64.sha256
           PATH="$EMPTY_PATH" ./osinara-linux-x64 --help | grep --fixed-strings "osinara install"
@@ -405,15 +348,23 @@ jobs:
         with:
           subject-path: osinara-linux-x64.sha256
 
-      - name: Attest bridge model config
-        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
-        with:
-          subject-path: agent-model-providers.json
-
-      - name: Attest Codex subscription model config
-        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
-        with:
-          subject-path: config/codex-subscription-model-providers.json
+      - name: Verify anonymous access to released images
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in "$APP_IMAGE" "$CLI_PROXY_IMAGE" "$EDGE_IMAGE" "$EGRESS_IMAGE" "$RUNNER_IMAGE" "$RUNTIME_IMAGE"; do
+            package="${image#ghcr.io/}"
+            if ! token_json="$(curl --fail --silent --show-error --max-time 30 --get \
+              --data-urlencode 'service=ghcr.io' --data-urlencode "scope=repository:${package}:pull" https://ghcr.io/token)"; then
+              printf 'RELEASE_IMAGE_NOT_PUBLIC: make %s public before publishing the installer\n' "$image" >&2
+              exit 1
+            fi
+            anonymous_token="$(jq -er '.token' <<< "$token_json")"
+            curl --fail --silent --show-error --max-time 30 \
+              --header "Authorization: Bearer ${anonymous_token}" \
+              --header 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              --output /dev/null "https://ghcr.io/v2/${package}/manifests/sha-${GITHUB_SHA}"
+          done
 
       - name: Create or resume draft and upload exact assets
         env:
@@ -427,10 +378,9 @@ jobs:
           TAG="v${RELEASE_VERSION}"
           if [[ "$RESUME_DRAFT" == "false" ]]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
-              --title "Osinara ${TAG}" --notes-file "$RELEASE_NOTES_FILE"
+              --title "Мия ${TAG}" --notes-file "$RELEASE_NOTES_FILE"
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            agent-model-providers.json config/codex-subscription-model-providers.json \
             osinara-deployment.json compose.production.yaml install.sh osinara-installation.tar.gz \
             osinara-linux-x64 osinara-linux-x64.sha256
 
@@ -438,16 +388,11 @@ jobs:
           trap 'rm -rf "$VERIFY_DIR"' EXIT
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$VERIFY_DIR" \
             --pattern osinara-deployment.json --pattern compose.production.yaml \
-            --pattern agent-model-providers.json \
-            --pattern codex-subscription-model-providers.json \
             --pattern install.sh \
             --pattern osinara-installation.tar.gz \
             --pattern osinara-linux-x64 --pattern osinara-linux-x64.sha256
           cmp --silent osinara-deployment.json "$VERIFY_DIR/osinara-deployment.json"
           cmp --silent compose.production.yaml "$VERIFY_DIR/compose.production.yaml"
-          cmp --silent agent-model-providers.json "$VERIFY_DIR/agent-model-providers.json"
-          cmp --silent config/codex-subscription-model-providers.json \
-            "$VERIFY_DIR/codex-subscription-model-providers.json"
           cmp --silent install.sh "$VERIFY_DIR/install.sh"
           cmp --silent osinara-installation.tar.gz "$VERIFY_DIR/osinara-installation.tar.gz"
           cmp --silent osinara-linux-x64 "$VERIFY_DIR/osinara-linux-x64"
@@ -455,7 +400,7 @@ jobs:
           ASSETS_JSON="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,targetCommitish)"
           jq -e --arg sha "$GITHUB_SHA" '
             .isDraft == true and .targetCommitish == $sha and
-            ([.assets[].name] | sort) == ["agent-model-providers.json", "codex-subscription-model-providers.json", "compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]
+            ([.assets[].name] | sort) == ["compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]
           ' <<<"$ASSETS_JSON" >/dev/null
 
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

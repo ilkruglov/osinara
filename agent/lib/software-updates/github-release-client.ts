@@ -4,7 +4,7 @@
  * Exports:
  * - `GitHubSoftwareReleaseClient`: latest accepted release lookup contract.
  * - `createGitHubSoftwareReleaseClient`: bounded, no-retry GitHub client factory.
- * - `githubSoftwareReleaseClient`: production client for nyxandro/osinara.
+ * - `githubSoftwareReleaseClient`: production client for ilkruglov/osinara.
  */
 import { z } from "zod";
 
@@ -17,10 +17,11 @@ import { AppError } from "../app-error.js";
 import { compareSemver, stableVersionFromTag } from "./semver.js";
 import type { SoftwareRelease, SoftwareUpdateManifest } from "./types.js";
 
-const LATEST_RELEASE_URL = "https://api.github.com/repos/nyxandro/osinara/releases/latest";
+const LATEST_RELEASE_URL = "https://api.github.com/repos/ilkruglov/osinara/releases/latest";
 const MANIFEST_ASSET_NAME = "osinara-deployment.json";
 const GITHUB_API_VERSION = "2026-03-10";
 const IMAGE_DIGEST = "[0-9a-f]{64}";
+const NO_RELEASE = Symbol("no-published-release");
 
 const releaseSchema = z.object({
   assets: z.array(z.object({
@@ -39,19 +40,19 @@ const manifestSchema = z.object({
   commitSha: z.string().regex(/^[0-9a-f]{40}$/),
   composeSha256: z.string().regex(/^[0-9a-f]{64}$/),
   images: z.object({
-    app: z.string().regex(new RegExp(`^ghcr\\.io/nyxandro/osinara-app@sha256:${IMAGE_DIGEST}$`)),
+    app: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`)),
     cliProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-cli-proxy@sha256:${IMAGE_DIGEST}$`),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-cli-proxy@sha256:${IMAGE_DIGEST}$`),
     ),
-    edge: z.string().regex(new RegExp(`^ghcr\\.io/nyxandro/osinara-edge@sha256:${IMAGE_DIGEST}$`)),
+    edge: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`)),
     sandboxEgressProxy: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`),
     ),
     sandboxRunner: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runner@sha256:${IMAGE_DIGEST}$`),
     ),
     sandboxRuntime: z.string().regex(
-      new RegExp(`^ghcr\\.io/nyxandro/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`),
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`),
     ),
   }).strict(),
   schemaVersion: z.literal(1),
@@ -129,7 +130,7 @@ export function createGitHubSoftwareReleaseClient(
     );
   }
 
-  async function request(url: string, maxBytes: number, code: string, message: string) {
+  async function request(url: string, maxBytes: number, code: string, message: string, allowMissing = false) {
     // Every endpoint is called exactly once with its own bounded signal and no authorization header.
     const response = await dependencies.fetch(url, {
       headers: {
@@ -140,6 +141,7 @@ export function createGitHubSoftwareReleaseClient(
       redirect: "follow",
       signal: AbortSignal.timeout(dependencies.timeoutMs),
     });
+    if (allowMissing && response.status === 404) return NO_RELEASE;
     if (!response.ok) {
       throw new AppError(
         "AGENT_SOFTWARE_RELEASE_REQUEST_FAILED",
@@ -156,7 +158,9 @@ export function createGitHubSoftwareReleaseClient(
         SOFTWARE_UPDATE_GITHUB_RESPONSE_MAX_BYTES,
         "AGENT_SOFTWARE_RELEASE_INVALID",
         "GitHub вернул некорректные данные последнего релиза",
+        true,
       );
+      if (releaseJson === NO_RELEASE) return null;
       const parsedRelease = releaseSchema.safeParse(releaseJson);
       if (!parsedRelease.success) {
         throw new AppError(
@@ -172,7 +176,7 @@ export function createGitHubSoftwareReleaseClient(
       // The public URL and unique uploaded asset are constrained to this exact repository and tag.
       const releaseUrl = requireRepositoryUrl(
         release.html_url,
-        `/nyxandro/osinara/releases/tag/${release.tag_name}`,
+        `/ilkruglov/osinara/releases/tag/${release.tag_name}`,
         "AGENT_SOFTWARE_RELEASE_URL_INVALID",
       );
       const assets = release.assets.filter((asset) =>
@@ -186,7 +190,7 @@ export function createGitHubSoftwareReleaseClient(
       }
       const assetUrl = requireRepositoryUrl(
         assets[0]!.browser_download_url,
-        `/nyxandro/osinara/releases/download/${release.tag_name}/${MANIFEST_ASSET_NAME}`,
+        `/ilkruglov/osinara/releases/download/${release.tag_name}/${MANIFEST_ASSET_NAME}`,
         "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID",
       );
       const manifestJson = await request(

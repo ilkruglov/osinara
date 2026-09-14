@@ -2,21 +2,19 @@
 # Canonical GitHub release, manifest, and resolved Compose validation.
 # Binds exact Compose bytes and image digests before any released configuration reaches Docker.
 
-readonly GITHUB_REPOSITORY="nyxandro/osinara"
+readonly GITHUB_REPOSITORY="ilkruglov/osinara"
 readonly GITHUB_API="https://api.github.com/repos/${GITHUB_REPOSITORY}"
 readonly GITHUB_RELEASES="https://github.com/${GITHUB_REPOSITORY}/releases/download"
-readonly APP_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-app@sha256:"
-readonly CLI_PROXY_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-cli-proxy@sha256:"
-readonly EDGE_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-edge@sha256:"
-readonly EGRESS_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-sandbox-egress-proxy@sha256:"
-readonly RUNNER_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-sandbox-runner@sha256:"
-readonly RUNTIME_IMAGE_PREFIX="ghcr.io/nyxandro/osinara-sandbox-runtime@sha256:"
+readonly APP_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-app@sha256:"
+readonly CLI_PROXY_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-cli-proxy@sha256:"
+readonly EDGE_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-edge@sha256:"
+readonly EGRESS_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:"
+readonly RUNNER_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-runner@sha256:"
+readonly RUNTIME_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-runtime@sha256:"
 readonly POSTGRES_IMAGE="pgvector/pgvector:pg17@sha256:d2ef61f42ef767baa5a1475393303cc235bcd92febd9d7014eddb48b41f3bad0"
 readonly TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07"
 readonly RETAINED_LOCAL_RELEASE_IMAGE_COUNT=2
 readonly RELEASE_DIRECTORY_NAME_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-readonly V0152_MODEL_CONFIG_ASSET="agent-model-providers.json"
-readonly V0160_CODEX_MODEL_CONFIG_ASSET="codex-subscription-model-providers.json"
 
 curl_github() {
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
@@ -48,7 +46,7 @@ release_image_refs_from_env() {
   local key value
   [[ -f "$env_file" ]] || return 0
   while IFS='=' read -r key value; do
-    if is_release_image_variable "$key" && [[ "$value" == ghcr.io/nyxandro/osinara-*@sha256:* ]]; then
+    if is_release_image_variable "$key" && [[ "$value" == ghcr.io/ilkruglov/osinara-*@sha256:* ]]; then
       printf '%s\n' "$value"
     fi
   done < "$env_file"
@@ -125,7 +123,7 @@ validate_manifest() {
   require_image_ref "$RUNNER_IMAGE" "$RUNNER_IMAGE_PREFIX"
   require_image_ref "$RUNTIME_IMAGE" "$RUNTIME_IMAGE_PREFIX"
 
-  if [[ "$INITIAL_MODE" -eq 0 ]] && {
+  if {
     [[ "$STORED_VERSION" != "$version" || "$STORED_COMMIT" != "$MANIFEST_COMMIT" ||
        "$STORED_COMPOSE_SHA" != "$MANIFEST_COMPOSE_SHA" || "$STORED_APP" != "$APP_IMAGE" ||
        "$STORED_CLI_PROXY" != "$CLI_PROXY_IMAGE" || "$STORED_EDGE" != "$EDGE_IMAGE" ||
@@ -151,8 +149,6 @@ download_and_validate_release() {
   local tag_json="${WORK_DIR}/tag.json"
   local manifest="${WORK_DIR}/osinara-deployment.json"
   local compose="${WORK_DIR}/compose.production.yaml"
-  local model_config="${WORK_DIR}/${V0152_MODEL_CONFIG_ASSET}"
-  local codex_model_config="${WORK_DIR}/${V0160_CODEX_MODEL_CONFIG_ASSET}"
 
   curl_github --output "$release_json" "${GITHUB_API}/releases/tags/${tag}"
   jq -e --arg tag "$tag" --arg base "${GITHUB_RELEASES}/${tag}" '
@@ -160,25 +156,11 @@ download_and_validate_release() {
     ([.assets[] | select(.name == "osinara-deployment.json" and
       .browser_download_url == ($base + "/osinara-deployment.json"))] | length == 1) and
     ([.assets[] | select(.name == "compose.production.yaml" and
-      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1) and
-    ($tag != "v0.15.2" or
-      ([.assets[] | select(.name == "agent-model-providers.json" and
-        .browser_download_url == ($base + "/agent-model-providers.json"))] | length == 1)) and
-    ($tag != "v0.16.0" or
-      ([.assets[] | select(.name == "codex-subscription-model-providers.json" and
-        .browser_download_url == ($base + "/codex-subscription-model-providers.json"))] | length == 1))
+      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1)
   ' "$release_json" >/dev/null ||
     fail "DEPLOY_RELEASE_METADATA_INVALID" "Public release metadata is invalid"
   curl_github --output "$manifest" "${GITHUB_RELEASES}/${tag}/osinara-deployment.json"
   curl_github --output "$compose" "${GITHUB_RELEASES}/${tag}/compose.production.yaml"
-  if [[ "$version" == "0.15.2" ]]; then
-    curl_github --output "$model_config" \
-      "${GITHUB_RELEASES}/${tag}/${V0152_MODEL_CONFIG_ASSET}"
-  fi
-  if [[ "$version" == "0.16.0" ]]; then
-    curl_github --output "$codex_model_config" \
-      "${GITHUB_RELEASES}/${tag}/${V0160_CODEX_MODEL_CONFIG_ASSET}"
-  fi
   validate_manifest "$manifest" "$version"
   verify_compose_hash "$compose"
 
@@ -197,7 +179,7 @@ download_and_validate_release() {
 
 require_upgrade_from_current() {
   local current_version
-  current_version="$(jq -er '.version' "${CURRENT_LINK}/osinara-deployment.json")"
+  current_version="$(jq -er '.version' "$CURRENT_MANIFEST")"
   require_semver "$current_version"
   version_is_greater "$REQUESTED_VERSION" "$current_version" ||
     fail "DEPLOY_DOWNGRADE_FORBIDDEN" \
@@ -211,7 +193,7 @@ prepare_candidate_release() {
   install -m 0644 "${WORK_DIR}/compose.production.yaml" "${CANDIDATE_DIR}/compose.production.yaml"
   install -m 0644 "${WORK_DIR}/osinara-deployment.json" \
     "${CANDIDATE_DIR}/osinara-deployment.json"
-  CANDIDATE_COMPOSE="${CANDIDATE_DIR}/compose.production.yaml"
+  CANDIDATE_COMPOSE="${CANDIDATE_DIR}/compose.installation.json"
   CANDIDATE_ENV="${CANDIDATE_DIR}/release.env"
   {
     printf 'OSINARA_APP_IMAGE=%s\n' "$APP_IMAGE"
@@ -222,6 +204,15 @@ prepare_candidate_release() {
     printf 'OSINARA_EDGE_IMAGE=%s\n' "$EDGE_IMAGE"
   } > "$CANDIDATE_ENV"
   chmod 0600 "$CANDIDATE_ENV"
+  docker compose --env-file "$SERVER_ENV" --env-file "$CANDIDATE_ENV" \
+    -f "${CANDIDATE_DIR}/compose.production.yaml" config --no-interpolate --format json > "${CANDIDATE_DIR}/compose.full.json"
+  # Preserve an installed subscription gateway; direct-provider installations do not acquire one.
+  if jq -e '.services | has("cli-proxy-api")' "$CURRENT_COMPOSE" >/dev/null; then
+    cp "${CANDIDATE_DIR}/compose.full.json" "$CANDIDATE_COMPOSE"
+  else
+    jq 'del(.services["cli-proxy-api"], .services.agent.depends_on["cli-proxy-api"], .volumes["cli-proxy-auth"])' \
+      "${CANDIDATE_DIR}/compose.full.json" > "$CANDIDATE_COMPOSE"
+  fi
   validate_resolved_compose
 }
 
@@ -235,23 +226,16 @@ validate_resolved_compose_security() {
     all(.services[]; (has("build") or has("devices") or has("cap_add") or has("volumes_from")) | not) and
     all(.services[]; .logging.driver == "json-file" and
       .logging.options["max-size"] == "20m" and .logging.options["max-file"] == "5") and
-    .services["memory-extraction-worker"].healthcheck.test == [
-      "CMD", "node", "-e",
-      "const fs=require(\u0027node:fs\u0027),p=\u0027/tmp/osinara-memory-extraction-worker-ready\u0027;if(!fs.existsSync(p)||Date.now()-fs.statSync(p).mtimeMs<30000)process.exit(1)"
-    ] and
-    .services["memory-extraction-worker"].healthcheck.retries == 120 and
-    .services["memory-extraction-worker"].network_mode == "none" and
-    ((.services["memory-extraction-worker"].environment // {}) | length) == 0 and
-    ((.services["memory-extraction-worker"].volumes // []) | length) == 0 and
     ((.services.edge.networks // {}) | keys) == ["app-network", "edge-frontend"] and
     ([.services | to_entries[] |
       select((.value.networks // {}) | has("edge-frontend")) | .key] | sort) == ["edge"] and
     any(.services.agent.volumes[];
       .source == "/opt/osinara/agent-model-providers.json" and
       .target == "/app/config/agent-model-providers.json" and .read_only == true) and
-    any(.services["cli-proxy-api"].volumes[];
-      .source == "cli-proxy-auth" and
-      .target == "/var/lib/cli-proxy-api/auth" and .type == "volume") and
+    (if .services | has("cli-proxy-api") then
+      any(.services["cli-proxy-api"].volumes[];
+        .source == "cli-proxy-auth" and .target == "/var/lib/cli-proxy-api/auth" and .type == "volume")
+      else true end) and
     ([.services | to_entries[] as $service |
       ($service.value.volumes // [])[] |
       {service: $service.key, type, source, target}] | sort_by(.service, .target)) == ([
@@ -259,13 +243,15 @@ validate_resolved_compose_security() {
         {service: "agent", type: "volume", source: "google-workspace-credentials", target: "/app/google-workspace-credentials"},
         {service: "agent", type: "volume", source: "workspace-data", target: "/app/workspaces"},
         {service: "agent", type: "bind", source: "/opt/osinara/agent-model-providers.json", target: "/app/config/agent-model-providers.json"},
-        {service: "cli-proxy-api", type: "volume", source: "cli-proxy-auth", target: "/var/lib/cli-proxy-api/auth"},
         {service: "memory-embedding", type: "volume", source: "memory-embedding-model-e5", target: "/data"},
+        {service: "memory-reranker", type: "volume", source: "memory-reranker-model-minilm", target: "/data"},
         {service: "postgres", type: "volume", source: "postgres-data", target: "/var/lib/postgresql/data"},
         {service: "sandbox-runner", type: "bind", source: "/var/run/docker.sock", target: "/var/run/docker.sock"},
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
         {service: "sandbox-runner", type: "volume", source: "workspace-data", target: "/runner/workspaces"}
-      ] | sort_by(.service, .target)) and
+      ] + (if .services | has("cli-proxy-api") then
+        [{service: "cli-proxy-api", type: "volume", source: "cli-proxy-auth", target: "/var/lib/cli-proxy-api/auth"}]
+        else [] end) | sort_by(.service, .target)) and
     ([.services | to_entries[] as $service | ($service.value.ports // [])[] |
       {service: $service.key, host_ip, published, target}] == [{
         service: "edge", host_ip: "127.0.0.1", published: "8082", target: 80
@@ -278,21 +264,26 @@ validate_resolved_compose() {
   local expected_images_file="${WORK_DIR}/expected-images.txt"
   local config_json="${WORK_DIR}/resolved-compose.json"
   compose_candidate config --images | LC_ALL=C sort > "$images_file"
-  printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
-    "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$CLI_PROXY_IMAGE" \
-    "$POSTGRES_IMAGE" "$TEI_IMAGE" | LC_ALL=C sort > "$expected_images_file"
+  {
+    printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
+      "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$POSTGRES_IMAGE" "$TEI_IMAGE" "$TEI_IMAGE"
+    if jq -e '.services | has("cli-proxy-api")' "$CANDIDATE_COMPOSE" >/dev/null; then
+      printf '%s\n' "$CLI_PROXY_IMAGE"
+    fi
+  } | LC_ALL=C sort > "$expected_images_file"
   cmp --silent "$images_file" "$expected_images_file" ||
     fail "DEPLOY_COMPOSE_IMAGE_SET_INVALID" "Resolved Compose image multiset is not approved"
 
   compose_candidate config --format json > "$config_json"
   jq -e '
-    (.services | keys) == [
-      "agent", "cli-proxy-api", "edge", "memory-embedding", "memory-embedding-worker", "memory-extraction-worker", "migrate", "postgres",
+    (.services | keys) == ([
+      "agent", "edge", "memory-embedding", "memory-embedding-worker", "memory-reranker", "migrate", "postgres",
       "sandbox-egress-proxy", "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
-    ] and
+    ] + (if .services | has("cli-proxy-api") then ["cli-proxy-api"] else [] end) | sort) and
     .services.agent.depends_on.migrate.condition == "service_completed_successfully" and
-    .services.agent.depends_on["cli-proxy-api"].condition == "service_healthy" and
-    .services["memory-extraction-worker"].depends_on.migrate.condition == "service_completed_successfully"
+    .services.agent.depends_on["memory-reranker"].condition == "service_healthy" and
+    (if .services | has("cli-proxy-api") then
+      .services.agent.depends_on["cli-proxy-api"].condition == "service_healthy" else true end)
   ' "$config_json" >/dev/null ||
     fail "DEPLOY_COMPOSE_SERVICE_SET_INVALID" "Resolved Compose service set is not approved"
   validate_resolved_compose_security "$config_json" ||
@@ -300,12 +291,6 @@ validate_resolved_compose() {
 }
 
 pull_release_images() {
-  docker pull "$APP_IMAGE"
-  docker pull "$CLI_PROXY_IMAGE"
-  docker pull "$RUNTIME_IMAGE"
-  docker pull "$RUNNER_IMAGE"
-  docker pull "$EGRESS_IMAGE"
-  docker pull "$EDGE_IMAGE"
   compose_candidate pull --quiet
 }
 
@@ -315,18 +300,17 @@ start_candidate_release() {
 
 promote_candidate_release() {
   local final_dir="${RELEASES_DIR}/v${REQUESTED_VERSION}"
-  local temporary_link="${BASE_DIR}/.current.tmp.$$"
-  local temporary_env="${BASE_DIR}/.release.env.tmp.$$"
   [[ ! -e "$final_dir" ]] ||
     fail "DEPLOY_RELEASE_DIR_EXISTS" "Final release directory already exists"
   mv "$CANDIDATE_DIR" "$final_dir"
   CANDIDATE_DIR="$final_dir"
-  CANDIDATE_COMPOSE="${final_dir}/compose.production.yaml"
+  CANDIDATE_COMPOSE="${final_dir}/compose.installation.json"
   CANDIDATE_ENV="${final_dir}/release.env"
-  ln -s "$final_dir" "$temporary_link"
-  mv -Tf "$temporary_link" "$CURRENT_LINK"
-  install -m 0600 "$CANDIDATE_ENV" "$temporary_env"
-  mv -f "$temporary_env" "$GLOBAL_RELEASE_ENV"
-  CURRENT_COMPOSE="$CANDIDATE_COMPOSE"
-  CURRENT_ENV="$CANDIDATE_ENV"
+  local name temporary
+  for name in compose.installation.json release.env osinara-deployment.json; do
+    temporary="${BASE_DIR}/.${name}.pending.$$"
+    install -m 0600 "${final_dir}/${name}" "$temporary"
+    mv -f "$temporary" "${BASE_DIR}/${name}"
+  done
+  set_current_release_paths
 }

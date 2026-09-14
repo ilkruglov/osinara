@@ -4,7 +4,7 @@
  * Exports:
  * - `MEMORY_SCOPE_QUOTAS`: agreed maximum record counts by scope.
  * - Retrieval and thread-creation gates, ranking calibration, pagination, E5, and chunking.
- * - Timeline-selection and retired-worker controller compatibility constants.
+ * - Timeline-selection limits.
  * - R3 always-on profile subject, claim, character, and inactivity limits.
  * - Durable profile-projection notice delivery lease.
  * - Source-backed thread context, activation, episode, and history budgets.
@@ -29,10 +29,6 @@ export const MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 40;
 
 export const CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES = 50;
 
-// The retired service remains until the installed production controller removes its process contract.
-export const MEMORY_EXTRACTION_WORKER_IDLE_MILLISECONDS = 1_000;
-export const MEMORY_EXTRACTION_WORKER_READY_PATH = "/tmp/osinara-memory-extraction-worker-ready";
-export const MEMORY_EXTRACTION_WORKER_STABILITY_MILLISECONDS = 30_000;
 export const MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS = 1_000;
 
 // Live briefs are generated only for activated threads and contain whole source-backed records.

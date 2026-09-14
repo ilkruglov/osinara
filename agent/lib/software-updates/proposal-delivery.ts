@@ -16,7 +16,7 @@ import type {
   SoftwareUpdateTelegramTransport,
 } from "./types.js";
 
-const PREPARING_TEXT = "Подготавливаю безопасное предложение обновления Osinara.";
+const PREPARING_TEXT = "Подготавливаю безопасное предложение обновления Мии.";
 
 interface ProposalDeliveryDependencies {
   repository: Pick<
@@ -44,7 +44,7 @@ function failure(error: unknown) {
 
 function proposalText(input: DeliverSoftwareUpdateProposalInput): string {
   return [
-    `Доступно обновление Osinara до версии ${input.release.version}.`,
+    `Доступно обновление Мии до версии ${input.release.version}.`,
     `Описание релиза: ${input.release.releaseUrl}`,
     "Установить его, когда системный контроллер обновлений будет готов?",
   ].join("\n\n");

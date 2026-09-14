@@ -19,6 +19,12 @@ import { InstallerError } from "./errors.js";
 const MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024;
 const ALLOWED_ENTRIES = new Map<string, { mode: number; type: "directory" | "file" }>([
   ["installation/", { mode: 0o755, type: "directory" }],
+  ["installation/production-deploy/", { mode: 0o755, type: "directory" }],
+  ["installation/production-deploy.sh", { mode: 0o750, type: "file" }],
+  ...["common", "database", "release", "backup"].map((name): [string, { mode: number; type: "file" }] =>
+    [`installation/production-deploy/${name}.sh`, { mode: 0o640, type: "file" }]),
+  ...["osinara-deploy.service", "osinara-deploy.timer", "LICENSE", "NOTICE"].map((name): [string, { mode: number; type: "file" }] =>
+    [`installation/${name}`, { mode: 0o644, type: "file" }]),
   ["installation/Caddyfile", { mode: 0o644, type: "file" }],
   ["installation/compose.installation.json", { mode: 0o644, type: "file" }],
   ["installation/compose.tls.yaml", { mode: 0o644, type: "file" }],
