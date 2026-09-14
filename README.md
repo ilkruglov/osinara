@@ -270,8 +270,8 @@ TypeScript на Node 24 · [Eve](https://eve.dev/docs) `0.40.0` · PostgreSQL 17
 Docker Compose · DeepSeek V4 Flash (Responses API) · Groq Whisper · локальные эмбеддинги E5 ·
 Cloudflare Workers AI и NeuralDeep для картинок · Telegram как единственный канал.
 
-Архитектурные заметки и рантбуки — в [`docs/`](docs/), правила разработки — в [`CLAUDE.md`](CLAUDE.md)
-и [`AGENTS.md`](AGENTS.md), деплой — в [`docs/production-deployment.md`](docs/production-deployment.md).
+Установка и обновления описаны в [`docs/production-deployment.md`](docs/production-deployment.md),
+изменения версий — в [`docs/releases/`](docs/releases/).
 
 ## Безопасность
 

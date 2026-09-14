@@ -1,4 +1,10 @@
 node_modules
+**/node_modules
+**/.eve
+**/.workflow-data
+**/.output
+**/.runtime
+**/__pycache__
 .git
 .tmp
 .env*
@@ -10,3 +16,11 @@ node_modules
 coverage
 *.log
 .playwright-mcp/
+
+# Локальные инструкции и отчёты не публикуются и не входят в сборку.
+/AGENTS.md
+/CLAUDE.md
+/CODE_REVIEW*.md
+/docs/*
+!/docs/production-deployment.md
+!/docs/releases/
