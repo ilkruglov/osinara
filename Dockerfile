@@ -9,6 +9,7 @@ ARG OCI_REVISION
 LABEL org.opencontainers.image.source="${OCI_SOURCE}" \
       org.opencontainers.image.version="${OCI_VERSION}" \
       org.opencontainers.image.revision="${OCI_REVISION}"
+COPY LICENSE NOTICE /usr/share/doc/osinara/
 
 FROM first-party-node AS dependencies
 WORKDIR /app
@@ -65,6 +66,7 @@ ARG OCI_REVISION
 LABEL org.opencontainers.image.source="${OCI_SOURCE}" \
       org.opencontainers.image.version="${OCI_VERSION}" \
       org.opencontainers.image.revision="${OCI_REVISION}"
+COPY LICENSE NOTICE /usr/share/doc/osinara/
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes curl jq \
     && groupadd --gid 10001 cli-proxy \
@@ -193,5 +195,6 @@ ARG OCI_REVISION
 LABEL org.opencontainers.image.source="${OCI_SOURCE}" \
       org.opencontainers.image.version="${OCI_VERSION}" \
       org.opencontainers.image.revision="${OCI_REVISION}"
+COPY LICENSE NOTICE /usr/share/doc/osinara/
 COPY infra/nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
