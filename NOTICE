@@ -1,16 +1,21 @@
-Mia / Osinara fork
+Mia / Osinara
 Copyright 2026 ilkruglov
 
-Original contributions authored and owned by ilkruglov in this fork are
-licensed under the Apache License, Version 2.0. See LICENSE.
+Mia application code, including the inherited Osinara code, is licensed under
+Apache License, Version 2.0, except for third-party materials identified below.
+See LICENSE.
 
-This grant does not license or relicense inherited upstream code,
-contributions owned by other authors, dependencies, models, or bundled
-third-party materials. The upstream project is https://github.com/nyxandro/osinara
-and had no root license at the time this notice was added.
+Based on Osinara by nyxandro and contributors:
+https://github.com/nyxandro/osinara
+Osinara is licensed under Apache-2.0. This fork includes modifications by
+ilkruglov, recorded in Git history.
 
-In particular, agent/skills/docx, agent/skills/pdf, and agent/skills/xlsx retain
-their respective LICENSE.txt terms. No permission for those materials is
-granted by this notice or the root LICENSE. Original notices and third-party
-terms remain in force. This repository as a whole is not represented as
-licensed under Apache-2.0.
+Third-party materials retain their original licenses and notices. In particular:
+- agent/skills/docx: see agent/skills/docx/LICENSE.txt
+- agent/skills/pdf: see agent/skills/pdf/LICENSE.txt
+- agent/skills/xlsx: see agent/skills/xlsx/LICENSE.txt
+These packages are not relicensed under Apache-2.0. Neither this notice nor the
+root LICENSE grants rights beyond their respective license terms.
+
+Dependencies, browser executables, fonts, models and external services retain
+their own licenses and terms. Their inclusion does not make them Apache-2.0.
