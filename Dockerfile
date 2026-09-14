@@ -123,13 +123,12 @@ RUN apt-get update \
 # and download Chrome (480 MB) into every tools workspace in the middle of a turn, one copy per
 # family member and a version drift between them. Chrome for Testing matches the agent-browser
 # release; Lightpanda is the light engine for reading (`--engine lightpanda`, no screenshots).
-# agent-browser 0.36 launches Lightpanda with `--experimental-features`, which the tagged 0.4.0
-# rejects, so the nightly build is used and pinned by its hash: a changed nightly fails the build
-# instead of silently shipping an untested browser.
+# Use the tagged Lightpanda release: nightly assets are replaced in place and invalidate the
+# pinned checksum. agent-browser 0.36.0 was smoke-tested with 0.4.0 (open, title and snapshot).
 ARG AGENT_BROWSER_VERSION=0.36.0
 ARG CHROME_FOR_TESTING_VERSION=152.0.7977.82
-ARG LIGHTPANDA_VERSION=nightly
-ARG LIGHTPANDA_SHA256=5866fb548b2e0a0612f17a78194b074c44145e1e923834991208e33b398d30dd
+ARG LIGHTPANDA_VERSION=0.4.0
+ARG LIGHTPANDA_SHA256=bfcf9bd7e80939b87232aa114a49d8f397f51af0c2632d9fc58d4a6d4386624f
 RUN npm install --global --no-fund --no-audit "agent-browser@${AGENT_BROWSER_VERSION}" \
     && curl -fsSL -o /tmp/chrome-linux64.zip \
       "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_FOR_TESTING_VERSION}/linux64/chrome-linux64.zip" \
