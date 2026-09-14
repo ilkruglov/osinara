@@ -2,11 +2,10 @@
  * Reinforcement of existing memory records by opaque ref.
  *
  * Export:
- * - `memoryReinforcementRepository.reinforceByRefs`: bumps `reinforcement_count` and
- *   `last_reinforced_at` for active records the caller may read, and audits each bump.
+ * - `memoryReinforcementRepository.reinforceByRefs`: records turn-idempotent use or reinforcement for active
+ *   authorized records. Model use updates only use_count/last_used_at, never evidence recency.
  *
- * Reinforcement is the only signal that widens a record's stability (see
- * `memory-retention-score.ts`); it must come from use, never from mere display.
+ * Only explicit remember reinforcement widens stability. Neither display nor model use does.
  */
 import { database } from "./database.js";
 import type { MemoryAuthorization } from "./memory-context.js";
@@ -53,8 +52,16 @@ export const memoryReinforcementRepository = {
         [requested, auth.familyId, auth.scopes, auth.userId, auth.groupId],
       );
       for (const row of rows.rows) {
+        const event = await client.query(
+          `INSERT INTO memory_reinforcement_events (memory_item_id, eve_session_id, eve_turn_id, reason)
+           VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING memory_item_id`,
+          [row.id, input.provenance.sessionId, input.provenance.turnId, input.reason],
+        );
+        if (!event.rowCount) continue;
         await client.query(
-          `UPDATE memory_items
+          input.reason === "model_used"
+            ? `UPDATE memory_items SET use_count = use_count + 1, last_used_at = now() WHERE id = $1`
+            : `UPDATE memory_items
               SET reinforcement_count = reinforcement_count + 1, last_reinforced_at = now(), updated_at = now()
             WHERE id = $1`,
           [row.id],

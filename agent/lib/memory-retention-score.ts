@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `memoryStabilityDays`: base stability by record kind.
- * - `memoryRetention`: R = exp(-age / S); age from the last reinforcement, event date, or creation.
+ * - `memoryRetention`: R = exp(-age / S); age from learning or later reinforcement.
  * - `retentionRankFactor`: multiplier for retrieval relevance; the floor keeps old records searchable.
  * - `isRetainedForAutomaticContext`: threshold that applies only to the automatic turn block.
  *
@@ -38,8 +38,9 @@ export function memoryStabilityDays(kind: MemoryKind, attribute: string | null):
 }
 
 export function memoryRetention(input: MemoryRetentionInput, now: Date): number {
-  const anchor = input.lastReinforcedAt ?? input.occurredAt ?? input.createdAt;
-  const ageDays = Math.max(0, now.getTime() - anchor.getTime()) / DAY_MILLISECONDS;
+  // An old event learned today is new knowledge. occurredAt is for event-window search only.
+  const anchor = Math.max(input.createdAt.getTime(), input.lastReinforcedAt?.getTime() ?? 0);
+  const ageDays = Math.max(0, now.getTime() - anchor) / DAY_MILLISECONDS;
   const stability = memoryStabilityDays(input.kind, input.attribute) *
     (1 + Math.log(1 + Math.max(0, input.reinforcementCount)));
   return Math.exp(-ageDays / stability);

@@ -56,6 +56,7 @@ function parseVector(value: unknown): number[] | null {
 async function embedMemoryTexts(
   texts: readonly string[],
   fetchImplementation: typeof fetch = fetch,
+  signal: AbortSignal = AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MILLISECONDS),
 ): Promise<number[][]> {
   if (texts.length === 0 || texts.some((text) => !text.trim())) {
     throw new AppError(
@@ -74,7 +75,7 @@ async function embedMemoryTexts(
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
-      signal: AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MILLISECONDS),
+      signal,
     });
   } catch (error) {
     console.error(JSON.stringify({
@@ -169,12 +170,15 @@ export async function embedMemoryQuery(
 ): Promise<number[]> {
   const chunks = chunkMemoryQuery(query);
   const embeddings: number[][] = [];
+  // A chat turn may continue with lexical retrieval; bound the entire query, not each chunk.
+  const signal = AbortSignal.timeout(3_000);
   for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
     embeddings.push(...await embedMemoryTexts(
       chunks
         .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
         .map((chunk) => `${E5_QUERY_PREFIX}${chunk.content}`),
       fetchImplementation,
+      signal,
     ));
   }
   if (embeddings.length === 1) return embeddings[0]!;

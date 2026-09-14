@@ -21,13 +21,15 @@ export default defineTool({
     "Найти по словам и смыслу релевантные записи долговременной памяти в доступных областях для углубления контекста перед сложным ответом или действием.",
     "Если автоматической подборки недостаточно, вызови инструмент до трёх раз с разными смысловыми формулировками и остановись, когда контекста достаточно или новые релевантные факты больше не находятся.",
     "Для вопроса о периоде передай окно occurredAfter/occurredBefore: оно фильтрует по дате события, а без даты события по дате записи.",
+    "Если точный поиск пуст, а вопрос косвенный, один раз используй includeWeakMatches=true. Результаты matchQuality=weak требуют проверки полного текста: похожая тема не доказывает совпадение сущности или факта.",
   ].join(" "),
   inputSchema: z.object({
     query: z.string().min(1).max(2_000),
+    includeWeakMatches: z.boolean().optional(),
     occurredAfter: ISO_DATE.optional().describe("Начало окна по дате события (occurredAt, иначе дата записи), ISO 8601"),
     occurredBefore: ISO_DATE.optional().describe("Конец окна по дате события, ISO 8601"),
   }),
-  async execute({ query, occurredAfter, occurredBefore }, ctx) {
+  async execute({ query, occurredAfter, occurredBefore, includeWeakMatches }, ctx) {
     const auth = requireMemoryAuthorization(ctx);
     const applicationSessionId = ctx.session.auth.current?.attributes.applicationSessionId;
     const exposure = typeof applicationSessionId === "string"
@@ -37,6 +39,7 @@ export default defineTool({
         }
       : undefined;
     return await retrieveRelevantMemories(auth, query, exposure, {
+      ...(includeWeakMatches === undefined ? {} : { includeWeakMatches }),
       ...(occurredAfter === undefined ? {} : { occurredAfter }),
       ...(occurredBefore === undefined ? {} : { occurredBefore }),
     });

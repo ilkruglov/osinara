@@ -16,6 +16,8 @@
  * - Version 2 and later pass the eval gate of `authored-skill-example-repository.ts`: every stored
  *   example rerun, the reruns saved with the version; the publish's own trial becomes an example.
  */
+import { createHash } from "node:crypto";
+
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
@@ -34,6 +36,7 @@ import {
   type AuthoredSkillExample,
   type AuthoredSkillTrial,
 } from "./authored-skill-example-repository.js";
+import { skillEvaluationRepository, type SkillPublicationEvidence } from "./skill-evaluation-repository.js";
 import { requireCurrentOwner } from "./authored-skill-owner.js";
 
 export type AuthoredSkillOutcome = "failed" | "ok" | "unknown";
@@ -60,6 +63,7 @@ export interface AuthoredSkillContent extends AuthoredSkillSummary {
 }
 
 export interface AuthoredSkillPackage {
+  version?: number;
   description: string;
   files: Readonly<Record<string, string>>;
   markdown: string;
@@ -82,6 +86,7 @@ export interface PublishAuthoredSkillResult {
 }
 
 export interface PublishAuthoredSkillOptions {
+  evaluation?: SkillPublicationEvidence;
   knownToolNames: ReadonlySet<string>;
   operationKey: string;
   provenance: AuthoredSkillProvenance;
@@ -134,6 +139,7 @@ async function activeSkill(client: PoolClient, familyId: string, name: string): 
 }
 
 async function insertVersion(client: PoolClient, input: {
+  evaluation?: SkillPublicationEvidence;
   caller: FamilyCaller;
   changeNote: string;
   content: { description: string; files: Readonly<Record<string, string>>; markdown: string };
@@ -147,12 +153,12 @@ async function insertVersion(client: PoolClient, input: {
   await client.query(
     `INSERT INTO authored_skill_versions
        (skill_id, family_id, version, description, markdown, files, change_note, trial_summary,
-        operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb)`,
+        operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials, evaluation_candidate_id, evaluation_run_id)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)`,
     [input.skillId, input.caller.familyId, input.version, input.content.description,
       input.content.markdown, JSON.stringify(input.content.files), input.changeNote,
       input.trialSummary, input.operationKey, input.provenance.eveSessionId,
-      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials)],
+      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials), input.evaluation?.candidateId ?? null, input.evaluation?.runId ?? null],
   );
 }
 
@@ -196,6 +202,10 @@ export const authoredSkillRepository = {
         return { ...replayed, warnings };
       }
       const existing = await activeSkill(client, caller.familyId, draft.name);
+      if (input.evaluation) {
+        await skillEvaluationRepository.verify(client, caller.familyId, input.evaluation, draft,
+          existing?.version ?? 0, existing ? await activeExamples(client, existing.id) : [], input.trialRequest);
+      }
       let skillId: string;
       let version: number;
       if (existing) {
@@ -232,7 +242,7 @@ export const authoredSkillRepository = {
       }
       await insertVersion(client, {
         caller, changeNote: draft.changeNote, content: draft, operationKey: input.operationKey,
-        provenance: input.provenance, skillId, trials, trialSummary: draft.trialSummary, version,
+        provenance: input.provenance, skillId, trials, evaluation: input.evaluation, trialSummary: draft.trialSummary, version,
       });
       // The trial run of this publish becomes a stored example, so the next version reruns it.
       const exampleAdded = typeof input.trialRequest === "string" && input.trialRequest.trim().length > 0
@@ -389,13 +399,13 @@ export const authoredSkillRepository = {
 
   /** Current content of every active skill: what the dynamic resolver hands to Eve each turn. */
   async activePackages(familyId: string): Promise<AuthoredSkillPackage[]> {
-    const result = await database().query<Pick<SkillRow, "description" | "files" | "markdown" | "name">>(
-      `SELECT name, description, markdown, files FROM authored_skills
+    const result = await database().query<Pick<SkillRow, "description" | "files" | "markdown" | "name" | "version">>(
+      `SELECT name, description, markdown, files, version FROM authored_skills
         WHERE family_id = $1 AND status = 'active' ORDER BY name`,
       [familyId],
     );
     return result.rows.map((row) => ({
-      description: row.description, files: row.files, markdown: row.markdown, name: row.name,
+      description: row.description, files: row.files, markdown: row.markdown, name: row.name, version: row.version,
     }));
   },
 
@@ -426,10 +436,16 @@ export const authoredSkillRepository = {
     skillName: string;
   }): Promise<boolean> {
     const result = await database().query(
-      `INSERT INTO authored_skill_usage (skill_id, family_id, conversation_id, eve_session_id, eve_turn_id)
-       SELECT id, family_id, $3, $4, $5 FROM authored_skills
-        WHERE family_id = $1 AND name = $2 AND status = 'active'`,
-      [input.familyId, input.skillName, input.conversationId, input.eveSessionId, input.eveTurnId],
+      `INSERT INTO authored_skill_usage
+         (skill_id, family_id, conversation_id, eve_session_id, eve_turn_id, skill_version, usage_key)
+       SELECT skill.id, skill.family_id, $3, $4, $5, snapshot.version, $6
+         FROM authored_skills AS skill
+         LEFT JOIN authored_skill_turn_versions AS snapshot ON snapshot.skill_id = skill.id
+           AND snapshot.eve_session_id = $4 AND snapshot.eve_turn_id = $5
+        WHERE skill.family_id = $1 AND skill.name = $2 AND skill.status = 'active'
+       ON CONFLICT (usage_key) DO NOTHING`,
+      [input.familyId, input.skillName, input.conversationId, input.eveSessionId, input.eveTurnId,
+        createHash("sha256").update(JSON.stringify([input.familyId, input.skillName, input.eveSessionId, input.eveTurnId])).digest("hex")],
     );
     if ((result.rowCount ?? 0) > 0) {
       console.info(JSON.stringify({
@@ -449,28 +465,95 @@ export const authoredSkillRepository = {
     return (result.rowCount ?? 0) > 0;
   },
 
-  /** Sets the outcome of the latest usage of the skill, in this conversation when one is known. */
-  async recordOutcome(caller: Pick<FamilyCaller, "familyId">, input: {
+  /** Pin the versions actually resolved for a turn, before the model can load them. */
+  async capturePackages(familyId: string, provenance: AuthoredSkillProvenance, packages: readonly AuthoredSkillPackage[]): Promise<void> {
+    const versions = packages.filter((pkg) => pkg.version !== undefined).map((pkg) => ({ name: pkg.name, version: pkg.version }));
+    if (versions.length === 0) return;
+    await database().query(
+      `INSERT INTO authored_skill_turn_versions (family_id, eve_session_id, eve_turn_id, skill_id, version)
+       SELECT s.family_id,$2,$3,s.id,p.version FROM jsonb_to_recordset($4::jsonb) AS p(name text,version integer)
+       JOIN authored_skills s ON s.name=p.name AND s.family_id=$1
+       ON CONFLICT (eve_session_id,eve_turn_id,skill_id) DO UPDATE SET version=EXCLUDED.version`,
+      [familyId,provenance.eveSessionId,provenance.eveTurnId,JSON.stringify(versions)],
+    );
+  },
+
+  /** Exact execution facts never overwrite the separately supplied goal outcome. */
+  async recordTelemetry(input: {
+    familyId: string; name: string; eveSessionId: string; eveTurnId: string;
+    executionStatus: "completed" | "failed"; note: string; stepCount: number;
+  }): Promise<{ usageFound: boolean }> {
+    const result = await database().query(
+      `UPDATE authored_skill_usage AS usage SET execution_status = $5, execution_note = $6,
+          step_count = $7, completed_at = now()
+        FROM authored_skills AS skill
+        WHERE usage.skill_id = skill.id AND skill.family_id = $1 AND skill.name = $2
+          AND usage.eve_session_id = $3 AND usage.eve_turn_id = $4 AND usage.usage_key IS NOT NULL`,
+      [input.familyId, input.name, input.eveSessionId, input.eveTurnId, input.executionStatus, input.note, input.stepCount],
+    );
+    return { usageFound: (result.rowCount ?? 0) > 0 };
+  },
+
+  async usages(familyId: string, name: string, conversationId: string | null) {
+    if (conversationId === null) return [];
+    const result = await database().query(
+      `SELECT usage.id, usage.skill_version AS version, usage.eve_turn_id, usage.loaded_at,
+              usage.outcome, usage.outcome_source, usage.note, usage.execution_status,
+              usage.execution_note, usage.step_count
+         FROM authored_skill_usage AS usage JOIN authored_skills AS skill ON skill.id = usage.skill_id
+        WHERE skill.family_id = $1 AND skill.name = $2 AND usage.conversation_id = $3
+        ORDER BY usage.loaded_at DESC LIMIT 20`, [familyId, name, conversationId],
+    );
+    return result.rows;
+  },
+
+  /** Owner feedback targets an explicit usage in the current conversation, never "the latest". */
+  async recordOutcome(caller: FamilyCaller, input: {
     conversationId: string | null;
+    usageId: string;
     name: string;
     note: string | null;
     outcome: Exclude<AuthoredSkillOutcome, "unknown">;
   }): Promise<{ name: string; outcome: AuthoredSkillOutcome; usageFound: boolean }> {
-    const result = await database().query(
-      `UPDATE authored_skill_usage SET outcome = $3, note = $4, outcome_at = now()
-        WHERE id = (
-          SELECT usage.id FROM authored_skill_usage AS usage
-            JOIN authored_skills AS skill ON skill.id = usage.skill_id
-           WHERE skill.family_id = $1 AND skill.name = $2
-             AND ($5::uuid IS NULL OR usage.conversation_id = $5::uuid)
-           ORDER BY usage.loaded_at DESC LIMIT 1)`,
-      [caller.familyId, input.name, input.outcome, input.note, input.conversationId],
-    );
-    const usageFound = (result.rowCount ?? 0) > 0;
-    console.info(JSON.stringify({
-      code: "AGENT_SKILL_OUTCOME", familyId: caller.familyId, name: input.name,
-      outcome: input.outcome, usageFound,
-    }));
-    return { name: input.name, outcome: input.outcome, usageFound };
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      await requireCurrentOwner(client, caller);
+      await lockFamilyLibrary(client, caller.familyId);
+      const result = await client.query(
+        `UPDATE authored_skill_usage AS usage SET outcome = $3, note = $4, outcome_at = now(), outcome_source = 'owner'
+          FROM authored_skills AS skill
+          WHERE usage.skill_id = skill.id AND skill.family_id = $1 AND skill.name = $2
+            AND usage.conversation_id = $5::uuid AND usage.id = $6::uuid`,
+        [caller.familyId, input.name, input.outcome, input.note, input.conversationId, input.usageId],
+      );
+      if (result.rowCount && input.outcome === "failed") {
+        // Two distinct, owner-confirmed failures of the CURRENT version queue one preparation.
+        // The hint goes only to the owner's personal conversation, never a member's next group turn.
+        await client.query(
+          `WITH requested AS (
+             INSERT INTO authored_skill_improvement_requests (skill_id,version,conversation_id)
+             SELECT s.id,s.version,$3 FROM authored_skills s
+             WHERE s.family_id=$1 AND s.name=$2 AND s.status='active' AND
+               (SELECT count(*) FROM authored_skill_usage u WHERE u.skill_id=s.id AND u.skill_version=s.version
+                AND u.conversation_id=$3 AND u.outcome='failed' AND u.outcome_source='owner') >= 2
+             ON CONFLICT DO NOTHING RETURNING skill_id
+           ) INSERT INTO conversation_skill_hints
+             (conversation_id,family_id,kind,summary,eve_session_id,eve_turn_id)
+             SELECT c.id,$1,'improve',$2,'skill-feedback','skill-feedback' FROM application_conversations c
+             WHERE c.family_id=$1 AND c.owner_user_id=$4 AND c.scope='personal' AND EXISTS (SELECT 1 FROM requested)
+             ON CONFLICT (conversation_id) DO UPDATE SET kind='improve',summary=EXCLUDED.summary,
+               step_count=NULL,tool_names='{}',created_at=now()`,
+          [caller.familyId,input.name,input.conversationId,caller.userId],
+        );
+      }
+      await client.query("COMMIT");
+      return { name: input.name, outcome: input.outcome, usageFound: (result.rowCount ?? 0) > 0 };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 };

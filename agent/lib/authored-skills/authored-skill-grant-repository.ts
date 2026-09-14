@@ -161,7 +161,7 @@ export const authoredSkillGrantRepository = {
   /** Active granted skills whose steps the group's current allowlist covers. */
   async packagesForGroup(input: { familyId: string; groupId: string }): Promise<AuthoredSkillPackage[]> {
     const result = await database().query<PackageRow>(
-      `SELECT skill.name, skill.description, skill.markdown, skill.files, telegram_group.tool_allowlist
+      `SELECT skill.name, skill.description, skill.markdown, skill.files, skill.version, telegram_group.tool_allowlist
          FROM authored_skill_group_grants AS grant_row
          JOIN authored_skills AS skill ON skill.id = grant_row.skill_id
          JOIN telegram_groups AS telegram_group ON telegram_group.id = grant_row.group_id
@@ -173,7 +173,7 @@ export const authoredSkillGrantRepository = {
     );
     return result.rows
       .filter((row) => externalGroupMissingTools(row.markdown, new Set(row.tool_allowlist)).length === 0)
-      .map((row) => ({ description: row.description, files: row.files, markdown: row.markdown, name: row.name }));
+      .map((row) => ({ description: row.description, files: row.files, markdown: row.markdown, name: row.name, version: row.version }));
   },
 
   /** Markdown of the granted active skill, or null when the group holds no such grant. */

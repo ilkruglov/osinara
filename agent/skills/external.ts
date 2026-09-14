@@ -1,4 +1,5 @@
 /** External capability-coupled skills refreshed from verified auth each turn. */
+import { z } from "zod";
 import { defineDynamic } from "eve/skills";
 
 import { isScheduledSession } from "../lib/agent-schedules/scheduled-session.js";
@@ -11,6 +12,7 @@ export default defineDynamic({
     "turn.started": (_event, ctx) => isMemoryReviewSession(ctx)
       ? {}
       : timed("skills_external", () => resolveExternalTurnSkills(ctx.session.auth, {
+        provenance: { eveSessionId: ctx.session.id, eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data.turnId },
         scheduledRun: isScheduledSession(ctx),
         subagent: ctx.channel.kind === "subagent",
       })),

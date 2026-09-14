@@ -5,21 +5,73 @@
  * - `supersedeSlotClaims`: retires older active claims of the same subject and attribute slot.
  */
 import type { PoolClient } from "pg";
-import { MEMORY_SEMANTIC_KINDS } from "./memory-config.js";
+import { MEMORY_LIST_MAX_LIMIT, MEMORY_SEMANTIC_KINDS } from "./memory-config.js";
 
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
-import type { MemoryKind } from "./memory-record.js";
+import { ModelFacingError } from "./model-facing-error.js";
+import type { CreateMemoryInput, MemoryKind } from "./memory-record.js";
 
 export interface SlotSupersedeInput {
   attribute: string;
-  kind: MemoryKind;
   newClaimId: string;
+  previousClaimIds: string[];
   scope: MemoryScope;
-  scopePartitionKey: string;
-  subjectLabel: string | null;
-  subjectParticipantId: string | null;
-  subjectUserId: string | null;
   systemActor: boolean;
+}
+
+export async function lockSlotClaims(
+  client: PoolClient, auth: MemoryAuthorization,
+  input: { attribute: string; kind: MemoryKind; scope: MemoryScope; scopePartitionKey: string; subjectLabel: string | null; subjectParticipantId: string | null; subjectUserId: string | null; memoryProjectId: string | null },
+): Promise<Array<{ id: string; memory_ref: string }>> {
+  // Lock the identity before inserting, including an empty slot. Row locks alone miss first-write races.
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([
+    "memory-slot", auth.familyId, input.scope, input.scopePartitionKey, input.attribute,
+    input.kind === "episode" ? "episode" : "semantic", input.subjectLabel,
+    input.subjectParticipantId, input.subjectUserId, input.memoryProjectId,
+  ])]);
+  // The slot is one subject in one partition; a label-only subject is still one slot per label.
+  // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
+  // version chain); an episode slot only ever holds episodes.
+  const slotKinds = input.kind === "episode" ? ["episode"] : [...MEMORY_SEMANTIC_KINDS];
+  const previous = await client.query<{ id: string; memory_ref: string }>(
+    `SELECT item.id, ref.memory_ref FROM memory_items AS item
+      JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
+      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
+        AND item.claim_status = 'active' AND item.memory_project_id IS NOT DISTINCT FROM $4::uuid
+        AND item.subject_family_id IS NULL
+        AND item.attribute = $5 AND item.kind = ANY($6::memory_kind[])
+        AND item.subject_participant_id IS NOT DISTINCT FROM $7::uuid
+        AND item.subject_user_id IS NOT DISTINCT FROM $8::uuid
+        AND item.subject_label IS NOT DISTINCT FROM $9::text
+      ORDER BY item.created_at, item.id FOR UPDATE OF item`,
+    [auth.familyId, input.scope, input.scopePartitionKey, input.memoryProjectId, input.attribute,
+      slotKinds, input.subjectParticipantId, input.subjectUserId, input.subjectLabel],
+  );
+  return previous.rows;
+}
+
+export function requireSlotUpdate(
+  rows: readonly { id: string; memory_ref: string }[],
+  update: CreateMemoryInput["slotUpdate"],
+): string[] {
+  const actual = rows.map((row) => row.memory_ref).sort();
+  const expected = update?.previousMemoryRefs.slice().sort();
+  const code = update ? "AGENT_MEMORY_SLOT_CHANGED" : "AGENT_MEMORY_SLOT_REVIEW_REQUIRED";
+  if ((actual.length > 0 && !update) || (update && JSON.stringify(actual) !== JSON.stringify(expected))) {
+    throw new ModelFacingError({
+      category: "conflict", code, field: "slotUpdate", retryable: false, sideEffectStatus: "not_started",
+      reason: update ? "Состав слота изменился после чтения" : "В слоте уже есть активные записи",
+      correction: "Прочитай полный текст актуальных записей через list_memories/search_memories. Затем передай slotUpdate с их previousMemoryRefs: add для дополнения, replace для полной новой версии. Текущие ссылки: " + actual.join(", "),
+    });
+  }
+  if (update?.action === "add" && actual.length >= MEMORY_LIST_MAX_LIMIT) {
+    throw new ModelFacingError({
+      category: "conflict", code: "AGENT_MEMORY_SLOT_LIMIT_REACHED", field: "slotUpdate",
+      retryable: false, sideEffectStatus: "not_started", reason: "Достигнут предел отдельных деталей в одном слоте",
+      correction: "Собери полную новую версию всех прочитанных записей с action=replace, сохранив актуальные детали.",
+    });
+  }
+  return update?.action === "replace" ? rows.map((row) => row.id) : [];
 }
 
 export async function supersedeSlotClaims(
@@ -27,23 +79,7 @@ export async function supersedeSlotClaims(
   auth: MemoryAuthorization,
   input: SlotSupersedeInput,
 ): Promise<string[]> {
-  // The slot is one subject in one partition; a label-only subject is still one slot per label.
-  // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
-  // version chain); an episode slot only ever holds episodes.
-  const slotKinds = input.kind === "episode" ? ["episode"] : [...MEMORY_SEMANTIC_KINDS];
-  const previous = await client.query<{ id: string }>(
-    `SELECT item.id FROM memory_items AS item
-      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
-        AND item.claim_status = 'active' AND item.id <> $4
-        AND item.attribute = $5 AND item.kind = ANY($6::memory_kind[])
-        AND item.subject_participant_id IS NOT DISTINCT FROM $7::uuid
-        AND item.subject_user_id IS NOT DISTINCT FROM $8::uuid
-        AND item.subject_label IS NOT DISTINCT FROM $9::text
-      ORDER BY item.created_at, item.id FOR UPDATE OF item`,
-    [auth.familyId, input.scope, input.scopePartitionKey, input.newClaimId, input.attribute,
-      slotKinds, input.subjectParticipantId, input.subjectUserId, input.subjectLabel],
-  );
-  const ids = previous.rows.map((row) => row.id);
+  const ids = input.previousClaimIds;
   for (const previousId of ids) {
     // Thread order follows the newest version, exactly as an explicit correction does.
     await client.query(

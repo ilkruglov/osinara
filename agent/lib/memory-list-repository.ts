@@ -45,13 +45,17 @@ function decodeCursor(
 export const memoryListRepository = {
   async list(
     auth: MemoryAuthorization,
-    options: { cursor?: string; limit: number; scope?: MemoryScope },
+    options: { cursor?: string; limit: number; scope?: MemoryScope; memoryRefs?: string[] },
   ): Promise<{ items: ReferencedMemoryItem[]; nextCursor: string | null }> {
     if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > MEMORY_LIST_MAX_LIMIT) {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный размер страницы памяти");
     }
     if (options.scope && !auth.scopes.includes(options.scope)) {
       throw new AppError("AGENT_MEMORY_SCOPE_DENIED", "Эта информация недоступна в текущем чате");
+    }
+    if (options.memoryRefs && (options.memoryRefs.length === 0 || options.memoryRefs.length > MEMORY_LIST_MAX_LIMIT ||
+      !options.memoryRefs.every((ref) => MEMORY_REF_PATTERN.test(ref)))) {
+      throw new AppError("AGENT_MEMORY_REF_INVALID", "Нужны точные ссылки из текущих результатов памяти");
     }
     // Bind the opaque cursor to its authorization and filters so it cannot cross result sets.
     const cursorBinding = paginationFilterDigest([
@@ -61,11 +65,12 @@ export const memoryListRepository = {
       auth.groupId,
       [...auth.scopes].sort().join(","),
       options.scope ?? null,
+      ...(options.memoryRefs ? [[...new Set(options.memoryRefs)].sort().join(",")] : []),
     ]);
     const cursor = decodeCursor(options.cursor, cursorBinding);
     const result = await database().query<MemoryListRow>(
       `SELECT item.id, item.author_user_id, item.author_telegram_user_id, item.scope, item.kind,
-               item.content, item.source, item.confirmation, item.sensitivity,
+               item.content, item.attribute, item.source, item.confirmation, item.sensitivity,
                item.message_thread_id, item.embedding_status, item.created_at, item.updated_at, item.occurred_at,
                ref.memory_ref,
                COALESCE(source_evidence.evidence_kind, 'unresolved') AS source_evidence_kind,
@@ -81,6 +86,7 @@ export const memoryListRepository = {
        ) AS source_evidence ON true
         WHERE item.family_id = $1 AND item.claim_status = 'active'
           AND ($5::memory_scope IS NULL OR item.scope = $5)
+          AND ($9::text[] IS NULL OR ref.memory_ref = ANY($9::text[]))
            AND ${liveMemoryReadPredicate({
              alias: "item",
              personalIdentityColumn: "owner_user_id",
@@ -97,6 +103,7 @@ export const memoryListRepository = {
         cursor?.updatedAt ?? null,
         cursor?.memoryRef ?? null,
         options.limit + 1,
+        options.memoryRefs ?? null,
       ],
     );
     const hasNext = result.rows.length > options.limit;

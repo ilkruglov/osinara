@@ -90,6 +90,19 @@ describe("skill signals", () => {
     expect(dependencies.saveHint).not.toHaveBeenCalled();
   });
 
+  it("records scheduled usage without suggesting skill creation", async () => {
+    const handlers = createSkillSignalHandlers(dependencies);
+    const ctx = context({ ...OWNER, scheduledRunId: "run-1" });
+    await handlers.actionsRequested({ data: { actions: [
+      { callId: "c1", input: { skill: "daily-report" }, kind: "load-skill" },
+    ], turnId: "scheduled-turn" } }, ctx);
+    expect(dependencies.recordUsage).toHaveBeenCalledWith(expect.objectContaining({
+      skillName: "daily-report", eveTurnId: "scheduled-turn",
+    }));
+    await handlers.turnCompleted({ data: { turnId: "scheduled-turn" } }, ctx);
+    expect(dependencies.saveHint).not.toHaveBeenCalled();
+  });
+
   it("saves a hint after four real tool calls in one trusted turn", async () => {
     const handlers = createSkillSignalHandlers(dependencies);
     const ctx = context(OWNER);

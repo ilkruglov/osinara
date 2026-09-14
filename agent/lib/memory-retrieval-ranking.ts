@@ -7,7 +7,7 @@
  * - `normalizeMemoryExactDuplicateKey`: safe exact-read normalization key.
  * - `collapseExactDuplicateRetrievalResults`: preserves top-ranked representatives without writes.
  */
-import type { ReferencedMemoryItem } from "./memory-record.js";
+import { normalizeMemoryClaimContent, type ReferencedMemoryItem } from "./memory-record.js";
 import type { ModelMemoryEvidence } from "./model-memory.js";
 
 export interface MemoryRetrievalBranchEvidence {
@@ -22,18 +22,13 @@ export interface ScoredMemoryRetrievalResult {
   memory: ReferencedMemoryItem;
   /** exp(-age / S) in [0, 1]; the automatic turn block admits only retained records. */
   retention: number;
+  rerankScore?: number;
   sourceEvidence?: ModelMemoryEvidence;
   score: number;
 }
 
 export function normalizeMemoryExactDuplicateKey(content: string): string {
-  // NFKC folds compatibility forms; punctuation becomes a boundary instead of joining words.
-  return content
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\p{P}\p{S}]+/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
+  return normalizeMemoryClaimContent(content);
 }
 
 export function collapseExactDuplicateRetrievalResults(

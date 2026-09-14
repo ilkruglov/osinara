@@ -16,6 +16,9 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { skillSelectionCaseSchema } from "../authored-skills/skill-selection.js";
+import { skillEvaluationRepository } from "../authored-skills/skill-evaluation-repository.js";
+import { skillCheckSchema } from "../authored-skills/skill-evaluation.js";
 import { AppError } from "../app-error.js";
 import {
   AUTHORED_SKILL_LIMITS,
@@ -33,20 +36,25 @@ import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../famil
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const TOOL_DESCRIPTION = [
-  "Библиотека собственных навыков Мии, одна на семью: list, read, publish, rollback, retire, record_outcome, grant, revoke, add_example, remove_example. Только владелец, только в личном чате владельца или семейной группе.",
-  "Когда применять: владелец просит создать, улучшить, откатить или убрать навык; ты предлагаешь сохранить повторяемую задачу как навык по служебной подсказке; после применения навыка владелец сказал, что вышло хорошо или плохо. Сначала загрузи skill-authoring через load_skill: он задаёт порядок работы и рубрику.",
-  "Когда не применять: стиль общения это manage_behavior_preference; факт о человеке это remember; разовая задача просто выполняется без навыка; расписание это manage_agent_schedule.",
-  "Publish требует пробного прогона в этом ходу: запрос в trialRequest, результат в trialSummary; пара сохраняется как пример навыка (до 5, read показывает их с id). Версия 2+: прогони каждый пример заново и передай trials по всем, иначе AGENT_SKILL_EVAL_MISSING. Publish, rollback, retire, grant и revoke требуют кнопки владельца. Опубликованный навык доступен со следующего хода.",
-  `Markdown навыка без frontmatter, обязательные разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.map((section) => `«${section}»`).join(", ")}; в шагах имена инструментов в обратных кавычках только из текущего режима; навык с generate_image обязан нести references/<имя>.md с английским шаблоном промпта. Лимиты: markdown ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов, до ${AUTHORED_SKILL_LIMITS.filesMax} файлов references/<имя>.md по ${AUTHORED_SKILL_LIMITS.fileMaxCharacters} символов, ${AUTHORED_SKILL_LIMITS.activeSkillsPerFamily} активных навыков на семью.`,
-  "Publish: {\"action\":\"publish\",\"name\":\"birthday-card\",\"description\":\"Открытка к празднику через Flux: поздравление с картинкой, подарочная карточка\",\"markdown\":\"## Когда применять\\n…\\n## Шаги\\n1. Вызови `generate_image`…\\n## Проверка результата\\n…\",\"files\":{\"references/flux-card.md\":\"…\"},\"changeNote\":\"Первая версия\",\"trialRequest\":\"Открытка Жене на день рождения\",\"trialSummary\":\"Сделала открытку, отправила в чат\"}; версия 2 плюс \"trials\":[{\"exampleId\":\"…\",\"summary\":\"…\"}]. Add_example: name, request, expected. Remove_example: name, exampleId.",
-  "Rollback: {\"action\":\"rollback\",\"name\":\"birthday-card\",\"version\":1}. Retire и read: name (read принимает version). Record_outcome: {\"action\":\"record_outcome\",\"name\":\"birthday-card\",\"outcome\":\"failed\",\"note\":\"на картинке появился текст\"}.",
-  `Grant выдаёт навык внешней группе (group: название или chat id), revoke забирает; до ${AUTHORED_SKILL_LIMITS.grantsPerGroup} навыков на группу. Навык прав не добавляет: инструмент из шагов, не выданный группе, приводит к отказу с перечнем недостающих. List показывает гранты.`,
+  "Библиотека собственных навыков Мии, одна на семью. Только владелец в личном или семейном чате. Сначала load_skill skill-authoring.",
+  "list/read показывают навыки, примеры, черновики и usages с id, версией, оценкой владельца и отдельной технической статистикой. record_outcome требует name, usageId из read, outcome ok/failed и note; записывай только явную оценку владельца.",
+  "Создание и улучшение: draft (name, description, markdown, files, changeNote) сохраняет неизменяемого кандидата. test_selection (candidateId, selectionCases:[{request,shouldLoad}]) проверяет выбор навыка в свежем контексте на 2–6 положительных и отрицательных запросах.",
+  "Пробный прогон: begin_trial с candidateId, variant candidate/baseline, request (или exampleId сохранённого примера), checks:[{toolName,path,operator,expected}]. Операторы succeeded, nonempty, equals; path это ключи JSON в output инструмента. Задай проверки ДО выполнения; затем выполни пример и finish_trial с runId и trialSummary. Выполняй последовательными шагами, begin_trial отдельно от проверяемых инструментов. Служебный manage_skill не считается доказательством. cancel_trial с runId отменяет начатый прогон.",
+  "Прогоны сами инструменты не запускают. Побочные действия только по явной просьбе владельца; при повторных проверках используй тестовые адресаты и файлы. Проверки доказывают наблюдаемое выполнение, качество принимает владелец.",
+  "publish требует тот же контент, candidateId, успешный runId, trialRequest и trialSummary. Для обновления каждый сохранённый пример должен иметь baseline и успешный candidate с одинаковыми checks; trials:[{exampleId,summary}] остаются пояснением, не доказательством. Изменился контент или базовая версия: новый draft и проверки. Publish, rollback, retire, grant, revoke требуют кнопки владельца.",
+  `Markdown без frontmatter; обязательные разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.join(", ")}. Инструменты только текущего режима. До ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов, ${AUTHORED_SKILL_LIMITS.filesMax} файлов references/*.md по ${AUTHORED_SKILL_LIMITS.fileMaxCharacters}. Навык с generate_image требует reference с шаблоном промпта.`,
+  "add_example: name, request, expected. remove_example: name, exampleId, только по просьбе владельца. rollback: name, version. retire: name. grant/revoke: name, group; права инструментов навык не добавляет. Опубликованный навык доступен со следующего хода.",
 ].join(" ");
 
 const MUTATING_ACTIONS = new Set(["grant", "publish", "retire", "revoke", "rollback"]);
 
 const manageSkillSchema = z.object({
-  action: z.enum(["add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
+  action: z.enum(["cancel_trial", "test_selection", "draft", "begin_trial", "finish_trial", "add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
+  selectionCases: z.array(skillSelectionCaseSchema).min(2).max(6).optional().describe("test_selection: положительные и отрицательные запросы для выбора навыка"),
+  candidateId: z.uuid().optional().describe("begin_trial и publish: id неизменяемого черновика из draft"),
+  runId: z.uuid().optional().describe("finish_trial и publish: id наблюдаемого прогона"),
+  checks: z.array(skillCheckSchema).min(1).max(10).optional().describe("begin_trial: заранее заданные проверки output инструмента; path это массив ключей JSON"),
+  variant: z.enum(["baseline", "candidate"]).optional().describe("begin_trial: текущая версия или черновик"),
   changeNote: z.string().max(AUTHORED_SKILL_LIMITS.changeNoteMaxCharacters).optional()
     .describe("publish: что изменилось и зачем"),
   description: z.string().max(AUTHORED_SKILL_LIMITS.descriptionMaxCharacters).optional()
@@ -74,6 +82,7 @@ const manageSkillSchema = z.object({
     .describe("publish версии 2+: прогон каждого сохранённого примера и что получилось"),
   trialSummary: z.string().max(AUTHORED_SKILL_LIMITS.trialSummaryMaxCharacters).optional()
     .describe("publish: что выполнено в пробном прогоне и что получилось"),
+  usageId: z.uuid().optional().describe("record_outcome: id конкретного применения из read, обязательно"),
   version: z.number().int().min(1).optional().describe("read: версия; rollback: к какой версии вернуться"),
 }).strict();
 
@@ -143,16 +152,38 @@ export default defineTool({
         return { ...result, note: "Группа больше не получает этот навык" };
       }
       case "read":
-        return await authoredSkillRepository.read(owner.familyId, requireName(input), input.version);
+        return {
+          ...await authoredSkillRepository.read(owner.familyId, requireName(input), input.version),
+          candidates: await skillEvaluationRepository.list(owner.familyId, requireName(input)),
+          usages: await authoredSkillRepository.usages(owner.familyId, requireName(input), await authoredSkillRepository.conversationId(owner)),
+        };
       case "record_outcome": {
-        if (input.outcome === undefined) {
-          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для record_outcome укажи outcome: ok или failed");
+        if (input.outcome === undefined || input.usageId === undefined) {
+          throw new AppError("AGENT_SKILL_INPUT_INVALID", "Для record_outcome укажи usageId из read и outcome: ok или failed");
         }
         const conversationId = await authoredSkillRepository.conversationId(owner);
         return await authoredSkillRepository.recordOutcome(caller, {
-          conversationId, name: requireName(input), note: input.note ?? null, outcome: input.outcome,
+          conversationId, usageId: input.usageId, name: requireName(input), note: input.note ?? null, outcome: input.outcome,
         });
       }
+      case "test_selection": {
+        if (!input.candidateId || !input.selectionCases) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId и selectionCases");
+        return await skillEvaluationRepository.testSelection(caller, input.candidateId, input.selectionCases);
+      }
+      case "begin_trial": {
+        if (!input.candidateId || !input.checks || !input.variant) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужны candidateId, checks, variant");
+        return await skillEvaluationRepository.begin(caller, { ...provenance, candidateId: input.candidateId,
+          exampleId: input.exampleId, request: input.request, checks: input.checks, variant: input.variant, operationKey: ctx.callId });
+      }
+      case "cancel_trial": {
+        if (!input.runId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен runId");
+        return await skillEvaluationRepository.cancel(caller, input.runId, provenance);
+      }
+      case "finish_trial": {
+        if (!input.runId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен runId");
+        return await skillEvaluationRepository.finish(caller, input.runId, provenance, requireField(input, "trialSummary", "finish_trial"));
+      }
+      case "draft":
       case "publish": {
         const draft = {
           changeNote: requireField(input, "changeNote"),
@@ -160,13 +191,16 @@ export default defineTool({
           files: input.files ?? {},
           markdown: requireField(input, "markdown"),
           name: requireName(input),
-          trialSummary: requireField(input, "trialSummary"),
+          trialSummary: input.action === "draft" ? "Пробный прогон ещё не выполнен" : requireField(input, "trialSummary"),
         };
+        if (input.action === "draft") return await skillEvaluationRepository.draft(caller, draft, ctx.callId, await knownToolNames(owner));
+        if (!input.candidateId || !input.runId) throw new AppError("AGENT_SKILL_EVAL_MISSING", "Сначала draft, begin_trial, выполнение, finish_trial; publish требует candidateId и runId");
         const trialRequest = requireField(input, "trialRequest");
         // Owner role and the exact Telegram approval are both revalidated at the mutation boundary.
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.publish(caller, draft, {
           knownToolNames: await knownToolNames(owner), operationKey: ctx.callId, provenance,
+          evaluation: { candidateId: input.candidateId, runId: input.runId },
           trialRequest, trials: input.trials ?? [],
         });
         return { ...result, note: nextTurnNote };

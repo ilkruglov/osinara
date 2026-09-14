@@ -19,6 +19,7 @@ import {
 } from "./memory-config.js";
 import { memoryRetention } from "./memory-retention-score.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
+import * as reranking from "./memory-reranking.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const url = process.env.DATABASE_URL;
@@ -67,6 +68,45 @@ describeWithDatabase("memoryRetrievalRepository", () => {
   });
 
   afterAll(async () => closeDatabase());
+
+  it("rechecks membership after the reranker finishes", async () => {
+    await database().query(
+      `INSERT INTO memory_items (family_id, owner_user_id, author_user_id, author_telegram_user_id,
+       scope, kind, content, source, confirmation, sensitivity, operation_key)
+       VALUES ($1, $2, $2, 'search-owner', 'personal', 'fact', 'Ключ от мастерской', 'test:rerank',
+       'model_high', 'normal', 'rerank-revoked')`, [auth.familyId, auth.userId],
+    );
+    const scorer = vi.spyOn(reranking, "rerankMemories").mockImplementation(async (_query, candidates) => {
+      expect(candidates).toHaveLength(1);
+      await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [auth.familyId, auth.userId]);
+      return { results: candidates, status: "applied" };
+    });
+    try {
+      const result = await memoryRetrievalRepository.searchWithConflictClosure(auth, "мастерская", null);
+      expect(result.results).toEqual([]);
+      expect(result.relatedClaimIds).toEqual([]);
+    } finally {
+      scorer.mockRestore();
+    }
+  });
+
+  it("keeps authorized lexical results and date filtering without a vector", async () => {
+    for (const owner of [auth.userId!, otherUserId]) {
+      await database().query(
+        `INSERT INTO memory_items (family_id, owner_user_id, author_user_id, author_telegram_user_id,
+           scope, kind, content, source, confirmation, sensitivity, operation_key, occurred_at)
+         VALUES ($1, $2, $2, 'search-owner', 'personal', 'episode', 'Поездка в Казань', 'test:lexical',
+           'model_high', 'normal', $3, '2026-09-01')`, [auth.familyId, owner, `lexical-${owner}`],
+      );
+    }
+    const found = await memoryRetrievalRepository.searchWithConflictClosure(auth, "Казань", null);
+    expect(found.results).toHaveLength(1);
+    expect(found.results[0]?.evidence).toMatchObject({ semanticSimilarity: null });
+    expect(found.results[0]?.retention).toBeGreaterThan(0.99);
+    expect(await memoryRetrievalRepository.search(auth, "Казань", null, 12, { occurredAfter: "2026-09-02" })).toEqual([]);
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [auth.familyId, auth.userId]);
+    expect((await memoryRetrievalRepository.searchWithConflictClosure(auth, "Казань", null)).results).toEqual([]);
+  });
 
   it("accepts the automatic block's candidate limit and rejects one above the candidate ceiling", async () => {
     // The turn context asks for more than it shows and filters afterwards; production lost its

@@ -8,7 +8,8 @@
  * Key constructs:
  * - Silent memory review, scheduled runs and subagents never reflect; an external group does,
  *   because most tool failures happen there, but its evidence carries no message text either.
- * - An authored skill loaded in a failed or heavy turn gets a `failed` outcome and a `skill` item
+ * - A loaded skill gets execution telemetry; errors and cost never determine its goal outcome.
+ *   A failed or heavy interactive turn creates a `skill` item
  *   from the application alone: no model call, and outside the reflection budget.
  * - A `workflow` item recurring the second time in a trusted chat leaves a backlog hint for the
  *   next turn, so the model can offer a skill once. Later recurrences stay silent.
@@ -50,11 +51,15 @@ interface ImprovementSignalDependencies {
   generate?: ReflectionGenerate;
   isAuthoredSkill(familyId: string, name: string): Promise<boolean>;
   record(input: ImprovementItemInput): Promise<{ item: { recurrenceCount: number }; recurred: boolean }>;
-  recordSkillOutcome(input: {
+  recordSkillTelemetry(input: {
     conversationId: string | null;
     familyId: string;
     name: string;
     note: string;
+    eveSessionId: string;
+    eveTurnId: string;
+    executionStatus: "completed" | "failed";
+    stepCount: number;
   }): Promise<{ usageFound: boolean }>;
   saveHint(input: {
     conversationId: string;
@@ -67,7 +72,7 @@ interface ImprovementSignalDependencies {
 }
 
 function reflectionIdentity(ctx: SignalContext): ImprovementIdentity | null {
-  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx) || isScheduledSession(ctx)) return null;
+  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx)) return null;
   const attributes = ctx.session.auth.current?.attributes;
   if (ctx.session.auth.current?.authenticator !== "telegram" || !attributes) return null;
   const familyId = attributes.familyId;
@@ -94,8 +99,8 @@ function failureNote(evidence: TurnEvidence): string {
 
 function skillItemSummary(name: string, evidence: TurnEvidence): string {
   const failure = evidence.failedTools[0];
-  if (failure) return `Навык ${name} не справился: ${failure.toolName} упал с ${failure.code}`;
-  if (evidence.turnFailure) return `Навык ${name} не справился: ход упал с ${evidence.turnFailure.code}`;
+  if (failure) return `В ходе с навыком ${name}: ${failure.toolName} упал с ${failure.code}`;
+  if (evidence.turnFailure) return `В ходе с навыком ${name}: ход упал с ${evidence.turnFailure.code}`;
   return `Навык ${name}: ход занял ${evidence.stepCount} шагов инструментов`;
 }
 
@@ -122,7 +127,12 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
     for (const name of new Set(evidence.loadedSkills)) {
       if (!await dependencies.isAuthoredSkill(identity.familyId, name)) continue;
       const note = failureNote(evidence);
-      const outcome = await dependencies.recordSkillOutcome({ conversationId, familyId: identity.familyId, name, note });
+      const outcome = await dependencies.recordSkillTelemetry({
+        conversationId, familyId: identity.familyId, name, note: note.slice(0, 500),
+        eveSessionId: ctx.session.id, eveTurnId: turnId, stepCount: evidence.stepCount,
+        executionStatus: evidence.turnFailure ? "failed" : "completed",
+      });
+      if (!shouldReflectOnTurn(evidence) || isScheduledSession(ctx)) continue;
       const failure = evidence.failedTools[0];
       const errorCode = failure?.code ?? evidence.turnFailure?.code ?? "HEAVY_TURN";
       const summary = skillItemSummary(name, evidence);
@@ -144,11 +154,12 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
   }
 
   async function finish(ctx: SignalContext, turnId: string, evidence: TurnEvidence | null): Promise<void> {
-    if (!evidence || !shouldReflectOnTurn(evidence)) return;
+    if (!evidence) return;
     const identity = reflectionIdentity(ctx);
     if (!identity) return;
     const conversationId = await dependencies.conversationId(identity);
     await closeSkillLoop(ctx, turnId, identity, evidence, conversationId);
+    if (!shouldReflectOnTurn(evidence) || isScheduledSession(ctx)) return;
     if (!limiter.admit(identity.familyId)) {
       console.info(JSON.stringify({ code: "AGENT_IMPROVEMENT_SKIPPED", reason: "rate_limit", familyId: identity.familyId }));
       return;

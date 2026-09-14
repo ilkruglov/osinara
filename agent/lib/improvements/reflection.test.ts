@@ -78,7 +78,7 @@ function dependencies(overrides: Partial<Record<keyof Dependencies, Mock>> = {})
     generate: vi.fn().mockResolvedValue("{\"items\":[]}"),
     isAuthoredSkill: vi.fn().mockResolvedValue(false),
     record: vi.fn().mockResolvedValue(recorded(1)),
-    recordSkillOutcome: vi.fn().mockResolvedValue({ usageFound: true }),
+    recordSkillTelemetry: vi.fn().mockResolvedValue({ usageFound: true }),
     saveHint: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -126,7 +126,7 @@ describe("createImprovementSignalHandlers", () => {
     expect(record).not.toHaveBeenCalled();
   });
 
-  it("marks a loaded authored skill failed and records a skill item without the model", async () => {
+  it("records technical failure separately and leaves a skill item without claiming goal failure", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const deps = dependencies({
       isAuthoredSkill: vi.fn().mockImplementation(async (_familyId: string, name: string) => name === "birthday-card"),
@@ -144,15 +144,15 @@ describe("createImprovementSignalHandlers", () => {
 
     expect(deps.isAuthoredSkill).toHaveBeenCalledWith("family-1", "birthday-card");
     expect(deps.isAuthoredSkill).toHaveBeenCalledWith("family-1", "imagegen");
-    expect(deps.recordSkillOutcome).toHaveBeenCalledTimes(1);
-    expect(deps.recordSkillOutcome).toHaveBeenCalledWith({
+    expect(deps.recordSkillTelemetry).toHaveBeenCalledTimes(1);
+    expect(deps.recordSkillTelemetry).toHaveBeenCalledWith(expect.objectContaining({
       conversationId: "conversation-1", familyId: "family-1", name: "birthday-card",
       note: "generate_image: AGENT_IMAGE_PROVIDER_FAILED",
-    });
+    }));
     const skillItem = deps.record.mock.calls.find((call) => call[0].category === "skill")?.[0];
     expect(skillItem).toMatchObject({
       category: "skill", familyId: "family-1", priority: "medium",
-      summary: "Навык birthday-card не справился: generate_image упал с AGENT_IMAGE_PROVIDER_FAILED",
+      summary: "В ходе с навыком birthday-card: generate_image упал с AGENT_IMAGE_PROVIDER_FAILED",
     });
     expect(skillItem.evidence).toMatchObject({ eveTurnId: "t1", skillName: "birthday-card" });
     expect(skillItem.fingerprint).toMatch(/^[0-9a-f]{16}$/u);
@@ -162,7 +162,7 @@ describe("createImprovementSignalHandlers", () => {
     expect(deps.saveHint).not.toHaveBeenCalled();
   });
 
-  it("records a heavy turn with an authored skill as a failed outcome by step count", async () => {
+  it("records cost separately without declaring a successful heavy turn failed", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const deps = dependencies({ isAuthoredSkill: vi.fn().mockResolvedValue(true) });
     const handlers = createImprovementSignalHandlers(deps);
@@ -174,10 +174,21 @@ describe("createImprovementSignalHandlers", () => {
     }
     await handlers.turnCompleted({ data: { turnId: "t1" } }, context);
 
-    expect(deps.recordSkillOutcome).toHaveBeenCalledWith(expect.objectContaining({ name: "weekly-report", note: "9 шагов инструментов" }));
+    expect(deps.recordSkillTelemetry).toHaveBeenCalledWith(expect.objectContaining({ name: "weekly-report", eveSessionId: "eve-1", eveTurnId: "t1", stepCount: 9, executionStatus: "completed" }));
     expect(deps.record).toHaveBeenCalledWith(expect.objectContaining({
       category: "skill", summary: "Навык weekly-report: ход занял 9 шагов инструментов",
     }));
+  });
+
+  it("records scheduled execution without reflection or proactive hints", async () => {
+    const deps = dependencies({ isAuthoredSkill: vi.fn().mockResolvedValue(true) });
+    const handlers = createImprovementSignalHandlers(deps);
+    const context = ctx({ familyId: "family-1", telegramChatType: "private", scheduledRunId: "scheduled-1" });
+    handlers.actionsRequested({ data: { actions: [{ input: { skill: "weekly-report" }, kind: "load-skill" }], turnId: "t1" } }, context);
+    await handlers.turnCompleted({ data: { turnId: "t1" } }, context);
+    expect(deps.recordSkillTelemetry).toHaveBeenCalledWith(expect.objectContaining({ name: "weekly-report", executionStatus: "completed", eveTurnId: "t1" }));
+    expect(deps.generate).not.toHaveBeenCalled();
+    expect(deps.saveHint).not.toHaveBeenCalled();
   });
 
   it("leaves a backlog hint when a workflow item recurs the second time in a trusted chat", async () => {

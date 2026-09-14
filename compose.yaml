@@ -46,6 +46,8 @@ services:
         condition: service_completed_successfully
       memory-embedding:
         condition: service_healthy
+      memory-reranker:
+        condition: service_healthy
       sandbox-runner:
         condition: service_healthy
     environment:
@@ -59,6 +61,7 @@ services:
       INTEGRATION_TOKEN_ENCRYPTION_KEY: ${INTEGRATION_TOKEN_ENCRYPTION_KEY-}
       INVITATION_SIGNING_SECRET: ${INVITATION_SIGNING_SECRET:?INVITATION_SIGNING_SECRET is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
+      MEMORY_RERANKER_BASE_URL: http://memory-reranker:80
       MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
@@ -189,6 +192,37 @@ services:
     volumes:
       - memory-embedding-model-e5:/data
 
+  memory-reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
+    cpus: 1.5
+    mem_limit: 1280m
+    command:
+      - --model-id
+      - cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+      - --revision
+      - 1427fd652930e4ba29e8149678df786c240d8825
+      - --tokenization-workers
+      - "2"
+      - --max-client-batch-size
+      - "40"
+      - --max-concurrent-requests
+      - "8"
+      - --max-batch-requests
+      - "8"
+      - --max-batch-tokens
+      - "1024"
+      - --auto-truncate=false
+    environment:
+      OMP_NUM_THREADS: "2"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+    restart: unless-stopped
+    volumes:
+      - memory-reranker-model-minilm:/data
+
   memory-embedding-worker:
     build:
       context: .
@@ -244,6 +278,7 @@ volumes:
   google-workspace-credentials:
   postgres-data:
   memory-embedding-model-e5:
+  memory-reranker-model-minilm:
   sandbox-data:
   tool-environments:
   workspace-data:

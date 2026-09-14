@@ -1,3 +1,4 @@
+import { authoredSkillRepository } from "../authored-skills/authored-skill-repository.js";
 /**
  * Lifecycle-scoped Eve skill visibility resolvers.
  *
@@ -28,6 +29,7 @@ import { knowledgeSkills } from "./knowledge-skill-packages.js";
 import { KNOWLEDGE_SKILL_CAPABILITY } from "./knowledge-skills.js";
 
 interface ConversationSkillResolverOptions {
+  provenance?: { eveSessionId: string; eveTurnId: string };
   scheduledRun?: boolean;
   subagent?: boolean;
 }
@@ -58,6 +60,7 @@ export function resolveTrustedSessionSkills(
 }
 
 interface ExternalTurnSkillDependencies {
+  capturePackages?: typeof authoredSkillRepository.capturePackages;
   /** Authored skills granted to the group whose steps its current allowlist covers. */
   packagesForGroup(identity: { familyId: string; groupId: string }): Promise<readonly AuthoredSkillPackage[]>;
 }
@@ -99,6 +102,7 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
       }));
       return skills;
     }
+    if (options.provenance) await dependencies.capturePackages?.(identity.familyId, options.provenance, packages);
     for (const pkg of packages) {
       // A static name can never be shadowed by a grant; the rubric already refuses such names.
       if (pkg.name in skills) continue;
@@ -109,5 +113,6 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
 }
 
 export const resolveExternalTurnSkills = createExternalTurnSkillResolver({
+  capturePackages: authoredSkillRepository.capturePackages,
   packagesForGroup: (identity) => authoredSkillGrantRepository.packagesForGroup(identity),
 });

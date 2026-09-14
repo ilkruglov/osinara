@@ -1,4 +1,5 @@
 /** Family-authored skills, refreshed from the library on every trusted turn. */
+import { z } from "zod";
 import { defineDynamic } from "eve/skills";
 
 import { resolveAuthoredTurnSkills } from "../lib/authored-skills/authored-skill-resolver.js";
@@ -8,6 +9,7 @@ import { timed } from "../lib/turn-timing.js";
 export default defineDynamic({
   events: {
     "turn.started": (_event, ctx) => timed("skills_authored", () => resolveAuthoredTurnSkills(ctx.session.auth, {
+      provenance: { eveSessionId: ctx.session.id, eveTurnId: z.object({ data: z.object({ turnId: z.string() }) }).parse(_event).data.turnId },
       memoryReview: isMemoryReviewSession(ctx),
       subagent: ctx.channel.kind === "subagent",
     })),

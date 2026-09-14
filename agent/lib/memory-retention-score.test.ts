@@ -27,17 +27,28 @@ describe("memoryRetention", () => {
     expect(memoryStabilityDays("family_shared", null)).toBe(180);
   });
 
-  it("decays from the last reinforcement, else the event date, else creation", () => {
+  it("decays from learning or later reinforcement, independently of the event date", () => {
     const base = { attribute: null, kind: "episode" as const, reinforcementCount: 0 };
     expect(memoryRetention({ ...base, createdAt: now, lastReinforcedAt: null, occurredAt: null }, now))
       .toBeCloseTo(1, 5);
     expect(memoryRetention({ ...base, createdAt: daysAgo(30), lastReinforcedAt: null, occurredAt: null }, now))
       .toBeCloseTo(Math.exp(-1), 5);
     expect(memoryRetention({ ...base, createdAt: now, lastReinforcedAt: null, occurredAt: daysAgo(30) }, now))
-      .toBeCloseTo(Math.exp(-1), 5);
+      .toBeCloseTo(1, 5);
     expect(memoryRetention({
       ...base, createdAt: daysAgo(90), lastReinforcedAt: daysAgo(30), occurredAt: daysAgo(90),
     }, now)).toBeCloseTo(Math.exp(-1), 5);
+  });
+
+  it("admits a newly learned old event and never anchors before learning", () => {
+    for (const lastReinforcedAt of [null, daysAgo(90)]) {
+      const retention = memoryRetention({
+        attribute: null, createdAt: now, kind: "episode", lastReinforcedAt,
+        occurredAt: daysAgo(100), reinforcementCount: 0,
+      }, now);
+      expect(retention).toBe(1);
+      expect(isRetainedForAutomaticContext(retention)).toBe(true);
+    }
   });
 
   it("grows stability with reinforcement: S = S0 * (1 + ln(1 + n))", () => {

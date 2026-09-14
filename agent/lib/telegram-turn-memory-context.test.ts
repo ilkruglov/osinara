@@ -38,6 +38,42 @@ function input(overrides: Partial<Parameters<ReturnType<typeof createTelegramMem
 const emptyRetrieval = { memories: [], retrievedClaimIds: [], threads: { threads: [], totalCharacters: 0 } };
 
 describe("createTelegramMemoryContextBuilder", () => {
+  it("does not discard claims when optional exposure bookkeeping is unavailable", async () => {
+    const build = createTelegramMemoryContextBuilder({
+      createProfile: vi.fn().mockResolvedValue(null),
+      retrieve: vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [{ content: "Любит гречку", memoryRef: "mem_1" }] }),
+      exposures: {
+        sessionTurn: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
+        recentlyShownMemoryRefs: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
+        authorCardShownRecently: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
+        record: vi.fn().mockRejectedValue(new Error("ledger unavailable")),
+      },
+    });
+    expect((await build(input())).join("\n")).toContain("Любит гречку");
+  });
+  it("keeps the profile when retrieval fails", async () => {
+    const createProfile = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "view_test",
+      subjects: [], totalCharacters: 0,
+    });
+    const build = createTelegramMemoryContextBuilder({
+      createProfile, retrieve: vi.fn().mockRejectedValue(new Error("retrieval unavailable")),
+    });
+    const blocks = await build(input());
+    expect(createProfile).toHaveBeenCalled();
+    expect(blocks.join("\n")).toContain("<verified_profile_view");
+    expect(blocks.join("\n")).toContain("недоступ");
+  });
+
+  it("keeps retrieved claims when profile or skill hints fail", async () => {
+    const build = createTelegramMemoryContextBuilder({
+      createProfile: vi.fn().mockRejectedValue(new Error("profile unavailable")),
+      retrieve: vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [{ content: "Любит гречку", memoryRef: "mem_1" }] }),
+      takeSkillHint: vi.fn().mockRejectedValue(new Error("hints unavailable")),
+    });
+    expect((await build(input())).join("\n")).toContain("Любит гречку");
+  });
+
   it("returns retrieved records as one context block", async () => {
     const retrieve = vi.fn().mockResolvedValue({
       ...emptyRetrieval,

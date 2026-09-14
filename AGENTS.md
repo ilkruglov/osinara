@@ -88,7 +88,19 @@ retrieval и thread activation используют только локальн�
 Профильные записи имеют необязательный слот `attribute`; новая запись того же субъекта и слота
 помечает прежнюю `superseded` (`memory-slot-supersede.ts`), а тихий review видит уже сохранённые
 записи разговора в блоке `<existing_memory>`, чтобы версионировать слот, а не дублировать.
-События (`kind: episode`) несут `occurred_at`; retrieval учитывает дату события в recency-boost,
+Поиск памяти объединяет simple/russian FTS и E5 через RRF. Затем локальный pinned MiniLM
+reranker проверяет пары запрос/запись до финальной live-авторизации и раскрытия конфликтов.
+При отказе E5 за общий трёхсекундный бюджет остаётся FTS; отказ reranker оставляет гибридную
+выдачу с явной пометкой. Текст для reranker не обрезается: превышение его token limit также
+даёт помеченный результат без reranking. `search_memories.includeWeakMatches=true` сохраняет
+слабые совпадения с `matchQuality=weak` для косвенных вопросов; это не основание приписать факт
+другому субъекту. CI отдельно запускает качество на настоящих pinned E5/MiniLM.
+Обновление занятого слота требует `slotUpdate` с полным текущим набором `previousMemoryRefs`:
+`add` сохраняет независимые детали, `replace` заменяет их полной новой версией. Перед этим агент
+читает полный текст; `list_memories.memoryRefs` позволяет получить точные записи. Backend
+блокирует сам слот до вставки и отклоняет устаревший набор ссылок. Миграция 106 отделяет
+`use_count`/`last_used_at` от подкрепления; повтор события того же хода учитывается один раз.
+События (`kind: episode`) несут `occurred_at`; retention считает давность от получения знания или подкрепления, а не от даты самого события;
 а `search_memories` принимает окно `occurredAfter`/`occurredBefore` для вопросов о периоде.
 Автоподборка памяти и карточка профиля ведут учёт показов (`memory-context-exposure-repository.ts`,
 миграция 088): запись, показанная в последние 10 ходов той же application-сессии, в автоподборку не
@@ -193,6 +205,18 @@ Eve `0.40.0` не умеет скрывать собственные built-ins p
 Subscription-backed `generate_image` существует только при активном provider `codex-subscription`: при любом другом provider он не имеет дескриптора ни в одном режиме и отсутствует в owner-facing grant contract, поэтому включить его нельзя. В private/family он доступен интерактивному root-agent; внешней группе владелец выдаёт capability через `manage_telegram_group.update_policy` из личного чата с HITL и повторной owner-role проверкой. Grant одновременно открывает dynamic skill `imagegen`; execution повторно читает live group policy. Subagents не получают ни tool, ни skill; trusted scheduled-ходы получают оба, внешние scheduled нет. Перед единственным вызовом `gpt-image-2` создаётся durable operation ledger; transport, 5xx и повреждённый success остаются terminal ambiguous без автоматического retry. Подтверждённый WebP сохраняется в authorized workspace и отправляется через exact-once `send_workspace_file`. CLIProxy запускается с `disable-image-generation: chat`, поэтому его скрытый provider tool не обходит application capability surface. Grant surface собирается в `agent/lib/tool-policy/grantable-group-capabilities.ts`: `manage_telegram_group` и registration принимают только capability, которую активный provider реально обслуживает, а grant, сохранённый под прежним provider, остаётся parseable, показывается в status как `unavailableConfiguredTools` и не выдаёт ни tool, ни skill.
 Authored model context внешней группы не должен содержать длинное или короткое типографское тире и кавычки-ёлочки. Permanent core, external mode fragments, model-facing descriptors и все файлы grantable skill packages должны быть очищены непосредственно в исходниках; runtime-нормализация и post-processing ответов запрещены. Пользовательские сообщения, история, память, файлы и tool data никогда не переписываются этой политикой.
 Eve `0.40.0` materializes dynamic skill packages и supporting files в sandbox. Стабильные trusted Google Workspace skills выдаются на `session.started`, чтобы не загружать 19 пакетов перед каждым ходом, и только при заданных `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` (`GOOGLE_WORKSPACE_AVAILABLE`, тот же gate прячет три Google-инструмента); внешний capability-coupled `imagegen` остаётся на `turn.started`, поскольку grant может измениться между репликами. Trusted HOME хранится в persistent tools volume, поэтому `agent/sandbox.ts` на session lifecycle удаляет только точный legacy package path `.agents/skills/pohuy`; не расширять этот cleanup на соседние skills.
+Авторские навыки: миграция 105 добавляет версии применений и отдельную техническую статистику;
+`record_outcome` принимает только точный `usageId` текущего разговора, оценка владельца не
+перезаписывается техническим сигналом. Версии выдаваемых пакетов сохраняются до model step,
+повторный load одного навыка в том же ходу идемпотентен; scheduled-ходы тоже учитываются.
+Создание проходит через неизменяемый `draft`, `test_selection` на положительных/отрицательных
+запросах и `begin_trial` → наблюдаемые результаты → `finish_trial` (отмена: `cancel_trial`).
+Backend сверяет запрос, hash контента, базовую версию, результаты проверок и baseline/candidate
+для сохранённых примеров; смысловое качество принимает владелец через HITL публикации.
+Два разных применения одной текущей версии с отрицательной оценкой владельца дают одну подсказку
+подготовить черновик в его личном чате. Технические ошибки и стоимость сами её не запускают;
+повторные побочные действия для проверки требуют явной просьбы владельца.
+
 Авторские навыки (`agent/lib/authored-skills/`, миграция 086): Мия пишет себе навыки из доступных
 инструментов, одна библиотека на семью. `manage_skill` (list, read, publish, rollback, retire,
 record_outcome) выдаётся только владельцу в личном чате и семейной группе, не в scheduled, не

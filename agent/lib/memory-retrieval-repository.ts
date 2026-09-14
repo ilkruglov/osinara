@@ -7,6 +7,7 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
+import { rerankMemories } from "./memory-reranking.js";
 import {
   MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
@@ -167,6 +168,7 @@ function rowToScoredResult(row: RetrievalRow): ScoredMemoryRetrievalResult {
 
 /** Optional inclusive date window over the event date, falling back to creation time. */
 export interface MemoryRetrievalWindow {
+  includeWeakMatches?: boolean;
   occurredAfter?: string;
   occurredBefore?: string;
 }
@@ -175,7 +177,7 @@ export const memoryRetrievalRepository = {
   async search(
     auth: MemoryAuthorization,
     query: string,
-    queryEmbedding: readonly number[],
+    queryEmbedding: readonly number[] | null,
     limit = MEMORY_RETRIEVAL_LIMIT,
     window: MemoryRetrievalWindow = {},
   ): Promise<ScoredMemoryRetrievalResult[]> {
@@ -239,7 +241,7 @@ export const memoryRetrievalRepository = {
                  authorized.updated_at
          FROM authorized
          JOIN memory_embedding_chunks AS chunk ON chunk.memory_item_id = authorized.id
-         WHERE authorized.embedding_status = 'indexed' AND chunk.embedding_model = $10
+         WHERE $9::vector IS NOT NULL AND authorized.embedding_status = 'indexed' AND chunk.embedding_model = $10
          GROUP BY authorized.id, authorized.updated_at
         ),
        semantic_evidence AS (
@@ -293,11 +295,10 @@ export const memoryRetrievalRepository = {
        LEFT JOIN simple_lexical USING (id)
        LEFT JOIN russian_morphology USING (id)
        LEFT JOIN semantic USING (id)
-       -- Retention R = exp(-age / S) mirrors memory-retention.ts: age from the last reinforcement,
-       -- else the event date, else creation; S widens with reinforcement.
+       -- Retention starts at learning or later reinforcement; event dates only constrain date windows.
        CROSS JOIN LATERAL (
          SELECT exp(
-           - GREATEST(0, EXTRACT(EPOCH FROM (now() - COALESCE(authorized.last_reinforced_at, authorized.occurred_at, authorized.created_at)))) / 86400.0
+           - GREATEST(0, EXTRACT(EPOCH FROM (now() - GREATEST(authorized.created_at, authorized.last_reinforced_at)))) / 86400.0
            / ((CASE WHEN authorized.kind = 'episode'
                     THEN CASE WHEN authorized.attribute = $18::text THEN $16::double precision ELSE $15::double precision END
                     ELSE $17::double precision END)
@@ -321,7 +322,7 @@ export const memoryRetrievalRepository = {
         MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
         MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
         MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
-        vectorLiteral(queryEmbedding),
+        queryEmbedding === null ? null : vectorLiteral(queryEmbedding),
         MEMORY_EMBEDDING_MODEL_VERSION,
         MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
         MEMORY_RETRIEVAL_RRF_RANK_OFFSET,
@@ -342,17 +343,25 @@ export const memoryRetrievalRepository = {
   async searchWithConflictClosure(
     auth: MemoryAuthorization,
     query: string,
-    queryEmbedding: readonly number[],
+    queryEmbedding: readonly number[] | null,
     limit = MEMORY_RETRIEVAL_LIMIT,
     window: MemoryRetrievalWindow = {},
   ): Promise<{
     conflicts: MemoryConflictGroup[];
     relatedClaimIds: string[];
     results: ScoredMemoryRetrievalResult[];
+    reranking?: "applied" | "unavailable";
   }> {
-    const results = await memoryRetrievalRepository.search(auth, query, queryEmbedding, limit, window);
+    if (!Number.isInteger(limit) || limit < 1 || limit > MEMORY_RETRIEVAL_CANDIDATE_LIMIT) {
+      throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный лимит поиска памяти");
+    }
+    const candidates = await memoryRetrievalRepository.search(auth, query, queryEmbedding,
+      process.env.MEMORY_RERANKER_BASE_URL ? MEMORY_RETRIEVAL_CANDIDATE_LIMIT : limit, window);
+    const reranked = await rerankMemories(query, candidates, fetch, window.includeWeakMatches);
+    const diagnostic = reranked.status === "disabled" ? {} : { reranking: reranked.status };
+    const results = reranked.results.slice(0, limit);
     const selectedIds = results.map((result) => result.memory.id);
-    if (selectedIds.length === 0) return { conflicts: [], relatedClaimIds: [], results };
+    if (selectedIds.length === 0) return { ...diagnostic, conflicts: [], relatedClaimIds: [], results };
 
     // Detect an inaccessible partner without selecting any partner content or metadata. Opaque refs
     // are capabilities, not authorization: one visible side of an unresolved conflict is withheld.
@@ -479,6 +488,7 @@ export const memoryRetrievalRepository = {
       }],
     }));
     return {
+      ...diagnostic,
       conflicts,
       relatedClaimIds: [...new Set([
         ...results.filter((result) => !blockedIds.has(result.memory.id))

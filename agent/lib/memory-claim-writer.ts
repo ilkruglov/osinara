@@ -5,7 +5,6 @@
  * - `createMemoryClaim`: replay-safe claim/reinforcement, evidence, optional thread, index, and audit write.
  */
 import type { PoolClient } from "pg";
-
 import { AppError } from "./app-error.js";
 import { insertClaimEvidence } from "./claim-evidence-writer.js";
 import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.js";
@@ -18,7 +17,7 @@ import {
   isSemanticMemoryKind,
   nearDuplicateError,
 } from "./memory-near-duplicate.js";
-import { supersedeSlotClaims } from "./memory-slot-supersede.js";
+import { lockSlotClaims, requireSlotUpdate, supersedeSlotClaims } from "./memory-slot-supersede.js";
 import { enforceMemoryQuota } from "./memory-quota.js";
 import {
   memoryOperationHash,
@@ -47,7 +46,6 @@ import {
   prepareMemoryThreadWrite,
   type PreparedMemoryThreadWrite,
 } from "./memory-thread-write.js";
-
 interface CreateOperationRow {
   input_hash: string;
   memory_item_id: string | null;
@@ -299,7 +297,7 @@ export async function createMemoryClaim(
     }
     if (reservation) {
       await requireMemoryThreadCreationReservation(client, auth, input, inputHash, reservation);
-      // The reservation row and live membership locks predate this savepoint and survive claim rollback.
+      // The reservation and live membership locks predate the savepoint and survive claim rollback.
       await client.query("SAVEPOINT memory_thread_claim_write");
       savepointCreated = true;
     }
@@ -335,6 +333,13 @@ export async function createMemoryClaim(
         ? auth.groupId!
         : auth.familyId;
     const contentNormalized = prepared?.contentNormalized ?? normalizeMemoryClaimContent(input.content);
+    const slotClaims = input.attribute === undefined ? [] : await lockSlotClaims(client, auth, {
+      attribute: input.attribute, kind: input.kind, scope: input.scope, scopePartitionKey,
+      subjectLabel: prepared?.subjectLabel ?? null,
+      subjectParticipantId: prepared?.subjectParticipantId ?? null,
+      subjectUserId: prepared?.subjectUserId ?? null,
+      memoryProjectId: threadWrite?.identity.memoryProjectId ?? null,
+    });
     const reinforced = await reinforceExactClaim(client, auth, {
       attribute: input.attribute ?? null,
       contentNormalized,
@@ -350,6 +355,8 @@ export async function createMemoryClaim(
       subjectUserId: prepared?.subjectUserId ?? null,
       systemActor: input.systemActor === true,
     });
+    const previousClaimIds = !reinforced && input.attribute !== undefined
+      ? requireSlotUpdate(slotClaims, input.slotUpdate) : [];
     if (!reinforced && contentEmbedding) {
       const neighbours = await findNearDuplicateClaims(client, auth, {
         embedding: contentEmbedding,
@@ -428,7 +435,6 @@ export async function createMemoryClaim(
     if (threadWrite) {
       await materializeMemoryThreadWrite(client, auth, row.id, threadWrite, input.systemActor === true);
     }
-
     const reference = await client.query<{ memory_ref: string }>(
       "SELECT memory_ref FROM memory_item_refs WHERE memory_item_id = $1",
       [row.id],
@@ -442,15 +448,8 @@ export async function createMemoryClaim(
     }
     if (input.attribute !== undefined) {
       await supersedeSlotClaims(client, auth, {
-        attribute: input.attribute,
-        kind: input.kind,
-        newClaimId: row.id,
-        scope: input.scope,
-        scopePartitionKey,
-        subjectLabel: prepared?.subjectLabel ?? null,
-        subjectParticipantId: prepared?.subjectParticipantId ?? null,
-        subjectUserId: prepared?.subjectUserId ?? null,
-        systemActor: input.systemActor === true,
+        attribute: input.attribute, newClaimId: row.id, previousClaimIds,
+        scope: input.scope, systemActor: input.systemActor === true,
       });
     }
     await insertCreateOperation(client, auth, input, inputHash, row.id, threadWrite);

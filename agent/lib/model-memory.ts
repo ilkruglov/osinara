@@ -23,6 +23,8 @@ import type {
 export const MEMORY_REF_PATTERN = /^mem_[0-9a-f]{32}$/u;
 
 export interface ModelMemory {
+  matchQuality?: "weak";
+  attribute?: string | null;
   authorStatus: ReferencedMemoryItem["author"]["status"];
   confirmation: MemoryConfirmation;
   content: string;
@@ -55,6 +57,7 @@ export function toModelMemory(
 ): ModelMemory {
   // Build from an explicit allowlist so future internal fields cannot leak by object spreading.
   return {
+    ...(memory.attribute === undefined ? {} : { attribute: memory.attribute }),
     authorStatus: memory.author.status,
     confirmation: memory.confirmation,
     content: memory.content,

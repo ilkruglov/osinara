@@ -62,6 +62,15 @@ describe("normalizeMemoryExactDuplicateKey", () => {
 });
 
 describe("collapseExactDuplicateRetrievalResults", () => {
+  it.each([
+    ["Хранить при -18 °C", "Хранить при 18 °C"],
+    ["Скидка 50%", "Скидка 50"],
+    ["Баланс +100", "Баланс -100"],
+  ])("preserves distinct numeric claims: %s / %s", (a, b) => {
+    const candidates = [result(a, 0.04, "mem_a"), result(b, 0.03, "mem_b")];
+    expect(collapseExactDuplicateRetrievalResults(candidates, 2)).toEqual(candidates);
+  });
+
   it("preserves the top-ranked representative and leaves stored DTOs unchanged", () => {
     const top = result("Врач рекомендует пить воду утром.", 0.04, "mem_11111111111111111111111111111111");
     const duplicate = result(" ВРАЧ рекомендует пить воду утром!!! ", 0.03, "mem_22222222222222222222222222222222");

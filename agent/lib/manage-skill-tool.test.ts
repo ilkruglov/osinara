@@ -12,6 +12,7 @@ import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const repository = vi.hoisted(() => ({
+  usages: vi.fn(),
   conversationId: vi.fn(),
   list: vi.fn(),
   publish: vi.fn(),
@@ -20,6 +21,8 @@ const repository = vi.hoisted(() => ({
   retire: vi.fn(),
   rollback: vi.fn(),
 }));
+const evaluations = vi.hoisted(() => ({ list: vi.fn().mockResolvedValue([]) }));
+vi.mock("./authored-skills/skill-evaluation-repository.js", () => ({ skillEvaluationRepository: evaluations }));
 const grants = vi.hoisted(() => ({
   grant: vi.fn(),
   grants: vi.fn(),
@@ -97,7 +100,7 @@ describe("manage_skill", () => {
   it("publishes only after exact approval with the mode catalog and the call id", async () => {
     repository.publish.mockResolvedValue({ name: "birthday-card", replayed: false, version: 1 });
     const input = {
-      action: "publish" as const, changeNote: "Первая версия", description: "Открытка",
+      action: "publish" as const, candidateId: "candidate-1", runId: "run-1", changeNote: "Первая версия", description: "Открытка",
       files: { "references/a.md": "x" }, markdown: "## Шаги", name: "birthday-card",
       trialRequest: "Открытка Жене", trialSummary: "Сделала открытку",
       trials: [{ exampleId: "0d8a5b2e-6e2c-4a3a-9c8e-1f2a3b4c5d6e", summary: "Прошло" }],
@@ -114,6 +117,7 @@ describe("manage_skill", () => {
       changeNote: "Первая версия", description: "Открытка", files: { "references/a.md": "x" },
       markdown: "## Шаги", name: "birthday-card", trialSummary: "Сделала открытку",
     });
+    expect(options.evaluation).toEqual({ candidateId: "candidate-1", runId: "run-1" });
     expect(options.operationKey).toBe("skill-call-1");
     expect(options.provenance).toEqual({ eveSessionId: "eve-session-1", eveTurnId: "turn-7" });
     expect(options.trialRequest).toBe("Открытка Жене");
@@ -130,9 +134,19 @@ describe("manage_skill", () => {
       action: "publish", changeNote: "x", description: "d", markdown: "m", name: "birthday-card",
     }, context)).rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
     await expect(manageSkill.execute({
-      action: "publish", changeNote: "x", description: "d", markdown: "m", name: "birthday-card", trialSummary: "s",
+      action: "publish", changeNote: "x", description: "d", markdown: "m", name: "birthday-card", trialSummary: "s", candidateId: "candidate-1", runId: "run-1",
     }, context)).rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
     expect(requireApprovalEvidence).not.toHaveBeenCalled();
+  });
+
+  it("rejects model prose without persisted candidate and run evidence", async () => {
+    await expect(manageSkill.execute({ action: "publish", name: "birthday-card", description: "d", markdown: "m",
+      changeNote: "c", trialSummary: "Все проверки прошли", trialRequest: "r" }, context))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_EVAL_MISSING" });
+    expect(repository.publish).not.toHaveBeenCalled();
+    await expect(manageSkill.execute({ action: "record_outcome", name: "birthday-card", outcome: "failed" }, context))
+      .rejects.toMatchObject({ code: "AGENT_SKILL_INPUT_INVALID" });
+    expect(repository.recordOutcome).not.toHaveBeenCalled();
   });
 
   it("adds and removes examples without approval", async () => {
@@ -174,12 +188,12 @@ describe("manage_skill", () => {
     repository.conversationId.mockResolvedValue("conversation-9");
     repository.recordOutcome.mockResolvedValue({ name: "birthday-card", outcome: "failed", usageFound: true });
 
-    await manageSkill.execute({ action: "record_outcome", name: "birthday-card", note: "текст на картинке", outcome: "failed" }, context);
+    await manageSkill.execute({ action: "record_outcome", name: "birthday-card", usageId: "usage-1", note: "текст на картинке", outcome: "failed" }, context);
 
     expect(repository.conversationId).toHaveBeenCalledWith(OWNER);
     expect(repository.recordOutcome).toHaveBeenCalledWith(
       { familyId: "family-1", role: "owner", userId: "user-1" },
-      { conversationId: "conversation-9", name: "birthday-card", note: "текст на картинке", outcome: "failed" },
+      { conversationId: "conversation-9", name: "birthday-card", usageId: "usage-1", note: "текст на картинке", outcome: "failed" },
     );
     expect(requireApprovalEvidence).not.toHaveBeenCalled();
   });

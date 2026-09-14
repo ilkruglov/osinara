@@ -6,7 +6,7 @@
  * - `MEMORY_RETRIEVAL_EVAL_RECORDS_V2`: fictional project, framework, link, and skill distractors.
  * - `MEMORY_RETRIEVAL_EVAL_QUERIES_V2`: identity controls and abstention-required near misses.
  * - `MEMORY_RETRIEVAL_R1_BASELINE_V2`: measured current behavior before semantic gating.
- * - `MEMORY_RETRIEVAL_V2_FUTURE_GATES`: acceptance targets reserved for semantic-gating work.
+ * - `MEMORY_RETRIEVAL_V2_GATES`: release gates for strict pairwise relevance scoring.
  */
 import type {
   MemoryRetrievalEvalQuery,
@@ -85,8 +85,8 @@ export const MEMORY_RETRIEVAL_R1_BASELINE_V2 = {
   identityControlRecallAt5: 1,
 } as const;
 
-// These targets become release gates only with the separately approved semantic-gating change.
-export const MEMORY_RETRIEVAL_V2_FUTURE_GATES = {
+// Strict search must abstain on these near misses; broad search separately guards recall.
+export const MEMORY_RETRIEVAL_V2_GATES = {
   hardNegativeEmptyRateMinimum: 1,
   identityControlRecallAt5Minimum: 1,
 } as const;

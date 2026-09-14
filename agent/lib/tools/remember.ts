@@ -29,6 +29,7 @@ export default defineTool({
     "В группе sourceSequence выбирает ровно одно сообщение видимой дельты. Для существующей нити используй thread.action=attach и threadRef только из list/search/read_memory_thread; thread.action=create создаёт нить атомарно.",
     "Результат содержит item.memoryRef и optional thread; для немедленной отмены доступен manage_memory с action undo. Не пересказывай пользователю служебные поля результата.",
     "При ошибке AGENT_MEMORY_NEAR_DUPLICATE один раз повтори вызов с reinforces (то же самое), attribute (факт изменился) или distinct=true (другой факт).",
+    "Перед обновлением слота прочитай полный текст всех его активных записей через list_memories/search_memories или existing_memory. В slotUpdate передай их previousMemoryRefs: add для независимого дополнения, replace для полной новой версии с сохранением всех актуальных деталей. При SLOT_CHANGED перечитай записи. Поздний рассказ о прошлом не заменяет текущий факт.",
   ].join(" "),
   inputSchema: rememberInputSchema,
   async execute(input, ctx) {
@@ -63,6 +64,7 @@ export default defineTool({
       }
       item = await memoryRepository.create(authorization, {
         ...(input.attribute === undefined ? {} : { attribute: input.attribute }),
+        ...(input.slotUpdate === undefined ? {} : { slotUpdate: input.slotUpdate }),
         ...(input.occurredAt === undefined ? {} : { occurredAt: input.occurredAt }),
         // A request to save another participant's delta message is not that author's endorsement.
         confirmation: input.basis === "user_requested" && source.isCurrent

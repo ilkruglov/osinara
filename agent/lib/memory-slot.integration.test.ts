@@ -69,7 +69,8 @@ describeWithDatabase("memory slots", () => {
     );
     const second = await memoryRepository.create(
       fixture.auth,
-      slotInput(fixture, "Анна ушла в IT, теперь тестировщик", "slot-b"),
+      { ...slotInput(fixture, "Анна ушла в IT, теперь тестировщик", "slot-b"),
+        slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] } },
     );
 
     await expect(database().query(
@@ -91,6 +92,48 @@ describeWithDatabase("memory slots", () => {
     expect(active.rows.map((row) => row.id)).toEqual([second.id]);
   });
 
+  it("rejects implicit replacement and leaves the original claim active", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом в компании Север с 2020 года", "guard-1"));
+    await expect(memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает удалённо", "guard-2")))
+      .rejects.toThrow("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
+    expect((await database().query("SELECT claim_status FROM memory_items WHERE id = $1", [first.id])).rows)
+      .toEqual([{ claim_status: "active" }]);
+  });
+
+  it("keeps independent slot details on add and rejects a stale replacement", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "add-1"));
+    const second = await memoryRepository.create(fixture.auth, {
+      ...slotInput(fixture, "Анна работает удалённо", "add-2"),
+      slotUpdate: { action: "add", previousMemoryRefs: [first.memoryRef] },
+    });
+    await expect(memoryRepository.create(fixture.auth, {
+      ...slotInput(fixture, "Анна перешла в IT", "add-3"),
+      slotUpdate: { action: "replace", previousMemoryRefs: [first.memoryRef] },
+    })).rejects.toThrow("AGENT_MEMORY_SLOT_CHANGED");
+    expect((await database().query("SELECT id FROM memory_items WHERE claim_status = 'active' AND id = ANY($1::uuid[])", [[first.id, second.id]])).rowCount).toBe(2);
+  });
+
+  it("can read exact slot refs without paging through unrelated memories", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const first = await memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "read-1"));
+    await memoryRepository.create(fixture.auth, { ...slotInput(fixture, "Анна живёт в Казани", "read-2"), attribute: "город" });
+    const page = await memoryRepository.list(fixture.auth, { limit: 20, memoryRefs: [first.memoryRef] });
+    expect(page.items.map((item) => item.memoryRef)).toEqual([first.memoryRef]);
+    expect(page.items[0]?.attribute).toBe("работа");
+  });
+
+  it("serializes concurrent first writes to the same empty slot", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const attempts = await Promise.allSettled([
+      memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает логистом", "race-1")),
+      memoryRepository.create(fixture.auth, slotInput(fixture, "Анна работает тестировщиком", "race-2")),
+    ]);
+    expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
+  });
+
   it("shares one slot across semantic kinds for a labelled subject, but not with episodes", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const labelled = (content: string, kind: CreateMemoryInput["kind"], attribute: string, operationKey: string): CreateMemoryInput => ({
@@ -104,7 +147,7 @@ describeWithDatabase("memory slots", () => {
       kind,
     });
     const fact = await memoryRepository.create(fixture.auth, labelled("Гоша живёт в клетке, но его выпускают", "fact", "содержание", "gosha-1"));
-    const shared = await memoryRepository.create(fixture.auth, labelled("Гоша живёт не в клетке, а на жёрдочке", "family_shared", "содержание", "gosha-2"));
+    const shared = await memoryRepository.create(fixture.auth, { ...labelled("Гоша живёт не в клетке, а на жёрдочке", "family_shared", "содержание", "gosha-2"), slotUpdate: { action: "replace", previousMemoryRefs: [fact.memoryRef] } });
     await expect(database().query(
       "SELECT claim_status::text, superseded_by FROM memory_items_all WHERE id = $1",
       [fact.id],
@@ -112,7 +155,7 @@ describeWithDatabase("memory slots", () => {
 
     // A discussion summary is an episode slot of its own and leaves the fact chain alone.
     const summary = await memoryRepository.create(fixture.auth, labelled("Обсудили содержание Гоши: решили оставить жёрдочку", "episode", "итог обсуждения", "gosha-3"));
-    const summaryAgain = await memoryRepository.create(fixture.auth, labelled("Обсудили содержание Гоши ещё раз: жёрдочка и клетка на ночь", "episode", "итог обсуждения", "gosha-4"));
+    const summaryAgain = await memoryRepository.create(fixture.auth, { ...labelled("Обсудили содержание Гоши ещё раз: жёрдочка и клетка на ночь", "episode", "итог обсуждения", "gosha-4"), slotUpdate: { action: "replace", previousMemoryRefs: [summary.memoryRef] } });
     await expect(database().query(
       "SELECT claim_status::text FROM memory_items_all WHERE id = ANY($1::uuid[]) ORDER BY created_at",
       [[shared.id, summary.id, summaryAgain.id]],

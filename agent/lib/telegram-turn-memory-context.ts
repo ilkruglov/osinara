@@ -89,6 +89,11 @@ function memoryAuthorization(input: TelegramMemoryContextInput): MemoryAuthoriza
   };
 }
 
+function exposureFailure(error: unknown): null {
+  console.error(JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }));
+  return null;
+}
+
 export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryContextDependencies) {
   return async function build(input: TelegramMemoryContextInput): Promise<string[]> {
     const query = input.query.trim();
@@ -99,18 +104,23 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
       // The same three facts shown fifty times a day read as a stuck record; what this session
       // already showed recently stays out of the automatic block (the model can still search).
       const exposures = dependencies.exposures;
-      const sessionTurn = exposures ? await exposures.sessionTurn(input.applicationSessionId) : 0;
-      const excludeMemoryRefs = exposures
-        ? await exposures.recentlyShownMemoryRefs(input.applicationSessionId, sessionTurn)
+      const sessionTurn = exposures ? await exposures.sessionTurn(input.applicationSessionId).catch(exposureFailure) : null;
+      const excludeMemoryRefs = exposures && sessionTurn !== null
+        ? await exposures.recentlyShownMemoryRefs(input.applicationSessionId, sessionTurn).catch(() => new Set<string>())
         : new Set<string>();
       // Skill-derived thread hints came from load_skill calls in history; none are reviewed now.
-      const context = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs });
+      let retrievalFailed = false;
+      const context = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs }).catch((error: unknown) => {
+        retrievalFailed = true;
+        console.error(JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component: "retrieval", error: String(error) }));
+        return { memories: [], retrievedClaimIds: [], threads: { threads: [], totalCharacters: 0 } };
+      });
       const retrievedAt = performance.now();
       const isUser = input.actor.kind === "telegram_user";
       const authorIsSubject = input.replyTelegramUserId === input.actor.id ||
         input.explicitMentionTelegramUserIds.includes(input.actor.id);
-      const suppressCurrentAuthor = isUser && exposures !== undefined && !authorIsSubject &&
-        await exposures.authorCardShownRecently(input.applicationSessionId, input.actor.id, sessionTurn);
+      const suppressCurrentAuthor = isUser && exposures !== undefined && sessionTurn !== null && !authorIsSubject &&
+        await exposures.authorCardShownRecently(input.applicationSessionId, input.actor.id, sessionTurn).catch(() => false);
       // A channel post has no human subject to build a profile for.
       const profile = isUser
         ? await dependencies.createProfile(authorization, {
@@ -125,19 +135,24 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
             : { replyTimelineSequence: input.replyTimelineSequence }),
           retrievalClaimIds: [...context.retrievedClaimIds],
           suppressCurrentAuthor,
+        }).catch((error: unknown) => {
+          console.error(JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component: "profile", error: String(error) }));
+          return null;
         })
         : null;
       const shownMemoryRefs = [
         ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
         ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
       ];
-      if (exposures) {
+      if (exposures && sessionTurn !== null) {
         const shownAuthorCard = profile?.subjects.some((subject) => subject.priority === "current_author") === true;
         await exposures.record({
           applicationSessionId: input.applicationSessionId,
           authorTelegramUserId: shownAuthorCard ? input.actor.id : null,
           memoryRefs: shownMemoryRefs,
           sessionTurn,
+        }).catch((error: unknown) => {
+          console.error(JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }));
         });
       }
       // Per-turn cost of memory on a small server: retrieval (FTS + E5 + pgvector) and profile view.
@@ -151,11 +166,14 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
       }));
       const hint = dependencies.takeSkillHint === undefined
         ? null
-        : await dependencies.takeSkillHint(input.conversationId);
+        : await dependencies.takeSkillHint(input.conversationId).catch((error: unknown) => {
+          console.error(JSON.stringify({ code: "AGENT_SKILL_HINT_FAILED", error: String(error) }));
+          return null;
+        });
       return [
-        ...(profile === null ? [] : [formatProfileViewContext(profile)]),
+        ...(profile == null ? [] : [formatProfileViewContext(profile)]),
         // The reminder sits right after the records: the rule in the mode block alone was ignored.
-        shownMemoryRefs.length === 0
+        retrievalFailed ? MEMORY_UNAVAILABLE_BLOCK : shownMemoryRefs.length === 0
           ? formatRetrievedMemoryInstructions(context.memories, context.threads)
           : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`,
         ...(hint === null ? [] : [formatSkillHint(hint)]),

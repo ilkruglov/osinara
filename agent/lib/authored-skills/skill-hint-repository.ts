@@ -22,10 +22,15 @@ export const SKILL_HINT_IGNORED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 export type SkillHint =
+  | { kind: "improve"; summary: string }
   | { kind: "backlog"; summary: string }
   | { kind: "repeat"; stepCount: number; toolNames: readonly string[] };
 
 export function formatSkillHint(hint: SkillHint): string {
+  if (hint.kind === "improve") return [
+    `Подготовь черновик улучшения навыка ${hint.summary}: владелец подтвердил неудачу двух разных применений одной версии.`,
+    "Загрузи skill-authoring, прочитай навык, предложи одну конкретную правку и сохрани draft. Проверь выбор через test_selection. Не выполняй побочные действия для проверки без явной просьбы владельца. Покажи черновик и результаты; publish только после пробного выполнения и кнопки владельца.",
+  ].join(" ");
   if (hint.kind === "backlog") {
     return [
       `В бэклоге улучшений второй раз повторяется: ${hint.summary}`,
@@ -40,14 +45,14 @@ export function formatSkillHint(hint: SkillHint): string {
 
 interface HintRow {
   created_at: Date;
-  kind: "backlog" | "repeat";
+  kind: "backlog" | "repeat" | "improve";
   step_count: number | null;
   summary: string | null;
   tool_names: string[];
 }
 
 function rowToHint(row: HintRow): SkillHint | null {
-  if (row.kind === "backlog") return row.summary === null ? null : { kind: "backlog", summary: row.summary };
+  if (row.kind === "backlog" || row.kind === "improve") return row.summary === null ? null : { kind: row.kind, summary: row.summary };
   return row.step_count === null ? null : { kind: "repeat", stepCount: row.step_count, toolNames: row.tool_names };
 }
 
@@ -70,7 +75,8 @@ export const skillHintRepository = {
          SET kind = EXCLUDED.kind, step_count = EXCLUDED.step_count, tool_names = EXCLUDED.tool_names,
              summary = EXCLUDED.summary,
              eve_session_id = EXCLUDED.eve_session_id, eve_turn_id = EXCLUDED.eve_turn_id,
-             created_at = now()`,
+             created_at = now()
+       WHERE conversation_skill_hints.kind <> 'improve' OR EXCLUDED.kind = 'improve'`,
       [input.conversationId, input.familyId, input.kind, stepCount, toolNames, summary,
         input.eveSessionId, input.eveTurnId],
     );

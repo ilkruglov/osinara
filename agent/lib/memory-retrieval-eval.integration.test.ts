@@ -3,7 +3,7 @@
  *
  * Constructs covered:
  * - R1 gates compare positive recall, irrelevant-query abstention, and duplicate pollution.
- * - V2 reports production-derived identity hard negatives without pre-implementing semantic gating.
+ * - V2 gates strict retrieval on production-derived identity hard negatives.
  * - Russian morphology, exact tokens, mixed-language text, semantic paraphrases, and one typo are exercised.
  * - The pinned multilingual E5 model embeds the synthetic corpus and every eval query.
  */
@@ -29,8 +29,9 @@ import {
 import {
   MEMORY_RETRIEVAL_EVAL_QUERIES_V2,
   MEMORY_RETRIEVAL_EVAL_RECORDS_V2,
-  MEMORY_RETRIEVAL_R1_BASELINE_V2,
+  MEMORY_RETRIEVAL_V2_GATES,
 } from "./memory-retrieval-eval-fixture.v2.js";
+import { retrieveRelevantMemories } from "./memory-retrieval.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 
@@ -38,6 +39,9 @@ const enabled = process.env.RUN_MEMORY_RETRIEVAL_EVALS === "true";
 const databaseUrl = process.env.DATABASE_URL;
 if (enabled && (!databaseUrl || !new URL(databaseUrl).pathname.endsWith("_test"))) {
   throw new Error("AGENT_TEST_DATABASE_UNSAFE: Для retrieval eval нужна отдельная БД *_test");
+}
+if (enabled && !process.env.MEMORY_RERANKER_BASE_URL) {
+  throw new Error("AGENT_TEST_RERANKER_REQUIRED: Quality eval requires the pinned reranker");
 }
 const describeEval = enabled ? describe : describe.skip;
 const EVAL_RESULT_LIMIT = 5;
@@ -136,15 +140,17 @@ describeEval("memory retrieval eval v1", () => {
 
   afterAll(async () => closeDatabase());
 
-  it("meets the versioned R1 quality gates and prints the measured result", async () => {
+  it("preserves broad-search R1 recall gates and prints the measured result", async () => {
     const evaluated: EvaluatedQuery[] = [];
     for (const query of MEMORY_RETRIEVAL_EVAL_QUERIES_V1) {
-      const results = await memoryRetrievalRepository.search(
+      const { results, reranking } = await memoryRetrievalRepository.searchWithConflictClosure(
         auth,
         query.text,
         await embedMemoryQuery(query.text),
         EVAL_RESULT_LIMIT,
+        { includeWeakMatches: true },
       );
+      expect(reranking).not.toBe("unavailable");
       // Every exposed attribution must carry branch-local evidence that already passed its gate.
       for (const result of results) {
         if (result.evidence.simpleLexicalRank !== null) {
@@ -235,12 +241,13 @@ describeEval("memory retrieval eval v1", () => {
   it("measures identity hard-negative abstention while preserving exact controls", async () => {
     const evaluated: EvaluatedQuery[] = [];
     for (const query of MEMORY_RETRIEVAL_EVAL_QUERIES_V2) {
-      const results = await memoryRetrievalRepository.search(
+      const { results, reranking } = await memoryRetrievalRepository.searchWithConflictClosure(
         auth,
         query.text,
         await embedMemoryQuery(query.text),
         EVAL_RESULT_LIMIT,
       );
+      expect(reranking).not.toBe("unavailable");
       const resultKeys = results.map((result) =>
         requireFixtureKey(contentToKey, result.memory.content)
       );
@@ -262,7 +269,7 @@ describeEval("memory retrieval eval v1", () => {
       });
     }
 
-    // V2 records the known quality gap without silently changing the separately scoped search policy.
+    // Strict reranking must close the recorded identity gap without losing exact controls.
     const controls = evaluated.filter((entry) => entry.query.category !== "negative");
     const hardNegatives = evaluated.filter((entry) => entry.query.category === "negative");
     const metrics = {
@@ -273,6 +280,16 @@ describeEval("memory retrieval eval v1", () => {
     };
     console.info("MEMORY_RETRIEVAL_EVAL_V2_IDENTITY", JSON.stringify({ evaluated, metrics }));
 
-    expect(metrics).toEqual(MEMORY_RETRIEVAL_R1_BASELINE_V2);
+    expect(metrics.hardNegativeEmptyRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V2_GATES.hardNegativeEmptyRateMinimum);
+    expect(metrics.identityControlRecallAt5).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V2_GATES.identityControlRecallAt5Minimum);
   }, 120_000);
+  it("recovers an indirect Russian question in broad mode and labels weak evidence", async () => {
+    const results = await retrieveRelevantMemories(auth,
+      "Как попасть в мастерскую, если основной комплект потерялся?", undefined, { includeWeakMatches: true });
+    expect(results).toContainEqual(expect.objectContaining({
+      content: MEMORY_RETRIEVAL_EVAL_RECORDS_V1.find((record) => record.key === "spare-key")!.content,
+      matchQuality: "weak",
+    }));
+  });
+
 });

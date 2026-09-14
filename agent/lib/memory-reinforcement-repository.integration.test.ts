@@ -26,7 +26,7 @@ describeWithDatabase("memoryReinforcementRepository", () => {
   });
   afterAll(closeDatabase);
 
-  it("reinforces a readable record once per call and ignores foreign refs", async () => {
+  it("records model use once per turn without refreshing evidence and ignores foreign refs", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const inserted = await database().query<{ id: string }>(
       `INSERT INTO memory_items
@@ -51,13 +51,19 @@ describeWithDatabase("memoryReinforcementRepository", () => {
 
     expect(result).toEqual({ reinforced: [memoryRef], unknown: ["mem_00000000000000000000000000000000"] });
     await expect(database().query(
-      "SELECT reinforcement_count, last_reinforced_at IS NOT NULL AS stamped FROM memory_items WHERE id = $1",
+      "SELECT reinforcement_count, last_reinforced_at IS NOT NULL AS stamped, use_count, last_used_at IS NOT NULL AS used FROM memory_items WHERE id = $1",
       [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1, stamped: true }] });
+    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 0, stamped: false, use_count: 1, used: true }] });
     await expect(database().query(
       "SELECT metadata->>'reason' AS reason FROM audit_events WHERE event_type = 'memory.reinforced' AND subject_id = $1",
       [inserted.rows[0]!.id],
     )).resolves.toMatchObject({ rows: [{ reason: "model_used" }] });
+
+    await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
+      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1" }, reason: "model_used",
+    });
+    expect((await database().query("SELECT use_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
+      .toEqual([{ use_count: 1 }]);
 
     // A personal-only caller cannot reinforce a family record.
     const personalOnly = { ...fixture.auth, scopes: ["personal" as const] };
@@ -72,6 +78,6 @@ describeWithDatabase("memoryReinforcementRepository", () => {
     })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
     await expect(database().query(
       "SELECT reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1 }] });
+    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 0 }] });
   });
 });

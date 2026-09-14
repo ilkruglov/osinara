@@ -203,7 +203,7 @@ describeWithDatabase("authored skill repository", () => {
     })).resolves.toBe(true);
 
     await expect(authoredSkillRepository.recordOutcome(owner, {
-      conversationId, name: "birthday-card", note: "картинка с текстом", outcome: "failed",
+      conversationId, usageId: (await authoredSkillRepository.usages(familyId, "birthday-card", conversationId))[0]!.id, name: "birthday-card", note: "картинка с текстом", outcome: "failed",
     })).resolves.toEqual({ name: "birthday-card", outcome: "failed", usageFound: true });
 
     const outcomes = await database().query<{ conversation_id: string | null; outcome: string }>(

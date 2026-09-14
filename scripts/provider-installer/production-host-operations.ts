@@ -41,6 +41,7 @@ const COMMAND_TIMEOUT_MS = 15 * 60 * 1_000;
 const PRODUCTION_DOCKER_RESOURCES = [
   "osinara-production-postgres-data",
   "osinara-production-memory-embedding-model-e5",
+  "osinara-production-memory-reranker-model-minilm",
   "osinara-production-google-workspace-credentials",
   "osinara-production-sandbox-data",
   "osinara-production-tool-environments",

@@ -10,6 +10,9 @@
  */
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
+import { AppError } from "./app-error.js";
+import { MEMORY_RERANKING_MIN_SCORE } from "./memory-reranking.js";
+import type { ScoredMemoryRetrievalResult } from "./memory-retrieval-ranking.js";
 
 import { MEMORY_RETRIEVAL_LIMIT, MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT, MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
@@ -27,7 +30,42 @@ import type { MemoryThreadContext } from "./memory-thread-context.js";
 
 export type ModelMemoryContextItem = ModelMemory | (MemoryConflictGroup & {
   type: "unresolved_conflict";
+}) | ({
+  type: "retrieval_status";
+  mode: "lexical_only" | "unreranked";
+  instruction: string;
 });
+
+const LEXICAL_ONLY_STATUS = {
+  type: "retrieval_status", mode: "lexical_only",
+  instruction: "Смысловой поиск временно недоступен. Выполнен поиск по словам; пустой результат не доказывает отсутствие подходящих воспоминаний.",
+} as const;
+const UNRERANKED_STATUS = {
+  type: "retrieval_status", mode: "unreranked",
+  instruction: "Уточняющая проверка релевантности недоступна. Найденные совпадения могут относиться к другой сущности; проверь полный текст перед использованием.",
+} as const;
+
+function toRetrievedMemory(result: ScoredMemoryRetrievalResult): ModelMemory {
+  return {
+    ...toModelMemory(result.memory, result.sourceEvidence),
+    ...(result.rerankScore !== undefined && result.rerankScore < MEMORY_RERANKING_MIN_SCORE
+      ? { matchQuality: "weak" as const } : {}),
+  };
+}
+
+async function retrievalEmbedding(query: string): Promise<number[] | null> {
+  try {
+    return await embedMemoryQuery(query);
+  } catch (error) {
+    if (!(error instanceof AppError) || ![
+      "AGENT_MEMORY_EMBEDDING_PROVIDER_UNAVAILABLE",
+      "AGENT_MEMORY_EMBEDDING_PROVIDER_FAILED",
+      "AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID",
+    ].includes(error.code)) throw error;
+    console.warn(JSON.stringify({ code: "AGENT_MEMORY_RETRIEVAL_DEGRADED", cause: error.code, mode: "lexical_only" }));
+    return null;
+  }
+}
 
 /**
  * The block carries only data: how retrieval works and how to treat records is stated once in the
@@ -112,9 +150,9 @@ export async function retrieveRelevantMemories(
   exposure?: MemorySearchExposure,
   window: MemoryRetrievalWindow = {},
 ): Promise<ModelMemoryContextItem[]> {
-  const embedding = await embedMemoryQuery(query);
+  const embedding = await retrievalEmbedding(query);
   const retrieval = await memoryRetrievalRepository.searchWithConflictClosure(auth, query, embedding, MEMORY_RETRIEVAL_LIMIT, window);
-  const memories = retrieval.results.map((result) => toModelMemory(result.memory, result.sourceEvidence));
+  const memories = retrieval.results.map(toRetrievedMemory);
   // Explicit search shows records too: only a shown ref may later be reinforced as used.
   if (exposure && memories.length > 0) {
     await memoryContextExposureRepository.record({
@@ -125,6 +163,8 @@ export async function retrieveRelevantMemories(
     });
   }
   return [
+    ...(embedding === null ? [LEXICAL_ONLY_STATUS] : []),
+    ...(retrieval.reranking === "unavailable" ? [UNRERANKED_STATUS] : []),
     ...memories,
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
@@ -141,7 +181,7 @@ export async function retrieveMemoryTurnContext(
   skillHints: readonly string[],
   options: MemoryTurnContextOptions = {},
 ): Promise<MemoryTurnContext> {
-  const embedding = await embedMemoryQuery(query);
+  const embedding = await retrievalEmbedding(query);
   // Automatic context is deliberately narrower than `search_memories`, which the model can call.
   // The block limit applies after the filters below: with the limit in SQL, a top made of faded
   // or recently shown records left the block empty while fitting records sat just below it.
@@ -158,7 +198,9 @@ export async function retrieveMemoryTurnContext(
     .filter((result) => !exclude.has(result.memory.memoryRef))
     .slice(0, MEMORY_TURN_RETRIEVAL_LIMIT);
   const memories: ModelMemoryContextItem[] = [
-    ...admitted.map((result) => toModelMemory(result.memory, result.sourceEvidence)),
+    ...(embedding === null ? [LEXICAL_ONLY_STATUS] : []),
+    ...(retrieval.reranking === "unavailable" ? [UNRERANKED_STATUS] : []),
+    ...admitted.map(toRetrievedMemory),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
   const threads = await memoryThreadBriefRepository.activate({

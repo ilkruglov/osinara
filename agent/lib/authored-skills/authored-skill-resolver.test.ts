@@ -50,6 +50,15 @@ describe("authored skill resolver", () => {
     expect(Object.keys(familySkills)).toEqual(["birthday-card", "club-digest"]);
   });
 
+  it("pins the exact resolved package versions before exposing their descriptors", async () => {
+    const packages = PACKAGES.map((pkg) => ({ ...pkg, version: 4 }));
+    const capturePackages = vi.fn().mockResolvedValue(undefined);
+    const resolve = createAuthoredTurnSkillResolver({ activePackages: vi.fn().mockResolvedValue(packages), capturePackages });
+    const provenance = { eveSessionId: "session", eveTurnId: "turn" };
+    await resolve(PRIVATE_OWNER, { provenance });
+    expect(capturePackages).toHaveBeenCalledWith("family-1", provenance, packages);
+  });
+
   it("gives nothing to members' private chats, external groups, review and subagents", async () => {
     const activePackages = vi.fn().mockResolvedValue(PACKAGES);
     const resolve = createAuthoredTurnSkillResolver({ activePackages });

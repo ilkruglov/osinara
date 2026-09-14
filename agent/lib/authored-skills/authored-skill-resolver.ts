@@ -16,11 +16,13 @@ import { resolveConversationEnvironment } from "../conversation-environment.js";
 import { authoredSkillRepository, type AuthoredSkillPackage } from "./authored-skill-repository.js";
 
 export interface AuthoredSkillResolverOptions {
+  provenance?: { eveSessionId: string; eveTurnId: string };
   memoryReview?: boolean;
   subagent?: boolean;
 }
 
 interface AuthoredSkillResolverDependencies {
+  capturePackages?: typeof authoredSkillRepository.capturePackages;
   activePackages(familyId: string): Promise<readonly AuthoredSkillPackage[]>;
 }
 
@@ -46,10 +48,12 @@ export function createAuthoredTurnSkillResolver(dependencies: AuthoredSkillResol
     // The private chat of a non-owner family member is trusted but not part of the library.
     if (environment === "private" && attributes?.role !== "owner") return {};
     const packages = await dependencies.activePackages(familyId);
+    if (options.provenance) await dependencies.capturePackages?.(familyId, options.provenance, packages);
     return Object.fromEntries(packages.map((pkg) => [pkg.name, packageDefinition(pkg)]));
   };
 }
 
 export const resolveAuthoredTurnSkills = createAuthoredTurnSkillResolver({
+  capturePackages: authoredSkillRepository.capturePackages,
   activePackages: (familyId) => authoredSkillRepository.activePackages(familyId),
 });

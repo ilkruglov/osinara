@@ -10,7 +10,8 @@
  * Key constructs:
  * - Counting lives in a bounded in-memory map keyed by session and turn; a restart loses at most
  *   the current turn's count, which is acceptable for a hint.
- * - Silent review, scheduled runs and subagents produce neither usage rows nor hints; an external
+ * - Silent review and subagents produce neither usage rows nor hints; scheduled runs record
+ *   usage only; an external
  *   group records loads of the skills granted to it but never gets a hint: the library is not its.
  */
 import type { SessionAuth } from "eve/context";
@@ -68,7 +69,7 @@ export function trustedChatKind(auth: SessionAuth): TrustedChatKind | null {
 function trustedIdentity(ctx: SkillSignalContext): {
   chatKind: TrustedChatKind; familyId: string; userId: string;
 } | null {
-  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx) || isScheduledSession(ctx)) return null;
+  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx)) return null;
   const chatKind = trustedChatKind(ctx.session.auth);
   const attributes = ctx.session.auth.current?.attributes;
   const familyId = attributes?.familyId;
@@ -124,7 +125,7 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
           continue;
         }
         // The repeat-task hint stays a trusted-chat affair: an external group cannot author skills.
-        if (!identity) continue;
+        if (!identity || isScheduledSession(ctx)) continue;
         if (action.kind !== "tool-call" || typeof action.toolName !== "string") continue;
         if (SKILL_HINT_IGNORED_TOOLS.has(action.toolName)) continue;
         remember(key, action.toolName);

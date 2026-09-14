@@ -51,6 +51,7 @@ export interface MemoryOperationProvenance {
 }
 
 export interface MemoryItem {
+  attribute?: string | null;
   author: {
     status: "current_member" | "former_member" | "telegram_user";
     telegramUserId: string | null;
@@ -78,6 +79,10 @@ export interface ReferencedMemoryItem extends MemoryItem {
 
 export interface CreateMemoryInput {
   attribute?: string;
+  slotUpdate?: {
+    action: "add" | "replace";
+    previousMemoryRefs: string[];
+  };
   confirmation: MemoryConfirmation;
   /** The writer has seen the near-duplicate candidates and asserts this is a different fact. */
   distinct?: boolean;
@@ -103,6 +108,7 @@ export interface CreateMemoryExplicitSourceInput {
 }
 
 export interface MemoryRow {
+  attribute?: string | null;
   author_telegram_user_id: string | null;
   author_user_id: string | null;
   confirmation: MemoryConfirmation;
@@ -125,6 +131,7 @@ export interface ReferencedMemoryRow extends MemoryRow {
 
 export function rowToMemory(row: MemoryRow): MemoryItem {
   return {
+    ...(row.attribute === undefined ? {} : { attribute: row.attribute }),
     author: {
       status:
         row.scope === "group"

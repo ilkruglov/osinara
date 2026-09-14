@@ -46,13 +46,25 @@ services:
       WORKFLOW_STRESS_RESET_ALLOWED: "true"
 
   memory-embedding:
-    profiles: ["workers"]
+    profiles: ["workers", "memory-quality"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
+    cpus: 2
+    mem_limit: 1536m
+    environment:
+      OMP_NUM_THREADS: "2"
     command:
       - --model-id
       - intfloat/multilingual-e5-small
       - --revision
       - 614241f622f53c4eeff9890bdc4f31cfecc418b3
+      - --tokenization-workers
+      - "2"
+      - --max-client-batch-size
+      - "8"
+      - --max-batch-requests
+      - "8"
+      - --max-batch-tokens
+      - "4096"
       - --auto-truncate=false
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost/health"]
@@ -73,3 +85,46 @@ services:
       timeout: 3s
       retries: 120
     restart: "no"
+
+  memory-reranker:
+    profiles: ["memory-quality"]
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
+    cpus: 2
+    mem_limit: 1280m
+    environment:
+      OMP_NUM_THREADS: "2"
+    command:
+      - --model-id
+      - cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+      - --revision
+      - 1427fd652930e4ba29e8149678df786c240d8825
+      - --max-client-batch-size
+      - "40"
+      - --max-batch-tokens
+      - "1024"
+      - --auto-truncate=false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 120
+
+  memory-evals:
+    profiles: ["memory-quality"]
+    build:
+      context: .
+      target: test
+    command: ["sh", "-c", "npm run migrate && npx vitest run agent/lib/memory-retrieval-eval.integration.test.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      memory-embedding:
+        condition: service_healthy
+      memory-reranker:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://osinara_test:osinara-test-only@postgres:5432/osinara_test
+      WORKFLOW_POSTGRES_URL: postgresql://osinara_workflow:osinara-workflow-test-only@postgres:5432/osinara_workflow
+      MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
+      MEMORY_RERANKER_BASE_URL: http://memory-reranker:80
+      RUN_MEMORY_RETRIEVAL_EVALS: "true"

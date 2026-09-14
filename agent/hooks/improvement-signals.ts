@@ -2,8 +2,8 @@
  * Improvement backlog signals.
  *
  * Export:
- * - Eve hook that turns a failed or heavy turn into reviewed backlog items for the owner, marks
- *   loaded authored skills failed and leaves a skill hint when a workflow problem recurs.
+ * - Eve hook that turns a failed or heavy turn into reviewed backlog items for the owner, records
+ *   execution telemetry for loaded authored skills and leaves a skill hint when a workflow problem recurs.
  *
  * Key construct:
  * - Failures are logged, never thrown: a bookkeeping hook must not fail a Telegram turn.
@@ -31,10 +31,7 @@ const handlers = createImprovementSignalHandlers({
   },
   isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),
-  recordSkillOutcome: (input) => authoredSkillRepository.recordOutcome(
-    { familyId: input.familyId },
-    { conversationId: input.conversationId, name: input.name, note: input.note, outcome: "failed" },
-  ),
+  recordSkillTelemetry: (input) => authoredSkillRepository.recordTelemetry(input),
   saveHint: (input) => skillHintRepository.save(input),
 });
 

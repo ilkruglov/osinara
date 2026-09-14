@@ -174,6 +174,7 @@ describe("production container contract", () => {
     for (const volume of [
       "postgres-data",
       "memory-embedding-model-e5",
+      "memory-reranker-model-minilm",
       "google-workspace-credentials",
       "sandbox-data",
       "tool-environments",
@@ -196,7 +197,7 @@ describe("production container contract", () => {
     expect(compose).toContain("x-bounded-json-logs: &bounded-json-logs");
     expect(compose).toContain('max-size: "20m"');
     expect(compose).toContain('max-file: "5"');
-    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(12);
+    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(13);
   });
 
   it("limits Docker control to the runner and tunes pinned TEI for one CPU", () => {

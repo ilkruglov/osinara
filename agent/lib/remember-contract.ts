@@ -98,8 +98,13 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
     attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS).optional().describe(
-      "Слот записи: для человека работа, профессия, город, семья, дети, партнёр, питомцы, машина, здоровье, привычки, увлечения, вкусы, музыка, еда, техника, прозвище, роль в чате, день рождения; для fact/family_shared о названной сущности или о чате вместе с subject.label (например «Гоша» + «содержание»); для episode только «итог обсуждения» с subject.label = тема. Новая запись в том же слоте заменяет старую",
+      "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
     ),
+    slotUpdate: z.object({
+      action: z.enum(["add", "replace"]).describe("add сохраняет прежние детали отдельными записями; replace заменяет их полной новой версией"),
+      previousMemoryRefs: z.array(z.string().regex(MEMORY_REF_PATTERN)).min(1).max(50)
+        .describe("Все прочитанные активные memoryRef того же субъекта и слота; backend проверяет, что набор не изменился"),
+    }).strict().optional(),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     distinct: z.boolean().optional().describe("true после AGENT_MEMORY_NEAR_DUPLICATE, если это другой факт, а не версия существующего"),
     reinforces: z.string().regex(MEMORY_REF_PATTERN).optional().describe("После AGENT_MEMORY_NEAR_DUPLICATE: memoryRef записи с тем же смыслом; она подкрепляется, новая не создаётся"),
@@ -119,6 +124,9 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
     subject: modelFacingMemorySubjectSchema.describe("Кому или чему принадлежит утверждение"),
     thread: memoryThreadSchema.optional().describe("Необязательное атомарное создание нити или attach"),
   }).strict().superRefine((input, context) => {
+    if (input.slotUpdate && (!input.attribute || input.reinforces !== undefined || input.distinct === true)) {
+      context.addIssue({ code: "custom", path: ["slotUpdate"], message: "slotUpdate требует attribute и несовместим с reinforces/distinct" });
+    }
     const create = input.thread?.action === "create" ? input.thread : null;
     if (create?.identity === "project" && input.subject.kind !== "none") {
       context.addIssue({

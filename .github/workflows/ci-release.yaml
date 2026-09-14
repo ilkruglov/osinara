@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Run production-equivalent checks
         run: docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests
+      - name: Verify hybrid retrieval with pinned E5 and reranker models
+        run: docker compose -f compose.test.yaml --profile memory-quality up --build --abort-on-container-exit --exit-code-from memory-evals memory-evals
 
   fork-app:
     name: Build fork app and sandbox runner images
