@@ -1,0 +1,16 @@
+Mia / Osinara fork
+Copyright 2026 ilkruglov
+
+Original contributions authored and owned by ilkruglov in this fork are
+licensed under the Apache License, Version 2.0. See LICENSE.
+
+This grant does not license or relicense inherited upstream code,
+contributions owned by other authors, dependencies, models, or bundled
+third-party materials. The upstream project is https://github.com/nyxandro/osinara
+and had no root license at the time this notice was added.
+
+In particular, agent/skills/docx, agent/skills/pdf, and agent/skills/xlsx retain
+their respective LICENSE.txt terms. No permission for those materials is
+granted by this notice or the root LICENSE. Original notices and third-party
+terms remain in force. This repository as a whole is not represented as
+licensed under Apache-2.0.
