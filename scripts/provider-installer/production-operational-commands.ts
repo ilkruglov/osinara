@@ -45,12 +45,15 @@ export function assertOperationalHost(identity: OperationalHostIdentity): void {
 
 async function requireManagedFile(path: string, mode: number): Promise<Buffer> {
   const metadata = await lstat(path);
+  // The installer writes public configuration as 0644; the updater tightens it to 0600.
+  // Secret files still require exactly 0600 on both paths.
+  const permittedModes = mode === 0o644 ? [0o600, 0o644] : [mode];
   if (
     !metadata.isFile()
     || metadata.isSymbolicLink()
     || metadata.uid !== 0
     || metadata.gid !== 0
-    || (metadata.mode & 0o777) !== mode
+    || !permittedModes.includes(metadata.mode & 0o777)
     || await realpath(path) !== path
   ) {
     throw new InstallerError(
