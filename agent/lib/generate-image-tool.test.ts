@@ -66,8 +66,10 @@ function context(): ToolContext {
 
 function dependencies() {
   return {
+    readImage: vi.fn().mockResolvedValue({ bytes: Buffer.from("original"), mediaType: "image/png" }),
     client: {
       assertConfigured: vi.fn(),
+      assertSupportsEditing: vi.fn(),
       generate: vi.fn().mockResolvedValue({
         bytes: Buffer.from("generated"),
         mediaType: "image/webp",
@@ -97,6 +99,70 @@ function dependencies() {
 }
 
 describe("generate_image", () => {
+  it.each(["AGENT_IMAGE_EDITING_INPUT_INVALID", "AGENT_IMAGE_EDITING_UNAVAILABLE"])("records %s as a definite failure", async (code) => {
+    const deps = dependencies();
+    deps.client.generate.mockRejectedValue(new AppError(code, "Редактирование не началось"));
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
+      images: [{ path: "photo.png", scope: "group" }],
+    }, context())).rejects.toMatchObject({ code });
+    expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-1", code);
+    expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
+  });
+
+  it("returns a completed edit without calling the provider again", async () => {
+    const deps = dependencies();
+    deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
+      images: [{ telegramMessageId: "42", scope: "group" }],
+    }, context())).resolves.toMatchObject({ generated: false, path: FILE.path });
+    expect(deps.readImage).toHaveBeenCalled();
+    expect(deps.client.generate).not.toHaveBeenCalled();
+    expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
+  });
+
+  it("rejects unavailable editing before reading a source or creating a reservation", async () => {
+    const deps = dependencies();
+    deps.client.assertSupportsEditing.mockImplementation(() => { throw new AppError("AGENT_IMAGE_EDITING_UNAVAILABLE", "Недоступно"); });
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
+      images: [{ path: "photo.png", scope: "group" }],
+    }, context())).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    expect(deps.readImage).not.toHaveBeenCalled();
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+  });
+  it("reads an authorized source, hashes its bytes and saves the edit to a new path", async () => {
+    const deps = dependencies();
+    const tool = createGenerateImageTool(deps as never);
+    const images = [{ path: "photos/source.png", scope: "group" }];
+    await tool.execute({ ...INPUT, images }, context());
+    expect(deps.readImage).toHaveBeenCalledWith(expect.objectContaining({ groupId: "group-1" }), images[0]);
+    expect(deps.client.generate).toHaveBeenCalledWith(expect.objectContaining({
+      referenceImages: [{ bytes: Buffer.from("original"), mediaType: "image/png" }],
+    }));
+    expect(deps.workspaces.writeBinary.mock.calls[0]![1].path).toBe(GENERATED_PATH);
+    const originalHash = deps.operations.begin.mock.calls[0]![0].inputHash;
+    deps.readImage.mockResolvedValue({ bytes: Buffer.from("changed"), mediaType: "image/png" });
+    await tool.execute({ ...INPUT, images }, context());
+    expect(deps.operations.begin.mock.calls[1]![0].inputHash).not.toBe(originalHash);
+  });
+
+  it("stops before reservation and provider access when source authorization fails", async () => {
+    const deps = dependencies();
+    deps.readImage.mockRejectedValue(new AppError("AGENT_WORKSPACE_ACCESS_DENIED", "Нет доступа"));
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT,
+      images: [{ path: "photo.png", scope: "personal" }],
+    }, context())).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_DENIED" });
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+    expect(deps.client.generate).not.toHaveBeenCalled();
+  });
+
+  it.each([[], [{ scope: "group" }], [{ scope: "group", path: "a.png", telegramMessageId: "42" }],
+    Array.from({ length: 5 }, () => ({ scope: "group", path: "a.png" }))].map((images) => ({ images })))("rejects invalid edit sources $images", async ({ images }) => {
+    const deps = dependencies();
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT, images }, context()))
+      .rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_INPUT_INVALID" });
+    expect(deps.readImage).not.toHaveBeenCalled();
+    expect(deps.operations.begin).not.toHaveBeenCalled();
+  });
   it("rejects a model-supplied workspace scope", async () => {
     const deps = dependencies();
     const tool = createGenerateImageTool(deps as never);

@@ -2,13 +2,14 @@
  * Flux image generation providers with an ordered fallback chain.
  *
  * Exports:
- * - `createCloudflareImageClient`: Workers AI text-to-image (FLUX.2 klein-4b only).
+ * - `createCloudflareImageClient`: Workers AI generation and editing (FLUX.2 klein-4b only).
  * - `createNeuralDeepImageClient`: async task API (create → poll → download PNG).
  * - `createFallbackImageClient`: advances after definitive refusals; unknown outcomes stop the chain.
  * - `detectImageMediaType`: PNG / JPEG / WebP by magic bytes; anything else is rejected.
  */
 import { AppError, isAppError } from "../app-error.js";
 import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
+import { editingUnavailable, prepareCloudflareReference } from "./image-editing-input.js";
 
 // klein-9b and flux-2-dev are deliberately absent: they burn the free Workers AI quota in a few images.
 // flux-1-schnell is absent too: it rejects width/height, so it cannot honour the requested size.
@@ -30,6 +31,7 @@ const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/u;
 
 export interface FluxImageClient {
+  readonly supportsEditing?: boolean;
   assertConfigured(): void;
   generate(input: ImageGenerationRequest): Promise<GeneratedImage>;
   readonly name: string;
@@ -118,6 +120,7 @@ export function createCloudflareImageClient(
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   return {
     name: "cloudflare",
+    supportsEditing: true,
     assertConfigured() {
       if (!/^[0-9a-f]{32}$/u.test(options.accountId) || !options.token || /\s/u.test(options.token)) {
         throw new AppError("AGENT_IMAGE_GENERATION_CONFIG_INVALID", "Не настроен доступ к Cloudflare Workers AI");
@@ -131,6 +134,15 @@ export function createCloudflareImageClient(
       const body = cloudflareRequestBody({
         height: String(height), prompt: input.prompt, steps: "4", width: String(width),
       });
+      if (input.referenceImages !== undefined) {
+        if (input.referenceImages.length < 1 || input.referenceImages.length > 4) {
+          throw new AppError("AGENT_IMAGE_EDITING_INPUT_INVALID", "Передайте от одного до четырёх исходников");
+        }
+        for (const [index, reference] of input.referenceImages.entries()) {
+          const bytes = await prepareCloudflareReference(reference);
+          body.append(`input_image_${index}`, new Blob([new Uint8Array(bytes)], { type: "image/png" }), `reference-${index}.png`);
+        }
+      }
       let response: Response;
       try {
         response = await fetchImplementation(url, {
@@ -188,6 +200,7 @@ export function createNeuralDeepImageClient(
       }
     },
     async generate(input) {
+      if (input.referenceImages?.length) throw editingUnavailable();
       this.assertConfigured();
       const { aspectRatio } = dimensions(input.size);
       let created: Response;
@@ -254,12 +267,15 @@ export function createFallbackImageClient(clients: readonly FluxImageClient[]): 
   }
   return {
     name: clients.map((client) => client.name).join(">"),
+    supportsEditing: clients.some((client) => client.supportsEditing),
     assertConfigured() {
       for (const client of clients) client.assertConfigured();
     },
     async generate(input) {
+      const candidates = input.referenceImages?.length ? clients.filter((client) => client.supportsEditing) : clients;
+      if (candidates.length === 0) throw editingUnavailable();
       let lastError: unknown = null;
-      for (const client of clients) {
+      for (const client of candidates) {
         try {
           return await client.generate(input);
         } catch (error) {

@@ -164,7 +164,8 @@ describe("unavailable subscription image generation", () => {
     const begin = vi.fn();
     const generate = vi.fn();
     const tool = createGenerateImageTool({
-      client: { assertConfigured: vi.fn(), generate },
+      readImage: vi.fn(),
+      client: { assertConfigured: vi.fn(), assertSupportsEditing: vi.fn(), generate },
       operations: {
         begin,
         complete: vi.fn(),

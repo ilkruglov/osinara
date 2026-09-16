@@ -14,6 +14,7 @@ import { AppError } from "../app-error.js";
 import { modelProviderConfig } from "../model-provider-config.js";
 import { createFallbackImageClient } from "./flux-image-clients.js";
 import { resolveFluxImageProviders } from "./image-generation-availability.js";
+import { editingUnavailable } from "./image-editing-input.js";
 
 export type ImageBackground = "auto" | "opaque" | "transparent";
 export type ImageQuality = "auto" | "high" | "low" | "medium";
@@ -24,6 +25,12 @@ export interface ImageGenerationRequest {
   prompt: string;
   quality: ImageQuality;
   size: ImageSize;
+  referenceImages?: readonly ImageReference[];
+}
+
+export interface ImageReference {
+  bytes: Uint8Array;
+  mediaType: string;
 }
 
 export type ImageMediaType = "image/jpeg" | "image/png" | "image/webp";
@@ -192,6 +199,7 @@ export function createImageGenerationClient(options: ImageGenerationClientOption
   return {
     assertConfigured,
     async generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
+      if (input.referenceImages?.length) throw editingUnavailable();
       assertConfigured();
       const url = generationUrl(options.baseUrl);
       let response: Response;
@@ -257,7 +265,12 @@ export function createImageGenerationClient(options: ImageGenerationClientOption
   };
 }
 
-function productionClient(): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
+function productionClient(editing = false): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
+  if (editing) {
+    const clients = resolveFluxImageProviders(process.env).filter((client) => client.supportsEditing);
+    if (clients.length === 0) throw editingUnavailable();
+    return createFallbackImageClient(clients);
+  }
   if (modelProviderConfig.provider !== "codex-subscription") {
     const chain = resolveFluxImageProviders(process.env);
     if (chain.length === 0) {
@@ -282,10 +295,13 @@ function productionClient(): { assertConfigured(): void; generate(input: ImageGe
 }
 
 export const imageGenerationClient = {
+  assertSupportsEditing(): void {
+    productionClient(true).assertConfigured();
+  },
   assertConfigured(): void {
     productionClient().assertConfigured();
   },
   generate(input: ImageGenerationRequest): Promise<GeneratedImage> {
-    return productionClient().generate(input);
+    return productionClient(Boolean(input.referenceImages?.length)).generate(input);
   },
 };

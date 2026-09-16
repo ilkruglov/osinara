@@ -9,6 +9,7 @@
  * - NeuralDeep creates a task, polls until finished and downloads the PNG result.
  */
 import { describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 import {
   CLOUDFLARE_IMAGE_MODELS,
@@ -35,6 +36,63 @@ function neuralDeepSuccess() {
 }
 
 describe("flux image clients", () => {
+  it("preserves reference ordering, corrects EXIF orientation and strips metadata", async () => {
+    const first = await sharp({ create: { width: 100, height: 50, channels: 3, background: "red" } })
+      .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    const second = await sharp({ create: { width: 80, height: 40, channels: 3, background: "blue" } }).png().toBuffer();
+    const fetch = vi.fn().mockResolvedValue(json({ result: { image: JPEG.toString("base64") }, success: true }));
+    const client = createCloudflareImageClient({ accountId: "0".repeat(32), fetch, token: "test" });
+    await client.generate({ ...request, referenceImages: [first, second, first, second].map((bytes) => ({ bytes, mediaType: "image/png" })) });
+    const form = fetch.mock.calls[0]![1].body as FormData;
+    for (let index = 0; index < 4; index++) {
+      const bytes = Buffer.from(await (form.get(`input_image_${index}`) as Blob).arrayBuffer());
+      const metadata = await sharp(bytes).metadata();
+      expect(metadata).toMatchObject(index % 2 === 0 ? { width: 50, height: 100 } : { width: 80, height: 40 });
+      expect(metadata.exif).toBeUndefined();
+    }
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([Buffer.from("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>"), PNG,
+    Buffer.alloc(10 * 1024 * 1024 + 1)])("rejects unsupported, corrupt or oversized input before POST %#", async (bytes) => {
+    const fetch = vi.fn();
+    const client = createCloudflareImageClient({ accountId: "0".repeat(32), fetch, token: "test" });
+    await expect(client.generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] }))
+      .rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_INPUT_INVALID" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("sends a reference image as binary multipart for editing", async () => {
+    const bytes = await sharp({ create: { width: 1200, height: 600, channels: 3, background: "red" } }).png().toBuffer();
+    const fetch = vi.fn().mockResolvedValue(json({ result: { image: JPEG.toString("base64") }, success: true }));
+    const client = createCloudflareImageClient({ accountId: "0".repeat(32), fetch, token: "test" });
+    await client.generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] } as never);
+    const form = fetch.mock.calls[0]![1].body as FormData;
+    expect(form.get("input_image_0")).toBeInstanceOf(Blob);
+    const normalized = Buffer.from(await (form.get("input_image_0") as Blob).arrayBuffer());
+    expect(await sharp(normalized).metadata()).toMatchObject({ width: 511, height: 256, format: "png" });
+    expect(form.get("prompt")).toBe(request.prompt);
+  });
+
+  it("never replaces an edit with a text-only NeuralDeep generation on quota exhaustion", async () => {
+    const cloudflareFetch = vi.fn().mockResolvedValue(json({}, 429));
+    const neuralFetch = neuralDeepSuccess();
+    const chain = createFallbackImageClient([
+      createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch, token: "test" }),
+      createNeuralDeepImageClient({ apiKey: "test", fetch: neuralFetch, sleep: async () => {} }),
+    ]);
+    const bytes = await sharp({ create: { width: 1, height: 1, channels: 3, background: "red" } }).png().toBuffer();
+    await expect(chain.generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] })).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
+    expect(cloudflareFetch).toHaveBeenCalledTimes(1);
+    expect(neuralFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects editing directly through a text-only provider before POST", async () => {
+    const fetch = neuralDeepSuccess();
+    const client = createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} });
+    await expect(client.generate({ ...request, referenceImages: [{ bytes: PNG, mediaType: "image/png" }] } as never))
+      .rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it.each(["network", "server", "request-timeout", "invalid-json", "invalid-base64", "invalid-image"])(
     "does not fall back after an ambiguous Cloudflare %s result", async (failure) => {
       const cloudflareFetch = vi.fn(async () => {

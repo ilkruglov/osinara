@@ -1,5 +1,5 @@
 /**
- * Subscription-backed raster image generation tool.
+ * Raster image generation and reference-based editing tool.
  *
  * Exports:
  * - `createGenerateImageTool`: dependency-injected exact-once generation workflow.
@@ -31,12 +31,16 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import { workspaceBinaryRepository } from "../workspaces/workspace-binary-repository.js";
 import type { WorkspaceAuthorization, WorkspaceScope } from "../workspaces/workspace-repository.js";
 import type { WorkspaceFileRecord } from "../workspaces/workspace-file-record.js";
+import { readWorkspaceImage, type WorkspaceImageLocation } from "../workspaces/workspace-image-source.js";
+import { imageSourcesSchema } from "../image-generation/image-source-schema.js";
 
 type AnyToolDefinition = ToolDefinition<any, any>;
 
 interface GenerateImageDependencies {
+  readImage(auth: WorkspaceAuthorization, input: WorkspaceImageLocation): Promise<{ bytes: Uint8Array; mediaType: string }>;
   client: {
     assertConfigured(): void;
+    assertSupportsEditing(): void;
     generate(input: ImageGenerationRequest): Promise<{
       bytes: Buffer;
       mediaType: ImageMediaType;
@@ -73,12 +77,12 @@ interface GenerateImageDependencies {
 }
 
 const IMAGE_PROMPT_MAX_LENGTH = 8_000;
-const IMAGE_CAPTION_MAX_LENGTH = 1_024;
 const IMAGE_SIZES = ["1024x1024", "1536x1024", "1024x1536", "auto"] as const;
 const IMAGE_QUALITIES = ["low", "medium", "high", "auto"] as const;
 const IMAGE_BACKGROUNDS = ["transparent", "opaque", "auto"] as const;
 
 const inputSchema = z.object({
+  images: imageSourcesSchema(),
   background: z.enum(IMAGE_BACKGROUNDS).describe("transparent, opaque или auto"),
   prompt: z.string().min(1).max(IMAGE_PROMPT_MAX_LENGTH)
     .describe("Полная визуальная спецификация изображения без служебных инструкций"),
@@ -90,7 +94,8 @@ type GenerateImageInput = z.infer<typeof inputSchema>;
 
 function parseInput(input: unknown): GenerateImageInput {
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success) {
+  if (!parsed.success || parsed.data.images?.some((source) =>
+    [source.path, source.attachmentId, source.telegramMessageId].filter((value) => value !== undefined).length !== 1)) {
     throw new AppError(
       "AGENT_IMAGE_GENERATION_INPUT_INVALID",
       "Не удалось проверить параметры изображения. Уточните описание и формат",
@@ -115,13 +120,17 @@ function outputFilePath(stem: string, mediaType: ImageMediaType): string {
   return `${stem}.${OUTPUT_EXTENSIONS[mediaType]}`;
 }
 
-function inputHash(input: GenerateImageInput, scope: WorkspaceScope): string {
+function inputHash(input: GenerateImageInput, scope: WorkspaceScope, references: ImageGenerationRequest["referenceImages"]): string {
   return createHash("sha256").update(JSON.stringify({
     background: input.background,
     prompt: input.prompt,
     quality: input.quality,
     scope,
     size: input.size,
+    ...(references === undefined ? {} : {
+      images: input.images,
+      referenceHashes: references.map(({ bytes }) => createHash("sha256").update(bytes).digest("hex")),
+    }),
   }), "utf8").digest("hex");
 }
 
@@ -177,6 +186,9 @@ async function settleProviderFailure(
   const definitive = isAppError(error) && [
     "AGENT_IMAGE_GENERATION_CONFIG_INVALID",
     "AGENT_IMAGE_GENERATION_REJECTED",
+    "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE",
+    "AGENT_IMAGE_EDITING_UNAVAILABLE",
+    "AGENT_IMAGE_EDITING_INPUT_INVALID",
   ].includes(error.code);
   const errorCode = isAppError(error) ? error.code : "AGENT_IMAGE_GENERATION_STATUS_UNKNOWN";
   try {
@@ -219,17 +231,16 @@ async function recoverStartedOperation(
 export function createGenerateImageTool(dependencies: GenerateImageDependencies): AnyToolDefinition {
   return defineTool({
     description: [
-      "Когда использовать: создать одно новое raster-изображение (Flux или GPT-Image, по настроенному провайдеру) и сохранить его в workspace.",
-      "Не использовать: для SVG, диаграмм из кода, редактирования существующего файла или незапрошенной фоновой генерации.",
+      "Когда использовать: создать raster-изображение или отредактировать существующее по просьбе пользователя и сохранить результат новым файлом в workspace.",
+      "Для правки передай images с исходниками из Telegram или workspace; prompt описывает изменения и что сохранить. Правки доступны через Cloudflare. Без images создаётся новая картинка.",
+      "Не использовать: для SVG, диаграмм из кода или незапрошенной фоновой генерации.",
       "Вход: prompt описывает назначение, сцену, объект, композицию, стиль и запреты. Если размер или качество не заданы пользователем, передай auto.",
       "Результат: изображение сохраняется без перезаписи в generated-images и НЕ отправляется в чат; чтобы показать его, вызови send_workspace_image с этим path. Черновик можно сначала посмотреть через inspect_workspace_image и переделать, отправив только итог.",
       "Ошибка: status unknown означает возможное списание лимита провайдера; не повторяй вызов автоматически. Надписи, особенно кириллицу, модели рисуют плохо, предупреждай об этом.",
     ].join(" "),
     inputSchema,
     async execute(rawInput, ctx) {
-      // The mode surfaces never emit this descriptor without the subscription provider, so reaching
-      // execution means a stale descriptor. Fail before the durable reservation records a call that
-      // could never have been billed.
+      // Fail before reservation if the descriptor outlived provider availability.
       if (!IMAGE_GENERATION_AVAILABLE) {
         throw new AppError(
           "AGENT_IMAGE_GENERATION_UNAVAILABLE",
@@ -239,11 +250,20 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       const input = parseInput(rawInput);
       const auth = requireWorkspaceAuthorization(ctx);
       const scope = currentWorkspaceScope(auth);
-      dependencies.client.assertConfigured();
+      if (input.images) dependencies.client.assertSupportsEditing();
+      else dependencies.client.assertConfigured();
       const workspaceId = await dependencies.workspaces.workspaceId(auth, scope);
+      const references: NonNullable<ImageGenerationRequest["referenceImages"]>[number][] = [];
+      for (const source of input.images ?? []) {
+        const image = await dependencies.readImage(auth, source as WorkspaceImageLocation);
+        references.push({ bytes: image.bytes, mediaType: image.mediaType });
+      }
+      const referenceImages = input.images ? references : undefined;
+      const { images: _images, ...request } = input;
+      ctx.abortSignal?.throwIfAborted();
       const path = outputPath(ctx.callId);
       const reservation = await dependencies.operations.begin({
-        inputHash: inputHash(input, scope),
+        inputHash: inputHash(input, scope, referenceImages),
         operationKey: ctx.callId,
         outputPath: path,
         workspaceId,
@@ -263,7 +283,9 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
       } else {
         let generatedImage: Awaited<ReturnType<GenerateImageDependencies["client"]["generate"]>>;
         try {
-          generatedImage = await dependencies.client.generate(input);
+          generatedImage = await dependencies.client.generate({ ...request,
+            ...(referenceImages === undefined ? {} : { referenceImages }),
+          });
         } catch (error) {
           return await settleProviderFailure(dependencies, ctx.callId, error);
         }
@@ -333,6 +355,7 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
 }
 
 export default createGenerateImageTool({
+  readImage: readWorkspaceImage,
   client: imageGenerationClient,
   operations: imageGenerationOperationRepository,
   workspaces: workspaceBinaryRepository,
