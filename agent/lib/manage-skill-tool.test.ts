@@ -22,6 +22,8 @@ const repository = vi.hoisted(() => ({
   rollback: vi.fn(),
 }));
 const evaluations = vi.hoisted(() => ({ list: vi.fn().mockResolvedValue([]) }));
+const experiments = vi.hoisted(() => ({ list: vi.fn().mockResolvedValue([]), create: vi.fn() }));
+vi.mock("./authored-skills/skill-experiment-repository.js", () => ({ skillExperimentRepository: experiments }));
 vi.mock("./authored-skills/skill-evaluation-repository.js", () => ({ skillEvaluationRepository: evaluations }));
 const grants = vi.hoisted(() => ({
   grant: vi.fn(),
@@ -95,6 +97,16 @@ describe("manage_skill", () => {
 
     await expect(manageSkill.execute({ action: "list" }, context)).rejects.toThrow("AGENT_OWNER_REQUIRED");
     expect(repository.list).not.toHaveBeenCalled();
+  });
+  it("requires exact owner approval before freezing an experiment protocol", async () => {
+    const input = { action: "create_experiment" as const, name: "file-report" };
+    requireApprovalEvidence.mockRejectedValueOnce(new Error("approval required"));
+    await expect(manageSkill.execute(input, context)).rejects.toThrow("approval required");
+    expect(experiments.create).not.toHaveBeenCalled();
+  });
+  it("finds experiments by name before the first skill is published", async () => {
+    await expect(manageSkill.execute({ action: "experiment_status", name: "file-report" }, context)).resolves.toEqual([]);
+    expect(experiments.list).toHaveBeenCalledWith({ familyId: OWNER.familyId, userId: OWNER.userId, role: "owner" }, "file-report");
   });
 
   it("publishes only after exact approval with the mode catalog and the call id", async () => {

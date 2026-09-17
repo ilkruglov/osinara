@@ -1,6 +1,6 @@
 {
   "name": "osinara-family-agent",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "imports": {
@@ -8,7 +8,7 @@
     "#evals/*": "./evals/*"
   },
   "scripts": {
-    "build": "eve build && node --experimental-strip-types scripts/validate-eve-tool-surface-build.ts",
+    "build": "eve build && node --experimental-strip-types scripts/validate-eve-tool-surface-build.ts && npm run build:skill-lab",
     "build:runtime": "esbuild scripts/create-bootstrap-code.ts scripts/migrate-workflow.ts scripts/migrate.ts scripts/memory-embedding-worker.ts scripts/telegram-ingress-worker.ts scripts/validate-model-provider-config.ts services/sandbox-runner/main.ts services/sandbox-egress-proxy/main.ts --bundle --platform=node --format=esm --target=node24 --packages=external --outbase=. --outdir=.runtime",
     "bootstrap:code": "node --experimental-strip-types scripts/create-bootstrap-code.ts",
     "dev": "eve dev",
@@ -24,7 +24,8 @@
     "migrate:runtime": "node .runtime/scripts/migrate-workflow.js && node .runtime/scripts/migrate.js",
     "memory:reindex": "node --import tsx scripts/reindex-memory.ts",
     "postinstall": "node --experimental-strip-types scripts/apply-eve-patches.ts",
-    "reset:workflow-stress": "node --experimental-strip-types scripts/reset-workflow-stress-database.ts"
+    "reset:workflow-stress": "node --experimental-strip-types scripts/reset-workflow-stress-database.ts",
+    "build:skill-lab": "cd services/skill-lab && ../../node_modules/.bin/eve build"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.37",
@@ -37,6 +38,7 @@
     "dockerode": "5.0.1",
     "eve": "0.40.0",
     "file-type": "22.0.1",
+    "just-bash": "3.4.2",
     "pg": "8.22.0",
     "sharp": "0.35.4",
     "tar-stream": "3.2.0",

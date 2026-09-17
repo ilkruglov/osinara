@@ -19,7 +19,7 @@ services:
     build:
       context: .
       target: test
-    command: ["sh", "-c", "npm run migrate && npm run typecheck && npm test && npm run build"]
+    command: ["sh", "-c", "npm run migrate && npm run typecheck && npm run build:skill-lab && npm test && npm run build"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,6 +27,7 @@ services:
       DATABASE_URL: postgresql://osinara_test:osinara-test-only@postgres:5432/osinara_test
       INVITATION_SIGNING_SECRET: integration-test-signing-secret-32-chars
       RUN_DATABASE_INTEGRATION_TESTS: "true"
+      RUN_SKILL_LAB_TESTS: "true"
       WORKFLOW_POSTGRES_URL: postgresql://osinara_workflow:osinara-workflow-test-only@postgres:5432/osinara_workflow
 
   workflow-stress:

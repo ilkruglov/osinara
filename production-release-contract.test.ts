@@ -83,7 +83,9 @@ describe("production container contract", () => {
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
     expect(runtime).toContain("COPY --from=build /app/.runtime ./.runtime");
     expect(runtime).toContain("COPY --from=build /app/agent ./agent");
-    expect(runtime).not.toMatch(/COPY --from=build \/app\/(scripts|services)\b/);
+    const labArtifact = "COPY --from=build /app/services/skill-lab/.output ./services/skill-lab/.output";
+    expect(runtime).toContain(labArtifact);
+    expect(runtime.replace(labArtifact, "")).not.toMatch(/COPY --from=build \/app\/(scripts|services)\b/);
     expect(entrypoint).toContain("node .runtime/scripts/migrate.js");
     expect(entrypoint).toContain("node .runtime/scripts/validate-model-provider-config.js");
     expect(entrypoint).not.toContain("npm run migrate");

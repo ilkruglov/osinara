@@ -19,6 +19,9 @@ import { z } from "zod";
 import { skillSelectionCaseSchema } from "../authored-skills/skill-selection.js";
 import { skillEvaluationRepository } from "../authored-skills/skill-evaluation-repository.js";
 import { skillCheckSchema } from "../authored-skills/skill-evaluation.js";
+import { experimentProtocolSchema } from "../authored-skills/skill-experiment.js";
+import { skillExperimentRepository } from "../authored-skills/skill-experiment-repository.js";
+import { runSkillExperiment } from "../authored-skills/skill-experiment-runner.js";
 import { AppError } from "../app-error.js";
 import {
   AUTHORED_SKILL_LIMITS,
@@ -36,20 +39,23 @@ import { requireTrustedTelegramOwner, type TrustedTelegramOwner } from "../famil
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 
 const TOOL_DESCRIPTION = [
-  "Библиотека собственных навыков Мии, одна на семью. Только владелец в личном или семейном чате. Сначала load_skill skill-authoring.",
-  "list/read показывают навыки, примеры, черновики и usages с id, версией, оценкой владельца и отдельной технической статистикой. record_outcome требует name, usageId из read, outcome ok/failed и note; записывай только явную оценку владельца.",
-  "Создание и улучшение: draft (name, description, markdown, files, changeNote) сохраняет неизменяемого кандидата. test_selection (candidateId, selectionCases:[{request,shouldLoad}]) проверяет выбор навыка в свежем контексте на 2–6 положительных и отрицательных запросах.",
-  "Пробный прогон: begin_trial с candidateId, variant candidate/baseline, request (или exampleId сохранённого примера), checks:[{toolName,path,operator,expected}]. Операторы succeeded, nonempty, equals; path это ключи JSON в output инструмента. Задай проверки ДО выполнения; затем выполни пример и finish_trial с runId и trialSummary. Выполняй последовательными шагами, begin_trial отдельно от проверяемых инструментов. Служебный manage_skill не считается доказательством. cancel_trial с runId отменяет начатый прогон.",
-  "Прогоны сами инструменты не запускают. Побочные действия только по явной просьбе владельца; при повторных проверках используй тестовые адресаты и файлы. Проверки доказывают наблюдаемое выполнение, качество принимает владелец.",
-  "publish требует тот же контент, candidateId, успешный runId, trialRequest и trialSummary. Для обновления каждый сохранённый пример должен иметь baseline и успешный candidate с одинаковыми checks; trials:[{exampleId,summary}] остаются пояснением, не доказательством. Изменился контент или базовая версия: новый draft и проверки. Publish, rollback, retire, grant, revoke требуют кнопки владельца.",
-  `Markdown без frontmatter; обязательные разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.join(", ")}. Инструменты только текущего режима. До ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов, ${AUTHORED_SKILL_LIMITS.filesMax} файлов references/*.md по ${AUTHORED_SKILL_LIMITS.fileMaxCharacters}. Навык с generate_image требует reference с шаблоном промпта.`,
-  "add_example: name, request, expected. remove_example: name, exampleId, только по просьбе владельца. rollback: name, version. retire: name. grant/revoke: name, group; права инструментов навык не добавляет. Опубликованный навык доступен со следующего хода.",
+  "Собственные навыки Мии, одна библиотека на семью. Только владелец в личном или семейном чате. Сначала load_skill skill-authoring.",
+  "list/read: навыки, примеры, черновики и usages с точной версией. record_outcome требует name, usageId, outcome ok/failed, note; только явная оценка владельца.",
+  "draft сохраняет неизменяемый name,description,markdown,files,changeNote. test_selection(candidateId,selectionCases) проверяет выбор на положительных и отрицательных запросах.",
+  "Авторские навыки: create_experiment(name,protocol) утверждает проверки и бюджет ДО draft. environment scenario проверяет внешние инструменты на toolFixtures без реальных действий; files исполняет read_file/write_file. Затем enroll_experiment(experimentId,candidateId,parentCandidateId?), run_experiment(experimentId). До трёх кандидатов сравниваются с точной baseline в отдельных Eve-сессиях, по два повтора на пример. experiment_status/cancel_experiment принимают experimentId. Сбой означает неизвестный исход без автоматического повтора. Проверки: файлы, ответ, вызовы, независимая rubric. Симуляция не доказывает работу сервиса. Порядок в skill-authoring.",
+  "Ручная проба: begin_trial(candidateId,variant candidate/baseline,request или exampleId,checks) отдельно от проверяемых вызовов. Затем выполнить задачу, finish_trial(runId,trialSummary); cancel_trial(runId) отменяет. Сам begin_trial ничего не исполняет и пакет не переключает. Побочные действия повторять только по просьбе владельца.",
+  "publish: точный проверенный контент, candidateId, успешный runId либо experimentId, trialRequest, trialSummary. Обновление требует повторной проверки всех сохранённых примеров и trials:[{exampleId,summary}]. Качество принимает владелец. Publish, create_experiment, rollback, retire, grant, revoke требуют подтверждения.",
+  `Markdown без frontmatter, разделы: ${AUTHORED_SKILL_REQUIRED_SECTIONS.join(", ")}. До ${AUTHORED_SKILL_LIMITS.markdownMaxCharacters} символов и ${AUTHORED_SKILL_LIMITS.filesMax} references/*.md. Инструменты только текущего режима; generate_image требует reference с шаблоном промпта.`,
+  "add_example(name,request,expected), remove_example(name,exampleId) по просьбе владельца. rollback(name,version), retire(name), grant/revoke(name,group). Навык не добавляет прав, публикация действует со следующего хода.",
 ].join(" ");
 
-const MUTATING_ACTIONS = new Set(["grant", "publish", "retire", "revoke", "rollback"]);
+const MUTATING_ACTIONS = new Set(["create_experiment", "grant", "publish", "retire", "revoke", "rollback"]);
 
 const manageSkillSchema = z.object({
-  action: z.enum(["cancel_trial", "test_selection", "draft", "begin_trial", "finish_trial", "add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
+  action: z.enum(["create_experiment", "enroll_experiment", "run_experiment", "experiment_status", "cancel_experiment", "cancel_trial", "test_selection", "draft", "begin_trial", "finish_trial", "add_example", "grant", "list", "publish", "read", "record_outcome", "remove_example", "retire", "revoke", "rollback"]),
+  experimentId: z.uuid().optional(),
+  parentCandidateId: z.uuid().optional(),
+  protocol: experimentProtocolSchema.optional().describe("create_experiment: environment files/scenario; 2–6 cases с id, partition development/holdout, request, files, checks и toolFixtures. checks: {path,text/json}, {target:answer,text/json}, {target:tool,toolName,input?,count}, {target:rubric,criteria,reference}. Бюджет включает оценщика."),
   selectionCases: z.array(skillSelectionCaseSchema).min(2).max(6).optional().describe("test_selection: положительные и отрицательные запросы для выбора навыка"),
   candidateId: z.uuid().optional().describe("begin_trial и publish: id неизменяемого черновика из draft"),
   runId: z.uuid().optional().describe("finish_trial и publish: id наблюдаемого прогона"),
@@ -136,6 +142,24 @@ export default defineTool({
     const nextTurnNote = "Навык доступен со следующего хода";
 
     switch (input.action) {
+      case "create_experiment": {
+        await requireToolApprovalEvidence(ctx, "manage_skill", input);
+        return skillExperimentRepository.create(caller, requireName(input), input.protocol, ctx.callId, owner.chatKind);
+      }
+      case "enroll_experiment":
+      case "run_experiment":
+      case "experiment_status":
+      case "cancel_experiment": {
+        if (input.action === "experiment_status" && !input.experimentId) return skillExperimentRepository.list(caller, requireName(input));
+        if (!input.experimentId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен experimentId");
+        if (input.action === "enroll_experiment") {
+          if (!input.candidateId) throw new AppError("AGENT_SKILL_INPUT_INVALID", "Нужен candidateId");
+          return skillExperimentRepository.enroll(caller, input.experimentId, input.candidateId, input.parentCandidateId);
+        }
+        if (input.action === "run_experiment") return runSkillExperiment(caller, input.experimentId, ctx.abortSignal);
+        if (input.action === "cancel_experiment") return skillExperimentRepository.cancel(caller, input.experimentId);
+        return skillExperimentRepository.status(caller, input.experimentId);
+      }
       case "list":
         return {
           grants: await authoredSkillGrantRepository.grants(owner.familyId),
@@ -154,6 +178,7 @@ export default defineTool({
       case "read":
         return {
           ...await authoredSkillRepository.read(owner.familyId, requireName(input), input.version),
+          experiments: await skillExperimentRepository.list(caller, requireName(input)),
           candidates: await skillEvaluationRepository.list(owner.familyId, requireName(input)),
           usages: await authoredSkillRepository.usages(owner.familyId, requireName(input), await authoredSkillRepository.conversationId(owner)),
         };
@@ -194,13 +219,13 @@ export default defineTool({
           trialSummary: input.action === "draft" ? "Пробный прогон ещё не выполнен" : requireField(input, "trialSummary"),
         };
         if (input.action === "draft") return await skillEvaluationRepository.draft(caller, draft, ctx.callId, await knownToolNames(owner));
-        if (!input.candidateId || !input.runId) throw new AppError("AGENT_SKILL_EVAL_MISSING", "Сначала draft, begin_trial, выполнение, finish_trial; publish требует candidateId и runId");
+        if (!input.candidateId || (!input.runId && !input.experimentId)) throw new AppError("AGENT_SKILL_EVAL_MISSING", "publish требует candidateId и runId либо experimentId завершённого эксперимента");
         const trialRequest = requireField(input, "trialRequest");
         // Owner role and the exact Telegram approval are both revalidated at the mutation boundary.
         await requireToolApprovalEvidence(ctx, "manage_skill", input);
         const result = await authoredSkillRepository.publish(caller, draft, {
           knownToolNames: await knownToolNames(owner), operationKey: ctx.callId, provenance,
-          evaluation: { candidateId: input.candidateId, runId: input.runId },
+          evaluation: { candidateId: input.candidateId, runId: input.runId, experimentId: input.experimentId },
           trialRequest, trials: input.trials ?? [],
         });
         return { ...result, note: nextTurnNote };

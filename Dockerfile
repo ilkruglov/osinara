@@ -177,6 +177,7 @@ COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/.eve ./.eve
 COPY --from=build /app/.runtime ./.runtime
+COPY --from=build /app/services/skill-lab/.output ./services/skill-lab/.output
 # Eve `start` serves `.output` but still resolves authored modules from this tree.
 COPY --from=build /app/agent ./agent
 COPY --from=build /app/config ./config

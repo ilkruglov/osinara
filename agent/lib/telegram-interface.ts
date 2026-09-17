@@ -11,6 +11,7 @@ import {
   buildApprovalMessage,
   genericApprovalFacts,
 } from "./telegram-hitl/approval-message.js";
+import { experimentApprovalSummary } from "./authored-skills/skill-experiment.js";
 
 
 const TOOL_ACTION_LABELS: Readonly<Record<string, string>> = {
@@ -23,6 +24,7 @@ const MANAGED_ACTION_LABELS: Readonly<Record<string, Readonly<Record<string, str
     disconnect: "отключить Google Workspace от текущей области",
   },
   manage_skill: {
+    create_experiment: "зафиксировать протокол испытания навыка Мии",
     grant: "выдать навык Мии внешней группе",
     publish: "опубликовать навык Мии",
     retire: "убрать навык Мии из употребления",
@@ -256,6 +258,9 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
       ];
     case "manage_skill":
       return [
+        ...(input.action === "create_experiment" ? experimentApprovalSummary(input.protocol) : []),
+        ...(input.action === "publish" && input.experimentId ? ["Испытание: изолированные файлы и/или тестовые ответы инструментов. Работа внешних сервисов не проверялась."] : []),
+        ...line("Эксперимент", "experimentId"),
         ...line("Навык", "name"),
         ...(typeof input.version === "number" ? [`Вернуться к версии: ${input.version}`] : []),
         ...line("Описание", "description"),

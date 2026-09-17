@@ -153,12 +153,12 @@ async function insertVersion(client: PoolClient, input: {
   await client.query(
     `INSERT INTO authored_skill_versions
        (skill_id, family_id, version, description, markdown, files, change_note, trial_summary,
-        operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials, evaluation_candidate_id, evaluation_run_id)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)`,
+        operation_key, eve_session_id, eve_turn_id, created_by_user_id, trials, evaluation_candidate_id, evaluation_run_id, evaluation_experiment_id)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16)`,
     [input.skillId, input.caller.familyId, input.version, input.content.description,
       input.content.markdown, JSON.stringify(input.content.files), input.changeNote,
       input.trialSummary, input.operationKey, input.provenance.eveSessionId,
-      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials), input.evaluation?.candidateId ?? null, input.evaluation?.runId ?? null],
+      input.provenance.eveTurnId, input.caller.userId, JSON.stringify(input.trials), input.evaluation?.candidateId ?? null, input.evaluation?.runId ?? null, input.evaluation?.experimentId ?? null],
   );
 }
 

@@ -12,11 +12,12 @@ import { assertAuthoredSkillDraft, type AuthoredSkillDraft } from "./authored-sk
 import { requireCurrentOwner } from "./authored-skill-owner.js";
 import { evaluateTrial, skillCheckSchema, skillContentHash, type SkillCheck, type ObservedSkillResult } from "./skill-evaluation.js";
 import type { AuthoredSkillExample } from "./authored-skill-example-repository.js";
+import { verifySkillExperiment } from "./skill-experiment-publication.js";
 
 const selectionLimiter = createReflectionRateLimiter(6);
 
 type Provenance = { eveSessionId: string; eveTurnId: string };
-export type SkillPublicationEvidence = { candidateId: string; runId: string };
+export type SkillPublicationEvidence = { candidateId: string; runId?: string; experimentId?: string };
 interface Candidate { id: string; family_id: string; name: string; base_version: number; content_hash: string; draft: AuthoredSkillDraft; selection_evaluation: { candidate: { passed: boolean[] }; cases: SkillSelectionCase[] } | null }
 interface Run { request: string; id: string; candidate_id: string; example_id: string | null; variant: string; checks: SkillCheck[]; passed: boolean[]; status: string; summary: string | null }
 
@@ -177,6 +178,9 @@ export const skillEvaluationRepository = {
     const selection = candidate.selection_evaluation;
     if (!selection || selection.candidate.passed.length < 2 || !selection.candidate.passed.every(Boolean)) {
       throw new AppError("AGENT_SKILL_SELECTION_FAILED", "Сначала test_selection: положительные и отрицательные примеры должны пройти");
+    }
+    if (evidence.experimentId) {
+      return verifySkillExperiment(client, familyId, evidence.experimentId, candidate.id, draft, baseVersion, examples, trialRequest);
     }
     const runs = (await client.query<Run>(
       "SELECT * FROM authored_skill_trial_runs WHERE candidate_id=$1 AND family_id=$2 AND status='checked' ORDER BY created_at DESC", [candidate.id,familyId],
