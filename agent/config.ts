@@ -97,6 +97,11 @@ const runtimeEnvironmentSchema = z
     TELEGRAM_BOT_TOKEN: z.string().min(1),
     TELEGRAM_BOT_USERNAME: z.string().min(1),
     TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(1),
+    // Jev (TypeSafe AI) drives browser_task; without the key the tool is simply not offered.
+    TYPESAFE_API_KEY: z.preprocess(
+      (value) => value === "" ? undefined : value,
+      z.string().regex(/^\S+$/u).optional(),
+    ),
   });
 
 export function requireRuntimeEnvironment() {
