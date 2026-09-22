@@ -15,7 +15,8 @@ import { database } from "../database.js";
 
 export type BrowserTaskStatus =
   | "awaiting_confirmation" | "blocked" | "cancelled" | "done" | "failed" | "needs_plan" | "running" | "unverified";
-export interface StepRecord { action: string; confidence: number; url: string; }
+/** `key` is `${operation}:${ref or name}`; it counts failures and repeats, `action` is what Jev reads. */
+export interface StepRecord { action: string; confidence: number; key?: string; url: string; }
 export interface PendingAction { label: string; ref: string | null; summary: string; url: string; }
 export interface BrowserTaskRun {
   id: string;
