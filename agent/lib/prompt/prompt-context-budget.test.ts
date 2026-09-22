@@ -18,7 +18,8 @@ const CORE_CHARACTER_BUDGET = 12_400;
 // the "after the answer, not instead of it" clause added after the directive-only eval case.
 // Raised by 400 on 10 September 2026: a chat rule is born only by an explicit durable request.
 // Raised by 400 on 13 September 2026 for recurrence periods from a minute to a year (upstream v0.22.0).
-const PRIVATE_CHARACTER_BUDGET = 13_200;
+// Raised by 400 on 22 September 2026: browser_task in the web rules.
+const PRIVATE_CHARACTER_BUDGET = 13_600;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section, then by 200 on 7 September for
@@ -27,7 +28,8 @@ const PRIVATE_CHARACTER_BUDGET = 13_200;
 // Raised by 400 on 9 September 2026 for the joke target rotation sentence.
 // Raised by 400 on 10 September 2026 for the same chat-rule sentence.
 // Raised by 400 on 13 September 2026 for the same recurrence sentence.
-const FAMILY_CHARACTER_BUDGET = 16_000;
+// Raised by 400 on 22 September 2026 for the same browser_task sentence.
+const FAMILY_CHARACTER_BUDGET = 16_400;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
 // then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
 // about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal,
@@ -49,7 +51,7 @@ const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_900;
 // closed-question rule, then by 200 on 8 September for the group length ceiling and by 100 for
 // the mandatory used-memory directive wording (200 in total: the worst case stacks two blocks),
 // then by 400 on 10 September for the core rule against repeating another person's obscenity.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 36_600;
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_000;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

@@ -11,6 +11,7 @@ import { webFetch as eveWebFetch } from "eve/tools/defaults";
 
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import exportMemory from "../tools/export_memory.js";
+import browserTask, { BROWSER_TASK_AVAILABLE } from "../tools/browser_task.js";
 import generateImage from "../tools/generate_image.js";
 import getCurrentTime from "../tools/get_current_time.js";
 import getMemorySource from "../tools/get_memory_source.js";
@@ -84,6 +85,8 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   ...(IMAGE_GENERATION_AVAILABLE
     ? { generate_image: generateImage as unknown as AnyToolDefinition }
     : {}),
+  // Jev drives the click loop; without its key the tool would only ever answer "unavailable".
+  ...(BROWSER_TASK_AVAILABLE ? { browser_task: browserTask as unknown as AnyToolDefinition } : {}),
   get_current_time: getCurrentTime as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
   manage_skill: manageSkill as unknown as AnyToolDefinition,

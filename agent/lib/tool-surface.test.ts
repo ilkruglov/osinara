@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 const AGENT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const EXPECTED_TOOL_MODULES = [
+  "browser_task.ts",
   "execute_google_workspace.ts",
   "export_memory.ts",
   "generate_image.ts",
