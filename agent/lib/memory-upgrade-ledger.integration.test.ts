@@ -140,6 +140,7 @@ const POST_V0101_MIGRATIONS = [
   "106_memory_use_signals.sql",
   "107_skill_experiments.sql",
   "108_skill_scenario_contracts.sql",
+  "109_browser_task_runs.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
