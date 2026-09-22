@@ -45,12 +45,14 @@ function harness(options: { pages?: BrowserPage[]; decisions?: JevDecision[]; ac
   };
   const decisions = [...(options.decisions ?? [decision("CLICK [2]")])];
   const saved: BrowserTaskRun[] = [];
+  const profiles: unknown[] = [];
   const approvalEvidence = vi.fn(async () => undefined);
   const deps: BrowserTaskDependencies = {
     approvalEvidence,
     driver: () => driver,
     jev: () => ({ decide: async () => decisions.shift() ?? decision("BLOCKED", 0.9) }),
     loadProfile: async () => ({ name: { domains: ["*"], value: "Илья" } }),
+    saveProfile: async (_auth, profile) => { profiles.push(profile); },
     log: () => undefined,
     now: () => 1_000,
     runs: {
@@ -61,7 +63,7 @@ function harness(options: { pages?: BrowserPage[]; decisions?: JevDecision[]; ac
     },
     sandboxSessionId: () => "sbx-1",
   };
-  return { approvalEvidence, calls, saved, tool: createBrowserTaskTool(deps) };
+  return { approvalEvidence, calls, profiles, saved, tool: createBrowserTaskTool(deps) };
 }
 
 const RUN_ID = "11111111-1111-4111-8111-111111111111";
@@ -110,6 +112,24 @@ describe("browser_task", () => {
     expect(approvalEvidence).toHaveBeenCalledTimes(1);
     expect(calls).toContainEqual(["click", "e3"]);
     expect(out.status).toBe("done");
+  });
+
+  it("save_field writes the personal profile, binding the field to the active run's site by default", async () => {
+    const active = storedRun({ lastUrl: "https://n1.yclients.ru/book", status: "needs_plan" });
+    const { profiles, tool } = harness({ active });
+
+    const out = await tool.execute({ action: "save_field", field: "phone", value: "+79160000000" }, context()) as { saved: { field: string; domains: string[] } };
+
+    expect(out.saved).toEqual({ domains: ["n1.yclients.ru"], field: "phone" });
+    expect(profiles[0]).toMatchObject({ name: { value: "Илья" }, phone: { domains: ["n1.yclients.ru"], value: "+79160000000" } });
+  });
+
+  it("save_field needs explicit domains without an active run and refuses card fields", async () => {
+    const { tool } = harness();
+    await expect(tool.execute({ action: "save_field", field: "phone", value: "+7" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_TASK_DOMAINS_REQUIRED" });
+    await expect(tool.execute({ action: "save_field", domains: ["*"], field: "cvc", value: "123" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_TASK_PROFILE_INVALID" });
+    const out = await tool.execute({ action: "save_field", domains: ["*"], field: "email", value: "a@b.ru" }, context()) as { saved: { domains: string[] } };
+    expect(out.saved.domains).toEqual(["*"]);
   });
 
   it("refuses resume and confirm in the wrong state, and cancel ends a run", async () => {

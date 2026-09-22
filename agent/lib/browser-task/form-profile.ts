@@ -5,6 +5,7 @@
  * - `parseFormProfile`: validates the file; card and password fields are refused at parse time.
  * - `resolveFieldValue`: the only way a value reaches a page: allowed field, allowed domain, run data first.
  * - `fieldForElement`: maps a visible field label to a profile field name.
+ * - `upsertProfileField`, `serializeFormProfile`: how Mia writes the file, so she never hand-crafts JSON.
  * - `FORBIDDEN_FIELDS`: what never gets filled, whatever the profile or the run says.
  */
 import { z } from "zod";
@@ -72,4 +73,24 @@ const LABELS: ReadonlyArray<readonly [RegExp, string]> = [
 export function fieldForElement(element: Pick<TableElement, "name" | "role">): string | null {
   for (const [pattern, field] of LABELS) if (pattern.test(element.name)) return field;
   return null;
+}
+
+/** Adds or replaces a field. A repeat with the same value only widens the domains; a new value replaces both. */
+export function upsertProfileField(
+  profile: FormProfile,
+  input: { domains: readonly string[]; field: string; value: string },
+): FormProfile {
+  const field = input.field.trim();
+  const value = input.value.trim();
+  const domains = [...new Set(input.domains.map((d) => d.trim().toLowerCase()).filter(Boolean))];
+  if (!field || FORBIDDEN_FIELDS.has(field.toLowerCase())) throw new AppError(PROFILE_INVALID, `Поле ${input.field} в анкете хранить нельзя`);
+  if (!value) throw new AppError(PROFILE_INVALID, `Пустое значение для поля ${field}`);
+  if (domains.length === 0) throw new AppError(PROFILE_INVALID, `Для поля ${field} не названо ни одного домена`);
+  const previous = profile[field];
+  const merged = previous && previous.value === value ? [...new Set([...previous.domains, ...domains])] : domains;
+  return { ...profile, [field]: { domains: merged, value } };
+}
+
+export function serializeFormProfile(profile: FormProfile): string {
+  return `${JSON.stringify(profile, null, 2)}\n`;
 }

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { fieldForElement, parseFormProfile, resolveFieldValue } from "./form-profile.js";
+import { fieldForElement, parseFormProfile, resolveFieldValue, serializeFormProfile, upsertProfileField } from "./form-profile.js";
 
 const PROFILE = parseFormProfile(JSON.stringify({
   name: { domains: ["*"], value: "Илья" },
@@ -40,4 +40,27 @@ describe("fieldForElement", () => {
     ("maps %s to %s", (name, field) => {
       expect(fieldForElement({ name, role: "textbox" })).toBe(field);
     });
+});
+
+describe("upsertProfileField and serializeFormProfile", () => {
+  it("adds a field bound to its domains and merges domains on repeat", () => {
+    const once = upsertProfileField({}, { domains: ["yclients.ru"], field: "phone", value: "+79160000000" });
+    expect(once.phone).toEqual({ domains: ["yclients.ru"], value: "+79160000000" });
+    const twice = upsertProfileField(once, { domains: ["dikidi.net", "yclients.ru"], field: "phone", value: "+79160000000" });
+    expect(twice.phone!.domains).toEqual(["yclients.ru", "dikidi.net"]);
+    const changed = upsertProfileField(twice, { domains: ["*"], field: "phone", value: "+79990000000" });
+    expect(changed.phone).toEqual({ domains: ["*"], value: "+79990000000" });
+  });
+
+  it("refuses card fields, empty values and empty domains", () => {
+    expect(() => upsertProfileField({}, { domains: ["*"], field: "cvc", value: "123" })).toThrowError(/AGENT_BROWSER_TASK_PROFILE_INVALID/u);
+    expect(() => upsertProfileField({}, { domains: [], field: "name", value: "Илья" })).toThrowError(/AGENT_BROWSER_TASK_PROFILE_INVALID/u);
+    expect(() => upsertProfileField({}, { domains: ["*"], field: "name", value: " " })).toThrowError(/AGENT_BROWSER_TASK_PROFILE_INVALID/u);
+  });
+
+  it("serializes to the file shape that parseFormProfile reads back", () => {
+    const profile = upsertProfileField({}, { domains: ["*"], field: "name", value: "Илья" });
+    expect(parseFormProfile(serializeFormProfile(profile))).toEqual(profile);
+    expect(serializeFormProfile(profile)).toContain("\n");
+  });
 });

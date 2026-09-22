@@ -21,7 +21,7 @@ import { AppError, isAppError } from "../app-error.js";
 import { type BrowserDriver, createSandboxBrowserDriver } from "../browser-task/browser-driver.js";
 import { type LoopOutcome, performPendingAction, runBrowserTaskLoop } from "../browser-task/browser-task-loop.js";
 import { type BrowserTaskRun, browserTaskRunRepository, type NewBrowserTaskRun } from "../browser-task/browser-task-run-repository.js";
-import { type FormProfile, parseFormProfile } from "../browser-task/form-profile.js";
+import { type FormProfile, parseFormProfile, serializeFormProfile, upsertProfileField } from "../browser-task/form-profile.js";
 import { createJevClient, type JevClient } from "../browser-task/jev-client.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
@@ -41,6 +41,7 @@ export interface BrowserTaskDependencies {
   driver(ctx: ToolContext, sandbox: string): BrowserDriver;
   jev(): JevClient;
   loadProfile(auth: WorkspaceAuthorization): Promise<FormProfile>;
+  saveProfile(auth: WorkspaceAuthorization, profile: FormProfile, operationKey: string): Promise<void>;
   log(event: Record<string, unknown>): void;
   now(): number;
   runs: {
@@ -66,6 +67,13 @@ const inputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("resume"), hint: z.string().min(1).max(2_000), runId: z.string().uuid() }).strict(),
   z.object({ action: z.literal("confirm"), runId: z.string().uuid() }).strict(),
   z.object({ action: z.literal("cancel"), runId: z.string().uuid() }).strict(),
+  z.object({
+    action: z.literal("save_field"),
+    domains: z.array(z.string().min(1).max(253)).min(1).max(8).optional()
+      .describe("Где поле можно подставлять; по умолчанию сайт текущего прогона, * только если человек сказал «везде»"),
+    field: FIELD_NAME.describe("Имя поля анкеты: phone, name, email, surname"),
+    value: z.string().min(1).max(512).describe("Значение, которое человек только что продиктовал"),
+  }).strict(),
 ]);
 
 function forbidden(reason: string): ModelFacingError {
@@ -116,12 +124,33 @@ export function createBrowserTaskTool(deps: BrowserTaskDependencies) {
       "start: goal словами, startUrl если известен, scope, allowedFields из анкеты (phone, name, email), которые для этой задачи можно подставлять; data только для данных, которых в анкете нет, спроси их у человека.",
       "Статусы: done с evidence; unverified значит подтверждения на странице нет, так и скажи; awaiting_confirmation значит перескажи summary человеку и после его согласия вызови confirm; needs_plan значит ответь на question через resume с hint, при необходимости спроси человека; blocked и failed это конец прогона.",
       "confirm требует подтверждения кнопкой и делает ровно один необратимый шаг. Одновременно идёт один прогон; второй вызов start вернёт AGENT_BROWSER_TASK_BUSY.",
+      "Анкету personal/forms/profile.json ведёшь ты через save_field: когда needs_plan просит значение поля, спроси человека, сохрани ответ через save_field (домены по умолчанию это сайт прогона), затем resume; JSON руками не пиши.",
     ].join(" "),
     inputSchema,
     async execute(input, ctx) {
       const auth = requireWorkspaceAuthorization(ctx);
       if (auth.userId === null) throw forbidden("Задачу в браузере ставит только участник с аккаунтом");
       const sandbox = deps.sandboxSessionId(ctx);
+      if (input.action === "save_field") {
+        const active = await deps.runs.activeForSandbox(sandbox);
+        const site = active?.lastUrl ?? active?.startUrl ?? null;
+        const domains = input.domains ?? (site ? [new URL(site).hostname] : []);
+        if (domains.length === 0) {
+          throw new ModelFacingError({
+            category: "input", code: "AGENT_BROWSER_TASK_DOMAINS_REQUIRED", correction: "Передайте domains: сайт, для которого человек разрешил это поле, или * если он сказал «везде».",
+            reason: "Нет активного прогона, поэтому домен для поля не выводится сам", retryable: false, sideEffectStatus: "not_started",
+          });
+        }
+        let profile: FormProfile;
+        try {
+          profile = upsertProfileField(await deps.loadProfile(auth), { domains, field: input.field, value: input.value });
+        } catch (error) {
+          if (!isAppError(error)) throw error;
+          throw new ModelFacingError({ category: "input", code: error.code, correction: "Такое поле в анкете хранить нельзя; заполнять его тоже нельзя.", reason: error.message, retryable: false, sideEffectStatus: "not_started" });
+        }
+        await deps.saveProfile(auth, profile, ctx.callId);
+        return { saved: { domains: profile[input.field.trim()]!.domains, field: input.field.trim() }, status: "saved" };
+      }
       const startedAt = deps.now();
       const loopDeps = { driver: deps.driver(ctx, sandbox), jev: deps.jev(), log: deps.log, now: deps.now, profile: await deps.loadProfile(auth) };
 
@@ -187,6 +216,16 @@ async function loadPersonalProfile(auth: WorkspaceAuthorization): Promise<FormPr
   }
 }
 
+async function savePersonalProfile(auth: WorkspaceAuthorization, profile: FormProfile, operationKey: string): Promise<void> {
+  await workspaceBinaryRepository.writeBinary(auth, {
+    bytes: Buffer.from(serializeFormProfile(profile), "utf8"),
+    mediaType: "application/json",
+    operationKey,
+    path: PROFILE_PATH,
+    scope: "personal",
+  });
+}
+
 const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
 
 export default createBrowserTaskTool({
@@ -197,6 +236,7 @@ export default createBrowserTaskTool({
     return createJevClient({ apiKey: TYPESAFE_API_KEY });
   },
   loadProfile: loadPersonalProfile,
+  saveProfile: savePersonalProfile,
   log: (event) => console.info(JSON.stringify(event)),
   now: () => Date.now(),
   runs: browserTaskRunRepository,
