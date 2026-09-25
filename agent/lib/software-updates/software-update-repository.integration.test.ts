@@ -26,13 +26,13 @@ const manifest = {
   commitSha: "b".repeat(40),
   composeSha256: "c".repeat(64),
   images: {
-    app: `ghcr.io/nyxandro/osinara-app@sha256:${"a".repeat(64)}`,
-    cliProxy: `ghcr.io/nyxandro/osinara-cli-proxy@sha256:${"a".repeat(64)}`,
-    edge: `ghcr.io/nyxandro/osinara-edge@sha256:${"a".repeat(64)}`,
+    app: `ghcr.io/ilkruglov/osinara-app@sha256:${"a".repeat(64)}`,
+    cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${"a".repeat(64)}`,
+    edge: `ghcr.io/ilkruglov/osinara-edge@sha256:${"a".repeat(64)}`,
     sandboxEgressProxy:
-      `ghcr.io/nyxandro/osinara-sandbox-egress-proxy@sha256:${"a".repeat(64)}`,
-    sandboxRunner: `ghcr.io/nyxandro/osinara-sandbox-runner@sha256:${"a".repeat(64)}`,
-    sandboxRuntime: `ghcr.io/nyxandro/osinara-sandbox-runtime@sha256:${"a".repeat(64)}`,
+      `ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${"a".repeat(64)}`,
+    sandboxRunner: `ghcr.io/ilkruglov/osinara-sandbox-runner@sha256:${"a".repeat(64)}`,
+    sandboxRuntime: `ghcr.io/ilkruglov/osinara-sandbox-runtime@sha256:${"a".repeat(64)}`,
   },
   schemaVersion: 1 as const,
   version: "0.2.0",
@@ -41,7 +41,7 @@ const manifest = {
 function release(version: string) {
   return {
     manifest: { ...manifest, version },
-    releaseUrl: `https://github.com/nyxandro/osinara/releases/tag/v${version}`,
+    releaseUrl: `https://github.com/ilkruglov/osinara/releases/tag/v${version}`,
     version,
   };
 }
@@ -132,11 +132,61 @@ describeWithDatabase("softwareUpdateRepository", () => {
         owner.familyId,
         owner.userId,
         owner.telegramUserId,
-        "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
+        "https://github.com/ilkruglov/osinara/releases/tag/v0.2.0",
         JSON.stringify(invalidManifest),
         createHash("sha256").update("invalid-manifest-token").digest("hex"),
       ],
     )).rejects.toThrow();
+  });
+
+  // 17 сентября 2026 релизы переехали из nyxandro/osinara в ilkruglov/osinara, а ограничение
+  // release_url осталось на старом репозитории: девять проверок подряд падали на INSERT, и владелец
+  // так и не получил предложение 1.2.0. Предложения, записанные до переезда, остаются валидными.
+  it("records a proposal for our own release and supersedes a legacy upstream one", async () => {
+    const owner = await fixture();
+    const legacy = await database().query<{ id: string }>(
+      `INSERT INTO software_update_proposals
+         (family_id, expected_owner_user_id, expected_owner_telegram_user_id,
+          target_version, release_url, manifest, callback_token_hash, created_at)
+       VALUES ($1, $2, $3, '0.23.0', $4, $5::jsonb, $6, '2026-09-14T00:00:00Z')
+       RETURNING id`,
+      [
+        owner.familyId, owner.userId, owner.telegramUserId,
+        "https://github.com/nyxandro/osinara/releases/tag/v0.23.0",
+        JSON.stringify({ ...manifest, images: Object.fromEntries(Object.entries(manifest.images).map(([k, v]) => [k, v.replace("ilkruglov", "nyxandro")])), version: "0.23.0" }),
+        createHash("sha256").update("legacy-token").digest("hex"),
+      ],
+    );
+
+    await expect(softwareUpdateRepository.prepareProposal({
+      callbackTokenHash: createHash("sha256").update("own-release-token").digest("hex"),
+      owner,
+      release: release("1.2.1"),
+    })).resolves.toMatchObject({ status: "created" });
+
+    const rows = await database().query<{ id: string; status: string }>(
+      "SELECT id::text, status FROM software_update_proposals WHERE target_version IN ('0.23.0', '1.2.1') ORDER BY target_version",
+    );
+    expect(rows.rows).toEqual([
+      { id: legacy.rows[0]!.id, status: "superseded" },
+      { id: expect.any(String), status: "preparing" },
+    ]);
+  });
+
+  it("rejects a new proposal pointing at a foreign repository", async () => {
+    const owner = await fixture();
+    await expect(database().query(
+      `INSERT INTO software_update_proposals
+         (family_id, expected_owner_user_id, expected_owner_telegram_user_id,
+          target_version, release_url, manifest, callback_token_hash)
+       VALUES ($1, $2, $3, '1.2.2', $4, $5::jsonb, $6)`,
+      [
+        owner.familyId, owner.userId, owner.telegramUserId,
+        "https://github.com/nyxandro/osinara/releases/tag/v1.2.2",
+        JSON.stringify({ ...manifest, version: "1.2.2" }),
+        createHash("sha256").update("foreign-token").digest("hex"),
+      ],
+    )).rejects.toThrow(/release_url/u);
   });
 
   it("atomically supersedes every older open proposal and expires its buttons", async () => {
