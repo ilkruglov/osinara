@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `BrowserTaskApprovalSubject`: site, button, page and the data that goes with the click.
- * - `describeBrowserTaskApproval`: builds the subject from a run, pure.
+ * - `describeBrowserTaskApproval`: builds the subject from a run of this conversation, pure.
  * - `loadBrowserTaskApproval`: production loader behind the Telegram approval presenter.
  *
  * Key construct:
@@ -11,10 +11,13 @@
  *   application from the same pending action `confirm` will click and from the values the loop
  *   actually typed, not from the profile as it is now: a later save_field, from any chat, cannot
  *   make the window show one phone while the form sends another.
+ * - The window is posted before `execute` checks the conversation, so it checks it itself: a runId
+ *   of the private chat passed in the family group reveals nothing, not even that it exists.
  */
 import type { SessionContext } from "eve/context";
 
 import { AppError } from "../app-error.js";
+import { sandboxSessionId } from "../sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { type BrowserTaskRun, browserTaskRunRepository } from "./browser-task-run-repository.js";
 
@@ -25,7 +28,12 @@ export interface BrowserTaskApprovalSubject {
   url: string;
 }
 
-export function describeBrowserTaskApproval(run: BrowserTaskRun): BrowserTaskApprovalSubject {
+function notFound(): AppError {
+  return new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Задача в браузере не найдена");
+}
+
+export function describeBrowserTaskApproval(run: BrowserTaskRun, conversation: string): BrowserTaskApprovalSubject {
+  if (run.sandboxSessionId !== conversation) throw notFound();
   const pending = run.pendingAction;
   if (run.status !== "awaiting_confirmation" || !pending) {
     throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Задача в браузере больше не ждёт подтверждения");
@@ -40,9 +48,8 @@ export async function loadBrowserTaskApproval(
   ctx: Pick<SessionContext, "session">,
 ): Promise<BrowserTaskApprovalSubject> {
   const auth = requireWorkspaceAuthorization(ctx);
-  if (auth.userId === null) throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Задача в браузере не найдена");
-  const owner = { familyId: auth.familyId, userId: auth.userId };
-  const run = await browserTaskRunRepository.get(runId, owner);
-  if (!run) throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Задача в браузере не найдена");
-  return describeBrowserTaskApproval(run);
+  if (auth.userId === null) throw notFound();
+  const run = await browserTaskRunRepository.get(runId, { familyId: auth.familyId, userId: auth.userId });
+  if (!run) throw notFound();
+  return describeBrowserTaskApproval(run, sandboxSessionId(ctx));
 }

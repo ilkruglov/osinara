@@ -10,14 +10,17 @@ DROP INDEX IF EXISTS browser_task_runs_active_idx;
 CREATE INDEX browser_task_runs_active_idx ON browser_task_runs (sandbox_session_id)
   WHERE status IN ('running', 'awaiting_confirmation', 'confirming', 'needs_plan');
 
--- One profile per person, readable from their private chat and from the family group alike.
+-- One profile per person and family, readable from their private chat and from the family group
+-- alike. The family is part of the key: a person who moves to another family keeps the same
+-- users.id and starts a new profile there, while the old one stays with the old family.
 -- Fields are {"phone": {"value": "...", "domains": ["site.ru"]}}; card and password fields are
 -- refused in code before they reach this table.
 CREATE TABLE IF NOT EXISTS browser_form_profiles (
-  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
   fields jsonb NOT NULL DEFAULT '{}'::jsonb,
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, family_id)
 );
 -- v1.2.1 kept the profile as a file in the personal workspace, which only the private chat can
 -- read. False until that file was looked at, so a first field saved from the family group does

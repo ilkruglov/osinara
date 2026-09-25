@@ -180,7 +180,7 @@ export function createBrowserTaskTool(deps: BrowserTaskDependencies) {
     async execute(input, ctx) {
       const auth = requireWorkspaceAuthorization(ctx);
       if (auth.userId === null) throw forbidden("Задачу в браузере ставит только участник с аккаунтом");
-      const owner: FormProfileOwner = { familyId: auth.familyId, userId: auth.userId };
+      const owner: FormProfileOwner = { familyId: auth.familyId, groupId: auth.groupId, userId: auth.userId };
       const sandbox = deps.sandboxSessionId(ctx);
       if (input.action === "save_field") return await saveField(auth, owner, sandbox, input);
 

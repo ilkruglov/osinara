@@ -4,6 +4,7 @@
  * Constructs covered:
  * - The window shows the values the loop typed, whatever the profile says now.
  * - A run that no longer waits for confirmation has no subject.
+ * - A run of another conversation has no subject: a family group never sees a private run's data.
  */
 import { describe, expect, it } from "vitest";
 
@@ -22,12 +23,19 @@ function run(overrides: Partial<BrowserTaskRun>): BrowserTaskRun {
 
 describe("describeBrowserTaskApproval", () => {
   it("shows what was typed into the form, not the profile as it is now", () => {
-    expect(describeBrowserTaskApproval(run({}))).toEqual({
+    expect(describeBrowserTaskApproval(run({}), "s")).toEqual({
       button: "Записаться", fields: [{ label: "Телефон", value: "111" }], site: "n1.yclients.com", url: "https://n1.yclients.com/book",
     });
   });
 
   it("has no subject once the run stopped waiting", () => {
-    expect(() => describeBrowserTaskApproval(run({ status: "confirming" }))).toThrow(/не ждёт подтверждения/u);
+    expect(() => describeBrowserTaskApproval(run({ status: "confirming" }), "s")).toThrow(/не ждёт подтверждения/u);
+  });
+
+  it("reveals nothing about a run of another conversation", () => {
+    let message = "";
+    try { describeBrowserTaskApproval(run({}), "family-group-sandbox"); } catch (error) { message = String(error); }
+    expect(message).toMatch(/не найдена/u);
+    expect(message).not.toMatch(/111|yclients/u);
   });
 });

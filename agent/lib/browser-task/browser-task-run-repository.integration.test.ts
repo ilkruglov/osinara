@@ -9,6 +9,8 @@
  * - The form profile belongs to one person: fields add up under concurrent writes, a card field is
  *   refused, another member reads nothing, a removed member reads and writes nothing, and the old
  *   profile file is folded in once without overwriting newer fields.
+ * - From a group the profile opens only while that group is still a family group of that family.
+ * - A person who moved to another family starts a new profile there; the old one stays behind.
  */
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -91,7 +93,7 @@ describeWithDatabase("browserTaskRunRepository", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const { familyId, otherUserId, userId } = await fixture(suffix);
     const profiles = createFormProfileRepository();
-    const owner = { familyId, userId };
+    const owner = { familyId, groupId: null, userId };
 
     expect(await profiles.get(owner)).toBeNull();
     await Promise.all([
@@ -101,7 +103,7 @@ describeWithDatabase("browserTaskRunRepository", () => {
     expect((await profiles.get(owner))!.fields).toMatchObject({ name: { value: "Илья" }, phone: { domains: ["yclients.com"], value: "+79160000000" } });
 
     await expect(profiles.upsertField(owner, { domains: ["*"], field: "cvc", value: "123" })).rejects.toMatchObject({ code: "AGENT_BROWSER_TASK_PROFILE_INVALID" });
-    expect(await profiles.get({ familyId, userId: otherUserId })).toBeNull();
+    expect(await profiles.get({ familyId, groupId: null, userId: otherUserId })).toBeNull();
 
     // A membership removed after the session started closes the profile for reads and writes.
     await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [familyId, userId]);
@@ -113,7 +115,7 @@ describeWithDatabase("browserTaskRunRepository", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const { familyId, userId } = await fixture(suffix);
     const profiles = createFormProfileRepository();
-    const owner = { familyId, userId };
+    const owner = { familyId, groupId: null, userId };
 
     // Saved from the family group: the old file could not be looked at.
     await profiles.upsertField(owner, { domains: ["dikidi.net"], field: "phone", value: "+7222" }, null);
@@ -127,5 +129,43 @@ describeWithDatabase("browserTaskRunRepository", () => {
     // Once folded, the file is never read into the row again.
     await profiles.importLegacy(owner, { email: { domains: ["*"], value: "other@b.ru" } });
     expect((await profiles.get(owner))!.fields.email!.value).toBe("old@b.ru");
+  });
+
+  it("opens the profile from a group only while it is registered as the family's private group", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { familyId, userId } = await fixture(suffix);
+    const profiles = createFormProfileRepository();
+    const group = await database().query<{ id: string }>(
+      `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
+       VALUES ($1, $2, 'Семья', 'family_private', 'all') RETURNING id`,
+      [familyId, `-100-profile-${suffix}`],
+    );
+    const fromGroup = { familyId, groupId: group.rows[0]!.id, userId };
+    await profiles.upsertField(fromGroup, { domains: ["*"], field: "name", value: "Илья" });
+    expect((await profiles.get(fromGroup))!.fields.name!.value).toBe("Илья");
+
+    await database().query("UPDATE telegram_groups SET type = 'external' WHERE id = $1", [fromGroup.groupId]);
+    await expect(profiles.get(fromGroup)).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
+    await expect(profiles.upsertField(fromGroup, { domains: ["*"], field: "phone", value: "+7" })).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
+    // The private chat of the same person is unaffected.
+    expect((await profiles.get({ familyId, groupId: null, userId }))!.fields.name!.value).toBe("Илья");
+  });
+
+  it("starts a new profile when the person moved to another family", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { familyId, userId } = await fixture(suffix);
+    const profiles = createFormProfileRepository();
+    await profiles.upsertField({ familyId, groupId: null, userId }, { domains: ["*"], field: "name", value: "Старое" });
+
+    const other = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ($1) RETURNING id", [`Other ${suffix}`]);
+    // A move ends the old membership and its private conversation, keeping the same users.id.
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [familyId, userId]);
+    await database().query("DELETE FROM application_conversations WHERE family_id = $1 AND owner_user_id = $2", [familyId, userId]);
+    await database().query("INSERT INTO family_memberships (family_id, user_id, role) VALUES ($1, $2, 'member')", [other.rows[0]!.id, userId]);
+    const moved = { familyId: other.rows[0]!.id, groupId: null, userId };
+
+    expect(await profiles.get(moved)).toBeNull();
+    await profiles.upsertField(moved, { domains: ["*"], field: "phone", value: "+7333" });
+    expect((await profiles.get(moved))!.fields).toEqual({ phone: { domains: ["*"], value: "+7333" } });
   });
 });
