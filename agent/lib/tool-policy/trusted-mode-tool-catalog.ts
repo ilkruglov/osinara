@@ -11,7 +11,12 @@ import { webFetch as eveWebFetch } from "eve/tools/defaults";
 
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import exportMemory from "../tools/export_memory.js";
-import browserTask, { BROWSER_TASK_AVAILABLE } from "../tools/browser_task.js";
+import browserAct from "../tools/browser_act.js";
+import browserConfirm from "../tools/browser_confirm.js";
+import browserLook from "../tools/browser_look.js";
+import browserOpen from "../tools/browser_open.js";
+import browserRead from "../tools/browser_read.js";
+import browserSession from "../tools/browser_session.js";
 import generateImage from "../tools/generate_image.js";
 import getCurrentTime from "../tools/get_current_time.js";
 import getMemorySource from "../tools/get_memory_source.js";
@@ -85,8 +90,12 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   ...(IMAGE_GENERATION_AVAILABLE
     ? { generate_image: generateImage as unknown as AnyToolDefinition }
     : {}),
-  // Jev drives the click loop; without its key the tool would only ever answer "unavailable".
-  ...(BROWSER_TASK_AVAILABLE ? { browser_task: browserTask as unknown as AnyToolDefinition } : {}),
+  browser_act: browserAct as unknown as AnyToolDefinition,
+  browser_confirm: browserConfirm as unknown as AnyToolDefinition,
+  browser_look: browserLook as unknown as AnyToolDefinition,
+  browser_open: browserOpen as unknown as AnyToolDefinition,
+  browser_read: browserRead as unknown as AnyToolDefinition,
+  browser_session: browserSession as unknown as AnyToolDefinition,
   get_current_time: getCurrentTime as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
   manage_skill: manageSkill as unknown as AnyToolDefinition,

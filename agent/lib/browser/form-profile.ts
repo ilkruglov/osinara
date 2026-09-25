@@ -11,7 +11,6 @@
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
-import type { TableElement } from "./element-table.js";
 
 export interface ProfileField { domains: string[]; value: string; }
 export type FormProfile = Record<string, ProfileField>;
@@ -70,7 +69,7 @@ const LABELS: ReadonlyArray<readonly [RegExp, string]> = [
   [/имя|name/iu, "name"],
 ];
 
-export function fieldForElement(element: Pick<TableElement, "name" | "role">): string | null {
+export function fieldForElement(element: { name: string }): string | null {
   for (const [pattern, field] of LABELS) if (pattern.test(element.name)) return field;
   return null;
 }

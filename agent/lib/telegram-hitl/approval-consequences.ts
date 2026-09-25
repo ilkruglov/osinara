@@ -2,7 +2,7 @@
  * Consequence wording shared by approval composition and settlement.
  *
  * Exports:
- * - `DEFAULT_CONSEQUENCE`, `GOOGLE_WORKSPACE_CONSEQUENCE`, `SCHEDULE_CONSEQUENCES`, `BROWSER_TASK_CONSEQUENCE`.
+ * - `DEFAULT_CONSEQUENCE`, `GOOGLE_WORKSPACE_CONSEQUENCE`, `SCHEDULE_CONSEQUENCES`, `BROWSER_CONFIRM_CONSEQUENCE`.
  * - `allApprovalConsequences`: every sentence a settled prompt may need stripped.
  *
  * Key constructs:
@@ -15,8 +15,8 @@ export const DEFAULT_CONSEQUENCE =
 export const GOOGLE_WORKSPACE_CONSEQUENCE =
   "Команда будет выполнена один раз в текущем профиле. Автоматического повтора при ошибке не будет.";
 
-export const BROWSER_TASK_CONSEQUENCE =
-  "Кнопка будет нажата один раз; сайт может сразу создать запись, заказ или платёж, и отменить это здесь будет нельзя. Если страница изменилась после сводки, ничего не будет нажато.";
+export const BROWSER_CONFIRM_CONSEQUENCE =
+  "Кнопка будет нажата один раз; сайт может сразу создать запись, заказ или платёж, и отменить это здесь будет нельзя. Значения полей видны на скриншоте выше. Если страница изменилась после сводки, ничего не будет нажато.";
 
 export const SCHEDULE_CONSEQUENCES: Readonly<Record<string, string>> = {
   create: "Будет создан новый автоматический запуск агента по указанному сценарию.",
@@ -31,7 +31,7 @@ export function allApprovalConsequences(): string[] {
   return [
     DEFAULT_CONSEQUENCE,
     GOOGLE_WORKSPACE_CONSEQUENCE,
-    BROWSER_TASK_CONSEQUENCE,
+    BROWSER_CONFIRM_CONSEQUENCE,
     ...Object.values(SCHEDULE_CONSEQUENCES),
   ];
 }

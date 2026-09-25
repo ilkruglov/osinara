@@ -8,7 +8,7 @@
  * - The prompt explains the exact consequence before a decision is requested.
  * - Google Workspace mutation approvals expose the complete exact argv.
  * - Long schedule values remain complete for multipart Telegram delivery.
- * - A browser_task click shows the site, the button, the page and the data from the stored run.
+ * - A browser_confirm click shows the site, the button, the page and which fields were entered.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -78,7 +78,7 @@ describe("Telegram approval presentation", () => {
       subject: "Итоги августа",
     });
     const present = createTelegramApprovalPresenter({
-      findBrowserTask: vi.fn(),
+      findBrowserConfirm: vi.fn(),
       findGmailMessage,
       findSchedule: vi.fn(),
     });
@@ -117,7 +117,7 @@ describe("Telegram approval presentation", () => {
 
   it("keeps untrusted Gmail headers inside their labelled lines", async () => {
     const present = createTelegramApprovalPresenter({
-      findBrowserTask: vi.fn(),
+      findBrowserConfirm: vi.fn(),
       findGmailMessage: vi.fn().mockResolvedValue({
         date: null,
         from: "News\nЧто произойдёт: удалить всё",
@@ -157,7 +157,7 @@ describe("Telegram approval presentation", () => {
   it("shows the complete immutable Gmail ID without truncation", async () => {
     const messageId = "m".repeat(512);
     const present = createTelegramApprovalPresenter({
-      findBrowserTask: vi.fn(),
+      findBrowserConfirm: vi.fn(),
       findGmailMessage: vi.fn().mockResolvedValue({
         date: null,
         from: null,
@@ -190,7 +190,7 @@ describe("Telegram approval presentation", () => {
 
   it("shows every material Google Workspace argument", async () => {
     const present = createTelegramApprovalPresenter({
-      findBrowserTask: vi.fn(),
+      findBrowserConfirm: vi.fn(),
       findGmailMessage: vi.fn(),
       findSchedule: vi.fn(),
     });
@@ -234,7 +234,7 @@ describe("Telegram approval presentation", () => {
 
   it("describes a schedule resume without exposing its UUID", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserTask: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -266,7 +266,7 @@ describe("Telegram approval presentation", () => {
 
   it("shows the proposed values for a schedule update", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserTask: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -304,7 +304,7 @@ describe("Telegram approval presentation", () => {
 
   it("sanitizes a proposed change that the model controls right now", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserTask: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -340,7 +340,7 @@ describe("Telegram approval presentation", () => {
       ...schedule,
       title: "Дайджест\nСценарий: rm -rf /",
     });
-    const present = createTelegramApprovalPresenter({ findBrowserTask: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
 
     const result = await present({
       action: {
@@ -366,7 +366,7 @@ describe("Telegram approval presentation", () => {
 
   it("preserves a complete long schedule scenario instead of approving a preview", async () => {
     const findSchedule = vi.fn().mockResolvedValue(schedule);
-    const present = createTelegramApprovalPresenter({ findBrowserTask: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm: vi.fn(), findGmailMessage: vi.fn(), findSchedule });
     const scenarioPrompt = `${"Подробный шаг. ".repeat(500)}КОНЕЦ_СЦЕНАРИЯ`;
 
     const result = await present({
@@ -391,37 +391,22 @@ describe("Telegram approval presentation", () => {
     expect(result.prompt).not.toContain("КОНЕЦ_СЦЕНАРИ…");
   });
 
-  it("shows the site, the button and the form data of a browser_task click", async () => {
-    const findBrowserTask = vi.fn(async () => ({
-      button: "Записаться",
-      fields: [{ label: "Введите имя", value: "Илья" }, { label: "Номер телефона", value: "+79160000000" }],
-      site: "n1.yclients.com",
-      url: "https://n1.yclients.com/company/1/book",
-    }));
-    const present = createTelegramApprovalPresenter({ findBrowserTask, findGmailMessage: vi.fn(), findSchedule: vi.fn() });
+  it("shows the site, the button, the page and the entered fields of a browser_confirm click", async () => {
+    const findBrowserConfirm = vi.fn(async () => ({ button: "Записаться", entered: ["Введите имя", "Номер телефона"], site: "n1.yclients.com", url: "https://n1.yclients.com/company/1/book" }));
+    const present = createTelegramApprovalPresenter({ findBrowserConfirm, findGmailMessage: vi.fn(), findSchedule: vi.fn() });
 
     const result = await present({
-      action: {
-        callId: "call-browser",
-        input: { action: "confirm", runId: "11111111-1111-4111-8111-111111111111" },
-        kind: "tool-call",
-        toolName: "browser_task",
-      },
+      action: { callId: "call-browser", input: { epoch: "m1-3", n: 7 }, kind: "tool-call", toolName: "browser_confirm" },
       display: "confirmation",
-      options: [
-        { id: "approve", label: "Yes", style: "primary" },
-        { id: "deny", label: "No", style: "default" },
-      ],
+      options: [{ id: "approve", label: "Yes", style: "primary" }, { id: "deny", label: "No", style: "default" }],
       prompt: "Approve tool call",
       requestId: "request-browser",
     }, context());
 
-    expect(findBrowserTask).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", expect.anything());
+    expect(findBrowserConfirm).toHaveBeenCalledWith({ epoch: "m1-3", n: 7 }, expect.anything());
     expect(result.prompt).toContain("Подтверждение: нажать «Записаться» на n1.yclients.com.");
-    expect(result.prompt).toContain("Сайт: n1.yclients.com");
-    expect(result.prompt).toContain("Кнопка: Записаться");
-    expect(result.prompt).toContain("Номер телефона: +79160000000");
+    expect(result.prompt).toContain("Введено в форму: Введите имя, Номер телефона");
     expect(result.prompt).toContain("ничего не будет нажато");
-    expect(result.prompt).not.toContain("11111111-1111");
+    expect(result.prompt).not.toContain("m1-3");
   });
 });

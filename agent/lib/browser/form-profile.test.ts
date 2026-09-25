@@ -38,7 +38,7 @@ describe("resolveFieldValue", () => {
 describe("fieldForElement", () => {
   it.each([["Телефон", "phone"], ["Номер телефона", "phone"], ["Мобильный телефон*", "phone"], ["Имя", "name"], ["Ваше имя*", "name"], ["Введите e-mail", "email"], ["Комментарий", null], ["Дата", null]])
     ("maps %s to %s", (name, field) => {
-      expect(fieldForElement({ name, role: "textbox" })).toBe(field);
+      expect(fieldForElement({ name })).toBe(field);
     });
 });
 

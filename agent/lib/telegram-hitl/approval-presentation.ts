@@ -19,8 +19,8 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
-import type { BrowserTaskApprovalSubject } from "../browser-task/browser-task-approval.js";
-import { loadBrowserTaskApproval } from "../browser-task/browser-task-approval.js";
+import type { BrowserConfirmApprovalSubject } from "../browser/browser-tools-production.js";
+import { loadBrowserConfirmApproval } from "../browser/browser-tools-production.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -29,7 +29,7 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 import {
-  BROWSER_TASK_CONSEQUENCE,
+  BROWSER_CONFIRM_CONSEQUENCE,
   GOOGLE_WORKSPACE_CONSEQUENCE,
   SCHEDULE_CONSEQUENCES,
 } from "./approval-consequences.js";
@@ -41,7 +41,7 @@ import {
 } from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
-  findBrowserTask(runId: string, ctx: Pick<SessionContext, "session">): Promise<BrowserTaskApprovalSubject>;
+  findBrowserConfirm(input: { epoch: string; n: number }, ctx: Pick<SessionContext, "session">): Promise<BrowserConfirmApprovalSubject>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -261,26 +261,24 @@ export function createTelegramApprovalPresenter(
     }
     if (
       request.display === "confirmation" &&
-      request.action.toolName === "browser_task"
+      request.action.toolName === "browser_confirm"
     ) {
-      const runId = request.action.input.runId;
-      if (request.action.input.action !== "confirm" || typeof runId !== "string" || !runId) {
-        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить задачу в браузере для подтверждения");
+      const { epoch, n } = request.action.input;
+      if (typeof epoch !== "string" || !epoch || typeof n !== "number") {
+        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить шаг в браузере для подтверждения");
       }
-      const subject = await dependencies.findBrowserTask(runId, ctx);
+      const subject = await dependencies.findBrowserConfirm({ epoch, n }, ctx);
       return {
         ...localized,
         prompt: buildApprovalMessage({
           actionLabel: `нажать «${subject.button}» на ${subject.site}`,
-          consequence: BROWSER_TASK_CONSEQUENCE,
+          consequence: BROWSER_CONFIRM_CONSEQUENCE,
           facts: [
             ...approvalFact("Сайт", subject.site),
             ...approvalFact("Кнопка", subject.button),
             ...approvalFact("Страница", subject.url),
+            ...approvalFact("Введено в форму", subject.entered.length > 0 ? subject.entered.join(", ") : "ничего"),
           ],
-          ...(subject.fields.length === 0
-            ? {}
-            : { section: { lines: subject.fields.map((f) => sanitizeApprovalLine(`${f.label}: ${f.value}`)), title: "Данные в форме:" } }),
         }),
       };
     }
@@ -334,7 +332,7 @@ export function createTelegramApprovalPresenter(
 }
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
-  findBrowserTask: loadBrowserTaskApproval,
+  findBrowserConfirm: loadBrowserConfirmApproval,
   findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });
