@@ -3,8 +3,9 @@
  *
  * Constructs covered:
  * - Inside a form, submit-like names on buttons, links, generics and text leaves count.
- * - Outside a form nothing counts: "Записаться онлайн" on a home page only leads to the form.
+ * - Outside a form booking words do not count: "Записаться онлайн" on a home page only leads to the form.
  * - "Продолжить" and "Далее" count only inside a form (Dikidi submits through a link so named).
+ * - Paying, deleting, confirming and ordering count everywhere: a last step has no contact fields.
  */
 import { describe, expect, it } from "vitest";
 
@@ -24,10 +25,16 @@ describe("looksIrreversible", () => {
       expect(looksIrreversible({ name, role }, true)).toBe(false);
     });
 
-  it("never fires outside a form, even on submit-like words", () => {
+  it("does not fire on booking words outside a form", () => {
     expect(looksIrreversible({ name: "Записаться онлайн", role: "link" }, false)).toBe(false);
     expect(looksIrreversible({ name: "Забронировать", role: "button" }, false)).toBe(false);
+    expect(looksIrreversible({ name: "Продолжить", role: "link" }, false)).toBe(false);
   });
+
+  it.each([["button", "Оплатить"], ["button", "Удалить заказ"], ["link", "Подтвердить запись"], ["generic", "Pay now"], ["button", "Купить"]])
+    ("fires on %s %s without a form", (role, name) => {
+      expect(looksIrreversible({ name, role }, false)).toBe(true);
+    });
 });
 
 describe("hasFormContext", () => {

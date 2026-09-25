@@ -3,11 +3,14 @@
  *
  * Constructs covered:
  * - The loop stops before an irreversible click inside a form and hands a code-built summary over.
+ * - A transaction word stops the loop without a form; any other click outside a form is put to Jev.
  * - Low confidence hands over to Mia twice, then blocks.
  * - A page that does not change after an action counts against that action; three in a row is stuck.
- * - DONE is claimed only with evidence on the final page.
+ * - DONE is claimed only with a success phrase on the final page, never with the goal's own words.
+ * - Every Jev request carries an abort signal; time counts only while the loop runs.
  * - A field the profile does not cover becomes a question, not a guess.
- * - performPendingAction clicks exactly the pending element and continues.
+ * - performPendingAction clicks exactly the pending element and continues; a changed element, form
+ *   or URL refuses without a click; a failed click is reported as unknown and never retried.
  * - A click covered by an iframe enters that iframe without asking Jev.
  */
 import { describe, expect, it } from "vitest";
@@ -17,7 +20,7 @@ import { parseSnapshot } from "./element-table.js";
 import type { JevClient, JevDecision } from "./jev-client.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import type { BrowserTaskRun } from "./browser-task-run-repository.js";
-import { performPendingAction, runBrowserTaskLoop } from "./browser-task-loop.js";
+import { pageHash, performPendingAction, runBrowserTaskLoop } from "./browser-task-loop.js";
 
 const FORM = `- textbox "Введите имя" [ref=e1]\n- textbox "Номер телефона" [ref=e2]\n- button "Записаться" [ref=e3]`;
 const FORM_FILLED = `- textbox "Введите имя" [ref=e1] value="Илья"\n- textbox "Номер телефона" [ref=e2] value="+79160000000"\n- button "Записаться" [ref=e3]`;
@@ -56,10 +59,10 @@ function decision(choice: string, confidence: number, final: number | null = nul
 }
 
 function queuedJev(decisions: JevDecision[]) {
-  const asked: Array<{ state: unknown; final: boolean }> = [];
+  const asked: Array<{ state: unknown; final: boolean; signal: AbortSignal | undefined }> = [];
   const jev: JevClient = {
-    decide: async (state, questions) => {
-      asked.push({ final: questions.final !== undefined, state });
+    decide: async (state, questions, signal) => {
+      asked.push({ final: questions.final !== undefined, signal, state });
       const next = decisions.shift();
       if (!next) throw new Error("jev queue empty");
       return next;
@@ -70,11 +73,15 @@ function queuedJev(decisions: JevDecision[]) {
 
 function run(overrides: Partial<BrowserTaskRun> = {}): BrowserTaskRun {
   return {
-    allowedFields: ["name", "phone"], entered: [], extraData: {}, failedActions: {}, familyId: "f", goal: "записаться на стрижку завтра после 18:00",
+    activeMillis: 0, allowedFields: ["name", "phone"], entered: [], extraData: {}, failedActions: {}, familyId: "f", goal: "записаться на стрижку завтра после 18:00",
     handoffCount: 0, hint: null, history: [], id: "run-1", lastSignature: null, lastUrl: null, pendingAction: null,
     sandboxSessionId: "sbx", scope: "personal", startUrl: "https://x.yclients.com", startedAt: new Date(0), status: "running", stepCount: 0, userId: "u",
     ...overrides,
   };
+}
+
+function pendingOn(at: BrowserPage) {
+  return { label: "Записаться", pageHash: pageHash(at), ref: "e3", role: "button", url: at.url };
 }
 
 const PROFILE = { name: { domains: ["*"], value: "Илья" }, phone: { domains: ["yclients.com"], value: "+79160000000" } };
@@ -147,15 +154,24 @@ describe("runBrowserTaskLoop", () => {
   it("counts an unchanged page against the action, drops it after two, and is stuck after three", async () => {
     const same = page(HOME, "https://x.ru/");
     const { driver } = scriptedDriver([same, same, same, same]);
-    const { asked, jev } = queuedJev([decision("CLICK [1]", 0.9), decision("CLICK [1]", 0.9), decision("CLICK [2]", 0.9)]);
+    const notFinal = decision("NO", 0.9, 0.01);
+    const { asked, jev } = queuedJev([decision("CLICK [1]", 0.9), notFinal, decision("CLICK [1]", 0.9), { ...notFinal }, decision("CLICK [2]", 0.9), { ...notFinal }]);
 
     const outcome = await runBrowserTaskLoop(run({ startUrl: null }), deps(driver, jev));
 
     expect(outcome.run.status).toBe("failed");
     expect(outcome.run.failedActions["CLICK:e1"]).toBe(2);
-    const lastCriteria = (asked.at(-1)!.state as { page: string }).page;
+    const lastCriteria = (asked.filter((a) => !a.final).at(-1)!.state as { page: string }).page;
     expect(lastCriteria).toContain("Записаться");
     expect(outcome.summary).toMatch(/не меняется/u);
+  });
+
+  it("claims done only with a success phrase, not with the goal's words on the unsent form", async () => {
+    const { driver } = scriptedDriver([page(FORM)], { text: "Записаться на стрижку завтра. Выберите время. Илья" });
+    const { jev } = queuedJev([decision("DONE", 0.9)]);
+    const outcome = await runBrowserTaskLoop(run({ entered: [{ field: "name", label: "Введите имя" }], startUrl: null }), deps(driver, jev));
+    expect(outcome.run.status).toBe("unverified");
+    expect(outcome.evidence).toEqual([]);
   });
 
   it("claims done only with evidence on the final page", async () => {
@@ -175,20 +191,54 @@ describe("runBrowserTaskLoop", () => {
   it("enters the covering iframe itself when a click is covered by one", async () => {
     const withFrame = page(`- link "Записаться" [ref=e1]\n- Iframe [ref=e22]`, "https://b-frant.ru/");
     const { calls, driver } = scriptedDriver([withFrame, withFrame], { clickError: "Element '@e1' is covered by <iframe.yWidgetIFrame> at its click point" });
-    const { jev } = queuedJev([decision("CLICK [1]", 0.9), decision("BLOCKED", 0.9)]);
+    const { jev } = queuedJev([decision("CLICK [1]", 0.9), decision("NO", 0.9, 0.01), decision("BLOCKED", 0.9)]);
 
     await runBrowserTaskLoop(run({ startUrl: null, handoffCount: 2 }), deps(driver, jev));
 
     expect(calls).toContainEqual(["enterFrame", "e22"]);
   });
 
-  it("fails on the step limit and on the time limit", async () => {
+  it("fails on the step limit and on loop time, but not on time spent waiting for a person", async () => {
     const { driver } = scriptedDriver([page(HOME)]);
     const { jev } = queuedJev([]);
     const steps = await runBrowserTaskLoop(run({ startUrl: null, stepCount: 40 }), deps(driver, jev));
     expect(steps.run.status).toBe("failed");
-    const time = await runBrowserTaskLoop(run({ startUrl: null }), deps(driver, jev, 200_000));
+    const time = await runBrowserTaskLoop(run({ activeMillis: 180_000, startUrl: null }), deps(driver, jev));
     expect(time.run.status).toBe("failed");
+
+    // Started an hour ago, most of it waiting for an answer: the budget sees only loop time.
+    const { jev: jev2 } = queuedJev([decision("BLOCKED", 0.9)]);
+    const waited = await runBrowserTaskLoop(run({ activeMillis: 10_000, startUrl: null, startedAt: new Date(0) }), deps(driver, jev2, 3_600_000));
+    expect(waited.run.status).toBe("needs_plan");
+  });
+
+  it("stops before a transaction word without a form, and asks Jev about any other click outside one", async () => {
+    const pay = page(`- heading "Ваш заказ" [ref=e1]\n- button "Оплатить 1500 ₽" [ref=e2]`, "https://shop.ru/cart");
+    const { calls, driver } = scriptedDriver([pay]);
+    const { asked, jev } = queuedJev([decision("CLICK [1]", 0.9)]);
+    const paid = await runBrowserTaskLoop(run({ startUrl: null }), deps(driver, jev));
+    expect(paid.run.status).toBe("awaiting_confirmation");
+    expect(asked.every((a) => !a.final)).toBe(true);
+    expect(calls.some((c) => c[0] === "click")).toBe(false);
+
+    const odd = page(`- heading "Ваш заказ" [ref=e1]\n- button "Ок" [ref=e2]`, "https://shop.ru/cart");
+    const { calls: calls2, driver: driver2 } = scriptedDriver([odd]);
+    const { asked: asked2, jev: jev2 } = queuedJev([decision("CLICK [1]", 0.9), decision("YES", 0.7, 0.6)]);
+    const gated = await runBrowserTaskLoop(run({ startUrl: null }), deps(driver2, jev2));
+    expect(gated.run.status).toBe("awaiting_confirmation");
+    expect(asked2.at(-1)!.final).toBe(true);
+    expect(calls2.some((c) => c[0] === "click")).toBe(false);
+  });
+
+  it("gives every Jev request an abort signal tied to the turn", async () => {
+    const turn = new AbortController();
+    const { driver } = scriptedDriver([page(HOME, "https://x.ru/")]);
+    const { asked, jev } = queuedJev([decision("BLOCKED", 0.9)]);
+    await runBrowserTaskLoop(run({ startUrl: null }), { ...deps(driver, jev), signal: turn.signal });
+    const signal = asked[0]!.signal!;
+    expect(signal.aborted).toBe(false);
+    turn.abort();
+    expect(signal.aborted).toBe(true);
   });
 });
 
@@ -196,7 +246,7 @@ describe("performPendingAction", () => {
   it("clicks exactly the pending element on the same page and continues to done", async () => {
     const { calls, driver } = scriptedDriver([page(FORM_FILLED), page(THANKS)], { text: "Вы записаны, ждём вас" });
     const { jev } = queuedJev([decision("DONE", 0.9)]);
-    const pending = run({ pendingAction: { label: "Записаться", ref: "e3", summary: "s", url: "https://x.yclients.com/book" }, startUrl: null, status: "awaiting_confirmation" });
+    const pending = run({ pendingAction: pendingOn(page(FORM_FILLED)), startUrl: null, status: "confirming" });
 
     const outcome = await performPendingAction(pending, deps(driver, jev));
 
@@ -205,14 +255,41 @@ describe("performPendingAction", () => {
     expect(outcome.run.pendingAction).toBeNull();
   });
 
-  it("refuses when the page moved since the summary was shown", async () => {
-    const { calls, driver } = scriptedDriver([page(HOME, "https://x.yclients.com/other")]);
+  it.each([
+    ["the URL changed", page(FORM_FILLED, "https://x.yclients.com/other")],
+    ["the ref now names another button", page(`- textbox "Введите имя" [ref=e1] value="Илья"\n- textbox "Номер телефона" [ref=e2] value="+79160000000"\n- button "Удалить запись" [ref=e3]`)],
+    ["the form was re-rendered with other data", page(`- textbox "Введите имя" [ref=e1] value="Пётр"\n- textbox "Номер телефона" [ref=e2] value="+79160000000"\n- button "Записаться" [ref=e3]`)],
+  ])("refuses without a click when %s", async (_case, now) => {
+    const { calls, driver } = scriptedDriver([now]);
     const { jev } = queuedJev([]);
-    const pending = run({ pendingAction: { label: "Записаться", ref: "e3", summary: "s", url: "https://x.yclients.com/book" }, startUrl: null, status: "awaiting_confirmation" });
+    const pending = run({ pendingAction: pendingOn(page(FORM_FILLED)), startUrl: null, status: "confirming" });
 
     const outcome = await performPendingAction(pending, deps(driver, jev));
 
     expect(outcome.run.status).toBe("failed");
+    expect(outcome.summary).toMatch(/ничего не нажимала/u);
     expect(calls.some((c) => c[0] === "click")).toBe(false);
+  });
+
+  it("reports a failed confirmed click as unknown and does not retry it", async () => {
+    const { calls, driver } = scriptedDriver([page(FORM_FILLED)], { clickError: "timeout" });
+    const { jev } = queuedJev([]);
+    const pending = run({ pendingAction: pendingOn(page(FORM_FILLED)), startUrl: null, status: "confirming" });
+
+    const outcome = await performPendingAction(pending, deps(driver, jev));
+
+    expect(outcome.run.status).toBe("failed");
+    expect(outcome.summary).toMatch(/неизвестно/u);
+    expect(calls.filter((c) => c[0] === "click")).toHaveLength(1);
+  });
+
+  it("keeps a verification reserve for the check after a click confirmed late in the budget", async () => {
+    const { driver } = scriptedDriver([page(FORM_FILLED), page(THANKS)], { text: "Вы записаны" });
+    const { jev } = queuedJev([decision("DONE", 0.9)]);
+    const pending = run({ activeMillis: 179_000, pendingAction: pendingOn(page(FORM_FILLED)), startUrl: null, status: "confirming" });
+
+    const outcome = await performPendingAction(pending, deps(driver, jev));
+
+    expect(outcome.run.status).toBe("done");
   });
 });

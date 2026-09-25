@@ -77,7 +77,7 @@ function operationsFor(role: string, tail: string): Operation[] {
   if (role === "Iframe") return ["ENTER"];
   if (role === "option") return ["SELECT"];
   if (TYPING_ROLES.has(role)) operations.push("TYPE_TEXT");
-  if (role === "combobox" || role === "listbox") operations.push("SELECT");
+  // A list only opens on click; SELECT belongs to its options, which find their list themselves.
   if (CLICK_ROLES.has(role) || (!STATIC_ROLES.has(role) && /clickable/u.test(tail))) operations.push("CLICK");
   return operations;
 }

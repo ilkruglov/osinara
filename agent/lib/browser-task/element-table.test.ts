@@ -41,7 +41,8 @@ describe("parseSnapshot", () => {
       [1, "e4", "link", "Закрыть", ["CLICK"]],
       [2, "e1", "generic", "Принять все", ["CLICK"]],
       [3, "e9", "textbox", "Телефон", ["TYPE_TEXT"]],
-      [4, "e10", "combobox", "Мастер", ["TYPE_TEXT", "SELECT", "CLICK"]],
+      // SELECT belongs to options only: on the list itself it selected in the previous list.
+      [4, "e10", "combobox", "Мастер", ["TYPE_TEXT", "CLICK"]],
       [5, "e11", "option", "Иван", ["SELECT"]],
       [6, "e12", "button", "Записаться", ["CLICK"]],
       [7, "e22", "Iframe", "(фрейм)", ["ENTER"]],

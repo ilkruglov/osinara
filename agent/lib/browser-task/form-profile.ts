@@ -1,11 +1,11 @@
 /**
- * Form profile for browser_task: `personal/forms/profile.json`, each field bound to domains.
+ * Form profile for browser_task: one per person, each field bound to domains.
  *
  * Exports:
- * - `parseFormProfile`: validates the file; card and password fields are refused at parse time.
+ * - `parseFormProfile`: validates a stored profile; card and password fields are refused at parse time.
  * - `resolveFieldValue`: the only way a value reaches a page: allowed field, allowed domain, run data first.
  * - `fieldForElement`: maps a visible field label to a profile field name.
- * - `upsertProfileField`, `serializeFormProfile`: how Mia writes the file, so she never hand-crafts JSON.
+ * - `upsertProfileField`, `serializeFormProfile`: the only way a field changes, so Mia never hand-crafts JSON.
  * - `FORBIDDEN_FIELDS`: what never gets filled, whatever the profile or the run says.
  */
 import { z } from "zod";
@@ -28,11 +28,11 @@ export function parseFormProfile(json: string): FormProfile {
   try {
     raw = JSON.parse(json);
   } catch {
-    throw new AppError(PROFILE_INVALID, "Анкета forms/profile.json не читается как JSON");
+    throw new AppError(PROFILE_INVALID, "Анкета не читается как JSON");
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    throw new AppError(PROFILE_INVALID, "Анкета forms/profile.json не соответствует форме: у каждого поля нужны value и domains");
+    throw new AppError(PROFILE_INVALID, "Анкета не соответствует форме: у каждого поля нужны value и domains");
   }
   for (const field of Object.keys(parsed.data)) {
     if (FORBIDDEN_FIELDS.has(field.toLowerCase())) {

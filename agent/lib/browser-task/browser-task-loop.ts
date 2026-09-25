@@ -4,15 +4,24 @@
  * Exports:
  * - `runBrowserTaskLoop`: steps until done, a gate, a question for Mia, a block or a failure.
  * - `performPendingAction`: the one irreversible click after confirmation, then the loop again.
+ * - `pageHash`: what a confirmation is bound to besides the element.
  * - `LOOP_LIMITS`: steps, time, handoffs, criteria.
  *
  * Key constructs:
  * - Jev never sees a value: it picks the field, the profile supplies the text.
- * - The gate is code: form context plus a submit-like name, or Jev's answer about the chosen
- *   element. Jev's DONE is a guess; the final page has to carry a quote.
+ * - The gate is code first: a transaction word anywhere or a submit word inside a form. Every
+ *   other click is put to Jev as a final-step question. Jev's DONE is a guess; the final page has
+ *   to carry a success phrase, and words of the goal or entered values never count as one.
+ * - A confirmation is bound to the element's role and name and to a hash of the whole page. A
+ *   single-page app may re-render the form while the person reads the summary, keeping the URL.
+ * - Time counts only while the loop runs; the wait for a person is outside the budget, and a
+ *   confirmed click always keeps enough budget to check what it did.
+ * - Every Jev request carries the turn's abort signal and the remaining budget.
  * - A page that did not change after an action counts against that action, and after two such
  *   counts the action leaves the table: the spike saw Jev re-click a selected service forever.
  */
+import { createHash } from "node:crypto";
+
 import type { BrowserDriver, BrowserPage } from "./browser-driver.js";
 import type { BrowserTaskRun, PendingAction } from "./browser-task-run-repository.js";
 import { actionCriteria, type ElementTable, parseChoice, renderTable, STATIC_OPTIONS, type TableElement } from "./element-table.js";
@@ -27,6 +36,7 @@ export interface LoopDependencies {
   log(event: Record<string, unknown>): void;
   now(): number;
   profile: FormProfile;
+  signal?: AbortSignal;
 }
 export interface LoopOutcome {
   evidence: Array<{ quote: string }>;
@@ -36,7 +46,9 @@ export interface LoopOutcome {
   snapshotExcerpt?: string;
   summary: string;
 }
-export const LOOP_LIMITS = { maxCriteria: 250, maxHandoffs: 2, maxMillis: 180_000, maxSteps: 40, maxUnchanged: 3 } as const;
+export const LOOP_LIMITS = {
+  maxCriteria: 250, maxHandoffs: 2, maxMillis: 180_000, maxSteps: 40, maxUnchanged: 3, verifyReserveMillis: 30_000,
+} as const;
 
 const RECENT_STEPS = 5;
 const EXCERPT_MAX_CHARACTERS = 1_500;
@@ -48,6 +60,28 @@ const signatureOf = (page: BrowserPage): string => `${page.url}|${page.table.ele
 const keyOf = (operation: string, element: TableElement): string => `${operation}:${element.ref ?? element.name}`;
 const hostOf = (url: string): string => { try { return new URL(url).hostname; } catch { return url; } };
 const excerpt = (table: ElementTable): string => renderTable(table).slice(0, EXCERPT_MAX_CHARACTERS);
+
+/** Roles, names and values of every element, without refs: a re-render keeps it, an edit does not. */
+export function pageHash(page: BrowserPage): string {
+  const content = page.table.elements.map((e) => `${e.role}\u0000${e.name}\u0000${e.value ?? ""}`).join("\u0001");
+  return createHash("sha256").update(`${page.url}\u0002${content}`).digest("hex");
+}
+
+interface Budget { elapsed(): number; signal(): AbortSignal; }
+
+function budgetFor(run: BrowserTaskRun, deps: LoopDependencies): Budget {
+  const segmentStart = deps.now();
+  const before = run.activeMillis;
+  const elapsed = (): number => before + deps.now() - segmentStart;
+  return {
+    elapsed,
+    signal() {
+      const remaining = Math.max(1, LOOP_LIMITS.maxMillis - elapsed());
+      const deadline = AbortSignal.timeout(remaining);
+      return deps.signal ? AbortSignal.any([deps.signal, deadline]) : deadline;
+    },
+  };
+}
 
 function outcome(run: BrowserTaskRun, page: BrowserPage, summary: string, extra: Partial<LoopOutcome> = {}): LoopOutcome {
   return { evidence: [], page: { title: page.title, url: page.url }, run, summary, ...extra };
@@ -73,12 +107,19 @@ function questionFrom(decision: JevDecision, table: ElementTable): string {
 
 async function verifyDone(run: BrowserTaskRun, page: BrowserPage, deps: LoopDependencies): Promise<LoopOutcome> {
   const text = await deps.driver.readText();
+  // The goal's own words and the typed values are on the unsent form too; only a success phrase
+  // tells the result apart from the form. The values then only add detail to the quotes.
+  const success = findEvidence(text, SUCCESS_TERMS);
+  if (success.length === 0) {
+    run.status = "unverified";
+    return outcome(run, page, "Похоже, задача выполнена, но подтверждения на странице не видно", { evidence: [] });
+  }
   const enteredValues = run.entered.map(({ field }) => resolveFieldValue({ allowedFields: run.allowedFields, domain: hostOf(page.url), extraData: run.extraData, field, profile: deps.profile }))
     .filter((value): value is string => value !== null);
-  const goalWords = run.goal.split(/[^\p{L}\p{N}:]+/u).filter((word) => word.length >= 4);
-  const evidence = findEvidence(text, [...SUCCESS_TERMS, ...enteredValues, ...goalWords]);
-  run.status = evidence.length > 0 ? "done" : "unverified";
-  return outcome(run, page, evidence.length > 0 ? `Готово: ${evidence[0]!.quote}` : "Похоже, задача выполнена, но подтверждения на странице не видно", { evidence });
+  const details = findEvidence(text, enteredValues).filter((d) => !success.some((s) => s.quote === d.quote));
+  const evidence = [...success, ...details].slice(0, 3);
+  run.status = "done";
+  return outcome(run, page, `Готово: ${evidence[0]!.quote}`, { evidence });
 }
 
 function handOver(run: BrowserTaskRun, page: BrowserPage, question: string, countsAsHandoff: boolean): LoopOutcome {
@@ -93,18 +134,17 @@ function handOver(run: BrowserTaskRun, page: BrowserPage, question: string, coun
   return outcome(run, page, question, { question, snapshotExcerpt: excerpt(page.table) });
 }
 
-async function isFinalStep(run: BrowserTaskRun, page: BrowserPage, element: TableElement, deps: LoopDependencies): Promise<boolean> {
-  const formContext = hasFormContext(page.table);
-  if (!formContext) return false;
-  if (looksIrreversible(element, true)) return true;
+async function isFinalStep(run: BrowserTaskRun, page: BrowserPage, element: TableElement, deps: LoopDependencies, budget: Budget): Promise<boolean> {
+  if (looksIrreversible(element, hasFormContext(page.table))) return true;
   const decision = await deps.jev.decide(
     { chosen_element: `${element.role} ${element.name}`, page: renderTable(page.table), task: run.goal, url: page.url },
     { action: { criteria: { NO: "не окончательное действие", YES: "окончательное действие" }, instructions: ACTION_QUESTION, type: "choice" }, final: { instructions: FINAL_QUESTION, type: "noul" } },
+    budget.signal(),
   );
   return (decision.final ?? 0) >= FINAL_STEP_THRESHOLD;
 }
 
-async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableElement, operation: string, deps: LoopDependencies): Promise<LoopOutcome | null> {
+async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableElement, operation: string, deps: LoopDependencies, budget: Budget): Promise<LoopOutcome | null> {
   const { driver } = deps;
   switch (operation) {
     case "TYPE_TEXT": {
@@ -125,12 +165,12 @@ async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableEleme
     }
     case "ENTER": await driver.enterFrame(element.ref!); return null;
     case "TEXT": {
-      if (await isFinalStep(run, page, element, deps)) return gate(run, page, element, deps);
+      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element, deps);
       await driver.clickText(element.name);
       return null;
     }
     default: {
-      if (await isFinalStep(run, page, element, deps)) return gate(run, page, element, deps);
+      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element, deps);
       try {
         await driver.click(element.ref!);
       } catch (error) {
@@ -151,13 +191,23 @@ async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableEleme
 function gate(run: BrowserTaskRun, page: BrowserPage, element: TableElement, deps: LoopDependencies): LoopOutcome {
   const entered = enteredSummary(run, page, deps.profile);
   const summary = `${element.name} на ${hostOf(page.url)}${entered ? `. Данные: ${entered}` : ""}`;
-  const pending: PendingAction = { label: element.name, ref: element.ref, summary, url: page.url };
+  // The summary with values goes to the model only; the row keeps the binding, not the data.
+  const pending: PendingAction = { label: element.name, pageHash: pageHash(page), ref: element.ref, role: element.role, url: page.url };
   run.pendingAction = pending;
   run.status = "awaiting_confirmation";
   return outcome(run, page, summary);
 }
 
 export async function runBrowserTaskLoop(run: BrowserTaskRun, deps: LoopDependencies): Promise<LoopOutcome> {
+  const budget = budgetFor(run, deps);
+  try {
+    return await loop(run, deps, budget);
+  } finally {
+    run.activeMillis = budget.elapsed();
+  }
+}
+
+async function loop(run: BrowserTaskRun, deps: LoopDependencies, budget: Budget): Promise<LoopOutcome> {
   const { driver } = deps;
   if (run.stepCount === 0 && run.startUrl && run.lastUrl === null) await driver.open(run.startUrl);
   // Consecutive snapshots with the same signature; three means the page ignores everything we do.
@@ -183,7 +233,7 @@ export async function runBrowserTaskLoop(run: BrowserTaskRun, deps: LoopDependen
       return outcome(run, page, "Страница не меняется в ответ на действия, цикл остановлен", { snapshotExcerpt: excerpt(page.table) });
     }
     if (run.stepCount >= LOOP_LIMITS.maxSteps) { run.status = "failed"; return outcome(run, page, `Исчерпан предел в ${LOOP_LIMITS.maxSteps} шагов`); }
-    if (deps.now() - run.startedAt.getTime() >= LOOP_LIMITS.maxMillis) { run.status = "failed"; return outcome(run, page, "Исчерпан предел времени на прогон"); }
+    if (budget.elapsed() >= LOOP_LIMITS.maxMillis) { run.status = "failed"; return outcome(run, page, "Исчерпан предел времени на прогон"); }
 
     const criteria = Object.fromEntries(Object.entries(actionCriteria(page.table)).filter(([choice]) => {
       const parsed = parseChoice(choice, page.table);
@@ -197,7 +247,7 @@ export async function runBrowserTaskLoop(run: BrowserTaskRun, deps: LoopDependen
       task: run.goal,
       url: page.url,
     };
-    const decision = await deps.jev.decide(state, { action: { criteria, instructions: ACTION_QUESTION, type: "choice" } });
+    const decision = await deps.jev.decide(state, { action: { criteria, instructions: ACTION_QUESTION, type: "choice" } }, budget.signal());
     deps.log({ code: "AGENT_BROWSER_TASK_STEP", choice: decision.action.choice, confidence: decision.action.confidence, elements: page.table.elements.length, inputTokens: decision.usage.inputTokens, latencyMs: decision.latencyMs, step: run.stepCount + 1 });
 
     const choice = parseChoice(decision.action.choice, page.table);
@@ -214,22 +264,45 @@ export async function runBrowserTaskLoop(run: BrowserTaskRun, deps: LoopDependen
       continue;
     }
     const element = page.table.elements[choice.index - 1]!;
-    const stop = await actOn(run, page, element, choice.operation, deps);
+    const stop = await actOn(run, page, element, choice.operation, deps, budget);
     if (stop) return stop;
     run.history.push({ action: `${choice.operation}: ${element.role} ${element.name}`, confidence: decision.action.confidence, key: keyOf(choice.operation, element), url: page.url });
   }
 }
 
+function stale(run: BrowserTaskRun, page: BrowserPage, what: string): LoopOutcome {
+  run.status = "failed";
+  run.pendingAction = null;
+  return outcome(run, page, `${what} с момента показа сводки, подтверждение устарело: ничего не нажимала`, { snapshotExcerpt: excerpt(page.table) });
+}
+
+/**
+ * Called with the run already claimed as `confirming`. Any refusal here happens before the click;
+ * a failed click is never retried, because the site may have taken it.
+ */
 export async function performPendingAction(run: BrowserTaskRun, deps: LoopDependencies): Promise<LoopOutcome> {
   const pending = run.pendingAction;
   const page = await deps.driver.snapshot();
-  if (!pending) { run.status = "failed"; return outcome(run, page, "Нет отложенного шага для подтверждения"); }
-  if (page.url !== pending.url) {
+  if (!pending || typeof pending.pageHash !== "string") return stale(run, page, "Отложенный шаг не найден");
+  if (page.url !== pending.url) return stale(run, page, "Страница сменилась");
+  const target = pending.ref === null
+    ? page.table.elements.find((e) => e.ref === null && e.name === pending.label)
+    : page.table.elements.find((e) => e.ref === pending.ref);
+  if (!target || target.name !== pending.label || target.role !== pending.role) return stale(run, page, "Кнопка на странице теперь другая");
+  if (pageHash(page) !== pending.pageHash) return stale(run, page, "Форма изменилась");
+
+  // Waiting for the person is outside the budget; the check after the click must not be cut short.
+  run.activeMillis = Math.min(run.activeMillis, LOOP_LIMITS.maxMillis - LOOP_LIMITS.verifyReserveMillis);
+  try {
+    if (pending.ref) await deps.driver.click(pending.ref);
+    else await deps.driver.clickText(pending.label);
+  } catch (error) {
     run.status = "failed";
-    return outcome(run, page, "Страница изменилась с момента показа сводки, подтверждение устарело");
+    run.pendingAction = null;
+    run.history.push({ action: `подтверждённый шаг ${pending.label} завершился ошибкой`, confidence: 1, url: page.url });
+    deps.log({ code: "AGENT_BROWSER_TASK_CONFIRM_AMBIGUOUS", reason: error instanceof Error ? error.message : String(error) });
+    return outcome(run, page, `Нажатие «${pending.label}» закончилось ошибкой, и неизвестно, принял ли его сайт. Повторно не нажимаю: проверьте результат на сайте или в письме`);
   }
-  if (pending.ref) await deps.driver.click(pending.ref);
-  else await deps.driver.clickText(pending.label);
   run.pendingAction = null;
   run.status = "running";
   run.stepCount += 1;

@@ -4,11 +4,15 @@
  * Constructs covered:
  * - A run is created running, progress is saved and read back, the active run of a sandbox is found.
  * - Another user of the family cannot read the run; a finished run is no longer active.
+ * - A confirm is claimed once; the claimed run stays active.
+ * - The form profile belongs to one person: fields add up under concurrent writes, a card field is
+ *   refused, another member reads nothing.
  */
 import { afterAll, describe, expect, it } from "vitest";
 
 import { database } from "../database.js";
 import { createBrowserTaskRunRepository } from "./browser-task-run-repository.js";
+import { createFormProfileRepository } from "./form-profile-repository.js";
 
 const integrationTestsEnabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 if (integrationTestsEnabled) {
@@ -58,15 +62,41 @@ describeWithDatabase("browserTaskRunRepository", () => {
     run.entered = [{ field: "name", label: "Введите имя" }];
     run.failedActions = { "CLICK:e7": 2 };
     run.status = "awaiting_confirmation";
-    run.pendingAction = { label: "Записаться", ref: "e7", summary: "Записаться: Иван, завтра 18:30", url: "https://b-frant.ru/book" };
+    run.pendingAction = { label: "Записаться", pageHash: "h", ref: "e7", role: "button", url: "https://b-frant.ru/book" };
+    run.allowedFields = ["name", "phone"];
+    run.activeMillis = 12_345;
     await repo.save(run);
 
     expect(await repo.activeForSandbox(sandbox)).toMatchObject({ id: run.id, pendingAction: { ref: "e7" }, stepCount: 3 });
     expect(await repo.get(run.id, { familyId, userId })).toMatchObject({ entered: [{ field: "name", label: "Введите имя" }], failedActions: { "CLICK:e7": 2 } });
     expect(await repo.get(run.id, { familyId, userId: otherUserId })).toBeNull();
+    expect(await repo.get(run.id, { familyId, userId })).toMatchObject({ activeMillis: 12_345, allowedFields: ["name", "phone"] });
+
+    // Only one confirm leaves awaiting_confirmation; the claimed run stays active and busy.
+    expect(await repo.transition(run.id, "awaiting_confirmation", "confirming")).toBe(true);
+    expect(await repo.transition(run.id, "awaiting_confirmation", "confirming")).toBe(false);
+    expect(await repo.activeForSandbox(sandbox)).toMatchObject({ id: run.id, status: "confirming" });
 
     run.status = "done";
     await repo.save(run);
     expect(await repo.activeForSandbox(sandbox)).toBeNull();
+  });
+
+  it("keeps one form profile per person and adds concurrent fields without losing either", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { familyId, otherUserId, userId } = await fixture(suffix);
+    const profiles = createFormProfileRepository();
+    const owner = { familyId, userId };
+
+    expect(await profiles.get(owner)).toBeNull();
+    await Promise.all([
+      profiles.upsertField(owner, { domains: ["yclients.com"], field: "phone", value: "+79160000000" }),
+      profiles.upsertField(owner, { domains: ["*"], field: "name", value: "Илья" }, async () => ({ email: { domains: ["*"], value: "a@b.ru" } })),
+    ]);
+    const stored = await profiles.get(owner);
+    expect(stored).toMatchObject({ name: { value: "Илья" }, phone: { domains: ["yclients.com"], value: "+79160000000" } });
+
+    await expect(profiles.upsertField(owner, { domains: ["*"], field: "cvc", value: "123" })).rejects.toMatchObject({ code: "AGENT_BROWSER_TASK_PROFILE_INVALID" });
+    expect(await profiles.get({ familyId, userId: otherUserId })).toBeNull();
   });
 });

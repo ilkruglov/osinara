@@ -19,6 +19,8 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
+import type { BrowserTaskApprovalSubject } from "../browser-task/browser-task-approval.js";
+import { loadBrowserTaskApproval } from "../browser-task/browser-task-approval.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -27,6 +29,7 @@ import {
   type TelegramInputRequest,
 } from "../telegram-interface.js";
 import {
+  BROWSER_TASK_CONSEQUENCE,
   GOOGLE_WORKSPACE_CONSEQUENCE,
   SCHEDULE_CONSEQUENCES,
 } from "./approval-consequences.js";
@@ -38,6 +41,7 @@ import {
 } from "./approval-message.js";
 
 interface ApprovalPresentationDependencies {
+  findBrowserTask(runId: string, ctx: Pick<SessionContext, "session">): Promise<BrowserTaskApprovalSubject>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -257,6 +261,31 @@ export function createTelegramApprovalPresenter(
     }
     if (
       request.display === "confirmation" &&
+      request.action.toolName === "browser_task"
+    ) {
+      const runId = request.action.input.runId;
+      if (request.action.input.action !== "confirm" || typeof runId !== "string" || !runId) {
+        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить задачу в браузере для подтверждения");
+      }
+      const subject = await dependencies.findBrowserTask(runId, ctx);
+      return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: `нажать «${subject.button}» на ${subject.site}`,
+          consequence: BROWSER_TASK_CONSEQUENCE,
+          facts: [
+            ...approvalFact("Сайт", subject.site),
+            ...approvalFact("Кнопка", subject.button),
+            ...approvalFact("Страница", subject.url),
+          ],
+          ...(subject.fields.length === 0
+            ? {}
+            : { section: { lines: subject.fields.map((f) => sanitizeApprovalLine(`${f.label}: ${f.value}`)), title: "Данные в форме:" } }),
+        }),
+      };
+    }
+    if (
+      request.display === "confirmation" &&
       request.action.toolName === "execute_google_workspace"
     ) {
       return {
@@ -305,6 +334,7 @@ export function createTelegramApprovalPresenter(
 }
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
+  findBrowserTask: loadBrowserTaskApproval,
   findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });
