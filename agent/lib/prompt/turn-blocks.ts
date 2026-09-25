@@ -39,6 +39,7 @@ import {
 } from "../tool-policy/external-group-policy.js";
 import { scheduledGroupHistoryAccess } from "../agent-schedules/scheduled-group-history-context.js";
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
+import { BROWSER_TASK_AVAILABLE } from "../browser-task/browser-task-availability.js";
 import { modeInstructions } from "./mode-instructions.js";
 
 export interface TurnBlockContext {
@@ -154,7 +155,7 @@ export function createModeBlockResolver(dependencies: {
       }
     }
     if (environment !== "external") {
-      return modeInstructions({ environment, reactionPolicy, scheduledRun });
+      return modeInstructions({ browserTask: BROWSER_TASK_AVAILABLE, environment, reactionPolicy, scheduledRun });
     }
 
     // Channel-authored turns can receive text only. Keep prompt instructions aligned with the

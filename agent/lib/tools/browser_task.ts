@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
 import { AppError, isAppError } from "../app-error.js";
+import { BROWSER_TASK_AVAILABLE } from "../browser-task/browser-task-availability.js";
 import { type BrowserDriver, createSandboxBrowserDriver } from "../browser-task/browser-driver.js";
 import { type LoopOutcome, performPendingAction, runBrowserTaskLoop } from "../browser-task/browser-task-loop.js";
 import { type BrowserTaskRun, browserTaskRunRepository, type NewBrowserTaskRun } from "../browser-task/browser-task-run-repository.js";
@@ -32,7 +33,7 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.js";
 
 const TYPESAFE_API_KEY = process.env.TYPESAFE_API_KEY?.trim() ?? "";
-export const BROWSER_TASK_AVAILABLE = TYPESAFE_API_KEY.length > 0;
+export { BROWSER_TASK_AVAILABLE };
 const PROFILE_PATH = "forms/profile.json";
 const FIELD_NAME = z.string().min(1).max(64);
 

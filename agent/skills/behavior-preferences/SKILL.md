@@ -7,7 +7,7 @@ description: Use when a user asks to persistently change communication style, fo
 Maintain the one persistent communication prompt of the current chat through `manage_behavior_preference`.
 
 - The current verified Telegram chat is always the scope; never supply or ask for IDs or memory scopes.
-- Any active participant may edit the same prompt in that chat.
+- Only family members may edit it; everyone in the chat is bound by it. In an external group a denied write means the owner's family sets these rules: say so once, do not retry.
 - Read the current prompt and revision from `chat_operational_instructions`; use action=get only when that block is unavailable.
 - Use action=append for an independent compatible wish. Use action=replace to edit, deduplicate, resolve conflicts, or remove expired text. Use action=clear only when the user asks to remove every saved wish.
 - Write a short standalone instruction instead of copying the user's message. Preserve all still-applicable wishes when replacing the prompt.

@@ -18,7 +18,7 @@ const CORE_CHARACTER_BUDGET = 12_400;
 // the "after the answer, not instead of it" clause added after the directive-only eval case.
 // Raised by 400 on 10 September 2026: a chat rule is born only by an explicit durable request.
 // Raised by 400 on 13 September 2026 for recurrence periods from a minute to a year (upstream v0.22.0).
-// Raised by 400 on 22 September 2026: browser_task in the web rules.
+// Raised by 400 on 22 September 2026: browser_task routing, measured with the tool offered.
 const PRIVATE_CHARACTER_BUDGET = 13_600;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
@@ -56,8 +56,8 @@ const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_000;
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {
     const core = await readFile("agent/instructions.md", "utf8");
-    const privateMode = modeInstructions({ environment: "private" });
-    const familyMode = modeInstructions({ environment: "family" });
+    const privateMode = modeInstructions({ browserTask: true, environment: "private" });
+    const familyMode = modeInstructions({ browserTask: true, environment: "family" });
     const externalMode = modeInstructions({
       capabilities: new Set(),
       environment: "external",

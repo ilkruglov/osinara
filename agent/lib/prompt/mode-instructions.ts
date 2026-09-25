@@ -43,6 +43,7 @@ import {
   GROUP_TIMELINE_TRUST,
 } from "./group-fragments.js";
 import {
+  BROWSER_TASK_RULES,
   CURRENT_TIME_TOOL_RULES,
   OFFICE_DOCUMENT_RULES,
   PROACTIVE_DELIVERY_RULES,
@@ -58,8 +59,19 @@ import {
 } from "./trusted-fragments.js";
 
 export type ModeInstructionsInput =
-  | { environment: "family"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
-  | { environment: "private"; reactionPolicy?: TelegramReactionPolicy | null; scheduledRun?: boolean }
+  | {
+      /** `browser_task` is on the tool surface; its routing sentence is rendered only then. */
+      browserTask?: boolean;
+      environment: "family";
+      reactionPolicy?: TelegramReactionPolicy | null;
+      scheduledRun?: boolean;
+    }
+  | {
+      browserTask?: boolean;
+      environment: "private";
+      reactionPolicy?: TelegramReactionPolicy | null;
+      scheduledRun?: boolean;
+    }
   | {
       /** Authored skills granted to this group, already filtered against its allowlist. */
       authoredSkills?: readonly { description: string; name: string }[];
@@ -132,9 +144,11 @@ ${CURRENT_TIME_TOOL_RULES}`,
 function privateInstructions(
   scheduledRun: boolean,
   reactionPolicy: TelegramReactionPolicy | null,
+  browserTask: boolean,
 ): string {
   return block([
     ...PRIVATE_INSTRUCTION_SECTIONS,
+    browserTask ? BROWSER_TASK_RULES : null,
     // A scheduled report is not a live exchange: it has no message to react to and never imitates
     // a spontaneous afterthought.
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
@@ -193,9 +207,11 @@ ${CURRENT_TIME_TOOL_RULES}`,
 function familyInstructions(
   scheduledRun: boolean,
   reactionPolicy: TelegramReactionPolicy | null,
+  browserTask: boolean,
 ): string {
   return block([
     ...FAMILY_INSTRUCTION_SECTIONS,
+    browserTask ? BROWSER_TASK_RULES : null,
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : GROUP_ADDRESSING_RULES,
     scheduledRun ? null : GROUP_LENGTH_RULES,
@@ -317,8 +333,12 @@ ${GROUP_TIMELINE_TRUST}`,
 export function modeInstructions(input: ModeInstructionsInput): string {
   const reactionPolicy = input.reactionPolicy ?? null;
   const scheduledRun = input.scheduledRun ?? false;
-  if (input.environment === "private") return privateInstructions(scheduledRun, reactionPolicy);
-  if (input.environment === "family") return familyInstructions(scheduledRun, reactionPolicy);
+  if (input.environment === "private") {
+    return privateInstructions(scheduledRun, reactionPolicy, input.browserTask ?? false);
+  }
+  if (input.environment === "family") {
+    return familyInstructions(scheduledRun, reactionPolicy, input.browserTask ?? false);
+  }
   return externalInstructions(
     input.capabilities,
     reactionPolicy,

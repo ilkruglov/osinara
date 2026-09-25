@@ -75,7 +75,9 @@ describe("EXTERNAL_GROUP_MODEL_POLICY", () => {
   });
 
   it("defines concise ordinary-participant communication without escalation", async () => {
-    expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/несколькими предложениями/iu);
+    // Length has one source in a live exchange, the group ceiling; a second, looser rule here
+    // contradicted it.
+    expect(EXTERNAL_GROUP_MODEL_POLICY).not.toMatch(/несколькими предложениями/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/слегка подстраивай/iu);
     expect(EXTERNAL_GROUP_MODEL_POLICY).toMatch(/не копируй оскорбления и не усиливай конфликт/iu);
     // Natural Russian typography is allowed everywhere; the old ban lived only here.
