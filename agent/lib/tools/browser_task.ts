@@ -58,6 +58,7 @@ export interface BrowserTaskDependencies {
     create(input: NewBrowserTaskRun): Promise<BrowserTaskRun>;
     get(id: string, owner: { familyId: string; userId: string }): Promise<BrowserTaskRun | null>;
     save(run: BrowserTaskRun): Promise<void>;
+    allowField(id: string, field: string): Promise<boolean>;
     transition(id: string, from: BrowserTaskStatus, to: BrowserTaskStatus): Promise<boolean>;
   };
   sandboxSessionId(ctx: ToolContext): string;
@@ -159,12 +160,10 @@ export function createBrowserTaskTool(deps: BrowserTaskDependencies) {
       throw new ModelFacingError({ category: "input", code: error.code, correction: "Такое поле в анкете хранить нельзя; заполнять его тоже нельзя.", reason: error.message, retryable: false, sideEffectStatus: "not_started" });
     }
     const field = input.field.trim();
-    // The person just gave this value for the running task: it is allowed there from now on.
-    if (mine && !mine.allowedFields.includes(field)) {
-      mine.allowedFields = [...mine.allowedFields, field];
-      await deps.runs.save(mine);
-    }
-    return { ...(mine ? { allowedInRun: mine.id } : {}), saved: { domains: stored.domains, field }, status: "saved" };
+    // The person just gave this value for the running task: it is allowed there from now on. One
+    // column, one statement: the run may have moved on since it was read above.
+    const allowed = mine !== null && await deps.runs.allowField(mine.id, field);
+    return { ...(allowed ? { allowedInRun: mine!.id } : {}), saved: { domains: stored.domains, field }, status: "saved" };
   }
 
   return defineTool({

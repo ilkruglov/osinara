@@ -12,8 +12,11 @@
  * - The gate is code first: a transaction word anywhere or a submit word inside a form. Every
  *   other click is put to Jev as a final-step question. Jev's DONE is a guess; the final page has
  *   to carry a success phrase, and words of the goal or entered values never count as one.
- * - A confirmation is bound to the element's role and name and to a hash of the whole page. A
- *   single-page app may re-render the form while the person reads the summary, keeping the URL.
+ * - A confirmation is bound to the element's role and name and to a hash of the whole snapshot:
+ *   headings, prose and field values, not just the action table. A single-page app may re-render
+ *   the form or change "К оплате 100 ₽" into "10 000 ₽" while the person reads the summary.
+ * - What was typed is what the confirmation shows: the value is kept with the entered field, so a
+ *   profile edited after the fill cannot change the window while the browser sends the old value.
  * - Time counts only while the loop runs; the wait for a person is outside the budget, and a
  *   confirmed click always keeps enough budget to check what it did.
  * - Every Jev request carries the turn's abort signal and the remaining budget.
@@ -61,10 +64,10 @@ const keyOf = (operation: string, element: TableElement): string => `${operation
 const hostOf = (url: string): string => { try { return new URL(url).hostname; } catch { return url; } };
 const excerpt = (table: ElementTable): string => renderTable(table).slice(0, EXCERPT_MAX_CHARACTERS);
 
-/** Roles, names and values of every element, without refs: a re-render keeps it, an edit does not. */
+/** The whole snapshot without refs: a re-render with the same content keeps it, any edit does not. */
 export function pageHash(page: BrowserPage): string {
-  const content = page.table.elements.map((e) => `${e.role}\u0000${e.name}\u0000${e.value ?? ""}`).join("\u0001");
-  return createHash("sha256").update(`${page.url}\u0002${content}`).digest("hex");
+  const content = page.content.replace(/\[?ref=e\d+\]?/gu, "").replace(/\s+/gu, " ").trim();
+  return createHash("sha256").update(`${page.url}\u0002${page.title}\u0002${content}`).digest("hex");
 }
 
 interface Budget { elapsed(): number; signal(): AbortSignal; }
@@ -87,12 +90,8 @@ function outcome(run: BrowserTaskRun, page: BrowserPage, summary: string, extra:
   return { evidence: [], page: { title: page.title, url: page.url }, run, summary, ...extra };
 }
 
-function enteredSummary(run: BrowserTaskRun, page: BrowserPage, profile: FormProfile): string {
-  const parts = run.entered.map(({ field, label }) => {
-    const value = resolveFieldValue({ allowedFields: run.allowedFields, domain: hostOf(page.url), extraData: run.extraData, field, profile });
-    return `${label}: ${value ?? "…"}`;
-  });
-  return parts.join(", ");
+function enteredSummary(run: BrowserTaskRun): string {
+  return run.entered.map(({ label, value }) => `${label}: ${value ?? "…"}`).join(", ");
 }
 
 function questionFrom(decision: JevDecision, table: ElementTable): string {
@@ -114,8 +113,7 @@ async function verifyDone(run: BrowserTaskRun, page: BrowserPage, deps: LoopDepe
     run.status = "unverified";
     return outcome(run, page, "Похоже, задача выполнена, но подтверждения на странице не видно", { evidence: [] });
   }
-  const enteredValues = run.entered.map(({ field }) => resolveFieldValue({ allowedFields: run.allowedFields, domain: hostOf(page.url), extraData: run.extraData, field, profile: deps.profile }))
-    .filter((value): value is string => value !== null);
+  const enteredValues = run.entered.map(({ value }) => value).filter((value): value is string => typeof value === "string");
   const details = findEvidence(text, enteredValues).filter((d) => !success.some((s) => s.quote === d.quote));
   const evidence = [...success, ...details].slice(0, 3);
   run.status = "done";
@@ -154,7 +152,7 @@ async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableEleme
         return handOver(run, page, `Нужно значение для поля «${element.name}» на ${hostOf(page.url)}: в анкете его нет или оно не разрешено для этой задачи.`, false);
       }
       await driver.fill(element.ref!, value);
-      run.entered.push({ field: field!, label: element.name });
+      run.entered.push({ field: field!, label: element.name, value });
       return null;
     }
     case "SELECT": {
@@ -165,12 +163,12 @@ async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableEleme
     }
     case "ENTER": await driver.enterFrame(element.ref!); return null;
     case "TEXT": {
-      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element, deps);
+      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element);
       await driver.clickText(element.name);
       return null;
     }
     default: {
-      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element, deps);
+      if (await isFinalStep(run, page, element, deps, budget)) return gate(run, page, element);
       try {
         await driver.click(element.ref!);
       } catch (error) {
@@ -188,10 +186,9 @@ async function actOn(run: BrowserTaskRun, page: BrowserPage, element: TableEleme
   }
 }
 
-function gate(run: BrowserTaskRun, page: BrowserPage, element: TableElement, deps: LoopDependencies): LoopOutcome {
-  const entered = enteredSummary(run, page, deps.profile);
+function gate(run: BrowserTaskRun, page: BrowserPage, element: TableElement): LoopOutcome {
+  const entered = enteredSummary(run);
   const summary = `${element.name} на ${hostOf(page.url)}${entered ? `. Данные: ${entered}` : ""}`;
-  // The summary with values goes to the model only; the row keeps the binding, not the data.
   const pending: PendingAction = { label: element.name, pageHash: pageHash(page), ref: element.ref, role: element.role, url: page.url };
   run.pendingAction = pending;
   run.status = "awaiting_confirmation";

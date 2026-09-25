@@ -16,7 +16,8 @@ import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import { type ElementTable, parseSnapshot } from "./element-table.js";
 
-export interface BrowserPage { table: ElementTable; title: string; url: string; }
+/** `content` is the full snapshot text: headings and prose the element table leaves out. */
+export interface BrowserPage { content: string; table: ElementTable; title: string; url: string; }
 export interface BrowserDriver {
   click(ref: string): Promise<void>;
   clickText(text: string): Promise<void>;
@@ -92,8 +93,10 @@ export function createSandboxBrowserDriver(input: {
     scroll: async (direction) => { await ab("scroll", direction); },
     select: async (ref, value) => { await ab("select", `@${ref}`, value); },
     async snapshot() {
+      const content = await ab("snapshot");
       return {
-        table: parseSnapshot(await ab("snapshot")),
+        content,
+        table: parseSnapshot(content),
         title: (await ab("get", "title")).trim(),
         url: (await ab("get", "url")).trim(),
       };

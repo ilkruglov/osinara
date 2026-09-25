@@ -34,12 +34,12 @@ function context(chat: "family" | "private" = "private"): ToolContext {
 }
 
 const FORM = `- textbox "Введите имя" [ref=e1] value="Илья"\n- button "Записаться" [ref=e3]`;
-function page(snapshot: string, url = "https://x.yclients.com/book"): BrowserPage { return { table: parseSnapshot(snapshot), title: "t", url }; }
+function page(snapshot: string, url = "https://x.yclients.com/book"): BrowserPage { return { content: snapshot, table: parseSnapshot(snapshot), title: "t", url }; }
 function decision(choice: string, confidence = 0.9): JevDecision {
   return { action: { choice, confidence, probabilities: { [choice]: confidence } }, final: null, latencyMs: 1, usage: { inputTokens: 1, outputTokens: 1 } };
 }
 
-function harness(options: { pages?: BrowserPage[]; decisions?: JevDecision[]; active?: BrowserTaskRun | null; stored?: BrowserTaskRun; claim?: boolean; snapshotError?: Error } = {}) {
+function harness(options: { pages?: BrowserPage[]; decisions?: JevDecision[]; active?: BrowserTaskRun | null; stored?: BrowserTaskRun; claim?: boolean; snapshotError?: Error; allowActive?: boolean } = {}) {
   const calls: string[][] = [];
   const pages = options.pages ?? [page(FORM)];
   let index = 0;
@@ -74,6 +74,7 @@ function harness(options: { pages?: BrowserPage[]; decisions?: JevDecision[]; ac
       get: async (id) => options.stored && options.stored.id === id ? options.stored : null,
       save: async (run) => { saved.push({ ...run }); },
       transition: async (_id, from, to) => { calls.push(["transition", from, to]); return options.claim ?? true; },
+      allowField: async (id, field) => { calls.push(["allowField", id, field]); return options.allowActive ?? true; },
     },
     sandboxSessionId: () => "sbx-1",
   };
@@ -155,14 +156,24 @@ describe("browser_task", () => {
 
   it("save_field writes the requester's profile from a family chat and allows the field in their active run", async () => {
     const active = storedRun({ lastUrl: "https://n1.yclients.ru/book", status: "needs_plan" });
-    const { profiles, saved, tool } = harness({ active });
+    const { calls, profiles, saved, tool } = harness({ active });
 
     const out = await tool.execute({ action: "save_field", field: "phone", value: "+79160000000" }, context("family")) as { allowedInRun: string; saved: { field: string; domains: string[] } };
 
     expect(out.saved).toEqual({ domains: ["n1.yclients.ru"], field: "phone" });
     expect(out.allowedInRun).toBe(RUN_ID);
     expect(profiles[0]).toMatchObject({ input: { field: "phone", value: "+79160000000" }, owner: { familyId: "family-1", userId: "user-1" } });
-    expect(saved.at(-1)!.allowedFields).toEqual(["name", "phone"]);
+    // Only the one column changes: a whole-row save from this copy could undo a finished confirm.
+    expect(calls).toContainEqual(["allowField", RUN_ID, "phone"]);
+    expect(saved).toEqual([]);
+  });
+
+  it("save_field does not claim the field for a run that finished meanwhile", async () => {
+    const active = storedRun({ lastUrl: "https://n1.yclients.ru/book", status: "needs_plan" });
+    const { tool } = harness({ active, allowActive: false });
+    const out = await tool.execute({ action: "save_field", field: "phone", value: "+7" }, context()) as Record<string, unknown>;
+    expect(out.allowedInRun).toBeUndefined();
+    expect(out.status).toBe("saved");
   });
 
   it("save_field leaves another member's run alone", async () => {

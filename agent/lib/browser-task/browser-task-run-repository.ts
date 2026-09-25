@@ -4,14 +4,16 @@
  * Exports:
  * - `BrowserTaskRun`, `BrowserTaskStatus`, `StepRecord`, `PendingAction`: the run as the loop sees it.
  * - `createBrowserTaskRunRepository`: create, read by owner, save, claim a status transition,
- *   find the active run of a sandbox.
+ *   allow one more field in an active run, find the active run of a sandbox.
  * - `browserTaskRunRepository`: production repository.
  *
  * Key constructs:
  * - `confirm` and `resume` arrive as separate tool calls, minutes apart and possibly after a
- *   restart, so everything the loop needs to continue lives here. Entered values do not: the
- *   row keeps which fields were filled, never what was typed, and the pending action carries a
- *   hash of the page, not its contents.
+ *   restart, so everything the loop needs to continue lives here. That includes what was typed
+ *   into each field while the run is active: the confirmation window shows exactly that, not the
+ *   profile as it is now. A finished run keeps only which fields were filled.
+ * - `allowed_fields` has one writer, `allowField`, a single conditional UPDATE: a whole-row save
+ *   from a stale copy would otherwise undo a confirm that finished in between.
  * - `confirming` is written, conditionally, before the irreversible click. A crash or a repeated
  *   confirm then finds that state instead of `awaiting_confirmation` and cannot click twice.
  * - `activeMillis` is loop time only: waiting for a person does not count against the budget.
@@ -40,7 +42,7 @@ export interface BrowserTaskRun {
   stepCount: number;
   handoffCount: number;
   history: StepRecord[];
-  entered: Array<{ field: string; label: string }>;
+  entered: EnteredField[];
   pendingAction: PendingAction | null;
   failedActions: Record<string, number>;
   lastSignature: string | null;
@@ -48,6 +50,7 @@ export interface BrowserTaskRun {
   activeMillis: number;
   startedAt: Date;
 }
+export interface EnteredField { field: string; label: string; value?: string; }
 export type NewBrowserTaskRun = Pick<
   BrowserTaskRun,
   "allowedFields" | "extraData" | "familyId" | "goal" | "sandboxSessionId" | "scope" | "startUrl" | "userId"
@@ -57,7 +60,7 @@ interface Row {
   id: string; family_id: string; user_id: string; scope: "family" | "personal"; sandbox_session_id: string;
   goal: string; start_url: string | null; allowed_fields: string[]; extra_data: Record<string, string>;
   hint: string | null; status: BrowserTaskStatus; step_count: number; handoff_count: number;
-  history: StepRecord[]; entered: Array<{ field: string; label: string }>; pending_action: PendingAction | null;
+  history: StepRecord[]; entered: EnteredField[]; pending_action: PendingAction | null;
   failed_actions: Record<string, number>; last_signature: string | null; last_url: string | null; active_millis: number;
   started_at: Date;
 }
@@ -65,6 +68,7 @@ const COLUMNS = `id, family_id, user_id, scope, sandbox_session_id, goal, start_
   status, step_count, handoff_count, history, entered, pending_action, failed_actions, last_signature, last_url,
   active_millis, started_at`;
 const ACTIVE = "('running', 'awaiting_confirmation', 'confirming', 'needs_plan')";
+const ACTIVE_STATUSES: ReadonlySet<BrowserTaskStatus> = new Set(["awaiting_confirmation", "confirming", "needs_plan", "running"]);
 
 function fromRow(row: Row): BrowserTaskRun {
   return {
@@ -103,12 +107,25 @@ export function createBrowserTaskRunRepository() {
         `UPDATE browser_task_runs
             SET hint = $2, status = $3, step_count = $4, handoff_count = $5, history = $6, entered = $7,
                 pending_action = $8, failed_actions = $9, last_signature = $10, last_url = $11,
-                allowed_fields = $12, active_millis = $13, updated_at = now()
+                active_millis = $12, updated_at = now()
           WHERE id = $1`,
         [run.id, run.hint, run.status, run.stepCount, run.handoffCount, JSON.stringify(run.history),
-          JSON.stringify(run.entered), run.pendingAction === null ? null : JSON.stringify(run.pendingAction),
-          JSON.stringify(run.failedActions), run.lastSignature, run.lastUrl, run.allowedFields, Math.round(run.activeMillis)],
+          JSON.stringify(ACTIVE_STATUSES.has(run.status) ? run.entered : run.entered.map(({ field, label }) => ({ field, label }))),
+          run.pendingAction === null ? null : JSON.stringify(run.pendingAction),
+          JSON.stringify(run.failedActions), run.lastSignature, run.lastUrl, Math.round(run.activeMillis)],
       );
+    },
+
+    /** Adds the field to an active run; returns false when the run is not active any more. */
+    async allowField(id: string, field: string): Promise<boolean> {
+      const result = await database().query(
+        `UPDATE browser_task_runs
+            SET allowed_fields = CASE WHEN $2 = ANY(allowed_fields) THEN allowed_fields ELSE array_append(allowed_fields, $2) END,
+                updated_at = now()
+          WHERE id = $1 AND status IN ${ACTIVE}`,
+        [id, field],
+      );
+      return result.rowCount === 1;
     },
 
     /** True only for the one caller that moved the row out of `from`. */

@@ -28,7 +28,7 @@ const HOME = `- link "Записаться" [ref=e1]\n- link "Контакты" 
 const THANKS = `- heading "Вы записаны" [ref=e1]\n- link "На главную" [ref=e2]`;
 
 function page(snapshot: string, url = "https://x.yclients.com/book", title = "Запись"): BrowserPage {
-  return { table: parseSnapshot(snapshot), title, url };
+  return { content: snapshot, table: parseSnapshot(snapshot), title, url };
 }
 
 function scriptedDriver(pages: BrowserPage[], options: { text?: string; clickError?: string } = {}) {
@@ -103,7 +103,7 @@ describe("runBrowserTaskLoop", () => {
     expect(calls).toEqual([["open", "https://x.yclients.com"], ["snapshot"], ["fill", "e1", "Илья"], ["snapshot"], ["fill", "e2", "+79160000000"], ["snapshot"]]);
     // "Записаться" is in the dictionary: no second question to Jev is needed.
     expect(asked.every((a) => !a.final)).toBe(true);
-    expect(outcome.run.entered).toEqual([{ field: "name", label: "Введите имя" }, { field: "phone", label: "Номер телефона" }]);
+    expect(outcome.run.entered).toEqual([{ field: "name", label: "Введите имя", value: "Илья" }, { field: "phone", label: "Номер телефона", value: "+79160000000" }]);
   });
 
   it("asks Jev about a submit-like element the dictionary does not know, inside a form", async () => {
@@ -243,6 +243,11 @@ describe("runBrowserTaskLoop", () => {
 });
 
 describe("performPendingAction", () => {
+  it("binds to a re-render with the same content: new refs keep the hash", async () => {
+    const renumbered = FORM_FILLED.replace(/ref=e(\d)/gu, (_m, n: string) => `ref=e${Number(n) + 40}`);
+    expect(pageHash(page(renumbered))).toBe(pageHash(page(FORM_FILLED)));
+  });
+
   it("clicks exactly the pending element on the same page and continues to done", async () => {
     const { calls, driver } = scriptedDriver([page(FORM_FILLED), page(THANKS)], { text: "Вы записаны, ждём вас" });
     const { jev } = queuedJev([decision("DONE", 0.9)]);
@@ -259,10 +264,12 @@ describe("performPendingAction", () => {
     ["the URL changed", page(FORM_FILLED, "https://x.yclients.com/other")],
     ["the ref now names another button", page(`- textbox "Введите имя" [ref=e1] value="Илья"\n- textbox "Номер телефона" [ref=e2] value="+79160000000"\n- button "Удалить запись" [ref=e3]`)],
     ["the form was re-rendered with other data", page(`- textbox "Введите имя" [ref=e1] value="Пётр"\n- textbox "Номер телефона" [ref=e2] value="+79160000000"\n- button "Записаться" [ref=e3]`)],
+    ["only prose outside the action table changed", page(`- heading "К оплате 10 000 ₽"\n${FORM_FILLED}`)],
   ])("refuses without a click when %s", async (_case, now) => {
     const { calls, driver } = scriptedDriver([now]);
     const { jev } = queuedJev([]);
-    const pending = run({ pendingAction: pendingOn(page(FORM_FILLED)), startUrl: null, status: "confirming" });
+    const shown = _case === "only prose outside the action table changed" ? page(`- heading "К оплате 100 ₽"\n${FORM_FILLED}`) : page(FORM_FILLED);
+    const pending = run({ pendingAction: pendingOn(shown), startUrl: null, status: "confirming" });
 
     const outcome = await performPendingAction(pending, deps(driver, jev));
 

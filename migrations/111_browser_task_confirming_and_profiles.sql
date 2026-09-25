@@ -19,3 +19,7 @@ CREATE TABLE IF NOT EXISTS browser_form_profiles (
   fields jsonb NOT NULL DEFAULT '{}'::jsonb,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- v1.2.1 kept the profile as a file in the personal workspace, which only the private chat can
+-- read. False until that file was looked at, so a first field saved from the family group does
+-- not hide the older fields forever.
+ALTER TABLE browser_form_profiles ADD COLUMN IF NOT EXISTS legacy_imported boolean NOT NULL DEFAULT false;

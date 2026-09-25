@@ -4,9 +4,11 @@
  * Constructs covered:
  * - A run is created running, progress is saved and read back, the active run of a sandbox is found.
  * - Another user of the family cannot read the run; a finished run is no longer active.
- * - A confirm is claimed once; the claimed run stays active.
+ * - A confirm is claimed once; the claimed run stays active. allowField touches one column of an
+ *   active run only. A finished run forgets typed values.
  * - The form profile belongs to one person: fields add up under concurrent writes, a card field is
- *   refused, another member reads nothing.
+ *   refused, another member reads nothing, a removed member reads and writes nothing, and the old
+ *   profile file is folded in once without overwriting newer fields.
  */
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -59,16 +61,17 @@ describeWithDatabase("browserTaskRunRepository", () => {
 
     run.stepCount = 3;
     run.history = [{ action: "CLICK [1]", confidence: 0.9, url: "https://b-frant.ru/" }];
-    run.entered = [{ field: "name", label: "Введите имя" }];
+    run.entered = [{ field: "name", label: "Введите имя", value: "Иван" }];
     run.failedActions = { "CLICK:e7": 2 };
     run.status = "awaiting_confirmation";
     run.pendingAction = { label: "Записаться", pageHash: "h", ref: "e7", role: "button", url: "https://b-frant.ru/book" };
-    run.allowedFields = ["name", "phone"];
     run.activeMillis = 12_345;
     await repo.save(run);
+    expect(await repo.allowField(run.id, "phone")).toBe(true);
+    expect(await repo.allowField(run.id, "phone")).toBe(true);
 
     expect(await repo.activeForSandbox(sandbox)).toMatchObject({ id: run.id, pendingAction: { ref: "e7" }, stepCount: 3 });
-    expect(await repo.get(run.id, { familyId, userId })).toMatchObject({ entered: [{ field: "name", label: "Введите имя" }], failedActions: { "CLICK:e7": 2 } });
+    expect(await repo.get(run.id, { familyId, userId })).toMatchObject({ entered: [{ field: "name", label: "Введите имя", value: "Иван" }], failedActions: { "CLICK:e7": 2 } });
     expect(await repo.get(run.id, { familyId, userId: otherUserId })).toBeNull();
     expect(await repo.get(run.id, { familyId, userId })).toMatchObject({ activeMillis: 12_345, allowedFields: ["name", "phone"] });
 
@@ -80,6 +83,8 @@ describeWithDatabase("browserTaskRunRepository", () => {
     run.status = "done";
     await repo.save(run);
     expect(await repo.activeForSandbox(sandbox)).toBeNull();
+    expect(await repo.allowField(run.id, "email")).toBe(false);
+    expect((await repo.get(run.id, { familyId, userId }))!.entered).toEqual([{ field: "name", label: "Введите имя" }]);
   });
 
   it("keeps one form profile per person and adds concurrent fields without losing either", async () => {
@@ -91,12 +96,36 @@ describeWithDatabase("browserTaskRunRepository", () => {
     expect(await profiles.get(owner)).toBeNull();
     await Promise.all([
       profiles.upsertField(owner, { domains: ["yclients.com"], field: "phone", value: "+79160000000" }),
-      profiles.upsertField(owner, { domains: ["*"], field: "name", value: "Илья" }, async () => ({ email: { domains: ["*"], value: "a@b.ru" } })),
+      profiles.upsertField(owner, { domains: ["*"], field: "name", value: "Илья" }),
     ]);
-    const stored = await profiles.get(owner);
-    expect(stored).toMatchObject({ name: { value: "Илья" }, phone: { domains: ["yclients.com"], value: "+79160000000" } });
+    expect((await profiles.get(owner))!.fields).toMatchObject({ name: { value: "Илья" }, phone: { domains: ["yclients.com"], value: "+79160000000" } });
 
     await expect(profiles.upsertField(owner, { domains: ["*"], field: "cvc", value: "123" })).rejects.toMatchObject({ code: "AGENT_BROWSER_TASK_PROFILE_INVALID" });
     expect(await profiles.get({ familyId, userId: otherUserId })).toBeNull();
+
+    // A membership removed after the session started closes the profile for reads and writes.
+    await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [familyId, userId]);
+    await expect(profiles.get(owner)).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
+    await expect(profiles.upsertField(owner, { domains: ["*"], field: "email", value: "a@b.ru" })).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
+  });
+
+  it("folds the old profile file in once, after a first field was saved where the file was unreadable", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { familyId, userId } = await fixture(suffix);
+    const profiles = createFormProfileRepository();
+    const owner = { familyId, userId };
+
+    // Saved from the family group: the old file could not be looked at.
+    await profiles.upsertField(owner, { domains: ["dikidi.net"], field: "phone", value: "+7222" }, null);
+    expect(await profiles.get(owner)).toMatchObject({ legacyImported: false });
+
+    const legacy = { email: { domains: ["*"], value: "old@b.ru" }, phone: { domains: ["*"], value: "+7111" } };
+    const merged = await profiles.importLegacy(owner, legacy);
+    expect(merged).toEqual({ email: { domains: ["*"], value: "old@b.ru" }, phone: { domains: ["dikidi.net"], value: "+7222" } });
+    expect(await profiles.get(owner)).toMatchObject({ legacyImported: true });
+
+    // Once folded, the file is never read into the row again.
+    await profiles.importLegacy(owner, { email: { domains: ["*"], value: "other@b.ru" } });
+    expect((await profiles.get(owner))!.fields.email!.value).toBe("old@b.ru");
   });
 });
