@@ -25,13 +25,14 @@ const elementSchema = z.object({
 const viewSchema = z.object({
   elements: z.array(z.unknown()),
   epoch: z.string().min(1).max(64),
+  stateHash: z.number().int().default(0),
   textHash: z.number().int().default(0),
-  title: z.string().max(200).default(""),
+  title: z.string().default("").transform((t) => t.slice(0, 200)),
   url: z.string().min(1).max(2_048),
 });
 
 export type PageElement = z.infer<typeof elementSchema>;
-export interface PageView { elements: PageElement[]; epoch: string; textHash: number; title: string; url: string; }
+export interface PageView { elements: PageElement[]; epoch: string; stateHash: number; textHash: number; title: string; url: string; }
 
 export function parsePageView(json: string): PageView {
   let raw: unknown;
@@ -46,7 +47,7 @@ export function parsePageView(json: string): PageView {
     const element = elementSchema.safeParse(row);
     return element.success ? [element.data] : [];
   });
-  return { elements, epoch: parsed.data.epoch, textHash: parsed.data.textHash, title: parsed.data.title, url: parsed.data.url };
+  return { elements, epoch: parsed.data.epoch, stateHash: parsed.data.stateHash, textHash: parsed.data.textHash, title: parsed.data.title, url: parsed.data.url };
 }
 
 export function renderElements(view: PageView): string {

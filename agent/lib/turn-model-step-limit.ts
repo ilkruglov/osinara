@@ -3,6 +3,8 @@
  *
  * Exports:
  * - `resolveTurnModelStepLimitSelection`: returns a blocking model at or beyond the limit.
+ * - `readModelStepIndex`: the step index of a `step.started` event, `null` when malformed, for
+ *   surfaces that budget steps where Eve allows no dynamic model (declared subagents).
  *
  * Key constructs:
  * - Strict `step.started` validation prevents malformed runtime state from bypassing the guard.
@@ -32,7 +34,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function readStepIndex(event: unknown): number | null {
+export function readModelStepIndex(event: unknown): number | null {
   if (!isRecord(event) || event.type !== "step.started" || !isRecord(event.data)) return null;
   const stepIndex = event.data.stepIndex;
   return typeof stepIndex === "number" && Number.isSafeInteger(stepIndex) && stepIndex >= 0
@@ -75,7 +77,7 @@ export function resolveTurnModelStepLimitSelection({
   model,
   modelContextWindowTokens,
 }: TurnModelStepLimitInput): TurnModelStepLimitSelection | null {
-  const stepIndex = readStepIndex(event);
+  const stepIndex = readModelStepIndex(event);
   const validLimit = Number.isSafeInteger(maxModelSteps) && maxModelSteps > 0;
 
   // Invalid runtime coordinates must never disable a production safety boundary.

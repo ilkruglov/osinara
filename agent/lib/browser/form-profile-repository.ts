@@ -92,6 +92,12 @@ async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promi
 
 export function createFormProfileRepository() {
   return {
+    /** The access check alone, for callers that touch the browser without reading the profile. */
+    async requireAccess(owner: FormProfileOwner): Promise<void> {
+      const result = await database().query<{ allowed: boolean }>(`SELECT ${ACCESS} AS allowed`, accessParams(owner));
+      if (!result.rows[0]?.allowed) throw revoked();
+    },
+
     /** `null` when the person has no row yet; throws when the membership is gone. */
     async get(owner: FormProfileOwner): Promise<{ fields: FormProfile; legacyImported: boolean } | null> {
       const result = await database().query<{ allowed: boolean; fields: FormProfile | null; legacy_imported: boolean | null }>(
@@ -155,6 +161,11 @@ async function readLegacyProfile(auth: WorkspaceAuthorization): Promise<LegacyPr
     if (error.code === "AGENT_WORKSPACE_ACCESS_DENIED") return null;
     throw error;
   }
+}
+
+/** Throws `AGENT_WORKSPACE_ACCESS_REVOKED` unless the membership and group are current. */
+export async function requireFormProfileAccess(owner: FormProfileOwner): Promise<void> {
+  await formProfileRepository.requireAccess(owner);
 }
 
 export async function loadFormProfile(auth: WorkspaceAuthorization, owner: FormProfileOwner): Promise<FormProfile> {

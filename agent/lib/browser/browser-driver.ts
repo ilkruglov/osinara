@@ -21,7 +21,6 @@ export interface BrowserDriver {
   eval(script: string): Promise<string>;
   open(url: string): Promise<void>;
   press(key: string): Promise<void>;
-  readText(): Promise<string>;
   screenshot(path: string): Promise<void>;
   scroll(direction: "down" | "up"): Promise<void>;
   settle(): Promise<void>;
@@ -71,11 +70,13 @@ export function createSandboxBrowserDriver(input: {
     // the fixed ones from som-script.ts, never model text.
     eval: async (script) => unquote(await ab("eval", script)),
     open: async (url) => {
-      // A slow page times out the CLI's own load wait; the page is usually there anyway.
-      try { await ab("open", url); } catch { /* looked at after settle */ }
+      // A slow page times out the CLI's own load wait; the page is usually there anyway. Any other
+      // failure (no daemon, no runner) is reported: the old tab must not pass for the new address.
+      try { await ab("open", url); } catch (error) {
+        if (!(error instanceof ModelFacingError && /time(d )?out/iu.test(error.message))) throw error;
+      }
     },
     press: async (key) => { await ab("press", key); },
-    readText: async () => await ab("get", "text", "body"),
     screenshot: async (path) => { await ab("screenshot", path); },
     scroll: async (direction) => { await ab("scroll", direction); },
     settle: async () => {

@@ -54,6 +54,7 @@ describeWithDatabase("formProfileRepository", () => {
 
     await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [familyId, userId]);
     await expect(profiles.get(owner)).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
+    await expect(profiles.requireAccess(owner)).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
     await expect(profiles.upsertField(owner, { domains: ["*"], field: "email", value: "a@b.ru" })).rejects.toMatchObject({ code: "AGENT_WORKSPACE_ACCESS_REVOKED" });
   });
 

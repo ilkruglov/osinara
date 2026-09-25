@@ -41,8 +41,8 @@ describe("createSandboxBrowserDriver", () => {
   });
 
   it("turns a failed command into a model-facing error without the query string", async () => {
-    const r = runner({ "get text": { fail: "✗ Timeout at https://x.ru/book?token=SECRET more" } });
-    await expect(createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).readText()).rejects.toMatchObject({
+    const r = runner({ "get url": { fail: "✗ Timeout at https://x.ru/book?token=SECRET more" } });
+    await expect(createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).url()).rejects.toMatchObject({
       code: "AGENT_BROWSER_FAILED",
       contract: { reason: expect.not.stringContaining("SECRET") },
     });
@@ -54,5 +54,10 @@ describe("createSandboxBrowserDriver", () => {
     await expect(driver.open("https://x.ru/")).resolves.toBeUndefined();
     await expect(driver.settle()).resolves.toBeUndefined();
     expect(r.run.mock.calls.map((c) => c[1].command)).toEqual(expect.arrayContaining([expect.stringContaining("wait '400'")]));
+  });
+
+  it("reports an open that failed before navigating", async () => {
+    const r = runner({ open: { fail: "✗ CDP WebSocket connect failed" } });
+    await expect(createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).open("https://x.ru/")).rejects.toMatchObject({ code: "AGENT_BROWSER_FAILED" });
   });
 });

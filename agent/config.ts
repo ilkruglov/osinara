@@ -18,6 +18,10 @@ export const AGENT_COMPACTION_THRESHOLD = 0.75;
 export const AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS = 160_000;
 // The model may perform substantial tool work, but one turn must never consume unbounded calls.
 export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
+/** The browser worker: a look and an act are two steps, so this is about 30 actions on a site. */
+export const BROWSER_WORKER_MAX_MODEL_STEPS = 60;
+/** Terminal token budget of one worker session: about 60 steps of a 20k-token prompt. */
+export const BROWSER_WORKER_MAX_INPUT_TOKENS_PER_SESSION = 1_500_000;
 export const GROQ_TRANSCRIPTION_TIMEOUT_MS = 60_000;
 export const GOOGLE_WORKSPACE_PROFILE_LOCK_HASH_SEED = 2;
 export const GOOGLE_WORKSPACE_COMMAND_TIMEOUT_MS = 60_000;

@@ -13,7 +13,20 @@
  * - The gate (`gate.ts`) runs inside `browser_act` before anything happens: a gated click is not
  *   performed but parked as the pending click, and `browser_confirm` performs exactly that click
  *   under user approval, after checking that the page did not change since the look.
- * - Fills from the form profile put the value into the page without ever returning it.
+ * - Fills from the form profile put the value into the page without ever returning it. Every fill
+ *   except into a search box counts as entered data for the gate, whatever the source; the value
+ *   is kept for the confirmation window and never returned to the model.
+ * - Only navigation keys are pressed (Escape, Tab, arrows, paging, Backspace, Delete): an Enter,
+ *   alone or in a chord, would submit a form past the gate.
+ * - Every call re-checks the membership in PostgreSQL before touching the browser: a session
+ *   whose membership was revoked mid-turn keeps no access to the logged-in browser.
+ * - The silent memory review is refused here, not by a same-name denial: Eve 0.40.0 throws when a
+ *   dynamic tool carries the name of the declared `browser_worker` subagent.
+ * - One call at a time per sandbox: Eve runs parallel tool calls concurrently, and a `fill` that
+ *   lands between the check and the click of `browser_confirm` would submit unconfirmed data.
+ * - A look belongs to the person who made it: in a family group the sandbox is shared, and a
+ *   member acting on, confirming or reading another member's look is refused; their own look
+ *   starts fresh, without the other's typed data.
  * - Every tool call is one Chromium of the zone; the child agent and the root share it.
  */
 import { defineTool, type ToolContext } from "eve/tools";
@@ -26,10 +39,11 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import { type FormProfile, type ProfileField, resolveFieldValue, upsertProfileField } from "./form-profile.js";
 import type { FormProfileOwner } from "./form-profile-repository.js";
 import type { BrowserDriver } from "./browser-driver.js";
-import { type ActAction, type EnteredField, gateDecision } from "./gate.js";
+import { isMemoryReviewSession } from "../memory-review/memory-review-session.js";
+import { type ActAction, type EnteredField, gateDecision, isSearchField } from "./gate.js";
 import type { BrowserLook, PendingClick, VisionView } from "./look-repository.js";
 import { type PageView, parsePageView, renderElements, viewHash } from "./page-view.js";
-import { actScript, clearScript, markScript, type SomAction, textHashScript } from "./som-script.js";
+import { actScript, clearScript, markScript, readTextScript, type SomAction, stateHashScript, textHashScript } from "./som-script.js";
 
 export type WorkspaceScope = "family" | "personal";
 
@@ -37,24 +51,28 @@ export interface BrowserToolDependencies {
   approvalEvidence(ctx: ToolContext, input: unknown): Promise<void>;
   driver(ctx: ToolContext, sandbox: string): BrowserDriver;
   loadProfile(auth: WorkspaceAuthorization, owner: FormProfileOwner): Promise<FormProfile>;
+  /** Throws when the membership (and the family group, when any) is not current. */
+  requireAccess(owner: FormProfileOwner): Promise<void>;
   log(event: Record<string, unknown>): void;
   looks: {
     addEntered(sandbox: string, familyId: string, entry: EnteredField): Promise<void>;
+    claimPending(sandbox: string, familyId: string, epoch: string, n: number): Promise<boolean>;
     get(sandbox: string, familyId: string): Promise<BrowserLook | null>;
     reset(sandbox: string, familyId: string): Promise<void>;
-    saveLook(input: { familyId: string; sandboxSessionId: string; screenshotPath: string | null; view: PageView; viewHash: string; vision: VisionView | null }): Promise<BrowserLook>;
+    saveLook(input: { familyId: string; sandboxSessionId: string; screenshotPath: string | null; userId: string; view: PageView; viewHash: string; vision: VisionView | null }): Promise<BrowserLook>;
     setPending(sandbox: string, familyId: string, pending: PendingClick | null): Promise<void>;
   };
   now(): number;
   sandboxSessionId(ctx: ToolContext): string;
   saveProfileField(auth: WorkspaceAuthorization, owner: FormProfileOwner, input: { domains: readonly string[]; field: string; value: string }): Promise<ProfileField>;
   /** Describes the screenshot at `path` of `scope`; `null` when the model has no image input. */
-  vision(auth: WorkspaceAuthorization, scope: WorkspaceScope, path: string, question: string): Promise<string | null>;
+  vision(auth: WorkspaceAuthorization, scope: WorkspaceScope, path: string, question: string, signal: AbortSignal): Promise<string | null>;
 }
 
 /** Where a booking flow never leads: messengers, app stores, downloads. The loop wandered there. */
 export const BLOCKED_HOSTS: readonly string[] = ["t.me", "telegram.me", "telegram.org", "wa.me", "api.whatsapp.com", "apps.apple.com", "play.google.com", "vk.me"];
 const READ_MAX_CHARACTERS = 20_000;
+const SAFE_KEYS = new Set(["escape", "tab", "arrowup", "arrowdown", "arrowleft", "arrowright", "pageup", "pagedown", "home", "end", "backspace", "delete"]);
 const FIELD_NAME = z.string().min(1).max(64);
 const VISION_QUESTION = "Это скриншот страницы в браузере с красными номерками у элементов. Ответь строго JSON без пояснений: "
   + '{"screen":"какой это экран, одной фразой","selected":["что на экране выбрано или отмечено"],"blockers":["что мешает продолжить: модалка, cookies, капча, форма входа, ошибка"],"note":"что ещё важно для задачи, одной фразой или пусто"}';
@@ -123,15 +141,33 @@ const actionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("back") }).strict(),
 ]);
 
+/** Per-sandbox serialization of the browser calls of this process. */
+const sandboxQueues = new Map<string, Promise<unknown>>();
+async function serialized<T>(sandbox: string, work: () => Promise<T>): Promise<T> {
+  const previous = sandboxQueues.get(sandbox) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(work);
+  sandboxQueues.set(sandbox, run);
+  try {
+    return await run;
+  } finally {
+    if (sandboxQueues.get(sandbox) === run) sandboxQueues.delete(sandbox);
+  }
+}
+
 export function createBrowserTools(deps: BrowserToolDependencies) {
+  // The queue key never decides access: an unresolvable session shares one queue and fails in bind.
+  const sandboxKey = (ctx: ToolContext): string => { try { return deps.sandboxSessionId(ctx); } catch { return ""; } };
   interface Bound { auth: WorkspaceAuthorization; ctx: ToolContext; driver: BrowserDriver; owner: FormProfileOwner; sandbox: string; scope: WorkspaceScope; }
 
-  function bind(ctx: ToolContext): Bound {
+  async function bind(ctx: ToolContext): Promise<Bound> {
     const auth = requireWorkspaceAuthorization(ctx);
     if (auth.userId === null || auth.role === "external") throw forbidden("Браузер доступен только участникам семьи");
     if (auth.telegramChatType !== "private" && auth.groupType !== "family_private") throw forbidden("Браузер доступен только в личном чате и семейной группе");
+    if (isMemoryReviewSession(ctx)) throw forbidden("Браузер недоступен в тихой проверке памяти");
+    const owner = { familyId: auth.familyId, groupId: auth.groupId, userId: auth.userId };
+    await deps.requireAccess(owner);
     const sandbox = deps.sandboxSessionId(ctx);
-    return { auth, ctx, driver: deps.driver(ctx, sandbox), owner: { familyId: auth.familyId, groupId: auth.groupId, userId: auth.userId }, sandbox, scope: scopeOf(auth) };
+    return { auth, ctx, driver: deps.driver(ctx, sandbox), owner, sandbox, scope: scopeOf(auth) };
   }
 
   let counter = 0;
@@ -150,12 +186,14 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     let vision: VisionView | null = null;
     if (screenshotPath !== null) {
       try {
-        vision = parseVision(await deps.vision(b.auth, b.scope, screenshotPath, question === undefined ? VISION_QUESTION : `${VISION_QUESTION}\nДополнительно ответь в note: ${question}`));
+        vision = parseVision(await deps.vision(b.auth, b.scope, screenshotPath, question === undefined ? VISION_QUESTION : `${VISION_QUESTION}\nДополнительно ответь в note: ${question}`, b.ctx.abortSignal));
       } catch (error) {
         deps.log({ code: "AGENT_BROWSER_VISION_FAILED", reason: error instanceof Error ? error.message.slice(0, 200) : String(error) });
       }
     }
-    const saved = await deps.looks.saveLook({ familyId: b.auth.familyId, sandboxSessionId: b.sandbox, screenshotPath, view, viewHash: viewHash(view), vision });
+    // A cancelled turn keeps no look: the next turn starts from what it sees, not from this one.
+    b.ctx.abortSignal.throwIfAborted();
+    const saved = await deps.looks.saveLook({ familyId: b.auth.familyId, sandboxSessionId: b.sandbox, screenshotPath, userId: b.owner.userId, view, viewHash: viewHash(view), vision });
     deps.log({ code: "AGENT_BROWSER_LOOK", elements: view.elements.length, epoch, host: hostOf(view.url), steps: saved.steps, vision: vision !== null });
     return present(saved, view);
   }
@@ -163,8 +201,9 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
   async function currentLook(b: Bound, epoch: string): Promise<{ look: BrowserLook; view: PageView }> {
     const look = await deps.looks.get(b.sandbox, b.auth.familyId);
     if (!look) throw stale("Страница ещё не просмотрена");
+    if (look.userId !== b.owner.userId) throw forbidden("Этот просмотр сделал другой участник: посмотрите страницу сами через browser_look");
     if (look.epoch !== epoch) throw stale(`Номера эпохи ${epoch} устарели, текущая ${look.epoch}`);
-    return { look, view: { elements: look.elements, epoch: look.epoch, textHash: look.textHash, title: look.title, url: look.url } };
+    return { look, view: { elements: look.elements, epoch: look.epoch, stateHash: look.stateHash, textHash: look.textHash, title: look.title, url: look.url } };
   }
 
   async function runScript(b: Bound, script: string): Promise<{ ok: true; src?: string } | { ok: false; reason: string }> {
@@ -176,12 +215,21 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     }
   }
 
-  async function changedSince(b: Bound, look: BrowserLook): Promise<{ changed: boolean; url: string }> {
-    await b.driver.settle();
+  /** The address or the visible text moved on since the look: a re-used button may mean something else now. */
+  async function textChangedSince(b: Bound, look: BrowserLook): Promise<{ changed: boolean; url: string }> {
     const url = await b.driver.url();
     if (url !== look.url) return { changed: true, url };
-    const hash = Number(await b.driver.eval(textHashScript()));
-    return { changed: Number.isFinite(hash) && hash !== look.textHash, url };
+    const text = Number(await b.driver.eval(textHashScript()));
+    return { changed: Number.isFinite(text) && text !== look.textHash, url };
+  }
+
+  /** Changed: the address, the visible text, or a value or state of a numbered element or field. */
+  async function changedSince(b: Bound, look: BrowserLook, options: { settle: boolean } = { settle: true }): Promise<{ changed: boolean; url: string }> {
+    if (options.settle) await b.driver.settle();
+    const text = await textChangedSince(b, look);
+    if (text.changed) return text;
+    const state = await b.driver.eval(stateHashScript());
+    return { changed: state === "none" || Number(state) !== look.stateHash, url: text.url };
   }
 
   async function performClick(b: Bound, look: BrowserLook, n: number) {
@@ -197,11 +245,18 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     ].join(" "),
     inputSchema: z.object({ url: z.string().url().max(2_048) }).strict(),
     async execute(input, ctx) {
-      const b = bind(ctx);
-      if (!/^https?:$/u.test(new URL(input.url).protocol) || blockedHost(input.url)) throw forbidden(`Адрес ${hostOf(input.url)} для задач в браузере не открывается`);
-      await b.driver.open(input.url);
-      await b.driver.settle();
-      return await look(b);
+      return await serialized(sandboxKey(ctx), async () => {
+        const b = await bind(ctx);
+        if (!/^https?:$/u.test(new URL(input.url).protocol) || blockedHost(input.url)) throw forbidden(`Адрес ${hostOf(input.url)} для задач в браузере не открывается`);
+        await b.driver.open(input.url);
+        await b.driver.settle();
+        const first = await look(b);
+        if (first.elements.length > 0) return first;
+        // A slow page: nothing to act on yet. One more wait, one more look.
+        await b.driver.settle();
+        await b.driver.settle();
+        return await look(b);
+      });
     },
   });
 
@@ -213,69 +268,92 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     ].join(" "),
     inputSchema: z.object({ question: z.string().min(1).max(300).optional() }).strict(),
     async execute(input, ctx) {
-      return await look(bind(ctx), input.question);
+      return await serialized(sandboxKey(ctx), async () => await look(await bind(ctx), input.question));
     },
   });
 
   const act = defineTool({
     description: [
-      "Одно действие на странице по номеру из последнего browser_look: click, fill (text или field анкеты: phone, name, email, surname), select option, enter во встроенный виджет (элемент frame), press key, scroll down|up, back.",
+      "Одно действие на странице по номеру из последнего browser_look: click, fill (text или field анкеты: phone, name, email, surname), select option, enter во встроенный виджет (элемент frame), press key (только Escape, Tab, стрелки, PageUp/PageDown, Home/End, Backspace, Delete; Enter не нажимается, кнопки только через click), scroll down|up, back.",
       "Ответ: changed=true, если адрес или текст страницы изменились; иначе действие не подействовало, не повторяй его подряд больше одного раза.",
       "Кнопки отправки, оплаты, удаления и любой клик после ввода данных анкеты инструмент не выполняет, а возвращает status=confirmation_required со скриншотом: покажи человеку скриншот и сводку, после согласия вызови browser_confirm.",
       "AGENT_BROWSER_STALE значит, что страница перестроилась: вызови browser_look и выбери номер заново.",
     ].join(" "),
     inputSchema: z.object({ action: actionSchema, epoch: z.string().min(1).max(64) }).strict(),
     async execute(input, ctx) {
-      const b = bind(ctx);
-      const { look: last, view } = await currentLook(b, input.epoch);
-      const action = input.action;
-      const n = "n" in action ? action.n : null;
-      const element = n === null ? null : view.elements.find((e) => e.n === n) ?? null;
-      if (n !== null && element === null) throw stale(`Номера ${n} нет в текущем просмотре`);
+      return await serialized(sandboxKey(ctx), async () => {
+        const b = await bind(ctx);
+        const { look: last, view } = await currentLook(b, input.epoch);
+        const action = input.action;
+        const n = "n" in action ? action.n : null;
+        const element = n === null ? null : view.elements.find((e) => e.n === n) ?? null;
+        if (n !== null && element === null) throw stale(`Номера ${n} нет в текущем просмотре`);
+        // Before touching a numbered element: the page the gate classifies must be the page shown. A
+        // click checks values and labels too (a re-labelled button); a fill only the text, since
+        // the previous fill changed the state itself.
+        if (n !== null) {
+          const moved = action.kind === "click" || action.kind === "enter" ? await changedSince(b, last, { settle: false }) : await textChangedSince(b, last);
+          if (moved.changed) throw stale("Страница изменилась после просмотра");
+        }
 
-      const gate = gateDecision({ action: action as ActAction, entered: last.entered, n, view });
-      if (gate.gated && element !== null && n !== null) {
-        const pending: PendingClick = { element, epoch: last.epoch, n, reason: gate.reason! };
-        await deps.looks.setPending(b.sandbox, b.auth.familyId, pending);
-        deps.log({ code: "AGENT_BROWSER_GATED", element: element.text, host: hostOf(last.url), reason: gate.reason });
-        return {
-          element: `${element.role} ${element.text}`, entered: last.entered.map((e) => e.label), epoch: last.epoch, n, reason: gate.reason,
-          ...(last.screenshotPath === null ? {} : { screenshot: last.screenshotPath }), status: "confirmation_required", url: last.url,
-        };
-      }
+        if (last.pending?.claimed) {
+          throw new ModelFacingError({
+            category: "operation", code: "AGENT_BROWSER_CONFIRM_AMBIGUOUS", correction: "Сначала browser_look, чтобы увидеть, что стало со страницей, и спросите человека, прежде чем нажимать снова.",
+            reason: `Нажатие «${last.pending.element.text}» уже выполнялось, и его исход не подтверждён`, retryable: false, sideEffectStatus: "unknown",
+          });
+        }
+        const gate = gateDecision({ action: action as ActAction, entered: last.entered, n, view });
+        if (gate.gated && element !== null && n !== null) {
+          const pending: PendingClick = { element, epoch: last.epoch, n, reason: gate.reason! };
+          await deps.looks.setPending(b.sandbox, b.auth.familyId, pending);
+          deps.log({ code: "AGENT_BROWSER_GATED", element: element.text, host: hostOf(last.url), reason: gate.reason });
+          return {
+            element: `${element.role} ${element.text}`, entered: last.entered.map((e) => e.label), epoch: last.epoch, n, reason: gate.reason,
+            ...(last.screenshotPath === null ? {} : { screenshot: last.screenshotPath }), status: "confirmation_required", url: last.url,
+          };
+        }
 
-      switch (action.kind) {
-        case "click": return { ...await performClick(b, last, action.n), status: "done" };
-        case "fill": {
-          let text = action.text ?? null;
-          if (action.field !== undefined) {
-            const profile = await deps.loadProfile(b.auth, b.owner);
-            text = resolveFieldValue({ allowedFields: [action.field], domain: hostOf(last.url), extraData: {}, field: action.field, profile });
-            if (text === null) {
-              return { field: action.field, status: "field_missing", summary: `В анкете нет поля ${action.field} для сайта ${hostOf(last.url)}: спроси человека и сохрани через browser_session save_field` };
+        switch (action.kind) {
+          case "click": return { ...await performClick(b, last, action.n), status: "done" };
+          case "fill": {
+            let text = action.text ?? null;
+            if (action.field !== undefined) {
+              const profile = await deps.loadProfile(b.auth, b.owner);
+              text = resolveFieldValue({ allowedFields: [action.field], domain: hostOf(last.url), extraData: {}, field: action.field, profile });
+              if (text === null) {
+                return { field: action.field, status: "field_missing", summary: `В анкете нет поля ${action.field} для сайта ${hostOf(last.url)}: спроси человека и сохрани через browser_session save_field` };
+              }
             }
+            const result = await runScript(b, actScript(last.epoch, action.n, { kind: "fill", text: text! }));
+            if (!result.ok && result.reason === "password") throw forbidden("Пароли не вводятся: попросите человека войти на сайт самому");
+            if (!result.ok) throw stale(result.reason === "stale" ? "Страница перестроилась после просмотра" : `Поле ${action.n}: ${result.reason}`);
+            // Typed data counts as much as data from the profile; a search box is not a form.
+            if (!isSearchField(element!)) {
+              await deps.looks.addEntered(b.sandbox, b.auth.familyId, { epoch: last.epoch, field: action.field ?? "text", label: element!.text, n: action.n, value: text! });
+            }
+            return { ...await changedSince(b, last), status: "done" };
           }
-          const result = await runScript(b, actScript(last.epoch, action.n, { kind: "fill", text: text! }));
-          if (!result.ok) throw stale(result.reason === "stale" ? "Страница перестроилась после просмотра" : `Поле ${action.n}: ${result.reason}`);
-          if (action.field !== undefined) await deps.looks.addEntered(b.sandbox, b.auth.familyId, { field: action.field, label: element!.text, n: action.n });
-          return { ...await changedSince(b, last), status: "done" };
+          case "select": {
+            const result = await runScript(b, actScript(last.epoch, action.n, { kind: "select", option: action.option } satisfies SomAction));
+            if (!result.ok) throw stale(result.reason === "stale" ? "Страница перестроилась после просмотра" : `Список ${action.n}: ${result.reason}`);
+            return { ...await changedSince(b, last), status: "done" };
+          }
+          case "enter": {
+            const result = await runScript(b, actScript(last.epoch, action.n, { kind: "enter" }));
+            if (!result.ok || !result.src) throw stale(`Элемент ${action.n} не встроенный виджет`);
+            if (blockedHost(result.src)) throw forbidden(`Виджет ведёт на ${hostOf(result.src)}, туда задачи не идут`);
+            await b.driver.open(result.src);
+            return { ...await changedSince(b, last), status: "done" };
+          }
+          case "press": {
+            if (!SAFE_KEYS.has(action.key.trim().toLowerCase())) throw forbidden("С клавиатуры нажимаются только Escape, Tab, стрелки, PageUp/PageDown, Home/End, Backspace и Delete: кнопки нажимайте по номеру через click");
+            await b.driver.press(action.key);
+            return { ...await changedSince(b, last), status: "done" };
+          }
+          case "scroll": await b.driver.scroll(action.direction); return { ...await changedSince(b, last), status: "done" };
+          case "back": await b.driver.back(); return { ...await changedSince(b, last), status: "done" };
         }
-        case "select": {
-          const result = await runScript(b, actScript(last.epoch, action.n, { kind: "select", option: action.option } satisfies SomAction));
-          if (!result.ok) throw stale(result.reason === "stale" ? "Страница перестроилась после просмотра" : `Список ${action.n}: ${result.reason}`);
-          return { ...await changedSince(b, last), status: "done" };
-        }
-        case "enter": {
-          const result = await runScript(b, actScript(last.epoch, action.n, { kind: "enter" }));
-          if (!result.ok || !result.src) throw stale(`Элемент ${action.n} не встроенный виджет`);
-          if (blockedHost(result.src)) throw forbidden(`Виджет ведёт на ${hostOf(result.src)}, туда задачи не идут`);
-          await b.driver.open(result.src);
-          return { ...await changedSince(b, last), status: "done" };
-        }
-        case "press": await b.driver.press(action.key); return { ...await changedSince(b, last), status: "done" };
-        case "scroll": await b.driver.scroll(action.direction); return { ...await changedSince(b, last), status: "done" };
-        case "back": await b.driver.back(); return { ...await changedSince(b, last), status: "done" };
-      }
+      });
     },
   });
 
@@ -287,30 +365,44 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     ].join(" "),
     inputSchema: z.object({ epoch: z.string().min(1).max(64), n: z.number().int().positive() }).strict(),
     async execute(input, ctx) {
-      const b = bind(ctx);
-      await deps.approvalEvidence(ctx, input);
-      const { look: last } = await currentLook(b, input.epoch);
-      const pending = last.pending;
-      if (!pending || pending.epoch !== input.epoch || pending.n !== input.n) throw stale("Такого отложенного клика нет: сначала browser_act, который вернул confirmation_required");
-      const before = await changedSince(b, last);
-      if (before.changed) {
+      return await serialized(sandboxKey(ctx), async () => {
+        const b = await bind(ctx);
+        await deps.approvalEvidence(ctx, input);
+        const { look: last } = await currentLook(b, input.epoch);
+        const pending = last.pending;
+        if (!pending || pending.epoch !== input.epoch || pending.n !== input.n) throw stale("Такого отложенного клика нет: сначала browser_act, который вернул confirmation_required");
+        // The person confirms what the screenshot shows; without one there is nothing to confirm.
+        if (last.screenshotPath === null) throw stale("Для этого просмотра нет скриншота: сделайте browser_look ещё раз и покажите его человеку");
+        if (pending.claimed) {
+          throw new ModelFacingError({
+            category: "operation", code: "AGENT_BROWSER_CONFIRM_AMBIGUOUS", correction: "Не нажимайте повторно; попросите человека проверить результат на сайте.",
+            reason: `Нажатие «${pending.element.text}» уже выполнялось, и его исход не подтверждён`, retryable: false, sideEffectStatus: "unknown",
+          });
+        }
+        const before = await changedSince(b, last);
+        if (before.changed) {
+          await deps.looks.setPending(b.sandbox, b.auth.familyId, null);
+          return { status: "stale", summary: "Страница изменилась с момента показа сводки, ничего не нажимала", url: before.url };
+        }
+        // Durable before the click: only one caller ever performs it, and a crash leaves it claimed.
+        if (!await deps.looks.claimPending(b.sandbox, b.auth.familyId, input.epoch, input.n)) {
+          throw stale("Этот клик уже забрал другой вызов");
+        }
+        let outcome: { changed: boolean; url: string };
+        try {
+          outcome = await performClick(b, last, input.n);
+        } catch (error) {
+          // The claim stays: nobody may click again until a new look replaces the page.
+          if (isAppError(error) && error.code === "AGENT_BROWSER_STALE") throw error;
+          throw new ModelFacingError({
+            category: "operation", code: "AGENT_BROWSER_CONFIRM_AMBIGUOUS", correction: "Не нажимайте повторно; попросите человека проверить результат на сайте.",
+            reason: `Нажатие «${pending.element.text}» закончилось ошибкой, и неизвестно, принял ли его сайт`, retryable: false, sideEffectStatus: "unknown",
+          });
+        }
         await deps.looks.setPending(b.sandbox, b.auth.familyId, null);
-        return { status: "stale", summary: "Страница изменилась с момента показа сводки, ничего не нажимала", url: before.url };
-      }
-      let outcome: { changed: boolean; url: string };
-      try {
-        outcome = await performClick(b, last, input.n);
-      } catch (error) {
-        await deps.looks.setPending(b.sandbox, b.auth.familyId, null);
-        if (isAppError(error) && error.code === "AGENT_BROWSER_STALE") throw error;
-        throw new ModelFacingError({
-          category: "operation", code: "AGENT_BROWSER_CONFIRM_AMBIGUOUS", correction: "Не нажимайте повторно; попросите человека проверить результат на сайте.",
-          reason: `Нажатие «${pending.element.text}» закончилось ошибкой, и неизвестно, принял ли его сайт`, retryable: false, sideEffectStatus: "unknown",
-        });
-      }
-      await deps.looks.setPending(b.sandbox, b.auth.familyId, null);
-      deps.log({ code: "AGENT_BROWSER_CONFIRMED", element: pending.element.text, host: hostOf(last.url) });
-      return { ...outcome, status: "done" };
+        deps.log({ code: "AGENT_BROWSER_CONFIRMED", element: pending.element.text, host: hostOf(last.url) });
+        return { ...outcome, status: "done" };
+      });
     },
   });
 
@@ -318,9 +410,14 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     description: "Текст видимой страницы браузера, до 20 000 символов: чтобы прочитать содержимое или найти подтверждение результата («Вы записаны на …»).",
     inputSchema: z.object({}).strict(),
     async execute(_input, ctx) {
-      const b = bind(ctx);
-      const text = (await b.driver.readText()).replace(/\s+/gu, " ").trim();
-      return { text: text.slice(0, READ_MAX_CHARACTERS), truncated: text.length > READ_MAX_CHARACTERS, url: await b.driver.url() };
+      return await serialized(sandboxKey(ctx), async () => {
+        const b = await bind(ctx);
+        // The page may show what another member typed: only the one whose look it is reads it.
+        const current = await deps.looks.get(b.sandbox, b.auth.familyId);
+        if (current !== null && current.userId !== b.owner.userId) throw forbidden("Страницу открыл другой участник: посмотрите её сами через browser_look");
+        const text = (await b.driver.eval(readTextScript())).replace(/\s+/gu, " ").trim();
+        return { text: text.slice(0, READ_MAX_CHARACTERS), truncated: text.length > READ_MAX_CHARACTERS, url: await b.driver.url() };
+      });
     },
   });
 
@@ -329,37 +426,48 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
       "status: адрес, epoch, сколько шагов и какие поля анкеты введены на этой странице. reset: закрыть вкладки и забыть введённое; логины сохраняются.",
       "save_field: сохранить в анкету человека значение поля (phone, name, email, surname), которое он только что продиктовал; domains по умолчанию — сайт текущей страницы, * только если человек сказал «везде».",
     ].join(" "),
-    inputSchema: z.discriminatedUnion("action", [
-      z.object({ action: z.literal("status") }).strict(),
-      z.object({ action: z.literal("reset") }).strict(),
-      z.object({ action: z.literal("save_field"), domains: z.array(z.string().min(1).max(253)).min(1).max(8).optional(), field: FIELD_NAME, value: z.string().min(1).max(512) }).strict(),
-    ]),
+    // An object at the root: providers reject a `oneOf` root as tool parameters.
+    inputSchema: z.object({
+      action: z.enum(["status", "reset", "save_field"]),
+      domains: z.array(z.string().min(1).max(253)).min(1).max(8).optional(),
+      field: FIELD_NAME.optional(),
+      value: z.string().min(1).max(512).optional(),
+    }).strict(),
     async execute(input, ctx) {
-      const b = bind(ctx);
-      const last = await deps.looks.get(b.sandbox, b.auth.familyId);
-      if (input.action === "status") {
-        return last === null ? { status: "idle" } : { entered: last.entered.map((e) => e.label), epoch: last.epoch, pending: last.pending?.element.text ?? null, status: "active", steps: last.steps, url: last.url };
-      }
-      if (input.action === "reset") {
-        await deps.looks.reset(b.sandbox, b.auth.familyId);
-        try { await b.driver.open("about:blank"); } catch { /* the next open starts fresh anyway */ }
-        return { status: "reset" };
-      }
-      const domains = input.domains ?? (last ? [hostOf(last.url)].filter(Boolean) : []);
-      if (domains.length === 0) {
-        throw new ModelFacingError({
-          category: "input", code: "AGENT_BROWSER_DOMAINS_REQUIRED", correction: "Передайте domains: сайт, для которого человек разрешил это поле, или * если он сказал «везде».",
-          reason: "Нет открытой страницы, поэтому домен для поля не выводится сам", retryable: false, sideEffectStatus: "not_started",
-        });
-      }
-      try {
-        upsertProfileField({}, { domains, field: input.field, value: input.value });
-      } catch (error) {
-        if (!isAppError(error)) throw error;
-        throw new ModelFacingError({ category: "input", code: error.code, correction: "Такое поле в анкете хранить нельзя; заполнять его тоже нельзя.", reason: error.message, retryable: false, sideEffectStatus: "not_started" });
-      }
-      const stored = await deps.saveProfileField(b.auth, b.owner, { domains, field: input.field, value: input.value });
-      return { saved: { domains: stored.domains, field: input.field.trim() }, status: "saved" };
+      return await serialized(sandboxKey(ctx), async () => {
+        const b = await bind(ctx);
+        const last = await deps.looks.get(b.sandbox, b.auth.familyId);
+        if (input.action === "status") {
+          return last === null ? { status: "idle" } : { entered: last.entered.map((e) => e.label), epoch: last.epoch, pending: last.pending?.element.text ?? null, status: "active", steps: last.steps, url: last.url };
+        }
+        if (input.action === "reset") {
+          await deps.looks.reset(b.sandbox, b.auth.familyId);
+          try { await b.driver.open("about:blank"); } catch { /* the next open starts fresh anyway */ }
+          return { status: "reset" };
+        }
+        const { field, value } = input;
+        if (field === undefined || value === undefined) {
+          throw new ModelFacingError({
+            category: "input", code: "AGENT_BROWSER_SESSION_INPUT_INVALID", correction: "Передайте field и value.",
+            reason: "save_field требует field и value", retryable: true, sideEffectStatus: "not_started",
+          });
+        }
+        const domains = input.domains ?? (last ? [hostOf(last.url)].filter(Boolean) : []);
+        if (domains.length === 0) {
+          throw new ModelFacingError({
+            category: "input", code: "AGENT_BROWSER_DOMAINS_REQUIRED", correction: "Передайте domains: сайт, для которого человек разрешил это поле, или * если он сказал «везде».",
+            reason: "Нет открытой страницы, поэтому домен для поля не выводится сам", retryable: false, sideEffectStatus: "not_started",
+          });
+        }
+        try {
+          upsertProfileField({}, { domains, field, value });
+        } catch (error) {
+          if (!isAppError(error)) throw error;
+          throw new ModelFacingError({ category: "input", code: error.code, correction: "Такое поле в анкете хранить нельзя; заполнять его тоже нельзя.", reason: error.message, retryable: false, sideEffectStatus: "not_started" });
+        }
+        const stored = await deps.saveProfileField(b.auth, b.owner, { domains, field, value });
+        return { saved: { domains: stored.domains, field: field.trim() }, status: "saved" };
+      });
     },
   });
 

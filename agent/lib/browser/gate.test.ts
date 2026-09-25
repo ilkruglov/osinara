@@ -27,16 +27,29 @@ describe("gateDecision", () => {
     expect(gateDecision({ action: { kind: "click" }, entered: [], n: 1, view: home })).toMatchObject({ gated: false });
     const form = view([{ role: "textbox", text: "Номер телефона" }, { role: "link", text: "Продолжить" }]);
     expect(gateDecision({ action: { kind: "click" }, entered: [], n: 2, view: form })).toMatchObject({ gated: true, reason: "form-submit" });
+    // A search box on a catalogue page is not a form: dikidi's «Продолжить» after picking a service.
+    const catalogue = view([{ role: "textbox", text: "Поиск" }, { role: "link", text: "Продолжить" }]);
+    expect(gateDecision({ action: { kind: "click" }, entered: [], n: 2, view: catalogue })).toMatchObject({ gated: false });
+    const address = view([{ role: "textbox", text: "Адрес" }, { role: "link", text: "Сохранить" }]);
+    expect(gateDecision({ action: { kind: "click" }, entered: [], n: 2, view: address })).toMatchObject({ gated: true, reason: "form-submit" });
     expect(gateDecision({ action: { kind: "click" }, entered: [{ field: "phone", label: "Телефон", n: 1 }], n: 1, view: home })).toMatchObject({ gated: true, reason: "form-submit" });
   });
 
-  it("stops on any button, link or submit once data was entered", () => {
-    const v = view([{ role: "textbox", text: "Имя" }, { role: "button", text: "Ок" }, { role: "generic", text: "Мужская стрижка" }, { role: "checkbox", text: "Согласие" }]);
+  it("stops on any click once data was entered, except picking a tab or an option", () => {
+    const v = view([{ role: "textbox", text: "Имя" }, { role: "button", text: "Ок" }, { role: "generic", text: "OK" }, { role: "checkbox", text: "Согласие" }, { role: "tab", text: "Вечер" }]);
     const entered = [{ field: "name", label: "Имя", n: 1 }];
     expect(gateDecision({ action: { kind: "click" }, entered, n: 2, view: v })).toMatchObject({ gated: true, reason: "after-entry" });
-    expect(gateDecision({ action: { kind: "click" }, entered, n: 3, view: v })).toMatchObject({ gated: false });
+    // A custom button is a generic element with a label: no role proves the click safe.
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 3, view: v })).toMatchObject({ gated: true, reason: "after-entry" });
     expect(gateDecision({ action: { kind: "click" }, entered, n: 4, view: v })).toMatchObject({ gated: false });
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 5, view: v })).toMatchObject({ gated: false });
     expect(gateDecision({ action: { kind: "fill", text: "x" }, entered, n: 1, view: v })).toMatchObject({ gated: false });
+  });
+
+  it("stops on a form's submit button whatever its label and whoever filled the form", () => {
+    const v = view([{ role: "submit", text: "ОК" }, { role: "button", text: "ОК" }]);
+    expect(gateDecision({ action: { kind: "click" }, entered: [], n: 1, view: v })).toMatchObject({ gated: true, reason: "form-submit" });
+    expect(gateDecision({ action: { kind: "click" }, entered: [], n: 2, view: v })).toMatchObject({ gated: false });
   });
 
   it("never stops fills, selects, scrolls or unknown numbers", () => {

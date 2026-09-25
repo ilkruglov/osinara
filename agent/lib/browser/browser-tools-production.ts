@@ -17,7 +17,7 @@ import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.j
 import { inspectWorkspaceImage } from "../workspaces/workspace-image-inspection.js";
 import { createSandboxBrowserDriver } from "./browser-driver.js";
 import { createBrowserTools } from "./browser-tools.js";
-import { loadFormProfile, saveFormProfileField } from "./form-profile-repository.js";
+import { loadFormProfile, requireFormProfileAccess, saveFormProfileField } from "./form-profile-repository.js";
 import { lookRepository } from "./look-repository.js";
 
 const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
@@ -29,10 +29,11 @@ export const browserTools = createBrowserTools({
   log: (event) => console.info(JSON.stringify(event)),
   looks: lookRepository,
   now: () => Date.now(),
+  requireAccess: requireFormProfileAccess,
   sandboxSessionId: (ctx) => sandboxSessionId(ctx),
   saveProfileField: saveFormProfileField,
-  async vision(auth, scope, path, question) {
-    const result = await inspectWorkspaceImage(auth, { path, question, scope });
+  async vision(auth, scope, path, question, abortSignal) {
+    const result = await inspectWorkspaceImage(auth, { abortSignal, path, question, scope });
     return "supported" in result && result.supported === false ? null : result.analysis;
   },
 });
@@ -50,5 +51,9 @@ export async function loadBrowserConfirmApproval(
   if (!look || !pending || pending.epoch !== input.epoch || pending.n !== input.n || look.epoch !== input.epoch) {
     throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "В браузере нет шага, ждущего подтверждения");
   }
-  return { button: pending.element.text, entered: look.entered.map((e) => e.label), site: new URL(look.url).hostname, url: look.url };
+  // The window is shown to the person who made the look; nobody confirms another member's click.
+  if (look.userId !== auth.userId) throw new AppError("AGENT_APPROVAL_SUBJECT_NOT_FOUND", "Этот шаг в браузере начал другой участник");
+  // The value as it was typed, so the person confirms data, not only field names.
+  const entered = look.entered.map((e) => (e.value ? `${e.label}: ${e.value}` : e.label));
+  return { button: pending.element.text, entered, site: new URL(look.url).hostname, url: look.url };
 }

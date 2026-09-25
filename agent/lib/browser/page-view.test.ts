@@ -20,6 +20,7 @@ describe("som scripts", () => {
     ["fill", actScript("ep-1", 3, { kind: "fill", text: "Илья \"Q\" 'z'" })],
     ["select", actScript("ep-1", 3, { kind: "select", option: "Утро" })],
   ])("%s script is one JavaScript expression", (_name, script) => {
+    // oxlint-disable-next-line typescript/no-implied-eval -- parsing the fixed page script proves it is valid JavaScript
     expect(() => new Function(`return (${script});`)).not.toThrow();
   });
 
@@ -46,6 +47,9 @@ describe("parsePageView", () => {
       ],
     }));
     expect(view.epoch).toBe("ep-1");
+    expect(view).toMatchObject({ stateHash: 0, textHash: 0 });
+    expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", title: "x".repeat(300), url: "https://x.ru" })).title).toHaveLength(200);
+    expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", stateHash: 7, textHash: 9, url: "https://x.ru" }))).toMatchObject({ stateHash: 7, textHash: 9 });
     expect(view.elements).toHaveLength(3);
     expect(view.elements[2]).toEqual({ n: 3, role: "checkbox", state: ["checked"], text: "Мужская стрижка", value: null });
   });
