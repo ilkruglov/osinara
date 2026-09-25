@@ -54,6 +54,7 @@ function extractRuntimeToolBuilder(source: string): RuntimeToolBuilder {
 
   // Execute the installed function with inert dynamic subagents so this test proves behavior,
   // rather than merely asserting that a patch marker exists in a minified artifact.
+  // oxlint-disable-next-line typescript/no-implied-eval -- the patched module source is evaluated to test it
   const factory = new Function(
     "buildDynamicSubagentTools",
     "AuthKey",

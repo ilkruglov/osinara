@@ -191,6 +191,7 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 function boundModelContent(value: string): { content: string; truncated: boolean } {
+  // oxlint-disable-next-line eslint/no-control-regex -- control characters are exactly what is stripped
   const safeText = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, "");
   const lines = safeText.split("\n");
   const lineBounded = lines.slice(0, CONTROLLED_WEB_FETCH_MAX_MODEL_LINES).join("\n");

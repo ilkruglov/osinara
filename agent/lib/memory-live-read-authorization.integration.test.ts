@@ -25,7 +25,6 @@ import { memoryThreadQueryRepository } from "./memory-thread-query-repository.js
 import {
   createBroadThread,
   createThreadRepositoryFixture,
-  THREAD_TITLE_VECTOR,
 } from "./memory-thread-repository.integration-fixtures.js";
 
 const { QUERY_VECTOR, sourceEvidenceBoundary } = vi.hoisted(() => ({

@@ -22,7 +22,7 @@ export function estimateTelegramRichBlocks(markdown: string): number {
   // provider rejection and affects only unusually large rich responses.
   for (const line of markdown.split("\n")) {
     const trimmed = line.trim();
-    if (/^```/u.test(trimmed)) {
+    if (trimmed.startsWith('```')) {
       if (!fencedCode) blocks += 1;
       fencedCode = !fencedCode;
       continue;

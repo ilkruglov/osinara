@@ -14,6 +14,7 @@ suite("authored scenario laboratory", () => {
     let malformedJudge = false;
     let searchTool = "web_search";
     let skipMainSkill = false;
+    // oxlint-disable-next-line typescript/no-misused-promises -- a test server; a failure surfaces through the assertions
     const server = createServer(async (req, res) => {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(Buffer.from(chunk));

@@ -10,9 +10,7 @@ import { resolve } from "node:path";
 
 import {
   parseModelProviderConfig,
-  type AgentModelTransport,
   type ModelProviderConfig,
-  type ModelProviderId,
 } from "./model-provider-config-schema.js";
 
 export {

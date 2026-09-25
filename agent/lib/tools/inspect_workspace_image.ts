@@ -49,7 +49,6 @@ function requireImageInput(input: Record<string, unknown>) {
   const attachmentId = input.attachmentId;
   const telegramMessageId = input.telegramMessageId;
   const hasPath = path !== undefined;
-  const hasTelegramMessageId = telegramMessageId !== undefined;
   const sourceCount = [attachmentId, path, telegramMessageId].filter((value) => value !== undefined).length;
   if (sourceCount !== 1) {
     toolInputError(

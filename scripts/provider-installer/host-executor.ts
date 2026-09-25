@@ -177,6 +177,7 @@ export function createHostInstallationExecutor(
         await release();
       } catch (error) {
         // Lock cleanup is secondary: never replace a useful primary failure or a committed result.
+        // oxlint-disable-next-line eslint/no-unsafe-finally -- only thrown when no primary failure or result would be replaced
         if (primaryError === undefined && !completed) throw error;
       }
     }

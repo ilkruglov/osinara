@@ -201,7 +201,7 @@ export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatc
   };
 }
 
-export function dispatchDueAgentSchedules(to: ScheduleToFn, now = new Date()): Promise<number> {
+export function dispatchDueAgentSchedules(to: ScheduleToFn): Promise<number> {
   return createAgentScheduleDispatcher({
     discardSession: (applicationSessionId) => sessionRepository.retireUnstartedScheduledSession(applicationSessionId),
     prepareHistory: (job) =>

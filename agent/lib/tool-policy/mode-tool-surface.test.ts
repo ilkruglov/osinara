@@ -235,7 +235,7 @@ describe("external group tool surface", () => {
 
   it("emits no application tool outside the effective allowlist", () => {
     const applicationNames = new Set([...TRUSTED_MODE_TOOL_NAMES, ...PRIVATE_ONLY_TOOL_NAMES, ...FAMILY_ONLY_TOOL_NAMES]);
-    const grantable = new Set<string>([...EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, ""))]);
+    const grantable = new Set<string>(EXTERNAL_GROUP_TOOL_NAMES.map((name) => name.replace(/\..*$/u, "")));
     const alwaysExternal = new Set(["manage_behavior_preference", "read_profile_view"]);
 
     for (const emitted of names({
@@ -258,8 +258,8 @@ describe("external group tool surface", () => {
     expect(names({ environment: "family" })).toContain("web_search");
     const granted = buildModeToolSurface({ capabilities: new Set(["web_search"]), environment: "external" });
     expect(granted.web_search?.inputSchema).toBeInstanceOf(z.ZodObject);
-    expect((granted.web_search?.inputSchema as z.ZodObject).safeParse({ query: "Eve documentation" }).success).toBe(true);
-    expect((granted.web_search?.inputSchema as z.ZodObject).safeParse({}).success).toBe(false);
+    expect((granted.web_search!.inputSchema as z.ZodObject).safeParse({ query: "Eve documentation" }).success).toBe(true);
+    expect((granted.web_search!.inputSchema as z.ZodObject).safeParse({}).success).toBe(false);
     expect(names({ capabilities: new Set(["web_search"]), environment: "external", scheduledRun: true } as never)).toContain("web_search");
     expect(
       names({

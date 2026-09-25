@@ -135,7 +135,7 @@ describe("event log cache", () => {
   it("counts decoded binary payloads without expanding them", () => {
     const events = Array.from({ length: 40 }, (_, index) => ({
       eventId: `evnt_${index}`,
-      eventData: { blob: { data: new Array(200_000).fill(7), type: "Buffer" } },
+      eventData: { blob: { data: Array.from({ length: 200_000 }, () => 7), type: "Buffer" } },
     }));
 
     const started = performance.now();

@@ -102,7 +102,7 @@ describeWithDatabase("reminder repositories", () => {
     await expect(reminderRepository.configureNotifications(auth, {
       quietEnd: "07:00",
       quietStart: "23:00",
-      timezone: "Not\/A-Timezone",
+      timezone: "Not/A-Timezone",
     })).rejects.toThrowError(/AGENT_TIMEZONE_INVALID/);
 
     await reminderRepository.configureNotifications(auth, {

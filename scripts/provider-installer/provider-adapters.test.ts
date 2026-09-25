@@ -10,7 +10,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../../agent/lib/app-error.js";
 import type { ModelProviderConfig } from "../../agent/lib/model-provider-config-schema.js";
-import type { ProviderCatalogModel } from "../../agent/lib/provider-catalog/provider-catalog.js";
 import type { NormalizedModel } from "./contracts.js";
 import { createProviderAdapters } from "./provider-adapters.js";
 

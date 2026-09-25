@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AppError } from "../app-error.js";
 
 function isVisibleMessageId(value: string): boolean {
-  return [...value].every((character) =>
+  return Array.from(value).every((character) =>
     character.trim() !== "" && !/[\p{Cc}\p{Cf}]/u.test(character)
   );
 }

@@ -32,7 +32,8 @@ interface ExplicitTimelineSourceRow {
 }
 
 function evidenceSnippet(content: string): string {
-  const bounded = [...content.trim()].slice(0, MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS).join("");
+  // Code points, not UTF-16 units: a cut never splits a surrogate pair.
+  const bounded = Array.from(content.trim()).slice(0, MEMORY_EVIDENCE_SNIPPET_MAX_CHARACTERS).join("");
   if (!bounded) {
     throw new AppError(
       "AGENT_MEMORY_EVIDENCE_SOURCE_EMPTY",

@@ -273,7 +273,7 @@ function completeMarkdownBlocks(markdown: string): string[] {
     const trimmed = line.trim();
     if (current.length === 0) {
       if (!trimmed) continue;
-      fencedCode = /^```/u.test(trimmed);
+      fencedCode = trimmed.startsWith('```');
       mathBlock = trimmed === "$$";
     } else if (!fencedCode && detailsDepth === 0 && !mathBlock && !trimmed) {
       flush();

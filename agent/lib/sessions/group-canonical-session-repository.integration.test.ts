@@ -152,7 +152,7 @@ describeWithDatabase("canonical group session repository", () => {
     expect(recovered.generation).toBe(3);
     expect(concurrent.generation).toBe(3);
     // Either caller can acquire the transaction lock first; exactly one creates the generation.
-    expect([recovered.rotated, concurrent.rotated].sort()).toEqual([false, true]);
+    expect([recovered.rotated, concurrent.rotated].sort((a, b) => Number(a) - Number(b))).toEqual([false, true]);
     expect(concurrent.id).toBe(recovered.id);
     expect(recovered.sandboxSessionId).toBe(staleTask.sandboxSessionId);
     expect(recovered.continuationToken).toBe(

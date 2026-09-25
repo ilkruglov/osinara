@@ -14,7 +14,7 @@ function compiled(event: "session.started" | "step.started" | "turn.started"): s
   return [
     "prefix",
     "#region agent/tools/capabilities.ts",
-    `defineDynamic({ events: { \"${event}\": async () => ({}) } });`,
+    `defineDynamic({ events: { "${event}": async () => ({}) } });`,
     "//#endregion",
     "suffix",
   ].join("\n");

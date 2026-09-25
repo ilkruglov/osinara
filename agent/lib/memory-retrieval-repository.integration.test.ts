@@ -177,7 +177,7 @@ describeWithDatabase("memoryRetrievalRepository", () => {
     const found = await memoryRetrievalRepository.searchWithConflictClosure(auth, "Питер", vector(1, 0));
 
     // The exact-duplicate collapse must not merge distinct events into one.
-    expect(found.results.map((result) => result.memory.occurredAt?.slice(0, 10)).sort())
+    expect(found.results.map((result) => result.memory.occurredAt?.slice(0, 10)).sort((a, b) => String(a).localeCompare(String(b))))
       .toEqual(["2026-08-10", "2026-09-05"]);
   });
 
@@ -353,13 +353,16 @@ describeWithDatabase("memoryRetrievalRepository", () => {
       values?: unknown[],
     ) => ReturnType<typeof pool.query>;
     let revoked = false;
+    // oxlint-disable-next-line typescript/no-misused-promises -- pg overloads type the callback form as void; the promise form is what runs
     const querySpy = vi.spyOn(pool, "query").mockImplementation((async (
       queryText: string,
       values?: unknown[],
     ) => {
+      // oxlint-disable-next-line typescript/await-thenable -- pg overloads type the callback form as void; the promise form is what runs
       const result = await originalQuery(queryText, values);
       if (!revoked && queryText.includes("WITH authorized AS NOT MATERIALIZED")) {
         revoked = true;
+        // oxlint-disable-next-line typescript/await-thenable -- pg overloads type the callback form as void; the promise form is what runs
         await originalQuery(
           "DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2",
           [auth.familyId, auth.userId],

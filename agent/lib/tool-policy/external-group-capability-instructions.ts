@@ -13,7 +13,7 @@ import {
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { KNOWLEDGE_SKILL_CAPABILITY, KNOWLEDGE_SKILL_NAMES } from "../group-skills/knowledge-skills.js";
 
-function modelInvocation(name: ExternalGroupToolName | string): string {
+function modelInvocation(name: string): string {
   const memoryAction = /^manage_memory\.(edit|delete|undo)$/u.exec(name)?.[1];
   if (memoryAction) return `\`manage_memory\` с \`action=${memoryAction}\``;
   const threadAction = /^manage_memory_thread\.(complete|reactivate)$/u.exec(name)?.[1];

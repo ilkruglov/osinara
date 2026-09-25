@@ -170,6 +170,7 @@ async function runUnderRecoveredLock<T>(
       await release();
     } catch (releaseError) {
       // Lock cleanup is actionable only when no more important transaction failure exists.
+      // oxlint-disable-next-line eslint/no-unsafe-finally -- only thrown when no primary failure would be replaced
       if (primaryFailure === undefined) throw releaseError;
     }
   }

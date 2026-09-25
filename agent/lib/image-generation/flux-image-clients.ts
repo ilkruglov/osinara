@@ -58,7 +58,8 @@ function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string
   switch (size) {
     case "1536x1024": return { aspectRatio: "3:2", height: 512, width: 768 };
     case "1024x1536": return { aspectRatio: "3:5", height: 768, width: 512 };
-    default: return { aspectRatio: "1:1", height: 512, width: 512 };
+    case "1024x1024":
+    case "auto": return { aspectRatio: "1:1", height: 512, width: 512 };
   }
 }
 
@@ -99,7 +100,7 @@ function imageFromBytes(bytes: Buffer, model: string, provider: string): Generat
 async function cloudflareErrorCodes(response: Response): Promise<string> {
   try {
     const payload = await response.json() as { errors?: readonly { code?: unknown }[] };
-    return (payload.errors ?? []).map((entry) => String(entry.code ?? "?")).join(",");
+    return (payload.errors ?? []).map((entry) => typeof entry.code === "string" || typeof entry.code === "number" ? String(entry.code) : "?").join(",");
   } catch {
     return "";
   }
@@ -229,6 +230,7 @@ export function createNeuralDeepImageClient(
       if (typeof task?.task_uid !== "string" || !/^[0-9a-f-]{8,64}$/u.test(task.task_uid)) {
         throw ambiguous("neuraldeep", "task id missing");
       }
+      const taskId: string = task.task_uid;
       // One deadline bounds every poll, the result download and the body read: a hanging GET used
       // to outlive the window because time was checked only after a response arrived.
       const deadline = Date.now() + pollTimeoutMs;
@@ -247,14 +249,14 @@ export function createNeuralDeepImageClient(
       };
       for (;;) {
         await sleep(NEURALDEEP_POLL_INTERVAL_MS);
-        const status = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${task.task_uid}`, { headers, method: "GET", signal }));
+        const status = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}`, { headers, method: "GET", signal }));
         if (!status.ok) throw ambiguous("neuraldeep", `status ${status.status}`);
         const state = (await bounded(() => status.json()) as { error?: unknown; status?: unknown }).status;
         if (state === "finished") break;
         if (state === "failed" || state === "error") throw rejected("neuraldeep", "task failed");
         remaining();
       }
-      const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${task.task_uid}/result`, { headers, method: "GET", signal }));
+      const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}/result`, { headers, method: "GET", signal }));
       if (!result.ok) throw ambiguous("neuraldeep", `result ${result.status}`);
       return imageFromBytes(Buffer.from(await bounded(() => result.arrayBuffer())), "neuraldeep/flux", "neuraldeep");
     },

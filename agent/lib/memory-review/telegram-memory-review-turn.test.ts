@@ -162,7 +162,7 @@ describe("prepareTelegramMemoryReviewTurn", () => {
     expect(result.durableMessage).not.toContain("review-5");
     expect(result.durableMessage).toContain("<memory_review_source_selection>");
     expect(result.durableMessage).toContain(
-      '\"sourceSequences\":[\"5\",\"3\",\"2\",\"1\"]',
+      '"sourceSequences":["5","3","2","1"]',
     );
   });
 

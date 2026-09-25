@@ -17,6 +17,7 @@
 export const FILE_MISSING_EXIT_CODE = 44;
 export const FILE_TOO_LARGE_EXIT_CODE = 45;
 
+// oxlint-disable-next-line eslint/no-control-regex -- control characters are exactly what is rejected
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
 
 export function assertShellSafePath(path: string): void {

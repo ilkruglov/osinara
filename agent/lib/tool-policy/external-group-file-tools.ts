@@ -10,7 +10,7 @@
  * - Model paths are canonical absolute paths under the exact `/workspace/group` root.
  * - Host-side component inspection rejects symlinks before Eve's native executor runs.
  */
-import { type ToolContext, type ToolDefinition, defineTool } from "eve/tools";
+import { type ToolDefinition, defineTool } from "eve/tools";
 import {
   glob as eveGlob,
   grep as eveGrep,
@@ -19,7 +19,6 @@ import {
 } from "eve/tools/defaults";
 
 import { AppError } from "../app-error.js";
-import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import {
   type WorkspaceAuthorization,
   workspaceRepository,

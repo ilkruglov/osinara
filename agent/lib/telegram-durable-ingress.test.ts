@@ -536,7 +536,7 @@ describe("createTelegramDurableIngress", () => {
     };
   }
 
-  function seriesIngress(storage: ReturnType<typeof repository>, dispatch: ReturnType<typeof vi.fn>) {
+  function seriesIngress(storage: ReturnType<typeof repository>, _dispatch: ReturnType<typeof vi.fn>) {
     return createTelegramDurableIngress({
       acceptMedia: vi.fn().mockResolvedValue(true),
       authorizeVoice: vi.fn(),

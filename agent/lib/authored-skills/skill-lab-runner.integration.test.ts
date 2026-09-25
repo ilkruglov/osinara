@@ -11,6 +11,7 @@ suite("native isolated skill laboratory", () => {
     let reportStalled!: () => void;
     const stalledRequest = new Promise<void>((done) => { reportStalled = done; });
     const requests: { tools: { function: { name: string } }[]; messages: { role: string; content: string; tool_calls?: unknown[] }[] }[] = [];
+    // oxlint-disable-next-line typescript/no-misused-promises -- a test server; a failure surfaces through the assertions
     const server = createServer(async (req, res) => {
       const chunks: Buffer[] = [];
       for await (const chunk of req) chunks.push(Buffer.from(chunk));

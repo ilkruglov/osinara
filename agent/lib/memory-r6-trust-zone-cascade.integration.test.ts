@@ -6,7 +6,7 @@
  * - Family group deletion preserves family roots while erasing source coordinates, retracting the
  *   completion projection, invalidating its brief, and retaining scoped audit/lifecycle rows.
  */
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "./database.js";
 import { MEMORY_EMBEDDING_DIMENSIONS } from "./memory-config.js";

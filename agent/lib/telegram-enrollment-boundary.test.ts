@@ -6,7 +6,7 @@
  * - Ordinary private text cannot consume a bootstrap attempt.
  * - Existing identities cannot turn invitation deep links into conversation content.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { handleTelegramEnrollmentBoundary } from "./telegram-enrollment-boundary.js";
 import {

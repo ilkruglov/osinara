@@ -15,7 +15,6 @@ import {
   MEMORY_REVIEW_BATCH_SIZE,
   MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES,
 } from "./memory-review-config.js";
-import { formatMemoryReviewBatchPrompt } from "./memory-review-prompt.js";
 import { memoryReviewTerminalRepository } from "./memory-review-terminal-repository.js";
 
 export interface MemoryReviewBatchSummary {

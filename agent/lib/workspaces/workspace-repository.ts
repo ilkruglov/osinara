@@ -16,7 +16,6 @@ import type { PoolClient } from "pg";
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import {
-  type WorkspaceFileRecord,
   type WorkspaceScope,
 } from "./workspace-file-record.js";
 import { validateWorkspacePath } from "./workspace-path.js";

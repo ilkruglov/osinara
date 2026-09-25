@@ -21,14 +21,17 @@ const child = spawn(
     stdio: "inherit",
   },
 );
-const exitCode = await new Promise<number | null>((resolveExit, reject) => {
-  child.once("error", reject);
-  child.once("exit", resolveExit);
-}).finally(async () => {
+let exitCode: number | null;
+try {
+  exitCode = await new Promise<number | null>((resolveExit, reject) => {
+    child.once("error", reject);
+    child.once("exit", resolveExit);
+  });
+} finally {
   await Promise.all(generatedPaths.map((path) =>
     rm(resolve(fixtureRoot, path), { force: true, recursive: true })
   ));
-});
+}
 if (exitCode !== 0) {
   throw new Error(
     `AGENT_WORKFLOW_STRESS_FAILED: PostgreSQL Workflow stress gate завершился с кодом ${String(exitCode)}`,

@@ -64,7 +64,6 @@ import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
   buildSandboxContainerOptions,
   resolveTrustedToolMount,
-  SANDBOX_PIDS_REAP_THRESHOLD,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
@@ -305,6 +304,7 @@ export function createDockerSandboxEngine(input: {
               stderr: cleanupResult.stderr,
             });
             if (!readFailed) {
+              // oxlint-disable-next-line eslint/no-unsafe-finally -- only thrown when the read itself succeeded
               throw new Error(
                 "AGENT_SANDBOX_RUNNER_FILE_CLEANUP_FAILED: " +
                 "Не удалось удалить временную копию прочитанного файла sandbox",

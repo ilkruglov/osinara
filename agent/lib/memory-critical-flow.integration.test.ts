@@ -176,8 +176,8 @@ describeWithDatabase("critical main-agent memory paths", () => {
     const surface = await capabilities.events["step.started"]?.({} as never, context as never);
     expect(surface?.remember).toBeDefined();
     expect(surface?.load_skill).toBeDefined();
-    expect((surface?.remember as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
-    expect((surface?.load_skill as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
+    expect((surface!.remember as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
+    expect((surface!.load_skill as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
 
     const result = await surface!.remember!.execute({
       basis: "user_requested",
@@ -294,7 +294,7 @@ describeWithDatabase("critical main-agent memory paths", () => {
 
     // The review surface must execute the same source-backed writer used by ordinary main turns.
     const surface = await capabilities.events["step.started"]?.({} as never, context as never);
-    expect((surface?.remember as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
+    expect((surface!.remember as unknown as Record<symbol, unknown>)[EVE_TOOL_BRAND]).toBe(true);
     const result = await surface!.remember!.execute({
       basis: "agent_inferred",
       content: "Анна предпочитает утренние тренировки",

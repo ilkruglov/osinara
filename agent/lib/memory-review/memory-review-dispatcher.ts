@@ -155,10 +155,7 @@ export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatche
   };
 }
 
-export function dispatchPendingMemoryReviews(
-  to: ScheduleToFn,
-  now = new Date(),
-): Promise<number> {
+export function dispatchPendingMemoryReviews(to: ScheduleToFn): Promise<number> {
   return createMemoryReviewDispatcher({
     claimPending: (input) => memoryReviewDispatchRepository.claimPending(input),
     discardSession: (batch, applicationSessionId) =>

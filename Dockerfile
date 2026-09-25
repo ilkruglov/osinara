@@ -24,7 +24,7 @@ RUN npm ci --ignore-scripts \
 
 FROM dependencies AS build
 COPY . .
-RUN npm run typecheck && npm run build && npm run build:runtime
+RUN npm run typecheck && npm run lint && npm run build && npm run build:runtime
 
 # Release-only artifact stage: output is one SEA executable, never a deployable container image.
 FROM build AS installer-cli-build

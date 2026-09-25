@@ -103,7 +103,7 @@ function renderInline(markdown: string): string {
 }
 
 function isSpecialBlockStart(line: string): boolean {
-  return /^```/u.test(line) || /^#{1,6}\s+/u.test(line) || /^>\s?/u.test(line) ||
+  return line.startsWith('```') || /^#{1,6}\s+/u.test(line) || /^>\s?/u.test(line) ||
     /^(?:[-+*]|\d+\.)\s+/u.test(line);
 }
 
@@ -118,7 +118,7 @@ export function renderTelegramMarkdownHtml(markdown: string): string {
       index += 1;
       continue;
     }
-    if (/^```/u.test(line)) {
+    if (line.startsWith('```')) {
       const codeLines: string[] = [];
       index += 1;
       while (index < lines.length && !/^```\s*$/u.test(lines[index]!)) {

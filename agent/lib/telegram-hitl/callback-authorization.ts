@@ -12,7 +12,6 @@ import {
   type TelegramHitlCallbackResult,
 } from "eve/channels/telegram";
 
-import { AppError } from "../app-error.js";
 import {
   telegramHitlApprovalRepository,
   type TelegramHitlApprovalRepository,

@@ -53,6 +53,7 @@ describe("Eve task origin auth patch", () => {
     if (expressionStart < 0 || expressionEnd < 0) {
       throw new Error("TEST_EVE_TURN_ORIGIN_AUTH_SHAPE_INVALID");
     }
+    // oxlint-disable-next-line typescript/no-implied-eval -- the patched module source is evaluated to test it
     const applyDelivery = new Function(
       "a",
       "c",
