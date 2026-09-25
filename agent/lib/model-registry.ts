@@ -4,6 +4,8 @@
  * Exports:
  * - `primaryModel`: configured protocol-native text model for the Eve agent loop.
  * - `visionModel`: independently selected model, or `null` when image input is unsupported.
+ * - `browserWorkerModel`: the primary model at low reasoning effort for the browser worker, whose
+ *   steps are one action each and whose latency is what a person waits through.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
  */
 import { createGroq } from "@ai-sdk/groq";
@@ -48,3 +50,21 @@ export const voiceTranscriptionModel = modelProviderConfig.voice.enabled && groq
       modelProviderConfig.voice.transcriptionModelId,
     )
   : null;
+
+/** The primary transport with reasoning lowered where the protocol has such a control. */
+export function lowEffortTransport(
+  transport: ModelProviderConfig["agent"]["transport"],
+): ModelProviderConfig["agent"]["transport"] {
+  if (transport.protocol === "deepseek-responses") return { ...transport, reasoning: { effort: "low" } };
+  if (transport.protocol === "openai-chat-completions" && transport.reasoning?.type === "effort") {
+    return { ...transport, reasoning: { ...transport.reasoning, effort: "low" } };
+  }
+  return transport;
+}
+
+export const browserWorkerModel = createConfiguredLanguageModel({
+  apiKey: agentModelApiKey,
+  maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
+  modelId: modelProviderConfig.agent.models.primary.id,
+  transport: lowEffortTransport(modelProviderConfig.agent.transport),
+});

@@ -48,7 +48,7 @@ const MARK = String.raw`(() => {
     || norm(el.getAttribute("name") || el.id || "");
   const hostOf = (u) => { try { return new URL(u, location.href).hostname; } catch { return ""; } };
   // An id-like path tail says nothing; the host at least says where the link goes.
-  const hrefText = (href) => { const tail = decodeURIComponent(href.replace(/[?#].*$/, "").split("/").filter(Boolean).pop() || ""); return /^[A-Za-z0-9_-]{16,}$/.test(tail) || !tail || /^https?:$/.test(tail) ? hostOf(href) : norm(tail); };
+  const hrefText = (href) => { const tail = decodeURIComponent(href.replace(/[?#].*$/, "").split("/").filter(Boolean).pop() || ""); if (/\.(jpe?g|png|gif|webp|svg|avif)$/i.test(tail)) return "изображение"; return /^[A-Za-z0-9_-]{16,}$/.test(tail) || !tail || /^https?:$/.test(tail) ? hostOf(href) : norm(tail); };
   const labelOf = (el) => { if (!el.id) return ""; const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); return l ? norm(l.innerText) : ""; };
   const stateOf = (el) => {
     const s = [];
