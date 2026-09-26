@@ -52,7 +52,10 @@ release_image_refs_from_env() {
   done < "$env_file"
 }
 
+# Keeps the images of the newest `retained` installed releases (default: current and previous).
+# Before the pull it runs with 1: three image sets and a backup no longer fit the disk otherwise.
 prune_retired_release_images() {
+  local retained="${1:-$RETAINED_LOCAL_RELEASE_IMAGE_COUNT}"
   [[ -d "$RELEASES_DIR" ]] || return 0
   local -a release_dirs=()
   local name path release_count retained_start index ref release_name release_prunable
@@ -64,8 +67,8 @@ prune_retired_release_images() {
   done < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\t%p\n' | sort -V)
 
   release_count=${#release_dirs[@]}
-  ((release_count > RETAINED_LOCAL_RELEASE_IMAGE_COUNT)) || return 0
-  retained_start=$((release_count - RETAINED_LOCAL_RELEASE_IMAGE_COUNT))
+  ((release_count > retained)) || return 0
+  retained_start=$((release_count - retained))
   for ((index = retained_start; index < release_count; index += 1)); do
     while IFS= read -r ref; do
       retained_refs["$ref"]=1
@@ -92,6 +95,58 @@ prune_retired_release_images() {
         fail "DEPLOY_RELEASE_DIRECTORY_PRUNE_FAILED" "Could not remove retired release directory: ${release_name}"
       log_event "DEPLOY_RELEASE_DIRECTORY_PRUNED" "Removed retired release directory: ${release_name}"
     fi
+  done
+}
+
+# The host controller (this script and its modules) is only ever written by the installer, so a
+# fix in scripts/production-deploy never reached a running installation. The release's own
+# installation archive carries the controller; it is trusted exactly like the manifest and the
+# Compose file (the same immutable release over TLS), and bound to the approved manifest by the
+# manifest copy the archive embeds. Staged here, installed by `install_controller_scripts` as the
+# last act of a healthy deploy.
+readonly CONTROLLER_FILES=(
+  "production-deploy.sh"
+  "production-deploy/common.sh"
+  "production-deploy/database.sh"
+  "production-deploy/release.sh"
+  "production-deploy/backup.sh"
+)
+CONTROLLER_STAGE_DIR=""
+
+stage_controller_scripts() {
+  local archive="$1"
+  local approved_manifest="$2"
+  local stage="${WORK_DIR}/controller"
+  local name
+  rm -rf "$stage"
+  mkdir -p "$stage"
+  tar -xzf "$archive" -C "$stage" --no-same-owner --no-same-permissions \
+    "installation/osinara-deployment.json" "${CONTROLLER_FILES[@]/#/installation/}" ||
+    fail "DEPLOY_CONTROLLER_ARCHIVE_INVALID" "Installation archive does not carry the controller"
+  cmp --silent "${stage}/installation/osinara-deployment.json" "$approved_manifest" ||
+    fail "DEPLOY_CONTROLLER_MANIFEST_MISMATCH" "Installation archive embeds another manifest"
+  for name in "${CONTROLLER_FILES[@]}"; do
+    [[ -f "${stage}/installation/${name}" && ! -L "${stage}/installation/${name}" ]] &&
+      [[ "$(head -c 11 "${stage}/installation/${name}")" == "#!/bin/bash" ]] ||
+      fail "DEPLOY_CONTROLLER_ARCHIVE_INVALID" "Controller file ${name} is missing or not a bash script"
+  done
+  CONTROLLER_STAGE_DIR="${stage}/installation"
+}
+
+install_controller_scripts() {
+  [[ -n "$CONTROLLER_STAGE_DIR" ]] ||
+    fail "DEPLOY_CONTROLLER_NOT_STAGED" "Controller scripts were not staged"
+  local name mode temporary
+  for name in "${CONTROLLER_FILES[@]}"; do
+    cmp --silent "${CONTROLLER_STAGE_DIR}/${name}" "${BIN_DIR}/${name}" && continue
+    mode=0640
+    [[ "$name" == "production-deploy.sh" ]] && mode=0750
+    temporary="${BIN_DIR}/${name}.pending.$$"
+    # A rename gives bash a new inode: the running entrypoint keeps reading its old one.
+    install -m "$mode" "${CONTROLLER_STAGE_DIR}/${name}" "$temporary" &&
+      mv -f "$temporary" "${BIN_DIR}/${name}" ||
+      fail "DEPLOY_CONTROLLER_INSTALL_FAILED" "Could not install controller file ${name}"
+    log_event "DEPLOY_CONTROLLER_UPDATED" "${name}"
   done
 }
 
@@ -149,6 +204,7 @@ download_and_validate_release() {
   local tag_json="${WORK_DIR}/tag.json"
   local manifest="${WORK_DIR}/osinara-deployment.json"
   local compose="${WORK_DIR}/compose.production.yaml"
+  local archive="${WORK_DIR}/osinara-installation.tar.gz"
 
   curl_github --output "$release_json" "${GITHUB_API}/releases/tags/${tag}"
   jq -e --arg tag "$tag" --arg base "${GITHUB_RELEASES}/${tag}" '
@@ -156,13 +212,17 @@ download_and_validate_release() {
     ([.assets[] | select(.name == "osinara-deployment.json" and
       .browser_download_url == ($base + "/osinara-deployment.json"))] | length == 1) and
     ([.assets[] | select(.name == "compose.production.yaml" and
-      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1)
+      .browser_download_url == ($base + "/compose.production.yaml"))] | length == 1) and
+    ([.assets[] | select(.name == "osinara-installation.tar.gz" and
+      .browser_download_url == ($base + "/osinara-installation.tar.gz"))] | length == 1)
   ' "$release_json" >/dev/null ||
     fail "DEPLOY_RELEASE_METADATA_INVALID" "Public release metadata is invalid"
   curl_github --output "$manifest" "${GITHUB_RELEASES}/${tag}/osinara-deployment.json"
   curl_github --output "$compose" "${GITHUB_RELEASES}/${tag}/compose.production.yaml"
+  curl_github --output "$archive" "${GITHUB_RELEASES}/${tag}/osinara-installation.tar.gz"
   validate_manifest "$manifest" "$version"
   verify_compose_hash "$compose"
+  stage_controller_scripts "$archive" "$manifest"
 
   curl_github --output "$ref_json" "${GITHUB_API}/git/ref/tags/${tag}"
   local object_type object_sha

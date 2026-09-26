@@ -8,6 +8,7 @@ import { isAppError } from "../app-error.js";
 import { database } from "../database.js";
 import { sessionRepository } from "./session-repository.js";
 import { deleteConfiguredPostgresEveSession } from "./workflow-postgres-session-storage.js";
+import { pruneConfiguredTerminalWorkflowRuns } from "./workflow-run-retention.js";
 
 const SESSION_RETENTION_ADVISORY_LOCK_KEY = "osinara-eve-session-retention";
 
@@ -34,6 +35,8 @@ export async function deleteExpiredSessions(): Promise<number> {
 async function deleteExpiredSessionsUnderLock(): Promise<number> {
   // The existing minute lifecycle hook bounds abandoned task rows before physical Eve deletion.
   await sessionRepository.retireAbandonedTasks(new Date());
+  // Finished per-turn runs outlive their sessions otherwise; the same lock serializes both sweeps.
+  await pruneConfiguredTerminalWorkflowRuns();
   let deleted = 0;
   while (true) {
     const claim = await sessionRepository.claimExpiredForDeletion(new Date());

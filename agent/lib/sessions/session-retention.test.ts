@@ -38,6 +38,9 @@ const values = vi.hoisted(() => {
 vi.mock("../database.js", () => ({
   database: () => ({ connect: values.connect }),
 }));
+vi.mock("./workflow-run-retention.js", () => ({
+  pruneConfiguredTerminalWorkflowRuns: vi.fn(async () => 0),
+}));
 vi.mock("./workflow-postgres-session-storage.js", () => ({
   deleteConfiguredPostgresEveSession: values.deletePostgresEveSession,
 }));

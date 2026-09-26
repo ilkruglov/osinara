@@ -133,6 +133,8 @@ main() {
   download_and_validate_release "$REQUESTED_VERSION"
   recheck_claim_owner
   prepare_candidate_release
+  # Only the current release's images stay before the pull: the new set plus a backup must fit.
+  prune_retired_release_images 1
   pull_release_images
   recheck_claim_owner
   preflight_backup
@@ -149,6 +151,8 @@ main() {
   send_success_notification
   prune_old_deploy_backups
   prune_retired_release_images
+  # Last: the controller of the release just proven healthy replaces this one for the next deploy.
+  install_controller_scripts
   log_event "DEPLOY_RELEASE_SUCCEEDED" "Release v${REQUESTED_VERSION} is healthy"
 }
 
