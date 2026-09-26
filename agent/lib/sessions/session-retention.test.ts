@@ -53,6 +53,7 @@ vi.mock("./session-repository.js", () => ({
   },
 }));
 
+import { AppError } from "../app-error.js";
 import { deleteExpiredSessions } from "./session-retention.js";
 
 describe("deleteExpiredSessions", () => {
@@ -65,6 +66,25 @@ describe("deleteExpiredSessions", () => {
         leaseToken: "lease-1",
       })
       .mockResolvedValue(null);
+  });
+
+  it("keeps sweeping past one failed session and closes a session whose storage is gone", async () => {
+    values.claimExpiredForDeletion.mockReset()
+      .mockResolvedValueOnce({ eveSessionId: "wrun_01KXB392VJ8YY13JMJ9YZAF5QA", id: "s-busy", leaseToken: "l-1" })
+      .mockResolvedValueOnce({ eveSessionId: "wrun_01KXB392VJ8YY13JMJ9YZAF5QB", id: "s-gone", leaseToken: "l-2" })
+      .mockResolvedValueOnce({ eveSessionId: "wrun_01KXB392VJ8YY13JMJ9YZAF5QC", id: "s-ok", leaseToken: "l-3" })
+      .mockResolvedValue(null);
+    values.deletePostgresEveSession
+      .mockRejectedValueOnce(new AppError("AGENT_EVE_SESSION_STORAGE_ACTIVE", "ещё выполняется"))
+      .mockRejectedValueOnce(new AppError("AGENT_EVE_SESSION_STORAGE_MISSING", "нет данных"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(deleteExpiredSessions()).resolves.toBe(2);
+
+    expect(values.failDeletion).toHaveBeenCalledWith("s-busy", "l-1", "AGENT_EVE_SESSION_STORAGE_ACTIVE", expect.any(Date));
+    expect(values.completeDeletion).toHaveBeenCalledWith("s-gone", "l-2");
+    expect(values.completeDeletion).toHaveBeenCalledWith("s-ok", "l-3");
+    expect(values.claimExpiredForDeletion).toHaveBeenCalledTimes(4);
   });
 
   it("serializes physical deletion across concurrent retention jobs", async () => {
