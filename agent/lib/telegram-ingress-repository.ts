@@ -312,11 +312,15 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     const result = await database().query<{ wait: string | null }>(
       `SELECT ceil(extract(epoch FROM min(ready_at) - clock_timestamp()) * 1000)::bigint::text AS wait
          FROM (
-           SELECT LEAST(max(received_at) + ($1 * interval '1 millisecond'),
-                        min(received_at) + ($2 * interval '1 millisecond')) AS ready_at
-             FROM telegram_ingress_updates
-            WHERE status = 'pending' AND (payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
-            GROUP BY queue_id
+           SELECT LEAST(max(held.received_at) + ($1 * interval '1 millisecond'),
+                        min(held.received_at) + ($2 * interval '1 millisecond')) AS ready_at
+             FROM telegram_ingress_updates held
+            WHERE held.status = 'pending' AND (held.payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
+              -- A chat whose head is already being worked on is not held: its tail waits for that turn.
+              AND NOT EXISTS (
+                SELECT 1 FROM telegram_ingress_updates busy
+                 WHERE busy.queue_id = held.queue_id AND busy.status = 'processing')
+            GROUP BY held.queue_id
          ) held
         WHERE ready_at > clock_timestamp()`,
       [burst.quietMilliseconds, burst.maxWaitMilliseconds],
