@@ -32,6 +32,7 @@ import {
   parseWorkspaceSandboxUseOptions,
   sandboxSeedDigest,
 } from "./sandbox-runner-contract.js";
+import { refuseBrowserCommand } from "./browser-command-guard.js";
 import { SandboxRunnerClient } from "./runner-client.js";
 import {
   accessForMounts,
@@ -157,7 +158,8 @@ function buildSession(input: {
     const sessionId = await input.ensure();
     const controller = new AbortController();
     let killed = false;
-    const completion = input.client.run(sessionId, {
+    const refused = refuseBrowserCommand(options.command);
+    const completion = refused !== null ? Promise.resolve({ ...refused, processId: "refused" }) : input.client.run(sessionId, {
       command: options.command,
       environment: options.env,
       workingDirectory: options.workingDirectory,
@@ -195,6 +197,8 @@ function buildSession(input: {
     },
     resolvePath: resolveSandboxPath,
     async run(options) {
+      const refused = refuseBrowserCommand(options.command);
+      if (refused !== null) return refused;
       const result = await input.client.run(await input.ensure(), {
         command: options.command,
         environment: options.env,

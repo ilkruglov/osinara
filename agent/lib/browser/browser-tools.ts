@@ -180,7 +180,7 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
       await b.driver.screenshot(`/workspace/${b.scope}/${relativePath}`);
     } catch (error) {
       screenshotPath = null;
-      deps.log({ code: "AGENT_BROWSER_SCREENSHOT_FAILED", reason: error instanceof Error ? error.message.slice(0, 200) : String(error) });
+      deps.log({ code: "AGENT_BROWSER_SCREENSHOT_FAILED", reason: error instanceof Error ? error.message.slice(0, 800) : String(error) });
     }
     await b.driver.eval(clearScript());
     let vision: VisionView | null = null;
@@ -188,7 +188,7 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
       try {
         vision = parseVision(await deps.vision(b.auth, b.scope, screenshotPath, question === undefined ? VISION_QUESTION : `${VISION_QUESTION}\nДополнительно ответь в note: ${question}`, b.ctx.abortSignal));
       } catch (error) {
-        deps.log({ code: "AGENT_BROWSER_VISION_FAILED", reason: error instanceof Error ? error.message.slice(0, 200) : String(error) });
+        deps.log({ code: "AGENT_BROWSER_VISION_FAILED", reason: error instanceof Error ? error.message.slice(0, 800) : String(error) });
       }
     }
     // A cancelled turn keeps no look: the next turn starts from what it sees, not from this one.

@@ -31,7 +31,7 @@ describe("tool input schemas", () => {
     expect(roots.length).toBeGreaterThan(30);
     const offenders = roots.filter((r) => r.root !== "object").map((r) => r.name);
     expect(offenders).toEqual([]);
-  });
+  }, 30_000); // imports every tool module; 1.8 s alone, past 5 s under the parallel run
 
   it("would catch a discriminated union at the root", () => {
     const union = z.discriminatedUnion("action", [z.object({ action: z.literal("a") }), z.object({ action: z.literal("b") })]);
