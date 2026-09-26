@@ -15,7 +15,13 @@ BACKUP_DURABLE_VOLUMES=()
 CREATED_CANDIDATE_VOLUMES=()
 CANDIDATE_HEALTH_VALIDATED=0
 
+# Keeps the newest `retained` timestamped deploy backups (default: the last two). Before a deploy
+# only the newest one matters: it is the backup of the release a failed candidate rolls back to,
+# while the one before it belongs to a transition already survived. Pruning to one before the
+# space check lowers the peak from three backups to two (25 сентября 2026: 3,6 + 3,3 GB on a
+# 40 GB disk, and the check itself asks for the new backup twice over).
 prune_old_deploy_backups() {
+  local retained="${1:-$RETAINED_DEPLOY_BACKUP_COUNT}"
   [[ -d "$BACKUPS_DIR" ]] || return 0
   local -a deploy_backups=()
   local nullglob_was_enabled=0 path name remove_count index
@@ -30,8 +36,7 @@ prune_old_deploy_backups() {
   done
   [[ "$nullglob_was_enabled" -eq 1 ]] || shopt -u nullglob
 
-  # Run only after a new complete backup and successful deployment; preserve the last two snapshots.
-  remove_count=$((${#deploy_backups[@]} - RETAINED_DEPLOY_BACKUP_COUNT))
+  remove_count=$((${#deploy_backups[@]} - retained))
   for ((index = 0; index < remove_count; index += 1)); do
     name="${deploy_backups[index]##*/}"
     rm -rf -- "${deploy_backups[index]}" ||
@@ -145,6 +150,8 @@ volume_size_bytes() {
 preflight_backup() {
   local volume volume_bytes
   local required_bytes=0
+  # The backup of the transition before the current one is no rollback target any more.
+  prune_old_deploy_backups 1
   select_durable_volumes
   for volume in "${BACKUP_DURABLE_VOLUMES[@]}"; do
     volume_bytes="$(volume_size_bytes "$volume")"
