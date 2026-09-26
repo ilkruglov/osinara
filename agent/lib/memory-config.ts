@@ -82,6 +82,11 @@ export const MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY = 60;
 export const MEMORY_STABILITY_DAYS_SEMANTIC = 180;
 export const MEMORY_RETENTION_RANK_FLOOR = 0.3;
 export const MEMORY_AUTO_CONTEXT_MIN_RETENTION = 0.2;
+// Model use counts as reinforcement at most once per record in this window (owner's decision,
+// 26 September 2026): 0 of 2 526 records had ever been reinforced, since the model never calls
+// `remember … reinforces`, so a fact used every day aged exactly like one never used. The window
+// keeps the loop short: shown → used → shown again cannot add a reinforcement per turn.
+export const MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS = 7;
 export const MEMORY_SEMANTIC_KINDS = ["profile", "preference", "fact", "family_shared"] as const;
 // Near-duplicate gate at write time; the prod embedder (multilingual-e5-small) keeps distinct facts
 // above 0.9 too, so the model decides and the gate only surfaces candidates.

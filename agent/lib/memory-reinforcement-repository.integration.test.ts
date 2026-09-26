@@ -26,7 +26,7 @@ describeWithDatabase("memoryReinforcementRepository", () => {
   });
   afterAll(closeDatabase);
 
-  it("records model use once per turn without refreshing evidence and ignores foreign refs", async () => {
+  it("records model use once per turn, reinforces once per window, and ignores foreign refs", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const inserted = await database().query<{ id: string }>(
       `INSERT INTO memory_items
@@ -53,7 +53,7 @@ describeWithDatabase("memoryReinforcementRepository", () => {
     await expect(database().query(
       "SELECT reinforcement_count, last_reinforced_at IS NOT NULL AS stamped, use_count, last_used_at IS NOT NULL AS used FROM memory_items WHERE id = $1",
       [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 0, stamped: false, use_count: 1, used: true }] });
+    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 1, stamped: true, use_count: 1, used: true }] });
     await expect(database().query(
       "SELECT metadata->>'reason' AS reason FROM audit_events WHERE event_type = 'memory.reinforced' AND subject_id = $1",
       [inserted.rows[0]!.id],
@@ -64,6 +64,19 @@ describeWithDatabase("memoryReinforcementRepository", () => {
     });
     expect((await database().query("SELECT use_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
       .toEqual([{ use_count: 1 }]);
+
+    // A second use inside the window counts as use, not as reinforcement; past the window it does both.
+    await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
+      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1b" }, reason: "model_used",
+    });
+    expect((await database().query("SELECT use_count, reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
+      .toEqual([{ reinforcement_count: 1, use_count: 2 }]);
+    await database().query("UPDATE memory_items SET last_reinforced_at = now() - interval '8 days' WHERE id = $1", [inserted.rows[0]!.id]);
+    await memoryReinforcementRepository.reinforceByRefs(fixture.auth, {
+      memoryRefs: [memoryRef], provenance: { sessionId: "eve-1", turnId: "turn-1c" }, reason: "model_used",
+    });
+    expect((await database().query("SELECT use_count, reinforcement_count, last_reinforced_at > now() - interval '1 minute' AS fresh FROM memory_items WHERE id = $1", [inserted.rows[0]!.id])).rows)
+      .toEqual([{ fresh: true, reinforcement_count: 2, use_count: 3 }]);
 
     // A personal-only caller cannot reinforce a family record.
     const personalOnly = { ...fixture.auth, scopes: ["personal" as const] };
@@ -78,6 +91,6 @@ describeWithDatabase("memoryReinforcementRepository", () => {
     })).resolves.toEqual({ reinforced: [], unknown: [memoryRef] });
     await expect(database().query(
       "SELECT reinforcement_count FROM memory_items WHERE id = $1", [inserted.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 0 }] });
+    )).resolves.toMatchObject({ rows: [{ reinforcement_count: 2 }] });
   });
 });

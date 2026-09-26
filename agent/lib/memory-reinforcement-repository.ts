@@ -3,11 +3,13 @@
  *
  * Export:
  * - `memoryReinforcementRepository.reinforceByRefs`: records turn-idempotent use or reinforcement for active
- *   authorized records. Model use updates only use_count/last_used_at, never evidence recency.
+ *   authorized records. Model use updates use_count/last_used_at every time and widens stability at
+ *   most once per `MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS`; explicit remember reinforcement always does.
  *
- * Only explicit remember reinforcement widens stability. Neither display nor model use does.
+ * Display alone never widens stability: only an answer that used the record does.
  */
 import { database } from "./database.js";
+import { MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS } from "./memory-config.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 
 export type MemoryReinforcementReason = "model_used" | "remember_reinforces";
@@ -58,14 +60,27 @@ export const memoryReinforcementRepository = {
           [row.id, input.provenance.sessionId, input.provenance.turnId, input.reason],
         );
         if (!event.rowCount) continue;
-        await client.query(
-          input.reason === "model_used"
-            ? `UPDATE memory_items SET use_count = use_count + 1, last_used_at = now() WHERE id = $1`
-            : `UPDATE memory_items
-              SET reinforcement_count = reinforcement_count + 1, last_reinforced_at = now(), updated_at = now()
-            WHERE id = $1`,
-          [row.id],
-        );
+        if (input.reason === "model_used") {
+          // Use is counted every time; stability grows once per window so a record shown and used
+          // in every turn cannot renew itself faster than the window.
+          await client.query(
+            `UPDATE memory_items
+                SET use_count = use_count + 1, last_used_at = now(),
+                    reinforcement_count = CASE WHEN last_reinforced_at IS NULL OR last_reinforced_at <= now() - make_interval(days => $2::int)
+                                               THEN reinforcement_count + 1 ELSE reinforcement_count END,
+                    last_reinforced_at = CASE WHEN last_reinforced_at IS NULL OR last_reinforced_at <= now() - make_interval(days => $2::int)
+                                              THEN now() ELSE last_reinforced_at END
+              WHERE id = $1`,
+            [row.id, MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS],
+          );
+        } else {
+          await client.query(
+            `UPDATE memory_items
+                SET reinforcement_count = reinforcement_count + 1, last_reinforced_at = now(), updated_at = now()
+              WHERE id = $1`,
+            [row.id],
+          );
+        }
         await client.query(
           `INSERT INTO audit_events (family_id, actor_user_id, event_type, subject_id, metadata)
            VALUES ($1, $2, 'memory.reinforced', $3,
