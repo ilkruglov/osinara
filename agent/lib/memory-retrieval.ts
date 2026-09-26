@@ -101,6 +101,8 @@ export interface MemoryTurnContext {
   memories: ModelMemoryContextItem[];
   retrievedClaimIds: string[];
   threads: MemoryThreadContext;
+  /** Where the retrieval spent its time: the query embedding, the hybrid search, the thread briefs. */
+  timings?: { embedMs: number; searchMs: number; threadsMs: number };
 }
 
 export function latestUserText(messages: readonly ModelMessage[]): string | null {
@@ -181,7 +183,9 @@ export async function retrieveMemoryTurnContext(
   skillHints: readonly string[],
   options: MemoryTurnContextOptions = {},
 ): Promise<MemoryTurnContext> {
+  const startedAt = performance.now();
   const embedding = await retrievalEmbedding(query);
+  const embeddedAt = performance.now();
   // Automatic context is deliberately narrower than `search_memories`, which the model can call.
   // The block limit applies after the filters below: with the limit in SQL, a top made of faded
   // or recently shown records left the block empty while fitting records sat just below it.
@@ -203,11 +207,17 @@ export async function retrieveMemoryTurnContext(
     ...admitted.map(toRetrievedMemory),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
+  const searchedAt = performance.now();
   const threads = await memoryThreadBriefRepository.activate({
     auth,
     queryEmbedding: embedding,
     retrievedClaimIds: admitted.map((result) => result.memory.id),
     skillHints,
   });
-  return { memories, retrievedClaimIds: retrieval.relatedClaimIds, threads };
+  const timings = {
+    embedMs: Math.round(embeddedAt - startedAt),
+    searchMs: Math.round(searchedAt - embeddedAt),
+    threadsMs: Math.round(performance.now() - searchedAt),
+  };
+  return { memories, retrievedClaimIds: retrieval.relatedClaimIds, threads, timings };
 }

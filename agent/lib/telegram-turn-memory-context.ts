@@ -163,6 +163,9 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         profileMs: Math.round(performance.now() - retrievedAt),
         retrievalMs: Math.round(retrievedAt - startedAt),
         threads: context.threads.threads.length,
+        // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
+        // steps answer that (rerank has its own AGENT_MEMORY_RERANKED durationMs).
+        ...(context.timings ?? {}),
       }));
       const hint = dependencies.takeSkillHint === undefined
         ? null
