@@ -160,6 +160,26 @@ describe("createConfiguredLanguageModel", () => {
     expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
   });
 
+  it("logs the provider's reason when DeepSeek rejects the request format", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const model = createConfiguredLanguageModel({
+      apiKey: "model-secret",
+      fetch: async () => new Response(JSON.stringify({ error: { message: "Invalid schema for function 'browser_task': schema must be a JSON Schema of 'type: \"object\"', got 'type: null'.", type: "invalid_request_error" } }), {
+        headers: { "content-type": "application/json" },
+        status: 400,
+      }),
+      maxOutputTokens: 1_000,
+      modelId: "deepseek-flash",
+      transport: { baseUrl: "https://api.deepseek.com", protocol: "deepseek-responses", reasoning: { effort: "low" } },
+    });
+
+    // 25 сентября 2026: three hours of «отклонил формат запроса» hid a rejected tool schema.
+    await expect(model.doGenerate({ prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }] } as LanguageModelV4CallOptions))
+      .rejects.toMatchObject({ code: "AGENT_MODEL_REQUEST_INVALID" });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("schema must be a JSON Schema"));
+    error.mockRestore();
+  });
+
   it("retries once with the fallback model when DeepSeek no longer knows the configured id", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const bodies: string[] = [];

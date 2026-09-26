@@ -142,9 +142,13 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
     if (options.transport.protocol === "deepseek-responses" && !response.ok) {
       const described = describeDeepSeekHttpError(response.status);
       if (described !== null && !described.retryable) {
+        // The provider's own reason: on 25 сентября 2026 a 400 hid a tool schema DeepSeek rejects
+        // for three hours behind "отклонил формат запроса". The body of an error carries no secret.
+        const providerMessage = (await response.clone().text().catch(() => "")).replace(/\s+/gu, " ").trim().slice(0, 500);
         console.error(JSON.stringify({
           code: described.code,
           modelId: options.modelId,
+          providerMessage,
           statusCode: response.status,
           url: modelRequestUrl(input),
         }));

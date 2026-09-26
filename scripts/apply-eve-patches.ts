@@ -174,11 +174,36 @@ await replaceExact(
   "if(I?.context!==void 0&&B.deferredContext!==!0)for(let e of I.context)H.push({content:e,role:`user`,providerOptions:{osinara:{turnContext:O.turnId}}});",
 );
 
-// Compaction may shrink the local recent window, but it may not buy another summary model call.
+// Compaction may shrink the local recent window, but it may not buy another summary model call:
+// the best result of the one summary is kept and logged instead of failing the turn (before
+// 25 сентября 2026 the turn died with EVE_COMPACTION_OUTPUT_TOO_LARGE; the next check tries again).
 await replaceExact(
   runtimePaths.compaction,
   "if(evaluateThreshold(v,i,`estimate`).type===`within-limit`||m===0)return v;--m",
-  "if(evaluateThreshold(v,i,`estimate`).type===`within-limit`)return v;throw Error(`EVE_COMPACTION_OUTPUT_TOO_LARGE: Compaction result exceeds the configured threshold`)",
+  "if(evaluateThreshold(v,i,`estimate`).type===`within-limit`)return v;console.error(JSON.stringify({code:\"AGENT_COMPACTION_OUTPUT_OVER_LIMIT\",estimatedTokens:Math.round(evaluateThreshold(v,i,`estimate`).estimatedTokens),threshold:i.threshold}));return v",
+);
+
+// The tool-result cap heuristic judged itself by the character estimate of the messages alone,
+// without the system prompt and the tool schemas (about 21k tokens) and with /4 for Russian text,
+// so it declared "within limit" while the real prompt stayed at 117–140k tokens and no summary
+// ever ran. It now subtracts what the cap saved from the real usage of the last call: a cap that
+// freed nothing (results already capped) hands over to the summary. The saving is estimated by
+// characters, which undercounts Russian, so the check errs towards the summary, never towards a
+// false "within limit".
+await replaceExact(
+  runtimePaths.compaction,
+  "let{conversation:f,previousCheckpoint:p}=extractPreviousCheckpoint(t),m=selectRecentWindowSize(f,d?{...i,recentWindowSize:1}:i)",
+  "let{conversation:f,previousCheckpoint:p}=extractPreviousCheckpoint(t),R=getInputTokenCount(t,i),m=selectRecentWindowSize(f,d?{...i,recentWindowSize:1}:i)",
+);
+await replaceExact(
+  runtimePaths.compaction,
+  "for(let n of COMPACTION_HEURISTICS){let r=n({config:i,conversation:f,older:e,previousCheckpoint:p,recent:t})",
+  "for(let n of COMPACTION_HEURISTICS){let r=n({config:i,conversation:f,older:e,previousCheckpoint:p,realBefore:R,recent:t})",
+);
+await replaceExact(
+  runtimePaths.compaction,
+  "function toolResultCapHeuristic(e){let t=withResumptionGuard([...e.previousCheckpoint===void 0?[]:[{content:COMPACTION_CHECKPOINT_MARKER,role:`user`},{content:e.previousCheckpoint,role:`assistant`}],...capToolResults(e.older),...e.recent],e.conversation);return evaluateThreshold(t,e.config,`should-compact`).type===`within-limit`?{messages:t,type:`within-limit`}:{type:`insufficient`}}",
+  "function toolResultCapHeuristic(e){let c=capToolResults(e.older),t=withResumptionGuard([...e.previousCheckpoint===void 0?[]:[{content:COMPACTION_CHECKPOINT_MARKER,role:`user`},{content:e.previousCheckpoint,role:`assistant`}],...c,...e.recent],e.conversation),s=Math.max(0,estimateTokens(e.older)-estimateTokens(c)),a=typeof e.realBefore==`number`?e.realBefore-s+COMPACTION_PROMPT_OVERHEAD_TOKENS:evaluateThreshold(t,e.config,`should-compact`).estimatedTokens,w=a<=e.config.threshold;console.info(JSON.stringify({code:\"AGENT_COMPACTION_HEURISTIC\",realBefore:typeof e.realBefore==`number`?Math.round(e.realBefore):null,savedTokens:Math.round(s),realAfter:Math.round(a),threshold:e.config.threshold,within:w}));return w?{messages:t,type:`within-limit`}:{type:`insufficient`}}",
 );
 
 // Every compaction check reports the numbers it decided on: prod grew to 133k prompt tokens with a
