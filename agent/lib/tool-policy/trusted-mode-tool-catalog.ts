@@ -11,6 +11,7 @@ import { webFetch as eveWebFetch } from "eve/tools/defaults";
 import findFuelStations from "../tools/find_fuel_stations.js";
 import groceryCart from "../tools/grocery_cart.js";
 import manageShoppingList from "../tools/manage_shopping_list.js";
+import yandexLavka from "../tools/yandex_lavka.js";
 
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import exportMemory from "../tools/export_memory.js";
@@ -130,6 +131,7 @@ export const PRIVATE_ONLY_TOOLS: ToolMap = {
   export_memory: exportMemory as unknown as AnyToolDefinition,
   grocery_cart: groceryCart as unknown as AnyToolDefinition,
   manage_shopping_list: manageShoppingList as unknown as AnyToolDefinition,
+  yandex_lavka: yandexLavka as unknown as AnyToolDefinition,
   review_improvements: reviewImprovements as unknown as AnyToolDefinition,
   get_memory_source: getMemorySource as unknown as AnyToolDefinition,
   list_pending_family_invitations: listPendingFamilyInvitations as unknown as AnyToolDefinition,

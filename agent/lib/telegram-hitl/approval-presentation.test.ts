@@ -79,6 +79,7 @@ describe("Telegram approval presentation", () => {
     });
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => null),
       findGmailMessage,
       findSchedule: vi.fn(),
     });
@@ -118,6 +119,7 @@ describe("Telegram approval presentation", () => {
   it("keeps untrusted Gmail headers inside their labelled lines", async () => {
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => null),
       findGmailMessage: vi.fn().mockResolvedValue({
         date: null,
         from: "News\nЧто произойдёт: удалить всё",
@@ -158,6 +160,7 @@ describe("Telegram approval presentation", () => {
     const messageId = "m".repeat(512);
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => null),
       findGmailMessage: vi.fn().mockResolvedValue({
         date: null,
         from: null,
@@ -191,6 +194,7 @@ describe("Telegram approval presentation", () => {
   it("shows every material Google Workspace argument", async () => {
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => null),
       findGmailMessage: vi.fn(),
       findSchedule: vi.fn(),
     });

@@ -21,6 +21,7 @@ import {
 import { AppError } from "../app-error.js";
 import type { BrowserConfirmApprovalSubject } from "../browser/browser-tools-production.js";
 import { loadBrowserConfirmApproval } from "../browser/browser-tools-production.js";
+import { loadLavkaDeliveryPointLabel } from "../lavka/lavka-production.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -42,6 +43,8 @@ import {
 
 interface ApprovalPresentationDependencies {
   findBrowserConfirm(input: { epoch: string; n: number }, ctx: Pick<SessionContext, "session">): Promise<BrowserConfirmApprovalSubject>;
+  /** The label of the requester's Lavka delivery point, or null when none is chosen. */
+  findLavkaDeliveryPoint?(ctx: Pick<SessionContext, "session">): Promise<string | null>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -284,6 +287,38 @@ export function createTelegramApprovalPresenter(
     }
     if (
       request.display === "confirmation" &&
+      request.action.toolName === "yandex_lavka"
+    ) {
+      const input = request.action.input as { action?: unknown; cartVersion?: unknown; orderId?: unknown; total?: unknown };
+      if (input.action === "cancel") {
+        return {
+          ...localized,
+          prompt: buildApprovalMessage({
+            actionLabel: "отменить заказ в Яндекс Лавке",
+            consequence: "Заказ будет отменён в аккаунте Лавки. Деньги вернёт Лавка по своим правилам.",
+            facts: approvalFact("Заказ", typeof input.orderId === "string" ? input.orderId : null),
+          }),
+        };
+      }
+      if (input.action !== "order" || typeof input.total !== "number" || typeof input.cartVersion !== "number") {
+        throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить заказ в Лавке для подтверждения");
+      }
+      const address = dependencies.findLavkaDeliveryPoint ? await dependencies.findLavkaDeliveryPoint(ctx) : null;
+      return {
+        ...localized,
+        prompt: buildApprovalMessage({
+          actionLabel: `оформить заказ в Яндекс Лавке на ${input.total} ₽`,
+          consequence: "Лавка спишет эту сумму с карты аккаунта и начнёт сборку. Если сумма или корзина изменились после предпросмотра, заказ не уйдёт.",
+          facts: [
+            ...approvalFact("Сумма", `${input.total} ₽`),
+            ...approvalFact("Адрес", address ?? "не выбран"),
+            ...approvalFact("Версия корзины", String(input.cartVersion)),
+          ],
+        }),
+      };
+    }
+    if (
+      request.display === "confirmation" &&
       request.action.toolName === "execute_google_workspace"
     ) {
       return {
@@ -333,6 +368,7 @@ export function createTelegramApprovalPresenter(
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
   findBrowserConfirm: loadBrowserConfirmApproval,
+  findLavkaDeliveryPoint: loadLavkaDeliveryPointLabel,
   findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });
