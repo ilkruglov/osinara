@@ -40,6 +40,7 @@ import {
   withPendingMarker,
 } from "./telegram-pending-messages.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
+import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
 
@@ -351,9 +352,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         pendingAfter: readonly TelegramPendingMessage[],
       ): Promise<void> {
         await dependencies.repository.beginDispatch(leased.updateId, leased.leaseToken);
-        const marked = marker !== null && update.kind === "message"
-          ? withSeriesMarker(update, marker)
-          : update;
+        // The turn learns its own update id: messages queued after it can then be shown to it.
+        const stamped = update.kind === "message" ? withTelegramUpdateMarker(update, leased.updateId) : update;
+        const marked = marker !== null && stamped.kind === "message"
+          ? withSeriesMarker(stamped, marker)
+          : stamped;
         // The turn sees what the chat said after its message: otherwise it answered a snapshot
         // the conversation had already moved past, and two bots went in circles.
         const outbound = pendingAfter.length > 0 && marked.kind === "message"

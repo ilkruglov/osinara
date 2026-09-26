@@ -20,6 +20,7 @@ import { AppError } from "../app-error.js";
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { EXTERNAL_IMAGE_GENERATION_TOOL_PRESENTATION } from "../image-generation/image-generation-tool-presentation.js";
 import { wrapModelFacingToolMap } from "../model-facing-tool.js";
+import { withTurnInterjectionSurface } from "../turn-interjection/turn-interjection-surface.js";
 import { authorizeAgentScheduleDelivery } from "../agent-schedules/agent-schedule-delivery-authorization.js";
 import { scheduledDeliveryMetadata } from "../agent-schedules/scheduled-session.js";
 import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-tool.js";
@@ -386,7 +387,7 @@ function allowlistKey(allowed: ReadonlySet<ExternalGroupToolName>): string {
   return [...allowed].sort().join("\0");
 }
 
-const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
+const TRUSTED_APPLICATION_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
   family: wrapModelFacingToolMap({
     ...TRUSTED_MODE_TOOLS,
     ...FAMILY_ONLY_TOOLS,
@@ -397,8 +398,14 @@ const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
   }),
 };
 
+// An interactive turn also receives, with each tool result, the messages its author sent meanwhile.
+const TRUSTED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = {
+  family: withTurnInterjectionSurface(TRUSTED_APPLICATION_SURFACES.family),
+  private: withTurnInterjectionSurface(TRUSTED_APPLICATION_SURFACES.private),
+};
+
 const TRUSTED_SCHEDULED_SURFACES: Readonly<Record<"family" | "private", ToolMap>> = Object.fromEntries(
-  Object.entries(TRUSTED_SURFACES).map(([environment, surface]) => {
+  Object.entries(TRUSTED_APPLICATION_SURFACES).map(([environment, surface]) => {
     // A scheduled turn can read chat instructions but has no user source for prompt or memory writes.
     const {
       manage_behavior_preference: _manageBehaviorPreference,

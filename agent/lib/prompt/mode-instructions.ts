@@ -11,6 +11,7 @@
  * - External-group rules follow the effective allowlist, so revoked capabilities leave no guidance.
  */
 import { EXTERNAL_GROUP_MODEL_POLICY } from "../external-group-model-policy.js";
+import { TURN_INTERJECTION_RULES } from "../turn-interjection/turn-interjection-block.js";
 import { externalGroupCapabilityInstructions } from "../tool-policy/external-group-capability-instructions.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import type { TelegramReactionPolicy } from "../telegram-reaction-policy.js";
@@ -141,6 +142,7 @@ function privateInstructions(
     // a spontaneous afterthought.
     scheduledRun ? null : SPOKEN_ASIDE_RULES,
     scheduledRun ? null : reactionRules(reactionPolicy, "private"),
+    scheduledRun ? null : TURN_INTERJECTION_RULES,
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }
@@ -203,6 +205,7 @@ function familyInstructions(
     scheduledRun ? null : GROUP_ADDRESSING_RULES,
     scheduledRun ? null : GROUP_LENGTH_RULES,
     scheduledRun ? null : reactionRules(reactionPolicy, "group"),
+    scheduledRun ? null : TURN_INTERJECTION_RULES,
     scheduledRun ? null : trustedBehaviorPreferenceRules(),
   ]);
 }

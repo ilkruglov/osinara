@@ -146,6 +146,9 @@ export function repositories() {
     proactiveDeliveries: {
       listPendingContext: vi.fn().mockResolvedValue(null),
     },
+    turnInterjections: {
+      findDeliveredContentKind: vi.fn().mockResolvedValue(null),
+    },
     session: {
       hasRoute: vi.fn().mockResolvedValue(false),
       prepareTurn: vi.fn().mockResolvedValue({

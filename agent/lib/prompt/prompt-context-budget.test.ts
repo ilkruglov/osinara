@@ -20,7 +20,8 @@ const CORE_CHARACTER_BUDGET = 12_400;
 // Raised by 400 on 13 September 2026 for recurrence periods from a minute to a year (upstream v0.22.0).
 // Raised by 400 on 22 September 2026: browser_task routing; by 400 on 25 September for the browser
 // tools section that replaced it (open, look, act, confirm, the worker, save_field).
-const PRIVATE_CHARACTER_BUDGET = 14_000;
+// +1 500 on 26 September 2026: the rules for messages that arrive while a turn works.
+const PRIVATE_CHARACTER_BUDGET = 15_500;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section, then by 200 on 7 September for
@@ -30,7 +31,7 @@ const PRIVATE_CHARACTER_BUDGET = 14_000;
 // Raised by 400 on 10 September 2026 for the same chat-rule sentence.
 // Raised by 400 on 13 September 2026 for the same recurrence sentence.
 // Raised by 400 on 22 September 2026 for the same browser_task sentence.
-const FAMILY_CHARACTER_BUDGET = 16_400;
+const FAMILY_CHARACTER_BUDGET = 18_000;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
 // then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
 // about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal,

@@ -59,6 +59,8 @@ import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory
 import { telegramInboundActor } from "./telegram-inbound-actor.js";
 import { readTelegramSeriesMarker } from "./telegram-message-series.js";
 import { formatPendingMessagesContext, readTelegramPendingMarker } from "./telegram-pending-messages.js";
+import { readTelegramUpdateMarker } from "./telegram-update-marker.js";
+import { createTurnInterjectionMarker } from "./turn-interjection/turn-interjection-block.js";
 import { logTurnTiming } from "./turn-timing.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
@@ -487,7 +489,20 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const memoryContext = pendingBlock === null
       ? retrievedMemoryContext
       : [...retrievedMemoryContext, pendingBlock];
+    // A running turn of this same conversation may already have seen this message with a tool result.
+    const currentUpdateId = readTelegramUpdateMarker(message.raw);
+    const shownDuringTurn = currentUpdateId !== null
+      ? await repositories.turnInterjections.findDeliveredContentKind(currentUpdateId, appSession.id)
+      : null;
+    // Messages its author sends while this turn works can reach it only in the trusted zones.
+    const turnInterjectionMarker = currentUpdateId !== null && !resumesPendingTask &&
+      actor.kind === "telegram_user" && (group === null || group.type === "family_private")
+      ? createTurnInterjectionMarker()
+      : null;
     const turnResult = buildTelegramTurnResult({
+      currentUpdateId,
+      shownDuringTurn,
+      turnInterjectionMarker,
       access,
       actor,
       appSession,
