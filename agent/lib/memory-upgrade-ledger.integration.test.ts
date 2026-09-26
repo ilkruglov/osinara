@@ -144,6 +144,7 @@ const POST_V0101_MIGRATIONS = [
   "110_software_update_release_url.sql",
   "111_browser_task_confirming_and_profiles.sql",
   "112_browser_looks.sql",
+  "113_owner_balance_alerts.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

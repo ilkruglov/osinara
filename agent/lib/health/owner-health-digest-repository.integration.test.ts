@@ -5,12 +5,16 @@
  * - The family owner with a Telegram id is a recipient.
  * - The report counts a rotation, written memory and a stuck review lane of that family only.
  * - The daily claim is taken once; a released claim can be taken again; a completed one cannot.
+ * - A completed digest records the balance the next one reads back; the balance alert claim
+ *   follows the same day rule, and an abandoned one is never taken again that day.
+ * - Both databases have a measurable size.
  */
 import { afterAll, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { createMemoryFamilyFixture, createMemoryInput } from "../memory-repository.integration-fixtures.js";
 import { memoryRepository } from "../memory-repository.js";
+import { ownerBalanceAlertRepository } from "./owner-balance-alert-repository.js";
 import { ownerHealthDigestRepository } from "./owner-health-digest-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
@@ -79,5 +83,30 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
     await ownerHealthDigestRepository.complete(family.familyId, digestDate, now, 42);
     await ownerHealthDigestRepository.release(family.familyId, digestDate);
     await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(false);
+  });
+
+  it("records the balance of a sent digest, claims the balance alert once a day and sizes the databases", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const family = await createMemoryFamilyFixture(suffix);
+    const now = new Date("2026-09-26T06:10:00.000Z");
+    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27")).toBeNull();
+    expect(await ownerHealthDigestRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
+    await ownerHealthDigestRepository.complete(family.familyId, "2026-09-26", now, 120, 12.5);
+    // Only yesterday's balance makes a day's change: a gap of a day yields no comparison.
+    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-27")).toBe(12.5);
+    expect(await ownerHealthDigestRepository.previousBalance(family.familyId, "2026-09-28")).toBeNull();
+
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(false);
+    await ownerBalanceAlertRepository.release(family.familyId, "2026-09-26");
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(true);
+    await ownerBalanceAlertRepository.abandon(family.familyId, "2026-09-26", "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS");
+    await ownerBalanceAlertRepository.release(family.familyId, "2026-09-26");
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-26", now)).toBe(false);
+    // A claim left behind by a dead dispatcher is ambiguous, not free: the alert is not sent twice.
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-27", now)).toBe(true);
+    expect(await ownerBalanceAlertRepository.claim(family.familyId, "2026-09-27", new Date(now.getTime() + 2 * 60 * 60 * 1_000))).toBe(false);
+
+    expect(await ownerHealthDigestRepository.databaseBytes()).toBeGreaterThan(0);
   });
 });

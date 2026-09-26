@@ -170,12 +170,33 @@ export const ownerHealthDigestRepository = {
     }
   },
 
-  async complete(familyId: string, digestDate: string, now: Date, textLength: number): Promise<void> {
+  async complete(familyId: string, digestDate: string, now: Date, textLength: number, balanceUsd: number | null = null): Promise<void> {
     await database().query(
-      `UPDATE owner_health_digests SET sent_at = $3, text_length = $4
+      `UPDATE owner_health_digests SET sent_at = $3, text_length = $4, balance_usd = $5
         WHERE family_id = $1 AND digest_date = $2`,
-      [familyId, digestDate, now, textLength],
+      [familyId, digestDate, now, textLength, balanceUsd],
     );
+  },
+
+  /** The balance recorded by yesterday's digest, so the difference is a day's change and nothing older. */
+  async previousBalance(familyId: string, digestDate: string): Promise<number | null> {
+    const result = await database().query<{ balance_usd: string }>(
+      `SELECT balance_usd::text AS balance_usd FROM owner_health_digests
+        WHERE family_id = $1 AND digest_date = $2::date - 1 AND sent_at IS NOT NULL AND balance_usd IS NOT NULL`,
+      [familyId, digestDate],
+    );
+    const row = result.rows[0];
+    return row === undefined ? null : Number(row.balance_usd);
+  },
+
+  /** Both databases the installer dumps before an update: the application one and the Workflow one. */
+  async databaseBytes(): Promise<number | null> {
+    const result = await database().query<{ bytes: string }>(
+      `SELECT (pg_database_size(current_database())
+             + coalesce((SELECT pg_database_size(datname) FROM pg_database WHERE datname = 'osinara_workflow'), 0))::text AS bytes`,
+    );
+    const row = result.rows[0];
+    return row === undefined ? null : Number(row.bytes);
   },
 
   async release(familyId: string, digestDate: string): Promise<void> {

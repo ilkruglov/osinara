@@ -18,6 +18,8 @@ export const AGENT_COMPACTION_THRESHOLD = 0.75;
 export const AGENT_COMPACTION_CONTEXT_WINDOW_TOKENS = 160_000;
 // The model may perform substantial tool work, but one turn must never consume unbounded calls.
 export const AGENT_MAX_MODEL_STEPS_PER_TURN = 32;
+/** The owner is warned once a day while the DeepSeek balance is below this, in USD. */
+export const DEEPSEEK_BALANCE_ALERT_USD = 5;
 /** The browser worker: a look and an act are two steps, so this is about 30 actions on a site. */
 export const BROWSER_WORKER_MAX_MODEL_STEPS = 60;
 /** Terminal token budget of one worker session: about 60 steps of a 20k-token prompt. */

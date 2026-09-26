@@ -26,6 +26,15 @@ const quiet: OwnerHealthReport = {
 };
 
 describe("formatOwnerHealthDigest", () => {
+  it("puts a spent balance among the failures and a healthy one next to the memory counts", () => {
+    const warning = formatOwnerHealthDigest(quiet, { balance: { available: false, totalUsd: -0.04 }, previousBalanceUsd: null, storage: null });
+    expect(warning.split("\n")[0]).toBe("Сводка за сутки.");
+    expect(warning).toContain("DeepSeek: запросы недоступны, баланс −0,04 $.");
+    const healthy = formatOwnerHealthDigest(quiet, { balance: { available: true, totalUsd: 20 }, previousBalanceUsd: null, storage: null });
+    expect(healthy.split("\n")[0]).toBe("Сводка за сутки: сбоев нет.");
+    expect(healthy).toContain("DeepSeek: баланс 20,00 $.");
+  });
+
   it("reports a quiet day with the memory counts", () => {
     expect(formatOwnerHealthDigest(quiet)).toBe(
       "Сводка за сутки: сбоев нет.\nПамять: +4 (group episode 3, personal profile 1).",
@@ -73,7 +82,10 @@ describe("createOwnerHealthDigestDispatcher", () => {
     return {
       claim: vi.fn().mockResolvedValue(true),
       complete: vi.fn().mockResolvedValue(undefined),
+      balance: vi.fn().mockResolvedValue(null),
       deliver: vi.fn().mockResolvedValue(undefined),
+      previousBalance: vi.fn().mockResolvedValue(null),
+      storage: vi.fn().mockResolvedValue(null),
       recipients: vi.fn().mockResolvedValue([
         { familyId: "family-1", ownerTelegramUserId: "101" },
         { familyId: "family-2", ownerTelegramUserId: "202" },
@@ -100,8 +112,26 @@ describe("createOwnerHealthDigestDispatcher", () => {
     expect(deps.report).toHaveBeenCalledWith("family-1", new Date("2026-09-08T06:10:00.000Z"), now);
     expect(deps.deliver).toHaveBeenCalledTimes(1);
     expect(deps.deliver).toHaveBeenCalledWith({ chatId: "101", text: formatOwnerHealthDigest(quiet) });
-    expect(deps.complete).toHaveBeenCalledWith("family-1", "2026-09-09", now, formatOwnerHealthDigest(quiet).length);
+    expect(deps.complete).toHaveBeenCalledWith("family-1", "2026-09-09", now, formatOwnerHealthDigest(quiet).length, null);
     expect(deps.release).not.toHaveBeenCalled();
+  });
+
+  it("adds the balance with the day's spend and records it, reading balance and disk once per pass", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const deps = dependencies({
+      balance: vi.fn().mockResolvedValue({ available: true, totalUsd: 12.5 }),
+      previousBalance: vi.fn().mockResolvedValue(13.7),
+      storage: vi.fn().mockResolvedValue({ databaseBytes: 3 * 1024 ** 3, freeBytes: 6 * 1024 ** 3, totalBytes: 40 * 1024 ** 3 }),
+    });
+    const now = new Date("2026-09-26T06:10:00.000Z");
+    await expect(createOwnerHealthDigestDispatcher(deps)(now)).resolves.toBe(2);
+    const text = (vi.mocked(deps.deliver).mock.calls[0]![0] as { text: string }).text;
+    expect(text).toContain("DeepSeek: баланс 12,50 $, за сутки −1,20 $.");
+    expect(text).toContain("Обновление не пройдёт проверку места");
+    expect(deps.complete).toHaveBeenCalledWith("family-1", "2026-09-26", now, text.length, 12.5);
+    expect(deps.balance).toHaveBeenCalledTimes(1);
+    expect(deps.storage).toHaveBeenCalledTimes(1);
+    expect(deps.previousBalance).toHaveBeenCalledWith("family-1", "2026-09-26");
   });
 
   it("releases the claim when Telegram fails and goes on to the next family", async () => {
@@ -115,7 +145,7 @@ describe("createOwnerHealthDigestDispatcher", () => {
 
     expect(deps.release).toHaveBeenCalledWith("family-1", "2026-09-09");
     expect(deps.complete).toHaveBeenCalledTimes(1);
-    expect(deps.complete).toHaveBeenCalledWith("family-2", "2026-09-09", expect.any(Date), expect.any(Number));
+    expect(deps.complete).toHaveBeenCalledWith("family-2", "2026-09-09", expect.any(Date), expect.any(Number), null);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_OWNER_HEALTH_DIGEST_FAILED"));
   });
 });
