@@ -14,7 +14,8 @@ import { createLavkaClient, type LavkaDeliveryPoint } from "./lavka-client.js";
 
 const point: LavkaDeliveryPoint = { city: "Москва", comment: "", country: "Россия", doorcode: "", entrance: "1", flat: "5", floor: "2", house: "11к1", label: "Корабельная 11к1", lat: 55.7, lon: 37.6, placeId: "", street: "Корабельная" };
 
-type Answer = { authorized?: boolean; data: unknown; status?: number } | ((body: unknown) => { authorized?: boolean; data: unknown; status?: number });
+type Reply = { authorized?: boolean; data: unknown; error?: string; status?: number };
+type Answer = Reply | ((body: unknown) => Reply);
 
 function tab(answers: Record<string, Answer>, url = "https://lavka.yandex.ru/") {
   const calls: Array<{ body: unknown; url: string }> = [];
@@ -25,7 +26,7 @@ function tab(answers: Record<string, Answer>, url = "https://lavka.yandex.ru/") 
       const answer = answers[request.url];
       if (!answer) throw new Error(`no answer for ${request.url}`);
       const value = typeof answer === "function" ? answer(request.body) : answer;
-      return JSON.stringify({ authorized: value.authorized ?? true, data: value.data, status: value.status ?? 200 });
+      return JSON.stringify({ authorized: value.authorized ?? true, data: value.data, error: value.error ?? null, status: value.status ?? 200 });
     }),
     open: vi.fn(async () => {}),
     settle: vi.fn(async () => {}),
@@ -50,6 +51,14 @@ describe("createLavkaClient", () => {
   it("names a lost session instead of retrying", async () => {
     const { client } = tab({ "/api/v1/providers/cart/v1/retrieve": { authorized: false, data: null, status: 401 } });
     await expect(client.cart(point)).rejects.toMatchObject({ code: "AGENT_LAVKA_AUTH_REQUIRED" });
+  });
+
+  // 26 September 2026: the first live add was a 400 whose body named the wrong field; the tool said only «не ответила».
+  it("repeats the site's own reason for a refused request and keeps an outage an outage", async () => {
+    const { client } = tab({ "/api/v1/providers/cart/v1/retrieve": { data: null, error: JSON.stringify({ data: { errors: ["deliveryType must match the following: \"/^(eats_dispatch|courier)$/\""], name: "ValidationError" } }), status: 400 } });
+    await expect(client.cart(point)).rejects.toMatchObject({ code: "AGENT_LAVKA_REJECTED", message: expect.stringContaining("deliveryType must match") });
+    const outage = tab({ "/api/v1/providers/cart/v1/retrieve": { data: null, error: "<html>502</html>", status: 502 } });
+    await expect(outage.client.cart(point)).rejects.toMatchObject({ code: "AGENT_LAVKA_UNAVAILABLE" });
   });
 
   it("adds a product as an absolute quantity under the cart version and reports a dropped one", async () => {

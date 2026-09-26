@@ -32,6 +32,8 @@ export interface LavkaPageRequest {
 export interface LavkaPageResult {
   authorized: boolean;
   data: unknown;
+  /** The site's answer to a refused request (a validation error names the wrong fields). */
+  error?: string | null;
   status: number;
 }
 
@@ -52,7 +54,7 @@ const projections = {
   addresses: (raw) => { const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : []; return list.filter((a) => a && typeof a === "object").slice(0, 20).map(address); },
   suggest: (raw) => { const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? (Object.values(raw).find(Array.isArray) || []) : []; return list.filter((s) => s && typeof s === "object" && Array.isArray(s.position)).slice(0, 5).map((s) => ({ lon: num(s.position[0]), lat: num(s.position[1]), text: str(pick(s, "full", "label", "title", "text"), 300), uri: str(pick(s, "uri"), 300) })); },
   geocode: (raw) => { const g = raw && typeof raw === "object" ? raw : {}; return { lat: num(pick(g, "lat")), lon: num(pick(g, "lon")), city: str(pick(g, "city"), 100), street: str(pick(g, "street"), 200), house: str(pick(g, "house"), 40), entrance: str(pick(g, "entrance"), 40), country: str(pick(g, "country"), 100), placeId: str(pick(g, "uri"), 300), text: str(pick(g, "text"), 300) }; },
-  paymentMethods: (raw) => { const r = raw && typeof raw === "object" ? raw : {}; const def = r.defaultMethod && typeof r.defaultMethod === "object" ? str(r.defaultMethod.id, 120) : ""; return { defaultId: def, methods: (Array.isArray(r.methods) ? r.methods : []).filter((m) => m && typeof m === "object").slice(0, 10).map((m) => ({ id: str(pick(m, "id"), 120), type: str(pick(m, "type"), 40), label: Array.isArray(m.displayName) ? m.displayName.join(" ").slice(0, 100) : str(pick(m, "name"), 100), bank: str(pick(m, "cardBank"), 60), available: !(m.availability && m.availability.available === false) })) }; },
+  paymentMethods: (raw) => { const r = raw && typeof raw === "object" ? raw : {}; const method = (m) => ({ id: str(pick(m, "id"), 120), type: str(pick(m, "type"), 40), label: Array.isArray(m.displayName) ? m.displayName.join(" ").slice(0, 100) : str(pick(m, "displayName", "name"), 100), bank: str(pick(m, "cardBank"), 60), available: !(m.availability && m.availability.available === false) }); const def = r.defaultMethod && typeof r.defaultMethod === "object" ? method(r.defaultMethod) : null; const all = (Array.isArray(r.methods) ? r.methods : []).filter((m) => m && typeof m === "object").map(method); /* an account carries hundreds of cards; the default comes first so the cut never loses it */ const rest = all.filter((m) => !def || m.id !== def.id); return { defaultId: def ? def.id : "", methods: (def ? [def, ...rest] : rest).slice(0, 10) }; },
   serviceInfo: (raw) => ({ depotId: str(pick(raw || {}, "depotId"), 120) }),
   submit: (raw) => { const d = raw && raw.data && typeof raw.data === "object" ? raw.data : raw || {}; return { orderId: str(pick(d, "orderId", "order_id", "id"), 120) }; },
   payment: (raw) => { const d = raw && typeof raw === "object" ? raw : {}; const p = d.payload && typeof d.payload === "object" ? d.payload : {}; return { status: str(pick(d, "status"), 60), redirectUrl: str(pick(p, "redirectUrl"), 1000) }; },
@@ -79,7 +81,7 @@ const response = await fetch(req.url, { method: req.method, credentials: "includ
 const text = await response.text();
 let data = null;
 try { data = JSON.parse(text); } catch (error) { data = null; }
-const out = { authorized: response.status !== 401 && response.status !== 403, status: response.status, data: response.ok && data !== null ? projections[req.project](data) : null };
+const out = { authorized: response.status !== 401 && response.status !== 403, status: response.status, data: response.ok && data !== null ? projections[req.project](data) : null, error: response.ok ? null : text.slice(0, 500) };
 return JSON.stringify(out).slice(0, ${LAVKA_PAGE_RESULT_MAX_BYTES});
 })()`;
 }

@@ -67,7 +67,7 @@ export function createLavkaClient(deps: Deps) {
     await deps.driver.settle();
   }
 
-  async function call<T>(request: LavkaPageRequest): Promise<{ data: T; status: number }> {
+  async function call<T>(request: LavkaPageRequest): Promise<{ data: T; error: string | null; status: number }> {
     await ensureTab();
     const raw = await deps.driver.eval(lavkaPageScript(request, LAVKA_SEARCH_LIMIT));
     let result: LavkaPageResult;
@@ -75,14 +75,32 @@ export function createLavkaClient(deps: Deps) {
     if (!result.authorized) {
       throw new AppError("AGENT_LAVKA_AUTH_REQUIRED", "Лавка не узнаёт вход: нужно войти в Яндекс в браузере Мии (browser_open https://passport.yandex.ru/auth), потом повторить");
     }
-    return { data: result.data as T, status: result.status };
+    return { data: result.data as T, error: result.error ?? null, status: result.status };
+  }
+
+  /** The site's own words for a refused request: a validation error names the fields it rejected. */
+  function refusalReason(error: string | null): string | null {
+    if (!error) return null;
+    try {
+      const parsed = JSON.parse(error) as { data?: { errors?: unknown; message?: unknown } };
+      const errors = Array.isArray(parsed.data?.errors) ? parsed.data.errors.filter((e): e is string => typeof e === "string") : [];
+      const message = errors.length > 0 ? errors.join("; ") : typeof parsed.data?.message === "string" ? parsed.data.message : null;
+      return message ? message.replace(/\s+/gu, " ").slice(0, 300) : null;
+    } catch { return null; }
   }
 
   async function ok<T>(request: LavkaPageRequest): Promise<T> {
-    const { data, status } = await call<T | null>(request);
+    const { data, error, status } = await call<T | null>(request);
     if (status === 409) throw new AppError("AGENT_LAVKA_CART_CONFLICT", "Корзина изменилась с другого устройства, повторите действие");
     if (status === 429) throw new AppError("AGENT_LAVKA_RATE_LIMITED", "Лавка временно ограничила число запросов. Попробуйте позже");
-    if (status >= 400 || data === null) throw unavailable(`status_${status}`);
+    if (status >= 400) {
+      const reason = refusalReason(error);
+      console.error(JSON.stringify({ code: "AGENT_LAVKA_REJECTED", endpoint: request.endpoint, reason, status }));
+      // A refusal the site explains is not an outage: the person hears what was wrong.
+      if (reason && status < 500) throw new AppError("AGENT_LAVKA_REJECTED", `Лавка отклонила запрос (${request.endpoint}): ${reason}`);
+      throw unavailable(`status_${status}`);
+    }
+    if (data === null) throw unavailable(`status_${status}_no_data`);
     return data;
   }
 

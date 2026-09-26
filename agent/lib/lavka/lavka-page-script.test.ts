@@ -28,7 +28,7 @@ function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; stat
 describe("lavkaPageScript", () => {
   it("posts to the site's path with the page's CSRF token and the session cookies", async () => {
     const { fetch, result } = runInFakeTab({ body: { text: "молоко 'х'" }, endpoint: "search", project: "search" }, { body: { cacheProducts: [] }, status: 200 });
-    expect(await result).toEqual({ authorized: true, data: [], status: 200 });
+    expect(await result).toEqual({ authorized: true, data: [], error: null, status: 200 });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, { body: string; credentials: string; headers: Record<string, string>; method: string }];
     expect(url).toBe("/api/v1/providers/search/v3/lavka");
     expect(init.method).toBe("POST");
@@ -57,9 +57,21 @@ describe("lavkaPageScript", () => {
     expect((cart.data as { paymentMethod: unknown }).paymentMethod).toEqual({ bank: "Т-Банк", id: "card-1", system: "MIR", type: "card" });
   });
 
+  // The owner's account carries 230 cards; the default must survive the cut to ten.
+  it("puts the default payment method first and keeps the site's error text", async () => {
+    const methods = Array.from({ length: 30 }, (_, i) => ({ availability: { available: true }, cardBank: `Bank ${i}`, displayName: ["MIR", `**${i}`], id: `card-${i}`, type: "card" }));
+    const result = await runInFakeTab({ endpoint: "paymentMethods", project: "paymentMethods" }, { body: { defaultMethod: methods[25], methods }, status: 200 }).result;
+    const data = result.data as { defaultId: string; methods: Array<{ id: string; label: string }> };
+    expect(data.defaultId).toBe("card-25");
+    expect(data.methods[0]).toMatchObject({ id: "card-25", label: "MIR **25" });
+    expect(data.methods).toHaveLength(10);
+    const refused = await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: { data: { errors: ["deliveryType must be a string"], name: "ValidationError" } }, status: 400 }).result;
+    expect(refused).toMatchObject({ authorized: true, data: null, status: 400, error: expect.stringContaining("deliveryType must be a string") });
+  });
+
   it("reports a lost session and an unreadable answer without guessing", async () => {
-    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>login</html>", status: 401 }).result).toEqual({ authorized: false, data: null, status: 401 });
-    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>captcha</html>", status: 200 }).result).toEqual({ authorized: true, data: null, status: 200 });
+    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>login</html>", status: 401 }).result).toEqual({ authorized: false, data: null, error: "<html>login</html>", status: 401 });
+    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>captcha</html>", status: 200 }).result).toEqual({ authorized: true, data: null, error: null, status: 200 });
   });
 
   it("fills a per-order path and encodes the query of a GET", () => {
