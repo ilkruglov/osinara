@@ -110,7 +110,7 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         : new Set<string>();
       // Skill-derived thread hints came from load_skill calls in history; none are reviewed now.
       let retrievalFailed = false;
-      const context = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs }).catch((error: unknown) => {
+      const context: MemoryTurnContext = await dependencies.retrieve(authorization, query, [], { excludeMemoryRefs }).catch((error: unknown) => {
         retrievalFailed = true;
         console.error(JSON.stringify({ code: "AGENT_MEMORY_UNAVAILABLE", component: "retrieval", error: String(error) }));
         return { memories: [], retrievedClaimIds: [], threads: { threads: [], totalCharacters: 0 } };
@@ -165,7 +165,7 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         threads: context.threads.threads.length,
         // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
         // steps answer that (rerank has its own AGENT_MEMORY_RERANKED durationMs).
-        ...(context.timings ?? {}),
+        ...context.timings,
       }));
       const hint = dependencies.takeSkillHint === undefined
         ? null
