@@ -39,6 +39,8 @@ const SUBMIT_ROLES = new Set(["button", "link", "menuitem", "submit"]);
 const CLICKABLE_ROLES = new Set([...SUBMIT_ROLES, "generic", "tab", "option", "treeitem"]);
 /** Picking a tab or an option changes what is shown, not what is sent. */
 const SAFE_AFTER_ENTRY_ROLES = new Set(["tab", "option", "treeitem"]);
+/** Cookie consent buttons: passport.yandex.ru asked to confirm «Allow essential cookies» after the phone was typed. */
+const COOKIE_CONSENT = /cookie|куки|cookies/iu;
 
 /** A search box is a way around a site, not a form: typing there and moving on sends nothing. */
 export const SEARCH_FIELD = /поиск|найти|search/iu;
@@ -66,6 +68,8 @@ export function gateDecision(input: {
   const entered = input.entered.length > 0;
   // A booking word on a button, in a form or after entered data: a link on a home page only leads to the form.
   if (FORM_SUBMIT.test(element.text) && (entered || element.role === "button" || hasFormContext(input.view))) return { gated: true, reason: "form-submit" };
+  // A cookie banner sends nothing: closing it after typing is not the form going out.
+  if (entered && COOKIE_CONSENT.test(element.text)) return { gated: false };
   // A custom button is a generic element with a label; after entered data no click is proven safe.
   if (entered && !SAFE_AFTER_ENTRY_ROLES.has(element.role)) return { gated: true, reason: "after-entry" };
   return { gated: false };

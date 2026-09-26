@@ -46,6 +46,15 @@ describe("gateDecision", () => {
     expect(gateDecision({ action: { kind: "fill", text: "x" }, entered, n: 1, view: v })).toMatchObject({ gated: false });
   });
 
+  // passport.yandex.ru, 26 September 2026: «Allow essential cookies» asked for a confirmation after the phone was typed.
+  it("lets a cookie banner be closed after entered data", () => {
+    const v = view([{ role: "textbox", text: "Телефон" }, { role: "button", text: "Allow essential cookies" }, { role: "button", text: "Принять куки" }, { role: "button", text: "Оплатить cookies" }]);
+    const entered = [{ field: "phone", label: "Телефон", n: 1 }];
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 2, view: v })).toMatchObject({ gated: false });
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 3, view: v })).toMatchObject({ gated: false });
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 4, view: v })).toMatchObject({ gated: true, reason: "transaction" });
+  });
+
   it("stops on a form's submit button whatever its label and whoever filled the form", () => {
     const v = view([{ role: "submit", text: "ОК" }, { role: "button", text: "ОК" }]);
     expect(gateDecision({ action: { kind: "click" }, entered: [], n: 1, view: v })).toMatchObject({ gated: true, reason: "form-submit" });

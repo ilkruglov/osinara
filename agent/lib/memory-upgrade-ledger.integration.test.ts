@@ -147,6 +147,7 @@ const POST_V0101_MIGRATIONS = [
   "113_owner_balance_alerts.sql",
   "114_shopping_items.sql",
   "115_lavka_delivery_points.sql",
+  "116_hitl_approval_turn_attributes.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

@@ -27,6 +27,41 @@ export interface ApprovalAuthRow {
   telegram_message_id: string;
   telegram_message_thread_id: string | null;
   telegram_timeline_entry_id?: string | null;
+  /** The session's current sandbox thread; the resumed turn works in the same container. */
+  thread_id?: string | null;
+  /** The requesting turn's context (`retainTurnAttributes`), restored under fresh policy. */
+  turn_attributes?: unknown;
+}
+
+/**
+ * Context of the requesting turn that the resumed turn needs and that carries no authorization:
+ * where the sandbox is, which message and timeline position the turn answers, what it saw.
+ * Policy attributes (role, scopes, group, allowlist, identity) are never taken from here.
+ */
+export const RETAINED_TURN_ATTRIBUTES = [
+  "memoryReviewBatchId", "memoryReviewMode", "memoryReviewSourceEntryIds", "proactiveDeliveryCursor", "sandboxSessionId",
+  "telegramConversationId", "telegramForumTopicId", "telegramMessageThreadId", "telegramProfileMentionUserIds",
+  "telegramProfileReplyTimelineSequence", "telegramProfileReplyUserId", "telegramReplyToMessageId", "telegramTimelineEntryId",
+  "telegramTimelineOmittedBeforeSequence", "telegramTimelineSequence", "telegramTimelineVisibleEntryIds", "telegramTurnStartedAt",
+] as const;
+
+export function retainTurnAttributes(attributes: Record<string, unknown> | undefined): Record<string, unknown> {
+  const retained: Record<string, unknown> = {};
+  for (const key of RETAINED_TURN_ATTRIBUTES) {
+    const value = attributes?.[key];
+    if (value !== undefined) retained[key] = value;
+  }
+  return retained;
+}
+
+function restoredTurnAttributes(row: ApprovalAuthRow): Record<string, unknown> {
+  const stored = row.turn_attributes && typeof row.turn_attributes === "object" && !Array.isArray(row.turn_attributes)
+    ? retainTurnAttributes(row.turn_attributes as Record<string, unknown>)
+    : {};
+  return {
+    ...(row.thread_id ? { sandboxSessionId: row.thread_id } : {}),
+    ...stored,
+  };
 }
 
 interface IdentityRow {
@@ -95,9 +130,10 @@ export async function resolveCurrentApprovalAuth(client: PoolClient, row: Approv
     }
   }
 
-  // Only freshly read database policy enters the resumed Eve turn.
+  // The requesting turn's context comes first; only freshly read database policy may follow it.
   return {
     attributes: {
+      ...restoredTurnAttributes(row),
       applicationSessionId: row.application_session_id,
       familyId: row.family_id,
       memoryScopes,
