@@ -38,6 +38,8 @@ export const yandexLavkaInput = z.object({
   flat: text(40),
   floor: text(40),
   orderId: text(120),
+  /** The catalogue price from search; the site validates it on every cart write of a new product. */
+  price: z.number().nonnegative().optional(),
   productId: productId.optional(),
   quantity: quantity.optional(),
   query: text(200),
@@ -45,10 +47,10 @@ export const yandexLavkaInput = z.object({
   total: z.number().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {
   const fields: Record<string, string[]> = {
-    add: ["productId", "quantity"], addresses: [], cancel: ["orderId"], cart: [], clear: [], order: ["cartVersion", "total"], orders: [], preview: [],
-    product: ["slug"], search: ["query"], set: ["productId", "quantity"], set_address: ["address", "flat", "entrance", "floor", "doorcode", "comment"], use_address: ["addressId"],
+    add: ["productId", "quantity", "price"], addresses: [], cancel: ["orderId"], cart: [], clear: [], order: ["cartVersion", "total"], orders: [], preview: [],
+    product: ["slug"], search: ["query"], set: ["productId", "quantity", "price"], set_address: ["address", "flat", "entrance", "floor", "doorcode", "comment"], use_address: ["addressId"],
   };
-  const required: Record<string, string[]> = { add: ["productId"], cancel: ["orderId"], order: ["cartVersion", "total"], product: ["slug"], search: ["query"], set: ["productId", "quantity"], set_address: ["address"], use_address: ["addressId"] };
+  const required: Record<string, string[]> = { add: ["productId", "price"], cancel: ["orderId"], order: ["cartVersion", "total"], product: ["slug"], search: ["query"], set: ["productId", "quantity"], set_address: ["address"], use_address: ["addressId"] };
   for (const key of Object.keys(value)) {
     if (key !== "action" && (value as Record<string, unknown>)[key] !== undefined && !fields[value.action]!.includes(key)) ctx.addIssue({ code: "custom", message: `Недопустимое поле ${key} для ${value.action}` });
   }
@@ -67,7 +69,7 @@ export default defineTool({
     return typeof action === "string" && APPROVAL_ACTIONS.has(action) ? "user-approval" : "not-applicable";
   },
   description: [
-    "Яндекс Лавка из аккаунта человека в его браузере: search ищет товары (query), product показывает описание (slug из search), cart показывает корзину, add кладёт productId (quantity по умолчанию 1, прибавляется к текущему), set ставит точное количество (0 убирает), clear очищает.",
+    "Яндекс Лавка из аккаунта человека в его браузере: search ищет товары (query), product показывает описание (slug из search), cart показывает корзину, add кладёт productId с его price из выдачи search (quantity по умолчанию 1, прибавляется к текущему), set ставит точное количество (0 убирает; для нового товара тоже нужен price), clear очищает.",
     "Адрес доставки нужен до поиска и заказа: addresses показывает сохранённые адреса, use_address выбирает один по addressId, set_address задаёт по тексту (address, при необходимости flat, entrance, floor, doorcode, comment).",
     "preview показывает состав, сумму, доставку, срок и карту без списания. order (cartVersion и total из preview) отправляет заказ и списывает деньги с карты аккаунта после подтверждения человека кнопкой; если сумма или корзина изменились, заказ не уходит. orders показывает текущие заказы, cancel отменяет заказ (orderId) после подтверждения.",
     "Если Лавка не узнаёт вход, человеку нужно войти в Яндекс через browser_open https://passport.yandex.ru/auth и код из СМС. Цены и наличие меняются: перед order всегда свежий preview.",
@@ -89,8 +91,8 @@ export default defineTool({
       case "search": return { point: point?.label ?? null, products: await client.search(input.query!, point) };
       case "product": return await client.product(input.slug!);
       case "cart": return await client.cart(point);
-      case "add": return await client.addItem(requirePoint(), input.productId!, input.quantity ?? 1);
-      case "set": return await client.setItem(requirePoint(), input.productId!, input.quantity!);
+      case "add": return await client.addItem(requirePoint(), input.productId!, input.quantity ?? 1, input.price ?? null);
+      case "set": return await client.setItem(requirePoint(), input.productId!, input.quantity!, input.price ?? null);
       case "clear": return await client.clearCart(point);
       case "addresses": return { addresses: await client.addresses(), current: point?.label ?? null };
       case "use_address": {

@@ -35,7 +35,7 @@ function tab(answers: Record<string, Answer>, url = "https://lavka.yandex.ru/") 
 }
 
 const cart = (version: number, items: Array<{ id: string; price: number; quantity: number }>, total: number) => ({
-  availableForCheckout: true, cartId: "c1", cartVersion: version, cashbackAvailable: null, cashbackWalletId: "", checkoutBlockedReason: "", deliveryFee: 0, discount: 0, eta: "20 мин", flowVersion: "grocery_flow_v1",
+  availableForCheckout: true, cartId: "c1", cartVersion: version, cashbackAvailable: null, cashbackWalletId: "", checkoutBlockedReason: "", deliveryFee: 0, deliveryTimeInfo: { kind: "on_demand" }, deliveryType: "eats_dispatch", discount: 0, eta: "20 мин", flowVersion: "grocery_flow_v1", nextIdempotencyToken: `tok-${version}`,
   itemCount: items.length, items: items.map((i) => ({ amount: "", id: i.id, price: i.price, quantity: i.quantity, title: i.id, unavailableOnDepot: false })), paymentMethod: { bank: "Т-Банк", id: "card-1", system: "MIR", type: "card" }, subtotal: total, total,
 });
 
@@ -57,14 +57,21 @@ describe("createLavkaClient", () => {
       "/api/v1/providers/cart/v1/retrieve": { data: cart(7, [{ id: "a", price: 100, quantity: 2 }], 200) },
       "/api/v1/providers/cart/v1/update": (body) => ({ data: cart(8, (body as { items: Array<{ id: string; quantity: string }> }).items.filter((i) => i.id === "a").map((i) => ({ id: i.id, price: 100, quantity: Number(i.quantity) })), 300) }),
     });
-    const result = await client.addItem(point, "a", 1);
+    const result = await client.addItem(point, "a", 1, null);
     expect(result.cartVersion).toBe(8);
-    const update = calls.find((c) => c.url === "/api/v1/providers/cart/v1/update")!.body as { cartVersion: number; idempotencyToken: string; items: Array<{ id: string; price: string; quantity: string }>; position: unknown };
+    const update = calls.find((c) => c.url === "/api/v1/providers/cart/v1/update")!.body as { cartVersion: number; deliveryTimeInfo: unknown; deliveryType: string; idempotencyToken: string; items: Array<{ id: string; price: string; quantity: string }>; position: unknown };
     expect(update.cartVersion).toBe(7);
     expect(update.items).toEqual([{ currency: "RUB", id: "a", price: "100", pricePerCount: "1", quantity: "3", quantityType: "unit", title: "" }]);
-    expect(update.idempotencyToken).toMatch(/^[0-9a-f]{32}$/u);
+    // The site validates the write against the cart it handed out (26 September 2026: nulls were a 400).
+    expect(update.idempotencyToken).toBe("tok-7");
+    expect(update.deliveryType).toBe("eats_dispatch");
+    expect(update.deliveryTimeInfo).toEqual({ kind: "on_demand" });
     expect(update.position).toEqual({ location: [37.6, 55.7] });
-    await expect(client.addItem(point, "b", 1)).rejects.toMatchObject({ code: "AGENT_LAVKA_ITEM_DROPPED" });
+    // A new product needs its catalogue price; the store dropping it is reported.
+    await expect(client.addItem(point, "b", 1, null)).rejects.toMatchObject({ code: "AGENT_LAVKA_PRICE_REQUIRED" });
+    await expect(client.addItem(point, "b", 1, 113)).rejects.toMatchObject({ code: "AGENT_LAVKA_ITEM_DROPPED" });
+    const priced = calls.filter((c) => c.url === "/api/v1/providers/cart/v1/update").at(-1)!.body as { items: Array<{ price: string }> };
+    expect(priced.items[0]!.price).toBe("113");
   });
 
   it("refuses to order a cart that drifted since the preview and submits an unchanged one once", async () => {

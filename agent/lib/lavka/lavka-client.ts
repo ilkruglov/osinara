@@ -40,7 +40,9 @@ export interface LavkaProductDetails extends LavkaProduct { brand: string; descr
 export interface LavkaCartItem { amount: string; id: string; price: number | null; quantity: number; title: string; unavailableOnDepot: boolean; }
 export interface LavkaCart {
   availableForCheckout: boolean | null; cartId: string; cartVersion: number | null; cashbackAvailable: number | null; cashbackWalletId: string;
-  checkoutBlockedReason: string; deliveryFee: number | null; discount: number; eta: string; flowVersion: string; itemCount: number;
+  checkoutBlockedReason: string; deliveryFee: number | null; deliveryTimeInfo: unknown; deliveryType: string; discount: number; eta: string; flowVersion: string; itemCount: number;
+  /** The token the site expects on the next write; a cart write without the cart's own values is a 400. */
+  nextIdempotencyToken: string;
   items: LavkaCartItem[]; paymentMethod: { bank: string; id: string; system: string; type: string } | null; subtotal: number | null; total: number | null;
 }
 export interface LavkaAddress extends LavkaDeliveryPoint { addressId: string; fullAddress: string; }
@@ -93,13 +95,23 @@ export function createLavkaClient(deps: Deps) {
 
   const itemBody = (id: string, quantity: number, price: number | null) => ({ currency: "RUB", id, price: price === null ? "" : String(price), pricePerCount: "1", quantity: String(quantity), quantityType: "unit", title: "" });
 
-  /** Read-modify-write under `cartVersion`; `build` returns absolute quantities from the fresh cart. */
-  async function mutate(point: LavkaDeliveryPoint | null, build: (current: LavkaCart) => Array<{ id: string; quantity: number }>): Promise<LavkaCart> {
+  /**
+   * Read-modify-write under `cartVersion`; `build` returns absolute quantities from the fresh cart.
+   * The site validates every write against the cart it just handed out: delivery type and time
+   * info, the next idempotency token and a numeric price per item (the cart's own for a product
+   * already there, the catalogue price for a new one). Learned live on 26 September 2026: the
+   * upstream capture sent nulls and the update was a 400.
+   */
+  async function mutate(point: LavkaDeliveryPoint | null, build: (current: LavkaCart) => Array<{ id: string; price?: number | null; quantity: number }>): Promise<LavkaCart> {
     for (let attempt = 0; ; attempt += 1) {
       const current = await cart(point);
-      const items = build(current).map((item) => itemBody(item.id, item.quantity, current.items.find((i) => i.id === item.id)?.price ?? null));
+      const items = build(current).map((item) => itemBody(item.id, item.quantity, current.items.find((i) => i.id === item.id)?.price ?? item.price ?? null));
       if (items.length === 0) return current;
-      const body = { ...baseBody(point), cartId: current.cartId, cartVersion: current.cartVersion, deliveryTimeInfo: null, deliveryType: null, idempotencyToken: randomUUID().replace(/-/gu, ""), isUserOrderEdit: false, items };
+      if (items.some((item) => item.price === "")) throw new AppError("AGENT_LAVKA_PRICE_REQUIRED", "Для нового товара в корзине нужна его цена из выдачи search (поле price)");
+      const body = {
+        ...baseBody(point), cartId: current.cartId, cartVersion: current.cartVersion, deliveryTimeInfo: current.deliveryTimeInfo, deliveryType: current.deliveryType,
+        idempotencyToken: current.nextIdempotencyToken || randomUUID().replace(/-/gu, ""), isUserOrderEdit: false, items,
+      };
       try {
         return await ok<LavkaCart>({ body, endpoint: "cartUpdate", project: "cart" });
       } catch (error) {
@@ -110,8 +122,8 @@ export function createLavkaClient(deps: Deps) {
   }
 
   return {
-    async addItem(point: LavkaDeliveryPoint | null, id: string, quantity: number): Promise<LavkaCart> {
-      const result = await mutate(point, (current) => [{ id, quantity: (current.items.find((i) => i.id === id)?.quantity ?? 0) + quantity }]);
+    async addItem(point: LavkaDeliveryPoint | null, id: string, quantity: number, price: number | null): Promise<LavkaCart> {
+      const result = await mutate(point, (current) => [{ id, price, quantity: (current.items.find((i) => i.id === id)?.quantity ?? 0) + quantity }]);
       // The site silently drops a product the current store cannot sell; the tool must say so.
       if (!result.items.some((i) => i.id === id)) throw new AppError("AGENT_LAVKA_ITEM_DROPPED", "Лавка не положила товар в корзину: в этом магазине его нет. Выберите другой");
       return result;
@@ -161,7 +173,7 @@ export function createLavkaClient(deps: Deps) {
       return { city: g.city, comment: "", country: g.country, doorcode: "", entrance: g.entrance, flat: "", floor: "", house: g.house, label: g.text || first.text, lat: g.lat ?? first.lat!, lon: g.lon ?? first.lon!, placeId: g.placeId || first.uri, street: g.street };
     },
     search: (query: string, point: LavkaDeliveryPoint | null) => ok<LavkaProduct[]>({ body: { ...baseBody(point), productsLimit: LAVKA_SEARCH_LIMIT, source: "manual_input", subcategoriesLimit: 0, text: query, useRetail: true }, endpoint: "search", project: "search" }),
-    setItem: (point: LavkaDeliveryPoint | null, id: string, quantity: number) => mutate(point, () => [{ id, quantity }]),
+    setItem: (point: LavkaDeliveryPoint | null, id: string, quantity: number, price: number | null) => mutate(point, () => [{ id, price, quantity }]),
     trackedOrders: () => ok<Array<{ eta: string; orderId: string; status: string; title: string }>>({ endpoint: "trackedOrders", project: "orders" }),
   };
 
