@@ -8,6 +8,9 @@
  */
 import type { ToolDefinition } from "eve/tools";
 import { webFetch as eveWebFetch } from "eve/tools/defaults";
+import findFuelStations from "../tools/find_fuel_stations.js";
+import groceryCart from "../tools/grocery_cart.js";
+import manageShoppingList from "../tools/manage_shopping_list.js";
 
 import executeGoogleWorkspace from "../tools/execute_google_workspace.js";
 import exportMemory from "../tools/export_memory.js";
@@ -117,6 +120,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   search_memory_threads: searchMemoryThreads as unknown as AnyToolDefinition,
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
   send_workspace_image: sendWorkspaceImage as unknown as AnyToolDefinition,
+  find_fuel_stations: findFuelStations as unknown as AnyToolDefinition,
   start_new_context: startNewContext as unknown as AnyToolDefinition,
   web_fetch: TRUSTED_WEB_FETCH,
 };
@@ -124,6 +128,8 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
 /** Owner administration and personal-only surfaces that require the owner's private chat. */
 export const PRIVATE_ONLY_TOOLS: ToolMap = {
   export_memory: exportMemory as unknown as AnyToolDefinition,
+  grocery_cart: groceryCart as unknown as AnyToolDefinition,
+  manage_shopping_list: manageShoppingList as unknown as AnyToolDefinition,
   review_improvements: reviewImprovements as unknown as AnyToolDefinition,
   get_memory_source: getMemorySource as unknown as AnyToolDefinition,
   list_pending_family_invitations: listPendingFamilyInvitations as unknown as AnyToolDefinition,
