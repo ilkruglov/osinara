@@ -25,10 +25,17 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "14";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "15";
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
+// Headless Chrome announces automation: `navigator.webdriver` is true and the UA says
+// HeadlessChrome. lavka.yandex.ru answered such a browser with 403 «доступ временно заблокирован»
+// (26 September 2026) while curl on the same egress got 200; with the marker off and a plain
+// Chrome UA the same browser got the page. Chrome for Testing 152 reports Chrome/152.0.0.0.
+const AGENT_BROWSER_CHROME_ARGS = "--disable-blink-features=AutomationControlled";
+const AGENT_BROWSER_USER_AGENT_VALUE =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36";
 // One Chromium holds about 500 MiB; the default daemon idle of one hour kept it after every turn.
 const AGENT_BROWSER_IDLE_TIMEOUT_MS = 10 * 60 * 1_000;
 const PROXY_URL = "http://sandbox-egress-proxy:3128";
@@ -94,6 +101,8 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessAp
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
     ...(browserlessApiKey ? [`BROWSERLESS_API_KEY=${browserlessApiKey}`] : []),
+    `AGENT_BROWSER_ARGS=${AGENT_BROWSER_CHROME_ARGS}`,
+    `AGENT_BROWSER_USER_AGENT=${AGENT_BROWSER_USER_AGENT_VALUE}`,
     `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
     `AGENT_BROWSER_PROXY=${PROXY_URL}`,
     `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,

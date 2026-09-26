@@ -105,11 +105,15 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "14",
+      "dev.osinara.sandbox.policy-version": "15",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
     expect(options.Env).toEqual(expect.arrayContaining([
+      // lavka.yandex.ru answered 403 to headless Chrome that announced itself (navigator.webdriver,
+      // HeadlessChrome in the UA) while the same page from curl on the same egress was 200.
+      "AGENT_BROWSER_ARGS=--disable-blink-features=AutomationControlled",
+      "AGENT_BROWSER_USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
       "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
       "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
       "AGENT_BROWSER_RESTORE=osinara",
