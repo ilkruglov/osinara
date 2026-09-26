@@ -17,6 +17,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDatabase, database } from "../database.js";
 import { sessionRepository } from "../sessions/session-repository.js";
+import { NO_PRIVATE_BURST } from "../telegram-ingress-contract.js";
 import { telegramIngressRepository } from "../telegram-ingress-repository.js";
 import { turnInterjectionRepository } from "./turn-interjection-repository.js";
 
@@ -100,7 +101,7 @@ describeWithDatabase("turnInterjectionRepository", () => {
     applicationSessionId = await conversation();
     call = { ...COORDINATE, applicationSessionId };
     await enqueue("1000", { text: "собери отчёт" });
-    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS))?.updateId).toBe("1000");
+    expect((await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST))?.updateId).toBe("1000");
   });
 
   afterAll(async () => {
@@ -195,7 +196,7 @@ describeWithDatabase("turnInterjectionRepository", () => {
       "SELECT lease_token::text FROM telegram_ingress_updates WHERE update_id = 1000",
     );
     await telegramIngressRepository.complete("1000", current.rows[0]!.lease_token);
-    const voice = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS);
+    const voice = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
     expect(voice).toMatchObject({ transcript: "добавь цены", updateId: "1001" });
     expect(await telegramIngressRepository.beginVoiceTranscription("1001", voice!.leaseToken)).toBe("completed");
   });

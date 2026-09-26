@@ -77,6 +77,33 @@ function repository() {
 }
 
 describe("createTelegramDurableIngress", () => {
+  // A private chat still receiving a burst is held by claimNext; the drain sleeps until the chat is
+  // ready instead of leaving the reply to the next five-second poll of the ingress worker.
+  it("waits for a held private chat and claims it once the quiet window has passed", async () => {
+    const storage = repository();
+    storage.value.claimNext.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    const ready = vi.fn().mockResolvedValueOnce(20).mockResolvedValueOnce(null);
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn().mockResolvedValue(true),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      privateBurst: { maxWaitMilliseconds: 2_000, quietMilliseconds: 500 },
+      repository: { ...storage.value, heldPrivateChatReadyIn: ready },
+      transcribeVoice: vi.fn(),
+    });
+    const tasks: Promise<unknown>[] = [];
+    const context = { dispatch: vi.fn(), waitUntil: (task: Promise<unknown>) => tasks.push(task) } as never;
+
+    await handle.drain(context);
+    await Promise.all(tasks);
+
+    expect(storage.value.claimNext).toHaveBeenCalledTimes(2);
+    expect(storage.value.claimNext).toHaveBeenCalledWith(60_000, { maxWaitMilliseconds: 2_000, quietMilliseconds: 500 });
+    expect(ready).toHaveBeenCalledTimes(2);
+  });
+
   it("releases leases left by a previous process once, before the first claim of this process", async () => {
     const storage = repository();
     storage.value.claimNext.mockReset().mockResolvedValue(null);

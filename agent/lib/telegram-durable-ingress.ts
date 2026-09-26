@@ -15,7 +15,7 @@ import type {
 import { parseTelegramUpdate, telegramContinuationToken } from "eve/channels/telegram";
 import { z } from "zod";
 
-import { TELEGRAM_INGRESS_LEASE_MS } from "../config.js";
+import { TELEGRAM_INGRESS_LEASE_MS, TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS, TELEGRAM_PRIVATE_BURST_QUIET_MS } from "../config.js";
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
 import type { TelegramIngressClaim, TelegramIngressRepository } from "./telegram-ingress-contract.js";
@@ -41,6 +41,7 @@ import {
 } from "./telegram-pending-messages.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
+import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
 
@@ -71,6 +72,8 @@ interface DurableIngressDependencies {
   ): Promise<boolean>;
   authorizeVoice(message: Pick<TelegramMessage, "chat" | "from">): Promise<boolean>;
   botUsername: string;
+  /** Quiet window before a private head is claimed; tests pass zero to claim at once. */
+  privateBurst?: TelegramPrivateBurstPolicy;
   /**
    * Drain loops allowed at once. `claimNext` keeps every chat/topic FIFO on its own, so parallel
    * loops only stop one long turn from holding every other chat and every approval button.
@@ -228,7 +231,14 @@ function withTranscript(payload: Record<string, unknown>, transcript: string): R
   return cloned;
 }
 
+// The claim reads the clock after the timer fires; this margin keeps it past the ready moment.
+const HELD_CHAT_WAKE_MARGIN_MS = 50;
+
 export function createTelegramDurableIngress(dependencies: DurableIngressDependencies) {
+  const privateBurst = dependencies.privateBurst ?? {
+    maxWaitMilliseconds: TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS,
+    quietMilliseconds: TELEGRAM_PRIVATE_BURST_QUIET_MS,
+  };
   const activeDrains = new Set<Promise<void>>();
   const maxConcurrentDrains = dependencies.maxConcurrentDrains ?? DEFAULT_MAX_CONCURRENT_DRAINS;
 
@@ -319,8 +329,17 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       }
     }
     while (true) {
-      const claim = await dependencies.repository.claimNext(dependencies.leaseMilliseconds);
-      if (!claim) return;
+      const claim = await dependencies.repository.claimNext(dependencies.leaseMilliseconds, privateBurst);
+      if (!claim) {
+        // A private chat still receiving a burst is held: sleep until it is ready instead of
+        // leaving its reply to the next poll of the ingress worker.
+        const wait = await dependencies.repository.heldPrivateChatReadyIn?.(privateBurst);
+        if (wait !== null && wait !== undefined && wait <= privateBurst.maxWaitMilliseconds) {
+          await new Promise((resolve) => setTimeout(resolve, wait + HELD_CHAT_WAKE_MARGIN_MS));
+          continue;
+        }
+        return;
+      }
       // One heartbeat per leased update, stopped right before that update's terminal transition:
       // a heartbeat that outlived its completed series member kept renewing a released lease,
       // failed after the next tick, and that failure sank the whole series minutes later.

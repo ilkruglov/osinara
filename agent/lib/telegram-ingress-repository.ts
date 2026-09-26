@@ -20,6 +20,8 @@ import {
   requireUuid,
   type TelegramIngressRepository,
   validateEnqueueInput,
+  NO_PRIVATE_BURST,
+  type TelegramPrivateBurstPolicy,
 } from "./telegram-ingress-contract.js";
 import { telegramIngressProcessingRepository } from "./telegram-ingress-processing-repository.js";
 import { telegramIngressSessionCursorRepository } from "./telegram-ingress-session-cursor-repository.js";
@@ -61,6 +63,14 @@ async function requireActiveLease(
       "AGENT_TELEGRAM_LEASE_LOST",
       "Срок обработки сообщения Telegram истёк. Операция остановлена для безопасного повторного запуска",
     );
+  }
+}
+
+function requirePrivateBurstPolicy(burst: TelegramPrivateBurstPolicy): void {
+  const { maxWaitMilliseconds, quietMilliseconds } = burst;
+  if (![maxWaitMilliseconds, quietMilliseconds].every((value) => Number.isSafeInteger(value) && value >= 0) ||
+    maxWaitMilliseconds < quietMilliseconds) {
+    throw new AppError("AGENT_TELEGRAM_BURST_WINDOW_INVALID", "Пауза перед ответом в личном чате задана неверно");
   }
 }
 
@@ -242,9 +252,13 @@ export const telegramIngressRepository: TelegramIngressRepository = {
     }
   },
 
-  async claimNext(leaseMilliseconds) {
+  async claimNext(leaseMilliseconds, burst = NO_PRIVATE_BURST) {
     requireLeaseMilliseconds(leaseMilliseconds);
+    requirePrivateBurstPolicy(burst);
     // The anti-join makes every non-terminal earlier update a hard FIFO barrier for its queue.
+    // A private chat still receiving a burst is left alone until it has been quiet for the window,
+    // or the cap has passed since its head arrived; only a pending message waits, never a retry.
+    // A button press has no message and must compare as not private, never as unknown.
     const result = await database().query<ClaimRow>(
       `WITH candidate AS (
          SELECT item.update_id
@@ -258,6 +272,14 @@ export const telegramIngressRepository: TelegramIngressRepository = {
                AND earlier.update_id < item.update_id
                 AND earlier.status IN ('pending', 'processing')
            )
+           AND NOT (item.status = 'pending' AND $2::bigint > 0
+             AND (item.payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
+             AND item.received_at > now() - ($3 * interval '1 millisecond')
+             AND EXISTS (
+               SELECT 1 FROM telegram_ingress_updates latest
+                WHERE latest.queue_id = item.queue_id AND latest.status = 'pending' AND latest.payload ? 'message'
+                  AND latest.received_at > now() - ($2 * interval '1 millisecond')
+             ))
          ORDER BY item.update_id
          FOR UPDATE SKIP LOCKED
          LIMIT 1
@@ -277,9 +299,30 @@ export const telegramIngressRepository: TelegramIngressRepository = {
          item.payload, item.attempt_count, item.lease_token::text, item.lease_expires_at,
          item.voice_file_id, item.voice_file_size::text, item.voice_mime_type,
          item.voice_transcript, queue.current_continuation_key`,
-      [leaseMilliseconds],
+      [leaseMilliseconds, burst.quietMilliseconds, burst.maxWaitMilliseconds],
     );
     return result.rows[0] ? mapTelegramIngressClaim(result.rows[0]) : null;
+  },
+
+  async heldPrivateChatReadyIn(burst) {
+    requirePrivateBurstPolicy(burst);
+    if (burst.quietMilliseconds === 0) return null;
+    // The same moment the claim condition waits for: quiet since the newest message, or the cap
+    // counted from the head.
+    const result = await database().query<{ wait: string | null }>(
+      `SELECT ceil(extract(epoch FROM min(ready_at) - clock_timestamp()) * 1000)::bigint::text AS wait
+         FROM (
+           SELECT LEAST(max(received_at) + ($1 * interval '1 millisecond'),
+                        min(received_at) + ($2 * interval '1 millisecond')) AS ready_at
+             FROM telegram_ingress_updates
+            WHERE status = 'pending' AND (payload #>> '{message,chat,type}') IS NOT DISTINCT FROM 'private'
+            GROUP BY queue_id
+         ) held
+        WHERE ready_at > clock_timestamp()`,
+      [burst.quietMilliseconds, burst.maxWaitMilliseconds],
+    );
+    const wait = result.rows[0]?.wait;
+    return wait === null || wait === undefined ? null : Math.max(0, Number(wait));
   },
 
   async claimFollowing(input) {

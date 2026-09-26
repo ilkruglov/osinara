@@ -44,6 +44,16 @@ export interface TelegramIngressClaim {
   voice: TelegramIngressVoice | null;
 }
 
+export interface TelegramPrivateBurstPolicy {
+  /** A steady stream is claimed once this long has passed since the head arrived. */
+  maxWaitMilliseconds: number;
+  /** The chat must have been quiet this long since its newest waiting message. */
+  quietMilliseconds: number;
+}
+
+/** No waiting: the head is claimed the moment it is the oldest of its queue (tests, callbacks). */
+export const NO_PRIVATE_BURST: TelegramPrivateBurstPolicy = { maxWaitMilliseconds: 0, quietMilliseconds: 0 };
+
 export interface TelegramIngressRepository {
   acceptMedia(input: {
     chatId: string;
@@ -64,7 +74,10 @@ export interface TelegramIngressRepository {
     limit: number;
     queueId: string;
   }): Promise<TelegramIngressClaim[]>;
-  claimNext(leaseMilliseconds: number): Promise<TelegramIngressClaim | null>;
+  /** The oldest claimable update; a private head still receiving a burst is left alone (`burst`). */
+  claimNext(leaseMilliseconds: number, burst?: TelegramPrivateBurstPolicy): Promise<TelegramIngressClaim | null>;
+  /** Milliseconds until the earliest held private chat becomes claimable, or null when none is held. */
+  heldPrivateChatReadyIn?(burst: TelegramPrivateBurstPolicy): Promise<number | null>;
   complete(updateId: string, leaseToken: string): Promise<void>;
   completeWithSession(
     updateId: string,

@@ -82,6 +82,11 @@ export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_DEFAULT_LIMIT = 50;
 export const TELEGRAM_ATTACHMENT_REFERENCE_LIST_MAX_LIMIT = 50;
 export const TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED = 1;
 export const TELEGRAM_INGRESS_LEASE_MS = 15 * 60 * 1_000;
+// A person often sends several messages in a row (26 September 2026: five private messages in a
+// minute gave five turns). A private chat's head is claimed only after the chat has been quiet this
+// long, so the series behind it is complete; a steady stream waits at most the cap.
+export const TELEGRAM_PRIVATE_BURST_QUIET_MS = 2_000;
+export const TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS = 20_000;
 export const TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const TELEGRAM_MAX_ATTACHMENTS_PER_MESSAGE = 1;
 export const TELEGRAM_MAX_OUTBOUND_DOCUMENT_BYTES = 50 * 1024 * 1024;
