@@ -24,7 +24,7 @@ export function assertReferenceCount(references: readonly ImageReference[]): voi
   }
 }
 
-async function prepareReference(image: ImageReference, maxSide: number): Promise<Buffer> {
+async function prepareReference(image: ImageReference, maxSide: number, format: "jpeg" | "png"): Promise<Buffer> {
   try {
     if (image.bytes.byteLength > 10 * 1024 * 1024) throw new Error("Image exceeds byte limit");
     await validateVisionImageBytes(image.bytes);
@@ -34,18 +34,19 @@ async function prepareReference(image: ImageReference, maxSide: number): Promise
       throw new Error("Unsupported static image");
     }
     // Preserve the whole image and its aspect ratio; only the longer side is bounded.
-    return await decoder.rotate().resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
-      .png().toBuffer();
+    const resized = decoder.rotate().resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true });
+    // Uploads go as JPEG: four PNG photos serialised as base64 reached 48 MiB of JSON.
+    return await (format === "jpeg" ? resized.flatten({ background: "#ffffff" }).jpeg({ quality: 92 }) : resized.png()).toBuffer();
   } catch {
     throw new AppError("AGENT_IMAGE_EDITING_INPUT_INVALID", "Не удалось прочитать исходник: нужен неповреждённый PNG, JPEG или WebP до 10 МБ и 40 мегапикселей");
   }
 }
 
 export function prepareCloudflareReference(image: ImageReference): Promise<Buffer> {
-  return prepareReference(image, CLOUDFLARE_MAX_SIDE);
+  return prepareReference(image, CLOUDFLARE_MAX_SIDE, "png");
 }
 
-/** PNG for providers that upload the reference (multipart or base64) and keep its size. */
+/** JPEG for providers that upload the reference (multipart or base64); the longer side is bounded to 1536. */
 export function prepareUploadReference(image: ImageReference): Promise<Buffer> {
-  return prepareReference(image, UPLOAD_MAX_SIDE);
+  return prepareReference(image, UPLOAD_MAX_SIDE, "jpeg");
 }

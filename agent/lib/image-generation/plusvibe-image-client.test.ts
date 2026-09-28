@@ -69,10 +69,36 @@ describe("plusvibe image client", () => {
     const body = JSON.parse(fetch.mock.calls[0]![1].body);
     expect(body.model).toBe("nano-banana-2");
     expect(body.opts.input_base64).toHaveLength(1);
-    expect(body.opts.input_base64[0]).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/u);
+    expect(body.opts.input_base64[0]).toMatch(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/u);
     expect(body.opts.image_url).toBeUndefined();
     const uploaded = Buffer.from(body.opts.input_base64[0].split(",")[1], "base64");
-    expect(await sharp(uploaded).metadata()).toMatchObject({ width: 1200, height: 600, format: "png" });
+    expect(await sharp(uploaded).metadata()).toMatchObject({ width: 1200, height: 600, format: "jpeg" });
+  });
+
+  it("bounds the reference upload to 1536 px on the longer side as JPEG", async () => {
+    const fetch = success();
+    const bytes = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: "red" } }).png().toBuffer();
+    await client(fetch).generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] });
+    const uploaded = Buffer.from(JSON.parse(fetch.mock.calls[0]![1].body).opts.input_base64[0].split(",")[1], "base64");
+    expect(await sharp(uploaded).metadata()).toMatchObject({ width: 1536, height: 1024, format: "jpeg" });
+    expect(uploaded.byteLength).toBeLessThan(1024 * 1024);
+  });
+
+  it("never logs the API key echoed by the provider", async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((line: unknown) => { logged.push(String(line)); });
+    try {
+      const fetch = vi.fn().mockResolvedValue(json({ message: "Invalid API key: pv-key-1234567890", ok: false }, 401));
+      await expect(client(fetch, "pv-key-1234567890").generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
+      const failed = vi.fn()
+        .mockResolvedValueOnce(json({ jobId: "cmuki4nb207hgzx01jxj5y66a", ok: true }, 202))
+        .mockResolvedValueOnce(json({ failMsg: "upstream rejected Bearer pv-key-1234567890", status: "failed" }));
+      await expect(client(failed, "pv-key-1234567890").generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_REJECTED" });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logged.length).toBeGreaterThan(0);
+    expect(logged.join("\n")).not.toContain("pv-key-1234567890");
   });
 
   it("rejects malformed references and too many of them before POST", async () => {

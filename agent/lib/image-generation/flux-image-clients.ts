@@ -7,8 +7,8 @@
  *   generation and multipart editing under the same task contract.
  * - `createFallbackImageClient`: advances after definitive refusals; unknown outcomes stop the chain.
  * - `detectImageMediaType`: PNG / JPEG / WebP by magic bytes; anything else is rejected.
- * - `ambiguous`, `rejected`, `unavailable`, `imageFromBytes` and the status classifiers are shared
- *   with the PlusVibe client in `plusvibe-image-client.ts`.
+ * - `ambiguous`, `rejected`, `unavailable`, `imageFromBytes`, `readBoundedBody`, `scrubProviderText`
+ *   and the status classifiers are shared with the PlusVibe client in `plusvibe-image-client.ts`.
  */
 import { AppError, isAppError } from "../app-error.js";
 import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
@@ -32,7 +32,39 @@ const CLOUDFLARE_API_BASE_URL = "https://api.cloudflare.com/client/v4";
 export const GENERATION_TIMEOUT_MS = 3 * 60 * 1_000;
 const NEURALDEEP_POLL_INTERVAL_MS = 3_000;
 const NEURALDEEP_POLL_TIMEOUT_MS = 4 * 60 * 1_000;
-const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
+export const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
+const SECRET_PATTERN = /\b(?:sk|pv|nd|cf)-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9_.-]+/gu;
+
+/** Provider text goes to the log only after the API key and anything key-shaped are removed. */
+export function scrubProviderText(text: unknown, apiKey: string, limit = 200): string {
+  if (typeof text !== "string") return "";
+  const withoutKey = apiKey.length >= 8 ? text.split(apiKey).join("[key]") : text;
+  return withoutKey.replace(SECRET_PATTERN, "[secret]").replace(/\s+/gu, " ").trim().slice(0, limit);
+}
+
+/**
+ * Reads a response body up to `MAX_IMAGE_BYTES`; a longer stream is cut off before it fills the
+ * process memory. The caller classifies the oversized result (accepted request, unknown outcome).
+ */
+export async function readBoundedBody(response: Response): Promise<Buffer> {
+  if (response.body === null) return Buffer.from(await response.arrayBuffer());
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_IMAGE_BYTES) throw new Error(`image body exceeds ${MAX_IMAGE_BYTES} bytes`);
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+    if (total > MAX_IMAGE_BYTES) await response.body.cancel().catch(() => undefined);
+  }
+  return Buffer.concat(chunks);
+}
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/u;
 
 export interface FluxImageClient {
@@ -177,7 +209,7 @@ export function createCloudflareImageClient(
           }
           bytes = Buffer.from(encoded, "base64");
         } else {
-          bytes = Buffer.from(await response.arrayBuffer());
+          bytes = await readBoundedBody(response);
         }
       } catch (error) {
         if (isAppError(error)) throw error;
@@ -257,7 +289,7 @@ export function createNeuralDeepImageClient(
     }
     const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}/result`, { headers, method: "GET", signal }));
     if (!result.ok) throw ambiguous("neuraldeep", `result ${result.status}`);
-    return Buffer.from(await bounded(() => result.arrayBuffer()));
+    return await bounded(() => readBoundedBody(result));
   }
 
   return {
@@ -280,7 +312,7 @@ export function createNeuralDeepImageClient(
         form.append("options", JSON.stringify({ aspect_ratio: aspectRatio }));
         for (const [index, reference] of input.referenceImages.entries()) {
           const bytes = await prepareUploadReference(reference);
-          form.append("images", new Blob([new Uint8Array(bytes)], { type: "image/png" }), `reference-${index}.png`);
+          form.append("images", new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }), `reference-${index}.jpg`);
         }
         taskId = await createTask("/images/edit", form, null);
       } else {

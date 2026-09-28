@@ -8,8 +8,8 @@
  *   picture on input is accepted by the route without a suffix (verified live on 28 September 2026).
  *
  * Key constructs:
- * - References travel as `input_base64` data URIs: URL fields take only public https links, and
- *   PlusVibe publishes the uploaded bytes for its provider itself.
+ * - References travel as `input_base64` data URIs (JPEG, longer side ≤ 1536): URL fields take only
+ *   public https links, and PlusVibe publishes the uploaded bytes for its provider itself.
  * - `ok: false` on create and `failed` on poll are definitive rejections; anything after an accepted
  *   job with an unknown outcome stays ambiguous, so the chain never bills twice.
  */
@@ -20,7 +20,9 @@ import {
   imageFromBytes,
   isAmbiguousStatus,
   isProviderUnavailableStatus,
+  readBoundedBody,
   rejected,
+  scrubProviderText,
   unavailable,
   type FluxImageClient,
 } from "./flux-image-clients.js";
@@ -88,7 +90,7 @@ export function createPlusVibeImageClient(
     } catch {
       payload = null;
     }
-    const message = typeof payload?.message === "string" ? payload.message.slice(0, 200) : "";
+    const message = scrubProviderText(payload?.message, options.apiKey);
     if (isProviderUnavailableStatus(response.status)) throw unavailable(PROVIDER, `create ${response.status} ${message}`.trim());
     if (!response.ok || payload?.ok === false) throw rejected(PROVIDER, `${model} create ${response.status} ${message}`.trim());
     if (typeof payload?.jobId !== "string" || !JOB_ID_PATTERN.test(payload.jobId)) throw ambiguous(PROVIDER, "job id missing");
@@ -118,7 +120,7 @@ export function createPlusVibeImageClient(
       job = await bounded(() => response.json() as Promise<JobStatus>);
       if (job.status === "success") break;
       if (job.status === "failed" || job.status === "error") {
-        const detail = [job.errorCode, job.failMsg].filter((part) => typeof part === "string").join(" ").slice(0, 200);
+        const detail = scrubProviderText([job.errorCode, job.failMsg].filter((part) => typeof part === "string").join(" "), options.apiKey);
         throw rejected(PROVIDER, `${model} job failed ${detail}`.trim());
       }
       remaining();
@@ -129,7 +131,7 @@ export function createPlusVibeImageClient(
     // The result link is pre-signed; the key stays with the API host only.
     const result = await bounded((signal) => fetchImplementation(resultUrl, { method: "GET", signal }));
     if (!result.ok) throw ambiguous(PROVIDER, `result ${result.status}`);
-    return Buffer.from(await bounded(() => result.arrayBuffer()));
+    return await bounded(() => readBoundedBody(result));
   }
 
   return {
@@ -148,7 +150,7 @@ export function createPlusVibeImageClient(
         assertReferenceCount(input.referenceImages);
         const references: string[] = [];
         for (const reference of input.referenceImages) {
-          references.push(`data:image/png;base64,${(await prepareUploadReference(reference)).toString("base64")}`);
+          references.push(`data:image/jpeg;base64,${(await prepareUploadReference(reference)).toString("base64")}`);
         }
         opts.input_base64 = references;
         model = PLUSVIBE_EDITING_MODEL;

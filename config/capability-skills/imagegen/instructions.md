@@ -17,7 +17,8 @@ the reference with a text description. External groups can use only their own `g
 Describe the requested change and what should stay the same (subject, face, pose, composition,
 style). When there are multiple references, identify them by image index starting at 0.
 To refine a generated draft, pass its returned path as a source on the next call.
-The editing provider keeps the reference size (a fallback provider may reduce it below 512x512).
+References are reduced to at most 1536 px on the longer side before upload (the last fallback
+provider reduces them below 512x512), so fine details may change.
 This is generative editing, not exact pixel-preserving retouching.
 If editing is unavailable or fails, do not omit `images` and silently generate a replacement.
 

@@ -18,6 +18,7 @@ import {
   createFallbackImageClient,
   createNeuralDeepImageClient,
   detectImageMediaType,
+  scrubProviderText,
 } from "./flux-image-clients.js";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
@@ -95,7 +96,29 @@ describe("flux image clients", () => {
     expect(form.get("prompt")).toBe("добавь тюльпаны");
     expect(form.getAll("images")).toHaveLength(2);
     const normalized = Buffer.from(await (form.getAll("images")[0] as Blob).arrayBuffer());
-    expect(await sharp(normalized).metadata()).toMatchObject({ width: 1200, height: 600, format: "png" });
+    expect(await sharp(normalized).metadata()).toMatchObject({ width: 1200, height: 600, format: "jpeg" });
+  });
+
+  it("stops reading an oversized result before it fills memory", async () => {
+    let pulled = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    const endless = new ReadableStream<Uint8Array>({ pull(controller) { pulled += 1; controller.enqueue(chunk); } });
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(json({ task_uid: "1ca2c888-1a64-4fbe-99e9-23c230779a37" }))
+      .mockResolvedValueOnce(json({ status: "finished" }))
+      .mockResolvedValueOnce(new Response(endless, { headers: { "content-type": "image/png" }, status: 200 }));
+    const client = createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} });
+    await expect(client.generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_AMBIGUOUS" });
+    expect(pulled).toBeLessThan(40);
+  });
+
+  it("scrubs the API key and key-shaped tokens from provider text before logging", () => {
+    expect(scrubProviderText("Invalid API key: sk-pv-abcdefghijklmnop (Bearer sk-pv-abcdefghijklmnop)", "sk-pv-abcdefghijklmnop"))
+      .toBe("Invalid API key: [key] (Bearer [key])");
+    expect(scrubProviderText("Authorization: Bearer abc.DEF-123_x expired", "other-key-value")).toBe("Authorization: [secret] expired");
+    expect(scrubProviderText("token nd-1234567890abc rejected", "other-key-value")).toBe("token [secret] rejected");
+    expect(scrubProviderText({ nested: true }, "k")).toBe("");
+    expect(scrubProviderText("x".repeat(300), "key-key-key")).toHaveLength(200);
   });
 
   it("rejects an edit with more than four references before POST", async () => {
