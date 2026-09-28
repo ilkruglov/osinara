@@ -12,7 +12,7 @@
  */
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 
-export const KNOWLEDGE_SKILL_NAMES = ["auto-analyst", "policy-finance-analyst"] as const;
+export const KNOWLEDGE_SKILL_NAMES = ["auto-analyst", "car-diagnostics", "policy-finance-analyst"] as const;
 export type KnowledgeSkillName = (typeof KNOWLEDGE_SKILL_NAMES)[number];
 
 export const KNOWLEDGE_SKILL_CAPABILITY: ExternalGroupToolName = "web_search";

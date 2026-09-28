@@ -4,7 +4,7 @@
  * Exports:
  * - `createExternalGroupLoadSkillTool`: injectable Eve-branded wrapper for authorization tests.
  * - `externalGroupLoadSkillTool`: production `defineTool` wrapper over Eve's native skill loader.
- * - Knowledge skills (`auto-analyst`, `policy-finance-analyst`) open with the live `web_search` grant.
+ * - Knowledge skills (`auto-analyst`, `car-diagnostics`, `policy-finance-analyst`) open with the live `web_search` grant.
  * - An authored skill opens only with a live grant to this group and every step tool in the live
  *   allowlist; a capability revoked after the grant closes the skill on the next call.
  */

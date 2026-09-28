@@ -113,6 +113,7 @@ describe("externalGroupCapabilityInstructions", () => {
     expect(denied).not.toContain("auto-analyst");
     expect(granted).toContain("`load_skill` с `skill=auto-analyst`");
     expect(granted).toContain("`load_skill` с `skill=policy-finance-analyst`");
+    expect(granted).toContain("`load_skill` с `skill=car-diagnostics`");
     expect(scheduled).not.toContain("auto-analyst");
   });
 
@@ -126,7 +127,7 @@ describe("externalGroupCapabilityInstructions", () => {
     });
 
     expect(granted).toContain("`load_skill` с `skill=weekly-digest`: Сводка недели по чату.");
-    expect(granted).toContain("`auto-analyst`, `policy-finance-analyst`, `weekly-digest`");
+    expect(granted).toContain("`auto-analyst`, `car-diagnostics`, `policy-finance-analyst`, `weekly-digest`");
     expect(scheduled).not.toContain("weekly-digest");
   });
 

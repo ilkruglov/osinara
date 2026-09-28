@@ -2,7 +2,7 @@
  * Analyst skills as dynamic packages for external groups.
  *
  * Exports:
- * - `KNOWLEDGE_SKILL_DEFINITIONS`: `auto-analyst` and `policy-finance-analyst` read once from
+ * - `KNOWLEDGE_SKILL_DEFINITIONS`: `auto-analyst`, `car-diagnostics` and `policy-finance-analyst` read once from
  *   `agent/skills/<name>/` (SKILL.md body plus every `references/*.md`).
  * - `knowledgeSkills`: the packages an external turn materializes with the live `web_search` grant.
  *

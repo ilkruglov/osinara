@@ -75,6 +75,7 @@ const EXPECTED_SKILL_DIRECTORIES = [
   "agent-browser",
   "auto-analyst",
   "behavior-preferences",
+  "car-diagnostics",
   "docx",
   "pdf",
   "policy-finance-analyst",

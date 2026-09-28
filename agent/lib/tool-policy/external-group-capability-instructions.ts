@@ -78,6 +78,7 @@ export function externalGroupCapabilityInstructions(
   ];
   const skillPurpose: Readonly<Record<string, string>> = {
     "auto-analyst": "аналитик по машинам и автопрому",
+    "car-diagnostics": "диагностика неисправностей BMW E60 530i (N52B30) и Subaru BRZ / Toyota GT86 первого поколения",
     "policy-finance-analyst": "аналитик по политике и финансам",
     ...Object.fromEntries((options.authoredSkills ?? []).map((skill) => [skill.name, skill.description])),
   };

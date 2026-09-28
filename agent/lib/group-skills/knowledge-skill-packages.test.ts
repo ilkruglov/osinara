@@ -27,8 +27,8 @@ function externalAuth(toolAllowlist: string[]): SessionAuth {
 }
 
 describe("knowledge skill packages", () => {
-  it("loads both analyst skills with description, body and references", () => {
-    for (const name of ["auto-analyst", "policy-finance-analyst"] as const) {
+  it("loads every analyst skill with description, body and references", () => {
+    for (const name of ["auto-analyst", "car-diagnostics", "policy-finance-analyst"] as const) {
       const definition = KNOWLEDGE_SKILL_DEFINITIONS[name];
       expect(definition.description.length).toBeGreaterThan(40);
       expect(definition.markdown.startsWith("---")).toBe(false);
@@ -40,7 +40,7 @@ describe("knowledge skill packages", () => {
   it("reaches the external sandbox only with the web_search grant", async () => {
     const resolve = createExternalTurnSkillResolver({ packagesForGroup: async () => [] });
     const granted = await resolve(externalAuth(["web_search", "remember"]));
-    expect(Object.keys(granted)).toEqual(expect.arrayContaining(["auto-analyst", "policy-finance-analyst"]));
+    expect(Object.keys(granted)).toEqual(expect.arrayContaining(["auto-analyst", "car-diagnostics", "policy-finance-analyst"]));
     const revoked = await resolve(externalAuth(["remember"]));
     expect(Object.keys(revoked)).not.toContain("auto-analyst");
     expect(Object.keys(await resolve(externalAuth(["web_search"]), { subagent: true }))).not.toContain("auto-analyst");
