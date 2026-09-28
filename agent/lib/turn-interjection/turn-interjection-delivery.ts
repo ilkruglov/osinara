@@ -13,8 +13,9 @@
  *   a fast tool can return while the model is still requesting the next one.
  * - Eve re-runs an interrupted step with the same index and the history of the completed attempt
  *   only (review, 28 September 2026): the step number, not the moment, decides what was delivered.
- * - A failed record is retried once and repeated at the end of the turn; if both fail the message
- *   reaches its ordinary turn as a new one, which can at most repeat a reply, never drop it.
+ * - A failed record is retried once; if both attempts fail the turn shows no new messages until a
+ *   step is recorded again (`isTurnInterjectionDeliveryUntracked`), and a claim without a step
+ *   number is freed, never delivered: a message may be answered twice, but it is never lost.
  */
 import type { SessionAuth } from "eve/context";
 
@@ -24,11 +25,23 @@ import { resolveTurnInterjectionScope } from "./turn-interjection-scope.js";
 type DeliveryContext = { session: { auth: SessionAuth; id: string; parent?: unknown; turn: { id: string } } };
 type Repository = Pick<typeof turnInterjectionRepository, "finishTurn" | "stepStarted">;
 
-async function twice(ctx: DeliveryContext, stage: string, operation: () => Promise<unknown>): Promise<void> {
+/**
+ * Turns of this process whose current step could not be recorded. A result returned now would carry
+ * a missing or stale step number and could later pass for delivered, so the turn shows no new
+ * messages until a step is recorded again. After a crash the retried step records itself first.
+ */
+const untrackedTurns = new Set<string>();
+const turnKey = (ctx: DeliveryContext) => `${ctx.session.id}\u0000${ctx.session.turn.id}`;
+
+export function isTurnInterjectionDeliveryUntracked(ctx: DeliveryContext): boolean {
+  return untrackedTurns.has(turnKey(ctx));
+}
+
+async function twice(ctx: DeliveryContext, stage: string, operation: () => Promise<unknown>): Promise<boolean> {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       await operation();
-      return;
+      return true;
     } catch (error) {
       console.error(JSON.stringify({
         attempt,
@@ -40,6 +53,7 @@ async function twice(ctx: DeliveryContext, stage: string, operation: () => Promi
       }));
     }
   }
+  return false;
 }
 
 export async function recordTurnInterjectionDelivery(
@@ -48,7 +62,9 @@ export async function recordTurnInterjectionDelivery(
   repository: Repository = turnInterjectionRepository,
 ): Promise<void> {
   if (resolveTurnInterjectionScope(ctx) === null) return;
-  await twice(ctx, "step", () => repository.stepStarted(ctx.session.id, ctx.session.turn.id, stepIndex));
+  const recorded = await twice(ctx, "step", () => repository.stepStarted(ctx.session.id, ctx.session.turn.id, stepIndex));
+  if (recorded) untrackedTurns.delete(turnKey(ctx));
+  else untrackedTurns.add(turnKey(ctx));
 }
 
 export async function finishTurnInterjectionDelivery(
@@ -56,5 +72,6 @@ export async function finishTurnInterjectionDelivery(
   repository: Repository = turnInterjectionRepository,
 ): Promise<void> {
   if (resolveTurnInterjectionScope(ctx) === null) return;
+  untrackedTurns.delete(turnKey(ctx));
   await twice(ctx, "turn", () => repository.finishTurn(ctx.session.id, ctx.session.turn.id));
 }

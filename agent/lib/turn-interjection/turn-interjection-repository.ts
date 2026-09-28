@@ -176,7 +176,8 @@ export const turnInterjectionRepository = {
    * Model step `stepIndex` of this turn started. Its prompt carries every result returned during an
    * earlier step; a claim returned during this step or later, or never returned, belongs to an
    * attempt Eve threw away when it re-ran the step, and is freed so the retry can show the message.
-   * A claim returned before step tracking existed (no `returned_step`) counts as delivered.
+   * A claim returned while no step was recorded (`returned_step` NULL) is freed, not delivered: the
+   * message may then be answered twice, but it is never lost (Codex review, 28 September 2026).
    */
   async stepStarted(eveSessionId: string, eveTurnId: string, stepIndex: number): Promise<number> {
     requireNonEmpty(eveSessionId, "AGENT_TURN_INTERJECTION_SESSION_INVALID", "Не удалось определить сессию текущего хода");
@@ -193,13 +194,13 @@ export const turnInterjectionRepository = {
       const delivered = await client.query(
         `UPDATE telegram_turn_interjections SET delivered_at = now()
           WHERE eve_session_id = $1 AND eve_turn_id = $2 AND returned_at IS NOT NULL AND delivered_at IS NULL
-            AND (returned_step IS NULL OR returned_step < $3)`,
+            AND returned_step < $3`,
         [eveSessionId, eveTurnId, stepIndex],
       );
       await client.query(
         `DELETE FROM telegram_turn_interjections
           WHERE eve_session_id = $1 AND eve_turn_id = $2 AND delivered_at IS NULL
-            AND (returned_at IS NULL OR returned_step >= $3)`,
+            AND (returned_at IS NULL OR returned_step IS NULL OR returned_step >= $3)`,
         [eveSessionId, eveTurnId, stepIndex],
       );
       await client.query("COMMIT");
@@ -224,7 +225,7 @@ export const turnInterjectionRepository = {
        ), delivered AS (
          UPDATE telegram_turn_interjections SET delivered_at = now()
           WHERE eve_session_id = $1 AND eve_turn_id = $2 AND returned_at IS NOT NULL AND delivered_at IS NULL
-            AND (returned_step IS NULL OR returned_step < (SELECT step_index FROM step))
+            AND returned_step < (SELECT step_index FROM step)
           RETURNING update_id
        ), released AS (
          DELETE FROM telegram_turn_interjections

@@ -16,6 +16,8 @@
  *   returns the stored result or an ambiguity code instead of adding or ordering twice.
  * - The delivery point is chosen once (`use_address` or `set_address`) and kept per person.
  */
+import { createHash } from "node:crypto";
+
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
@@ -91,9 +93,18 @@ export default defineTool({
     const userId = auth.userId;
     const client = lavkaClientFor(ctx);
     const point = await lavkaDeliveryPointRepository.find(userId);
-    // One durable key per call: a step Eve replays after a crash must not add or order twice.
-    const once = <T>(action: LavkaOperationAction, run: () => Promise<T>) =>
-      runLavkaOperation(lavkaOperationRepository, { action, key: `${ctx.session.id}:${ctx.callId}`, request: input, userId }, run);
+    // A step Eve replays after a crash must not add or order twice. A confirmed order or cancel is
+    // bound to its call id (the approval is); an add is bound to the turn and its input, because a
+    // re-run model step generates the same add under a new call id (Codex review, 28 September 2026).
+    const once = async <T>(action: LavkaOperationAction, run: () => Promise<T>) => {
+      const key = action === "add"
+        ? `${ctx.session.id}:${ctx.session.turn.id}:add:${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 32)}`
+        : `${ctx.session.id}:${ctx.callId}`;
+      const done = await runLavkaOperation(lavkaOperationRepository, { action, key, request: input, userId }, run);
+      return done.replayed && action === "add"
+        ? { ...(done.result as object), note: "Такой же add уже выполнен в этом ходе, корзина не изменена. Чтобы положить больше, используйте set с итоговым количеством" }
+        : done.result;
+    };
     const requirePoint = () => {
       if (!point) throw new AppError("AGENT_LAVKA_ADDRESS_REQUIRED", "Сначала выберите адрес доставки: addresses и use_address или set_address");
       return point;

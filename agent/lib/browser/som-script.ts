@@ -89,7 +89,8 @@ const HELPERS = String.raw`
   const inFormOf = (el) => { const t = el.tagName === "LABEL" && el.control ? el.control : el; if (t.form) return true; for (let x = t; x; x = x.parentNode || x.host) if (x.tagName === "FORM") return true; return false; };
   const describe = (el) => { const d = full(el); return { role: d.role, text: d.text.slice(0, 60), value: d.value === null ? null : d.value.slice(0, 60), state: d.state, inForm: inFormOf(el) }; };
   // Hashed in full: a changed tail of a long address must make the confirmation stale.
-  const stateHashOf = (nodes) => djb2(nodes.map((el) => { const d = full(el); return d.role + "\u0002" + d.text + "\u0002" + (d.value || "") + "\u0002" + d.state.join(","); }).join("\u0001") + "\u0003" + fieldsStateOf());
+  // Form membership is in the hash too: a button moved into the form after the look is not the button the gate saw.
+  const stateHashOf = (nodes) => djb2(nodes.map((el) => { const d = full(el); return d.role + "\u0002" + d.text + "\u0002" + (d.value || "") + "\u0002" + d.state.join(",") + "\u0002" + (inFormOf(el) ? "form" : ""); }).join("\u0001") + "\u0003" + fieldsStateOf());
   const visibleText = () => { const parts = [(document.body && document.body.innerText) || ""]; const walk = (root) => { for (const el of root.querySelectorAll("*")) if (el.shadowRoot) { parts.push(plainText(el.shadowRoot)); walk(el.shadowRoot); } }; walk(document); return norm(parts.join(" ")); };
   // Every field of the page, on screen or not: the form a confirmation submits is the whole form.
   const allFields = () => { const out = []; const walk = (root) => { for (const el of root.querySelectorAll("input,select,textarea")) { if (String(el.type).toLowerCase() !== "hidden") out.push(el); if (el.shadowRoot) walk(el.shadowRoot); } for (const el of root.querySelectorAll("*")) if (el.shadowRoot) walk(el.shadowRoot); }; walk(document); return out; };

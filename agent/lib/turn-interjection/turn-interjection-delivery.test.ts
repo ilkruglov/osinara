@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { finishTurnInterjectionDelivery, recordTurnInterjectionDelivery } from "./turn-interjection-delivery.js";
+import { finishTurnInterjectionDelivery, isTurnInterjectionDeliveryUntracked, recordTurnInterjectionDelivery } from "./turn-interjection-delivery.js";
 
 function context(attributes: Record<string, unknown>) {
   return {
@@ -68,5 +68,17 @@ describe("turn interjection delivery", () => {
     await expect(finishTurnInterjectionDelivery(context({}), repo)).resolves.toBeUndefined();
     expect(repo.finishTurn).toHaveBeenCalledTimes(2);
     expect(log.mock.calls.map((call) => JSON.parse(String(call[0])).code)).toEqual(Array(3).fill("AGENT_TURN_INTERJECTION_DELIVERY_RECORD_FAILED"));
+  });
+
+  // Codex review of 1.7.3: a result returned while the step was unrecorded passed for delivered on a retry.
+  it("stops showing new messages to a turn whose step could not be recorded, until one is", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const repo = repository();
+    const ctx = context({});
+    repo.stepStarted.mockRejectedValueOnce(new Error("down")).mockRejectedValueOnce(new Error("down"));
+    await recordTurnInterjectionDelivery(ctx, 4, repo);
+    expect(isTurnInterjectionDeliveryUntracked(ctx)).toBe(true);
+    await recordTurnInterjectionDelivery(ctx, 5, repo);
+    expect(isTurnInterjectionDeliveryUntracked(ctx)).toBe(false);
   });
 });

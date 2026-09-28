@@ -38,8 +38,8 @@ describe("runLavkaOperation", () => {
   it("runs once and replays the stored result", async () => {
     const repo = ledger();
     const run = vi.fn(async () => ({ orderId: "o-1" }));
-    await expect(runLavkaOperation(repo, call, run)).resolves.toEqual({ orderId: "o-1" });
-    await expect(runLavkaOperation(repo, call, run)).resolves.toEqual({ orderId: "o-1" });
+    await expect(runLavkaOperation(repo, call, run)).resolves.toEqual({ replayed: false, result: { orderId: "o-1" } });
+    await expect(runLavkaOperation(repo, call, run)).resolves.toEqual({ replayed: true, result: { orderId: "o-1" } });
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -64,6 +64,8 @@ describe("runLavkaOperation", () => {
 
   it("frees the key after a refusal the site explained", async () => {
     const repo = ledger();
+    await expect(runLavkaOperation(repo, call, async () => { throw new AppError("AGENT_LAVKA_ADDRESS_REQUIRED", "x"); })).rejects.toMatchObject({ code: "AGENT_LAVKA_ADDRESS_REQUIRED" });
+    expect(repo.rows.size).toBe(0);
     await expect(runLavkaOperation(repo, call, async () => { throw new AppError("AGENT_LAVKA_CART_CHANGED", "x"); })).rejects.toMatchObject({ code: "AGENT_LAVKA_CART_CHANGED" });
     expect(repo.rows.size).toBe(0);
     await expect(runLavkaOperation(repo, call, async () => { throw new AppError("AGENT_LAVKA_UNAVAILABLE", "x"); })).rejects.toMatchObject({ code: "AGENT_LAVKA_UNAVAILABLE" });

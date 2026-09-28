@@ -213,6 +213,16 @@ describeWithDatabase("turnInterjectionRepository", () => {
     expect(await turnInterjectionRepository.findDeliveredContentKinds(["1001", "1002"], applicationSessionId)).toEqual(new Map([["1001", "text"]]));
   });
 
+  it("frees, never delivers, a result returned while no step was recorded", async () => {
+    await enqueue("1001");
+    await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }]);
+    await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
+
+    expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0)).toBe(0);
+    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBeNull();
+    expect((await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId)).toEqual(["1001"]);
+  });
+
   it("pages candidates past a full page of earlier ones", async () => {
     for (let id = 1001; id <= 1012; id += 1) await enqueue(String(id));
     const page = async (afterUpdateId?: string) => (await turnInterjectionRepository.listCandidates({

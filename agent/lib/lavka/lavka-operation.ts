@@ -2,9 +2,10 @@
  * Exactly-once guard for Lavka side effects of one tool call (migration 118).
  *
  * Exports:
- * - `runLavkaOperation`: runs a side effect under a durable key; a replay of the same call returns
- *   the stored result or refuses with an ambiguity code, a different input under the same key is
- *   refused.
+ * - `runLavkaOperation`: runs a side effect under a durable key; a replay returns the stored result
+ *   (`replayed: true`) or refuses with an ambiguity code, a different input under the same key is
+ *   refused. The caller picks the key: a confirmed order is bound to its call id, an `add` to the
+ *   turn and its input, because a re-run model step generates the same call under a new id.
  * - `lavkaOperationRepository`: the PostgreSQL ledger behind it.
  * - `LAVKA_DEFINITIVE_FAILURES`: codes after which nothing reached Lavka, so the key is released.
  *
@@ -31,6 +32,7 @@ export interface LavkaOperationRepository {
 /** Codes after which the site did not accept the side effect: retrying the same call is safe. */
 export const LAVKA_DEFINITIVE_FAILURES: ReadonlySet<string> = new Set([
   "AGENT_LAVKA_ADDRESS_CHANGED",
+  "AGENT_LAVKA_ADDRESS_REQUIRED",
   "AGENT_LAVKA_AUTH_REQUIRED",
   "AGENT_LAVKA_CART_CHANGED",
   "AGENT_LAVKA_CART_CONFLICT",
@@ -55,14 +57,14 @@ export async function runLavkaOperation<T>(
   repository: LavkaOperationRepository,
   input: { action: LavkaOperationAction; key: string; request: unknown; userId: string },
   run: () => Promise<T>,
-): Promise<T> {
+): Promise<{ replayed: boolean; result: T }> {
   const requestHash = createHash("sha256").update(JSON.stringify(input.request)).digest("hex");
   const begun = await repository.begin({ action: input.action, key: input.key, requestHash, userId: input.userId });
   if (begun.kind === "existing") {
     if (begun.requestHash !== requestHash) {
       throw new AppError("AGENT_LAVKA_OPERATION_MISMATCH", "Этот вызов уже выполнялся с другими параметрами. Сделайте новый вызов");
     }
-    if (begun.status === "completed") return begun.result as T;
+    if (begun.status === "completed") return { replayed: true, result: begun.result as T };
     throw ambiguity(input.action);
   }
   let result: T;
@@ -75,7 +77,7 @@ export async function runLavkaOperation<T>(
     throw error;
   }
   await repository.complete({ key: input.key, result, userId: input.userId });
-  return result;
+  return { replayed: false, result };
 }
 
 export const lavkaOperationRepository: LavkaOperationRepository = {

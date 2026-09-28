@@ -47,6 +47,7 @@ import type {
   TurnInterjectionShowCoordinate,
   turnInterjectionRepository,
 } from "./turn-interjection-repository.js";
+import { isTurnInterjectionDeliveryUntracked } from "./turn-interjection-delivery.js";
 import { resolveTurnInterjectionScope, type TurnInterjectionScope } from "./turn-interjection-scope.js";
 import type { TurnInterjection } from "./turn-interjection-tool.js";
 
@@ -286,6 +287,8 @@ export function createTurnInterjectionCollector(
   async function collect(ctx: ToolContext): Promise<string | null> {
     const scope = resolveTurnInterjectionScope(ctx);
     if (!scope) return null;
+    // The current step could not be recorded: whatever this result carried might later pass for seen.
+    if (isTurnInterjectionDeliveryUntracked(ctx)) return null;
     const collection: Collection = {
       coordinate: { ...callCoordinate(ctx), applicationSessionId: scope.applicationSessionId },
       dependencies,
