@@ -637,6 +637,7 @@ describe("createTelegramDurableIngress", () => {
     expect(dispatch.mock.calls[1]?.[0].message.raw.osinara_series).toEqual({ role: "context" });
     expect(dispatch.mock.calls[2]?.[0].message.raw.osinara_series).toEqual({
       addressed: true,
+      earlierUpdateIds: ["2001", "2002"],
       role: "current",
       telegramMessageIds: ["2001", "2002"],
     });

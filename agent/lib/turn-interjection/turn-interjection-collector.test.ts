@@ -286,6 +286,17 @@ describe("createTurnInterjectionCollector", () => {
     expect(dependencies.repository.listCandidates).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
   });
 
+  // Review 28 September 2026: fifty unaddressed messages on the first page hid a later «стоп».
+  it("reads the next page when a full page held nothing to show", async () => {
+    const chatter = Array.from({ length: 50 }, (_, index) => groupCandidate(String(501 + index), `болтовня ${index}`));
+    dependencies.repository.listCandidates.mockImplementation(async (input: { afterUpdateId?: string }) =>
+      input.afterUpdateId === undefined ? chatter : input.afterUpdateId === "550" ? [groupCandidate("600", `@${BOT} стоп`)] : []);
+    const { collect } = createTurnInterjectionCollector(dependencies);
+
+    expect(blockMessages(await collect(toolContext(GROUP_ATTRIBUTES)))).toEqual([expect.objectContaining({ text: `@${BOT} стоп` })]);
+    expect(dependencies.repository.listCandidates).toHaveBeenLastCalledWith(expect.objectContaining({ afterUpdateId: "550" }));
+  });
+
   it("claims a voice message and marks it started before transcribing it", async () => {
     candidates = [voiceCandidate("501", { voice: { fileId: "voice-501", mimeType: "audio/ogg" } })];
     const { collect } = createTurnInterjectionCollector(dependencies);

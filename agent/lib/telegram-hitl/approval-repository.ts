@@ -9,8 +9,8 @@
 import type { SessionAuthContext } from "eve/context";
 import type { PoolClient } from "pg";
 
-import { AppError } from "../app-error.js";
 import { database } from "../database.js";
+import { requireToolExecutionApprovalEvidence, type ToolExecutionApprovalInput } from "./approval-evidence.js";
 import {
   resolveCurrentApprovalAuth,
   type ApprovalAuthRow,
@@ -81,14 +81,7 @@ export interface TelegramHitlApprovalRepository {
   claimCallback(input: ClaimTelegramHitlCallbackInput): Promise<TelegramHitlCallbackClaim>;
   clearForEveSession(applicationSessionId: string, eveSessionId: string): Promise<void>;
   hasPendingForSession(applicationSessionId: string, eveSessionId: string): Promise<boolean>;
-  requireToolExecutionApproval(input: {
-    applicationSessionId: string;
-    eveSessionId: string;
-    telegramUserId: string;
-    toolCallId: string;
-    toolInputHash: string;
-    toolName: string;
-  }): Promise<void>;
+  requireToolExecutionApproval(input: ToolExecutionApprovalInput): Promise<void>;
   register(input: RegisterTelegramHitlApprovalInput): Promise<void>;
 }
 
@@ -266,34 +259,7 @@ export const telegramHitlApprovalRepository: TelegramHitlApprovalRepository = {
     );
   },
 
-  async requireToolExecutionApproval(input) {
-    const result = await database().query<{ authorized: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1
-         FROM telegram_hitl_approvals AS approval
-         JOIN conversation_sessions AS session ON session.id = approval.application_session_id
-         WHERE approval.application_session_id = $1
-           AND approval.eve_session_id = $2
-           AND approval.expected_telegram_user_id = $3
-           AND approval.tool_call_id = $4
-           AND approval.tool_name = $5
-           AND approval.tool_input_hash = $6
-           AND approval.consumed_at IS NOT NULL
-           AND approval.timed_out_at IS NULL
-           AND (approval.selected_option_id IS NULL OR approval.selected_option_id = 'approve')
-           AND session.eve_session_id = approval.eve_session_id
-           AND session.retired_at IS NULL
-       ) AS authorized`,
-      [input.applicationSessionId, input.eveSessionId, input.telegramUserId,
-        input.toolCallId, input.toolName, input.toolInputHash],
-    );
-    if (result.rows[0]?.authorized !== true) {
-      throw new AppError(
-        "AGENT_TOOL_APPROVAL_EVIDENCE_INVALID",
-        "Не удалось подтвердить решение пользователя для этого действия. Запросите подтверждение заново",
-      );
-    }
-  },
+  requireToolExecutionApproval: requireToolExecutionApprovalEvidence,
 
   async claimCallback(input) {
     const client = await database().connect();

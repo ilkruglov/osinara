@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { gateDecision } from "./gate.js";
 import { parsePageView } from "./page-view.js";
 
-const view = (rows: Array<Partial<{ n: number; role: string; text: string; state: string[] }>>) => parsePageView(JSON.stringify({
+const view = (rows: Array<Partial<{ inForm: boolean; n: number; role: string; text: string; state: string[] }>>) => parsePageView(JSON.stringify({
   epoch: "e", title: "t", url: "https://x.ru/", elements: rows.map((r, i) => ({ n: i + 1, role: "button", text: "", ...r })),
 }));
 
@@ -53,6 +53,13 @@ describe("gateDecision", () => {
     expect(gateDecision({ action: { kind: "click" }, entered, n: 2, view: v })).toMatchObject({ gated: false });
     expect(gateDecision({ action: { kind: "click" }, entered, n: 3, view: v })).toMatchObject({ gated: false });
     expect(gateDecision({ action: { kind: "click" }, entered, n: 4, view: v })).toMatchObject({ gated: true, reason: "transaction" });
+  });
+
+  it("does not let a cookie-worded button inside the form skip the gate after entered data", () => {
+    const v = view([{ role: "textbox", text: "Телефон", inForm: true }, { role: "button", text: "Allow cookies", inForm: true }, { role: "generic", text: "Принять куки", inForm: true }]);
+    const entered = [{ field: "phone", label: "Телефон", n: 1 }];
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 2, view: v })).toMatchObject({ gated: true, reason: "after-entry" });
+    expect(gateDecision({ action: { kind: "click" }, entered, n: 3, view: v })).toMatchObject({ gated: true, reason: "after-entry" });
   });
 
   it("stops on a form's submit button whatever its label and whoever filled the form", () => {

@@ -36,6 +36,7 @@ import {
 } from "./turn-interjection-block.js";
 import {
   TURN_INTERJECTION_CANDIDATE_LIMIT,
+  TURN_INTERJECTION_CANDIDATE_PAGES,
   TURN_INTERJECTION_MAX_MESSAGES,
   TURN_INTERJECTION_MAX_TEXT_CHARACTERS,
   TURN_INTERJECTION_MAX_TRANSCRIPTIONS_PER_CALL,
@@ -296,17 +297,23 @@ export function createTurnInterjectionCollector(
     // A retry of this call starts from scratch, so an earlier attempt's returned claims cannot be
     // counted as seen when this attempt ends up returning none.
     await dependencies.repository.releaseCall(collection.coordinate);
-    const candidates = await dependencies.repository.listCandidates({
-      ...collection.coordinate,
-      currentUpdateId: scope.currentUpdateId,
-      limit: TURN_INTERJECTION_CANDIDATE_LIMIT,
-      telegramUserId: scope.telegramUserId,
-    });
     const plans: Plan[] = [];
-    for (const candidate of candidates) {
-      if (plans.length >= TURN_INTERJECTION_MAX_MESSAGES) break;
-      const planned = await plan(candidate, collection);
-      if (planned) plans.push(planned);
+    let afterUpdateId: string | undefined;
+    for (let page = 0; page < TURN_INTERJECTION_CANDIDATE_PAGES && plans.length < TURN_INTERJECTION_MAX_MESSAGES; page += 1) {
+      const candidates = await dependencies.repository.listCandidates({
+        ...collection.coordinate,
+        ...(afterUpdateId === undefined ? {} : { afterUpdateId }),
+        currentUpdateId: scope.currentUpdateId,
+        limit: TURN_INTERJECTION_CANDIDATE_LIMIT,
+        telegramUserId: scope.telegramUserId,
+      });
+      for (const candidate of candidates) {
+        if (plans.length >= TURN_INTERJECTION_MAX_MESSAGES) break;
+        const planned = await plan(candidate, collection);
+        if (planned) plans.push(planned);
+      }
+      if (candidates.length < TURN_INTERJECTION_CANDIDATE_LIMIT) break;
+      afterUpdateId = candidates[candidates.length - 1]!.updateId;
     }
     if (plans.length === 0) return null;
 

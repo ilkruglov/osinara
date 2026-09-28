@@ -116,6 +116,32 @@ describe("Telegram approval presentation", () => {
     expect(result.options?.find((option) => option.id === "approve")?.label).toBe(approveLabel);
   });
 
+  // Review 28 September 2026: an address edited after the preview must not ride along with an approved total.
+  it("shows the Lavka order address only when it is the one the preview bound", async () => {
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => ({ key: "0123456789abcdef", label: "Корабельная 11к1, кв. 5" })),
+      findSchedule: vi.fn(),
+    });
+    const request = (addressKey: string) => ({
+      action: {
+        callId: "call-lavka",
+        input: { action: "order", addressKey, cartVersion: 9, paymentMethodId: "card-1", total: 300 },
+        kind: "tool-call" as const,
+        toolName: "yandex_lavka",
+      },
+      display: "confirmation" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-lavka",
+    });
+    const shown = await present(request("0123456789abcdef"), context());
+    expect(shown.prompt).toContain("Корабельная 11к1, кв. 5");
+    expect(shown.prompt).toContain("300 ₽");
+    await expect(present(request("fedcba9876543210"), context())).rejects.toMatchObject({ code: "AGENT_LAVKA_ADDRESS_CHANGED" });
+  });
+
   it("keeps untrusted Gmail headers inside their labelled lines", async () => {
     const present = createTelegramApprovalPresenter({
       findBrowserConfirm: vi.fn(),

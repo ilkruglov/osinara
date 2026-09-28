@@ -6,6 +6,7 @@
  * - A message this conversation's running turn already saw arrives with a trusted notice; a message
  *   shown only as a notice (voice without transcript, a file) says so instead.
  * - A message never delivered to this conversation, or prepared outside the ingress, carries neither.
+ * - A series whose earlier messages a running turn already showed says so for them too.
  * - An external group and a bot author never get a marker, so their queue is never consulted.
  */
 import { describe, expect, it } from "vitest";
@@ -19,7 +20,8 @@ function botGroupMessage(text: string) {
 }
 import { createTelegramMessageHandler } from "./telegram-on-message.js";
 import { TELEGRAM_UPDATE_MARKER_KEY } from "./telegram-update-marker.js";
-import { alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
+import { TELEGRAM_SERIES_MARKER_KEY } from "./telegram-message-series.js";
+import { alreadySeenSeriesContext, alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
 
 const INGRESS_UPDATE_ID = "501";
 // The durable ingress stamps the update id into the message before Eve dispatch.
@@ -107,6 +109,21 @@ describe("turn interjection preparation", () => {
     const result = await handler(telegramContext().context, fromIngress(privateMessage("фото")));
 
     expect(result?.context).toContain(alreadySeenTurnContext("notice"));
+  });
+
+  // Review 28 September 2026: B was shown while turn A worked, then B and C were merged into a series
+  // answered by C; B came back as an earlier message without any notice.
+  it("tells the agent which earlier messages of the series it already saw", async () => {
+    const repository = ownerRepositories();
+    repository.turnInterjections.findDeliveredContentKinds.mockResolvedValue(new Map([["499", "text"], ["500", "notice"]]));
+    const handler = createTelegramMessageHandler(repository);
+    const message = fromIngress(privateMessage("и ещё сыр"));
+    const series = { ...message, raw: { ...message.raw, [TELEGRAM_SERIES_MARKER_KEY]: { addressed: true, earlierUpdateIds: ["499", "500"], role: "current", telegramMessageIds: ["41", "42"] } } };
+
+    const result = await handler(telegramContext().context, series);
+
+    expect(repository.turnInterjections.findDeliveredContentKinds).toHaveBeenCalledWith(["499", "500"], "session-1");
+    expect(result?.context).toContain(alreadySeenSeriesContext(1));
   });
 
   it("adds no notice for a message this conversation never saw", async () => {

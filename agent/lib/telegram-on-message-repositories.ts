@@ -84,7 +84,7 @@ export interface TelegramMessageRepositories {
   session: Pick<typeof sessionRepository, "hasRoute" | "prepareTurn">;
   telegram: TelegramRepository;
   timeline: Pick<typeof conversationTimelineRepository, "recordInbound">;
-  turnInterjections: Pick<typeof turnInterjectionRepository, "findDeliveredContentKind">;
+  turnInterjections: Pick<typeof turnInterjectionRepository, "findDeliveredContentKind" | "findDeliveredContentKinds">;
 }
 
 // Production wiring stays separate from authorization flow so tests can replace every side effect.

@@ -14,7 +14,7 @@ import type { PreparedTelegramGroupTurnContext } from "./telegram-group-turn-con
 import type { TelegramGroupAttachmentSummary } from "./telegram-group-journal-context.js";
 import type { PreparedSession } from "./sessions/session-repository.js";
 import type { TelegramInboundActor } from "./telegram-inbound-actor.js";
-import { alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
+import { alreadySeenSeriesContext, alreadySeenTurnContext, turnInterjectionMarkerContext } from "./turn-interjection/turn-interjection-block.js";
 import type { TurnInterjectionContentKind } from "./turn-interjection/turn-interjection-repository.js";
 import { TURN_INTERJECTION_MARKER_ATTRIBUTE } from "./turn-interjection/turn-interjection-scope.js";
 import {
@@ -27,6 +27,8 @@ export function buildTelegramTurnResult(input: {
   currentUpdateId: string | null;
   /** What a running turn already saw of this message, when it was shown with a tool result. */
   shownDuringTurn: TurnInterjectionContentKind | null;
+  /** Earlier messages of this series whose content a running turn already showed to the model. */
+  shownEarlierInSeries?: number;
   /** Announced to the model here, so only a block carrying it counts as the author's new message. */
   turnInterjectionMarker: string | null;
   access: ConversationAccess;
@@ -64,6 +66,7 @@ export function buildTelegramTurnResult(input: {
   if (input.lazyAttachment) context.push(formatTelegramAttachmentReferences([input.lazyAttachment]));
   if (input.pendingDelivery) context.push(input.pendingDelivery.context);
   if (input.shownDuringTurn) context.push(alreadySeenTurnContext(input.shownDuringTurn));
+  if (input.shownEarlierInSeries) context.push(alreadySeenSeriesContext(input.shownEarlierInSeries));
   if (input.turnInterjectionMarker) context.push(turnInterjectionMarkerContext(input.turnInterjectionMarker));
   context.push(...input.memoryContext);
 

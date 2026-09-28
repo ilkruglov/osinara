@@ -68,8 +68,9 @@ export function gateDecision(input: {
   const entered = input.entered.length > 0;
   // A booking word on a button, in a form or after entered data: a link on a home page only leads to the form.
   if (FORM_SUBMIT.test(element.text) && (entered || element.role === "button" || hasFormContext(input.view))) return { gated: true, reason: "form-submit" };
-  // A cookie banner sends nothing: closing it after typing is not the form going out.
-  if (entered && COOKIE_CONSENT.test(element.text)) return { gated: false };
+  // A cookie banner sends nothing: closing it after typing is not the form going out. A button
+  // inside the form is not a banner whatever it says (review, 28 September 2026).
+  if (entered && !element.inForm && COOKIE_CONSENT.test(element.text)) return { gated: false };
   // A custom button is a generic element with a label; after entered data no click is proven safe.
   if (entered && !SAFE_AFTER_ENTRY_ROLES.has(element.role)) return { gated: true, reason: "after-entry" };
   return { gated: false };

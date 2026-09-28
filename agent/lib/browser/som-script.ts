@@ -84,7 +84,10 @@ const HELPERS = String.raw`
     const role = roleOf(target); const field = isField(role);
     return { role, text: (field && (labelOf(target) || textOf(target))) || textOf(el), value: valueOf(target, role), state: stateOf(target) };
   };
-  const describe = (el) => { const d = full(el); return { role: d.role, text: d.text.slice(0, 60), value: d.value === null ? null : d.value.slice(0, 60), state: d.state }; };
+  // A form member (by ancestry or the form attribute): after entered data no button inside a form
+  // is exempt from the gate, whatever it is called.
+  const inFormOf = (el) => { const t = el.tagName === "LABEL" && el.control ? el.control : el; if (t.form) return true; for (let x = t; x; x = x.parentNode || x.host) if (x.tagName === "FORM") return true; return false; };
+  const describe = (el) => { const d = full(el); return { role: d.role, text: d.text.slice(0, 60), value: d.value === null ? null : d.value.slice(0, 60), state: d.state, inForm: inFormOf(el) }; };
   // Hashed in full: a changed tail of a long address must make the confirmation stale.
   const stateHashOf = (nodes) => djb2(nodes.map((el) => { const d = full(el); return d.role + "\u0002" + d.text + "\u0002" + (d.value || "") + "\u0002" + d.state.join(","); }).join("\u0001") + "\u0003" + fieldsStateOf());
   const visibleText = () => { const parts = [(document.body && document.body.innerText) || ""]; const walk = (root) => { for (const el of root.querySelectorAll("*")) if (el.shadowRoot) { parts.push(plainText(el.shadowRoot)); walk(el.shadowRoot); } }; walk(document); return norm(parts.join(" ")); };

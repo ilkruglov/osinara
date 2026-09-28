@@ -12,11 +12,13 @@
  *   site's own `fetch` carries the session. A tab on another site is navigated to Lavka first.
  * - The cart is one server-side resource per account under optimistic concurrency (`cartVersion`):
  *   every write re-reads the cart and retries a conflict a few times.
- * - Placing an order re-reads the cart and refuses when the version or the total drifted from what
- *   the person confirmed; the submit is never retried (a lost answer could mean two orders).
+ * - Placing an order re-reads the cart and refuses when the version, the total, the address
+ *   fingerprint (`lavkaAddressKey`) or the card drifted from what the person confirmed; the submit is
+ *   never retried (a lost answer could mean two orders), and once it returned an order number a
+ *   failing payment poll reports `paymentStatus: "unknown"` instead of hiding the order.
  * - Not a published API: an unexpected answer is `AGENT_LAVKA_UNAVAILABLE`, never a guess.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { AppError } from "../app-error.js";
 import type { BrowserDriver } from "../browser/browser-driver.js";
@@ -51,6 +53,19 @@ export interface LavkaOrderPlacement { orderId: string; paymentStatus: string; r
 
 interface Deps { driver: Pick<BrowserDriver, "eval" | "open" | "settle" | "url">; sleep?: (ms: number) => Promise<void>; }
 
+/**
+ * A fingerprint of everything the courier gets: the order confirmation binds to it, so an address
+ * edited after the preview (flat, doorcode) cannot ride along with an approved total.
+ */
+export function lavkaAddressKey(point: LavkaDeliveryPoint): string {
+  const fields = [point.city, point.street, point.house, point.flat, point.entrance, point.floor, point.doorcode, point.comment, point.lat.toFixed(6), point.lon.toFixed(6)];
+  return createHash("sha256").update(JSON.stringify(fields)).digest("hex").slice(0, 16);
+}
+
+/** Submit failures that prove no order was created. */
+const SUBMIT_DEFINITIVE: ReadonlySet<string> = new Set(["AGENT_LAVKA_AUTH_REQUIRED", "AGENT_LAVKA_CART_CONFLICT", "AGENT_LAVKA_RATE_LIMITED", "AGENT_LAVKA_REJECTED", "AGENT_LAVKA_TAB_MOVED"]);
+const orderAmbiguous = (): AppError => new AppError("AGENT_LAVKA_ORDER_AMBIGUOUS", "Не удалось понять, принят ли заказ. Проверьте заказы (orders) или приложение Лавки, прежде чем повторять");
+
 const unavailable = (diagnostic: string): AppError => {
   console.error(JSON.stringify({ code: "AGENT_LAVKA_UNAVAILABLE", diagnostic }));
   return new AppError("AGENT_LAVKA_UNAVAILABLE", "Лавка не ответила или ответила непонятно. Попробуйте позже");
@@ -72,6 +87,11 @@ export function createLavkaClient(deps: Deps) {
     const raw = await deps.driver.eval(lavkaPageScript(request, LAVKA_SEARCH_LIMIT));
     let result: LavkaPageResult;
     try { result = JSON.parse(raw) as LavkaPageResult; } catch { throw unavailable("page_result_not_json"); }
+    // The page refused to send: the tab moved to another site after the URL check. Nothing left it.
+    if (typeof result.error === "string" && result.error.startsWith("wrong_origin:")) {
+      console.error(JSON.stringify({ code: "AGENT_LAVKA_TAB_MOVED", endpoint: request.endpoint, host: result.error.slice(13, 100) }));
+      throw new AppError("AGENT_LAVKA_TAB_MOVED", "Вкладка браузера ушла со страницы Лавки во время запроса. Повторите действие");
+    }
     if (!result.authorized) {
       throw new AppError("AGENT_LAVKA_AUTH_REQUIRED", "Лавка не узнаёт вход: нужно войти в Яндекс в браузере Мии (browser_open https://passport.yandex.ru/auth), потом повторить");
     }
@@ -148,21 +168,28 @@ export function createLavkaClient(deps: Deps) {
     },
     cancelOrder: async (orderId: string) => { await ok<unknown>({ body: {}, endpoint: "orderCancel", orderId, project: "raw" }); return { cancelled: true, orderId }; },
     cart,
-    async checkoutPreview(point: LavkaDeliveryPoint | null): Promise<LavkaCart & { paymentChoice: LavkaPaymentMethod | null }> {
+    async checkoutPreview(point: LavkaDeliveryPoint): Promise<LavkaCart & { addressKey: string; paymentChoice: LavkaPaymentMethod | null; paymentMethodId: string | null }> {
       const current = await cart(point);
-      return { ...current, paymentChoice: await resolvePayment(current, point) };
+      const paymentChoice = await resolvePayment(current, point);
+      return { ...current, addressKey: lavkaAddressKey(point), paymentChoice, paymentMethodId: paymentChoice?.id ?? null };
     },
     clearCart: (point: LavkaDeliveryPoint | null) => mutate(point, (current) => current.items.map((i) => ({ id: i.id, quantity: 0 }))),
     addresses: () => ok<LavkaAddress[]>({ body: {}, endpoint: "addresses", project: "addresses" }),
     paymentMethods,
     paymentStatus: (orderId: string) => ok<{ redirectUrl: string; status: string }>({ body: { orderId, paymentType: "card" }, endpoint: "paymentStatus", project: "payment" }),
-    async placeOrder(point: LavkaDeliveryPoint, expected: { cartVersion: number; total: number }): Promise<LavkaOrderPlacement> {
+    async placeOrder(point: LavkaDeliveryPoint, expected: { addressKey: string; cartVersion: number; paymentMethodId: string; total: number }): Promise<LavkaOrderPlacement> {
+      if (lavkaAddressKey(point) !== expected.addressKey) {
+        throw new AppError("AGENT_LAVKA_ADDRESS_CHANGED", "Адрес доставки изменился после предпросмотра. Сделайте новый preview и подтвердите заказ заново");
+      }
       const live = await cart(point);
       if (live.cartVersion !== expected.cartVersion) throw new AppError("AGENT_LAVKA_CART_CHANGED", `Корзина изменилась после предпросмотра (версия ${expected.cartVersion} → ${live.cartVersion}). Покажите новый предпросмотр и подтвердите заново`);
       if (live.total === null || Math.abs(live.total - expected.total) > LAVKA_PRICE_TOLERANCE_RUB) throw new AppError("AGENT_LAVKA_CART_CHANGED", `Сумма изменилась после подтверждения (${expected.total} → ${live.total}). Покажите новый предпросмотр и подтвердите заново`);
       if (live.availableForCheckout === false) throw new AppError("AGENT_LAVKA_CHECKOUT_BLOCKED", `Лавка не принимает эту корзину${live.checkoutBlockedReason ? ` (${live.checkoutBlockedReason})` : ""}. Уберите недоступные позиции и повторите предпросмотр`);
       const payment = await resolvePayment(live, point);
-      if (!payment) throw new AppError("AGENT_LAVKA_PAYMENT_MISSING", "У аккаунта Лавки нет доступной карты. Добавьте карту в приложении Лавки");
+      if (!payment) throw new AppError("AGENT_LAVKA_PAYMENT_MISSING", "У аккаунта Лавки нет выбранной доступной карты. Выберите карту в приложении Лавки");
+      if (payment.id !== expected.paymentMethodId) {
+        throw new AppError("AGENT_LAVKA_PAYMENT_CHANGED", "Карта оплаты изменилась после предпросмотра. Сделайте новый preview и подтвердите заказ заново");
+      }
       const service = await ok<{ depotId: string }>({ endpoint: "serviceInfo", project: "serviceInfo", query: `position[location][0]=${point.lon}&position[location][1]=${point.lat}&fallbackCurrencySign=%E2%82%BD&depotType=regular` });
       const body = {
         cartId: live.cartId, cartVersion: live.cartVersion, cashback: live.cashbackWalletId ? { walletId: live.cashbackWalletId } : {},
@@ -171,12 +198,28 @@ export function createLavkaClient(deps: Deps) {
         position: { buildingName: "", city: point.city, comment: point.comment, country: point.country || "Россия", depotId: service.depotId, doorbellName: "", doorcode: point.doorcode, entrance: point.entrance, flat: point.flat, floor: point.floor, house: point.house, leftAtDoor: false, location: [point.lon, point.lat], meetOutside: false, noDoorCall: false, placeId: point.placeId, street: point.street },
         useRover: false,
       };
-      const submitted = await ok<{ orderId: string }>({ body, endpoint: "orderSubmit", project: "submit" });
-      if (!submitted.orderId) throw new AppError("AGENT_LAVKA_ORDER_AMBIGUOUS", "Лавка не вернула номер заказа. Проверьте заказы в приложении Лавки, прежде чем повторять");
-      let status = ""; let redirectUrl = "";
+      let submitted: { orderId: string };
+      try {
+        submitted = await ok<{ orderId: string }>({ body, endpoint: "orderSubmit", project: "submit" });
+      } catch (error) {
+        // A refusal the site explained (or a request that never left the tab) placed nothing; any
+        // other failure after the submit went out may have created the order.
+        if (error instanceof AppError && SUBMIT_DEFINITIVE.has(error.code)) throw error;
+        console.error(JSON.stringify({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS", cause: error instanceof AppError ? error.code : "unknown" }));
+        throw orderAmbiguous();
+      }
+      if (!submitted.orderId) throw orderAmbiguous();
+      // The order exists from here on: a failing status poll must not hide its number.
+      let status = "unknown"; let redirectUrl = "";
       for (let attempt = 0; attempt < LAVKA_PAYMENT_POLL_ATTEMPTS; attempt += 1) {
-        const payment = await ok<{ redirectUrl: string; status: string }>({ body: { orderId: submitted.orderId, paymentType: "card" }, endpoint: "paymentStatus", project: "payment" });
-        status = payment.status; redirectUrl = payment.redirectUrl;
+        try {
+          const payment = await ok<{ redirectUrl: string; status: string }>({ body: { orderId: submitted.orderId, paymentType: "card" }, endpoint: "paymentStatus", project: "payment" });
+          status = payment.status || "unknown"; redirectUrl = payment.redirectUrl;
+        } catch (error) {
+          console.error(JSON.stringify({ code: "AGENT_LAVKA_PAYMENT_STATUS_UNKNOWN", cause: error instanceof AppError ? error.code : "unknown", orderId: submitted.orderId }));
+          status = "unknown";
+          break;
+        }
         if (["failed", "hold", "paid", "rejected", "success", "wait_user_action"].includes(status)) break;
         await sleep(1000);
       }
@@ -199,11 +242,14 @@ export function createLavkaClient(deps: Deps) {
     return await ok({ body: { countryIso3: "RUS", location: point ? [point.lon, point.lat] : [] }, endpoint: "paymentMethods", project: "paymentMethods" });
   }
 
-  /** The card that will be charged: what the cart holds, else the account default, else the first available. */
+  /**
+   * The card that will be charged: what the cart holds, else the account default when available.
+   * Never another card the person did not pick (review, 28 September 2026): no card is an error.
+   */
   async function resolvePayment(current: LavkaCart, point: LavkaDeliveryPoint | null): Promise<LavkaPaymentMethod | null> {
     if (current.paymentMethod?.id) return { available: true, bank: current.paymentMethod.bank, id: current.paymentMethod.id, label: [current.paymentMethod.system, current.paymentMethod.bank].filter(Boolean).join(" "), type: current.paymentMethod.type || "card" };
     const { defaultId, methods } = await paymentMethods(point);
-    return methods.find((m) => m.id === defaultId && m.available) ?? methods.find((m) => m.available) ?? null;
+    return methods.find((m) => m.id === defaultId && m.available) ?? null;
   }
 }
 

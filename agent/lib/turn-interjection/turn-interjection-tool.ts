@@ -35,6 +35,15 @@ function isInterjectedOutput(output: unknown): output is InterjectedOutput {
     Object.hasOwn(output, OUTPUT_KEY) && typeof (output as Record<string, unknown>)[OUTPUT_KEY] === "string";
 }
 
+
+/**
+ * The tool's own output without the messages appended for the running turn. Anything that reads
+ * tool results by path (authored-skill trials) must look through the wrapper (review, 28 September 2026).
+ */
+export function unwrapTurnInterjectionOutput(output: unknown): unknown {
+  return isInterjectedOutput(output) ? output.result : output;
+}
+
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return typeof value === "object" && value !== null && Symbol.asyncIterator in value;
 }

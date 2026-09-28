@@ -11,7 +11,7 @@ import { defineTool, type ToolDefinition } from "eve/tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { withTurnInterjection } from "./turn-interjection-tool.js";
+import { unwrapTurnInterjectionOutput, withTurnInterjection } from "./turn-interjection-tool.js";
 
 const BLOCK = '<messages_while_working marker="m1">\n{"messages":[]}\n</messages_while_working>';
 const CONTEXT = { callId: "call-1" } as never;
@@ -120,5 +120,12 @@ describe("withTurnInterjection", () => {
     });
     expect(log).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(log.mock.calls[0]![0]))).toMatchObject({ code: "AGENT_TURN_INTERJECTION_FAILED" });
+  });
+
+  // Review 28 September 2026: a skill trial reading ["delivered"] failed when a message came with the result.
+  it("gives readers of tool results the tool's own output back", () => {
+    expect(unwrapTurnInterjectionOutput({ osinaraTurnInterjection: "<messages_while_working/>", result: { delivered: true } })).toEqual({ delivered: true });
+    expect(unwrapTurnInterjectionOutput({ delivered: true })).toEqual({ delivered: true });
+    expect(unwrapTurnInterjectionOutput("plain")).toBe("plain");
   });
 });

@@ -15,6 +15,7 @@
  * - Only a delivered claim — a later model step of the turn had the result in its prompt — makes the
  *   later ordinary turn treat the message as already seen.
  */
+import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import { requireNonEmpty, requireUpdateId, requireUuid } from "../telegram-ingress-contract.js";
 
@@ -56,6 +57,8 @@ export const turnInterjectionRepository = {
    * and messages owned by another tool call or already seen by the model are excluded.
    */
   async listCandidates(input: TurnInterjectionShowCoordinate & {
+    /** Page cursor: only messages after this update; defaults to the turn's own update. */
+    afterUpdateId?: string;
     currentUpdateId: string;
     limit: number;
     telegramUserId: string;
@@ -76,7 +79,7 @@ export const turnInterjectionRepository = {
               0 AS album_member_count
          FROM telegram_ingress_updates current_update
          JOIN telegram_ingress_updates pending
-           ON pending.queue_id = current_update.queue_id AND pending.update_id > current_update.update_id
+           ON pending.queue_id = current_update.queue_id AND pending.update_id > GREATEST(current_update.update_id, $7::bigint)
          LEFT JOIN telegram_turn_interjections shown ON shown.update_id = pending.update_id
         WHERE current_update.update_id = $1
           AND pending.status = 'pending'
@@ -94,6 +97,7 @@ export const turnInterjectionRepository = {
         input.eveTurnId,
         input.toolCallId,
         input.limit,
+        requireUpdateId(input.afterUpdateId ?? input.currentUpdateId),
       ],
     );
     return result.rows.map((row) => ({
@@ -147,8 +151,13 @@ export const turnInterjectionRepository = {
   async markReturned(coordinate: TurnInterjectionShowCoordinate, updateIds: readonly string[]): Promise<void> {
     requireCoordinate(coordinate);
     await database().query(
-      `UPDATE telegram_turn_interjections SET returned_at = COALESCE(returned_at, now())
-        WHERE update_id = ANY($1::bigint[]) AND eve_session_id = $2 AND eve_turn_id = $3 AND tool_call_id = $4`,
+      `UPDATE telegram_turn_interjections interjection
+          SET returned_at = COALESCE(interjection.returned_at, now()),
+              returned_step = COALESCE(interjection.returned_step, (
+                SELECT step.step_index FROM telegram_turn_steps step
+                 WHERE step.eve_session_id = interjection.eve_session_id AND step.eve_turn_id = interjection.eve_turn_id))
+        WHERE interjection.update_id = ANY($1::bigint[]) AND interjection.eve_session_id = $2
+          AND interjection.eve_turn_id = $3 AND interjection.tool_call_id = $4`,
       [updateIds.map(requireUpdateId), coordinate.eveSessionId, coordinate.eveTurnId, coordinate.toolCallId],
     );
   },
@@ -163,14 +172,71 @@ export const turnInterjectionRepository = {
     );
   },
 
-  /** A model step of this turn started after every result returned so far. */
-  async markDelivered(eveSessionId: string, eveTurnId: string): Promise<number> {
+  /**
+   * Model step `stepIndex` of this turn started. Its prompt carries every result returned during an
+   * earlier step; a claim returned during this step or later, or never returned, belongs to an
+   * attempt Eve threw away when it re-ran the step, and is freed so the retry can show the message.
+   * A claim returned before step tracking existed (no `returned_step`) counts as delivered.
+   */
+  async stepStarted(eveSessionId: string, eveTurnId: string, stepIndex: number): Promise<number> {
+    requireNonEmpty(eveSessionId, "AGENT_TURN_INTERJECTION_SESSION_INVALID", "Не удалось определить сессию текущего хода");
+    requireNonEmpty(eveTurnId, "AGENT_TURN_INTERJECTION_TURN_INVALID", "Не удалось определить текущий ход");
+    if (!Number.isInteger(stepIndex) || stepIndex < 0) throw new AppError("AGENT_TURN_INTERJECTION_STEP_INVALID", "Не удалось определить шаг модели");
+    const client = await database().connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO telegram_turn_steps (eve_session_id, eve_turn_id, step_index) VALUES ($1, $2, $3)
+         ON CONFLICT (eve_session_id, eve_turn_id) DO UPDATE SET step_index = EXCLUDED.step_index, started_at = now()`,
+        [eveSessionId, eveTurnId, stepIndex],
+      );
+      const delivered = await client.query(
+        `UPDATE telegram_turn_interjections SET delivered_at = now()
+          WHERE eve_session_id = $1 AND eve_turn_id = $2 AND returned_at IS NOT NULL AND delivered_at IS NULL
+            AND (returned_step IS NULL OR returned_step < $3)`,
+        [eveSessionId, eveTurnId, stepIndex],
+      );
+      await client.query(
+        `DELETE FROM telegram_turn_interjections
+          WHERE eve_session_id = $1 AND eve_turn_id = $2 AND delivered_at IS NULL
+            AND (returned_at IS NULL OR returned_step >= $3)`,
+        [eveSessionId, eveTurnId, stepIndex],
+      );
+      await client.query("COMMIT");
+      return delivered.rowCount ?? 0;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * The turn ended. Results returned before its last started step were in that step's prompt; the
+   * rest never reached the model and go back to ordinary processing. The step row is dropped, and
+   * rows of turns that ended without this call are swept after two days.
+   */
+  async finishTurn(eveSessionId: string, eveTurnId: string): Promise<number> {
     const result = await database().query(
-      `UPDATE telegram_turn_interjections SET delivered_at = now()
-        WHERE eve_session_id = $1 AND eve_turn_id = $2 AND returned_at IS NOT NULL AND delivered_at IS NULL`,
+      `WITH step AS (
+         DELETE FROM telegram_turn_steps WHERE eve_session_id = $1 AND eve_turn_id = $2 RETURNING step_index
+       ), delivered AS (
+         UPDATE telegram_turn_interjections SET delivered_at = now()
+          WHERE eve_session_id = $1 AND eve_turn_id = $2 AND returned_at IS NOT NULL AND delivered_at IS NULL
+            AND (returned_step IS NULL OR returned_step < (SELECT step_index FROM step))
+          RETURNING update_id
+       ), released AS (
+         DELETE FROM telegram_turn_interjections
+          WHERE eve_session_id = $1 AND eve_turn_id = $2 AND delivered_at IS NULL
+            AND update_id NOT IN (SELECT update_id FROM delivered)
+       ), swept AS (
+         DELETE FROM telegram_turn_steps WHERE started_at < now() - interval '2 days'
+       )
+       SELECT count(*)::int AS delivered FROM delivered`,
       [eveSessionId, eveTurnId],
     );
-    return result.rowCount ?? 0;
+    return (result.rows[0] as { delivered?: number } | undefined)?.delivered ?? 0;
   },
 
   /**
@@ -241,6 +307,20 @@ export const turnInterjectionRepository = {
       [input.telegramChatId, requireUpdateId(input.replyMessageId), input.replyRouteToken],
     );
     return result.rows[0]?.blocked === true;
+  },
+
+  /** Which of these messages a running turn of this conversation already showed to the model, and how. */
+  async findDeliveredContentKinds(
+    updateIds: readonly string[],
+    applicationSessionId: string,
+  ): Promise<Map<string, TurnInterjectionContentKind>> {
+    if (updateIds.length === 0) return new Map();
+    const result = await database().query<{ content_kind: TurnInterjectionContentKind; update_id: string }>(
+      `SELECT update_id::text, content_kind FROM telegram_turn_interjections
+        WHERE update_id = ANY($1::bigint[]) AND application_session_id = $2 AND delivered_at IS NOT NULL`,
+      [updateIds.map(requireUpdateId), requireApplicationSessionId(applicationSessionId)],
+    );
+    return new Map(result.rows.map((row) => [row.update_id, row.content_kind]));
   },
 
   /** What the model saw of this message in this conversation, when it answered after seeing it. */

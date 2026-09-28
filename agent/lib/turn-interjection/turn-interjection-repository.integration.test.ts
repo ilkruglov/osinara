@@ -12,6 +12,10 @@
  * - The canonical route resolves to the live session it leads to; a reply into a conversation that
  *   awaits a confirmation is recognized.
  * - A re-claim by the same call clears a stale returned mark from an earlier attempt.
+ * - Delivery follows the model step number: step N delivers results returned during earlier steps;
+ *   a re-run of step N (Eve's retry after a crash) frees what the abandoned attempt returned, so the
+ *   retry shows it again; the end of the turn delivers what its last step saw and frees the rest.
+ * - Candidates are paged by update id, so fifty unaddressed messages cannot hide a later one.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -93,7 +97,7 @@ describeWithDatabase("turnInterjectionRepository", () => {
 
   beforeEach(async () => {
     await database().query(
-      `TRUNCATE telegram_turn_interjections, eve_session_event_cursors, telegram_ingress_ignored_updates,
+      `TRUNCATE telegram_turn_interjections, telegram_turn_steps, eve_session_event_cursors, telegram_ingress_ignored_updates,
          telegram_ingress_updates, telegram_ingress_continuation_aliases, telegram_ingress_queues,
          conversation_session_routes, conversation_sessions, conversation_route_generations,
          family_memberships, users, families CASCADE`,
@@ -147,11 +151,12 @@ describeWithDatabase("turnInterjectionRepository", () => {
     await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
     await turnInterjectionRepository.claim(call, [{ contentKind: "notice", updateId: "1001" }]);
 
-    expect(await turnInterjectionRepository.markDelivered("ses_1", "turn_2")).toBe(0);
+    expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1)).toBe(0);
   });
 
   it("gives a message to one tool call and reports it only after a model step saw it", async () => {
     await enqueue("1001");
+    await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0);
 
     expect(await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }])).toEqual(new Set(["1001"]));
     expect(await turnInterjectionRepository.claim({ ...OTHER_CALL, applicationSessionId }, [{ contentKind: "text", updateId: "1001" }]))
@@ -159,15 +164,63 @@ describeWithDatabase("turnInterjectionRepository", () => {
     expect((await list(OTHER_CALL)).map((candidate) => candidate.updateId)).toEqual([]);
     expect((await list()).map((candidate) => candidate.updateId)).toEqual(["1001"]);
 
-    expect(await turnInterjectionRepository.markDelivered("ses_1", "turn_2")).toBe(0);
     await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
     expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBeNull();
-    expect(await turnInterjectionRepository.markDelivered("ses_1", "turn_2")).toBe(1);
+    expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1)).toBe(1);
 
     expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
     expect(await turnInterjectionRepository.findDeliveredContentKind("1001", "00000000-0000-4000-8000-0000000000ff")).toBeNull();
     // A later step's call that happens to reuse the call id is not a retry of a delivered result.
     expect((await list()).map((candidate) => candidate.updateId)).toEqual([]);
+  });
+
+  // Review 28 September 2026: a crash after the tool returned but before Eve saved the step made
+  // the retried step look like a delivery, and the message («стоп») was never shown again.
+  it("frees what an abandoned attempt of a step returned and delivers only earlier steps", async () => {
+    await enqueue("1001");
+    await enqueue("1002");
+    await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0);
+    await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }]);
+    await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
+    await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1);
+    const second = { ...call, toolCallId: "call-3" };
+    await turnInterjectionRepository.claim(second, [{ contentKind: "text", updateId: "1002" }]);
+    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, ["1002"]);
+
+    // Eve re-runs step 1: its tool result never reached a saved history.
+    expect(await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1)).toBe(0);
+    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
+    expect(await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId)).toBeNull();
+    expect((await list({ ...COORDINATE, toolCallId: "call-4" })).map((candidate) => candidate.updateId)).toEqual(["1002"]);
+  });
+
+  it("settles the turn at its end: seen by the last step delivered, the rest released", async () => {
+    await enqueue("1001");
+    await enqueue("1002");
+    await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 0);
+    await turnInterjectionRepository.claim(call, [{ contentKind: "text", updateId: "1001" }]);
+    await turnInterjectionRepository.markReturned(COORDINATE, ["1001"]);
+    await turnInterjectionRepository.stepStarted("ses_1", "turn_2", 1);
+    await turnInterjectionRepository.claim({ ...call, toolCallId: "call-3" }, [{ contentKind: "text", updateId: "1002" }]);
+    await turnInterjectionRepository.markReturned({ ...COORDINATE, toolCallId: "call-3" }, ["1002"]);
+
+    expect(await turnInterjectionRepository.finishTurn("ses_1", "turn_2")).toBe(0);
+    expect(await turnInterjectionRepository.findDeliveredContentKind("1001", applicationSessionId)).toBe("text");
+    expect(await turnInterjectionRepository.findDeliveredContentKind("1002", applicationSessionId)).toBeNull();
+    const rows = await database().query("SELECT update_id FROM telegram_turn_interjections WHERE update_id = 1002");
+    expect(rows.rowCount).toBe(0);
+    expect((await database().query("SELECT 1 FROM telegram_turn_steps")).rowCount).toBe(0);
+    expect(await turnInterjectionRepository.findDeliveredContentKinds(["1001", "1002"], applicationSessionId)).toEqual(new Map([["1001", "text"]]));
+  });
+
+  it("pages candidates past a full page of earlier ones", async () => {
+    for (let id = 1001; id <= 1012; id += 1) await enqueue(String(id));
+    const page = async (afterUpdateId?: string) => (await turnInterjectionRepository.listCandidates({
+      ...COORDINATE, ...(afterUpdateId ? { afterUpdateId } : {}), currentUpdateId: "1000", limit: 5, telegramUserId: "101",
+    })).map((candidate) => candidate.updateId);
+    expect(await page()).toEqual(["1001", "1002", "1003", "1004", "1005"]);
+    expect(await page("1005")).toEqual(["1006", "1007", "1008", "1009", "1010"]);
+    expect(await page("1010")).toEqual(["1011", "1012"]);
   });
 
   it("frees a released claim for a later call and never claims a message that left the queue", async () => {

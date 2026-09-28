@@ -12,7 +12,7 @@ import { createSandboxBrowserDriver } from "../browser/browser-driver.js";
 import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { sandboxSessionId } from "../sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
-import { createLavkaClient, type LavkaClient } from "./lavka-client.js";
+import { createLavkaClient, lavkaAddressKey, type LavkaClient } from "./lavka-client.js";
 import { lavkaDeliveryPointRepository } from "./lavka-delivery-point-repository.js";
 
 const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
@@ -21,9 +21,10 @@ export function lavkaClientFor(ctx: ToolContext): LavkaClient {
   return createLavkaClient({ driver: createSandboxBrowserDriver({ runner, sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
 }
 
-/** The requester's delivery point label for the confirmation window; null when none is chosen. */
-export async function loadLavkaDeliveryPointLabel(ctx: Pick<SessionContext, "session">): Promise<string | null> {
+/** The requester's delivery point for the confirmation window: its label and fingerprint; null when none is chosen. */
+export async function loadLavkaDeliveryPoint(ctx: Pick<SessionContext, "session">): Promise<{ key: string; label: string } | null> {
   const auth = requireWorkspaceAuthorization(ctx);
   if (auth.userId === null) return null;
-  return (await lavkaDeliveryPointRepository.find(auth.userId))?.label ?? null;
+  const point = await lavkaDeliveryPointRepository.find(auth.userId);
+  return point === null ? null : { key: lavkaAddressKey(point), label: point.label };
 }

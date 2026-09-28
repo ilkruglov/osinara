@@ -313,6 +313,8 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       addressed: messages.some((message) =>
         isMessageAddressedToBot(message, dependencies.botUsername)
       ),
+      // The ordinary turn checks these against messages a running turn already showed to the model.
+      earlierUpdateIds: series.slice(0, -1).map((item) => item.claim.updateId),
       role: "current",
       telegramMessageIds: messages.slice(0, -1).map((message) => message.messageId),
     };

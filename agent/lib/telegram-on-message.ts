@@ -494,6 +494,11 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const shownDuringTurn = currentUpdateId !== null
       ? await repositories.turnInterjections.findDeliveredContentKind(currentUpdateId, appSession.id)
       : null;
+    const earlierInSeries = series?.role === "current" ? series.earlierUpdateIds ?? [] : [];
+    const shownEarlierInSeries = earlierInSeries.length > 0
+      ? [...(await repositories.turnInterjections.findDeliveredContentKinds(earlierInSeries, appSession.id)).values()]
+        .filter((kind) => kind !== "notice").length
+      : 0;
     // Messages its author sends while this turn works can reach it only in the trusted zones.
     const turnInterjectionMarker = currentUpdateId !== null && !resumesPendingTask &&
       actor.kind === "telegram_user" && (group === null || group.type === "family_private")
@@ -502,6 +507,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const turnResult = buildTelegramTurnResult({
       currentUpdateId,
       shownDuringTurn,
+      shownEarlierInSeries,
       turnInterjectionMarker,
       access,
       actor,

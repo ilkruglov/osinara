@@ -13,7 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { LavkaPageRequest } from "./lavka-page-script.js";
 import { lavkaPageScript } from "./lavka-page-script.js";
 
-function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; status: number }, searchLimit = 12) {
+function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; status: number }, searchLimit = 12, hostname = "lavka.yandex.ru") {
   const fetch = vi.fn(async () => ({
     ok: response.status >= 200 && response.status < 300,
     status: response.status,
@@ -21,11 +21,18 @@ function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; stat
   }));
   const document = { documentElement: { innerHTML: "<script>{\"csrfToken\":\"tok-1\"}</script>" } };
   // oxlint-disable-next-line typescript/no-implied-eval -- the fixed page script runs against a fake tab
-  const run = new Function("fetch", "document", `return ${lavkaPageScript(request, searchLimit)};`) as (f: unknown, d: unknown) => Promise<string>;
-  return { fetch, result: run(fetch, document).then((text) => JSON.parse(text) as { authorized: boolean; data: unknown; status: number }) };
+  const run = new Function("fetch", "document", "location", `return ${lavkaPageScript(request, searchLimit)};`) as (f: unknown, d: unknown, l: unknown) => Promise<string>;
+  return { fetch, result: run(fetch, document, { hostname }).then((text) => JSON.parse(text) as { authorized: boolean; data: unknown; error: string | null; status: number }) };
 }
 
 describe("lavkaPageScript", () => {
+  // Review 28 September 2026: a parallel browser_open can move the tab between the URL check and the eval.
+  it("sends nothing from a tab that is no longer on Lavka", async () => {
+    const { fetch, result } = runInFakeTab({ body: { flat: "5" }, endpoint: "orderSubmit", project: "submit" }, { body: {}, status: 200 }, 12, "evil.example");
+    expect(await result).toEqual({ authorized: true, data: null, error: "wrong_origin:evil.example", status: 0 });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("posts to the site's path with the page's CSRF token and the session cookies", async () => {
     const { fetch, result } = runInFakeTab({ body: { text: "молоко 'х'" }, endpoint: "search", project: "search" }, { body: { cacheProducts: [] }, status: 200 });
     expect(await result).toEqual({ authorized: true, data: [], error: null, status: 200 });

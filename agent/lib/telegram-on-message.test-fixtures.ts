@@ -148,6 +148,7 @@ export function repositories() {
     },
     turnInterjections: {
       findDeliveredContentKind: vi.fn().mockResolvedValue(null),
+      findDeliveredContentKinds: vi.fn(async () => new Map()),
     },
     session: {
       hasRoute: vi.fn().mockResolvedValue(false),

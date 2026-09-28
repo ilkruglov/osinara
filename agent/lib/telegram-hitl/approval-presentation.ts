@@ -21,7 +21,7 @@ import {
 import { AppError } from "../app-error.js";
 import type { BrowserConfirmApprovalSubject } from "../browser/browser-tools-production.js";
 import { loadBrowserConfirmApproval } from "../browser/browser-tools-production.js";
-import { loadLavkaDeliveryPointLabel } from "../lavka/lavka-production.js";
+import { loadLavkaDeliveryPoint } from "../lavka/lavka-production.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -44,7 +44,7 @@ import {
 interface ApprovalPresentationDependencies {
   findBrowserConfirm(input: { epoch: string; n: number }, ctx: Pick<SessionContext, "session">): Promise<BrowserConfirmApprovalSubject>;
   /** The label of the requester's Lavka delivery point, or null when none is chosen. */
-  findLavkaDeliveryPoint?(ctx: Pick<SessionContext, "session">): Promise<string | null>;
+  findLavkaDeliveryPoint?(ctx: Pick<SessionContext, "session">): Promise<{ key: string; label: string } | null>;
   findGmailMessage(
     messageId: string,
     profileRef: string,
@@ -289,7 +289,7 @@ export function createTelegramApprovalPresenter(
       request.display === "confirmation" &&
       request.action.toolName === "yandex_lavka"
     ) {
-      const input = request.action.input as { action?: unknown; cartVersion?: unknown; orderId?: unknown; total?: unknown };
+      const input = request.action.input as { action?: unknown; addressKey?: unknown; cartVersion?: unknown; orderId?: unknown; total?: unknown };
       if (input.action === "cancel") {
         return {
           ...localized,
@@ -300,10 +300,15 @@ export function createTelegramApprovalPresenter(
           }),
         };
       }
-      if (input.action !== "order" || typeof input.total !== "number" || typeof input.cartVersion !== "number") {
+      if (input.action !== "order" || typeof input.total !== "number" || typeof input.cartVersion !== "number" || typeof input.addressKey !== "string") {
         throw new AppError("AGENT_APPROVAL_SUBJECT_INVALID", "Не удалось определить заказ в Лавке для подтверждения");
       }
-      const address = dependencies.findLavkaDeliveryPoint ? await dependencies.findLavkaDeliveryPoint(ctx) : null;
+      const point = dependencies.findLavkaDeliveryPoint ? await dependencies.findLavkaDeliveryPoint(ctx) : null;
+      // The window shows only the address the order will carry: another one means a stale preview.
+      if (point !== null && point.key !== input.addressKey) {
+        throw new AppError("AGENT_LAVKA_ADDRESS_CHANGED", "Адрес доставки изменился после предпросмотра. Сделайте новый preview");
+      }
+      const address = point?.label ?? null;
       return {
         ...localized,
         prompt: buildApprovalMessage({
@@ -368,7 +373,7 @@ export function createTelegramApprovalPresenter(
 
 export const presentTelegramApproval = createTelegramApprovalPresenter({
   findBrowserConfirm: loadBrowserConfirmApproval,
-  findLavkaDeliveryPoint: loadLavkaDeliveryPointLabel,
+  findLavkaDeliveryPoint: loadLavkaDeliveryPoint,
   findGmailMessage: loadGmailMessageApproval,
   findSchedule: (auth, id) => agentScheduleRepository.findById(auth, id),
 });

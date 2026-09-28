@@ -4,6 +4,7 @@ import { skillEvaluationRepository } from "../lib/authored-skills/skill-evaluati
 import { trustedChatKind } from "../lib/authored-skills/skill-signals.js";
 import { isScheduledSession } from "../lib/agent-schedules/scheduled-session.js";
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
+import { unwrapTurnInterjectionOutput } from "../lib/turn-interjection/turn-interjection-tool.js";
 
 export default defineHook({
   events: {
@@ -16,7 +17,7 @@ export default defineHook({
       try {
         await skillEvaluationRepository.observe({
           familyId, eveSessionId: ctx.session.id, eveTurnId: event.data.turnId, eventId: event.meta.id,
-          toolName: result.toolName, output: result.output, succeeded: event.data.status === "completed" && result.isError !== true,
+          toolName: result.toolName, output: unwrapTurnInterjectionOutput(result.output), succeeded: event.data.status === "completed" && result.isError !== true,
         });
       } catch (error) {
         console.error(JSON.stringify({ code: "AGENT_SKILL_TRIAL_OBSERVATION_FAILED", error: error instanceof Error ? error.message : String(error) }));

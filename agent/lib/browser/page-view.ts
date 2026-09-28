@@ -16,6 +16,7 @@ import { z } from "zod";
 import { AppError } from "../app-error.js";
 
 const elementSchema = z.object({
+  inForm: z.boolean().default(false),
   n: z.number().int().positive(),
   role: z.string().min(1).max(40),
   state: z.array(z.string().max(20)).max(8).default([]),

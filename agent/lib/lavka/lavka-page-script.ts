@@ -14,7 +14,7 @@
  *   executed by tests in Node against a fake `fetch`.
  */
 import type { LavkaEndpoint } from "./lavka-config.js";
-import { LAVKA_ENDPOINTS, LAVKA_PAGE_RESULT_MAX_BYTES } from "./lavka-config.js";
+import { LAVKA_ENDPOINTS, LAVKA_HOST, LAVKA_PAGE_RESULT_MAX_BYTES } from "./lavka-config.js";
 
 export type LavkaProjection = "addresses" | "cart" | "geocode" | "orders" | "payment" | "paymentMethods" | "product" | "raw" | "search" | "serviceInfo" | "submit" | "suggest";
 
@@ -70,6 +70,9 @@ export function lavkaPageScript(request: LavkaPageRequest, searchLimit: number):
   const literal = JSON.stringify({ body: request.body ?? null, city: request.city ?? "213", method: spec.method, project: request.project, url });
   return `(async () => {
 const req = ${literal};
+// The tab may have been navigated elsewhere between the driver's URL check and this eval: a
+// relative fetch would then carry the order (address, flat, doorcode) to whatever site is open.
+if (location.hostname !== ${JSON.stringify(LAVKA_HOST)}) return JSON.stringify({ authorized: true, status: 0, data: null, error: "wrong_origin:" + location.hostname });
 const LIMIT = ${Math.max(1, Math.floor(searchLimit))};
 ${PROJECTIONS}
 const html = document.documentElement.innerHTML;

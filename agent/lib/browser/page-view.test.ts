@@ -51,7 +51,7 @@ describe("parsePageView", () => {
     expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", title: "x".repeat(300), url: "https://x.ru" })).title).toHaveLength(200);
     expect(parsePageView(JSON.stringify({ elements: [], epoch: "e", stateHash: 7, textHash: 9, url: "https://x.ru" }))).toMatchObject({ stateHash: 7, textHash: 9 });
     expect(view.elements).toHaveLength(3);
-    expect(view.elements[2]).toEqual({ n: 3, role: "checkbox", state: ["checked"], text: "Мужская стрижка", value: null });
+    expect(view.elements[2]).toEqual({ inForm: false, n: 3, role: "checkbox", state: ["checked"], text: "Мужская стрижка", value: null });
   });
 
   it("rejects a result without epoch or url", () => {

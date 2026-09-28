@@ -149,6 +149,8 @@ const POST_V0101_MIGRATIONS = [
   "115_lavka_delivery_points.sql",
   "116_hitl_approval_turn_attributes.sql",
   "117_telegram_turn_interjections.sql",
+  "118_lavka_operations.sql",
+  "119_turn_interjection_steps.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

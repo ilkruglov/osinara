@@ -90,6 +90,14 @@ const ALREADY_SEEN_CONTENT = `Это сообщение ты уже видел �
 
 const ALREADY_SEEN_NOTICE = "Во время предыдущего хода тебе сообщили только, что это сообщение пришло, без его содержимого. Содержимое ты видишь впервые: обработай сообщение полностью.";
 
+/**
+ * The series this turn answers holds earlier messages a running turn already showed to the model
+ * (review, 28 September 2026: they came back as `earlierMessagesInSeries` with no notice).
+ */
+export function alreadySeenSeriesContext(count: number): string {
+  return `Среди более ранних сообщений этой серии ${count === 1 ? "одно" : count} ты уже видел во время предыдущего хода: backend добавлял их к результату инструмента. Проверь по истории того хода, что ты с ними сделал, и не повторяй сделанное; невыполненное выполни сейчас.`;
+}
+
 export function alreadySeenTurnContext(kind: TurnInterjectionContentKind): string {
   return kind === "notice" ? ALREADY_SEEN_NOTICE : ALREADY_SEEN_CONTENT;
 }
