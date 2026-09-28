@@ -1,12 +1,16 @@
 /**
- * Runtime availability gate for subscription-backed image generation.
+ * Runtime availability gate for image generation and the ordered provider chains.
  *
  * Exports:
  * - `supportsSubscriptionImageGeneration`: pure provider capability check.
+ * - `resolveImageProviders`: generation goes PlusVibe → Cloudflare → NeuralDeep (cheapest and
+ *   best-looking first, the free quota next); editing goes PlusVibe → NeuralDeep → Cloudflare
+ *   (Qwen edits in seconds and keeps the picture's size, klein-4b is bounded to 512).
  * - `IMAGE_GENERATION_AVAILABLE`: availability for the active validated runtime config.
  */
 import { modelProviderConfig, type ModelProviderId } from "../model-provider-config.js";
-import { createCloudflareImageClient, createNeuralDeepImageClient } from "./flux-image-clients.js";
+import { createCloudflareImageClient, createNeuralDeepImageClient, type FluxImageClient } from "./flux-image-clients.js";
+import { createPlusVibeImageClient } from "./plusvibe-image-client.js";
 
 export function supportsSubscriptionImageGeneration(provider: ModelProviderId): boolean {
   return provider === "codex-subscription";
@@ -26,19 +30,26 @@ export function supportsNeuralDeepImageGeneration(environment: ImageGenerationEn
   return configured(environment.NEURALDEEP_IMAGE_API_KEY);
 }
 
-/** Ordered Flux providers: the free Cloudflare quota first, NeuralDeep once it is exhausted or down. */
-export function resolveFluxImageProviders(environment: ImageGenerationEnvironment) {
-  const chain = [];
-  if (supportsCloudflareImageGeneration(environment)) {
-    chain.push(createCloudflareImageClient({
+export function supportsPlusVibeImageGeneration(environment: ImageGenerationEnvironment): boolean {
+  return configured(environment.PLUSVIBE_API_KEY);
+}
+
+/** Ordered providers for one request kind; only the configured ones are present. */
+export function resolveImageProviders(environment: ImageGenerationEnvironment, editing = false): FluxImageClient[] {
+  const plusvibe = supportsPlusVibeImageGeneration(environment)
+    ? createPlusVibeImageClient({ apiKey: environment.PLUSVIBE_API_KEY!.trim() })
+    : null;
+  const cloudflare = supportsCloudflareImageGeneration(environment)
+    ? createCloudflareImageClient({
       accountId: environment.CLOUDFLARE_ACCOUNT_ID!.trim(),
       token: environment.CLOUDFLARE_AI_TOKEN!.trim(),
-    }));
-  }
-  if (supportsNeuralDeepImageGeneration(environment)) {
-    chain.push(createNeuralDeepImageClient({ apiKey: environment.NEURALDEEP_IMAGE_API_KEY!.trim() }));
-  }
-  return chain;
+    })
+    : null;
+  const neuraldeep = supportsNeuralDeepImageGeneration(environment)
+    ? createNeuralDeepImageClient({ apiKey: environment.NEURALDEEP_IMAGE_API_KEY!.trim() })
+    : null;
+  const ordered = editing ? [plusvibe, neuraldeep, cloudflare] : [plusvibe, cloudflare, neuraldeep];
+  return ordered.filter((client): client is FluxImageClient => client !== null);
 }
 
 export function supportsImageGeneration(
@@ -46,6 +57,7 @@ export function supportsImageGeneration(
   environment: ImageGenerationEnvironment,
 ): boolean {
   return supportsSubscriptionImageGeneration(provider) ||
+    supportsPlusVibeImageGeneration(environment) ||
     supportsCloudflareImageGeneration(environment) ||
     supportsNeuralDeepImageGeneration(environment);
 }

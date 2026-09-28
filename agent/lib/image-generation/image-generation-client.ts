@@ -13,7 +13,7 @@
 import { AppError } from "../app-error.js";
 import { modelProviderConfig } from "../model-provider-config.js";
 import { createFallbackImageClient } from "./flux-image-clients.js";
-import { resolveFluxImageProviders } from "./image-generation-availability.js";
+import { resolveImageProviders } from "./image-generation-availability.js";
 import { editingUnavailable } from "./image-editing-input.js";
 
 export type ImageBackground = "auto" | "opaque" | "transparent";
@@ -267,12 +267,12 @@ export function createImageGenerationClient(options: ImageGenerationClientOption
 
 function productionClient(editing = false): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
   if (editing) {
-    const clients = resolveFluxImageProviders(process.env).filter((client) => client.supportsEditing);
+    const clients = resolveImageProviders(process.env, true).filter((client) => client.supportsEditing);
     if (clients.length === 0) throw editingUnavailable();
     return createFallbackImageClient(clients);
   }
   if (modelProviderConfig.provider !== "codex-subscription") {
-    const chain = resolveFluxImageProviders(process.env);
+    const chain = resolveImageProviders(process.env);
     if (chain.length === 0) {
       throw new AppError(
         "AGENT_IMAGE_GENERATION_CONFIG_INVALID",

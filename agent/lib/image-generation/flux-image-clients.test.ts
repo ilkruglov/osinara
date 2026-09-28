@@ -6,7 +6,8 @@
  * - Definitive Cloudflare refusals fall through to NeuralDeep; unknown outcomes stop the chain.
  *   Schnell is never tried because it neither accepts dimensions nor a cheaper quality.
  * - When every provider rejects the prompt the chain reports a rejection, not an outage.
- * - NeuralDeep creates a task, polls until finished and downloads the PNG result.
+ * - NeuralDeep creates a task, polls until finished and downloads the PNG result; an edit goes to
+ *   `/images/edit` as multipart with every reference under one `images` field.
  */
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
@@ -73,24 +74,35 @@ describe("flux image clients", () => {
     expect(form.get("prompt")).toBe(request.prompt);
   });
 
-  it("never replaces an edit with a text-only NeuralDeep generation on quota exhaustion", async () => {
-    const cloudflareFetch = vi.fn().mockResolvedValue(json({}, 429));
-    const neuralFetch = neuralDeepSuccess();
-    const chain = createFallbackImageClient([
-      createCloudflareImageClient({ accountId: "0".repeat(32), fetch: cloudflareFetch, token: "test" }),
-      createNeuralDeepImageClient({ apiKey: "test", fetch: neuralFetch, sleep: async () => {} }),
-    ]);
+  it("never replaces an edit with a text-only generation when no provider edits", async () => {
+    const generate = vi.fn().mockResolvedValue({ bytes: PNG, mediaType: "image/png", model: "text-only" });
+    const chain = createFallbackImageClient([{ name: "text-only", assertConfigured() {}, generate }]);
     const bytes = await sharp({ create: { width: 1, height: 1, channels: 3, background: "red" } }).png().toBuffer();
-    await expect(chain.generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] })).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
-    expect(cloudflareFetch).toHaveBeenCalledTimes(1);
-    expect(neuralFetch).not.toHaveBeenCalled();
+    await expect(chain.generate({ ...request, referenceImages: [{ bytes, mediaType: "image/png" }] })).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    expect(generate).not.toHaveBeenCalled();
   });
 
-  it("rejects editing directly through a text-only provider before POST", async () => {
+  it("edits through NeuralDeep as multipart references of their own size", async () => {
     const fetch = neuralDeepSuccess();
     const client = createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} });
-    await expect(client.generate({ ...request, referenceImages: [{ bytes: PNG, mediaType: "image/png" }] } as never))
-      .rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_UNAVAILABLE" });
+    const bytes = await sharp({ create: { width: 1200, height: 600, channels: 3, background: "red" } }).png().toBuffer();
+    const image = await client.generate({ ...request, prompt: "добавь тюльпаны", referenceImages: [{ bytes, mediaType: "image/png" }, { bytes, mediaType: "image/png" }] });
+    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/qwen-image-2.1" });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(String(url)).toBe("https://api.neuraldeep.ru/v1/images/edit");
+    expect(init.headers["content-type"]).toBeUndefined();
+    const form = init.body as FormData;
+    expect(form.get("prompt")).toBe("добавь тюльпаны");
+    expect(form.getAll("images")).toHaveLength(2);
+    const normalized = Buffer.from(await (form.getAll("images")[0] as Blob).arrayBuffer());
+    expect(await sharp(normalized).metadata()).toMatchObject({ width: 1200, height: 600, format: "png" });
+  });
+
+  it("rejects an edit with more than four references before POST", async () => {
+    const fetch = neuralDeepSuccess();
+    const client = createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} });
+    const references = Array.from({ length: 5 }, () => ({ bytes: PNG, mediaType: "image/png" }));
+    await expect(client.generate({ ...request, referenceImages: references })).rejects.toMatchObject({ code: "AGENT_IMAGE_EDITING_INPUT_INVALID" });
     expect(fetch).not.toHaveBeenCalled();
   });
   it.each(["network", "server", "request-timeout", "invalid-json", "invalid-base64", "invalid-image"])(
@@ -171,7 +183,7 @@ describe("flux image clients", () => {
 
     const image = await chain.generate({ ...request, size: "1536x1024" });
 
-    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/flux" });
+    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/qwen-image-2.1" });
     expect(cloudflareFetch).toHaveBeenCalledTimes(1);
     expect(Object.fromEntries((cloudflareFetch.mock.calls[0]![1].body as FormData).entries())).toMatchObject({ height: "512", width: "768" });
     expect(JSON.parse(neuralFetch.mock.calls[0]![1].body)).toEqual({ options: { aspect_ratio: "3:2" }, prompt: "кот на подоконнике" });
@@ -188,7 +200,7 @@ describe("flux image clients", () => {
 
     const image = await chain.generate({ ...request, prompt: "Porsche Cayman на дороге" });
 
-    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/flux" });
+    expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/qwen-image-2.1" });
     expect(neuralFetch).toHaveBeenCalledTimes(4);
   });
 

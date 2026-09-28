@@ -267,7 +267,8 @@ docker compose up --build   # edge: http://localhost:8080
 к инфраструктуре. Поведение агента (таймауты, лимиты, расписания, настройки модели) живёт в
 конфигурации в репозитории, а не в окружении. Отсутствующий обязательный секрет — ошибка на старте,
 а не подставленное значение по умолчанию. Блоки Google Workspace и генерации картинок необязательны:
-`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_AI_TOKEN` и/или `NEURALDEEP_IMAGE_API_KEY` включают `generate_image`.
+`PLUSVIBE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_AI_TOKEN` и/или `NEURALDEEP_IMAGE_API_KEY` включают
+`generate_image` (PlusVibe Nano Banana 2 первым, дальше Cloudflare klein-4b и NeuralDeep Qwen-Image-2.1).
 Каталог ВкусВилла и Яндекс Карты ключей не требуют; `GROCERY_MCP_URL` переопределяет адрес каталога.
 
 Проверки:

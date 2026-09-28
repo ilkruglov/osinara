@@ -24,6 +24,6 @@ const instructions = readFileSync(
 
 export const IMAGE_GENERATION_SKILL_DEFINITION: SkillDefinition = defineSkill({
   description:
-    "Создание raster-изображения или правка исходного фото через Flux; сохранение нового файла в workspace и отдельная отправка в Telegram.",
+    "Создание raster-изображения или правка исходного фото; сохранение нового файла в workspace и отдельная отправка в Telegram.",
   markdown: instructions,
 });
