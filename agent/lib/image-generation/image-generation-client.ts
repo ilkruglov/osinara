@@ -267,7 +267,7 @@ export function createImageGenerationClient(options: ImageGenerationClientOption
 
 function productionClient(editing = false): { assertConfigured(): void; generate(input: ImageGenerationRequest): Promise<GeneratedImage> } {
   if (editing) {
-    const clients = resolveImageProviders(process.env, true).filter((client) => client.supportsEditing);
+    const clients = resolveImageProviders(process.env).filter((client) => client.supportsEditing);
     if (clients.length === 0) throw editingUnavailable();
     return createFallbackImageClient(clients);
   }

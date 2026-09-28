@@ -268,7 +268,7 @@ docker compose up --build   # edge: http://localhost:8080
 конфигурации в репозитории, а не в окружении. Отсутствующий обязательный секрет — ошибка на старте,
 а не подставленное значение по умолчанию. Блоки Google Workspace и генерации картинок необязательны:
 `PLUSVIBE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_AI_TOKEN` и/или `NEURALDEEP_IMAGE_API_KEY` включают
-`generate_image` (PlusVibe Nano Banana 2 первым, дальше Cloudflare klein-4b и NeuralDeep Qwen-Image-2.1).
+`generate_image` (PlusVibe Nano Banana 2 первым, дальше NeuralDeep Qwen-Image-2.1 и Cloudflare klein-4b).
 Каталог ВкусВилла и Яндекс Карты ключей не требуют; `GROCERY_MCP_URL` переопределяет адрес каталога.
 
 Проверки:

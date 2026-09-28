@@ -3,9 +3,9 @@
  *
  * Exports:
  * - `supportsSubscriptionImageGeneration`: pure provider capability check.
- * - `resolveImageProviders`: generation goes PlusVibe → Cloudflare → NeuralDeep (cheapest and
- *   best-looking first, the free quota next); editing goes PlusVibe → NeuralDeep → Cloudflare
- *   (Qwen edits in seconds and keeps the picture's size, klein-4b is bounded to 512).
+ * - `resolveImageProviders`: PlusVibe → NeuralDeep → Cloudflare for generation and editing alike
+ *   (owner's decision, 28 September 2026): the free klein-4b quota is the last resort because it
+ *   draws 512 px and bounds edited references to 512.
  * - `IMAGE_GENERATION_AVAILABLE`: availability for the active validated runtime config.
  */
 import { modelProviderConfig, type ModelProviderId } from "../model-provider-config.js";
@@ -34,8 +34,8 @@ export function supportsPlusVibeImageGeneration(environment: ImageGenerationEnvi
   return configured(environment.PLUSVIBE_API_KEY);
 }
 
-/** Ordered providers for one request kind; only the configured ones are present. */
-export function resolveImageProviders(environment: ImageGenerationEnvironment, editing = false): FluxImageClient[] {
+/** Ordered providers; only the configured ones are present. */
+export function resolveImageProviders(environment: ImageGenerationEnvironment): FluxImageClient[] {
   const plusvibe = supportsPlusVibeImageGeneration(environment)
     ? createPlusVibeImageClient({ apiKey: environment.PLUSVIBE_API_KEY!.trim() })
     : null;
@@ -48,8 +48,7 @@ export function resolveImageProviders(environment: ImageGenerationEnvironment, e
   const neuraldeep = supportsNeuralDeepImageGeneration(environment)
     ? createNeuralDeepImageClient({ apiKey: environment.NEURALDEEP_IMAGE_API_KEY!.trim() })
     : null;
-  const ordered = editing ? [plusvibe, neuraldeep, cloudflare] : [plusvibe, cloudflare, neuraldeep];
-  return ordered.filter((client): client is FluxImageClient => client !== null);
+  return [plusvibe, neuraldeep, cloudflare].filter((client): client is FluxImageClient => client !== null);
 }
 
 export function supportsImageGeneration(

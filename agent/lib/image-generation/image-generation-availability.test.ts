@@ -3,8 +3,7 @@
  *
  * Constructs covered:
  * - `supportsSubscriptionImageGeneration`: enables the feature only for CLIProxy-backed Codex.
- * - `resolveImageProviders`: PlusVibe leads both chains; editing prefers NeuralDeep over Cloudflare,
- *   generation the other way round; unset keys drop out without gaps.
+ * - `resolveImageProviders`: PlusVibe → NeuralDeep → Cloudflare; unset keys drop out without gaps.
  */
 import { describe, expect, it } from "vitest";
 
@@ -32,9 +31,8 @@ describe("subscription image generation availability", () => {
     }
   });
 
-  it("orders generation and editing chains differently", () => {
-    expect(resolveImageProviders(FULL).map((client) => client.name)).toEqual(["plusvibe", "cloudflare", "neuraldeep"]);
-    expect(resolveImageProviders(FULL, true).map((client) => client.name)).toEqual(["plusvibe", "neuraldeep", "cloudflare"]);
+  it("keeps the free Cloudflare quota as the last resort", () => {
+    expect(resolveImageProviders(FULL).map((client) => client.name)).toEqual(["plusvibe", "neuraldeep", "cloudflare"]);
   });
 
   it("keeps only configured providers and enables the tool from any one of them", () => {
