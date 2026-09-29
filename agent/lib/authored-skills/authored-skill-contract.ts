@@ -83,16 +83,28 @@ function sectionBody(markdown: string, heading: string): string | null {
   return next === -1 ? rest : rest.slice(0, next);
 }
 
+/** Application core every interactive external turn gets without a grant (`buildModeToolSurface`). */
+const EXTERNAL_GROUP_CORE_TOOL_NAMES = ["manage_behavior_preference", "read_profile_view"] as const;
+
+export interface ExternalGroupSurfaceOptions {
+  /** `IMAGE_GENERATION_AVAILABLE`: a stored drawing grant surfaces nothing without a provider. */
+  imageGenerationAvailable: boolean;
+}
+
 /**
- * Tool names a group's grants put on its surface, as `buildModeToolSurface` does: action-level
- * memory grants surface as `manage_memory` / `manage_memory_thread`, and a drawing grant brings
- * `send_workspace_image` along. The action itself is still checked when the tool runs.
+ * Tool names an interactive external turn really gets, as `buildModeToolSurface` builds them:
+ * the application core, action-level memory grants as `manage_memory` / `manage_memory_thread`,
+ * and a drawing grant with `send_workspace_image` only while a provider is configured. The action
+ * itself is still checked when the tool runs.
  */
-export function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>): Set<string> {
-  const names = new Set(allowed);
+export function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>, options: ExternalGroupSurfaceOptions): Set<string> {
+  const names = new Set<string>([...allowed, ...EXTERNAL_GROUP_CORE_TOOL_NAMES]);
   if ([...allowed].some((name) => name.startsWith("manage_memory."))) names.add("manage_memory");
   if ([...allowed].some((name) => name.startsWith("manage_memory_thread."))) names.add("manage_memory_thread");
-  if (allowed.has("generate_image")) names.add("send_workspace_image");
+  if (allowed.has("generate_image")) {
+    if (options.imageGenerationAvailable) names.add("send_workspace_image");
+    else names.delete("generate_image");
+  }
   return names;
 }
 
@@ -100,8 +112,9 @@ export function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>): Set
 export function externalGroupMissingTools(
   markdown: string,
   allowed: ReadonlySet<string>,
+  options: ExternalGroupSurfaceOptions,
 ): string[] {
-  const surface = externalGroupSurfaceToolNames(allowed);
+  const surface = externalGroupSurfaceToolNames(allowed, options);
   return stepToolNames(markdown).filter((name) =>
     !surface.has(name) && !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name)
   );

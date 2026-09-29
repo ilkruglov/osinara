@@ -15,6 +15,7 @@
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { FamilyCaller } from "../family-context.js";
+import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { AUTHORED_SKILL_LIMITS, externalGroupMissingTools } from "./authored-skill-contract.js";
 import { requireCurrentOwner } from "./authored-skill-owner.js";
 import type { AuthoredSkillPackage } from "./authored-skill-repository.js";
@@ -56,7 +57,7 @@ async function findExternalGroup(familyId: string, group: string): Promise<Group
 }
 
 function requireCoveredTools(name: string, markdown: string, allowed: ReadonlySet<string>): void {
-  const missing = externalGroupMissingTools(markdown, allowed);
+  const missing = externalGroupMissingTools(markdown, allowed, { imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE });
   if (missing.length > 0) {
     throw new AppError(
       "AGENT_SKILL_GROUP_TOOLS_MISSING",
@@ -172,7 +173,7 @@ export const authoredSkillGrantRepository = {
       [input.groupId, input.familyId],
     );
     return result.rows
-      .filter((row) => externalGroupMissingTools(row.markdown, new Set(row.tool_allowlist)).length === 0)
+      .filter((row) => externalGroupMissingTools(row.markdown, new Set(row.tool_allowlist), { imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE }).length === 0)
       .map((row) => ({ description: row.description, files: row.files, markdown: row.markdown, name: row.name, version: row.version }));
   },
 

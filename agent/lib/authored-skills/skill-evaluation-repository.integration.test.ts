@@ -56,6 +56,13 @@ suite("skill trial provenance", () => {
       checks: [{ toolName: "web_search", path: [], operator: "succeeded" as const }], operationKey: "begin-cancel" };
     const run = await skillEvaluationRepository.begin(caller, input);
     await expect(skillEvaluationRepository.begin(caller, { ...input, operationKey: "begin-second" })).rejects.toMatchObject({ code: "AGENT_SKILL_TRIAL_BUSY" });
+    // Two begins of one step run concurrently: the loser also gets the stable code, not a constraint error.
+    const raced = await Promise.allSettled([
+      skillEvaluationRepository.begin(caller, { ...input, eveTurnId: "race-turn", operationKey: "race-a" }),
+      skillEvaluationRepository.begin(caller, { ...input, eveTurnId: "race-turn", operationKey: "race-b" }),
+    ]);
+    expect(raced.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(raced.find((result) => result.status === "rejected")).toMatchObject({ reason: { code: "AGENT_SKILL_TRIAL_BUSY" } });
     expect(await skillEvaluationRepository.cancel(caller, run.id, { ...provenance, eveTurnId: "other" })).toEqual({ cancelled: false });
     expect(await skillEvaluationRepository.cancel(caller, run.id, provenance)).toEqual({ cancelled: true });
     await expect(skillEvaluationRepository.finish(caller, run.id, provenance, "Готово"))

@@ -117,11 +117,21 @@ export const skillEvaluationRepository = {
       // constraint violation (Codex review, 30 September 2026).
       const busy = await client.query("SELECT id FROM authored_skill_trial_runs WHERE eve_session_id=$1 AND eve_turn_id=$2 AND status='running'", [input.eveSessionId, input.eveTurnId]);
       if (busy.rowCount) throw new AppError("AGENT_SKILL_TRIAL_BUSY", `В этом ходе уже идёт пробный прогон ${busy.rows[0].id}: заверши его finish_trial или cancel_trial`);
-      const result = await client.query<Run>(
-        `INSERT INTO authored_skill_trial_runs (candidate_id,family_id,example_id,variant,eve_session_id,eve_turn_id,operation_key,checks,passed,request)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING *`,
-        [candidate.id,caller.familyId,input.exampleId ?? null,input.variant,input.eveSessionId,input.eveTurnId,input.operationKey,JSON.stringify(checks),JSON.stringify(checks.map(() => false)),request],
-      );
+      let result;
+      try {
+        result = await client.query<Run>(
+          `INSERT INTO authored_skill_trial_runs (candidate_id,family_id,example_id,variant,eve_session_id,eve_turn_id,operation_key,checks,passed,request)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING *`,
+          [candidate.id,caller.familyId,input.exampleId ?? null,input.variant,input.eveSessionId,input.eveTurnId,input.operationKey,JSON.stringify(checks),JSON.stringify(checks.map(() => false)),request],
+        );
+      } catch (error) {
+        // Two begin_trial calls of one step run concurrently; the loser meets the unique index.
+        const pgError = error as { code?: unknown; constraint?: unknown };
+        if (pgError.code === "23505" && pgError.constraint === "authored_skill_trial_running") {
+          throw new AppError("AGENT_SKILL_TRIAL_BUSY", "В этом ходе уже идёт пробный прогон: заверши его finish_trial или cancel_trial");
+        }
+        throw error;
+      }
       return result.rows[0]!;
     });
   },

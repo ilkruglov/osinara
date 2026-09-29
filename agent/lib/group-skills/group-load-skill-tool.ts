@@ -82,7 +82,7 @@ export const externalGroupLoadSkillTool = createExternalGroupLoadSkillTool({
     const markdown = await authoredSkillGrantRepository.grantedMarkdown({ ...identity, name: skill });
     if (markdown === null) throw forbidden();
     const allowed = await loadCurrentExternalGroupCapabilities(identity);
-    if (externalGroupMissingTools(markdown, allowed).length > 0) throw forbidden();
+    if (externalGroupMissingTools(markdown, allowed, { imageGenerationAvailable: IMAGE_GENERATION_AVAILABLE }).length > 0) throw forbidden();
   },
   authorizeImageGeneration: async (ctx) => {
     const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);

@@ -50,18 +50,20 @@ export const skillExperimentRepository = {
       FROM authored_skill_experiments WHERE family_id=$1 AND name=$2 ORDER BY created_at DESC LIMIT 10`, [caller.familyId,name])).rows);
   },
   async create(caller: FamilyCaller, name: string, input: unknown, operationKey: string, chatKind: "private" | "family" = "private") {
-    // Missing or malformed protocol is the author's input, not an outage (Codex review, 30 September 2026).
-    const parsed = experimentProtocolSchema.safeParse(input);
-    if (!parsed.success) {
-      const issues = parsed.error.issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "protocol"}: ${issue.message}`).join("; ");
-      throw new AppError("AGENT_SKILL_EXPERIMENT_PROTOCOL_INVALID", `Протокол эксперимента не принят: ${issues}`);
-    }
-    const protocol = parsed.data;
     if (!AUTHORED_SKILL_NAME_PATTERN.test(name) || isReservedSkillName(name)) throw new AppError("AGENT_SKILL_EXPERIMENT_UNSUPPORTED", "Испытания доступны только собственным навыкам Мии");
     return owned(caller, async (c) => {
       await c.query("SELECT id FROM families WHERE id=$1 FOR UPDATE", [caller.familyId]);
+      // A replay returns the experiment it created, even if today's schema would reject the input
+      // it was created from (the request cap went from 2000 to 1000 on 30 September 2026).
       const previous = (await c.query<Experiment>("SELECT * FROM authored_skill_experiments WHERE family_id=$1 AND operation_key=$2", [caller.familyId, operationKey])).rows[0];
       if (previous) return { id: previous.id, protocolHash: previous.protocol_hash };
+      // Missing or malformed protocol is the author's input, not an outage (Codex review, 30 September 2026).
+      const parsed = experimentProtocolSchema.safeParse(input);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "protocol"}: ${issue.message}`).join("; ");
+        throw new AppError("AGENT_SKILL_EXPERIMENT_PROTOCOL_INVALID", `Протокол эксперимента не принят: ${issues}`);
+      }
+      const protocol = parsed.data;
       const contracts = await captureScenarioContracts(protocol, chatKind);
       const count = (await c.query("SELECT count(*)::int AS n FROM authored_skill_experiments WHERE family_id=$1 AND created_at > now()-interval '1 day'", [caller.familyId])).rows[0].n;
       if (count >= 3) throw new AppError("AGENT_SKILL_EXPERIMENT_LIMIT", "Лимит: три протокола в сутки на семью");

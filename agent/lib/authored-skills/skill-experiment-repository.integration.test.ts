@@ -27,6 +27,8 @@ suite("skill experiment ledger", () => {
     const generic = { environment: "scenario", cases: protocol.cases.map((c) => ({ ...c, toolFixtures: [{ toolName: "agent", input: { task: "report" }, output: "result" }] })) };
     const e = await repo.create(caller, draft.name, generic, "generic");
     expect(await repo.status(caller, e.id)).toMatchObject({ genericScenarioTools: ["agent"] });
+    // A replay returns the created experiment before the input is validated again.
+    await expect(repo.create(caller, draft.name, undefined, "generic")).resolves.toMatchObject({ id: e.id });
   });
   it("freezes scenario descriptors and labels evidence without granting real capabilities", async () => {
     const scenario = { ...protocol, environment: "scenario", cases: protocol.cases.map((c) => ({ ...c,

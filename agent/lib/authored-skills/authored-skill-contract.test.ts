@@ -164,10 +164,16 @@ describe("authored skill contract", () => {
 
   it("checks group skills against the tools the grants actually surface", () => {
     const steps = (tools: string[]) => ["## Шаги", ...tools.map((tool, index) => `${index + 1}. Вызови \`${tool}\`.`), "## Проверка результата", "ok"].join("\n");
-    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["manage_memory.edit"]))).toEqual([]);
-    expect(externalGroupMissingTools(steps(["manage_memory_thread"]), new Set(["manage_memory_thread.complete"]))).toEqual([]);
-    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]))).toEqual([]);
-    expect(externalGroupMissingTools(steps(["send_workspace_image"]), new Set(["web_search"]))).toEqual(["send_workspace_image"]);
-    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]))).toEqual(["manage_memory"]);
+    const on = { imageGenerationAvailable: true };
+    const off = { imageGenerationAvailable: false };
+    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["manage_memory.edit"]), on)).toEqual([]);
+    expect(externalGroupMissingTools(steps(["manage_memory_thread"]), new Set(["manage_memory_thread.complete"]), on)).toEqual([]);
+    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]), on)).toEqual([]);
+    expect(externalGroupMissingTools(steps(["send_workspace_image"]), new Set(["web_search"]), on)).toEqual(["send_workspace_image"]);
+    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]), on)).toEqual(["manage_memory"]);
+    // The application core is on every interactive external surface without a grant.
+    expect(externalGroupMissingTools(steps(["read_profile_view", "manage_behavior_preference"]), new Set(), on)).toEqual([]);
+    // A stored drawing grant surfaces nothing while no image provider is configured.
+    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]), off)).toEqual(["generate_image", "send_workspace_image"]);
   });
 });
