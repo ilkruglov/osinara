@@ -7,10 +7,14 @@
  * - Rubric: required sections, real tool names in «Шаги», referenced files supplied,
  *   no untrusted-context blocks, no secrets. Every problem is reported in one error.
  */
+import { readdirSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
   assertAuthoredSkillDraft,
+  externalGroupMissingTools,
+  isReservedSkillName,
   rubricChecklist,
   type AuthoredSkillDraft,
   stepToolNames,
@@ -148,5 +152,22 @@ describe("authored skill contract", () => {
       "3. Уточни `scope` и при необходимости `web_search`, затем `bash` для проверки. Отправь файл",
     );
     expect(() => assertAuthoredSkillDraft(draft({ markdown }), { knownToolNames: KNOWN })).not.toThrow();
+  });
+
+  // Codex review, 30 September 2026: `car-diagnostics` could be published as an authored skill.
+  it("reserves every built-in skill directory name", () => {
+    const builtIn = readdirSync(new URL("../../skills/", import.meta.url), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    expect(builtIn).toContain("car-diagnostics");
+    for (const name of [...builtIn, "imagegen"]) expect(isReservedSkillName(name)).toBe(true);
+  });
+
+  it("checks group skills against the tools the grants actually surface", () => {
+    const steps = (tools: string[]) => ["## Шаги", ...tools.map((tool, index) => `${index + 1}. Вызови \`${tool}\`.`), "## Проверка результата", "ok"].join("\n");
+    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["manage_memory.edit"]))).toEqual([]);
+    expect(externalGroupMissingTools(steps(["manage_memory_thread"]), new Set(["manage_memory_thread.complete"]))).toEqual([]);
+    expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]))).toEqual([]);
+    expect(externalGroupMissingTools(steps(["send_workspace_image"]), new Set(["web_search"]))).toEqual(["send_workspace_image"]);
+    expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]))).toEqual(["manage_memory"]);
   });
 });

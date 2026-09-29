@@ -16,6 +16,7 @@
  *   `action` or `scope` are parameters and stay unchecked.
  */
 import { AppError } from "../app-error.js";
+import { KNOWLEDGE_SKILL_NAMES } from "../group-skills/knowledge-skills.js";
 import { ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES } from "../tool-policy/group-tool-catalog.js";
 
 export const AUTHORED_SKILL_LIMITS = Object.freeze({
@@ -45,9 +46,12 @@ export const EVE_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
   "web_fetch", "web_search", "write_file",
 ]);
 
+// Every built-in package name: an authored skill of the same name would override it in trusted
+// chats and lose to it in external groups, i.e. mean two things under one name. The knowledge
+// skills come from their catalog so a new analyst is reserved without touching this list.
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
   "agent-browser", "authored", "behavior-preferences", "docx", "imagegen", "pdf",
-  "skill-authoring", "xlsx",
+  "skill-authoring", "xlsx", ...KNOWLEDGE_SKILL_NAMES,
 ]);
 const RESERVED_PREFIXES = ["authored-", "gws-"] as const;
 
@@ -79,13 +83,27 @@ function sectionBody(markdown: string, heading: string): string | null {
   return next === -1 ? rest : rest.slice(0, next);
 }
 
-/** Step tools an external group cannot call: everything outside its allowlist and the baseline file tools. */
+/**
+ * Tool names a group's grants put on its surface, as `buildModeToolSurface` does: action-level
+ * memory grants surface as `manage_memory` / `manage_memory_thread`, and a drawing grant brings
+ * `send_workspace_image` along. The action itself is still checked when the tool runs.
+ */
+export function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>): Set<string> {
+  const names = new Set(allowed);
+  if ([...allowed].some((name) => name.startsWith("manage_memory."))) names.add("manage_memory");
+  if ([...allowed].some((name) => name.startsWith("manage_memory_thread."))) names.add("manage_memory_thread");
+  if (allowed.has("generate_image")) names.add("send_workspace_image");
+  return names;
+}
+
+/** Step tools an external group cannot call: everything outside its surface and the baseline file tools. */
 export function externalGroupMissingTools(
   markdown: string,
   allowed: ReadonlySet<string>,
 ): string[] {
+  const surface = externalGroupSurfaceToolNames(allowed);
   return stepToolNames(markdown).filter((name) =>
-    !allowed.has(name) && !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name)
+    !surface.has(name) && !(ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES as readonly string[]).includes(name)
   );
 }
 

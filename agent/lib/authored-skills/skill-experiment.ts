@@ -22,12 +22,19 @@ export const experimentCheckSchema = z.union([
   z.object({ target: z.literal("tool"), toolName, input: toolInput.optional(), count: z.number().int().min(0).max(32) }).strict(),
   z.object({ target: z.literal("rubric"), criteria: z.array(z.string().min(1).max(500)).min(1).max(5), reference: z.string().min(1).max(8000) }).strict(),
 ]);
+/**
+ * A case request becomes the `trialRequest` of `publish`, which the example store caps at 1000
+ * characters (`AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS`). A longer request froze a protocol that could
+ * never be published: the full text failed the input schema, a shortened one the evidence match.
+ */
+export const EXPERIMENT_REQUEST_MAX_CHARACTERS = 1_000;
+
 export const experimentProtocolSchema = z.object({
   environment: z.enum(["files", "scenario"]).optional(),
   cases: z.array(z.object({
     id: z.string().regex(/^[a-z0-9-]{1,40}$/u),
     partition: z.enum(["development", "holdout"]),
-    request: z.string().min(1).max(2000),
+    request: z.string().trim().min(1).max(EXPERIMENT_REQUEST_MAX_CHARACTERS),
     files: z.record(experimentPath, z.string().max(8000)).refine((v) => Object.keys(v).length <= 5),
     checks: z.array(experimentCheckSchema).min(1).max(5),
     toolFixtures: z.array(toolFixtureSchema).max(16).optional(),

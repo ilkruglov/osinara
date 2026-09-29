@@ -54,7 +54,12 @@ export async function activeExamples(client: PoolClient, skillId: string): Promi
   return result.rows.map(rowToExample);
 }
 
-/** Adds an example when the cap allows; returns null when the skill already holds five. */
+/**
+ * Adds an example when the cap allows; returns null when the skill already holds five. The same
+ * request and expectation already active is that example, not a new one: a replayed `add_example`
+ * used to insert a duplicate and burn the cap (Codex review, 30 September 2026). Callers hold the
+ * skill row lock, so the check and the insert cannot interleave.
+ */
 export async function insertExample(client: PoolClient, input: {
   createdByUserId: string;
   expected: string;
@@ -63,6 +68,8 @@ export async function insertExample(client: PoolClient, input: {
   skillId: string;
 }): Promise<AuthoredSkillExample | null> {
   const existing = await activeExamples(client, input.skillId);
+  const same = existing.find((example) => example.request === input.request.trim() && example.expected === input.expected.trim());
+  if (same) return same;
   if (existing.length >= AUTHORED_SKILL_EXAMPLES_MAX) return null;
   const result = await client.query<ExampleRow>(
     `INSERT INTO authored_skill_examples (skill_id, family_id, request, expected, created_by_user_id)

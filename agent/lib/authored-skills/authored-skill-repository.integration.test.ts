@@ -127,7 +127,29 @@ describeWithDatabase("authored skill repository", () => {
     }
     await expect(authoredSkillExampleRepository.add(owner, { expected: "ок", name: "birthday-card", request: "лишний" }))
       .rejects.toMatchObject({ code: "AGENT_SKILL_EXAMPLE_LIMIT_REACHED" });
+    // A replayed add of an example that is already there returns it instead of a duplicate.
+    const again = await authoredSkillExampleRepository.add(owner, { expected: "ок", name: "birthday-card", request: " Пример 0 " });
+    expect(again.request).toBe("Пример 0");
     await expect(authoredSkillExampleRepository.list(familyId, "birthday-card")).resolves.toHaveLength(AUTHORED_SKILL_EXAMPLES_MAX);
+  });
+
+  // Codex review, 30 September 2026: every family group's usages went to the oldest group's conversation.
+  it("resolves the conversation of the verified family group, not the family's oldest one", async () => {
+    const groups = [] as string[];
+    for (const suffix of ["a", "b"]) {
+      const group = await database().query<{ id: string }>(
+        `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode) VALUES ($1, $2, $3, 'family_private', 'addressed_only') RETURNING id`,
+        [familyId, `-100skill${suffix}`, `Семья ${suffix}`],
+      );
+      // The group's application conversation is created with the group itself.
+      groups.push(group.rows[0]!.id);
+    }
+    const first = await authoredSkillRepository.conversationId({ chatKind: "family", familyId, groupId: groups[0]!, userId: owner.userId });
+    const second = await authoredSkillRepository.conversationId({ chatKind: "family", familyId, groupId: groups[1]!, userId: owner.userId });
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first).not.toBe(second);
+    await expect(authoredSkillRepository.conversationId({ chatKind: "family", familyId, groupId: null, userId: owner.userId })).resolves.toBeNull();
   });
 
   it("rolls back by creating a new version with the old content and retires from packages", async () => {

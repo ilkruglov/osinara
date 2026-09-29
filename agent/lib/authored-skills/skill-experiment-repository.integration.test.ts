@@ -19,6 +19,7 @@ suite("skill experiment ledger", () => {
   afterAll(closeDatabase);
   it("rejects built-in packages, invented tools and private-only descriptors in family chat", async () => {
     await expect(repo.create(caller, "docx", protocol, "built-in")).rejects.toMatchObject({ code: "AGENT_SKILL_EXPERIMENT_UNSUPPORTED" });
+    await expect(repo.create(caller, draft.name, undefined, "no-protocol")).rejects.toMatchObject({ code: "AGENT_SKILL_EXPERIMENT_PROTOCOL_INVALID" });
     for (const toolName of ["invented_tool", "export_memory"]) {
       const scenario = { environment: "scenario", cases: protocol.cases.map((c) => ({ ...c, toolFixtures: [{ toolName, input: {}, output: {} }] })) };
       await expect(repo.create(caller, draft.name, scenario, toolName, "family")).rejects.toMatchObject({ code: "AGENT_SKILL_EXPERIMENT_UNSUPPORTED" });

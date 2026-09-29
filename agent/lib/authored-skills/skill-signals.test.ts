@@ -55,7 +55,8 @@ describe("skill signals", () => {
       { callId: "c1", input: { skill: "birthday-card" }, kind: "load-skill" },
     ], turnId: "turn_3" } }, context(FAMILY));
 
-    expect(dependencies.conversationId).toHaveBeenCalledWith({ chatKind: "family", familyId: "family-1", userId: "user-1" });
+    // The verified group of this turn, not the family's oldest group (Codex review, 30 September 2026).
+    expect(dependencies.conversationId).toHaveBeenCalledWith({ chatKind: "family", familyId: "family-1", groupId: "group-1", userId: "user-1" });
     expect(dependencies.recordUsage).toHaveBeenCalledWith({
       conversationId: "conversation-1", eveSessionId: "eve-1", eveTurnId: "turn_3",
       familyId: "family-1", skillName: "birthday-card",

@@ -409,15 +409,19 @@ export const authoredSkillRepository = {
     }));
   },
 
-  /** Application conversation of the owner's current chat: the family group or the private chat. */
-  async conversationId(owner: { chatKind: "family" | "private"; familyId: string; userId: string }): Promise<string | null> {
+  /**
+   * Application conversation of the owner's current chat: the verified family group of this turn or
+   * the private chat. A family may have several groups; the oldest one used to receive every
+   * group's usages and hints (Codex review, 30 September 2026). No group id, no conversation.
+   */
+  async conversationId(owner: { chatKind: "family" | "private"; familyId: string; groupId?: string | null; userId: string }): Promise<string | null> {
+    if (owner.chatKind === "family" && !owner.groupId) return null;
     const result = owner.chatKind === "family"
       ? await database().query<{ id: string }>(
         `SELECT conversation.id FROM application_conversations AS conversation
            JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
-          WHERE conversation.family_id = $1 AND telegram_group.type = 'family_private'
-          ORDER BY conversation.created_at LIMIT 1`,
-        [owner.familyId],
+          WHERE conversation.family_id = $1 AND telegram_group.type = 'family_private' AND telegram_group.id = $2`,
+        [owner.familyId, owner.groupId],
       )
       : await database().query<{ id: string }>(
         `SELECT id FROM application_conversations

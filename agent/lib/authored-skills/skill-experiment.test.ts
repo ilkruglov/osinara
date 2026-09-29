@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { experimentApprovalSummary, experimentHash, experimentProtocolSchema, scoreArtifact, planExperiment, publicExperimentResults } from "./skill-experiment.js";
+import { AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS } from "./authored-skill-example-repository.js";
+import { EXPERIMENT_REQUEST_MAX_CHARACTERS, experimentApprovalSummary, experimentHash, experimentProtocolSchema, scoreArtifact, planExperiment, publicExperimentResults } from "./skill-experiment.js";
 
 const cases = [
   { id: "known", partition: "development", request: "Составь отчёт", files: { "/workspace/input.txt": "42" }, checks: [{ path: "/workspace/result.json", json: { total: 42 } }] },
@@ -21,6 +22,14 @@ describe("isolated skill experiment protocol", () => {
     expect(experimentProtocolSchema.safeParse({ cases: [cases[0], { ...cases[0], id: "second" }] }).success).toBe(false);
     expect(experimentProtocolSchema.safeParse({ cases: [cases[0], { ...cases[1], id: "known" }] }).success).toBe(false);
   });
+  // Codex review, 30 September 2026: a 1500-character request froze a protocol publish could never match.
+  it("keeps case requests within what publish accepts as trialRequest", () => {
+    expect(EXPERIMENT_REQUEST_MAX_CHARACTERS).toBe(AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS);
+    const long = { ...cases[0], request: "я".repeat(EXPERIMENT_REQUEST_MAX_CHARACTERS + 1) };
+    expect(experimentProtocolSchema.safeParse({ cases: [long, cases[1]] }).success).toBe(false);
+    expect(experimentProtocolSchema.parse({ cases: [{ ...cases[0], request: "  Составь отчёт  " }, cases[1]] }).cases[0]!.request).toBe("Составь отчёт");
+  });
+
   it("compares structured artifacts without accepting missing files or partial matches", () => {
     expect(scoreArtifact({ path: "/workspace/a", json: { a: 1, b: 2 } }, '{"b":2,"a":1}')).toBe(true);
     expect(scoreArtifact({ path: "/workspace/a", json: { a: 1 } }, '{"a":1,"extra":2}')).toBe(false);
@@ -56,7 +65,7 @@ describe("isolated skill experiment protocol", () => {
   });
   it("keeps six large scenario summaries inside Telegram's approval budget", () => {
     const full = { environment: "scenario", cases: Array.from({ length: 6 }, (_, i) => ({
-      id: "case-" + "x".repeat(30) + i, partition: i ? "holdout" : "development", request: "д".repeat(2000),
+      id: "case-" + "x".repeat(30) + i, partition: i ? "holdout" : "development", request: "д".repeat(EXPERIMENT_REQUEST_MAX_CHARACTERS),
       files: { ["/workspace/" + "x".repeat(160)]: "data" },
       checks: [{ target: "rubric", criteria: ["к".repeat(400)], reference: "о".repeat(300) }],
       toolFixtures: [{ toolName: "a".repeat(90), input: { value: "input" }, output: "response" }],

@@ -27,7 +27,7 @@ const handlers = createImprovementSignalHandlers({
     }
     return identity.userId === null
       ? Promise.resolve(null)
-      : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, userId: identity.userId });
+      : authoredSkillRepository.conversationId({ chatKind: identity.chatKind, familyId: identity.familyId, groupId: identity.groupId, userId: identity.userId });
   },
   isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),

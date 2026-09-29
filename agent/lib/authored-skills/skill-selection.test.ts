@@ -15,6 +15,8 @@ describe("skill selection", () => {
   });
   it("fails closed on invented selections or malformed output", async () => {
     expect((await evaluateSkillSelection("report", [{ name: "report", description: "Сводка" }], cases, async () => '["unknown","report"]')).passed).toEqual([false,false]);
-    await expect(evaluateSkillSelection("report", [], cases, async () => "готово")).rejects.toThrow();
+    await expect(evaluateSkillSelection("report", [], cases, async () => "готово")).rejects.toMatchObject({ code: "AGENT_SKILL_SELECTION_UNREADABLE" });
+    await expect(evaluateSkillSelection("report", [], cases, async () => '["report"]')).rejects.toMatchObject({ code: "AGENT_SKILL_SELECTION_UNREADABLE" });
+    expect((await evaluateSkillSelection("report", [{ name: "report", description: "Сводка" }], cases, async () => '```json\n["report",null]\n```')).passed).toEqual([true, true]);
   });
 });

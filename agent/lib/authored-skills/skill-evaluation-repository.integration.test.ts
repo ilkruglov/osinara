@@ -16,6 +16,15 @@ suite("skill trial provenance", () => {
     caller = { familyId: fixture.familyId, userId: fixture.userId, role: "owner" };
   });
   afterAll(closeDatabase);
+  // Codex review, 30 September 2026: two concurrent drafts with one key both missed the row, the second hit UNIQUE.
+  it("returns one draft for concurrent calls with the same key", async () => {
+    const [a, b] = await Promise.all([
+      skillEvaluationRepository.draft(caller, draft, "draft-race", new Set(["web_search"])),
+      skillEvaluationRepository.draft(caller, draft, "draft-race", new Set(["web_search"])),
+    ]);
+    expect(a.id).toBe(b.id);
+  });
+
   it("requires observed results, rejects foreign runs and binds the gate to candidate content", async () => {
     const candidate = await skillEvaluationRepository.draft(caller, draft, "draft-1", new Set(["web_search"]));
     const run = await skillEvaluationRepository.begin(caller, {
@@ -46,6 +55,7 @@ suite("skill trial provenance", () => {
     const input = { ...provenance, candidateId: candidate.id, request: "Сводка", variant: "candidate" as const,
       checks: [{ toolName: "web_search", path: [], operator: "succeeded" as const }], operationKey: "begin-cancel" };
     const run = await skillEvaluationRepository.begin(caller, input);
+    await expect(skillEvaluationRepository.begin(caller, { ...input, operationKey: "begin-second" })).rejects.toMatchObject({ code: "AGENT_SKILL_TRIAL_BUSY" });
     expect(await skillEvaluationRepository.cancel(caller, run.id, { ...provenance, eveTurnId: "other" })).toEqual({ cancelled: false });
     expect(await skillEvaluationRepository.cancel(caller, run.id, provenance)).toEqual({ cancelled: true });
     await expect(skillEvaluationRepository.finish(caller, run.id, provenance, "Готово"))

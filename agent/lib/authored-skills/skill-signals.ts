@@ -35,7 +35,7 @@ interface SkillSignalAction {
 }
 
 interface SkillSignalDependencies {
-  conversationId(owner: { chatKind: TrustedChatKind; familyId: string; userId: string }): Promise<string | null>;
+  conversationId(owner: { chatKind: TrustedChatKind; familyId: string; groupId: string | null; userId: string }): Promise<string | null>;
   /** Conversation of a registered external group, for loads of skills granted to it. */
   groupConversationId(groupId: string): Promise<string | null>;
   recordUsage(input: {
@@ -67,7 +67,7 @@ export function trustedChatKind(auth: SessionAuth): TrustedChatKind | null {
 }
 
 function trustedIdentity(ctx: SkillSignalContext): {
-  chatKind: TrustedChatKind; familyId: string; userId: string;
+  chatKind: TrustedChatKind; familyId: string; groupId: string | null; userId: string;
 } | null {
   if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx)) return null;
   const chatKind = trustedChatKind(ctx.session.auth);
@@ -75,7 +75,8 @@ function trustedIdentity(ctx: SkillSignalContext): {
   const familyId = attributes?.familyId;
   const userId = ctx.session.auth.current?.principalId;
   if (chatKind === null || typeof familyId !== "string" || typeof userId !== "string") return null;
-  return { chatKind, familyId, userId };
+  const groupId = chatKind === "family" && typeof attributes?.groupId === "string" ? attributes.groupId : null;
+  return { chatKind, familyId, groupId, userId };
 }
 
 /** A live external group turn: its granted skills are loaded here, so usage is recorded here too. */

@@ -38,9 +38,11 @@ export const skillEvaluationRepository = {
     assertAuthoredSkillDraft(draft, { knownToolNames });
     return owned(caller, async (client) => {
       // Bound abandoned drafts, without deleting history or evicting a candidate under evaluation.
+      // The replay check runs under the family lock: two concurrent calls with one key used to
+      // both miss the row and the second hit the UNIQUE constraint (Codex review, 30 September 2026).
+      await client.query("SELECT id FROM families WHERE id=$1 FOR UPDATE", [caller.familyId]);
       const existing = await client.query<Candidate>("SELECT * FROM authored_skill_candidates WHERE family_id=$1 AND operation_key=$2", [caller.familyId, operationKey]);
       if (existing.rows[0]) return existing.rows[0];
-      await client.query("SELECT id FROM families WHERE id=$1 FOR UPDATE", [caller.familyId]);
       const count = await client.query<{ count: string }>("SELECT count(*) FROM authored_skill_candidates WHERE family_id=$1 AND created_at > now() - interval '1 day'", [caller.familyId]);
       if (Number(count.rows[0]!.count) >= 20) throw new AppError("AGENT_SKILL_DRAFT_LIMIT", "Лимит: 20 черновиков в сутки");
       const result = await client.query<Candidate>(
@@ -91,7 +93,9 @@ export const skillEvaluationRepository = {
     candidateId: string; exampleId?: string; request?: string; variant: "baseline" | "candidate";
     operationKey: string; checks: readonly SkillCheck[];
   }): Promise<Run> {
-    const checks = skillCheckSchema.array().min(1).max(10).parse(input.checks);
+    const parsedChecks = skillCheckSchema.array().min(1).max(10).safeParse(input.checks);
+    if (!parsedChecks.success) throw new AppError("AGENT_SKILL_TRIAL_CHECK_INVALID", "Нужны от 1 до 10 проверок вида {toolName, path, operator}");
+    const checks = parsedChecks.data;
     if (checks.some((check) => check.toolName === "manage_skill")) throw new AppError("AGENT_SKILL_TRIAL_CHECK_INVALID", "Служебный вызов не доказывает выполнение навыка");
     return owned(caller, async (client) => {
       const replay = await client.query<Run>("SELECT * FROM authored_skill_trial_runs WHERE family_id=$1 AND operation_key=$2", [caller.familyId, input.operationKey]);
@@ -109,6 +113,10 @@ export const skillEvaluationRepository = {
         request = example.rows[0].request;
       }
       if (request.length === 0 || request.length > 1000) throw new AppError("AGENT_SKILL_TRIAL_REQUEST_REQUIRED", "Укажи request пробного прогона");
+      // One running trial per turn (unique index): a second begin used to surface as a raw
+      // constraint violation (Codex review, 30 September 2026).
+      const busy = await client.query("SELECT id FROM authored_skill_trial_runs WHERE eve_session_id=$1 AND eve_turn_id=$2 AND status='running'", [input.eveSessionId, input.eveTurnId]);
+      if (busy.rowCount) throw new AppError("AGENT_SKILL_TRIAL_BUSY", `В этом ходе уже идёт пробный прогон ${busy.rows[0].id}: заверши его finish_trial или cancel_trial`);
       const result = await client.query<Run>(
         `INSERT INTO authored_skill_trial_runs (candidate_id,family_id,example_id,variant,eve_session_id,eve_turn_id,operation_key,checks,passed,request)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING *`,

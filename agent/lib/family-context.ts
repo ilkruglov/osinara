@@ -63,6 +63,8 @@ export function requirePrivateTelegramOwner(ctx: SessionContext): PrivateTelegra
 
 export interface TrustedTelegramOwner extends FamilyCaller {
   chatKind: "family" | "private";
+  /** The verified family group of this turn; null in the private chat. */
+  groupId: string | null;
   telegramChatId: string;
 }
 
@@ -85,5 +87,6 @@ export function requireTrustedTelegramOwner(ctx: SessionContext): TrustedTelegra
       "Это действие доступно владельцу только в личном чате или семейной группе",
     );
   }
-  return { ...owner, chatKind, telegramChatId: attributes.telegramChatId };
+  const groupId = chatKind === "family" && typeof attributes.groupId === "string" ? attributes.groupId : null;
+  return { ...owner, chatKind, groupId, telegramChatId: attributes.telegramChatId };
 }
