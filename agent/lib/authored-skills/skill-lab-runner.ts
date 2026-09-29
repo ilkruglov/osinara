@@ -16,6 +16,20 @@ export interface LabResult {
   artifactHashes: Record<string, string>;
   telemetry: Record<string, unknown>;
 }
+/**
+ * Why a run did not complete, as a code the author can act on. Before 30 September 2026 every such
+ * run said `runtime_failed`: an exhausted call budget, the deadline and a model error looked the
+ * same, and the author could only guess. Only `AGENT_*` identifiers are taken from the failure text.
+ */
+export function labFailureReason(input: { aborted: boolean; calls: number; diagnostic: string; failureText: string; maxCalls: number }): string {
+  if (input.aborted) return "cancelled_or_timed_out";
+  if (input.diagnostic.startsWith("AGENT_SKILL_LAB_")) return input.diagnostic;
+  const codes = [...new Set(input.failureText.match(/AGENT_[A-Z0-9_]{3,60}/gu) ?? [])];
+  if (codes.includes("AGENT_SKILL_LAB_CALL_LIMIT") || input.calls >= input.maxCalls) return "call_limit";
+  if (codes.includes("AGENT_SKILL_LAB_DEADLINE")) return "deadline";
+  return codes.find((code) => code.startsWith("AGENT_SKILL_LAB_")) ?? codes[0] ?? "runtime_failed";
+}
+
 export async function runSkillLab(job: LabJob, signal: AbortSignal, options: { root?: string; deadlineAt?: number; diagnostic?: (text: string) => void } = {}): Promise<LabResult> {
   const root = options.root ?? process.cwd();
   const start = Date.now();
@@ -27,6 +41,8 @@ export async function runSkillLab(job: LabJob, signal: AbortSignal, options: { r
   let completed = false;
   let diagnostic = "";
   let stderr = "";
+  // Failed events and stderr of a turn that did not complete; only AGENT_* codes leave this function.
+  let failureText = "";
   try {
     const portServer = createServer();
     portServer.listen(0, "127.0.0.1");
@@ -65,7 +81,10 @@ export async function runSkillLab(job: LabJob, signal: AbortSignal, options: { r
       const { response } = await client.sessions.create({ message: job.testCase.request, signal });
       const result = await response.result();
       completed = result.status !== "failed" && result.events.some((e) => e.type === "turn.completed");
-      if (!completed) options.diagnostic?.(JSON.stringify(result.events.filter((e) => e.type.includes("failed"))) + "\n" + stderr);
+      if (!completed) {
+        failureText = JSON.stringify(result.events.filter((e) => e.type.includes("failed"))) + "\n" + stderr;
+        options.diagnostic?.(failureText);
+      }
     } finally { signal.removeEventListener("abort", kill); }
   } catch (error) {
     diagnostic = error instanceof Error ? error.message.split("\n")[0]! : "AGENT_SKILL_LAB_FAILED";
@@ -96,6 +115,7 @@ export async function runSkillLab(job: LabJob, signal: AbortSignal, options: { r
         usageComplete: usages.length === calls && usages.every((u) => u.usage?.inputTokens?.total !== undefined && u.usage.outputTokens?.total !== undefined),
         durationMs: Date.now() - start, loaded, sessionId: final?.sessionId, turnId: final?.turnId,
         // Error bodies may contain model text. A bounded code conveys failure without leaking it.
-        diagnostic: !coverageComplete ? "scenario_uncovered" : completed && final ? undefined : signal.aborted ? "cancelled_or_timed_out" : diagnostic.startsWith("AGENT_SKILL_LAB_") ? diagnostic : "runtime_failed" } };
+        diagnostic: !coverageComplete ? "scenario_uncovered" : completed && final ? undefined
+          : labFailureReason({ aborted: signal.aborted, calls, diagnostic, failureText: failureText + "\n" + stderr, maxCalls: job.maxCalls }) } };
   } finally { await rm(dir, { recursive: true, force: true }); }
 }

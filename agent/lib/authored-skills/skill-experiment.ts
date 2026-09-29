@@ -29,6 +29,11 @@ export const experimentCheckSchema = z.union([
  */
 export const EXPERIMENT_REQUEST_MAX_CHARACTERS = 1_000;
 
+/** One judge call plus load, one working step and the answer. */
+export const RUBRIC_MIN_CALLS_PER_RUN = 4;
+const hasRubric = (p: { cases: readonly { checks: readonly object[] }[] }): boolean =>
+  p.cases.some((c) => c.checks.some((v) => "target" in v && v.target === "rubric"));
+
 export const experimentProtocolSchema = z.object({
   environment: z.enum(["files", "scenario"]).optional(),
   cases: z.array(z.object({
@@ -54,6 +59,12 @@ export const experimentProtocolSchema = z.object({
     if (new Set(keys).size !== keys.length) ctx.addIssue({ code: "custom", message: "Duplicate tool fixtures are ambiguous" });
     if (fixtures.some((f) => ["read_file", "write_file"].includes(f.toolName))) ctx.addIssue({ code: "custom", message: "File tools execute against the isolated filesystem and cannot be simulated" });
     if (c.checks.filter((v) => "target" in v && v.target === "rubric").length > 1) ctx.addIssue({ code: "custom", message: "Use one rubric per case" });
+  }
+  // The rubric judge spends one call of the same budget; with less than four the skill itself gets
+  // at most load, one step and the answer, and runs stop at the limit (29 September 2026: a menu
+  // protocol with 3 calls interrupted 15 of 16 runs).
+  if (hasRubric(p) && p.maxCallsPerRun < RUBRIC_MIN_CALLS_PER_RUN) {
+    ctx.addIssue({ code: "custom", path: ["maxCallsPerRun"], message: `A rubric check needs maxCallsPerRun of at least ${RUBRIC_MIN_CALLS_PER_RUN}: the judge uses one call of the budget` });
   }
 });
 export type ExperimentProtocol = z.infer<typeof experimentProtocolSchema>;
@@ -84,7 +95,7 @@ export function experimentApprovalSummary(input: unknown): string[] {
       `Ожидания (сокращённо): ${brief(JSON.stringify(c.checks), 120)}`,
       ...(c.toolFixtures?.length ? [`Тестовые ответы (${c.toolFixtures.length}, сокращённо): ${brief(JSON.stringify(c.toolFixtures), 100)}`] : []),
     ]),
-    ...(p.cases.some((c) => c.checks.some((v) => "target" in v && v.target === "rubric")) ? ["Качество: отдельный вызов модели по рубрике, внутри бюджета; оценка может ошибаться."] : []),
+    ...(hasRubric(p) ? [`Качество: отдельный вызов модели по рубрике, один из ${p.maxCallsPerRun} вызовов прогона; оценка может ошибаться.`] : []),
     `SHA-256 полного протокола: ${experimentHash(p)}`,
   ];
 }

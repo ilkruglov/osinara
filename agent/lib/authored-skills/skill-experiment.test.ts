@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AUTHORED_SKILL_EXAMPLE_MAX_CHARACTERS } from "./authored-skill-example-repository.js";
-import { EXPERIMENT_REQUEST_MAX_CHARACTERS, experimentApprovalSummary, experimentHash, experimentProtocolSchema, scoreArtifact, planExperiment, publicExperimentResults } from "./skill-experiment.js";
+import { EXPERIMENT_REQUEST_MAX_CHARACTERS, RUBRIC_MIN_CALLS_PER_RUN, experimentApprovalSummary, experimentHash, experimentProtocolSchema, scoreArtifact, planExperiment, publicExperimentResults } from "./skill-experiment.js";
 
 const cases = [
   { id: "known", partition: "development", request: "Составь отчёт", files: { "/workspace/input.txt": "42" }, checks: [{ path: "/workspace/result.json", json: { total: 42 } }] },
@@ -28,6 +28,16 @@ describe("isolated skill experiment protocol", () => {
     const long = { ...cases[0], request: "я".repeat(EXPERIMENT_REQUEST_MAX_CHARACTERS + 1) };
     expect(experimentProtocolSchema.safeParse({ cases: [long, cases[1]] }).success).toBe(false);
     expect(experimentProtocolSchema.parse({ cases: [{ ...cases[0], request: "  Составь отчёт  " }, cases[1]] }).cases[0]!.request).toBe("Составь отчёт");
+  });
+
+  // 29 September 2026: a menu protocol with a rubric and 3 calls interrupted 15 of 16 runs at the limit.
+  it("requires room for the rubric judge in the call budget", () => {
+    const rubric = { target: "rubric", criteria: ["Меню без кабачков"], reference: "Меню" };
+    const withRubric = [{ ...cases[0], checks: [rubric] }, cases[1]];
+    expect(experimentProtocolSchema.safeParse({ cases: withRubric, maxCallsPerRun: RUBRIC_MIN_CALLS_PER_RUN - 1 }).success).toBe(false);
+    expect(experimentProtocolSchema.safeParse({ cases: withRubric, maxCallsPerRun: RUBRIC_MIN_CALLS_PER_RUN }).success).toBe(true);
+    expect(experimentProtocolSchema.safeParse({ cases, maxCallsPerRun: 2 }).success).toBe(true);
+    expect(experimentApprovalSummary({ cases: withRubric }).join("\n")).toContain("один из 6 вызовов");
   });
 
   it("compares structured artifacts without accepting missing files or partial matches", () => {
