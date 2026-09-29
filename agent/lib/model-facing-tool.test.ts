@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { AppError } from "./app-error.js";
-import { wrapModelFacingTool, wrapModelFacingToolMap } from "./model-facing-tool.js";
+import { jsonSafeToolOutput, wrapModelFacingTool, wrapModelFacingToolMap } from "./model-facing-tool.js";
 import {
   PROGRESS_NOTICE_SENT_NOTE,
   progressNoticeKey,
@@ -35,6 +35,22 @@ describe("model-facing tool boundary", () => {
     // Generic call discipline lives in the permanent instructions, not in every descriptor.
     expect(wrapped.description).toBe(source.description);
     expect(wrapped.inputSchema).toBe(source.inputSchema);
+  });
+
+  // Eve rejects anything but plain JSON; pg rows carry Date objects for timestamp columns.
+  it("hands Eve plain JSON: dates and bigints inside results become strings", async () => {
+    const created = new Date("2026-09-29T19:43:27.379Z");
+    const wrapped = wrapModelFacingTool("test_tool", tool(() => ({ id: "c1", created_at: created, runs: [{ finished_at: created, count: 3n }], none: null })));
+    await expect(wrapped.execute({}, {} as never)).resolves.toEqual({
+      created_at: "2026-09-29T19:43:27.379Z", id: "c1", none: null, runs: [{ count: "3", finished_at: "2026-09-29T19:43:27.379Z" }],
+    });
+    const bytes = new Uint8Array([1, 2, 3]);
+    expect(jsonSafeToolOutput({ bytes })).toEqual({ bytes });
+    expect((jsonSafeToolOutput({ bytes }) as { bytes: unknown }).bytes).toBe(bytes);
+    expect(jsonSafeToolOutput(new Date(Number.NaN))).toBeNull();
+    const cyclic: Record<string, unknown> = { a: 1 };
+    cyclic.self = cyclic;
+    expect(() => jsonSafeToolOutput(cyclic)).not.toThrow();
   });
 
   it("tells the model when its pre-tool text already reached the person", async () => {

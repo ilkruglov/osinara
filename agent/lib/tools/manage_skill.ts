@@ -218,7 +218,11 @@ export default defineTool({
           name: requireName(input),
           trialSummary: input.action === "draft" ? "Пробный прогон ещё не выполнен" : requireField(input, "trialSummary"),
         };
-        if (input.action === "draft") return await skillEvaluationRepository.draft(caller, draft, ctx.callId, await knownToolNames(owner));
+        if (input.action === "draft") {
+          const candidate = await skillEvaluationRepository.draft(caller, draft, ctx.callId, await knownToolNames(owner));
+          // The contract names the id `candidateId` everywhere else; the raw row said `id`.
+          return { baseVersion: candidate.base_version, candidateId: candidate.id, contentHash: candidate.content_hash, name: candidate.name };
+        }
         if (!input.candidateId || (!input.runId && !input.experimentId)) throw new AppError("AGENT_SKILL_EVAL_MISSING", "publish требует candidateId и runId либо experimentId завершённого эксперимента");
         const trialRequest = requireField(input, "trialRequest");
         // Owner role and the exact Telegram approval are both revalidated at the mutation boundary.

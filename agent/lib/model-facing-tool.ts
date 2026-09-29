@@ -6,6 +6,12 @@
  *   the model when its pre-tool text has already been delivered.
  * - `wrapModelFacingToolMap`: applies the boundary once to a complete mode-scoped surface.
  * - `turnKey`: the current session and turn as one string, for per-turn side-effect bookkeeping.
+ * - `jsonSafeToolOutput`: dates and bigints inside plain objects and arrays become strings.
+ *
+ * Key construct:
+ * - Eve accepts only plain JSON from a tool and fails the call with ToolOutputSerializationError
+ *   otherwise. Repositories hand back pg rows whose timestamp columns are `Date` objects; before
+ *   30 September 2026 every `manage_skill draft` failed this way after the row was already saved.
  */
 import { defineTool, type ToolDefinition } from "eve/tools";
 
@@ -88,9 +94,35 @@ export function wrapModelFacingTool(
         throw normalizeModelFacingError(error, { toolName });
       }
       if (turn !== null && fingerprint !== null) toolRepeatGuard.recordSuccess(turn, fingerprint);
-      return withDeliveredNoticeNote(output, ctx);
+      return withDeliveredNoticeNote(jsonSafeToolOutput(output), ctx);
     },
   });
+}
+
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === null || prototype === Object.prototype;
+}
+
+/**
+ * Only plain objects and arrays are walked: binary payloads, streams and class instances other than
+ * `Date` pass through untouched, so Eve's own check still reports anything genuinely unsupported.
+ */
+export function jsonSafeToolOutput(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  if (typeof value === "bigint") return value.toString();
+  if (value === null || typeof value !== "object" || seen.has(value)) return value;
+  if (Array.isArray(value)) {
+    seen.add(value);
+    const mapped = value.map((item) => jsonSafeToolOutput(item, seen));
+    seen.delete(value);
+    return mapped;
+  }
+  if (!isPlainObject(value)) return value;
+  seen.add(value);
+  const mapped = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, jsonSafeToolOutput(item, seen)]));
+  seen.delete(value);
+  return mapped;
 }
 
 /**

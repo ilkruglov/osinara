@@ -7,6 +7,7 @@
  * - Publish passes the mode catalog plus Eve built-ins as known tool names and the call id as the
  *   idempotency key; the result tells the model the skill is live from the next turn.
  * - Record_outcome resolves the owner's current conversation and needs no approval.
+ * - Draft returns `candidateId` (the name every later action uses), not the raw pg row.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +22,7 @@ const repository = vi.hoisted(() => ({
   retire: vi.fn(),
   rollback: vi.fn(),
 }));
-const evaluations = vi.hoisted(() => ({ list: vi.fn().mockResolvedValue([]) }));
+const evaluations = vi.hoisted(() => ({ draft: vi.fn(), list: vi.fn().mockResolvedValue([]) }));
 const experiments = vi.hoisted(() => ({ list: vi.fn().mockResolvedValue([]), create: vi.fn() }));
 vi.mock("./authored-skills/skill-experiment-repository.js", () => ({ skillExperimentRepository: experiments }));
 vi.mock("./authored-skills/skill-evaluation-repository.js", () => ({ skillEvaluationRepository: evaluations }));
@@ -107,6 +108,14 @@ describe("manage_skill", () => {
   it("finds experiments by name before the first skill is published", async () => {
     await expect(manageSkill.execute({ action: "experiment_status", name: "file-report" }, context)).resolves.toEqual([]);
     expect(experiments.list).toHaveBeenCalledWith({ familyId: OWNER.familyId, userId: OWNER.userId, role: "owner" }, "file-report");
+  });
+
+  // 29 September 2026: draft returned the raw row, its Date made Eve reject the result, and the model never got the id.
+  it("returns the draft as candidateId without the raw row", async () => {
+    evaluations.draft.mockResolvedValue({ base_version: 0, content_hash: "h1", created_at: new Date("2026-09-29T19:43:27Z"), draft: {}, family_id: "family-1", id: "11111111-2222-4333-8444-555555555555", name: "keto-menu" });
+    const result = await manageSkill.execute({ action: "draft", changeNote: "Первый черновик", description: "Кето-меню на неделю", markdown: "## Шаги", name: "keto-menu" }, context);
+    expect(result).toEqual({ baseVersion: 0, candidateId: "11111111-2222-4333-8444-555555555555", contentHash: "h1", name: "keto-menu" });
+    expect(evaluations.draft.mock.calls[0]![2]).toBe("skill-call-1");
   });
 
   it("publishes only after exact approval with the mode catalog and the call id", async () => {
