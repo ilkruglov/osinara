@@ -65,13 +65,15 @@ export const skillExperimentRepository = {
       }
       const protocol = parsed.data;
       const contracts = await captureScenarioContracts(protocol, chatKind);
-      // Rolling 24 hours. A protocol cancelled before any run spent nothing and does not count; the
+      // Rolling 24 hours. A protocol stopped without a single completed run produced no evidence
+      // and does not count (a cut-off output or a lab fault used to burn the day); the
       // refusal names the moment the oldest counted one leaves the window (30 September 2026: one
       // slot was lost to the draft serialization bug, and the author could only guess the reset).
       const window = (await c.query<{ n: number; frees_at: Date | null }>(
         `SELECT count(*)::int AS n, min(created_at) + interval '1 day' AS frees_at FROM authored_skill_experiments e
           WHERE e.family_id=$1 AND e.created_at > now()-interval '1 day'
-            AND NOT (e.status = 'cancelled' AND NOT EXISTS (SELECT 1 FROM authored_skill_experiment_runs r WHERE r.experiment_id = e.id))`,
+            AND NOT (e.status IN ('cancelled', 'interrupted')
+                     AND NOT EXISTS (SELECT 1 FROM authored_skill_experiment_runs r WHERE r.experiment_id = e.id AND r.status = 'completed'))`,
         [caller.familyId],
       )).rows[0]!;
       if (window.n >= 3) {

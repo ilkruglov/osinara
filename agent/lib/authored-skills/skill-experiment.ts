@@ -2,6 +2,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { LAB_MAX_OUTPUT_TOKENS } from "./skill-lab-model.js";
 
 export const experimentPath = z.string().max(180).regex(/^\/workspace\/[a-zA-Z0-9_-]+(?:[./][a-zA-Z0-9_-]+)*$/u);
 export const artifactCheckSchema = z.object({
@@ -45,7 +46,8 @@ export const experimentProtocolSchema = z.object({
     toolFixtures: z.array(toolFixtureSchema).max(16).optional(),
   }).strict()).min(2).max(6),
   maxCallsPerRun: z.number().int().min(2).max(8).default(6),
-  maxSeconds: z.number().int().min(30).max(600).default(300),
+  // Runs are sequential: 16 runs of a real answer at production effort need more than 10 minutes.
+  maxSeconds: z.number().int().min(30).max(1800).default(900),
 }).strict().superRefine((p, ctx) => {
   if (new Set(p.cases.map((c) => c.id)).size !== p.cases.length ||
       !p.cases.some((c) => c.partition === "development") || !p.cases.some((c) => c.partition === "holdout")) {
@@ -87,7 +89,7 @@ export function experimentApprovalSummary(input: unknown): string[] {
   };
   return [
     p.environment === "scenario" ? "Симуляция внешних инструментов: тестовые ответы; реальных отправок, поиска и изменений данных нет." : "Изоляция: read_file/write_file; без памяти и реальных отправок.",
-    `Бюджет: ${p.maxSeconds} с, до ${p.maxCallsPerRun} вызовов модели на прогон, до 2048 выходных токенов на вызов.`,
+    `Бюджет: ${p.maxSeconds} с, до ${p.maxCallsPerRun} вызовов модели на прогон, до ${LAB_MAX_OUTPUT_TOKENS} выходных токенов на вызов (с рассуждениями).`,
     `Baseline и до трёх кандидатов, каждый пример дважды: до ${p.cases.length * 8 * p.maxCallsPerRun} вызовов.`,
     ...p.cases.flatMap((c) => [
       `${c.id} (${c.partition}): ${brief(c.request, 80)}`,

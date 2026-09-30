@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
-import { boundedLabModel } from "./skill-lab-model.js";
+import { boundedLabModel, LAB_MAX_OUTPUT_TOKENS } from "./skill-lab-model.js";
 
 it("reserves every provider attempt, caps output, and removes provider tools", async () => {
   const doGenerate = vi.fn().mockRejectedValue(new Error("provider failed"));
@@ -13,7 +13,7 @@ it("reserves every provider attempt, caps output, and removes provider tools", a
   await expect(wrapped.doGenerate(input)).rejects.toThrow("provider failed");
   await expect(wrapped.doGenerate(input)).rejects.toThrow("budget");
   expect(doGenerate).toHaveBeenCalledTimes(2);
-  expect(doGenerate.mock.calls[0][0]).toMatchObject({ maxOutputTokens: 2048, tools: [] });
+  expect(doGenerate.mock.calls[0][0]).toMatchObject({ maxOutputTokens: LAB_MAX_OUTPUT_TOKENS, tools: [] });
 });
 
 it("only exposes frozen scenario tools while still denying provider-native tools", async () => {
@@ -38,4 +38,9 @@ it("keeps simulated questions out of Eve's human-input control flow without rena
   expect(doGenerate.mock.calls[0][0].tools[0].name).toBe("ask_question");
   expect(doGenerate.mock.calls[0][0].prompt[0].content[0].toolName).toBe("ask_question");
   expect(result.content[0]).toMatchObject({ toolName: "skill_lab_ask_question" });
+});
+
+// 30 September 2026: at 2048 the production-effort reasoning alone filled the budget (11 of 16 runs cut off).
+it("leaves room for reasoning plus a full answer", () => {
+  expect(LAB_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(8192);
 });

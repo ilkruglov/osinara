@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "eve/client";
 import type { LabJob } from "../../../services/skill-lab/agent/lib/job.js";
 import { experimentHash } from "./skill-experiment.js";
+import { LAB_RUN_TIMEOUT_MS } from "./skill-lab-model.js";
 
 export interface LabResult {
   status: "completed" | "interrupted";
@@ -50,7 +51,7 @@ export async function runSkillLab(job: LabJob, signal: AbortSignal, options: { r
     const port = (portServer.address() as { port: number }).port;
     await new Promise<void>((done, fail) => portServer.close((e) => e ? fail(e) : done()));
     const token = randomBytes(32).toString("hex");
-    await writeFile(resolve(dir, "job.json"), JSON.stringify({ ...job, deadlineAt: Math.min(options.deadlineAt ?? Infinity, start + 90_000) }), { mode: 0o600 });
+    await writeFile(resolve(dir, "job.json"), JSON.stringify({ ...job, deadlineAt: Math.min(options.deadlineAt ?? Infinity, start + LAB_RUN_TIMEOUT_MS) }), { mode: 0o600 });
     await writeFile(resolve(dir, "package.json"), '{"name":"mia-skill-lab-run","type":"module","private":true}');
     await symlink(resolve(root, "node_modules"), resolve(dir, "node_modules"), "dir");
     child = spawn(process.execPath, [resolve(root, "services/skill-lab/.output/server/index.mjs")], {

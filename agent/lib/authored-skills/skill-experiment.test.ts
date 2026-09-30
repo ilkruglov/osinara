@@ -10,7 +10,7 @@ describe("isolated skill experiment protocol", () => {
   it("keeps approval within Telegram limits and hashes JSONB independently of key order", () => {
     expect(experimentHash({ a: 1, b: { c: 2, d: 3 } })).toBe(experimentHash({ b: { d: 3, c: 2 }, a: 1 }));
     const summary = experimentApprovalSummary({ cases }).join("\n");
-    expect(summary).toContain("300 с");
+    expect(summary).toContain("900 с");
     expect(summary).toContain("96 вызовов");
     expect(summary.length).toBeLessThan(3500);
   });

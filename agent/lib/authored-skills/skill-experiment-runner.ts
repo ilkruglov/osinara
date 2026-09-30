@@ -2,6 +2,7 @@
 import type { FamilyCaller } from "../family-context.js";
 import { modelProviderConfig } from "../model-provider-config.js";
 import { skillExperimentRepository as repo } from "./skill-experiment-repository.js";
+import { LAB_RUN_TIMEOUT_MS } from "./skill-lab-model.js";
 import { runSkillLab } from "./skill-lab-runner.js";
 
 export async function runSkillExperiment(caller: FamilyCaller, id: string, signal: AbortSignal) {
@@ -24,7 +25,7 @@ export async function runSkillExperiment(caller: FamilyCaller, id: string, signa
       const skill = run.variant === "baseline" ? batch.experiment.baseline : batch.candidates.find((c) => c.id === run.variant)!.draft;
       const result = await runSkillLab({ runId: run.id, skill, testCase, maxCalls: batch.experiment.protocol.maxCallsPerRun, model: modelProviderConfig.agent,
         toolContracts: batch.experiment.tool_contracts, environment: batch.experiment.protocol.environment },
-        AbortSignal.any([combined, AbortSignal.timeout(90_000)]), { deadlineAt });
+        AbortSignal.any([combined, AbortSignal.timeout(LAB_RUN_TIMEOUT_MS)]), { deadlineAt });
       await repo.completeRun(id, run.id, result);
     }
   } finally { clearInterval(monitor); await repo.finish(id); }
