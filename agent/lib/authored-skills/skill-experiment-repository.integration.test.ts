@@ -74,6 +74,19 @@ suite("skill experiment ledger", () => {
     expect(JSON.stringify(status)).not.toContain("Задача holdout");
     expect(status.status).toBe("running");
   });
+  // 30 September 2026: a protocol cancelled before any run spent a daily slot, and the refusal
+  // did not say when the next slot frees.
+  it("does not count a protocol cancelled before any run and names when a slot frees", async () => {
+    const first = await repo.create(caller, draft.name, protocol, "limit-1");
+    await repo.cancel(caller, first.id);
+    await repo.create(caller, draft.name, protocol, "limit-2");
+    await repo.create(caller, draft.name, protocol, "limit-3");
+    await repo.create(caller, draft.name, protocol, "limit-4");
+    await expect(repo.create(caller, draft.name, protocol, "limit-5")).rejects.toMatchObject({
+      code: "AGENT_SKILL_EXPERIMENT_LIMIT", message: expect.stringMatching(/освободится \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/u),
+    });
+  });
+
   it("rechecks owner role, rejects foreign parents and terminates cancellation without replay", async () => {
     const experiment = await repo.create(caller, draft.name, protocol, "create");
     const candidate = await skillEvaluationRepository.draft(caller, draft, "new", new Set());

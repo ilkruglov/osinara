@@ -65,8 +65,19 @@ export const skillExperimentRepository = {
       }
       const protocol = parsed.data;
       const contracts = await captureScenarioContracts(protocol, chatKind);
-      const count = (await c.query("SELECT count(*)::int AS n FROM authored_skill_experiments WHERE family_id=$1 AND created_at > now()-interval '1 day'", [caller.familyId])).rows[0].n;
-      if (count >= 3) throw new AppError("AGENT_SKILL_EXPERIMENT_LIMIT", "Лимит: три протокола в сутки на семью");
+      // Rolling 24 hours. A protocol cancelled before any run spent nothing and does not count; the
+      // refusal names the moment the oldest counted one leaves the window (30 September 2026: one
+      // slot was lost to the draft serialization bug, and the author could only guess the reset).
+      const window = (await c.query<{ n: number; frees_at: Date | null }>(
+        `SELECT count(*)::int AS n, min(created_at) + interval '1 day' AS frees_at FROM authored_skill_experiments e
+          WHERE e.family_id=$1 AND e.created_at > now()-interval '1 day'
+            AND NOT (e.status = 'cancelled' AND NOT EXISTS (SELECT 1 FROM authored_skill_experiment_runs r WHERE r.experiment_id = e.id))`,
+        [caller.familyId],
+      )).rows[0]!;
+      if (window.n >= 3) {
+        const freesAt = window.frees_at ? ` Ближайший слот освободится ${window.frees_at.toISOString().slice(0, 16).replace("T", " ")} UTC.` : "";
+        throw new AppError("AGENT_SKILL_EXPERIMENT_LIMIT", `Лимит: три протокола за скользящие 24 часа на семью.${freesAt}`);
+      }
       const baseline = (await c.query<AuthoredSkillDraft & { version: number }>("SELECT name,description,markdown,files,version FROM authored_skills WHERE family_id=$1 AND name=$2 AND status='active'", [caller.familyId, name])).rows[0] ?? null;
       if (baseline) assertExperimentSkill(baseline, protocol, contracts);
       const hash = experimentHash(protocol);
