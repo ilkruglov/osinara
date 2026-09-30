@@ -76,6 +76,17 @@ suite("skill experiment ledger", () => {
   });
   // 30 September 2026: a protocol cancelled before any run spent a daily slot, and the refusal
   // did not say when the next slot frees.
+  // 30 September 2026: a protocol named «keto-menu-v4» and a draft «keto-menu»; the refusal did not say why.
+  it("names the reason a draft cannot join the experiment", async () => {
+    const early = await skillEvaluationRepository.draft(caller, draft, "early", new Set());
+    const experiment = await repo.create(caller, draft.name, protocol, "reasons");
+    await expect(repo.enroll(caller, experiment.id, early.id)).rejects.toMatchObject({ message: expect.stringContaining("раньше протокола") });
+    const other = await skillEvaluationRepository.draft(caller, { ...draft, name: "file-report-v2" }, "other", new Set());
+    await expect(repo.enroll(caller, experiment.id, other.id)).rejects.toMatchObject({ code: "AGENT_SKILL_EXPERIMENT_CANDIDATE", message: expect.stringContaining("«file-report-v2»") });
+    const fresh = await skillEvaluationRepository.draft(caller, draft, "fresh", new Set());
+    await expect(repo.enroll(caller, experiment.id, fresh.id)).resolves.toEqual({ enrolled: true });
+  });
+
   it("does not count a protocol cancelled before any run and names when a slot frees", async () => {
     const first = await repo.create(caller, draft.name, protocol, "limit-1");
     await repo.cancel(caller, first.id);

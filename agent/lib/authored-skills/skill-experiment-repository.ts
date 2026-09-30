@@ -92,10 +92,19 @@ export const skillExperimentRepository = {
     return owned(caller, async (c) => {
       const e = await get(c, caller, id);
       if (e.status !== "draft") throw new AppError("AGENT_SKILL_EXPERIMENT_FROZEN", "Состав запущенного эксперимента менять нельзя");
-      const candidate = (await c.query<ExperimentCandidate & { name: string }>(`SELECT * FROM authored_skill_candidates
-        WHERE id=$1 AND family_id=$2 AND created_at > (SELECT created_at FROM authored_skill_experiments WHERE id=$3)`, [candidateId, caller.familyId,id])).rows[0];
-      if (!candidate || candidate.name !== e.name || candidate.base_version !== e.base_version) {
-        throw new AppError("AGENT_SKILL_EXPERIMENT_CANDIDATE", "Нужен черновик этого навыка и базовой версии, созданный после фиксации протокола");
+      const candidate = (await c.query<ExperimentCandidate & { name: string; created_at: Date }>(`SELECT * FROM authored_skill_candidates
+        WHERE id=$1 AND family_id=$2`, [candidateId, caller.familyId])).rows[0];
+      // Each refusal names its reason: on 30 September 2026 a protocol named «keto-menu-v4» took the
+      // last daily slot, the draft was «keto-menu», and the generic text did not say names differ.
+      if (!candidate) throw new AppError("AGENT_SKILL_EXPERIMENT_CANDIDATE", "Черновик с таким candidateId не найден");
+      if (candidate.name !== e.name) {
+        throw new AppError("AGENT_SKILL_EXPERIMENT_CANDIDATE", `Эксперимент создан для навыка «${e.name}», а черновик называется «${candidate.name}». Имя эксперимента это имя навыка, не версия: нужен протокол с name «${candidate.name}»`);
+      }
+      if (candidate.base_version !== e.base_version) {
+        throw new AppError("AGENT_SKILL_EXPERIMENT_CANDIDATE", `Черновик сделан от версии ${candidate.base_version}, а протокол от версии ${e.base_version}: сделай draft заново`);
+      }
+      if (!(candidate.created_at > e.created_at)) {
+        throw new AppError("AGENT_SKILL_EXPERIMENT_CANDIDATE", "Черновик создан раньше протокола: после create_experiment сделай draft заново и добавь его");
       }
       assertExperimentSkill(candidate.draft, e.protocol, e.tool_contracts);
       const existing = await c.query("SELECT candidate_id FROM authored_skill_experiment_candidates WHERE experiment_id=$1", [id]);

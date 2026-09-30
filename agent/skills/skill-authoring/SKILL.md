@@ -104,7 +104,8 @@ description: Создать, улучшить, откатить или оцен�
 `environment: scenario` для навыков с поиском, памятью, браузером, генерацией, отправками и другими инструментами.
 В scenario эти инструменты возвращают только зафиксированные тестовые ответы, реальных действий нет.
 
-1. До черновиков согласуй с владельцем `create_experiment`: name, protocol с 2–6 cases.
+1. До черновиков согласуй с владельцем `create_experiment`: name (ровно имя навыка, как будет
+   в draft; не «-v2» и не номер попытки), protocol с 2–6 cases.
    У каждого case есть id, partition (`development` или `holdout`), request, files
    (`/workspace/name` → текст) и checks. Нужны обе partition. Варианты checks:
    - `{path,text}` / `{path,json}`: точный итоговый файл;
