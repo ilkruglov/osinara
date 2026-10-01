@@ -23,7 +23,7 @@ export type FuelType = (typeof FUEL_TYPES)[number];
 const FUEL_LABELS: Record<FuelType, string> = { AI_100: "АИ-100", AI_92: "АИ-92", AI_95: "АИ-95", AI_98: "АИ-98", DT: "ДТ", GAS: "газ" };
 
 export const FUEL_MAP_MAX_RADIUS_METERS = 30_000;
-export const FUEL_MAP_MAX_RESULTS = 10;
+const FUEL_MAP_MAX_RESULTS = 10;
 const FUEL_MAP_TIMEOUT_MS = 15_000;
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const USER_AGENT = "Osinara family bot (https://github.com/ilkruglov/osinara)";

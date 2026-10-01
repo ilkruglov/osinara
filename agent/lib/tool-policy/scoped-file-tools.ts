@@ -91,7 +91,7 @@ async function assertNoSymlinkComponent(
   }
 }
 
-export function throwFileToolExecutionError(error: unknown, toolName: ScopedFileToolName): never {
+function throwFileToolExecutionError(error: unknown, toolName: ScopedFileToolName): never {
   if (isAppError(error)) throw error;
   const isWrite = toolName === "write_file";
   console.error(JSON.stringify({

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { LAB_MAX_OUTPUT_TOKENS } from "./skill-lab-model.js";
 
 export const experimentPath = z.string().max(180).regex(/^\/workspace\/[a-zA-Z0-9_-]+(?:[./][a-zA-Z0-9_-]+)*$/u);
-export const artifactCheckSchema = z.object({
+const artifactCheckSchema = z.object({
   path: experimentPath,
   text: z.string().max(8000).optional(),
   json: z.json().optional(),

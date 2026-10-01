@@ -22,15 +22,15 @@ function configured(value: string | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export function supportsCloudflareImageGeneration(environment: ImageGenerationEnvironment): boolean {
+function supportsCloudflareImageGeneration(environment: ImageGenerationEnvironment): boolean {
   return configured(environment.CLOUDFLARE_ACCOUNT_ID) && configured(environment.CLOUDFLARE_AI_TOKEN);
 }
 
-export function supportsNeuralDeepImageGeneration(environment: ImageGenerationEnvironment): boolean {
+function supportsNeuralDeepImageGeneration(environment: ImageGenerationEnvironment): boolean {
   return configured(environment.NEURALDEEP_IMAGE_API_KEY);
 }
 
-export function supportsPlusVibeImageGeneration(environment: ImageGenerationEnvironment): boolean {
+function supportsPlusVibeImageGeneration(environment: ImageGenerationEnvironment): boolean {
   return configured(environment.PLUSVIBE_API_KEY);
 }
 

@@ -24,7 +24,7 @@ export function requireTelegramPositiveBigint(value: string, field: string): str
   return value;
 }
 
-export function telegramMessageThreadId(value: number | undefined): string | null {
+function telegramMessageThreadId(value: number | undefined): string | null {
   if (value === undefined) return null;
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(

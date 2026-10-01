@@ -32,7 +32,7 @@ export const AUTHORED_SKILL_LIMITS = Object.freeze({
 });
 
 export const AUTHORED_SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/u;
-export const AUTHORED_SKILL_FILE_PATTERN = /^references\/[a-z0-9][a-z0-9-]{0,39}\.md$/u;
+const AUTHORED_SKILL_FILE_PATTERN = /^references\/[a-z0-9][a-z0-9-]{0,39}\.md$/u;
 
 export const AUTHORED_SKILL_REQUIRED_SECTIONS = Object.freeze([
   "## Когда применять",
@@ -97,7 +97,7 @@ export interface ExternalGroupSurfaceOptions {
  * and a drawing grant with `send_workspace_image` only while a provider is configured. The action
  * itself is still checked when the tool runs.
  */
-export function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>, options: ExternalGroupSurfaceOptions): Set<string> {
+function externalGroupSurfaceToolNames(allowed: ReadonlySet<string>, options: ExternalGroupSurfaceOptions): Set<string> {
   const names = new Set<string>([...allowed, ...EXTERNAL_GROUP_CORE_TOOL_NAMES]);
   if ([...allowed].some((name) => name.startsWith("manage_memory."))) names.add("manage_memory");
   if ([...allowed].some((name) => name.startsWith("manage_memory_thread."))) names.add("manage_memory_thread");

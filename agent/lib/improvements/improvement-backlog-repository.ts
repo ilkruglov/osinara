@@ -46,7 +46,7 @@ interface ItemRow {
 }
 
 const PRIORITY_RANK: Record<ImprovementPriority, number> = { high: 0, low: 2, medium: 1 };
-export const IMPROVEMENT_LIST_LIMIT = 20;
+const IMPROVEMENT_LIST_LIMIT = 20;
 
 function rowToItem(row: ItemRow): ImprovementItem {
   return {

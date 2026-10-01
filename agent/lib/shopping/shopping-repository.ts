@@ -22,7 +22,7 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { MemoryAuthorization } from "../memory-context.js";
 
-export const DEFAULT_SHOPPING_LIST = "покупки";
+const DEFAULT_SHOPPING_LIST = "покупки";
 
 export const shoppingInput = z.object({
   action: z.enum(["add", "list", "buy", "unbuy", "remove"]),
@@ -73,7 +73,7 @@ export interface ShoppingItem {
   version: number;
 }
 
-export function presentShoppingItem(row: ShoppingRow): ShoppingItem {
+function presentShoppingItem(row: ShoppingRow): ShoppingItem {
   return {
     boughtAt: row.bought_at === null ? null : row.bought_at.toISOString(),
     id: row.id, listName: row.list_name, note: row.note, quantity: row.quantity, title: row.title, version: row.version,
@@ -98,7 +98,7 @@ async function authorizeShopping(client: PoolClient, auth: MemoryAuthorization):
 }
 
 const COLUMNS = "id, list_name, title, quantity, note, version, bought_at";
-export const SHOPPING_PAGE_SIZE = 100;
+const SHOPPING_PAGE_SIZE = 100;
 
 /** One page plus one row: the extra row says whether a next page exists. */
 async function selectItems(client: PoolClient, ownerUserId: string, input: ShoppingInput, id: string | null): Promise<{ hasMore: boolean; rows: ShoppingRow[] }> {

@@ -2,15 +2,12 @@
  * Versioned synthetic fixture for long-term memory retrieval evaluation.
  *
  * Exports:
- * - `MEMORY_RETRIEVAL_EVAL_FIXTURE_VERSION`: immutable fixture contract version.
  * - `MEMORY_RETRIEVAL_EVAL_RECORDS_V1`: fictional searchable records and duplicate pollution.
  * - `MEMORY_RETRIEVAL_EVAL_QUERIES_V1`: multilingual positive, typo, and negative queries.
  * - `MEMORY_RETRIEVAL_R0_BASELINE_V1`: measured pre-R1 quality on this exact fixture.
  * - `MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1`: pinned E5 relevance margin observations.
  * - `MEMORY_RETRIEVAL_R1_GATES_V1`: measurable acceptance thresholds for R1.
  */
-
-export const MEMORY_RETRIEVAL_EVAL_FIXTURE_VERSION = "memory-retrieval-v1";
 
 export type MemoryRetrievalEvalCategory =
   | "exact"

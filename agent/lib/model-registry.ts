@@ -52,7 +52,7 @@ export const voiceTranscriptionModel = modelProviderConfig.voice.enabled && groq
   : null;
 
 /** The primary transport with reasoning lowered where the protocol has such a control. */
-export function lowEffortTransport(
+function lowEffortTransport(
   transport: ModelProviderConfig["agent"]["transport"],
 ): ModelProviderConfig["agent"]["transport"] {
   if (transport.protocol === "deepseek-responses") return { ...transport, reasoning: { effort: "low" } };

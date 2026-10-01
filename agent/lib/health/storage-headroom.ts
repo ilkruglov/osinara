@@ -18,7 +18,7 @@
  */
 import { statfs } from "node:fs/promises";
 
-export const STORAGE_HEADROOM_WARNING_FRACTION = 0.2;
+const STORAGE_HEADROOM_WARNING_FRACTION = 0.2;
 const UPDATE_RESERVE_BYTES = 512 * 1024 * 1024;
 
 export interface StorageHeadroom {

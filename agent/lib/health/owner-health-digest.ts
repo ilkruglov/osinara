@@ -27,8 +27,8 @@ import {
   ownerHealthDigestRepository,
 } from "./owner-health-digest-repository.js";
 
-export const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
-export const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
+const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
+const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
 
 const MOSCOW = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric", hour: "2-digit", minute: "2-digit", month: "long", timeZone: "Europe/Moscow",

@@ -16,7 +16,7 @@ export const TOOL_ALLOWLIST_MAX_SIZE = 50;
 // oxlint-disable-next-line eslint/no-control-regex -- control characters are exactly what is rejected
 export const TELEGRAM_GROUP_TITLE_CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 
-export const telegramGroupIdSchema = z
+const telegramGroupIdSchema = z
   // PostgreSQL and Telegram boundaries use strings so large identifiers are never rounded by JSON.
   .string()
   .regex(TELEGRAM_GROUP_ID_PATTERN);

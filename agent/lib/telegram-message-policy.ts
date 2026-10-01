@@ -171,7 +171,7 @@ export function mentionsAnotherUsername(text: string, botUsername: string): bool
   );
 }
 
-export function isAgentNameMentioned(text: string): boolean {
+function isAgentNameMentioned(text: string): boolean {
   return AGENT_NAME_PATTERN.test(text);
 }
 

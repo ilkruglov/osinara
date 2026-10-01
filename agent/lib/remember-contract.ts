@@ -26,7 +26,7 @@ const MEMORY_CONTENT_MAX_CHARACTERS = 4_000;
 const SUBJECT_LABEL_MAX_CHARACTERS = 200;
 const TIMELINE_SEQUENCE_PATTERN = /^[1-9]\d*$/u;
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
-export const MEMORY_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
+const MEMORY_SUBJECT_REF_PATTERN = /^subj_[0-9a-f]{32}$/u;
 
 /*
  * The active OpenAI-compatible provider can emit a nested tool argument as a
@@ -48,7 +48,7 @@ const SERIALIZED_MEMORY_SUBJECT_PATTERN = new RegExp(
   "u",
 );
 
-export const memorySubjectSchema = z.discriminatedUnion("kind", [
+const memorySubjectSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("current_author").describe("Сведение относится к автору текущего сообщения"),
   }).strict(),
@@ -75,7 +75,7 @@ const threadRoleSchema = z.enum([
   "goal", "constraint", "method", "decision", "episode", "outcome", "lesson", "open_loop",
 ]);
 
-export const memoryThreadSchema = z.discriminatedUnion("action", [
+const memoryThreadSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("attach").describe("Прикрепить запись к существующей нити"),
     role: threadRoleSchema.describe("Роль новой записи внутри нити"),

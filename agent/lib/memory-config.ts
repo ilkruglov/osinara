@@ -75,8 +75,6 @@ export const MEMORY_RETRIEVAL_CONFIRMATION_BOOST = 0.001;
 export const MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE = "итог обсуждения";
 // How a person talks to Mia and what they say about her answers; shown first on their card.
 export const MEMORY_COMMUNICATION_STYLE_ATTRIBUTE = "общение с Мией";
-// How the chat itself likes to be talked to: length, tone, what gets read and what does not.
-export const MEMORY_CHAT_MANNER_ATTRIBUTE = "как здесь принято";
 export const MEMORY_STABILITY_DAYS_EPISODE = 30;
 export const MEMORY_STABILITY_DAYS_DISCUSSION_SUMMARY = 60;
 export const MEMORY_STABILITY_DAYS_SEMANTIC = 180;
@@ -95,7 +93,7 @@ export const MEMORY_NEAR_DUPLICATE_CANDIDATES = 2;
 
 export const MEMORY_EMBEDDING_DIMENSIONS = 384;
 export const MEMORY_EMBEDDING_MODEL = "intfloat/multilingual-e5-small";
-export const MEMORY_EMBEDDING_MODEL_REVISION = "614241f622f53c4eeff9890bdc4f31cfecc418b3";
+const MEMORY_EMBEDDING_MODEL_REVISION = "614241f622f53c4eeff9890bdc4f31cfecc418b3";
 export const MEMORY_EMBEDDING_MODEL_VERSION =
   `${MEMORY_EMBEDDING_MODEL}@${MEMORY_EMBEDDING_MODEL_REVISION}`;
 export const MEMORY_EMBEDDING_LEASE_MILLISECONDS = 120_000;

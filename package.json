@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#*": "./agent/*",
-    "#evals/*": "./evals/*"
+    "#*": "./agent/*"
   },
   "scripts": {
     "build": "eve build && node --experimental-strip-types scripts/validate-eve-tool-surface-build.ts && npm run build:skill-lab",
@@ -20,7 +19,7 @@
     "eval:prompt": "tsx stress/prompt-evals/compare.ts",
     "test:watch": "vitest",
     "typecheck": "tsc",
-    "lint": "oxlint --type-aware agent scripts services",
+    "lint": "oxlint --type-aware agent scripts services *.ts",
     "migrate": "node --experimental-strip-types scripts/migrate-workflow.ts && node --experimental-strip-types scripts/migrate.ts",
     "migrate:runtime": "node .runtime/scripts/migrate-workflow.js && node .runtime/scripts/migrate.js",
     "memory:reindex": "node --import tsx scripts/reindex-memory.ts",
@@ -33,6 +32,8 @@
     "@ai-sdk/groq": "4.0.27",
     "@ai-sdk/openai": "4.0.58",
     "@ai-sdk/openai-compatible": "3.0.29",
+    "@ai-sdk/provider": "4.0.7",
+    "@ai-sdk/provider-utils": "5.0.26",
     "@googleworkspace/cli": "0.22.5",
     "@workflow/world-postgres": "5.0.0-beta.35",
     "ai": "7.0.60",

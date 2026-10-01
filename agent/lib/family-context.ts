@@ -22,7 +22,7 @@ export interface PrivateTelegramOwner extends FamilyCaller {
   telegramChatId: string;
 }
 
-export function requireFamilyCaller(ctx: SessionContext): FamilyCaller {
+function requireFamilyCaller(ctx: SessionContext): FamilyCaller {
   const caller = resolveSessionCaller(ctx);
   const familyId = caller?.attributes.familyId;
   const role = caller?.attributes.role;
@@ -36,7 +36,7 @@ export function requireFamilyCaller(ctx: SessionContext): FamilyCaller {
   return { familyId, role: role as FamilyRole, userId: caller.principalId };
 }
 
-export function requireOwner(ctx: SessionContext): FamilyCaller {
+function requireOwner(ctx: SessionContext): FamilyCaller {
   const caller = requireFamilyCaller(ctx);
   if (caller.role !== "owner") {
     throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");

@@ -14,7 +14,7 @@ import {
 import type { MemoryThreadEntryRole } from "./memory-record.js";
 import type { ModelMemoryEvidence } from "./model-memory.js";
 
-export const THREAD_BRIEF_BLOCK_KINDS = [
+const THREAD_BRIEF_BLOCK_KINDS = [
   "constraints_conflicts",
   "active_goals_open_loops",
   "method",

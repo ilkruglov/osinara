@@ -30,7 +30,7 @@ export interface LavkaOperationRepository {
 }
 
 /** Codes after which the site did not accept the side effect: retrying the same call is safe. */
-export const LAVKA_DEFINITIVE_FAILURES: ReadonlySet<string> = new Set([
+const LAVKA_DEFINITIVE_FAILURES: ReadonlySet<string> = new Set([
   "AGENT_LAVKA_ADDRESS_CHANGED",
   "AGENT_LAVKA_ADDRESS_REQUIRED",
   "AGENT_LAVKA_AUTH_REQUIRED",

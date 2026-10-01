@@ -8,8 +8,8 @@ import type { ImageReference } from "./image-generation-client.js";
 const CLOUDFLARE_MAX_SIDE = 511;
 /** Async providers take the picture as is; this only bounds the upload, not the output. */
 const UPLOAD_MAX_SIDE = 1_536;
-export const MIN_REFERENCE_IMAGES = 1;
-export const MAX_REFERENCE_IMAGES = 4;
+const MIN_REFERENCE_IMAGES = 1;
+const MAX_REFERENCE_IMAGES = 4;
 
 export function editingUnavailable(): AppError {
   return new AppError(

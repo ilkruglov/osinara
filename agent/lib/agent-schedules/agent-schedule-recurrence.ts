@@ -2,7 +2,6 @@
  * Pure recurrence helpers for agent schedules.
  *
  * Exports:
- * - `weekdayFromDate`: ISO weekday for UTC dates used by validation and tests.
  * - `describeRecurrence`: concise Russian recurrence summary for tool results.
  * - `recurrenceValues`: shared persistence projection for both schedule creation boundaries.
  */
@@ -17,11 +16,6 @@ const WEEKDAY_LABELS: Readonly<Record<number, string>> = {
   6: "сб",
   7: "вс",
 };
-
-export function weekdayFromDate(date: Date): number {
-  const day = date.getUTCDay();
-  return day === 0 ? 7 : day;
-}
 
 export function describeRecurrence(recurrence: AgentScheduleRecurrence): string {
   if (recurrence.kind === "once") return "один раз";

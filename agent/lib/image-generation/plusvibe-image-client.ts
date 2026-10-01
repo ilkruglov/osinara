@@ -29,9 +29,9 @@ import {
 import { assertReferenceCount, prepareUploadReference } from "./image-editing-input.js";
 import type { ImageGenerationRequest } from "./image-generation-client.js";
 
-export const PLUSVIBE_API_BASE_URL = "https://plusvibeapi.ru";
-export const PLUSVIBE_GENERATION_MODEL = "nano-banana-2:white";
-export const PLUSVIBE_EDITING_MODEL = "nano-banana-2";
+const PLUSVIBE_API_BASE_URL = "https://plusvibeapi.ru";
+const PLUSVIBE_GENERATION_MODEL = "nano-banana-2:white";
+const PLUSVIBE_EDITING_MODEL = "nano-banana-2";
 const PROVIDER = "plusvibe";
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 4 * 60 * 1_000;

@@ -25,14 +25,14 @@ function cloudflareRequestBody(fields: Record<string, string>): FormData {
   for (const [key, value] of Object.entries(fields)) form.append(key, value);
   return form;
 }
-export const NEURALDEEP_IMAGE_BASE_URL = "https://api.neuraldeep.ru/v1";
+const NEURALDEEP_IMAGE_BASE_URL = "https://api.neuraldeep.ru/v1";
 /** NeuralDeep runs Qwen-Image-2.1 behind `/images/generate` and `/images/edit`; there is no model field. */
-export const NEURALDEEP_IMAGE_MODEL = "neuraldeep/qwen-image-2.1";
+const NEURALDEEP_IMAGE_MODEL = "neuraldeep/qwen-image-2.1";
 const CLOUDFLARE_API_BASE_URL = "https://api.cloudflare.com/client/v4";
 export const GENERATION_TIMEOUT_MS = 3 * 60 * 1_000;
 const NEURALDEEP_POLL_INTERVAL_MS = 3_000;
 const NEURALDEEP_POLL_TIMEOUT_MS = 4 * 60 * 1_000;
-export const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
+const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
 const SECRET_PATTERN = /\b(?:sk|pv|nd|cf)-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9_.-]+/gu;
 
 /** Provider text goes to the log only after the API key and anything key-shaped are removed. */
@@ -91,7 +91,7 @@ export function detectImageMediaType(bytes: Uint8Array): ImageMediaType | null {
  * Codex sizes map to small Flux dimensions: Workers AI bills per 512x512 tile, so a square is one
  * tile and the landscape/portrait variants are two. NeuralDeep only takes an aspect ratio.
  */
-export function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string; height: number; width: number } {
+function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string; height: number; width: number } {
   switch (size) {
     case "1536x1024": return { aspectRatio: "3:2", height: 512, width: 768 };
     case "1024x1536": return { aspectRatio: "3:5", height: 768, width: 512 };

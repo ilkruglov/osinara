@@ -15,7 +15,7 @@
  */
 import { createHash } from "node:crypto";
 
-export const REFLECTION_STEP_THRESHOLD = 8;
+const REFLECTION_STEP_THRESHOLD = 8;
 const MAX_TRACKED_TURNS = 200;
 const ERROR_MESSAGE_MAX_CHARACTERS = 300;
 
@@ -142,7 +142,7 @@ export function shouldReflectOnTurn(evidence: TurnEvidence): boolean {
     evidence.stepCount >= REFLECTION_STEP_THRESHOLD;
 }
 
-export function normalizeSummary(summary: string): string {
+function normalizeSummary(summary: string): string {
   return summary
     .normalize("NFKC")
     .toLowerCase()

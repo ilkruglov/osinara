@@ -19,8 +19,8 @@ import pg from "pg";
 import { AppError } from "../app-error.js";
 
 const { Client } = pg;
-export const WORKFLOW_TURN_RUN_RETENTION_DAYS = 7;
-export const WORKFLOW_TURN_RUN_PRUNE_BATCH = 50;
+const WORKFLOW_TURN_RUN_RETENTION_DAYS = 7;
+const WORKFLOW_TURN_RUN_PRUNE_BATCH = 50;
 const PRUNABLE_RUN_NAMES = ["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"];
 
 interface WorkflowQueryClient {

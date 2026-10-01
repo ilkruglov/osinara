@@ -85,7 +85,7 @@ const CURRENT_TIMELINE_ENTRY_COUNT = 1;
 const RECENT_WINDOW_ENTRY_OVERHEAD = 80;
 
 /** The newest entries that fit the recent-window character cap, in chronological order. */
-export function recentTimelineWindow(
+function recentTimelineWindow(
   entries: readonly TelegramGroupJournalEntry[],
   maxCharacters: number = TELEGRAM_GROUP_JOURNAL_RECENT_WINDOW_CHARACTERS,
 ): TelegramGroupJournalEntry[] {
@@ -101,7 +101,7 @@ export function recentTimelineWindow(
 }
 
 /** Unseen entries plus the recent window, without duplicates, in sequence order. */
-export function mergeTimelineEntries(
+function mergeTimelineEntries(
   unseen: readonly TelegramGroupJournalEntry[],
   window: readonly TelegramGroupJournalEntry[],
 ): TelegramGroupJournalEntry[] {

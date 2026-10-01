@@ -34,7 +34,7 @@ function runIdFromAttributes(attributes: Readonly<Record<string, unknown>> | und
   return typeof runId === "string" && runId ? runId : null;
 }
 
-export function scheduledRunId(ctx: { session: { auth: SessionContext["session"]["auth"] } }): string | null {
+function scheduledRunId(ctx: { session: { auth: SessionContext["session"]["auth"] } }): string | null {
   return runIdFromAttributes(ctx.session.auth.current?.attributes) ??
     runIdFromAttributes(ctx.session.auth.initiator?.attributes);
 }

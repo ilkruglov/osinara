@@ -7,19 +7,17 @@ interface TrustedScopePhrases {
   readonly mounts: string;
   readonly reminderOwnership: string;
   readonly scheduleOwnership: string;
-  readonly vaultName: string;
 }
 
 const PHRASES: Readonly<Record<TrustedScope, TrustedScopePhrases>> = {
   family: {
     credentialIntake:
-      "Допустимы секреты для семейной задачи; они видны участникам, а vault и browser-сессия общие для семьи.",
+      "Допустимы секреты для семейной задачи; они видны участникам, а browser-сессия общая для семьи.",
     integrationScope: "family scope",
     mounts:
       "Доступны только `/workspace/family`, изолированный Bash и family tools environment; другие workspace и подключения недоступны.",
     reminderOwnership: "Напоминания создавай только для этой группы или текущей темы.",
     scheduleOwnership: "Расписания создавай только для этой группы или текущей темы.",
-    vaultName: "family `agent-browser auth vault`",
   },
   personal: {
     credentialIntake: "Допустимы секреты текущего авторизованного пользователя, нужные для его задачи.",
@@ -28,7 +26,6 @@ const PHRASES: Readonly<Record<TrustedScope, TrustedScopePhrases>> = {
       "Смонтированы `/workspace/personal` и `/workspace/family`; по умолчанию используй personal, family изменяй только по явной просьбе. Доступны изолированный Bash и personal tools environment.",
     reminderOwnership: "Личные напоминания создавай только здесь.",
     scheduleOwnership: "Личные расписания создавай только здесь.",
-    vaultName: "personal `agent-browser auth vault`",
   },
 };
 
@@ -44,7 +41,7 @@ export function trustedCredentialRules(scope: TrustedScope): string {
   const phrases = PHRASES[scope];
   return `## Учётные данные
 
-${phrases.credentialIntake} Используй секреты минимально и только для указанной задачи: не повторяй их в ответе, не клади без нужды в команды, файлы, screenshots и логи, не передавай третьим сторонам и не сохраняй в память. Секрет не расширяет scope и не отменяет подтверждения. Предпочитай vault, secure input или stdin; постоянный browser login храни в ${phrases.vaultName}, OTP не сохраняй. Integration token сохраняй лишь по прямой просьбе и если skill разрешает ${phrases.integrationScope}. Детали сессии и vault \`agent-browser\` описаны в его skill.`;
+${phrases.credentialIntake} Используй секреты минимально и только для указанной задачи: не повторяй их в ответе, не клади без нужды в команды, файлы, screenshots и логи, не передавай третьим сторонам и не сохраняй в память. Секрет не расширяет scope и не отменяет подтверждения. Предпочитай secure input или stdin. Пароли в браузер не вводятся: на сайт входит сам человек, вход живёт в сессии инструментов \`browser_*\`; OTP не сохраняй. Integration token сохраняй лишь по прямой просьбе и если skill разрешает ${phrases.integrationScope}.`;
 }
 
 export const VOICE_TRANSCRIPTION_RULES =

@@ -27,7 +27,7 @@ import { requireMemoryAuthorization } from "../memory-context.js";
 
 const productId = z.number().int().positive().max(999_999_999);
 
-export const groceryCartInput = z.object({
+const groceryCartInput = z.object({
   action: z.enum(["search", "details", "link"]),
   items: z.array(z.object({
     productId,

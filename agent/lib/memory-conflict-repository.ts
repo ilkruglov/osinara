@@ -13,7 +13,7 @@ import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { memoryOperationHash } from "./memory-record.js";
 import { MEMORY_REF_PATTERN } from "./model-memory.js";
 
-export const CONFLICT_REF_PATTERN = /^conf_[0-9a-f]{32}$/u;
+const CONFLICT_REF_PATTERN = /^conf_[0-9a-f]{32}$/u;
 
 export type ResolveMemoryConflictInput =
   | { action: "choose"; conflictRef: string; memoryRef: string; operationKey: string }

@@ -14,7 +14,7 @@
 import { database } from "../database.js";
 
 export const SKILL_HINT_MIN_STEPS = 4;
-export const SKILL_HINT_TTL_MILLISECONDS = 24 * 60 * 60 * 1_000;
+const SKILL_HINT_TTL_MILLISECONDS = 24 * 60 * 60 * 1_000;
 /** Bookkeeping calls that every turn makes; they say nothing about the task being repeatable. */
 export const SKILL_HINT_IGNORED_TOOLS: ReadonlySet<string> = new Set([
   "get_current_time", "list_memories", "load_skill", "manage_skill", "read_profile_view",

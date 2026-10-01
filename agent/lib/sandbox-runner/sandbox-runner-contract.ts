@@ -15,15 +15,15 @@ import { posix } from "node:path";
 import { z } from "zod";
 
 export const SANDBOX_RUNNER_API_PREFIX = "/v1";
-export const SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS = 100_000;
-export const SANDBOX_RUNNER_ENVIRONMENT_MAX_ENTRIES = 100;
+const SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS = 100_000;
+const SANDBOX_RUNNER_ENVIRONMENT_MAX_ENTRIES = 100;
 export const SANDBOX_RUNNER_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 export const SANDBOX_RUNNER_REQUEST_MAX_BYTES = 64 * 1024 * 1024;
 export const SANDBOX_RUNNER_PROCESS_DEFAULT_TIMEOUT_MS = 2 * 60 * 1_000;
 export const SANDBOX_RUNNER_TIMEOUT_MAX_MS = 30 * 60 * 1_000;
 export const SANDBOX_RUNNER_HTTP_TIMEOUT_MS = SANDBOX_RUNNER_TIMEOUT_MAX_MS + 30_000;
-export const SANDBOX_RUNNER_SEED_FILES_MAX = 512;
-export const SANDBOX_RUNNER_SEED_FILE_MAX_BYTES = 50 * 1024 * 1024;
+const SANDBOX_RUNNER_SEED_FILES_MAX = 512;
+const SANDBOX_RUNNER_SEED_FILE_MAX_BYTES = 50 * 1024 * 1024;
 
 const eveSessionIdSchema = z.string().regex(/^wrun_[A-Z0-9]{26}$/u);
 // Eve sanitizes custom-backend keys to this alphabet and truncates them to 120 characters.

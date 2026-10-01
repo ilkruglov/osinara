@@ -9,7 +9,7 @@
 export type DeepSeekReasoningEffort = "high" | "low" | "max" | "none";
 
 /** Request fields DeepSeek documents as unsupported or ignored; dropping them keeps the wire exact. */
-export const DEEPSEEK_RESPONSES_UNSUPPORTED_FIELDS = [
+const DEEPSEEK_RESPONSES_UNSUPPORTED_FIELDS = [
   "background",
   "conversation",
   "include",

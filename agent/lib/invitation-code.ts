@@ -11,7 +11,7 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 
 export const INVITATION_CODE_TTL_MS = 24 * 60 * 60 * 1000;
-export const INVITATION_SIGNING_SECRET_MIN_LENGTH = 32;
+const INVITATION_SIGNING_SECRET_MIN_LENGTH = 32;
 const INVITATION_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 const TELEGRAM_START_COMMAND_PATTERN =
   /^\/start(?:@(?<target>[A-Za-z0-9_]{5,32}))?\s+(?<token>[A-Za-z0-9_-]{32})$/u;

@@ -12,7 +12,7 @@ import { fileTypeFromBuffer } from "file-type";
 
 import { AppError } from "../app-error.js";
 
-export const VISION_IMAGE_MEDIA_TYPES = new Set([
+const VISION_IMAGE_MEDIA_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",

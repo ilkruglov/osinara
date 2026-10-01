@@ -54,7 +54,7 @@ const TIMEOUT_PROMPT_FINALIZE_FAILED = "AGENT_APPROVAL_TIMEOUT_PROMPT_FINALIZE_F
 const TIMEOUT_MINUTES = Math.round(TELEGRAM_HITL_APPROVAL_TIMEOUT_MS / 60_000);
 const NO_ANSWER_TEXT = "Пользователь не ответил на вопрос вовремя.";
 
-export function approvalTimeoutContext(claim: TimedOutApprovalClaim): string {
+function approvalTimeoutContext(claim: TimedOutApprovalClaim): string {
   const subject = claim.kind === "question"
     ? "не ответил на заданный вопрос"
     : claim.toolName === null

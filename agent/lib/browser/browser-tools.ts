@@ -70,7 +70,7 @@ export interface BrowserToolDependencies {
 }
 
 /** Where a booking flow never leads: messengers, app stores, downloads. The loop wandered there. */
-export const BLOCKED_HOSTS: readonly string[] = ["t.me", "telegram.me", "telegram.org", "wa.me", "api.whatsapp.com", "apps.apple.com", "play.google.com", "vk.me"];
+const BLOCKED_HOSTS: readonly string[] = ["t.me", "telegram.me", "telegram.org", "wa.me", "api.whatsapp.com", "apps.apple.com", "play.google.com", "vk.me"];
 const READ_MAX_CHARACTERS = 20_000;
 const SAFE_KEYS = new Set(["escape", "tab", "arrowup", "arrowdown", "arrowleft", "arrowright", "pageup", "pagedown", "home", "end", "backspace", "delete"]);
 const FIELD_NAME = z.string().min(1).max(64);

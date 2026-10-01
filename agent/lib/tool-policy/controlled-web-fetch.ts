@@ -22,7 +22,7 @@ import { z } from "zod";
 import { AppError, isAppError } from "../app-error.js";
 
 export const CONTROLLED_WEB_FETCH_PROXY_URL = "http://sandbox-egress-proxy:3128";
-export const CONTROLLED_WEB_FETCH_MAX_REDIRECTS = 5;
+const CONTROLLED_WEB_FETCH_MAX_REDIRECTS = 5;
 export const CONTROLLED_WEB_FETCH_MAX_BODY_BYTES = 5 * 1024 * 1024;
 export const CONTROLLED_WEB_FETCH_MAX_MODEL_BYTES = 50 * 1024;
 export const CONTROLLED_WEB_FETCH_MAX_MODEL_LINES = 2_000;

@@ -2,18 +2,14 @@
  * Production-derived identity hard negatives for long-term memory retrieval evaluation.
  *
  * Exports:
- * - `MEMORY_RETRIEVAL_EVAL_FIXTURE_VERSION_V2`: immutable identity-confusion fixture version.
  * - `MEMORY_RETRIEVAL_EVAL_RECORDS_V2`: fictional project, framework, link, and skill distractors.
  * - `MEMORY_RETRIEVAL_EVAL_QUERIES_V2`: identity controls and abstention-required near misses.
- * - `MEMORY_RETRIEVAL_R1_BASELINE_V2`: measured current behavior before semantic gating.
  * - `MEMORY_RETRIEVAL_V2_GATES`: release gates for strict pairwise relevance scoring.
  */
 import type {
   MemoryRetrievalEvalQuery,
   MemoryRetrievalEvalRecord,
 } from "./memory-retrieval-eval-fixture.v1.js";
-
-export const MEMORY_RETRIEVAL_EVAL_FIXTURE_VERSION_V2 = "memory-retrieval-v2-identity";
 
 // Names mirror the observed confusion classes, while URLs and statements remain synthetic.
 export const MEMORY_RETRIEVAL_EVAL_RECORDS_V2: readonly MemoryRetrievalEvalRecord[] = [
@@ -77,13 +73,6 @@ export const MEMORY_RETRIEVAL_EVAL_QUERIES_V2: readonly MemoryRetrievalEvalQuery
     text: "Дай ссылку на исходный код Осинары.",
   },
 ] as const;
-
-// Pinned PostgreSQL/E5 measurement makes the known false-positive gap explicit and reproducible.
-export const MEMORY_RETRIEVAL_R1_BASELINE_V2 = {
-  hardNegativeEmptyRate: 0,
-  hardNegativeQueries: 4,
-  identityControlRecallAt5: 1,
-} as const;
 
 // Strict search must abstain on these near misses; broad search separately guards recall.
 export const MEMORY_RETRIEVAL_V2_GATES = {

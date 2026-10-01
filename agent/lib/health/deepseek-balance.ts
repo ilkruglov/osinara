@@ -69,7 +69,7 @@ export async function readConfiguredDeepSeekBalance(): Promise<DeepSeekBalance |
   });
 }
 
-export function usd(value: number): string {
+function usd(value: number): string {
   const text = Math.abs(value).toFixed(2).replace(".", ",");
   return `${value < 0 ? "−" : ""}${text} $`;
 }

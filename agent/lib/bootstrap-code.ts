@@ -9,7 +9,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 export const BOOTSTRAP_CODE_MAX_ATTEMPTS = 5;
-export const BOOTSTRAP_CODE_TTL_MS = 15 * 60 * 1000;
+const BOOTSTRAP_CODE_TTL_MS = 15 * 60 * 1000;
 
 export interface BootstrapCodeRecord {
   codeHash: string;

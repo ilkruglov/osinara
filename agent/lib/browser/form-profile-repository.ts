@@ -1,5 +1,5 @@
 /**
- * Durable form profile of one person for browser_task.
+ * Durable form profile of one person for the browser tools.
  *
  * Exports:
  * - `createFormProfileRepository`: read a person's profile, add or replace one field, fold in the
@@ -147,7 +147,7 @@ export function createFormProfileRepository() {
   };
 }
 
-export const formProfileRepository = createFormProfileRepository();
+const formProfileRepository = createFormProfileRepository();
 
 /** Only the private chat can look at the personal workspace; elsewhere the answer is "unknown". */
 async function readLegacyProfile(auth: WorkspaceAuthorization): Promise<LegacyProfile> {

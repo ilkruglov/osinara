@@ -19,7 +19,7 @@ import {
 import { collectLimitedStream } from "./docker-sandbox-files.js";
 
 const PROCESS_KILL_GRACE_SECONDS = 5;
-export const PROCESS_TIMED_OUT_MARKER = "AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT";
+const PROCESS_TIMED_OUT_MARKER = "AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT";
 
 export function processTimedOut(result: Pick<SandboxRunnerProcessResponse, "stderr">): boolean {
   return result.stderr.includes(PROCESS_TIMED_OUT_MARKER);

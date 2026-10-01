@@ -2,7 +2,7 @@
  * The grocery catalogue: its source and the limits.
  *
  * Exports:
- * - `GROCERY_MCP_URL`, `GROCERY_AVAILABLE`: the MCP endpoint and whether it is usable.
+ * - `GROCERY_MCP_URL`: the MCP endpoint.
  * - Limits of a search page, a batch, a cart and a request.
  *
  * Key constructs:
@@ -12,7 +12,6 @@
  * - Ported from artkruglov/homka (Apache-2.0) on 26 сентября 2026.
  */
 export const GROCERY_MCP_URL = process.env.GROCERY_MCP_URL ?? "https://mcp.vkusvill.ru/mcp";
-export const GROCERY_AVAILABLE = /^https:\/\/[a-z0-9.-]+\/[\w./-]*$/iu.test(GROCERY_MCP_URL);
 
 /** The source pages by ten; the model needs no more. */
 export const GROCERY_SEARCH_MAX_ITEMS = 10;

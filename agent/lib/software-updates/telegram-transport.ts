@@ -87,7 +87,7 @@ function requirePositiveMessageId(value: string): string {
   return value;
 }
 
-export function createSoftwareUpdateTelegramTransport(
+function createSoftwareUpdateTelegramTransport(
   dependencies: SoftwareUpdateTelegramTransportDependencies,
 ): SoftwareUpdateTelegramTransport {
   if (!dependencies.botToken) {

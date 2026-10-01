@@ -14,7 +14,7 @@ import type {
   SoftwareUpdateTelegramTransport,
 } from "./types.js";
 
-export const SOFTWARE_UPDATE_CALLBACK_PREFIX = "su:";
+const SOFTWARE_UPDATE_CALLBACK_PREFIX = "su:";
 const CALLBACK_PATTERN = /^su:([ad]):([A-Za-z0-9_-]{12,43})$/;
 const CALLBACK_MESSAGES = {
   approved: "Обновление подтверждено. Система обновлений установит его отдельно.",

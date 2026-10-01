@@ -33,7 +33,7 @@ const productId = z.string().trim().min(1).max(120);
 const quantity = z.number().int().min(0).max(LAVKA_ITEM_MAX_QUANTITY);
 const text = (max: number) => z.string().trim().max(max).optional();
 
-export const yandexLavkaInput = z.object({
+const yandexLavkaInput = z.object({
   action: z.enum(["search", "product", "cart", "add", "set", "clear", "addresses", "use_address", "set_address", "preview", "order", "orders", "cancel"]),
   address: text(300),
   addressId: text(120),

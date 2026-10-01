@@ -19,7 +19,7 @@
 import { AppError } from "../app-error.js";
 import { type FuelAvailability, type FuelStation, type FuelType, FUEL_TYPES, distanceMeters, sortFuelStations, text } from "./fuel-map.js";
 
-export const YANDEX_MAPS_URL = process.env.YANDEX_MAPS_URL ?? "https://yandex.ru/maps/";
+const YANDEX_MAPS_URL = process.env.YANDEX_MAPS_URL ?? "https://yandex.ru/maps/";
 const TIMEOUT_MS = 20_000;
 const YANDEX_GRADES: Record<FuelType, string[]> = {
   AI_100: ["AI100"], AI_92: ["AI92", "AI92_PREMIUM"], AI_95: ["AI95", "AI95_PREMIUM"], AI_98: ["AI98", "AI98_PREMIUM"], DT: ["DIESEL", "DIESEL_PREMIUM"], GAS: ["GAS", "LPG", "PROPANE", "METHANE"],

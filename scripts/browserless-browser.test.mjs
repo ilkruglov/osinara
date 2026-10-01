@@ -36,6 +36,18 @@ describe("Browserless fallback", () => {
     ], { env })).rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("AGENT_BROWSERLESS_NOT_CONFIGURED") });
   });
 
+  // 2 October 2026: the cloud helper accepted click and fill, so a public form could be sent with
+  // the person's phone past the confirmation gate of browser_act.
+  it("reads pages but refuses every page action", async () => {
+    const env = { ...process.env };
+    delete env.BROWSERLESS_API_KEY;
+    for (const command of ["click", "fill", "type", "press", "select", "check", "uncheck", "hover"]) {
+      await expect(promisify(execFile)(process.execPath, [
+        "agent/skills/agent-browser/scripts/browserless.mjs", command, "@e1",
+      ], { env })).rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("AGENT_BROWSERLESS_COMMAND_FORBIDDEN") });
+    }
+  });
+
   it("uses CONNECT to the fixed provider host and fails closed on proxy rejection", async () => {
     const proxy = createServer();
     let target;

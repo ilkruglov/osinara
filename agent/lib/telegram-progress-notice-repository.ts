@@ -11,7 +11,7 @@
  */
 import { database } from "./database.js";
 
-export const TELEGRAM_PROGRESS_NOTICE_MAX_PER_TURN = 5;
+const TELEGRAM_PROGRESS_NOTICE_MAX_PER_TURN = 5;
 
 export const telegramProgressNoticeRepository = {
   async claim(input: {

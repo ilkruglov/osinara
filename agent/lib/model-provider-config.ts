@@ -14,7 +14,6 @@ import {
 } from "./model-provider-config-schema.js";
 
 export {
-  parseModelProviderConfig,
   type AgentModelTransport,
   type ModelProviderConfig,
   type ModelProviderId,

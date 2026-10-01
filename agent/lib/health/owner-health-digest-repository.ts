@@ -32,8 +32,8 @@ export interface OwnerHealthRecipient {
   ownerTelegramUserId: string;
 }
 
-export const OWNER_HEALTH_LAGGING_MIN_WAITING = 50;
-export const OWNER_HEALTH_LAGGING_MIN_AGE_MILLISECONDS = 6 * 60 * 60 * 1_000;
+const OWNER_HEALTH_LAGGING_MIN_WAITING = 50;
+const OWNER_HEALTH_LAGGING_MIN_AGE_MILLISECONDS = 6 * 60 * 60 * 1_000;
 
 export const ownerHealthDigestRepository = {
   async recipients(): Promise<OwnerHealthRecipient[]> {

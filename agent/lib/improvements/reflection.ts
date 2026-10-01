@@ -19,7 +19,7 @@ import {
   type TurnEvidence,
 } from "./turn-evidence.js";
 
-export const REFLECTIONS_PER_FAMILY_PER_HOUR = 6;
+const REFLECTIONS_PER_FAMILY_PER_HOUR = 6;
 const REFLECTION_TIMEOUT_MILLISECONDS = 60_000;
 const MAX_ITEMS_PER_REFLECTION = 3;
 const SUMMARY_MAX_CHARACTERS = 400;
@@ -42,7 +42,7 @@ export interface ReflectionInput {
 
 export type ReflectionGenerate = (prompt: string) => Promise<string>;
 
-export function buildReflectionPrompt(input: ReflectionInput): string {
+function buildReflectionPrompt(input: ReflectionInput): string {
   const facts = {
     chatKind: input.chatKind,
     failedTools: input.evidence.failedTools,
@@ -113,7 +113,7 @@ export function parseReflection(text: string, evidence: TurnEvidence): Reflectio
   return items;
 }
 
-export async function generateReflectionText(prompt: string): Promise<string> {
+async function generateReflectionText(prompt: string): Promise<string> {
   const result = await generateText({
     abortSignal: AbortSignal.timeout(REFLECTION_TIMEOUT_MILLISECONDS),
     maxRetries: 0,

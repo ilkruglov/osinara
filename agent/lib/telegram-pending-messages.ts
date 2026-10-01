@@ -19,7 +19,7 @@ import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
 
 export const TELEGRAM_PENDING_MESSAGES_MAX = 10;
-export const TELEGRAM_PENDING_MARKER_KEY = "osinara_pending";
+const TELEGRAM_PENDING_MARKER_KEY = "osinara_pending";
 const TEXT_MAX_CHARACTERS = 500;
 
 export interface TelegramPendingMessage {

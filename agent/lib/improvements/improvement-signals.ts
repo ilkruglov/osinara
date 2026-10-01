@@ -30,7 +30,7 @@ import {
 type ChatKind = "external" | "family" | "private";
 
 /** Recurrence at which a workflow problem is worth one skill offer. */
-export const BACKLOG_HINT_RECURRENCE = 2;
+const BACKLOG_HINT_RECURRENCE = 2;
 
 interface SignalContext {
   channel: { kind?: string };

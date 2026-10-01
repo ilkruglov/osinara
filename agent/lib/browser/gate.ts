@@ -33,7 +33,6 @@ export type GateReason = "after-entry" | "form-submit" | "transaction";
 const words = (list: readonly string[]) => new RegExp(`(?:^|[^\\p{L}])(?:${list.join("|")})(?:[^\\p{L}]|$)`, "iu");
 const TRANSACTION = words(TRANSACTION_WORDS);
 const FORM_SUBMIT = words(FORM_SUBMIT_WORDS);
-export const CONTACT_FIELD = /телефон|phone|тел\.|имя|name|фамили|e-?mail|почт/iu;
 const FIELD_ROLES = new Set(["checkbox", "combobox", "date", "file", "radio", "spinbutton", "textbox", "time"]);
 const SUBMIT_ROLES = new Set(["button", "link", "menuitem", "submit"]);
 const CLICKABLE_ROLES = new Set([...SUBMIT_ROLES, "generic", "tab", "option", "treeitem"]);
@@ -43,13 +42,13 @@ const SAFE_AFTER_ENTRY_ROLES = new Set(["tab", "option", "treeitem"]);
 const COOKIE_CONSENT = /cookie|куки|cookies/iu;
 
 /** A search box is a way around a site, not a form: typing there and moving on sends nothing. */
-export const SEARCH_FIELD = /поиск|найти|search/iu;
+const SEARCH_FIELD = /поиск|найти|search/iu;
 export function isSearchField(element: { role: string; text: string }): boolean {
   return element.role === "searchbox" || SEARCH_FIELD.test(element.text);
 }
 
 /** Any field on the page but a search box: a form is not only its contact fields. */
-export function hasFormContext(view: PageView): boolean {
+function hasFormContext(view: PageView): boolean {
   return view.elements.some((e) => FIELD_ROLES.has(e.role) && !isSearchField(e));
 }
 

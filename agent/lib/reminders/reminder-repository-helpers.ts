@@ -98,7 +98,7 @@ export async function selectReminder(
  * private chat: naming it in the family group would put private text into shared model context,
  * even for the owner asking there. The audience rule precedes every author or role check.
  */
-export function reminderVisibleInChat(
+function reminderVisibleInChat(
   auth: Pick<ReminderAuthorization, "telegramChatType">,
   reminder: { scope: string },
 ): boolean {

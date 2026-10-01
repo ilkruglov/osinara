@@ -6,9 +6,7 @@ description: Reading pages that need JavaScript through the agent-browser CLI in
 # agent-browser
 
 Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with
-accessibility-tree snapshots and compact `@eN` element refs.
-
-Install: `npm i -g agent-browser && agent-browser install`
+accessibility-tree snapshots and compact `@eN` element refs. It is preinstalled in the sandbox; never install it or another browser.
 
 ## Runtime
 
@@ -48,32 +46,12 @@ timeout --signal=TERM --kill-after=5s 45s node "$HOME/.agents/skills/agent-brows
 timeout --signal=TERM --kill-after=5s 45s node "$HOME/.agents/skills/agent-browser/scripts/browserless.mjs" snapshot -i -c
 ```
 
-The helper also supports `read`, `screenshot` (use an absolute workspace path), `click`, `fill`, `press`, `scroll`, `get` and other ordinary page actions. It owns `osinara-cloud` and routes CDP through the sandbox egress proxy. Never use `-p browserless`, override its session/profile/CDP flags, or build a provider URL containing the token yourself.
+The helper only reads: it also supports `read`, `screenshot` (use an absolute workspace path), `scroll`, `wait`, `get`, `tab`, `back`, `forward` and `reload`. It refuses `click`, `fill`, `type`, `press` and every other page action (`AGENT_BROWSERLESS_COMMAND_FORBIDDEN`): an action goes through `browser_act`, whose gate asks before a form is sent. It owns `osinara-cloud` and routes CDP through the sandbox egress proxy. Never use `-p browserless`, override its session/profile/CDP flags, or build a provider URL containing the token yourself.
 
-The entire cloud session lasts at most two minutes, including time between commands. CAPTCHA solving may take tens of seconds: use `wait 30000`, then inspect the page again. If it is still solving and the session has enough time left, allow one more `wait 30000` and inspection. A returned screenshot or successful navigation alone does not prove that the CAPTCHA is solved. If still blocked, the session expires, or the provider rejects the request, report that result. Do not loop, automatically reopen an expired session or retry a form submission. One cloud attempt per blocked site per user task is enough; further attempts require a new user request. Residential proxies are not enabled by this helper because their traffic consumes the free allowance quickly.
+The entire cloud session lasts at most two minutes, including time between commands. CAPTCHA solving may take tens of seconds: use `wait 30000`, then inspect the page again. If it is still solving and the session has enough time left, allow one more `wait 30000` and inspection. A returned screenshot or successful navigation alone does not prove that the CAPTCHA is solved. If still blocked, the session expires, or the provider rejects the request, report that result. Do not loop or automatically reopen an expired session. One cloud attempt per blocked site per user task is enough; further attempts require a new user request. Residential proxies are not enabled by this helper because their traffic consumes the free allowance quickly.
 
 Close promptly after extracting the needed result, even if the task continues in the local browser:
 
 ```bash
 node "$HOME/.agents/skills/agent-browser/scripts/browserless.mjs" close
 ```
-
-## Start here
-
-This file is a discovery stub, not the usage guide. Before running any
-`agent-browser` command, load the actual workflow content from the CLI:
-
-```bash
-agent-browser skills get core             # start here — workflows, common patterns, troubleshooting
-agent-browser skills get core --full      # include full command reference and templates
-```
-
-The CLI serves skill content that always matches the installed version,
-so instructions never go stale. The content in this stub cannot change
-between releases, which is why it just points at `skills get core`.
-
-## Session and auth vault
-
-The runtime runs `agent-browser` with `AGENT_BROWSER_SESSION=osinara`; separate calls continue the same tab. Do not close the session before the task is done, and check it with `agent-browser session info --json` before treating it as lost. Cookies and localStorage live in `$HOME`; when a site session has expired, use the vault first.
-
-Persistent logins go into the `agent-browser auth vault` of the current trust zone (personal or family) through `--password-stdin`; never store OTP codes. Save an integration token only on the user's direct request and only when this skill allows the current scope: inside this skill's `$HOME`, mode `0600`, without printing or logging it.

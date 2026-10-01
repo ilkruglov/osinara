@@ -47,7 +47,7 @@ services:
       WORKFLOW_STRESS_RESET_ALLOWED: "true"
 
   memory-embedding:
-    profiles: ["workers", "memory-quality"]
+    profiles: ["memory-quality"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
     cpus: 2
     mem_limit: 1536m

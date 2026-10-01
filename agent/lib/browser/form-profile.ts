@@ -1,5 +1,5 @@
 /**
- * Form profile for browser_task: one per person, each field bound to domains.
+ * Form profile for the browser tools: one per person, each field bound to domains.
  *
  * Exports:
  * - `parseFormProfile`: validates a stored profile; card and password fields are refused at parse time.
@@ -14,7 +14,7 @@ import { AppError } from "../app-error.js";
 
 export interface ProfileField { domains: string[]; value: string; }
 export type FormProfile = Record<string, ProfileField>;
-export const FORBIDDEN_FIELDS: ReadonlySet<string> = new Set(["card", "cardnumber", "cvc", "cvv", "expiry", "pan", "password"]);
+const FORBIDDEN_FIELDS: ReadonlySet<string> = new Set(["card", "cardnumber", "cvc", "cvv", "expiry", "pan", "password"]);
 const PROFILE_INVALID = "AGENT_BROWSER_TASK_PROFILE_INVALID";
 
 const schema = z.record(

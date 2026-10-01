@@ -5,7 +5,6 @@
  * - `ReminderMutationValues`: validated optional changes of one reminder.
  * - `requireReminderNotLeased`: refuses a change while Telegram delivery is in flight.
  * - `applyReminderUpdate`: recomputes schedule state and writes the row.
- * - `recordReminderOperation`: writes the replay marker of one mutation.
  *
  * Key construct:
  * - Recurrence math and lease policy stay in one place, so a group reminder cannot drift away from
@@ -31,7 +30,7 @@ const LEASED_MESSAGES = {
   update: "Напоминание сейчас отправляется. Повторите изменение после завершения доставки",
 } as const;
 
-export function requireReminderNotLeased(
+function requireReminderNotLeased(
   reminder: { status: ReminderStatus },
   action: keyof typeof LEASED_MESSAGES,
 ): void {
@@ -87,22 +86,4 @@ export async function applyReminderUpdate(
     ],
   );
   return updated.rows[0]!;
-}
-
-export async function recordReminderOperation(
-  client: PoolClient,
-  input: {
-    familyId: string;
-    inputHash: string;
-    operationKey: string;
-    operationKind: "create" | "delete" | "update";
-    reminderId: string;
-  },
-): Promise<void> {
-  await client.query(
-    `INSERT INTO reminder_operations
-       (family_id, operation_key, operation_kind, input_hash, reminder_id)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [input.familyId, input.operationKey, input.operationKind, input.inputHash, input.reminderId],
-  );
 }

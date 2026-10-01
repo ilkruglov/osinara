@@ -10,7 +10,7 @@ import type Docker from "dockerode";
 
 import type { SandboxActivityRegistry } from "./docker-sandbox-lifecycle.js";
 
-export const SANDBOX_STOPPED_RETENTION_MS = 24 * 60 * 60 * 1_000;
+const SANDBOX_STOPPED_RETENTION_MS = 24 * 60 * 60 * 1_000;
 export const SANDBOX_STOPPED_CACHE_MAX = 16;
 const SANDBOX_STOP_TIMEOUT_SECONDS = 5;
 

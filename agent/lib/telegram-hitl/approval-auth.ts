@@ -38,7 +38,7 @@ export interface ApprovalAuthRow {
  * where the sandbox is, which message and timeline position the turn answers, what it saw.
  * Policy attributes (role, scopes, group, allowlist, identity) are never taken from here.
  */
-export const RETAINED_TURN_ATTRIBUTES = [
+const RETAINED_TURN_ATTRIBUTES = [
   "memoryReviewBatchId", "memoryReviewMode", "memoryReviewSourceEntryIds", "proactiveDeliveryCursor", "sandboxSessionId",
   "telegramConversationId", "telegramForumTopicId", "telegramMessageThreadId", "telegramProfileMentionUserIds",
   "telegramProfileReplyTimelineSequence", "telegramProfileReplyUserId", "telegramReplyToMessageId", "telegramTimelineEntryId",

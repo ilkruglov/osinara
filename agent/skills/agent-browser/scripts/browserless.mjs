@@ -6,7 +6,8 @@ import { BRIDGE_PORT, startBridge } from "./browserless-bridge.mjs";
 
 const BASE = `http://127.0.0.1:${BRIDGE_PORT}`;
 const SELF = fileURLToPath(import.meta.url);
-const COMMANDS = new Set(["open", "read", "snapshot", "screenshot", "click", "fill", "type", "press", "scroll", "wait", "get", "tab", "back", "forward", "reload", "select", "check", "uncheck", "hover"]);
+// Reading only: an action on a page goes through browser_act, whose gate asks before a form is sent.
+const COMMANDS = new Set(["open", "read", "snapshot", "screenshot", "scroll", "wait", "get", "tab", "back", "forward", "reload"]);
 
 export function browserEnvironment(source) {
   const env = Object.fromEntries(Object.entries(source).filter(([key]) =>
@@ -60,7 +61,7 @@ export async function main(argv) {
     return;
   }
   if (!COMMANDS.has(command) || args.some((arg) => /^--(?:session|profile|state|restore|provider|cdp|config)(?:=|$)/u.test(arg) || arg === "-p")) {
-    throw new Error("AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Используйте open, read, snapshot или действия на странице");
+    throw new Error("AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Облачный браузер только читает: open, read, snapshot, screenshot, scroll, get. Действия на странице делает browser_act");
   }
   if (!process.env.BROWSERLESS_API_KEY?.trim()) {
     throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED: Не задан BROWSERLESS_API_KEY");
