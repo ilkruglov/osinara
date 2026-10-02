@@ -151,6 +151,7 @@ const POST_V0101_MIGRATIONS = [
   "117_telegram_turn_interjections.sql",
   "118_lavka_operations.sql",
   "119_turn_interjection_steps.sql",
+  "120_drop_group_skill_allowlist.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -265,12 +266,15 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
       expect(after.rows.map(({ name }) => name).filter((name) => !namesBefore.has(name)))
         .toEqual(POST_V0101_MIGRATIONS);
       expect(after.rows).toHaveLength(V0101_LEDGER.length + POST_V0101_MIGRATIONS.length);
-      await expect(client.query<{ skill_allowlist: string[] }>(
-        "SELECT skill_allowlist FROM telegram_groups WHERE telegram_chat_id = '-100083'",
-      )).resolves.toMatchObject({ rows: [{ skill_allowlist: [] }] });
+      // A legacy grant was cleared by 083 and the column dropped by 120; the group itself survives.
       await expect(client.query(
-        "UPDATE telegram_groups SET skill_allowlist = ARRAY['removed-skill'] WHERE telegram_chat_id = '-100083'",
-      )).rejects.toThrow();
+        "SELECT 1 FROM telegram_groups WHERE telegram_chat_id = '-100083'",
+      )).resolves.toMatchObject({ rowCount: 1 });
+      await expect(client.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_schema = $1 AND table_name = 'telegram_groups' AND column_name = 'skill_allowlist'`,
+        [TEST_SCHEMA],
+      )).resolves.toMatchObject({ rowCount: 0 });
 
       // Representative authoritative and projection objects prove every R0-R7 migration took effect.
       for (const table of EXPECTED_R0_R7_TABLES) {

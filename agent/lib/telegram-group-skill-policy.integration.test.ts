@@ -16,25 +16,11 @@ describeWithDatabase("removed Telegram group skill policy", () => {
   });
   afterAll(closeDatabase);
 
-  it("allows only an empty legacy allowlist", async () => {
-    const family = await database().query<{ id: string }>(
-      "INSERT INTO families (name) VALUES ('No custom skills') RETURNING id",
-    );
-    const group = await database().query<{ id: string }>(
-      `INSERT INTO telegram_groups
-         (family_id, telegram_chat_id, title, type, message_mode, skill_allowlist)
-       VALUES ($1, '-1004401', 'External', 'external', 'addressed_only', '{}')
-       RETURNING id`,
-      [family.rows[0]!.id],
-    );
-
+  it("keeps no per-group skill allowlist at all", async () => {
+    // 120 dropped the column 083 had pinned to an empty array: no row can grant a removed package.
     await expect(database().query(
-      "UPDATE telegram_groups SET skill_allowlist = ARRAY['removed-skill'] WHERE id = $1",
-      [group.rows[0]!.id],
-    )).rejects.toThrow();
-    await expect(database().query<{ skill_allowlist: string[] }>(
-      "SELECT skill_allowlist FROM telegram_groups WHERE id = $1",
-      [group.rows[0]!.id],
-    )).resolves.toMatchObject({ rows: [{ skill_allowlist: [] }] });
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'telegram_groups' AND column_name = 'skill_allowlist'`,
+    )).resolves.toMatchObject({ rowCount: 0 });
   });
 });

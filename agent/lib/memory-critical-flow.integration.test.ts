@@ -127,9 +127,9 @@ describeWithDatabase("critical main-agent memory paths", () => {
     );
     const group = await database().query<{ id: string }>(
       `INSERT INTO telegram_groups
-         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist, skill_allowlist)
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
        VALUES ($1, '-100-critical-memory', 'Critical memory', 'external', 'addressed_only',
-               ARRAY['remember'], '{}')
+               ARRAY['remember'])
        RETURNING id`,
       [family.rows[0]!.id],
     );

@@ -44,11 +44,11 @@ describeWithDatabase("Telegram group status repository", () => {
     const other = await familyFixture("other");
     await database().query(
       `INSERT INTO telegram_groups
-         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist, skill_allowlist)
+         (family_id, telegram_chat_id, title, type, message_mode, tool_allowlist)
        VALUES
-         ($1, '-1002', 'Внешняя', 'external', 'owner_only', ARRAY['search_memories'], '{}'),
-         ($1, '-1001', 'Семья', 'family_private', 'all', '{}', '{}'),
-         ($2, '-1003', 'Чужая', 'external', 'addressed_only', ARRAY['remember'], '{}')`,
+         ($1, '-1002', 'Внешняя', 'external', 'owner_only', ARRAY['search_memories']),
+         ($1, '-1001', 'Семья', 'family_private', 'all', '{}'),
+         ($2, '-1003', 'Чужая', 'external', 'addressed_only', ARRAY['remember'])`,
       [current.familyId, other.familyId],
     );
 
