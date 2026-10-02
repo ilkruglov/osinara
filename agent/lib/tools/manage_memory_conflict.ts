@@ -7,7 +7,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
-import { memoryConflictRepository } from "../memory-conflict-repository.js";
+import { CONFLICT_REF_PATTERN, memoryConflictRepository } from "../memory-conflict-repository.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { MEMORY_REF_PATTERN } from "../model-memory.js";
 import { AppError } from "../app-error.js";
@@ -17,7 +17,6 @@ const conflictInputSchema = z.object({
   conflictRef: z.string(),
   memoryRef: z.string().optional(),
 }).strict();
-const CONFLICT_REF_PATTERN = /^conf_[0-9a-f]{32}$/u;
 
 function invalidInput(): AppError {
   return new AppError(

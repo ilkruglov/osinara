@@ -5,12 +5,7 @@
  * - `verifiedTelegramProfileSignals`: exact reply/text_mention IDs, never names or usernames.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
-
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
+import { asRecord as record } from "./json-value.js";
 
 function telegramId(value: unknown): string | null {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);

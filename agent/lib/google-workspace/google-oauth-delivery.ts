@@ -7,6 +7,7 @@
 import { sendTelegramMessage } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
+import { withRequestTimeout } from "../request-signal.js";
 
 function botToken(): string {
   const value = process.env.TELEGRAM_BOT_TOKEN;
@@ -21,8 +22,7 @@ export async function deliverGoogleAuthorizationLink(
   authorizationUrl: string,
   expiresAt: Date,
 ): Promise<void> {
-  const signal = AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS);
-  const fetchWithTimeout: typeof fetch = (request, init) => fetch(request, { ...init, signal });
+  const fetchWithTimeout = withRequestTimeout(fetch, TELEGRAM_API_REQUEST_TIMEOUT_MS);
   try {
     await sendTelegramMessage({
       body: {

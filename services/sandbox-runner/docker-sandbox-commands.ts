@@ -14,6 +14,8 @@
  *   and its double quotes leave `$(...)` and backticks live: a file name chosen by the model in an
  *   external group could run commands in the restricted container despite the Bash denial.
  */
+import { shellQuote } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
+
 export const FILE_MISSING_EXIT_CODE = 44;
 export const FILE_TOO_LARGE_EXIT_CODE = 45;
 
@@ -24,10 +26,6 @@ export function assertShellSafePath(path: string): void {
   if (CONTROL_CHARACTERS.test(path)) {
     throw new Error("AGENT_SANDBOX_RUNNER_PATH_INVALID: Path contains control characters");
   }
-}
-
-export function shellQuote(value: string): string {
-  return `'${value.split("'").join("'\\''")}'`;
 }
 
 export function stageFileForReadCommand(input: {

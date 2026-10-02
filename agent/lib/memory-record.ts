@@ -7,11 +7,10 @@
  * - `memoryOperationHash`: fingerprints replay-protected mutation input.
  * - `normalizeMemoryClaimContent`: exact-duplicate normalization without semantic heuristics.
  */
-import { createHash } from "node:crypto";
-
 import type { MemoryScope } from "./memory-context.js";
 import type { ModelMemoryEvidence } from "./model-memory.js";
 import type { RememberInput } from "./remember-contract.js";
+import { sha256Json } from "./json-hash.js";
 
 export type MemoryKind = "episode" | "fact" | "family_shared" | "preference" | "profile";
 export type MemoryConfirmation = "model_high" | "user_confirmed";
@@ -165,7 +164,7 @@ export function rowToReferencedMemory(row: ReferencedMemoryRow): ReferencedMemor
 }
 
 export function memoryOperationHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return sha256Json(value);
 }
 
 export function normalizeMemoryClaimContent(content: string): string {

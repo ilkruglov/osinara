@@ -14,6 +14,7 @@
  *   to the one message the owner's authorization depends on.
  */
 import { AppError } from "../app-error.js";
+import { clipText, flattenDisplayText as flatten } from "../display-text.js";
 import { DEFAULT_CONSEQUENCE } from "./approval-consequences.js";
 
 const PURPOSE_MAX_CHARACTERS = 300;
@@ -46,19 +47,11 @@ function visibleEscape(value: string): string {
     );
 }
 
-/** Strips control characters and newlines so a model cannot restructure the message. */
-function flatten(value: string): string {
-  return value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
-}
-
 function purposeLine(reason: unknown): string[] {
   if (typeof reason !== "string") return [];
   const text = flatten(reason);
   if (!text) return [];
-  const bounded = text.length <= PURPOSE_MAX_CHARACTERS
-    ? text
-    : `${text.slice(0, PURPOSE_MAX_CHARACTERS - 1).trimEnd()}…`;
-  return [`Зачем: ${bounded}`];
+  return [`Зачем: ${clipText(text, PURPOSE_MAX_CHARACTERS)}`];
 }
 
 export function buildApprovalMessage(input: ApprovalMessageInput): string {
@@ -84,9 +77,7 @@ function readableScalar(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = flatten(value);
   if (!text) return null;
-  return text.length <= GENERIC_VALUE_MAX_CHARACTERS
-    ? text
-    : `${text.slice(0, GENERIC_VALUE_MAX_CHARACTERS - 1).trimEnd()}…`;
+  return clipText(text, GENERIC_VALUE_MAX_CHARACTERS);
 }
 
 /**

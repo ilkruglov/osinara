@@ -6,11 +6,13 @@
  * - `requireOnlyFields`: fails on misspelled or unsupported payload fields.
  * - `requireAction`: validates action discriminators without publishing JSON Schema unions.
  * - Field validators for strings, enums, UUIDs, ISO datetimes, and plain objects.
+ * - `UUID_PATTERN`: the UUID shape every validator in the agent accepts.
  */
 import { AppError } from "./app-error.js";
 
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+/** Any RFC 9562 version 1–8 UUID, case-insensitive. */
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 interface StringOptions {
   maxLength?: number;

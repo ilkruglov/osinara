@@ -25,10 +25,10 @@ import {
 } from "../agent-schedules/external-agent-schedule-policy.js";
 import { AppError } from "../app-error.js";
 import { requirePrivateTelegramOwner } from "../family-context.js";
+import { UUID_PATTERN } from "../tool-input-validation.js";
 
 const ACTIONS = ["create", "delete", "pause", "resume", "run_now", "status", "update"] as const;
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const TELEGRAM_CHAT_ID_PATTERN = /^-\d+$/u;
 const HISTORY_WINDOW_MAX_DAYS = 365;
 const TIMEZONE_MAX_LENGTH = 100;

@@ -12,7 +12,6 @@ import { AppError } from "./app-error.js";
 import type { PreparedClaimEvidence } from "./claim-evidence-writer.js";
 import { embedMemoryPassages } from "./memory-embedding-client.js";
 import {
-  MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   THREAD_CREATION_CANDIDATE_LIMIT,
   THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY,
@@ -25,6 +24,7 @@ import type {
   CreateMemoryThreadInput,
   MemoryThreadWriteResult,
 } from "./memory-record.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 interface ThreadIdentity {
   memoryProjectId: string | null;
@@ -92,14 +92,10 @@ function scopePartitionKey(auth: MemoryAuthorization, scope: MemoryScope): strin
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-    !vector.every((value) => Number.isFinite(value))) {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
-      "Не удалось построить смысловой индекс названия нити памяти",
-    );
-  }
-  return `[${vector.join(",")}]`;
+  return memoryVectorLiteral(vector, () => new AppError(
+    "AGENT_MEMORY_THREAD_TITLE_EMBEDDING_INVALID",
+    "Не удалось построить смысловой индекс названия нити памяти",
+  ));
 }
 
 export async function embedMemoryThreadTitle(

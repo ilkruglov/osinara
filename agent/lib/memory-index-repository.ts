@@ -8,10 +8,8 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
-import {
-  MEMORY_EMBEDDING_DIMENSIONS,
-  MEMORY_EMBEDDING_MODEL_VERSION,
-} from "./memory-config.js";
+import { MEMORY_EMBEDDING_MODEL_VERSION } from "./memory-config.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 export interface MemoryEmbeddingJob {
   content: string;
@@ -28,16 +26,10 @@ export interface IndexedMemoryEmbeddingChunk {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (
-    vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-    !vector.every((value) => Number.isFinite(value))
-  ) {
-    throw new AppError(
-      "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
-      "Локальный сервис памяти вернул вектор неверного формата",
-    );
-  }
-  return `[${vector.join(",")}]`;
+  return memoryVectorLiteral(vector, () => new AppError(
+    "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+    "Локальный сервис памяти вернул вектор неверного формата",
+  ));
 }
 
 export const memoryIndexRepository = {

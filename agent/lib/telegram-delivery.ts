@@ -7,6 +7,7 @@
 import { sendTelegramMessage } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../config.js";
+import { withRequestTimeout } from "./request-signal.js";
 
 interface FamilyInvitationDelivery {
   chatId: string;
@@ -31,15 +32,7 @@ export async function deliverFamilyInvitation(input: FamilyInvitationDelivery): 
   const startLink = `https://t.me/${botUsername}?start=${encodeURIComponent(input.code)}`;
 
   // The token is sent directly to the verified owner chat and is never returned as tool output.
-  const signal = AbortSignal.any([
-    input.signal,
-    AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS),
-  ]);
-  const fetchWithSignal: typeof fetch = (request, init) =>
-    fetch(request, {
-      ...init,
-      signal,
-    });
+  const fetchWithSignal = withRequestTimeout(fetch, TELEGRAM_API_REQUEST_TIMEOUT_MS, input.signal);
 
   // Eve owns Telegram request construction while this adapter owns cancellation and secret handling.
   try {

@@ -13,14 +13,9 @@
  *   (strings and link entities) is joined.
  */
 import type { TelegramUpdate } from "eve/channels/telegram";
+import { asRecord as record } from "./json-value.js";
 
 type JsonRecord = Record<string, unknown>;
-
-function record(value: unknown): JsonRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as JsonRecord
-    : null;
-}
 
 /**
  * RichText arrives as a string, as `{ text, entities }`, or as an array of parts: plain strings

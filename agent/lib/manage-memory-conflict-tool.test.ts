@@ -14,7 +14,8 @@ const { resolveConflict } = vi.hoisted(() => ({ resolveConflict: vi.fn() }));
 vi.mock("./memory-context.js", () => ({
   requireMemoryAuthorization: () => ({ familyId: "family-1", scopes: ["personal"] }),
 }));
-vi.mock("./memory-conflict-repository.js", () => ({
+vi.mock("./memory-conflict-repository.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./memory-conflict-repository.js")>(),
   memoryConflictRepository: { resolve: resolveConflict },
 }));
 import manageMemoryConflict from "./tools/manage_memory_conflict.js";

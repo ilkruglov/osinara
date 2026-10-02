@@ -14,6 +14,7 @@
  * - `formatPendingMessagesContext`: the untrusted context block.
  */
 import { parseTelegramUpdate, type TelegramMessage, type TelegramUpdate } from "eve/channels/telegram";
+import { clipText } from "./display-text.js";
 
 import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
 import { withRichMessageText } from "./telegram-rich-message.js";
@@ -32,8 +33,7 @@ export interface TelegramPendingMessage {
 }
 
 function clip(text: string): string {
-  const normalized = text.replace(/\s+/gu, " ").trim();
-  return normalized.length > TEXT_MAX_CHARACTERS ? `${normalized.slice(0, TEXT_MAX_CHARACTERS)}…` : normalized;
+  return clipText(text.replace(/\s+/gu, " ").trim(), TEXT_MAX_CHARACTERS);
 }
 
 /** Queue payloads in arrival order become model-safe summaries; anything unparsable is skipped. */

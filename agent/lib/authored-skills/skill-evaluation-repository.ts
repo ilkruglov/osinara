@@ -1,7 +1,6 @@
 /** Immutable skill candidates and bounded, provenance-bound observations of manual trial runs.
  * No tool is executed here. Result bodies stay out of the ledger; only check matches and hashes persist.
  */
-import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import { createReflectionRateLimiter } from "../improvements/reflection.js";
 import { evaluateSkillSelection, type SkillSelectionCase } from "./skill-selection.js";
@@ -13,6 +12,7 @@ import { requireCurrentOwner } from "./authored-skill-owner.js";
 import { evaluateTrial, skillCheckSchema, skillContentHash, type SkillCheck, type ObservedSkillResult } from "./skill-evaluation.js";
 import type { AuthoredSkillExample } from "./authored-skill-example-repository.js";
 import { verifySkillExperiment } from "./skill-experiment-publication.js";
+import { sha256Json } from "../json-hash.js";
 
 const selectionLimiter = createReflectionRateLimiter(6);
 
@@ -150,7 +150,7 @@ export const skillEvaluationRepository = {
         await client.query(
           `INSERT INTO authored_skill_trial_events (run_id,event_id,tool_name,succeeded,result_hash,matched_checks)
            VALUES ($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT DO NOTHING`,
-          [run.id,input.eventId,input.toolName,input.succeeded,createHash("sha256").update(JSON.stringify(input.output) ?? "null").digest("hex"),JSON.stringify(matches)],
+          [run.id,input.eventId,input.toolName,input.succeeded,sha256Json(input.output),JSON.stringify(matches)],
         );
         await client.query("UPDATE authored_skill_trial_runs SET passed=$2::jsonb WHERE id=$1", [run.id, JSON.stringify(run.passed.map((passed, index) => passed || matches[index]))]);
       }

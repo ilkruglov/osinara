@@ -20,9 +20,9 @@ import {
   commitStagedFileCommand,
   FILE_MISSING_EXIT_CODE,
   FILE_TOO_LARGE_EXIT_CODE,
-  shellQuote,
   stageFileForReadCommand,
 } from "./docker-sandbox-commands.js";
+import { shellQuote } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 
 const run = promisify(execFile);
 const HOSTILE = "/workspace/group/$(touch \"/tmp/pwned\")`id`'quote' and space.txt";

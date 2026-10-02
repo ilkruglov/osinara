@@ -13,14 +13,16 @@
  * - `ok: false` on create and `failed` on poll are definitive rejections; anything after an accepted
  *   job with an unknown outcome stays ambiguous, so the chain never bills twice.
  */
-import { AppError, isAppError } from "../app-error.js";
+import { AppError } from "../app-error.js";
 import {
   ambiguous,
+  defaultSleep,
   GENERATION_TIMEOUT_MS,
   imageFromBytes,
   isAmbiguousStatus,
   isProviderUnavailableStatus,
-  readBoundedBody,
+  pollDeadline,
+  readImageBody,
   rejected,
   scrubProviderText,
   unavailable,
@@ -65,7 +67,7 @@ export function createPlusVibeImageClient(
   },
 ): FluxImageClient {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
-  const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const sleep = options.sleep ?? defaultSleep;
   const baseUrl = (options.baseUrl ?? PLUSVIBE_API_BASE_URL).replace(/\/$/u, "");
   const pollTimeoutMs = options.pollTimeoutMs ?? POLL_TIMEOUT_MS;
   const headers = { authorization: `Bearer ${options.apiKey}`, "content-type": "application/json" };
@@ -98,20 +100,7 @@ export function createPlusVibeImageClient(
   }
 
   async function awaitJob(model: string, jobId: string): Promise<Buffer> {
-    const deadline = Date.now() + pollTimeoutMs;
-    const remaining = () => {
-      const left = deadline - Date.now();
-      if (left <= 0) throw ambiguous(PROVIDER, "poll timeout");
-      return AbortSignal.timeout(left);
-    };
-    const bounded = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> => {
-      try {
-        return await operation(remaining());
-      } catch (error) {
-        if (isAppError(error)) throw error;
-        throw ambiguous(PROVIDER, error instanceof Error ? error.message : String(error));
-      }
-    };
+    const { bounded, remaining } = pollDeadline(PROVIDER, pollTimeoutMs);
     let job: JobStatus;
     for (;;) {
       await sleep(POLL_INTERVAL_MS);
@@ -131,7 +120,7 @@ export function createPlusVibeImageClient(
     // The result link is pre-signed; the key stays with the API host only.
     const result = await bounded((signal) => fetchImplementation(resultUrl, { method: "GET", signal }));
     if (!result.ok) throw ambiguous(PROVIDER, `result ${result.status}`);
-    return await bounded(() => readBoundedBody(result));
+    return await bounded(() => readImageBody(result));
   }
 
   return {

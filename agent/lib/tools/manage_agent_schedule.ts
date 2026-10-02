@@ -24,12 +24,12 @@ import { AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, type AgentScheduleSimpleRecurre
 import { agentScheduleRecurrenceSchema } from "../agent-schedules/agent-schedule-recurrence-schema.js";
 import type { AgentScheduleInputRecurrence } from "../agent-schedules/agent-schedule-validation.js";
 import { AppError } from "../app-error.js";
+import { UUID_PATTERN } from "../tool-input-validation.js";
 
 const TOOL_ACTIONS = ["create", "update", "pause", "resume", "run_now", "delete"] as const;
 const RECURRENCE_KINDS = ["once", ...AGENT_SCHEDULE_SIMPLE_RECURRENCE_KINDS, "weekly"] as const;
 const SCOPES = ["personal", "family"] as const;
 const ISO_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/u;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const AGENT_SCHEDULE_TIMEZONE_MAX_LENGTH = 100;
 
 type ToolAction = (typeof TOOL_ACTIONS)[number];

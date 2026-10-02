@@ -4,8 +4,6 @@
  * Exports:
  * - `deliverTelegramFinalOutput`: sends plain or rich chunks once behind the durable outbox barrier.
  */
-import { createHash } from "node:crypto";
-
 import { AppError } from "./app-error.js";
 import {
   formatTelegramFinalPresentation,
@@ -14,9 +12,10 @@ import {
 import type { SentTelegramMessage } from "./telegram-rich-messages.js";
 import { telegramFinalDeliveryRepository } from "./telegram-final-delivery-repository.js";
 import { formatTelegramRichMessages } from "./telegram-rich-markdown.js";
+import { sha256Json } from "./json-hash.js";
 
 function hash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return sha256Json(value);
 }
 
 function terminalDeliveryError(code: string): AppError {

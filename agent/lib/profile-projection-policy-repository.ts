@@ -12,6 +12,7 @@ import { database } from "./database.js";
 import type { MemoryAuthorization } from "./memory-context.js";
 import { PROFILE_PROJECTION_NOTICE_LEASE_MILLISECONDS } from "./memory-config.js";
 import { memoryOperationHash } from "./memory-record.js";
+import { lockCurrentOwner } from "./family-repository-checks.js";
 
 export interface ExternalProfileProjectionPolicy {
   enabled: boolean;
@@ -27,12 +28,7 @@ async function requireCurrentOwner(client: PoolClient, auth: MemoryAuthorization
       "Изменять проекцию профиля может только владелец семьи",
     );
   }
-  const owner = await client.query(
-    `SELECT 1 FROM family_memberships
-     WHERE family_id = $1 AND user_id = $2 AND role = 'owner' FOR SHARE`,
-    [auth.familyId, auth.userId],
-  );
-  if (!owner.rowCount) {
+  if (!await lockCurrentOwner(client, auth.familyId, auth.userId)) {
     throw new AppError(
       "AGENT_PROFILE_PROJECTION_OWNER_REQUIRED",
       "Права владельца больше не действуют. Обновите чат и повторите действие",

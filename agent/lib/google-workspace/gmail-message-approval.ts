@@ -7,6 +7,7 @@ import type { SessionContext } from "eve/context";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { clipText, flattenDisplayText } from "../display-text.js";
 import type { GoogleIntegrationAuthorization, GoogleIntegrationScope } from "./google-integration-contract.js";
 import { runGoogleWorkspaceCommand } from "./google-workspace-command-runner.js";
 import { resolveGoogleWorkspaceAuthorization } from "./google-workspace-context.js";
@@ -59,14 +60,12 @@ interface GmailMessageApprovalDependencies {
 
 function readable(value: string | undefined): string | null {
   if (value === undefined) return null;
-  const normalized = value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
-  return normalized || null;
+  return flattenDisplayText(value) || null;
 }
 
 function boundedSnippet(value: string | undefined): string | null {
   const normalized = readable(value);
-  if (normalized === null || normalized.length <= GMAIL_SNIPPET_MAX_CHARACTERS) return normalized;
-  return `${normalized.slice(0, GMAIL_SNIPPET_MAX_CHARACTERS - 1).trimEnd()}…`;
+  return normalized === null ? null : clipText(normalized, GMAIL_SNIPPET_MAX_CHARACTERS);
 }
 
 function responseSubject(

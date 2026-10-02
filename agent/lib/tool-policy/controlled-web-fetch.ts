@@ -20,6 +20,8 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { AppError, isAppError } from "../app-error.js";
+import { readBoundedBody } from "../bounded-body.js";
+import { deadlineSignal } from "../request-signal.js";
 
 export const CONTROLLED_WEB_FETCH_PROXY_URL = "http://sandbox-egress-proxy:3128";
 const CONTROLLED_WEB_FETCH_MAX_REDIRECTS = 5;
@@ -117,35 +119,11 @@ function textContentType(response: Response): string {
   return value;
 }
 
-async function readBoundedBody(response: Response): Promise<Uint8Array> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > CONTROLLED_WEB_FETCH_MAX_BODY_BYTES) {
-    await response.body?.cancel();
-    throw new AppError(
-      "AGENT_WEB_FETCH_BODY_TOO_LARGE",
-      "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
-    );
-  }
-
-  // Read incrementally so a misleading or absent Content-Length cannot force unbounded buffering.
-  const reader = response.body?.getReader();
-  if (!reader) return new Uint8Array();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    totalBytes += value.byteLength;
-    if (totalBytes > CONTROLLED_WEB_FETCH_MAX_BODY_BYTES) {
-      await reader.cancel();
-      throw new AppError(
-        "AGENT_WEB_FETCH_BODY_TOO_LARGE",
-        "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
-      );
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks, totalBytes);
+async function readPageBody(response: Response): Promise<Uint8Array> {
+  return await readBoundedBody(response, CONTROLLED_WEB_FETCH_MAX_BODY_BYTES, () => new AppError(
+    "AGENT_WEB_FETCH_BODY_TOO_LARGE",
+    "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
+  ));
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -202,18 +180,13 @@ function boundModelContent(value: string): { content: string; truncated: boolean
   };
 }
 
-function requestSignal(timeoutSeconds: number, abortSignal?: AbortSignal): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(timeoutSeconds * MILLISECONDS_PER_SECOND);
-  return abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
-}
-
 export function createControlledWebFetch(dependencies: ControlledWebFetchDependencies) {
   return async (
     rawInput: ControlledWebFetchInput,
     options: ExecuteOptions = {},
   ): Promise<ControlledWebFetchResult> => {
     const input = parseInput(rawInput);
-    const signal = requestSignal(input.timeout ?? DEFAULT_TIMEOUT_SECONDS, options.abortSignal);
+    const signal = deadlineSignal((input.timeout ?? DEFAULT_TIMEOUT_SECONDS) * MILLISECONDS_PER_SECOND, options.abortSignal);
     let currentUrl = validateUrl(input.url);
 
     try {
@@ -252,7 +225,7 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
 
         // Reject files before buffering; web access is intentionally limited to model-readable text.
         const responseContentType = textContentType(response);
-        const body = await readBoundedBody(response);
+        const body = await readPageBody(response);
         const decoded = new TextDecoder("utf-8", { fatal: false }).decode(body);
         const requestedFormat = input.format ?? "extracted_text";
         const formatted = responseContentType === HTML_CONTENT_TYPE && requestedFormat !== "html"

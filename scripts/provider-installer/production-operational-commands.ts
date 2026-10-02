@@ -12,7 +12,7 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import { parseModelProviderConfigBytes } from "../model-config/schema.js";
 import { buildOwnerBootstrapOutput } from "./configuration.js";
 import { InstallerError } from "./errors.js";
-import { parseBootstrapProcessOutput } from "./host-contracts.js";
+import { composeArgs, parseBootstrapProcessOutput } from "./host-contracts.js";
 import type { OperationalCommandOperations } from "./operational-commands.js";
 import { runHostCommand } from "./process-runner.js";
 
@@ -62,10 +62,6 @@ async function requireManagedFile(path: string, mode: number): Promise<Buffer> {
     );
   }
   return await readFile(path);
-}
-
-function composeArgs(file: string, envFiles: readonly string[], args: readonly string[]): string[] {
-  return ["compose", ...envFiles.flatMap((path) => ["--env-file", path]), "--file", file, ...args];
 }
 
 async function compose(

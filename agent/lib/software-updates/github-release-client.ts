@@ -14,6 +14,7 @@ import {
   SOFTWARE_UPDATE_MANIFEST_MAX_BYTES,
 } from "../../config.js";
 import { AppError } from "../app-error.js";
+import { readBoundedBody } from "../bounded-body.js";
 import { compareSemver, stableVersionFromTag } from "./semver.js";
 import type { SoftwareRelease, SoftwareUpdateManifest } from "./types.js";
 
@@ -74,32 +75,7 @@ async function responseJson(
   code: string,
   message: string,
 ): Promise<unknown> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength && Number(declaredLength) > maxBytes) throw new AppError(code, message);
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  const reader = response.body?.getReader();
-  if (reader) {
-    // Stop reading at the limit even when an external server omits Content-Length.
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      byteLength += chunk.value.byteLength;
-      if (byteLength > maxBytes) {
-        await reader.cancel();
-        reader.releaseLock();
-        throw new AppError(code, message);
-      }
-      chunks.push(chunk.value);
-    }
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+  const bytes = await readBoundedBody(response, maxBytes, () => new AppError(code, message));
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch (error) {

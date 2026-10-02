@@ -4,6 +4,7 @@
  * Exports:
  * - `releaseEnvironmentFromManifest`: validates schema v1 and emits five fresh-install image refs.
  * - `parseBootstrapProcessOutput`: validates one machine-readable bootstrap process result.
+ * - `composeArgs`: `docker compose` arguments for one compose file and its env files.
  */
 import { z } from "zod";
 
@@ -38,6 +39,10 @@ const bootstrapSchema = z.object({
   bootstrapCode: z.string().regex(/^[A-Za-z0-9_-]+$/u),
   bootstrapExpiresAt: z.iso.datetime({ offset: false }),
 }).strict();
+
+export function composeArgs(file: string, envFiles: readonly string[], args: readonly string[]): string[] {
+  return ["compose", ...envFiles.flatMap((envFile) => ["--env-file", envFile]), "--file", file, ...args];
+}
 
 export function releaseEnvironmentFromManifest(
   bytes: Buffer,

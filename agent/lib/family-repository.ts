@@ -16,6 +16,7 @@ import {
   requireInvitationSigningSecret,
 } from "./invitation-code.js";
 import type { TelegramProfile } from "./telegram-repository.js";
+import { requireLockedOwner } from "./family-repository-checks.js";
 
 export interface PendingFamilyInvitation {
   claimedAt: string;
@@ -160,16 +161,7 @@ export const familyRepository: FamilyRepository = {
       await client.query("BEGIN");
 
       // Lock current membership so a stale Eve approval cannot race an owner-role revocation.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [familyId, createdBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, familyId, createdBy);
 
       // A code derived from callId is reproducible after Eve replays an interrupted tool step.
       const generated = createInvitationCodeForOperation(
@@ -248,16 +240,7 @@ export const familyRepository: FamilyRepository = {
       await client.query("BEGIN");
 
       // A shared lock prevents candidate data from racing current owner-role revocation.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [familyId, requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, familyId, requestedBy);
 
       // Persist terminal expiry state so it no longer occupies a candidate's pending slot.
       await client.query(
@@ -409,16 +392,7 @@ export const familyRepository: FamilyRepository = {
       await client.query("BEGIN");
 
       // Session authorization is a snapshot; reserve transport only while owner access is live.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [input.familyId, input.createdBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.createdBy);
 
       // The row lock turns concurrent execution or replay into a durable fail-closed boundary.
       const invitation = await client.query<{

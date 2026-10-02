@@ -12,6 +12,7 @@
  *   the raw response is observed at the transport boundary instead of Eve's framework usage.
  * - Streaming bodies pass through byte-for-byte; the observer only reads copied text lines.
  */
+import { isRecord } from "./json-value.js";
 export interface NormalizedProviderUsage {
   readonly cacheHitTokens: number | null;
   readonly cacheMissTokens: number | null;
@@ -36,10 +37,6 @@ export interface ModelUsageLogContext {
 export type UsageLogger = (line: string) => void;
 
 const SSE_DATA_PREFIX = "data:";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function count(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;

@@ -1,5 +1,6 @@
 /** Provider boundary budget, including Eve retries. The agent loop remains Eve's. */
 import type { LanguageModelV4, LanguageModelV4CallOptions, LanguageModelV4Usage } from "@ai-sdk/provider";
+import { deadlineSignal } from "../request-signal.js";
 
 // Eve treats the reserved ask_question name as a human-input boundary even after an override.
 // Keep the public name at the model boundary; execute its fixture under a plain local tool name.
@@ -32,7 +33,7 @@ export function boundedLabModel(model: LanguageModelV4, reserve: () => void, usa
     return { ...input, prompt, maxOutputTokens: LAB_MAX_OUTPUT_TOKENS,
       tools: input.tools?.filter((t) => t.type === "function" && allowed.has(labToolPublicName(t.name))).map((t) => ({ ...t, name: labToolPublicName(t.name) })),
       toolChoice: input.toolChoice?.type === "tool" ? { ...input.toolChoice, toolName: labToolPublicName(input.toolChoice.toolName) } : input.toolChoice,
-      abortSignal: AbortSignal.any([...(input.abortSignal ? [input.abortSignal] : []), AbortSignal.timeout(LAB_CALL_TIMEOUT_MS)]) };
+      abortSignal: deadlineSignal(LAB_CALL_TIMEOUT_MS, input.abortSignal) };
   };
   return {
     specificationVersion: "v4", modelId: model.modelId, provider: model.provider, supportedUrls: model.supportedUrls,

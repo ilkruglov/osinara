@@ -11,6 +11,7 @@ import type { PoolClient } from "pg";
 
 import { TELEGRAM_GROUP_JOURNAL_RETENTION_MESSAGES } from "../config.js";
 import { memoryContentRejectionCode } from "./memory-content-policy.js";
+import { lockApplicationConversation } from "./conversation-lock.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 const MILLISECONDS_PER_SECOND = 1_000;
@@ -114,7 +115,7 @@ export async function lockTelegramGroupJournal(
   if (!conversationId) {
     throw new Error("AGENT_APPLICATION_CONVERSATION_NOT_FOUND: Для группы не найден разговор");
   }
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [conversationId]);
+  await lockApplicationConversation(client, conversationId);
 }
 
 export async function pruneTelegramGroupJournal(

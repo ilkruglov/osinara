@@ -19,6 +19,7 @@ import { dirname } from "node:path";
 
 import { ModelFacingError } from "../model-facing-error.js";
 import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
+import { shellQuote } from "../sandbox-runner/sandbox-runner-contract.js";
 
 export interface BrowserDriver {
   back(): Promise<void>;
@@ -40,7 +41,6 @@ const DIAGNOSTIC_MAX_CHARACTERS = 400;
 /** `timeout(1)` exit status; the runner's marker is in `services/sandbox-runner/docker-sandbox-process.ts`. */
 const TIMEOUT_EXIT_CODE = 124;
 const RUNNER_TIMED_OUT = /AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT|time(d )?out/iu;
-const quote = (value: string): string => `'${value.replace(/'/gu, `'\\''`)}'`;
 
 export function createSandboxBrowserDriver(input: {
   runner: Pick<SandboxRunnerClient, "run">;
@@ -49,7 +49,7 @@ export function createSandboxBrowserDriver(input: {
 }): BrowserDriver {
   const browserCommand = (args: string[]): string => {
     const [subcommand, ...rest] = args;
-    return `timeout --signal=TERM --kill-after=${CLI_KILL_AFTER_SECONDS}s ${CLI_TIMEOUT_SECONDS}s agent-browser ${[subcommand, ...rest.map(quote)].join(" ")}`;
+    return `timeout --signal=TERM --kill-after=${CLI_KILL_AFTER_SECONDS}s ${CLI_TIMEOUT_SECONDS}s agent-browser ${[subcommand, ...rest.map(shellQuote)].join(" ")}`;
   };
 
   async function exec(command: string, name: string): Promise<string> {
@@ -97,7 +97,7 @@ export function createSandboxBrowserDriver(input: {
     press: async (key) => { await ab("press", key); },
     // The shots directory does not exist in a fresh workspace: 26 September 2026 every look of a
     // login attempt lost its screenshot to "No such file or directory".
-    screenshot: async (path) => { await exec(`mkdir -p ${quote(dirname(path))} && ${browserCommand(["screenshot", path])}`, "screenshot"); },
+    screenshot: async (path) => { await exec(`mkdir -p ${shellQuote(dirname(path))} && ${browserCommand(["screenshot", path])}`, "screenshot"); },
     scroll: async (direction) => { await ab("scroll", direction); },
     settle: async () => {
       try { await ab("wait", "--load", "domcontentloaded"); } catch { /* bounded by the CLI timeout */ }

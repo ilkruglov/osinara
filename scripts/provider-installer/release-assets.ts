@@ -9,6 +9,7 @@
  * - Fixed canonical GitHub repository, tag, and asset name.
  * - Bounded response size and timeout before bytes cross the installer trust boundary.
  */
+import { readBoundedBody } from "../../agent/lib/bounded-body.js";
 import type { ReleaseAssets } from "./contracts.js";
 import { InstallerError } from "./errors.js";
 
@@ -45,36 +46,17 @@ async function readBoundedArchive(response: Response): Promise<Uint8Array> {
     );
   }
 
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    totalBytes += value.byteLength;
-    if (totalBytes > MAX_ARCHIVE_BYTES) {
-      await reader.cancel();
-      throw new InstallerError(
-        "OSINARA_INSTALL_RELEASE_ARCHIVE_TOO_LARGE",
-        `Installation bundle превышает допустимые ${MAX_ARCHIVE_BYTES} байт`,
-      );
-    }
-    chunks.push(value);
-  }
-  if (totalBytes === 0) {
+  const archive = await readBoundedBody(response, MAX_ARCHIVE_BYTES, () => new InstallerError(
+    "OSINARA_INSTALL_RELEASE_ARCHIVE_TOO_LARGE",
+    `Installation bundle превышает допустимые ${MAX_ARCHIVE_BYTES} байт`,
+  ));
+  if (archive.byteLength === 0) {
     throw new InstallerError(
       "OSINARA_INSTALL_RELEASE_ARCHIVE_INVALID",
       "GitHub Release вернул пустой installation bundle",
     );
   }
-
-  const archive = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    archive.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return archive;
+  return new Uint8Array(archive);
 }
 
 /** Creates a resolver whose version and expected hash are immutable build inputs of the SEA CLI. */

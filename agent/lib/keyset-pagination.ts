@@ -7,11 +7,10 @@
  * - `decodeBigintUuidCursor` / `encodeBigintUuidCursor`: positive bigint plus UUID cursor codec.
  * - `paginationFilterDigest`: stable binding for the filters that define one result set.
  */
-import { createHash } from "node:crypto";
-
 import { AppError } from "./app-error.js";
+import { sha256Json } from "./json-hash.js";
+import { UUID_PATTERN } from "./tool-input-validation.js";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const POSITIVE_BIGINT_PATTERN = /^[1-9]\d*$/u;
 const FILTER_DIGEST_PATTERN = /^[0-9a-f]{32}$/u;
 
@@ -20,7 +19,7 @@ function invalidCursor(code: string, message: string): never {
 }
 
 export function paginationFilterDigest(values: readonly (string | null)[]): string {
-  return createHash("sha256").update(JSON.stringify(values)).digest("hex").slice(0, 32);
+  return sha256Json(values).slice(0, 32);
 }
 
 function requireBinding(

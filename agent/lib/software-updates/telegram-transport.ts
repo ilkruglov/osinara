@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import { SOFTWARE_UPDATE_HTTP_TIMEOUT_MS } from "../../config.js";
 import { AppError } from "../app-error.js";
+import { withRequestTimeout } from "../request-signal.js";
 import type { SoftwareUpdateTelegramTransport } from "./types.js";
 
 const telegramMessageResponseSchema = z.object({
@@ -103,10 +104,7 @@ function createSoftwareUpdateTelegramTransport(
     );
   }
 
-  const boundedFetch: typeof fetch = (request, init) => dependencies.fetch(request, {
-    ...init,
-    signal: AbortSignal.timeout(dependencies.timeoutMs),
-  });
+  const boundedFetch = withRequestTimeout(dependencies.fetch, dependencies.timeoutMs);
 
   async function requireAccepted(method: string, body: TelegramJsonObject): Promise<void> {
     const response = await callTelegramApi({

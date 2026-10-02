@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 
 import { modelConfigError } from "./errors.js";
+import { isRecord } from "../../agent/lib/json-value.js";
 
 const JOURNAL_SCHEMA_VERSION = 1;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
@@ -49,10 +50,6 @@ function invalidJournal(): never {
 function hasExactKeys(value: object, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function decodeBytes(value: unknown): Buffer {

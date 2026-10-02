@@ -4,6 +4,9 @@
  */
 import { z } from "zod";
 import { AppError, isAppError } from "../app-error.js";
+import { readBoundedBody } from "../bounded-body.js";
+import { deadlineSignal } from "../request-signal.js";
+import { isRecord as record } from "../json-value.js";
 
 const SEARCH_URL = "https://api.deepseek.com/anthropic/v1/messages";
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -15,28 +18,13 @@ export const WEB_SEARCH_INPUT = z.object({
 interface SearchResult { title: string; url: string; snippet: string }
 interface SearchResponse { results: SearchResult[]; summary: string; truncated: boolean }
 interface SearchInput { query: string; maxResults?: number; userId?: string; abortSignal?: AbortSignal }
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 function failed(): AppError {
   return new AppError("AGENT_WEB_SEARCH_FAILED", "Поисковый сервис не подтвердил результат. Не выдавайте ответ по памяти за результат поиска");
 }
 
 async function readResponse(response: Response): Promise<unknown> {
-  const reader = response.body?.getReader();
-  if (!reader) throw failed();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) break;
-      bytes += next.value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) { await reader.cancel(); throw failed(); }
-      chunks.push(next.value);
-    }
-  } finally { reader.releaseLock(); }
-  return JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
+  if (!response.body) throw failed();
+  return JSON.parse((await readBoundedBody(response, MAX_RESPONSE_BYTES, failed)).toString("utf8"));
 }
 
 function parseSearchResponse(payload: unknown, maxResults: number): SearchResponse {
@@ -94,13 +82,12 @@ export function createDeepSeekSearchClient(options: {
     if (!options.apiKey || /\s/u.test(options.apiKey)) {
       throw new AppError("AGENT_WEB_SEARCH_NOT_CONFIGURED", "Не настроен ключ DeepSeek для веб-поиска");
     }
-    const signal = AbortSignal.timeout(options.timeoutMs ?? 60_000);
     const started = Date.now();
     try {
       const response = await (options.fetch ?? globalThis.fetch)(SEARCH_URL, {
         method: "POST", redirect: "error",
         headers: { "content-type": "application/json", "x-api-key": options.apiKey, "anthropic-version": "2023-06-01" },
-        signal: input.abortSignal ? AbortSignal.any([input.abortSignal, signal]) : signal,
+        signal: deadlineSignal(options.timeoutMs ?? 60_000, input.abortSignal),
         body: JSON.stringify({
           model: "deepseek-v4-flash", max_tokens: 4096, stream: false,
           thinking: { type: "disabled" },

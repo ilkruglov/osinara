@@ -7,6 +7,7 @@
 import { sendTelegramMessage } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
+import { withRequestTimeout } from "../request-signal.js";
 import { AppError } from "../app-error.js";
 import type { ProactiveDeliveryReceipt } from "../proactive-deliveries/proactive-delivery-repository.js";
 import type { ClaimedReminder } from "./reminder-dispatch-repository.js";
@@ -45,8 +46,7 @@ export async function deliverTelegramReminder(job: ClaimedReminder): Promise<Pro
     ? `Доставлено с задержкой. Изначальное время: ${formatScheduledTime(job)} (${job.timezone}).`
     : null;
   const text = ["Напоминание:", job.content, delayedNotice].filter(Boolean).join("\n\n");
-  const signal = AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS);
-  const fetchWithTimeout: typeof fetch = (request, init) => fetch(request, { ...init, signal });
+  const fetchWithTimeout = withRequestTimeout(fetch, TELEGRAM_API_REQUEST_TIMEOUT_MS);
 
   // Telegram has no idempotency key; the durable marker is written before this boundary call.
   try {

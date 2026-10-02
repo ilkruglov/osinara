@@ -9,9 +9,9 @@
  */
 import { AppError } from "./app-error.js";
 import type { TelegramInboundMediaKind } from "./telegram-message-policy.js";
+import { UUID_PATTERN } from "./tool-input-validation.js";
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface TelegramIngressVoice {
   fileId: string;

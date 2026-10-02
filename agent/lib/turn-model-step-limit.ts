@@ -13,6 +13,7 @@
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 
 import { AppError } from "./app-error.js";
+import { isRecord } from "./json-value.js";
 
 interface TurnModelStepLimitInput {
   readonly event: unknown;
@@ -29,10 +30,6 @@ interface TurnModelStepLimitSelection {
 }
 
 type BlockReason = "limit" | "state";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 export function readModelStepIndex(event: unknown): number | null {
   if (!isRecord(event) || event.type !== "step.started" || !isRecord(event.data)) return null;

@@ -14,7 +14,7 @@ import { chmod, chown, lstat, mkdir, open, realpath, rename, rm } from "node:fs/
 import { createServer } from "node:net";
 
 import type { HostInstallationOperations, HostInstallationStageInput } from "./host-executor.js";
-import { parseBootstrapProcessOutput, releaseEnvironmentFromManifest } from "./host-contracts.js";
+import { composeArgs, parseBootstrapProcessOutput, releaseEnvironmentFromManifest } from "./host-contracts.js";
 import { readInstallationBundle, validateInstallationBundle } from "./installation-bundle.js";
 import { recoverPreMigrationInstallationAttempt } from "./installation-attempt.js";
 import { acquireInstallationLock } from "./installation-lock.js";
@@ -77,16 +77,6 @@ async function writeRootFile(path: string, bytes: Buffer, mode: number): Promise
   } finally {
     await directory.close();
   }
-}
-
-function composeArgs(file: string, envFiles: readonly string[], args: readonly string[]): string[] {
-  return [
-    "compose",
-    ...envFiles.flatMap((envFile) => ["--env-file", envFile]),
-    "--file",
-    file,
-    ...args,
-  ];
 }
 
 async function dockerCompose(

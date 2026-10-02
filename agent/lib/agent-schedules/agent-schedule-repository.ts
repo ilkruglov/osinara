@@ -26,8 +26,6 @@ import {
   findAgentScheduleOperation,
   lockAgentScheduleOperation,
   requireAgentScheduleMutationAccess,
-  requireAgentScheduleTimezone,
-  requireCurrentScheduleMembership,
   selectAgentSchedule,
 } from "./agent-schedule-repository-helpers.js";
 import {
@@ -43,6 +41,7 @@ import {
   requireExternalScheduleHistoryWindowDays,
   requireUpdatedExternalScheduleCapabilities,
 } from "./external-agent-schedule-policy.js";
+import { requireCurrentMembership, requireTimezone } from "../family-repository-checks.js";
 
 export interface AgentScheduleCreateInput {
   firstRunAt: Date;
@@ -106,7 +105,7 @@ export const agentScheduleRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await requireCurrentScheduleMembership(client, auth);
+      await requireCurrentMembership(client, auth);
       await lockAgentScheduleOperation(client, auth, input.operationKey);
       const replay = await findAgentScheduleOperation(
         client,
@@ -122,7 +121,7 @@ export const agentScheduleRepository = {
         await client.query("COMMIT");
         return rowToAgentSchedule(existing);
       }
-      const timezone = await requireAgentScheduleTimezone(client, input.timezone);
+      const timezone = await requireTimezone(client, input.timezone);
       requireDestination(auth, input.scope);
       if (input.scope === "family") {
         const group = await client.query(

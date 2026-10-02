@@ -2,7 +2,9 @@
 import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { clipText } from "../display-text.js";
 import { LAB_MAX_OUTPUT_TOKENS } from "./skill-lab-model.js";
+import { canonicalJson } from "../json-hash.js";
 
 export const experimentPath = z.string().max(180).regex(/^\/workspace\/[a-zA-Z0-9_-]+(?:[./][a-zA-Z0-9_-]+)*$/u);
 const artifactCheckSchema = z.object({
@@ -73,20 +75,12 @@ export type ExperimentProtocol = z.infer<typeof experimentProtocolSchema>;
 export type ArtifactCheck = z.infer<typeof artifactCheckSchema>;
 export type ExperimentCheck = z.infer<typeof experimentCheckSchema>;
 export type ToolFixture = z.infer<typeof toolFixtureSchema>;
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k,v]) => [k,canonical(v)]));
-  return value;
-}
-export const experimentHash = (value: unknown): string => createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+export const experimentHash = (value: unknown): string => createHash("sha256").update(canonicalJson(value)).digest("hex");
 export function experimentApprovalSummary(input: unknown): string[] {
   const protocol = experimentProtocolSchema.safeParse(input);
   if (!protocol.success) return ["Некорректный протокол: выполнение будет отклонено."];
   const p = protocol.data;
-  const brief = (s: string, max: number) => {
-    const line = s.replace(/[\p{Cc}\p{Cf}]/gu, " ");
-    return line.length > max ? line.slice(0, max - 1) + "…" : line;
-  };
+  const brief = (s: string, max: number) => clipText(s.replace(/[\p{Cc}\p{Cf}]/gu, " "), max);
   return [
     p.environment === "scenario" ? "Симуляция внешних инструментов: тестовые ответы; реальных отправок, поиска и изменений данных нет." : "Изоляция: read_file/write_file; без памяти и реальных отправок.",
     `Бюджет: ${p.maxSeconds} с, до ${p.maxCallsPerRun} вызовов модели на прогон, до ${LAB_MAX_OUTPUT_TOKENS} выходных токенов на вызов (с рассуждениями).`,

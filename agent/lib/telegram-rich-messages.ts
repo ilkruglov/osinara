@@ -23,6 +23,7 @@ import {
 } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../config.js";
+import { withRequestTimeout } from "./request-signal.js";
 import { AppError } from "./app-error.js";
 import type { TelegramReplyParameters } from "./telegram-reply.js";
 import { formatTelegramRichMessages } from "./telegram-rich-markdown.js";
@@ -100,16 +101,8 @@ function numericChatId(
   );
 }
 
-function telegramRichFetch(
-  request: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
-  const timeoutSignal = AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS);
-  const signal = init?.signal
-    ? AbortSignal.any([init.signal, timeoutSignal])
-    : timeoutSignal;
-  return fetch(request, { ...init, signal });
-}
+// Resolved per call, so a fetch replaced after import (tests, instrumentation) is the one used.
+const telegramRichFetch = withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS);
 
 function addStableErrorCode(error: Error, code: string): void {
   // DOMException exposes a getter-only message, so attach diagnostics without replacing the cause.

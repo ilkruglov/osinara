@@ -14,13 +14,13 @@
  * - The Eve call id is the operation key: a replayed step returns the same line, adds nothing.
  * - Ported from artkruglov/homka (Apache-2.0) and reduced from shared spaces to a personal list.
  */
-import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { MemoryAuthorization } from "../memory-context.js";
+import { sha256Json } from "../json-hash.js";
 
 const DEFAULT_SHOPPING_LIST = "покупки";
 
@@ -131,7 +131,7 @@ export const shoppingRepository = {
         return { hasMore, items: rows.map(presentShoppingItem), page: input.page ?? 1 };
       }
       if (!operationKey || operationKey.length > 500) shoppingDenied();
-      const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+      const hash = sha256Json(input);
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${ownerUserId}:shopping:${operationKey}`]);
       const previous = await client.query<{ item_id: string; request_hash: string }>(
         "SELECT item_id, request_hash FROM shopping_item_operations WHERE owner_user_id = $1 AND operation_key = $2",

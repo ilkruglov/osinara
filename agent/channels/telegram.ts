@@ -70,8 +70,7 @@ import { memoryReviewRepository } from "../lib/memory-review/memory-review-repos
 import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-review-dispatch-repository.js";
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+import { UUID_PATTERN } from "../lib/tool-input-validation.js";
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,

@@ -22,9 +22,7 @@ import {
 import {
   REMINDER_COLUMNS,
   findReminderOperation,
-  requireCurrentMembership,
   requireReminderMutationAccess,
-  requireTimezone,
   selectReminder,
 } from "./reminder-repository-helpers.js";
 import {
@@ -34,6 +32,7 @@ import {
   requireReminderDate,
   requireReminderRecurrence,
 } from "./reminder-validation.js";
+import { requireCurrentMembership, requireTimezone } from "../family-repository-checks.js";
 
 export interface ReminderCreateInput {
   content: string;

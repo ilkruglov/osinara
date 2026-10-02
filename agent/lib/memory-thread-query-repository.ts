@@ -9,7 +9,6 @@ import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import { embedMemoryQuery } from "./memory-embedding-client.js";
 import {
-  MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   THREAD_HISTORY_PAGE_MAX_CHARACTERS,
   THREAD_HISTORY_PAGE_MAX_ENTRIES,
@@ -18,6 +17,7 @@ import {
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import { liveMemoryReadPredicate } from "./memory-live-read-authorization.js";
 import type { ModelMemoryEvidence } from "./model-memory.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 export const THREAD_REF_PATTERN = /^thread_[0-9a-f]{32}$/u;
 export const THREAD_ENTRY_REF_PATTERN = /^entry_[0-9a-f]{32}$/u;
@@ -73,14 +73,10 @@ type ThreadReadRow = ThreadSummaryRow & { id: string } & ({
 });
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-    !vector.every((value) => Number.isFinite(value))) {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
-      "Не удалось выполнить смысловой поиск нитей памяти",
-    );
-  }
-  return `[${vector.join(",")}]`;
+  return memoryVectorLiteral(vector, () => new AppError(
+    "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
+    "Не удалось выполнить смысловой поиск нитей памяти",
+  ));
 }
 
 function toSummary(row: ThreadSummaryRow): ModelMemoryThreadSummary {

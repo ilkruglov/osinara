@@ -13,6 +13,8 @@
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 
 import { AppError } from "./app-error.js";
+import { readBoundedBody } from "./bounded-body.js";
+import { asRecord as record } from "./json-value.js";
 
 type WireDirection = "from-minimax" | "to-minimax";
 
@@ -37,12 +39,6 @@ function parseWireJson(source: string): unknown {
     }
     throw error;
   }
-}
-
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
 }
 
 function rewriteSearchResult(value: unknown, direction: WireDirection): unknown {
@@ -310,35 +306,11 @@ function rewrittenResponse(response: Response, body: BodyInit): Response {
 }
 
 async function readBoundedJsonBody(response: Response): Promise<string> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && /^\d+$/u.test(declaredLength)) {
-    if (Number(declaredLength) > MAX_JSON_RESPONSE_BYTES) {
-      throw new AppError(
-        "AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED",
-        "MiniMax передал слишком большой JSON-ответ",
-      );
-    }
-  }
-
-  // Count bytes while decoding so a missing or dishonest Content-Length cannot exhaust memory.
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let bytesRead = 0;
-  let source = "";
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    bytesRead += chunk.value.byteLength;
-    if (bytesRead > MAX_JSON_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new AppError(
-        "AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED",
-        "MiniMax передал слишком большой JSON-ответ",
-      );
-    }
-    source += decoder.decode(chunk.value, { stream: true });
-  }
-  return source + decoder.decode();
+  const body = await readBoundedBody(response, MAX_JSON_RESPONSE_BYTES, () => new AppError(
+    "AGENT_MINIMAX_ANTHROPIC_JSON_LIMIT_EXCEEDED",
+    "MiniMax передал слишком большой JSON-ответ",
+  ));
+  return body.toString("utf8");
 }
 
 async function rewriteResponse(response: Response): Promise<Response> {

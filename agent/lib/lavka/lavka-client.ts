@@ -18,7 +18,7 @@
  *   failing payment poll reports `paymentStatus: "unknown"` instead of hiding the order.
  * - Not a published API: an unexpected answer is `AGENT_LAVKA_UNAVAILABLE`, never a guess.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { AppError } from "../app-error.js";
 import type { BrowserDriver } from "../browser/browser-driver.js";
@@ -32,6 +32,7 @@ import {
 } from "./lavka-config.js";
 import type { LavkaPageRequest, LavkaPageResult } from "./lavka-page-script.js";
 import { lavkaPageScript } from "./lavka-page-script.js";
+import { sha256Json } from "../json-hash.js";
 
 export interface LavkaDeliveryPoint {
   city: string; comment: string; country: string; doorcode: string; entrance: string; flat: string; floor: string;
@@ -59,7 +60,7 @@ interface Deps { driver: Pick<BrowserDriver, "eval" | "open" | "settle" | "url">
  */
 export function lavkaAddressKey(point: LavkaDeliveryPoint): string {
   const fields = [point.city, point.street, point.house, point.flat, point.entrance, point.floor, point.doorcode, point.comment, point.lat.toFixed(6), point.lon.toFixed(6)];
-  return createHash("sha256").update(JSON.stringify(fields)).digest("hex").slice(0, 16);
+  return sha256Json(fields).slice(0, 16);
 }
 
 /** Submit failures that prove no order was created. */

@@ -6,6 +6,7 @@
  * - `normalizeDeepSeekResponsesRequest`: applies the documented compatibility table to a request
  *   body produced by the AI SDK OpenAI Responses client.
  */
+import { isRecord } from "../json-value.js";
 export type DeepSeekReasoningEffort = "high" | "low" | "max" | "none";
 
 /** Request fields DeepSeek documents as unsupported or ignored; dropping them keeps the wire exact. */
@@ -27,10 +28,6 @@ const DEEPSEEK_RESPONSES_UNSUPPORTED_FIELDS = [
 
 /** DeepSeek ignores provider-managed search; a local web_search must be a function tool. */
 const SUPPORTED_TOOL_TYPES = new Set(["function"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function normalizeDeepSeekResponsesBody(
   body: Record<string, unknown>,

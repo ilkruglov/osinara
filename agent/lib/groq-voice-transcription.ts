@@ -15,6 +15,8 @@ import {
   TELEGRAM_VOICE_MAX_BYTES,
 } from "../config.js";
 import { AppError } from "./app-error.js";
+import { readBoundedBody } from "./bounded-body.js";
+import { withRequestTimeout } from "./request-signal.js";
 import { voiceTranscriptionModel } from "./model-registry.js";
 
 const OGG_SIGNATURE = new Uint8Array([0x4f, 0x67, 0x67, 0x53]);
@@ -53,45 +55,17 @@ function includesSignature(bytes: Uint8Array, signature: Uint8Array): boolean {
 }
 
 async function readLimitedBody(response: Response, maxBytes: number): Promise<Uint8Array> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > maxBytes) {
-    throw new AppError(
-      "AGENT_VOICE_FILE_TOO_LARGE",
-      "Голосовое сообщение превышает допустимый размер. Отправьте более короткую запись",
-    );
-  }
   if (!response.body) {
     throw new AppError(
       "AGENT_VOICE_DOWNLOAD_FAILED",
       "Не удалось скачать голосовое сообщение из Telegram. Попробуйте отправить его снова",
     );
   }
-
-  // Read incrementally so an incorrect or absent Content-Length cannot bypass the hard cap.
-  const chunks: Uint8Array[] = [];
-  const reader = response.body.getReader();
-  let receivedBytes = 0;
-  for (;;) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    receivedBytes += chunk.value.byteLength;
-    if (receivedBytes > maxBytes) {
-      await reader.cancel();
-      throw new AppError(
-        "AGENT_VOICE_FILE_TOO_LARGE",
-        "Голосовое сообщение превышает допустимый размер. Отправьте более короткую запись",
-      );
-    }
-    chunks.push(chunk.value);
-  }
-
-  const audio = new Uint8Array(receivedBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    audio.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return audio;
+  // A plain copy: a small Buffer may sit in Node's shared allocation pool.
+  return new Uint8Array(await readBoundedBody(response, maxBytes, () => new AppError(
+    "AGENT_VOICE_FILE_TOO_LARGE",
+    "Голосовое сообщение превышает допустимый размер. Отправьте более короткую запись",
+  )));
 }
 
 export function createTelegramVoiceTranscriber(dependencies: TelegramVoiceTranscriberDependencies) {
@@ -131,12 +105,7 @@ export function createTelegramVoiceTranscriber(dependencies: TelegramVoiceTransc
   };
 }
 
-function telegramFetchWithTimeout(input: URL | RequestInfo, init?: RequestInit): Promise<Response> {
-  return fetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS),
-  });
-}
+const telegramFetchWithTimeout = withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS);
 
 export const transcribeTelegramVoice = createTelegramVoiceTranscriber({
   downloadFile: (filePath) => downloadTelegramFile({ fetch: telegramFetchWithTimeout, filePath }),

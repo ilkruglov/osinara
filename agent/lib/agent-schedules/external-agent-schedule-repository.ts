@@ -39,6 +39,7 @@ import {
   type ExternalScheduleCapability,
   parseExternalScheduleCapabilities,
 } from "./external-agent-schedule-policy.js";
+import { lockCurrentOwner, requireTimezone } from "../family-repository-checks.js";
 
 const HISTORY_WINDOW_MAX_DAYS = 365;
 type QueryClient = Pick<PoolClient, "query">;
@@ -106,13 +107,7 @@ async function requireCurrentOwner(
   client: PoolClient,
   auth: ExternalAgentScheduleAuthorization,
 ): Promise<void> {
-  const result = await client.query(
-    `SELECT 1 FROM family_memberships
-      WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-      FOR SHARE`,
-    [auth.familyId, auth.requestedBy],
-  );
-  if (result.rowCount !== 1) {
+  if (!await lockCurrentOwner(client, auth.familyId, auth.requestedBy)) {
     throw new AppError(
       "AGENT_OWNER_REQUIRED",
       "Управление автоматизациями внешних групп доступно только текущему владельцу в личном чате",
@@ -263,16 +258,7 @@ export const externalAgentScheduleRepository = {
         await client.query("COMMIT");
         return existing;
       }
-      const timezone = await client.query(
-        "SELECT 1 FROM pg_timezone_names WHERE name = $1",
-        [input.timezone],
-      );
-      if (timezone.rowCount !== 1) {
-        throw new AppError(
-          "AGENT_TIMEZONE_INVALID",
-          "Не удалось распознать часовой пояс. Укажите IANA timezone, например Europe/Moscow",
-        );
-      }
+      await requireTimezone(client, input.timezone);
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO agent_schedules
            (family_id, owner_user_id, author_user_id, group_id, scope, title,

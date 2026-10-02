@@ -11,6 +11,7 @@
  *   by an older release is left intact rather than truncated.
  */
 import { allApprovalConsequences } from "./approval-consequences.js";
+import { clipText } from "../display-text.js";
 import { stripApprovalConsequence } from "./approval-message.js";
 
 export function settledPromptText(prompt: string): string {
@@ -22,9 +23,5 @@ export function settledPromptText(prompt: string): string {
  * rejects a malformed payload, which would leave the decided prompt showing its old buttons.
  */
 export function boundSettledPrompt(prompt: string, limit: number): string {
-  if (limit <= 0) return "";
-  if (prompt.length <= limit) return prompt;
-  let end = limit - 1;
-  if (/[\uD800-\uDBFF]/u.test(prompt[end - 1] ?? "")) end -= 1;
-  return `${prompt.slice(0, end).trimEnd()}…`;
+  return clipText(prompt, limit);
 }

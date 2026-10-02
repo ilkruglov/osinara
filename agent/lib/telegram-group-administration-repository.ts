@@ -20,6 +20,7 @@ import type {
   StandardTelegramGroupMessageMode,
   TelegramGroupMessageMode,
 } from "./family-access.js";
+import { requireLockedOwner } from "./family-repository-checks.js";
 
 interface TelegramGroupRegistrationBase {
   familyId: string;
@@ -87,16 +88,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("BEGIN");
 
       // Keep the current owner membership locked until the family-scoped policy read completes.
-      const owner = await client.query(
-        `SELECT 1
-           FROM family_memberships
-          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-          FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Return the exact persisted configuration; effective external base tools are added by the
       // model-facing tool from the same static catalog used by execution policy.
@@ -135,16 +127,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("BEGIN");
 
       // Lock current ownership so a parked HITL action cannot outlive role revocation.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Receipt-time media policy and trust-zone replacement share this chat-level lock.
       await client.query(
@@ -216,16 +199,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("BEGIN");
 
       // Authorization is current at mutation time, not inherited from the private session snapshot.
-      const owner = await client.query(
-        `SELECT 1
-           FROM family_memberships
-          WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-          FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Serialize exact-chat administration so registration replacement or removal cannot race
       // selection of the trust zone whose canonical sessions are being rotated.
@@ -288,16 +262,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("BEGIN");
 
       // Keep authorization and deletion in one transaction to close the HITL revocation race.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Prevent removal from overtaking an in-flight media trust-zone decision.
       await client.query(
@@ -335,16 +300,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       await client.query("BEGIN");
 
       // Recheck current ownership under a shared row lock after HITL and before any side effect.
-      const owner = await client.query(
-        `SELECT 1
-         FROM family_memberships
-         WHERE family_id = $1 AND user_id = $2 AND role = 'owner'
-         FOR SHARE`,
-        [input.familyId, input.requestedBy],
-      );
-      if (!owner.rowCount) {
-        throw new AppError("AGENT_OWNER_REQUIRED", "Это действие доступно только владельцу");
-      }
+      await requireLockedOwner(client, input.familyId, input.requestedBy);
 
       // Serialize against registration, removal, and receipt-time trust decisions for this chat.
       await client.query(

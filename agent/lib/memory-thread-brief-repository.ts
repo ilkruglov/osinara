@@ -10,7 +10,6 @@
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import {
-  MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   THREAD_CONTEXT_EPISODES_PER_THREAD,
   THREAD_EPISODE_MAX_CHARACTERS,
@@ -29,6 +28,7 @@ import {
 } from "./memory-thread-source-repository.js";
 import { assembleMemoryThreadContext, type ActivatedMemoryThread, type MemoryThreadContext } from "./memory-thread-context.js";
 import { loadMemoryThreadSourceEvidence } from "./memory-thread-source-evidence.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 interface ActivatedThreadRow {
   id: string;
@@ -42,14 +42,10 @@ interface ActivatedThreadRow {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-    !vector.every((value) => Number.isFinite(value))) {
-    throw new AppError(
-      "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
-      "Не удалось выполнить смысловой поиск нитей памяти",
-    );
-  }
-  return `[${vector.join(",")}]`;
+  return memoryVectorLiteral(vector, () => new AppError(
+    "AGENT_MEMORY_THREAD_QUERY_EMBEDDING_INVALID",
+    "Не удалось выполнить смысловой поиск нитей памяти",
+  ));
 }
 
 function titleSimilarity(value: number | string | null): number | null {

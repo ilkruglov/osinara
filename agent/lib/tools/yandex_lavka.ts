@@ -16,8 +16,6 @@
  *   returns the stored result or an ambiguity code instead of adding or ordering twice.
  * - The delivery point is chosen once (`use_address` or `set_address`) and kept per person.
  */
-import { createHash } from "node:crypto";
-
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
@@ -28,6 +26,7 @@ import { lavkaOperationRepository, runLavkaOperation, type LavkaOperationAction 
 import { lavkaClientFor } from "../lavka/lavka-production.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
+import { sha256Json } from "../json-hash.js";
 
 const productId = z.string().trim().min(1).max(120);
 const quantity = z.number().int().min(0).max(LAVKA_ITEM_MAX_QUANTITY);
@@ -98,7 +97,7 @@ export default defineTool({
     // re-run model step generates the same add under a new call id (Codex review, 28 September 2026).
     const once = async <T>(action: LavkaOperationAction, run: () => Promise<T>) => {
       const key = action === "add"
-        ? `${ctx.session.id}:${ctx.session.turn.id}:add:${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 32)}`
+        ? `${ctx.session.id}:${ctx.session.turn.id}:add:${sha256Json(input).slice(0, 32)}`
         : `${ctx.session.id}:${ctx.callId}`;
       const done = await runLavkaOperation(lavkaOperationRepository, { action, key, request: input, userId }, run);
       return done.replayed && action === "add"

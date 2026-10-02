@@ -3,11 +3,12 @@
  *
  * Exports:
  * - `agentScheduleColumns` and `AGENT_SCHEDULE_COLUMNS`: qualified and plain row projections.
- * - Membership, timezone, replay, idempotency-lock, row-lock, and mutation authorization helpers.
+ * - Replay, idempotency-lock, row-lock, and mutation authorization helpers.
  */
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
+import { requireCurrentMembership } from "../family-repository-checks.js";
 import type { AgentScheduleAuthorization } from "./agent-schedule-context.js";
 import type { AgentScheduleRow } from "./agent-schedule-record.js";
 
@@ -31,38 +32,6 @@ export function agentScheduleColumns(qualifier?: string): string {
 }
 
 export const AGENT_SCHEDULE_COLUMNS = agentScheduleColumns();
-
-export async function requireCurrentScheduleMembership(
-  client: PoolClient,
-  auth: AgentScheduleAuthorization,
-): Promise<"member" | "owner" | "recovery_owner"> {
-  const membership = await client.query<{ role: "member" | "owner" | "recovery_owner" }>(
-    "SELECT role FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-    [auth.familyId, auth.userId],
-  );
-  const role = membership.rows[0]?.role;
-  if (!role) {
-    throw new AppError("AGENT_ACCESS_DENIED", "У вас больше нет доступа к этой семье");
-  }
-  return role;
-}
-
-export async function requireAgentScheduleTimezone(
-  client: PoolClient,
-  timezone: string,
-): Promise<string> {
-  const result = await client.query<{ name: string }>(
-    "SELECT name FROM pg_timezone_names WHERE name = $1",
-    [timezone],
-  );
-  if (!result.rows[0]) {
-    throw new AppError(
-      "AGENT_TIMEZONE_INVALID",
-      "Не удалось распознать часовой пояс. Укажите название IANA, например Europe/Moscow",
-    );
-  }
-  return result.rows[0].name;
-}
 
 export async function findAgentScheduleOperation(
   client: PoolClient,
@@ -139,7 +108,7 @@ export async function requireAgentScheduleMutationAccess(
   if (!agentScheduleVisibleInChat(auth, schedule)) {
     throw new AppError("AGENT_SCHEDULE_NOT_FOUND", "Агентное расписание не найдено");
   }
-  const role = await requireCurrentScheduleMembership(client, auth);
+  const role = await requireCurrentMembership(client, auth);
   const allowed = schedule.scope === "personal"
     ? schedule.author_user_id === auth.userId
     : schedule.scope === "family"

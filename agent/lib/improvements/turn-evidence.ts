@@ -15,6 +15,8 @@
  */
 import { createHash } from "node:crypto";
 
+import { clipText } from "../display-text.js";
+
 const REFLECTION_STEP_THRESHOLD = 8;
 const MAX_TRACKED_TURNS = 200;
 const ERROR_MESSAGE_MAX_CHARACTERS = 300;
@@ -42,10 +44,7 @@ function emptyEvidence(): TurnEvidence {
 }
 
 function clip(text: string): string {
-  const normalized = text.replace(/\s+/gu, " ").trim();
-  return normalized.length > ERROR_MESSAGE_MAX_CHARACTERS
-    ? `${normalized.slice(0, ERROR_MESSAGE_MAX_CHARACTERS)}…`
-    : normalized;
+  return clipText(text.replace(/\s+/gu, " ").trim(), ERROR_MESSAGE_MAX_CHARACTERS);
 }
 
 export function createTurnEvidenceCollector() {

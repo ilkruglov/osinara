@@ -114,9 +114,9 @@ describe("flux image clients", () => {
 
   it("scrubs the API key and key-shaped tokens from provider text before logging", () => {
     expect(scrubProviderText("Invalid API key: sk-pv-abcdefghijklmnop (Bearer sk-pv-abcdefghijklmnop)", "sk-pv-abcdefghijklmnop"))
-      .toBe("Invalid API key: [key] (Bearer [key])");
-    expect(scrubProviderText("Authorization: Bearer abc.DEF-123_x expired", "other-key-value")).toBe("Authorization: [secret] expired");
-    expect(scrubProviderText("token nd-1234567890abc rejected", "other-key-value")).toBe("token [secret] rejected");
+      .toBe("Invalid API key: [СКРЫТО] (Bearer [СКРЫТО])");
+    expect(scrubProviderText("Authorization: Bearer abc.DEF-123_x expired", "other-key-value")).toBe("Authorization: Bearer [СКРЫТО] expired");
+    expect(scrubProviderText("token nd-1234567890abc rejected", "other-key-value")).toBe("token [СКРЫТО] rejected");
     expect(scrubProviderText({ nested: true }, "k")).toBe("");
     expect(scrubProviderText("x".repeat(300), "key-key-key")).toHaveLength(200);
   });

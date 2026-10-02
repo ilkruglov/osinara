@@ -8,6 +8,7 @@
  * - `parseWorkspaceSandboxUseOptions`: validates mounted or explicitly disabled Eve session state.
  * - Other `parse*` helpers: validate every untrusted HTTP payload fail-closed.
  * - Runner endpoint, execution-limit, and transport-timeout constants.
+ * - `shellQuote`: one POSIX single-quoted word, for commands both sides assemble.
  */
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
@@ -15,6 +16,11 @@ import { posix } from "node:path";
 import { z } from "zod";
 
 export const SANDBOX_RUNNER_API_PREFIX = "/v1";
+
+export function shellQuote(value: string): string {
+  return `'${value.split("'").join("'\\''")}'`;
+}
+
 const SANDBOX_RUNNER_COMMAND_MAX_CHARACTERS = 100_000;
 const SANDBOX_RUNNER_ENVIRONMENT_MAX_ENTRIES = 100;
 export const SANDBOX_RUNNER_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;

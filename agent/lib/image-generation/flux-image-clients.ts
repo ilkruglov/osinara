@@ -7,12 +7,14 @@
  *   generation and multipart editing under the same task contract.
  * - `createFallbackImageClient`: advances after definitive refusals; unknown outcomes stop the chain.
  * - `detectImageMediaType`: PNG / JPEG / WebP by magic bytes; anything else is rejected.
- * - `ambiguous`, `rejected`, `unavailable`, `imageFromBytes`, `readBoundedBody`, `scrubProviderText`
+ * - `ambiguous`, `rejected`, `unavailable`, `imageFromBytes`, `readImageBody`, `scrubProviderText`
  *   and the status classifiers are shared with the PlusVibe client in `plusvibe-image-client.ts`.
  */
 import { AppError, isAppError } from "../app-error.js";
+import { readBoundedBody } from "../bounded-body.js";
 import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
 import { assertReferenceCount, editingUnavailable, prepareCloudflareReference, prepareUploadReference } from "./image-editing-input.js";
+import { redactSecrets } from "../secret-redaction.js";
 
 // klein-9b and flux-2-dev are deliberately absent: they burn the free Workers AI quota in a few images.
 // flux-1-schnell is absent too: it rejects width/height, so it cannot honour the requested size.
@@ -33,37 +35,19 @@ export const GENERATION_TIMEOUT_MS = 3 * 60 * 1_000;
 const NEURALDEEP_POLL_INTERVAL_MS = 3_000;
 const NEURALDEEP_POLL_TIMEOUT_MS = 4 * 60 * 1_000;
 const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
-const SECRET_PATTERN = /\b(?:sk|pv|nd|cf)-[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9_.-]+/gu;
 
 /** Provider text goes to the log only after the API key and anything key-shaped are removed. */
 export function scrubProviderText(text: unknown, apiKey: string, limit = 200): string {
   if (typeof text !== "string") return "";
-  const withoutKey = apiKey.length >= 8 ? text.split(apiKey).join("[key]") : text;
-  return withoutKey.replace(SECRET_PATTERN, "[secret]").replace(/\s+/gu, " ").trim().slice(0, limit);
+  return redactSecrets(text, [apiKey]).replace(/\s+/gu, " ").trim().slice(0, limit);
 }
 
 /**
  * Reads a response body up to `MAX_IMAGE_BYTES`; a longer stream is cut off before it fills the
  * process memory. The caller classifies the oversized result (accepted request, unknown outcome).
  */
-export async function readBoundedBody(response: Response): Promise<Buffer> {
-  if (response.body === null) return Buffer.from(await response.arrayBuffer());
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_IMAGE_BYTES) throw new Error(`image body exceeds ${MAX_IMAGE_BYTES} bytes`);
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-    if (total > MAX_IMAGE_BYTES) await response.body.cancel().catch(() => undefined);
-  }
-  return Buffer.concat(chunks);
+export async function readImageBody(response: Response): Promise<Buffer> {
+  return await readBoundedBody(response, MAX_IMAGE_BYTES, () => new Error(`image body exceeds ${MAX_IMAGE_BYTES} bytes`));
 }
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/u;
 
@@ -124,6 +108,31 @@ export function rejected(provider: string, detail: string): AppError {
     "Сервис генерации изображений отклонил запрос. Уберите названия брендов, марок и персон, "
       + "опишите объект своими словами и попробуйте снова",
   );
+}
+
+export const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+/**
+ * One deadline for a polled job: `remaining()` gives the signal for the next call and throws once the
+ * window has passed; `bounded` runs a call under it and turns a transport failure into an ambiguous
+ * outcome, since the provider may already have billed the job.
+ */
+export function pollDeadline(provider: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  const remaining = () => {
+    const left = deadline - Date.now();
+    if (left <= 0) throw ambiguous(provider, "poll timeout");
+    return AbortSignal.timeout(left);
+  };
+  const bounded = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    try {
+      return await operation(remaining());
+    } catch (error) {
+      if (isAppError(error)) throw error;
+      throw ambiguous(provider, error instanceof Error ? error.message : String(error));
+    }
+  };
+  return { bounded, remaining };
 }
 
 export function imageFromBytes(bytes: Buffer, model: string, provider: string): GeneratedImage {
@@ -209,7 +218,7 @@ export function createCloudflareImageClient(
           }
           bytes = Buffer.from(encoded, "base64");
         } else {
-          bytes = await readBoundedBody(response);
+          bytes = await readImageBody(response);
         }
       } catch (error) {
         if (isAppError(error)) throw error;
@@ -225,7 +234,7 @@ export function createNeuralDeepImageClient(
 ): FluxImageClient {
   const pollTimeoutMs = options.pollTimeoutMs ?? NEURALDEEP_POLL_TIMEOUT_MS;
   const fetchImplementation = options.fetch ?? globalThis.fetch;
-  const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const sleep = options.sleep ?? defaultSleep;
   const baseUrl = (options.baseUrl ?? NEURALDEEP_IMAGE_BASE_URL).replace(/\/$/u, "");
   const authorization = `Bearer ${options.apiKey}`;
 
@@ -264,20 +273,7 @@ export function createNeuralDeepImageClient(
     const headers = { authorization };
     // One deadline bounds every poll, the result download and the body read: a hanging GET used
     // to outlive the window because time was checked only after a response arrived.
-    const deadline = Date.now() + pollTimeoutMs;
-    const remaining = () => {
-      const left = deadline - Date.now();
-      if (left <= 0) throw ambiguous("neuraldeep", "poll timeout");
-      return AbortSignal.timeout(left);
-    };
-    const bounded = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> => {
-      try {
-        return await operation(remaining());
-      } catch (error) {
-        if (isAppError(error)) throw error;
-        throw ambiguous("neuraldeep", error instanceof Error ? error.message : String(error));
-      }
-    };
+    const { bounded, remaining } = pollDeadline("neuraldeep", pollTimeoutMs);
     for (;;) {
       await sleep(NEURALDEEP_POLL_INTERVAL_MS);
       const status = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}`, { headers, method: "GET", signal }));
@@ -289,7 +285,7 @@ export function createNeuralDeepImageClient(
     }
     const result = await bounded((signal) => fetchImplementation(`${baseUrl}/images/tasks/${taskId}/result`, { headers, method: "GET", signal }));
     if (!result.ok) throw ambiguous("neuraldeep", `result ${result.status}`);
-    return await bounded(() => readBoundedBody(result));
+    return await bounded(() => readImageBody(result));
   }
 
   return {

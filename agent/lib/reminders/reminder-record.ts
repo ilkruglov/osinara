@@ -6,7 +6,7 @@
  * - `reminderOperationHash`: replay-protection fingerprint.
  * - `rowToReminder`: safe PostgreSQL projection.
  */
-import { createHash } from "node:crypto";
+import { sha256Json } from "../json-hash.js";
 
 export type ReminderScope = "family" | "personal";
 export type ReminderStatus = "active" | "completed" | "failed" | "leased" | "paused";
@@ -67,5 +67,5 @@ export function rowToReminder(row: ReminderRow): ReminderRecord {
 }
 
 export function reminderOperationHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  return sha256Json(value);
 }

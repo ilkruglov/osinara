@@ -9,6 +9,7 @@
 import { callTelegramApi } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
+import { withRequestTimeout } from "../request-signal.js";
 import { AppError } from "../app-error.js";
 
 export class MemoryReviewOwnerAlertTransportError extends AppError {
@@ -44,10 +45,7 @@ export function createMemoryReviewOwnerAlertTransport(
     "Тайм-аут уведомления владельца должен быть положительным целым числом",
   );
 
-  const boundedFetch: typeof fetch = (request, init) => dependencies.fetch(request, {
-    ...init,
-    signal: AbortSignal.timeout(dependencies.timeoutMilliseconds),
-  });
+  const boundedFetch = withRequestTimeout(dependencies.fetch, dependencies.timeoutMilliseconds);
   return {
     async deliver(input): Promise<void> {
       const response = await callTelegramApi({

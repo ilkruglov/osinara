@@ -15,10 +15,9 @@
  * - A thrown error the site explained before any write (validation, lost session, moved tab) frees
  *   the key; any other failure keeps it `started`, which a replay reports as ambiguous.
  */
-import { createHash } from "node:crypto";
-
 import { AppError, isAppError } from "../app-error.js";
 import { database } from "../database.js";
+import { sha256Json } from "../json-hash.js";
 
 export type LavkaOperationAction = "add" | "cancel" | "order";
 
@@ -58,7 +57,7 @@ export async function runLavkaOperation<T>(
   input: { action: LavkaOperationAction; key: string; request: unknown; userId: string },
   run: () => Promise<T>,
 ): Promise<{ replayed: boolean; result: T }> {
-  const requestHash = createHash("sha256").update(JSON.stringify(input.request)).digest("hex");
+  const requestHash = sha256Json(input.request);
   const begun = await repository.begin({ action: input.action, key: input.key, requestHash, userId: input.userId });
   if (begun.kind === "existing") {
     if (begun.requestHash !== requestHash) {

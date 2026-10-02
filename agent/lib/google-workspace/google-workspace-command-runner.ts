@@ -17,6 +17,7 @@ import {
 import { ModelFacingError } from "../model-facing-error.js";
 import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import type { GoogleIntegrationAuthorization } from "./google-integration-contract.js";
+import { redactSecrets } from "../secret-redaction.js";
 
 export interface GoogleWorkspaceCommandResult {
   exitCode: number;
@@ -26,7 +27,6 @@ export interface GoogleWorkspaceCommandResult {
 
 const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
 const MODEL_DIAGNOSTIC_MAX_CHARACTERS = 1_000;
-const REDACTED_DIAGNOSTIC_VALUE = "[СКРЫТО]";
 
 type GoogleWorkspaceCommandKind = "mutation" | "read";
 
@@ -37,20 +37,8 @@ interface GoogleWorkspaceCommandRunnerDependencies {
   ): ReturnType<SandboxRunnerClient["runGoogleWorkspace"]>;
 }
 
-function redactDiagnosticSecrets(value: string, accessToken: string): string {
-  // The exact live token is always sensitive even when its provider format changes.
-  return value
-    .split(accessToken).join(REDACTED_DIAGNOSTIC_VALUE)
-    .replace(
-      /\b([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?))\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,}]+)/giu,
-      `$1=${REDACTED_DIAGNOSTIC_VALUE}`,
-    )
-    .replace(/\b(Bearer|Basic)\s+[^\s]+/giu, `$1 ${REDACTED_DIAGNOSTIC_VALUE}`)
-    .replace(/:\/\/([^\s:/]+):([^\s@/]+)@/gu, `://$1:${REDACTED_DIAGNOSTIC_VALUE}@`);
-}
-
 function boundedDiagnostic(stderr: string, accessToken: string): string | null {
-  const normalized = redactDiagnosticSecrets(stderr, accessToken).replace(/\s+/gu, " ").trim();
+  const normalized = redactSecrets(stderr, [accessToken]).replace(/\s+/gu, " ").trim();
   if (!normalized) return null;
   return normalized.slice(0, MODEL_DIAGNOSTIC_MAX_CHARACTERS);
 }

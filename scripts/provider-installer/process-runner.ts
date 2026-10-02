@@ -7,21 +7,12 @@
 import { spawn } from "node:child_process";
 
 import { InstallerError } from "./errors.js";
+import { redactSecrets } from "../../agent/lib/secret-redaction.js";
 
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const MAX_DIAGNOSTIC_BYTES = 2 * 1024;
 const DIAGNOSTIC_EDGE_BYTES = MAX_DIAGNOSTIC_BYTES / 2;
 const SAFE_HOST_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-
-function redactDiagnosticSecrets(value: string): string {
-  return value
-    .replace(
-      /\b([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?))\s*=\s*([^\s]+)/giu,
-      "$1=[СКРЫТО]",
-    )
-    .replace(/\b(Bearer|Basic)\s+[^\s]+/giu, "$1 [СКРЫТО]")
-    .replace(/:\/\/([^\s:/]+):([^\s@/]+)@/gu, "://$1:[СКРЫТО]@");
-}
 
 function boundedStderrDiagnostic(stderr: readonly Buffer[]): string | null {
   const bytes = Buffer.concat(stderr);
@@ -35,7 +26,7 @@ function boundedStderrDiagnostic(stderr: readonly Buffer[]): string | null {
         Buffer.from("\n...[диагностика сокращена]...\n", "utf8"),
         bytes.subarray(-DIAGNOSTIC_EDGE_BYTES),
       ]);
-  const sanitized = redactDiagnosticSecrets(selected.toString("utf8")).trim();
+  const sanitized = redactSecrets(selected.toString("utf8")).trim();
   return sanitized || null;
 }
 

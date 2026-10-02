@@ -10,8 +10,6 @@
  * - One row lock and `expectedRevision` prevent silent lost updates.
  * - The last source/hash pair makes an exact Eve tool replay idempotent.
  */
-import { createHash } from "node:crypto";
-
 import type { PoolClient } from "pg";
 
 import { AppError } from "./app-error.js";
@@ -26,6 +24,7 @@ import {
   requireChatOperationalPromptText,
 } from "./behavior-preferences.js";
 import { database } from "./database.js";
+import { sha256Json } from "./json-hash.js";
 
 export type BehaviorPreferenceMutation =
   | { action: "append" | "replace"; content: string; expectedRevision: number }
@@ -203,7 +202,7 @@ async function requireBotBoundary(
 }
 
 function operationHash(input: BehaviorPreferenceMutation): string {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  return sha256Json(input);
 }
 
 function project(row: PromptRow | undefined): ChatOperationalPrompt {

@@ -11,6 +11,7 @@
  *   bot sender is a real participant of the timeline. It never carries family identity or rights.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
+import { asRecord as record, nonEmptyText } from "./json-value.js";
 
 export type TelegramTimelineActorKind =
   | "agent_self"
@@ -28,26 +29,13 @@ export interface TelegramInboundActor {
   username: string | null;
 }
 
-type JsonRecord = Record<string, unknown>;
 // Telegram Bot API uses this fixed fake user for messages posted on behalf of a channel.
 const TELEGRAM_CHANNEL_BOT_ID = "136817688";
-
-function record(value: unknown): JsonRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as JsonRecord
-    : null;
-}
 
 function exactIdentifier(value: unknown): string | null {
   if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
   if (typeof value === "string" && /^-?\d+$/u.test(value)) return value;
   return null;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  return text.length > 0 ? text : null;
 }
 
 function userDisplayName(message: TelegramMessage): string | null {

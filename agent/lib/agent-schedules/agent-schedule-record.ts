@@ -6,7 +6,7 @@
  * - `rowToAgentSchedule`: converts PostgreSQL rows to tool-safe records.
  * - `agentScheduleOperationHash`: replay protection digest for mutation tools.
  */
-import { createHash } from "node:crypto";
+import { sha256Json } from "../json-hash.js";
 
 export type AgentScheduleScope = "family" | "group" | "personal";
 export type AgentScheduleStatus = "active" | "completed" | "failed" | "leased" | "paused";
@@ -87,6 +87,6 @@ export function rowToAgentSchedule(row: AgentScheduleRow): AgentScheduleRecord {
 }
 
 export function agentScheduleOperationHash(input: unknown): string {
-  // Stable JSON is enough here because tool inputs are parsed objects with deterministic key order.
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  // Plain JSON is enough here because tool inputs are parsed objects with deterministic key order.
+  return sha256Json(input);
 }

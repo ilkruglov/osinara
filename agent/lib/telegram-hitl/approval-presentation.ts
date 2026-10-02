@@ -19,6 +19,7 @@ import {
   requireAgentScheduleAuthorization,
 } from "../agent-schedules/agent-schedule-context.js";
 import { AppError } from "../app-error.js";
+import { clipText, flattenDisplayText } from "../display-text.js";
 import type { BrowserConfirmApprovalSubject } from "../browser/browser-tools-production.js";
 import { loadBrowserConfirmApproval } from "../browser/browser-tools-production.js";
 import { loadLavkaDeliveryPoint } from "../lavka/lavka-production.js";
@@ -104,11 +105,9 @@ const GMAIL_MESSAGE_ACTIONS = {
 
 function approvalValue(value: string | null, missing: string, maxCharacters = 500): string {
   if (value === null) return missing;
-  const normalized = value.replace(/[\p{Cc}\p{Cf}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  const normalized = flattenDisplayText(value);
   if (!normalized) return missing;
-  return normalized.length <= maxCharacters
-    ? normalized
-    : `${normalized.slice(0, maxCharacters - 1).trimEnd()}…`;
+  return clipText(normalized, maxCharacters);
 }
 
 function gmailMessagePrompt(

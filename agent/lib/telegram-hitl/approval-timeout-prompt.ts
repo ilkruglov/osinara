@@ -10,6 +10,7 @@
 import { callTelegramApi } from "eve/channels/telegram";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
+import { withRequestTimeout } from "../request-signal.js";
 import { AppError } from "../app-error.js";
 import type { TimedOutApprovalClaim } from "./approval-timeout.js";
 import { boundSettledPrompt, settledPromptText } from "./settled-prompt.js";
@@ -57,8 +58,7 @@ export function createTimedOutPromptFinalizer(
 export const finalizeTimedOutPrompt = createTimedOutPromptFinalizer(async (body) => {
   return await callTelegramApi({
     body,
-    fetch: (request, init) =>
-      fetch(request, { ...init, signal: AbortSignal.timeout(TELEGRAM_API_REQUEST_TIMEOUT_MS) }),
+    fetch: withRequestTimeout((request, init) => fetch(request, init), TELEGRAM_API_REQUEST_TIMEOUT_MS),
     method: "editMessageText",
   });
 });

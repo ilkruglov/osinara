@@ -20,6 +20,7 @@ import {
   telegramMessageSentAt,
   telegramSenderDisplayName,
 } from "./telegram-group-message-storage.js";
+import { lockApplicationConversation } from "./conversation-lock.js";
 
 const AGENT_ACTOR_ID = "agent:osinara";
 const AGENT_DISPLAY_NAME = "Мия";
@@ -114,10 +115,6 @@ async function boundary(client: PoolClient, conversationId: string): Promise<Con
   return row;
 }
 
-async function lock(client: PoolClient, conversationId: string): Promise<void> {
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [conversationId]);
-}
-
 async function nextSequence(client: PoolClient, conversationId: string): Promise<string> {
   const result = await client.query<{ sequence_id: string }>(
     `UPDATE application_conversations
@@ -209,7 +206,7 @@ export const conversationTimelineRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await lock(client, conversationId);
+      await lockApplicationConversation(client, conversationId);
       const conversation = await boundary(client, conversationId);
       if (
         conversation.telegram_chat_id !== message.chat.id ||
@@ -303,7 +300,7 @@ export const conversationTimelineRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
-      await lock(client, input.conversationId);
+      await lockApplicationConversation(client, input.conversationId);
       const conversation = await boundary(client, input.conversationId);
       const existing = await client.query<{ entry_id: string; sequence_id: string }>(
         `SELECT alias.entry_id, entry.sequence_id::text FROM telegram_group_message_ids AS alias

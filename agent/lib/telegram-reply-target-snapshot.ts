@@ -6,6 +6,7 @@
  * - `telegramReplyTargetSnapshot`: validates raw target identity before projecting untrusted text.
  */
 import type { TelegramMessage } from "eve/channels/telegram";
+import { asRecord as record, nonEmptyText } from "./json-value.js";
 
 export interface TelegramReplyTargetSnapshot {
   contentText: string;
@@ -16,22 +17,10 @@ export interface TelegramReplyTargetSnapshot {
 
 type JsonRecord = Record<string, unknown>;
 
-function record(value: unknown): JsonRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as JsonRecord
-    : null;
-}
-
 function exactIdentifier(value: unknown): string | null {
   if (typeof value === "string" && value.length > 0) return value;
   if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
   return null;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  return text.length > 0 ? text : null;
 }
 
 function senderProjection(target: JsonRecord): {

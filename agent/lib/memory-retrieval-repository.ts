@@ -9,7 +9,6 @@ import { AppError } from "./app-error.js";
 import { database } from "./database.js";
 import { rerankMemories } from "./memory-reranking.js";
 import {
-  MEMORY_EMBEDDING_DIMENSIONS,
   MEMORY_EMBEDDING_MODEL_VERSION,
   MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
   MEMORY_RETRIEVAL_CONFIRMATION_BOOST,
@@ -34,6 +33,7 @@ import {
   collapseExactDuplicateRetrievalResults,
   type ScoredMemoryRetrievalResult,
 } from "./memory-retrieval-ranking.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 interface RetrievalRow extends ReferencedMemoryRow {
   attribute: string | null;
@@ -88,16 +88,10 @@ interface ConflictClosureRow {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (
-    vector.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-    !vector.every((value) => Number.isFinite(value))
-  ) {
-    throw new AppError(
-      "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
-      "Не удалось выполнить смысловой поиск по памяти",
-    );
-  }
-  return `[${vector.join(",")}]`;
+  return memoryVectorLiteral(vector, () => new AppError(
+    "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+    "Не удалось выполнить смысловой поиск по памяти",
+  ));
 }
 
 function authorizedClaimPredicate(alias: "a" | "b" | "item" | "partner"): string {

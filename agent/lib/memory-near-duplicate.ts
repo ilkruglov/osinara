@@ -21,6 +21,7 @@ import {
 } from "./memory-config.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
 import type { MemoryKind } from "./memory-record.js";
+import { memoryVectorLiteral } from "./memory-vector.js";
 
 export interface NearDuplicateCandidate {
   attribute: string | null;
@@ -73,7 +74,10 @@ export async function findNearDuplicateClaims(
       ORDER BY similarity DESC, item.created_at DESC, item.id DESC
       LIMIT $11`,
     [auth.familyId, input.scope, input.scopePartitionKey, [...MEMORY_SEMANTIC_KINDS],
-      `[${input.embedding.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION,
+      memoryVectorLiteral(input.embedding, () => new AppError(
+        "AGENT_MEMORY_EMBEDDING_VECTOR_INVALID",
+        "Не удалось проверить похожие записи памяти",
+      )), MEMORY_EMBEDDING_MODEL_VERSION,
       input.subjectParticipantId, input.subjectUserId, input.subjectLabel,
       MEMORY_NEAR_DUPLICATE_SIMILARITY, MEMORY_NEAR_DUPLICATE_CANDIDATES],
   );

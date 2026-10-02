@@ -16,6 +16,7 @@ import {
   MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES,
 } from "./memory-review-config.js";
 import { memoryReviewTerminalRepository } from "./memory-review-terminal-repository.js";
+import { lockApplicationConversation } from "../conversation-lock.js";
 
 export interface MemoryReviewBatchSummary {
   batchId: string;
@@ -84,10 +85,6 @@ function projectSource(row: SourceRow): TelegramGroupJournalEntry {
     sentAt: row.sent_at.toISOString(),
     sequenceId: row.sequence_id,
   };
-}
-
-async function lockConversation(client: PoolClient, conversationId: string): Promise<void> {
-  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [conversationId]);
 }
 
 async function laneForUpdate(
@@ -257,7 +254,7 @@ export const memoryReviewRepository = {
         await client.query("COMMIT");
         return null;
       }
-      await lockConversation(client, source.conversation_id);
+      await lockApplicationConversation(client, source.conversation_id);
       const lane = await laneForUpdate(
         client,
         source.conversation_id,
@@ -320,7 +317,7 @@ export const memoryReviewRepository = {
         "AGENT_MEMORY_REVIEW_SOURCE_INVALID",
         "Текущее сообщение не подходит для проверки памяти",
       );
-      await lockConversation(client, current.conversation_id);
+      await lockApplicationConversation(client, current.conversation_id);
       const lane = await laneForUpdate(client, current.conversation_id, current.message_thread_id, "0");
       if (await laneBlocked(client, lane)) {
         await client.query("COMMIT");

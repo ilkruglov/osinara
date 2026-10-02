@@ -14,25 +14,14 @@
  *   with the correction to change the call or report to the person.
  */
 import { createHash } from "node:crypto";
+import { canonicalJson } from "./json-hash.js";
 
 export const TOOL_REPEAT_WITHOUT_PROGRESS_CODE = "AGENT_TOOL_REPEAT_WITHOUT_PROGRESS";
 
 const MAX_TRACKED_TURNS = 500;
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`);
-    return `{${entries.join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
 export function toolCallFingerprint(toolName: string, input: unknown): string {
-  return createHash("sha256").update(`${toolName}\n${stableJson(input)}`).digest("hex");
+  return createHash("sha256").update(`${toolName}\n${canonicalJson(input)}`).digest("hex");
 }
 
 export interface ToolRepeatGuard {

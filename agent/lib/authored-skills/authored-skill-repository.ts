@@ -16,8 +16,6 @@
  * - Version 2 and later pass the eval gate of `authored-skill-example-repository.ts`: every stored
  *   example rerun, the reruns saved with the version; the publish's own trial becomes an example.
  */
-import { createHash } from "node:crypto";
-
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
@@ -38,6 +36,7 @@ import {
 } from "./authored-skill-example-repository.js";
 import { skillEvaluationRepository, type SkillPublicationEvidence } from "./skill-evaluation-repository.js";
 import { requireCurrentOwner } from "./authored-skill-owner.js";
+import { sha256Json } from "../json-hash.js";
 
 export type AuthoredSkillOutcome = "failed" | "ok" | "unknown";
 
@@ -449,7 +448,7 @@ export const authoredSkillRepository = {
         WHERE skill.family_id = $1 AND skill.name = $2 AND skill.status = 'active'
        ON CONFLICT (usage_key) DO NOTHING`,
       [input.familyId, input.skillName, input.conversationId, input.eveSessionId, input.eveTurnId,
-        createHash("sha256").update(JSON.stringify([input.familyId, input.skillName, input.eveSessionId, input.eveTurnId])).digest("hex")],
+        sha256Json([input.familyId, input.skillName, input.eveSessionId, input.eveTurnId])],
     );
     if ((result.rowCount ?? 0) > 0) {
       console.info(JSON.stringify({

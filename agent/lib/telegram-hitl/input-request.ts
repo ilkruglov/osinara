@@ -43,6 +43,7 @@ import {
   presentTelegramApproval,
   type TelegramApprovalPresenter,
 } from "./approval-presentation.js";
+import { UUID_PATTERN } from "../tool-input-validation.js";
 
 interface InputRequestedData {
   requests: ReadonlyArray<TelegramInputRequest & { kind: InputRequestKind }>;
@@ -67,7 +68,6 @@ interface InputRequestDependencies {
 const HITL_PREPARING_MESSAGE = "Подготавливаю безопасный запрос подтверждения.";
 const HITL_PROMPT_CHUNK_CHARACTERS = 3_000;
 const SESSION_LIMIT_CONTINUATION_TOOL_NAME = "session_limit_continuation";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 type TelegramJsonValue =
   | boolean

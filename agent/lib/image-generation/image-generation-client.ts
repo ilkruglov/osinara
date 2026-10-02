@@ -11,6 +11,7 @@
  * - Provider rejection is definitive; transport, 5xx, and malformed success are ambiguous.
  */
 import { AppError } from "../app-error.js";
+import { readBoundedBody } from "../bounded-body.js";
 import { modelProviderConfig } from "../model-provider-config.js";
 import { createFallbackImageClient } from "./flux-image-clients.js";
 import { resolveImageProviders } from "./image-generation-availability.js";
@@ -105,33 +106,11 @@ function generationUrl(baseUrl: string): string {
 }
 
 async function boundedResponseText(response: Response): Promise<string> {
-  const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && Number(declaredLength) > IMAGE_RESPONSE_MAX_BYTES) {
-    throw new AppError(
-      "AGENT_IMAGE_GENERATION_RESPONSE_INVALID",
-      "Сервис генерации вернул слишком большой ответ. Создайте новый запрос с меньшим изображением",
-    );
-  }
-  if (!response.body) return "";
-
-  // Read incrementally so an upstream response cannot exhaust the agent container.
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  for (;;) {
-    const item = await reader.read();
-    if (item.done) break;
-    byteLength += item.value.byteLength;
-    if (byteLength > IMAGE_RESPONSE_MAX_BYTES) {
-      await reader.cancel("image response exceeds limit");
-      throw new AppError(
-        "AGENT_IMAGE_GENERATION_RESPONSE_INVALID",
-        "Сервис генерации вернул слишком большой ответ. Создайте новый запрос с меньшим изображением",
-      );
-    }
-    chunks.push(item.value);
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  const body = await readBoundedBody(response, IMAGE_RESPONSE_MAX_BYTES, () => new AppError(
+    "AGENT_IMAGE_GENERATION_RESPONSE_INVALID",
+    "Сервис генерации вернул слишком большой ответ. Создайте новый запрос с меньшим изображением",
+  ));
+  return body.toString("utf8");
 }
 
 function parseGeneratedImage(source: string): GeneratedImage {

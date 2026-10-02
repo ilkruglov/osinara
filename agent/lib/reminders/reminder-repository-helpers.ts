@@ -3,11 +3,12 @@
  *
  * Exports:
  * - `REMINDER_COLUMNS`: shared safe projection.
- * - Membership, timezone, operation, row-lock, and mutation authorization helpers.
+ * - Operation, row-lock, and mutation authorization helpers.
  */
 import type { PoolClient } from "pg";
 
 import { AppError } from "../app-error.js";
+import { requireCurrentMembership } from "../family-repository-checks.js";
 import type { ReminderAuthorization } from "./reminder-context.js";
 import type { ReminderRow } from "./reminder-record.js";
 
@@ -21,35 +22,6 @@ export interface MutableReminderRow extends ReminderRow {
 export const REMINDER_COLUMNS = `id, scope, content, timezone, due_at, recurrence_unit,
   recurrence_interval, status, message_thread_id::text, forum_topic_id::text,
   last_error_code, created_at, updated_at`;
-
-export async function requireCurrentMembership(
-  client: PoolClient,
-  auth: ReminderAuthorization,
-): Promise<"member" | "owner" | "recovery_owner"> {
-  const membership = await client.query<{ role: "member" | "owner" | "recovery_owner" }>(
-    "SELECT role FROM family_memberships WHERE family_id = $1 AND user_id = $2",
-    [auth.familyId, auth.userId],
-  );
-  const role = membership.rows[0]?.role;
-  if (!role) {
-    throw new AppError("AGENT_ACCESS_DENIED", "У вас больше нет доступа к этой семье");
-  }
-  return role;
-}
-
-export async function requireTimezone(client: PoolClient, timezone: string): Promise<string> {
-  const result = await client.query<{ name: string }>(
-    "SELECT name FROM pg_timezone_names WHERE name = $1",
-    [timezone],
-  );
-  if (!result.rows[0]) {
-    throw new AppError(
-      "AGENT_TIMEZONE_INVALID",
-      "Не удалось распознать часовой пояс. Укажите название IANA, например Europe/Moscow",
-    );
-  }
-  return result.rows[0].name;
-}
 
 export async function findReminderOperation(
   client: PoolClient,
