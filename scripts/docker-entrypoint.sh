@@ -22,9 +22,12 @@ node .runtime/scripts/validate-model-provider-config.js
 
 # Sandbox templates are prepared by a one-shot step, then the built server is this container's
 # process: the npm wrapper and the `eve start` parent only supervised it and held ~430 MB.
+# The watchdog replaces the five-minute health wait of `eve start`: started right before `exec`,
+# its parent becomes the server, which gets SIGTERM if health never answers, so Docker restarts.
 start_server() {
   node .runtime/scripts/prewarm-sandboxes.js
   export HOST=0.0.0.0 NITRO_HOST=0.0.0.0 PORT=3000 NITRO_PORT=3000
+  node .runtime/scripts/startup-watchdog.js &
   exec node .output/server/index.mjs
 }
 

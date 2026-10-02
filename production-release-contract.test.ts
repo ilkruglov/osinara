@@ -94,6 +94,9 @@ describe("production container contract", () => {
     expect(entrypoint).toContain("exec node .output/server/index.mjs");
     expect(entrypoint).not.toContain("npm run start");
     expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(entrypoint.indexOf("exec node .output/server/index.mjs"));
+    // Without `eve start` nothing else ends a server that never becomes healthy (Codex review).
+    expect(entrypoint).toContain("node .runtime/scripts/startup-watchdog.js &\n  exec node .output/server/index.mjs");
+    expect(readProjectFile("package.json")).toContain("scripts/startup-watchdog.ts");
     expect(readProjectFile("package.json")).toContain("scripts/prewarm-sandboxes.ts");
   });
 

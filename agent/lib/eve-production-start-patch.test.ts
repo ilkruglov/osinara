@@ -3,6 +3,10 @@
  *
  * Constructs covered:
  * - Patched Eve health timeout: permits bounded first-start sandbox initialization.
+ *
+ * Since 1.8.12 the container runs the built server directly and this `eve start` path is unused;
+ * `scripts/startup-watchdog.ts` keeps the same five-minute bound. The patch stays for `eve start`
+ * run by hand.
  */
 import { readFile } from "node:fs/promises";
 
