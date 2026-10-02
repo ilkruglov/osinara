@@ -12,7 +12,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-const COMPACTION_PATH = "node_modules/eve/dist/src/harness/compaction.js";
+const COMPACTION_PATH = "vendor/eve/dist/src/harness/compaction.js";
 const execFileAsync = promisify(execFile);
 
 describe("Eve compaction decision log patch", () => {
@@ -29,7 +29,7 @@ describe("Eve compaction decision log patch", () => {
   it("names the session and turn of every check", async () => {
     const [compaction, toolLoop] = await Promise.all([
       readFile(COMPACTION_PATH, "utf8"),
-      readFile("node_modules/eve/dist/src/harness/tool-loop.js", "utf8"),
+      readFile("vendor/eve/dist/src/harness/tool-loop.js", "utf8"),
     ]);
     // Without them a check was matched to model steps by log adjacency, which parallel sessions
     // interleave (25 сентября 2026: two separate analyses of the same week had to guess).

@@ -97,10 +97,13 @@ describe("production container contract", () => {
     expect(readProjectFile("package.json")).toContain("scripts/prewarm-sandboxes.ts");
   });
 
-  it("installs the version-pinned Eve patch in build and production stages", () => {
+  it("installs the vendored Eve fork as a copy in build and production stages", () => {
     const dockerfile = readProjectFile("Dockerfile");
 
-    expect(dockerfile.match(/COPY scripts\/apply-eve-patches\.ts/g)).toHaveLength(2);
+    expect(dockerfile.match(/COPY vendor \.\/vendor\n/g)).toHaveLength(2);
+    expect(dockerfile.match(/COPY package\.json package-lock\.json \.npmrc \.\/\n/g)).toHaveLength(2);
+    expect(readProjectFile(".npmrc")).toContain("install-links=true");
+    expect(dockerfile).not.toContain("postinstall");
   });
 
   it("pins the official Russian root CA inside the sandbox runtime", () => {

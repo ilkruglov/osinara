@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-const TOOL_LOOP_PATH = "node_modules/eve/dist/src/harness/tool-loop.js";
+const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
 const AUTH_KEY = Symbol("eve.auth.test");
 
 interface RuntimeTool {
@@ -145,14 +145,9 @@ describe("Eve implicit agent policy patch", () => {
     expect(tools.get("agent")).toBe(agentTool);
   });
 
-  it("keeps the policy in the reproducible Eve patch installer", async () => {
-    const [patchSource, runtime] = await Promise.all([
-      readFile("scripts/apply-eve-patches.ts", "utf8"),
-      readFile(TOOL_LOOP_PATH, "utf8"),
-    ]);
+  it("keeps the policy exactly once in the vendored tool loop", async () => {
+    const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
 
-    expect(patchSource).toContain("memoryReviewMode===`background`");
-    expect(patchSource).toContain("groupType===`external`");
     expect(runtime.match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
     expect(runtime.match(/groupType===`external`/gu)).toHaveLength(1);
   });

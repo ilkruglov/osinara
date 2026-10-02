@@ -15,23 +15,21 @@ import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const runtimePaths = [
-  "node_modules/eve/dist/src/context/keys.js",
-  "node_modules/eve/dist/src/execution/workflow-steps.js",
-  "node_modules/eve/dist/src/execution/dispatch-runtime-actions-shared.js",
-  "node_modules/eve/dist/src/execution/tasks/parent/dispatch-task-step.js",
-  "node_modules/eve/dist/src/execution/tasks/parent/delegate.js",
-  "node_modules/eve/dist/src/execution/tasks/child/workflow.js",
-  "node_modules/eve/dist/src/execution/tasks/child/steps.js",
+  "vendor/eve/dist/src/context/keys.js",
+  "vendor/eve/dist/src/execution/workflow-steps.js",
+  "vendor/eve/dist/src/execution/dispatch-runtime-actions-shared.js",
+  "vendor/eve/dist/src/execution/tasks/parent/dispatch-task-step.js",
+  "vendor/eve/dist/src/execution/tasks/parent/delegate.js",
+  "vendor/eve/dist/src/execution/tasks/child/workflow.js",
+  "vendor/eve/dist/src/execution/tasks/child/steps.js",
 ] as const;
 
 describe("Eve task origin auth patch", () => {
   it("carries the originating turn caller through every durable task wake", async () => {
-    const [patch, keys, workflowSteps, dispatchShared, dispatchTask, delegate, childWorkflow, childSteps] = await Promise.all([
-      readFile("scripts/apply-eve-patches.ts", "utf8"),
-      ...runtimePaths.map((path) => readFile(path, "utf8")),
-    ]);
+    const [keys, workflowSteps, dispatchShared, dispatchTask, delegate, childWorkflow, childSteps] = await Promise.all(
+      runtimePaths.map((path) => readFile(path, "utf8")),
+    );
 
-    expect(patch).toContain("TurnOriginAuthKey");
     expect(keys).toContain("eve.turnOriginAuth");
     expect(workflowSteps).toContain("TurnOriginAuthKey");
     expect(workflowSteps).toContain("getHarnessEmissionState(s.state).turnId.length===0");
@@ -45,7 +43,7 @@ describe("Eve task origin auth patch", () => {
 
   it("captures auth only at a new turn boundary and ignores same-turn HITL auth", async () => {
     const source = await readFile(
-      "node_modules/eve/dist/src/execution/workflow-steps.js",
+      "vendor/eve/dist/src/execution/workflow-steps.js",
       "utf8",
     );
     const expressionStart = source.indexOf("a.input?.kind===`deliver`&&(");
@@ -109,7 +107,7 @@ describe("Eve task origin auth patch", () => {
 
   it("places each task's complete frozen caller on every parent delivery envelope", async () => {
     const source = await readFile(
-      "node_modules/eve/dist/src/execution/tasks/child/steps.js",
+      "vendor/eve/dist/src/execution/tasks/child/steps.js",
       "utf8",
     );
     const bodyStart = source.indexOf("const log=");

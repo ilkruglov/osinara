@@ -17,14 +17,12 @@ async function importEveModule(path: string): Promise<Record<string, unknown>> {
 
 describe("Eve dynamic skill runtime revision patch", () => {
   it("refreshes only resumed-session skills inside the managed sandbox scope", async () => {
-    const [patch, keys, lifecycle, workflow] = await Promise.all([
-      readFile("scripts/apply-eve-patches.ts", "utf8"),
-      readFile("node_modules/eve/dist/src/context/keys.js", "utf8"),
-      readFile("node_modules/eve/dist/src/context/dynamic-skill-lifecycle.js", "utf8"),
-      readFile("node_modules/eve/dist/src/execution/workflow-steps.js", "utf8"),
+    const [keys, lifecycle, workflow] = await Promise.all([
+      readFile("vendor/eve/dist/src/context/keys.js", "utf8"),
+      readFile("vendor/eve/dist/src/context/dynamic-skill-lifecycle.js", "utf8"),
+      readFile("vendor/eve/dist/src/execution/workflow-steps.js", "utf8"),
     ]);
 
-    expect(patch).toContain("SessionDynamicSkillRuntimeRevisionKey");
     expect(keys).toContain("eve.sessionDynamicSkillRuntimeRevision");
     expect(lifecycle).toContain("async function refreshDynamicSessionSkillsForRuntimeRevision");
     expect(workflow).toContain("refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C");
@@ -49,9 +47,9 @@ describe("Eve dynamic skill runtime revision patch", () => {
 
   it("replaces a legacy manifest once before the first turn of a new runtime", async () => {
     const [{ ContextContainer }, keys, lifecycle] = await Promise.all([
-      importEveModule("node_modules/eve/dist/src/context/container.js"),
-      importEveModule("node_modules/eve/dist/src/context/keys.js"),
-      importEveModule("node_modules/eve/dist/src/context/dynamic-skill-lifecycle.js"),
+      importEveModule("vendor/eve/dist/src/context/container.js"),
+      importEveModule("vendor/eve/dist/src/context/keys.js"),
+      importEveModule("vendor/eve/dist/src/context/dynamic-skill-lifecycle.js"),
     ]) as [
       { ContextContainer: new () => {
         get(key: unknown): unknown;

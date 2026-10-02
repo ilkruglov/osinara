@@ -1,0 +1,1 @@
+import{isDynamicSentinel}from"#shared/dynamic-tool-definition.js";function isDynamicModelDefinition(e){return isDynamicSentinel(e)}export{isDynamicModelDefinition};

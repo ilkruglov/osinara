@@ -1,0 +1,1 @@
+import{createVercelSandbox}from"#execution/sandbox/bindings/vercel.js";function vercel(e){let{sessionCreateOptions:t,...n}=e??{};return createVercelSandbox({createOptions:n,resolveSessionCreateOptions:t})}export{vercel};

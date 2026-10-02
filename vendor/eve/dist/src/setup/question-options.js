@@ -1,0 +1,1 @@
+function optionById(e,t){return e.options.find(e=>e.id===String(t))}function optionByValue(e,t){return e.options.find(e=>e.value===t)}function requiredOptionId(e,t,n){let r=optionByValue(e,t);if(r===void 0)throw Error(`Question "${e.key}" has a ${n} that is not one of its options.`);return r.id}export{optionById,optionByValue,requiredOptionId};

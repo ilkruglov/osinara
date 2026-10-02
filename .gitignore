@@ -28,3 +28,7 @@ result-chat.json
 /docs/*
 !/docs/production-deployment.md
 !/docs/releases/
+
+# Eve and Workflow Postgres world are our fork (vendor/): their built code is the source.
+!/vendor/**/dist
+!/vendor/**/dist/**

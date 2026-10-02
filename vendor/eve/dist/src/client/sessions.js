@@ -1,0 +1,1 @@
+import{ClientSession}from"#client/session.js";var ClientSessions=class{#e;constructor(e){this.#e=e}async create(t){return await ClientSession.create(this.#e,t)}attach(t,n){if(t.length===0)throw Error(`sessionId must be a non-empty string.`);return new ClientSession(this.#e,{sessionId:t,streamIndex:n?.streamIndex??0})}};export{ClientSessions};

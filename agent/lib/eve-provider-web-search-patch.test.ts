@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
-const PROVIDER_TOOLS_PATH = "node_modules/eve/dist/src/harness/provider-tools.js";
+const PROVIDER_TOOLS_PATH = "vendor/eve/dist/src/harness/provider-tools.js";
 
 describe("eve provider web-search backend patch", () => {
   it("selects the native backend from the model id when the reference has no source", async () => {

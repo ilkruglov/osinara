@@ -1,0 +1,1 @@
+import{z}from"#compiled/zod/index.js";const CancelTurnResponseSchema=z.discriminatedUnion(`status`,[z.strictObject({ok:z.literal(!0),sessionId:z.string().min(1),status:z.literal(`accepted`)}),z.strictObject({ok:z.literal(!0),status:z.literal(`no_active_turn`)})]);export{CancelTurnResponseSchema};

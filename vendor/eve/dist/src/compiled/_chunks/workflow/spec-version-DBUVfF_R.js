@@ -1,0 +1,1 @@
+function e(e){return e==null||e<=1}function t(e){return e!=null&&e>6}export{t as n,e as t};

@@ -13,13 +13,11 @@ COPY LICENSE NOTICE /usr/share/doc/osinara/
 
 FROM first-party-node AS dependencies
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
-COPY scripts/eve-patches ./scripts/eve-patches
-COPY scripts/eve-runtime ./scripts/eve-runtime
+# Eve and the Workflow Postgres world are our fork in vendor/, installed as copies (.npmrc).
+COPY package.json package-lock.json .npmrc ./
+COPY vendor ./vendor
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --ignore-scripts \
-    && npm run postinstall \
     && npm run install:gws
 
 FROM dependencies AS build
@@ -49,13 +47,10 @@ CMD ["npm", "test"]
 FROM first-party-node AS production-dependencies
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json package-lock.json ./
-COPY scripts/apply-eve-patches.ts ./scripts/apply-eve-patches.ts
-COPY scripts/eve-patches ./scripts/eve-patches
-COPY scripts/eve-runtime ./scripts/eve-runtime
+COPY package.json package-lock.json .npmrc ./
+COPY vendor ./vendor
 COPY scripts/install-google-workspace-cli.ts ./scripts/install-google-workspace-cli.ts
 RUN npm ci --omit=dev --ignore-scripts \
-    && npm run postinstall \
     && npm run install:gws
 
 FROM first-party-node AS sandbox-runtime

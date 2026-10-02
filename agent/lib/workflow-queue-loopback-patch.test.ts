@@ -13,9 +13,9 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-const QUEUE_PATH = "node_modules/@workflow/world-postgres/dist/queue.js";
-const INDEX_PATH = "node_modules/@workflow/world-postgres/dist/index.js";
-const RECOVERY_PATH = "node_modules/@workflow/world-postgres/dist/osinara-stuck-run-recovery.js";
+const QUEUE_PATH = "vendor/workflow-world-postgres/dist/queue.js";
+const INDEX_PATH = "vendor/workflow-world-postgres/dist/index.js";
+const RECOVERY_PATH = "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js";
 const execFileAsync = promisify(execFile);
 
 describe("workflow queue loopback patch", () => {

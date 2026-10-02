@@ -1,5 +1,8 @@
 node_modules
 **/node_modules
+# Eve ships its own bundled dependencies inside dist; they are part of the vendored fork.
+!vendor/eve/dist/src/node_modules
+!vendor/eve/dist/src/node_modules/**
 **/.eve
 **/.workflow-data
 **/.output

@@ -1,0 +1,1 @@
+import{xr as e}from"./wait-until-BZHmJCAW.js";import{i as t}from"./attribute-changes-DXbpwBdw.js";async function n(r){let i=globalThis[e];return i||t(`sleep()`,`https://workflow-sdk.dev/docs/api-reference/workflow/sleep`,n),i(r)}export{n as t};

@@ -7,14 +7,9 @@
  * - `replyHandling: "message"`: suppresses only preliminary Telegram HITL reply synthesis.
  * - Application-authored durable message overrides replace only the model-visible inbound text.
  * - Pure HITL callbacks do not insert channel context between approval and tool execution.
- * - Patch installation remains safe when lifecycle scripts invoke it repeatedly.
  * - Callback-specific routing contracts live in `eve-telegram-ingress-patch-hitl.test.ts`.
  */
-import { execFile } from "node:child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 
 import {
   parseTelegramUpdate,
@@ -29,11 +24,6 @@ interface HttpRoute {
   handler(request: Request, context: Record<string, unknown>): Promise<Response>;
 }
 
-const execFileAsync = promisify(execFile);
-const patchCommand = ["--experimental-strip-types", "scripts/apply-eve-patches.ts"];
-// The stream patch strips TypeScript types with Node's experimental API, which warns once on stderr.
-const patchStderr = expect.stringMatching(/^(?:\(node:\d+\) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time\n\(Use .+ to show where the warning was created\)\n)?$/u);
-
 function createChannelSource(session: Record<string, unknown> = { id: "session-test" }) {
   const send = vi.fn().mockResolvedValue(session);
   const respond = vi.fn().mockResolvedValue(session);
@@ -42,28 +32,17 @@ function createChannelSource(session: Record<string, unknown> = { id: "session-t
 }
 
 describe("Eve Telegram verified ingress patch", () => {
-  it("can be applied repeatedly without changing its reviewed anchors", async () => {
-    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: patchStderr });
-    const indexTypesPath = "node_modules/eve/dist/src/public/channels/telegram/index.d.ts";
-    const before = await readFile(indexTypesPath, "utf8");
-
-    await expect(execFileAsync(process.execPath, patchCommand)).resolves.toMatchObject({ stderr: patchStderr });
-
-    await expect(readFile(indexTypesPath, "utf8")).resolves.toBe(before);
-  });
-
   it("pins the reviewed runtime and public type seam exactly once", async () => {
-    const patchSource = await readFile("scripts/apply-eve-patches.ts", "utf8");
     const runtime = await readFile(
-      "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.js",
+      "vendor/eve/dist/src/public/channels/telegram/telegramChannel.js",
       "utf8",
     );
     const inputRequestsRuntime = await readFile(
-      "node_modules/eve/dist/src/harness/input-requests.js",
+      "vendor/eve/dist/src/harness/input-requests.js",
       "utf8",
     );
     const types = await readFile(
-      "node_modules/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
+      "vendor/eve/dist/src/public/channels/telegram/telegramChannel.d.ts",
       "utf8",
     );
     const valid: TelegramInboundResult = {
@@ -79,7 +58,6 @@ describe("Eve Telegram verified ingress patch", () => {
     // @ts-expect-error The pinned seam deliberately permits no other handling modes.
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
-    expect(patchSource).toContain('const EXPECTED_EVE_VERSION = "0.40.0";');
     expect(runtime.match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
     expect(runtime.match(/i\.acknowledgementText\?\?`Answer received\.`/g)).toHaveLength(1);
     expect(runtime.match(/n\.send\(r\.message\?\?a/g)).toHaveLength(1);
@@ -150,55 +128,6 @@ describe("Eve Telegram verified ingress patch", () => {
 
     expect(source.send.mock.calls[0]?.[0]).toBe("durable context\n\nПривет");
   });
-
-  it("fails fast when the pinned Telegram runtime artifact does not match", async () => {
-    const root = await mkdtemp(join(tmpdir(), "osinara-eve-patch-mismatch-"));
-    const eveTarget = join(root, "node_modules/eve");
-    const runtimePath = join(
-      eveTarget,
-      "dist/src/public/channels/telegram/telegramChannel.js",
-    );
-    try {
-      await cp(resolve("node_modules/eve"), eveTarget, { recursive: true });
-      // The stream patch runs first and needs the Workflow world and its runtime helpers in place.
-      await cp(resolve("node_modules/@workflow/world-postgres"), join(root, "node_modules/@workflow/world-postgres"), { recursive: true });
-      await cp(resolve("scripts/eve-runtime"), join(root, "scripts/eve-runtime"), { recursive: true });
-      const runtime = await readFile(runtimePath, "utf8");
-      await writeFile(runtimePath, runtime.replace(
-        "r.replyHandling!==`message`",
-        "r.replyHandling!==`unexpected_reviewed_artifact`",
-      ));
-
-      await expect(execFileAsync(process.execPath, [
-        "--experimental-strip-types",
-        resolve("scripts/apply-eve-patches.ts"),
-      ], { cwd: root })).rejects.toMatchObject({
-        stderr: expect.stringContaining("AGENT_EVE_PATCH_MISMATCH"),
-      });
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
-  }, 15_000);
-
-  it("fails fast when the installed Eve version does not match", async () => {
-    const root = await mkdtemp(join(tmpdir(), "osinara-eve-version-mismatch-"));
-    const eveTarget = join(root, "node_modules/eve");
-    const packagePath = join(eveTarget, "package.json");
-    try {
-      await cp(resolve("node_modules/eve"), eveTarget, { recursive: true });
-      const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as Record<string, unknown>;
-      await writeFile(packagePath, `${JSON.stringify({ ...packageJson, version: "0.31.0" })}\n`);
-
-      await expect(execFileAsync(process.execPath, [
-        "--experimental-strip-types",
-        resolve("scripts/apply-eve-patches.ts"),
-      ], { cwd: root })).rejects.toMatchObject({
-        stderr: expect.stringContaining("AGENT_EVE_PATCH_VERSION_UNSUPPORTED"),
-      });
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
-  }, 15_000);
 
   it("propagates input.requested handler failures instead of parking an unbound approval", async () => {
     const error = new Error("AGENT_APPROVAL_STORAGE_FAILED");

@@ -12,12 +12,8 @@ import { describe, expect, it } from "vitest";
 
 describe("Eve turn context patch", () => {
   it("stamps delivery context with the turn id and filters other turns' context from the prompt", async () => {
-    const [patch, toolLoop] = await Promise.all([
-      readFile("scripts/apply-eve-patches.ts", "utf8"),
-      readFile("node_modules/eve/dist/src/harness/tool-loop.js", "utf8"),
-    ]);
+    const toolLoop = await readFile("vendor/eve/dist/src/harness/tool-loop.js", "utf8");
 
-    expect(patch).toContain("osinara:{turnContext:O.turnId}");
     const stamp = toolLoop.indexOf(
       "for(let e of I.context)H.push({content:e,role:`user`,providerOptions:{osinara:{turnContext:O.turnId}}})",
     );

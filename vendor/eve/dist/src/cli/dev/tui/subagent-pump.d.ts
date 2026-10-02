@@ -1,0 +1,147 @@
+/**
+ * The subagent child-stream subsystem: for every `subagent.called` on the
+ * parent stream, a parallel pump over the child session folds its events
+ * into the renderer's nested subagent view. Extracted from the runner —
+ * the subsystem touches nothing but its own run state, the client, and the
+ * {@link SubagentView} seam.
+ */
+import type { Client } from "#client/index.js";
+import { type EventDeduper } from "#protocol/event-dedupe.js";
+import { type ActionResultStreamEvent, type SubagentCalledStreamEvent } from "#protocol/message.js";
+/**
+ * The renderer's subagent surface. One cohesive capability: a renderer that
+ * implements it renders whole sections — header, nested steps and tools,
+ * ghost sweeps, completion — and a renderer without it simply has no
+ * subagent view. Individually-optional methods would let a renderer
+ * implement a type-legal subset that ghosts placeholders or duplicates
+ * parent tool rows.
+ */
+export interface SubagentView {
+    /** Opens a call's section the moment its dispatch is announced. */
+    begin(update: {
+        callId: string;
+        name: string;
+    }): void;
+    /** Keeps a receipt-returned background call mutable across parent turns. */
+    background(update: {
+        callId: string;
+    }): void;
+    upsertStep(update: SubagentStepUpdate): void;
+    upsertTool(update: SubagentToolUpdate): void;
+    /** Drops a child tool row whose call never materialized. */
+    removeTool(update: {
+        callId: string;
+        childCallId: string;
+    }): void;
+    /** Marks a call complete so its section collapses on `└ Done…`. */
+    complete(update: {
+        authoritative: boolean;
+        callId: string;
+    }): void;
+    /** Suppresses the parent-level tool row for a child-owned call id. */
+    markChildToolCallId(callId: string): void;
+}
+type SubagentChildStep = {
+    reasoning: string;
+    message: string;
+    finalized: boolean;
+};
+type SubagentToolStatus = "preparing" | "approval-requested" | "executing" | "done" | "failed" | "rejected";
+type SubagentToolState = {
+    toolName: string;
+    input: unknown;
+    status: SubagentToolStatus;
+    output?: unknown;
+    errorText?: string;
+};
+export type SubagentRun = {
+    name: string;
+    /** Parent turn that originated this dispatch; cancellation is scoped to it. */
+    parentTurnId: string;
+    /** A receipt-returned task survives cancellation of its originating turn. */
+    background: boolean;
+    /** Parent completion is provisional; only a child boundary is authoritative. */
+    status: "open" | "provisional" | "authoritative";
+    /** Parent-authored route on the parent origin, valid for local and remote children. */
+    childStreamPath: string;
+    /** Absolute durable cursor retained across exhausted transport sources. */
+    childStreamIndex: number;
+    /**
+     * One entry per logical "child message" — independent of the child's
+     * `stepIndex` field, which the harness can reuse across multiple
+     * assistant messages within a turn (e.g. a message before a tool call
+     * and another message after the tool result both arrive under
+     * `stepIndex: 0`). The key is a monotonic counter so each
+     * `message.completed` opens a new box on the next inbound delta.
+     */
+    steps: Map<number, SubagentChildStep>;
+    /**
+     * Section currently accepting reasoning/message deltas. `null` means
+     * the next delta opens a new section.
+     */
+    currentSectionKey: number | null;
+    /** Monotonic counter for new section keys. */
+    nextSectionKey: number;
+    tools: Map<string, SubagentToolState>;
+    /**
+     * Child events already folded into this run. A restarted pump replays the
+     * child stream from `streamIndex: 0` while this run's state survives.
+     */
+    seenChildEvents: EventDeduper;
+};
+export type SubagentStepUpdate = {
+    callId: string;
+    subagentName: string;
+    sectionKey: number;
+    reasoning: string;
+    message: string;
+    finalized: boolean;
+};
+export type SubagentToolUpdate = {
+    callId: string;
+    subagentName: string;
+    childCallId: string;
+    toolName: string;
+    input: unknown;
+    status: SubagentToolStatus;
+    output?: unknown;
+    errorText?: string;
+};
+export interface SubagentPumpOptions {
+    client?: Client;
+    view?: SubagentView;
+    formatActionResultError: (event: ActionResultStreamEvent) => string;
+}
+export declare class SubagentPump {
+    #private;
+    constructor(options: SubagentPumpOptions);
+    /**
+     * The moment a dispatch is known to be a subagent call, its section
+     * header replaces the parent-level tool row (or its still-preparing
+     * placeholder — subagent dispatches never upgrade one, since their
+     * actions are not tool-call kind). Without this the placeholder is
+     * swept at the step boundary and nothing shows until the child's first
+     * content arrives. A later parent-stream translator may replay the call;
+     * re-entry only refreshes the name.
+     */
+    begin(called: SubagentCalledStreamEvent): void;
+    /**
+     * Parent completion is provisional because the child's final events can be
+     * in flight on an independent connection. The pump remains open until the
+     * child boundary supplies authoritative completion.
+     */
+    settle(callId: string): void;
+    /**
+     * The originating call returned a task receipt, not the child's result.
+     * Keep the section open until the child stream reaches its own boundary.
+     * A child that already settled before the receipt raced in stays settled.
+     */
+    background(callId: string): void;
+    abortAll(): void;
+    /**
+     * Settles and aborts only foreground descendants of the cancelled parent
+     * turn. Background tasks survive even when that same turn started them.
+     */
+    settleCancelledTurn(turnId: string): void;
+}
+export {};

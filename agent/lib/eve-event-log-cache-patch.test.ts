@@ -13,8 +13,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-const STORAGE_PATH = "node_modules/@workflow/world-postgres/dist/storage.js";
-const CACHE_PATH = "node_modules/@workflow/world-postgres/dist/osinara-event-log-cache.js";
+const STORAGE_PATH = "vendor/workflow-world-postgres/dist/storage.js";
+const CACHE_PATH = "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js";
 const execFileAsync = promisify(execFile);
 
 describe("workflow event log cache patch", () => {
@@ -36,8 +36,8 @@ describe("workflow event log cache patch", () => {
 
   it("traces slow driver queries from the one pool the driver builds", async () => {
     const [index, trace] = await Promise.all([
-      readFile("node_modules/@workflow/world-postgres/dist/index.js", "utf8"),
-      readFile("node_modules/@workflow/world-postgres/dist/osinara-workflow-pool-trace.js", "utf8"),
+      readFile("vendor/workflow-world-postgres/dist/index.js", "utf8"),
+      readFile("vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js", "utf8"),
     ]);
 
     expect(index).toContain("traceWorkflowPool(pool);");

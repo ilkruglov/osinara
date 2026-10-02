@@ -7,7 +7,7 @@
  *   wrapper above it 78 MB, half of the agent container. The entrypoint now runs the same two
  *   preparation calls here, exits, and executes `.output/server/index.mjs` itself.
  * - Eve exports neither call publicly, so they are loaded from the pinned package by file path;
- *   `apply-eve-patches.ts` refuses any other Eve version, which keeps these paths reviewed.
+ *   Eve is our fork in `vendor/eve`, so these paths change only with a reviewed commit there.
  */
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";

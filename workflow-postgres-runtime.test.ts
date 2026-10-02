@@ -23,8 +23,10 @@ describe("PostgreSQL Workflow world", () => {
     };
     const agent = readProjectFile("agent/agent.ts");
 
-    expect(packageJson.dependencies?.eve).toBe("0.40.0");
-    expect(packageJson.dependencies?.["@workflow/world-postgres"]).toBe("5.0.0-beta.35");
+    expect(packageJson.dependencies?.eve).toBe("file:vendor/eve");
+    expect(packageJson.dependencies?.["@workflow/world-postgres"]).toBe("file:vendor/workflow-world-postgres");
+    const world = JSON.parse(readProjectFile("vendor/workflow-world-postgres/package.json")) as { name: string; version: string };
+    expect(world).toMatchObject({ name: "@workflow/world-postgres", version: "5.0.0-beta.35" });
     expect(agent).toContain('externalDependencies: ["@workflow/world-postgres"]');
     expect(agent).toContain('world: "@workflow/world-postgres"');
   });

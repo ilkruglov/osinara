@@ -11,8 +11,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-const LIFECYCLE_PATH = "node_modules/eve/dist/src/context/dynamic-skill-lifecycle.js";
-const PACKAGE_PATH = "node_modules/eve/dist/src/shared/skill-package.js";
+const LIFECYCLE_PATH = "vendor/eve/dist/src/context/dynamic-skill-lifecycle.js";
+const PACKAGE_PATH = "vendor/eve/dist/src/shared/skill-package.js";
 const execFileAsync = promisify(execFile);
 
 describe("Eve skill materialization patch", () => {

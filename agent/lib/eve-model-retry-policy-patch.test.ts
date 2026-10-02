@@ -14,8 +14,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-const TOOL_LOOP_PATH = "node_modules/eve/dist/src/harness/tool-loop.js";
-const COMPACTION_PATH = "node_modules/eve/dist/src/harness/compaction.js";
+const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
+const COMPACTION_PATH = "vendor/eve/dist/src/harness/compaction.js";
 const execFileAsync = promisify(execFile);
 
 describe("Eve model retry policy patch", () => {
@@ -32,21 +32,24 @@ describe("Eve model retry policy patch", () => {
       "@ai-sdk/openai-compatible": "3.0.29",
       "@googleworkspace/cli": "0.22.5",
       ai: "7.0.60",
-      eve: "0.40.0",
+      eve: "file:vendor/eve",
     });
     expect(packageJson.overrides.ai).toBe("7.0.60");
+    // Workflow step ids are `step//eve@<version>//<name>`: a changed version strands every
+    // in-flight run, so the fork keeps the upstream name and version.
+    const vendored = JSON.parse(await readFile("vendor/eve/package.json", "utf8")) as { name: string; version: string };
+    expect(vendored).toMatchObject({ name: "eve", version: "0.40.0" });
   });
 
   it("delegates transport retries to AI SDK while disabling Eve-level reissues", async () => {
-    const [patchSource, runtime, compaction, aiRuntime] = await Promise.all([
-      readFile("scripts/apply-eve-patches.ts", "utf8"),
+    const [runtime, compaction, aiRuntime] = await Promise.all([
       readFile(TOOL_LOOP_PATH, "utf8"),
       readFile(COMPACTION_PATH, "utf8"),
       readFile("node_modules/ai/dist/index.js", "utf8"),
     ]);
 
     // AI SDK 7 owns its documented two-retry transport default; Eve must not override it.
-    expect(patchSource).not.toContain("AI_SDK_TRANSPORT_MAX_RETRIES");
+    expect(runtime).not.toContain("AI_SDK_TRANSPORT_MAX_RETRIES");
     expect(aiRuntime).toContain("maxRetries = 2");
     expect(runtime).not.toMatch(/ToolLoopAgent\([^)]*maxRetries/u);
     expect(compaction).not.toMatch(/generateText\([^)]*maxRetries/u);
@@ -58,7 +61,7 @@ describe("Eve model retry policy patch", () => {
     // An empty model response has no side effect to duplicate, so Eve's single nudge-and-reissue
     // stays: without it a reasoning-only reply parks the whole session for the user.
     expect(runtime).toContain("reissuing the model call once");
-    expect(patchSource).not.toContain("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}");
+    expect(runtime).not.toContain("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}");
     expect(runtime).not.toContain("disabling unsupported provider tool(s); retrying step once");
     // Compaction never buys a second summary call: an oversized summary is returned and logged.
     expect(compaction).not.toContain("||m===0)return v;--m");
