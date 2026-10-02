@@ -65,11 +65,14 @@ export const memoryIndexRepository = {
         `WITH candidates AS (
            SELECT job.memory_item_id
            FROM memory_embedding_jobs AS job
+           -- Visibility is checked before LIMIT: a job of a hidden record left at the head of the
+           -- queue would otherwise fill every batch and stall all live records behind it.
+           JOIN memory_items AS visible ON visible.id = job.memory_item_id
            WHERE job.status = 'pending' AND job.attempts = 0
            -- Newest first: after a model change requeues everything, a fresh record is searchable
            -- at once and the backlog fills from recent records, which turns ask about most.
            ORDER BY job.created_at DESC, job.memory_item_id
-           FOR UPDATE SKIP LOCKED
+           FOR UPDATE OF job SKIP LOCKED
            LIMIT $1
          )
          UPDATE memory_embedding_jobs AS job
