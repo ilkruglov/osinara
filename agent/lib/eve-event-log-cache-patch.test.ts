@@ -13,7 +13,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeText } from "./vendored-code.js";
 
 const STORAGE_PATH = "vendor/workflow-world-postgres/dist/storage.js";
 const CACHE_PATH = "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js";
@@ -25,15 +25,15 @@ describe("workflow event log cache patch", () => {
 
     // A 43-turn session carried 585 events and 9 MB of payloads that were re-read on every
     // message before the model was called (10 сентября 2026).
-    expect(codeShape(storage)).toContain(codeShape("const cacheKey = eventLogCacheKey(params, resolveData, sortOrder);"));
-    expect(codeShape(storage)).toContain(codeShape("let cached = cacheKey === null ? undefined : readEventLogCache(cacheKey);"));
-    expect(codeShape(storage)).toContain(codeShape("const data = cached === undefined ? [] : [...cached.data];"));
+    expect(codeText(storage)).toContain(codeText("const cacheKey = eventLogCacheKey(params, resolveData, sortOrder"));
+    expect(codeText(storage)).toContain(codeText("let cached = cacheKey === null ? undefined : readEventLogCache(cacheKey"));
+    expect(codeText(storage)).toContain(codeText("const data = cached === undefined ? [] : [...cached.data]"));
     // A shrunk log must never be served from a stale prefix.
-    expect(codeShape(storage)).toContain(codeShape("if (total < cached.data.length) {"));
-    expect(codeShape(storage)).toContain(codeShape("dropEventLogCache(cacheKey);"));
+    expect(codeText(storage)).toContain(codeText("if (total < cached.data.length) {"));
+    expect(codeText(storage)).toContain(codeText("dropEventLogCache(cacheKey"));
     // Only a complete listing becomes a prefix for the next resume, and every resume reports itself.
-    expect(codeShape(storage)).toContain(codeShape("if (!hasMore) writeEventLogCache(cacheKey, data, data.at(-1)?.eventId);"));
-    expect(codeShape(storage)).toContain(codeShape("traceEventLogRead(params.runId, reusedEvents,"));
+    expect(codeText(storage)).toContain(codeText("if (!hasMore) writeEventLogCache(cacheKey, data, data.at(-1)?.eventId"));
+    expect(codeText(storage)).toContain(codeText("traceEventLogRead( params.runId, reusedEvents"));
   });
 
   it("traces slow driver queries from the one pool the driver builds", async () => {
@@ -42,16 +42,16 @@ describe("workflow event log cache patch", () => {
       readFile("vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js", "utf8"),
     ]);
 
-    expect(codeShape(index)).toContain(codeShape("traceWorkflowPool(pool);"));
-    expect(codeShape(trace)).toContain(codeShape("AGENT_WORKFLOW_SLOW_QUERY"));
+    expect(codeText(index)).toContain(codeText("traceWorkflowPool(pool);"));
+    expect(codeText(trace)).toContain(codeText("AGENT_WORKFLOW_SLOW_QUERY"));
     // Parameter values carry the turn context of a family chat and never reach the log.
-    expect(codeShape(trace)).toContain(codeShape("statement: statementShape(args[0])"));
+    expect(codeText(trace)).toContain(codeText("statement: statementShape(args[0]"));
   });
 
   it("installs the cache module next to the driver", async () => {
     const cache = await readFile(CACHE_PATH, "utf8");
 
-    expect(codeShape(cache)).toContain(codeShape("export function eventLogCacheKey"));
+    expect(codeText(cache)).toContain(codeText("export function eventLogCacheKey"));
     expect(cache).not.toMatch(/:\s*(string|number|boolean)\b/u);
   });
 

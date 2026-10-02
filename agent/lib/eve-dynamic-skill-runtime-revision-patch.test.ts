@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 import { defineSkill } from "eve/skills";
 import { describe, expect, it, vi } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeText } from "./vendored-code.js";
 
 async function importEveModule(path: string): Promise<Record<string, unknown>> {
   return await import(pathToFileURL(resolve(path)).href) as Record<string, unknown>;
@@ -25,22 +25,22 @@ describe("Eve dynamic skill runtime revision patch", () => {
       readFile("vendor/eve/dist/src/execution/workflow-steps.js", "utf8"),
     ]);
 
-    expect(codeShape(keys)).toContain(codeShape("eve.sessionDynamicSkillRuntimeRevision"));
-    expect(codeShape(lifecycle)).toContain(codeShape("async function refreshDynamicSessionSkillsForRuntimeRevision"));
-    expect(codeShape(workflow)).toContain(codeShape("refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C"));
-    const shape = codeShape(workflow);
-    const at = (snippet: string) => shape.indexOf(codeShape(snippet));
+    expect(codeText(keys)).toContain(codeText("eve.sessionDynamicSkillRuntimeRevision"));
+    expect(codeText(lifecycle)).toContain(codeText("async function refreshDynamicSessionSkillsForRuntimeRevision"));
+    expect(codeText(workflow)).toContain(codeText("refreshDynamicSessionSkillsForRuntimeRevision({ ctx: c, resolvers: C"));
+    const text = codeText(workflow);
+    const at = (snippet: string) => text.indexOf(codeText(snippet));
     const revisionAssignment = at(
-      "runtimeRevision=t;if(!v.sessionStarted)c.set(SessionDynamicSkillRuntimeRevisionKey,t)",
+      "runtimeRevision = t; if (!v.sessionStarted) (c.set(SessionDynamicSkillRuntimeRevisionKey, t",
     );
-    const managedScope = at("j=await runStep(c,g,async e=>{");
-    const skillRefresh = at("refreshDynamicSessionSkillsForRuntimeRevision({ctx:c,resolvers:C");
-    const turnPreparation = at("let t=resolveEffectiveOutputSchema(");
+    const managedScope = at("j = await runStep(c, g, async (e) => {");
+    const skillRefresh = at("refreshDynamicSessionSkillsForRuntimeRevision({ ctx: c, resolvers: C");
+    const turnPreparation = at("let t = resolveEffectiveOutputSchema(");
 
     expect(revisionAssignment).toBeGreaterThanOrEqual(0);
     expect(revisionAssignment).toBeLessThan(managedScope);
     expect(managedScope).toBeGreaterThanOrEqual(0);
-    expect(shape.slice(managedScope, skillRefresh)).toContain(codeShape("v.sessionStarted&&await "));
+    expect(text.slice(managedScope, skillRefresh)).toContain(codeText("v.sessionStarted && (await"));
     expect(skillRefresh).toBeGreaterThan(managedScope);
     expect(skillRefresh).toBeLessThan(turnPreparation);
   });

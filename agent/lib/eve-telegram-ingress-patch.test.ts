@@ -18,7 +18,7 @@ import {
 } from "eve/channels/telegram";
 import { describe, expect, it, vi } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeText } from "./vendored-code.js";
 
 import { callAdapterEventHandler } from "../../node_modules/eve/dist/src/channel/adapter.js";
 
@@ -60,12 +60,12 @@ describe("Eve Telegram verified ingress patch", () => {
     // @ts-expect-error The pinned seam deliberately permits no other handling modes.
     const invalid: TelegramInboundResult = { auth: null, replyHandling: "hitl" };
 
-    expect(codeShape(runtime).match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
-    expect(codeShape(runtime).match(/i\.acknowledgementText\?\?`Answerreceived\.`/g)).toHaveLength(1);
-    expect(codeShape(runtime).match(/n\.sendr\.message\?\?a/g)).toHaveLength(1);
+    expect(codeText(runtime).match(/r\.replyHandling!==`message`/g)).toHaveLength(1);
+    expect(codeText(runtime).match(/i\.acknowledgementText\?\?`Answerreceived\.`/g)).toHaveLength(1);
+    expect(codeText(runtime).match(/n\.send\(r\.message\?\?a/g)).toHaveLength(1);
     // Eve natively defers callback context until after the isolated approval step.
-    expect(codeShape(inputRequestsRuntime)).toContain(codeShape("deferMessagesWhileApprovalsPending"));
-    expect(codeShape(inputRequestsRuntime)).toContain(codeShape("queueDeferredStepInput"));
+    expect(codeText(inputRequestsRuntime)).toContain(codeText("deferMessagesWhileApprovalsPending"));
+    expect(codeText(inputRequestsRuntime)).toContain(codeText("queueDeferredStepInput"));
     expect(types.match(/readonly message\?: string;/g)).toHaveLength(1);
     expect(types.match(/readonly replyHandling\?: "message";/g)).toHaveLength(1);
     expect(valid).toMatchObject({ replyHandling: "message" });

@@ -13,7 +13,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeShape, codeText } from "./vendored-code.js";
 
 const execFileAsync = promisify(execFile);
 const PROVIDER_TOOLS_PATH = "vendor/eve/dist/src/harness/provider-tools.js";
@@ -22,7 +22,7 @@ describe("eve provider web-search backend patch", () => {
   it("selects the native backend from the model id when the reference has no source", async () => {
     const runtime = await readFile(PROVIDER_TOOLS_PATH, "utf8");
 
-    expect(codeShape(runtime)).toContain(codeShape("let n=e.id.split(`/`)[0]??``;if(e.source===void 0&&!(n===`openai`"));
+    expect(codeText(runtime)).toContain(codeText("let n = e.id.split(`/`)[0] ?? ``; if ( e.source === void 0 && !( n === `openai`"));
     expect(codeShape(runtime)).not.toContain(codeShape("function resolveWebSearchBackend(e,t=`exa`){if(e.source===void 0)return t;"));
   });
 
@@ -31,7 +31,7 @@ describe("eve provider web-search backend patch", () => {
   it("lets an explicit backend override the prefix rule", async () => {
     const runtime = await readFile(PROVIDER_TOOLS_PATH, "utf8");
 
-    expect(codeShape(runtime)).toContain(codeShape("function resolveWebSearchBackend(e,t=`exa`){let o=process.env.OSINARA_WEB_SEARCH_BACKEND;if(o)return o;"));
+    expect(codeText(runtime)).toContain(codeText("function resolveWebSearchBackend(e, t = `exa`) { let o = process.env.OSINARA_WEB_SEARCH_BACKEND; if (o) return o"));
   });
 
   it("keeps the patched provider-tools runtime syntactically valid", async () => {

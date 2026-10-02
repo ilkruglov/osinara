@@ -13,7 +13,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeText } from "./vendored-code.js";
 
 const execFileAsync = promisify(execFile);
 const runtimePaths = [
@@ -32,15 +32,15 @@ describe("Eve task origin auth patch", () => {
       runtimePaths.map((path) => readFile(path, "utf8")),
     );
 
-    expect(codeShape(keys)).toContain(codeShape("eve.turnOriginAuth"));
-    expect(codeShape(workflowSteps)).toContain(codeShape("TurnOriginAuthKey"));
-    expect(codeShape(workflowSteps)).toContain(codeShape("getHarnessEmissionState(s.state).turnId.length===0"));
-    expect(codeShape(dispatchShared)).toContain(codeShape("turnOriginAuth"));
-    expect(codeShape(dispatchTask)).toContain(codeShape("auth:i.turnOriginAuth??null"));
-    expect(codeShape(delegate)).toContain(codeShape("parentAuth:n.auth"));
-    expect(codeShape(childWorkflow)).toContain(codeShape("y=i.parentAuth??null"));
-    expect(codeShape(childWorkflow).match(/auth:y/g)).toHaveLength(7);
-    expect(codeShape(childSteps).match(/auth:e\.auth/g)).toHaveLength(4);
+    expect(codeText(keys)).toContain(codeText("eve.turnOriginAuth"));
+    expect(codeText(workflowSteps)).toContain(codeText("TurnOriginAuthKey"));
+    expect(codeText(workflowSteps)).toContain(codeText("getHarnessEmissionState(s.state).turnId.length === 0"));
+    expect(codeText(dispatchShared)).toContain(codeText("turnOriginAuth"));
+    expect(codeText(dispatchTask)).toContain(codeText("auth: i.turnOriginAuth ?? null"));
+    expect(codeText(delegate)).toContain(codeText("parentAuth: n.auth"));
+    expect(codeText(childWorkflow)).toContain(codeText("y = i.parentAuth ?? null"));
+    expect(codeText(childWorkflow).match(/auth:y/g)).toHaveLength(7);
+    expect(codeText(childSteps).match(/auth:e\.auth/g)).toHaveLength(4);
   });
 
   it("captures auth only at a new turn boundary and ignores same-turn HITL auth", async () => {

@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape, topLevelFunction } from "./vendored-code.js";
+import { codeText, topLevelFunction } from "./vendored-code.js";
 
 const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
 const AUTH_KEY = Symbol("eve.auth.test");
@@ -143,7 +143,7 @@ describe("Eve implicit agent policy patch", () => {
   it("keeps the policy exactly once in the vendored tool loop", async () => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
 
-    expect(codeShape(runtime).match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
-    expect(codeShape(runtime).match(/groupType===`external`/gu)).toHaveLength(1);
+    expect(codeText(runtime).match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
+    expect(codeText(runtime).match(/groupType===`external`/gu)).toHaveLength(1);
   });
 });

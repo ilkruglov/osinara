@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeShape, codeText } from "./vendored-code.js";
 
 const LIFECYCLE_PATH = "vendor/eve/dist/src/context/dynamic-skill-lifecycle.js";
 const PACKAGE_PATH = "vendor/eve/dist/src/shared/skill-package.js";
@@ -27,9 +27,9 @@ describe("Eve skill materialization patch", () => {
     // Eve rewrites every dynamic package on every turn; sequential writes cost one container
     // round trip per file, 2-5 seconds per external-group turn (10 сентября 2026).
     expect(codeShape(lifecycle)).not.toContain(codeShape("for(let{skills:e}of p)for(let t of e)await writeSkillPackageToSandbox"));
-    expect(codeShape(lifecycle)).toContain(codeShape("await Promise.all(p.flatMap("));
+    expect(codeText(lifecycle)).toContain(codeText("await Promise.all( p.flatMap"));
     expect(codeShape(skillPackage)).not.toContain(codeShape("for(let t of e.skill.files)await e.sandbox.writeBinaryFile"));
-    expect(codeShape(skillPackage)).toContain(codeShape("await Promise.all(e.skill.files.map("));
+    expect(codeText(skillPackage)).toContain(codeText("await Promise.all( e.skill.files.map"));
   });
 
   it("keeps both patched skill runtimes syntactically valid", async () => {

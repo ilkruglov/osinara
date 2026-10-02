@@ -2,15 +2,21 @@
  * Formatting-independent reading of the vendored Eve and Workflow code for tests.
  *
  * Exports:
+ * - `codeText`: code without whitespace, for checks that a reviewed snippet is present; the
+ *   snippets are the formatted text of `vendor/`, so parentheses and operators still count.
  * - `codeShape`: code without whitespace, parentheses, trailing commas, semicolons before a
- *   closing brace and quote style, so a check written against one formatting matches another.
+ *   closing brace and quote style, for checks that an old form is absent in any layout.
  * - `topLevelFunction`: the full text of one top-level function of a formatted module.
  *
  * Key construct:
  * - The patch tests were written against minified code; `vendor/` is prettier-formatted since
- *   3 October 2026. Comparing shapes keeps the reviewed snippets as they are without tying the
- *   tests to either layout. It is a presence check, not a parser: parentheses are dropped.
+ *   3 October 2026. Presence is checked strictly: dropping parentheses let a regrouped operator
+ *   pass (Codex review, 3 October 2026). Absence is checked loosely, which only makes it stricter.
  */
+export function codeText(code: string): string {
+  return code.replace(/\s+/gu, "");
+}
+
 export function codeShape(code: string): string {
   return code
     .replace(/\s+/gu, "")

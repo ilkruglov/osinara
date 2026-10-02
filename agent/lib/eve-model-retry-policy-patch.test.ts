@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
-import { codeShape } from "./vendored-code.js";
+import { codeShape, codeText } from "./vendored-code.js";
 
 const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
 const COMPACTION_PATH = "vendor/eve/dist/src/harness/compaction.js";
@@ -56,18 +56,18 @@ describe("Eve model retry policy patch", () => {
     expect(runtime).not.toMatch(/ToolLoopAgent\([^)]*maxRetries/u);
     expect(compaction).not.toMatch(/generateText\([^)]*maxRetries/u);
     // Stable function names and log messages survive Eve's package build and guard semantic reissues.
-    expect(codeShape(runtime)).toContain(codeShape("async function runModelCallWithRetries"));
-    expect(codeShape(runtime)).toContain(codeShape("async function attemptEmptyResponseRecovery"));
-    expect(codeShape(runtime)).toContain(codeShape("async function attemptUnsupportedProviderToolRecovery"));
+    expect(codeText(runtime)).toContain(codeText("async function runModelCallWithRetries"));
+    expect(codeText(runtime)).toContain(codeText("async function attemptEmptyResponseRecovery"));
+    expect(codeText(runtime)).toContain(codeText("async function attemptUnsupportedProviderToolRecovery"));
     expect(codeShape(runtime)).not.toContain(codeShape("model call failed transiently — retrying"));
     // An empty model response has no side effect to duplicate, so Eve's single nudge-and-reissue
     // stays: without it a reasoning-only reply parks the whole session for the user.
-    expect(codeShape(runtime)).toContain(codeShape("reissuing the model call once"));
+    expect(codeText(runtime)).toContain(codeText("reissuing the model call once"));
     expect(codeShape(runtime)).not.toContain(codeShape("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}"));
     expect(codeShape(runtime)).not.toContain(codeShape("disabling unsupported provider tool(s); retrying step once"));
     // Compaction never buys a second summary call: an oversized summary is returned and logged.
     expect(codeShape(compaction)).not.toContain(codeShape("||m===0)return v;--m"));
-    expect(codeShape(compaction)).toContain(codeShape("AGENT_COMPACTION_OUTPUT_OVER_LIMIT"));
+    expect(codeText(compaction)).toContain(codeText("AGENT_COMPACTION_OUTPUT_OVER_LIMIT"));
   });
 
   it("keeps every patched model runtime syntactically valid", async () => {
