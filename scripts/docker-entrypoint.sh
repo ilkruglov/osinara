@@ -20,9 +20,17 @@ fi
 # Validate model IDs and context metadata before Eve opens a listener or accepts durable work.
 node .runtime/scripts/validate-model-provider-config.js
 
+# Sandbox templates are prepared by a one-shot step, then the built server is this container's
+# process: the npm wrapper and the `eve start` parent only supervised it and held ~430 MB.
+start_server() {
+  node .runtime/scripts/prewarm-sandboxes.js
+  export HOST=0.0.0.0 NITRO_HOST=0.0.0.0 PORT=3000 NITRO_PORT=3000
+  exec node .output/server/index.mjs
+}
+
 # A compose run command is an explicit operator action and must terminate normally.
 if [ "$#" -eq 1 ] && [ "$1" = "start-after-migration" ]; then
-  exec npm run start -- --host 0.0.0.0 --port 3000
+  start_server
 fi
 if [ "$#" -gt 0 ]; then
   exec "$@"
@@ -30,4 +38,4 @@ fi
 
 # Production images contain the emitted migration runner, not TypeScript source files.
 node .runtime/scripts/migrate.js
-exec npm run start -- --host 0.0.0.0 --port 3000
+start_server

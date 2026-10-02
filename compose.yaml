@@ -184,7 +184,7 @@ services:
       - --max-client-batch-size
       - "40"
       - --max-concurrent-requests
-      - "8"
+      - "40"
       - --max-batch-requests
       - "8"
       - --max-batch-tokens

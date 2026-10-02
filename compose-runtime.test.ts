@@ -62,6 +62,18 @@ describe("Docker Compose runtime wiring", () => {
     expect(productionCompose).not.toContain("/opt/osinara/model-providers.json");
   });
 
+  // 2 October 2026: TEI counts each reranked text as one request, so with --max-concurrent-requests 8
+  // every memory search with 9+ candidates (we send up to 40) got 429 «Model is overloaded» and
+  // fell back to unreranked results. The test compose left the flag at its default and never saw it.
+  it("lets the reranker take every candidate of one call at once", () => {
+    for (const file of ["compose.yaml", "compose.production.yaml"]) {
+      const compose = readFileSync(new URL(file, projectRoot), "utf8");
+      const reranker = compose.slice(compose.indexOf("\n  memory-reranker:\n"));
+      const flag = (name: string) => Number(reranker.match(new RegExp(`- ${name}\\n\\s+- "(\\d+)"`, "u"))?.[1]);
+      expect(flag("--max-concurrent-requests"), file).toBeGreaterThanOrEqual(flag("--max-client-batch-size"));
+    }
+  });
+
   it("provides Eve's derived queue namespace before workflow recovery starts", () => {
     // Eve derives the queue namespace from the package name after loading the agent bundle.
     // Compose must provide the same value earlier so local-world recovery targets registered queues.

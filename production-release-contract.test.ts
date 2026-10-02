@@ -87,6 +87,14 @@ describe("production container contract", () => {
     expect(entrypoint).toContain("node .runtime/scripts/migrate.js");
     expect(entrypoint).toContain("node .runtime/scripts/validate-model-provider-config.js");
     expect(entrypoint).not.toContain("npm run migrate");
+    // 2 October 2026: `npm run start` (78 MB) and the `eve start` parent (355 MB, idle after start)
+    // held half of the agent's memory. Sandboxes are prepared by a one-shot step, then the built
+    // server is the container's process.
+    expect(entrypoint).toContain("node .runtime/scripts/prewarm-sandboxes.js");
+    expect(entrypoint).toContain("exec node .output/server/index.mjs");
+    expect(entrypoint).not.toContain("npm run start");
+    expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(entrypoint.indexOf("exec node .output/server/index.mjs"));
+    expect(readProjectFile("package.json")).toContain("scripts/prewarm-sandboxes.ts");
   });
 
   it("installs the version-pinned Eve patch in build and production stages", () => {
