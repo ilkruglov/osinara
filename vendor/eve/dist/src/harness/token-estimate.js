@@ -1,1 +1,4 @@
-function estimateTokens(e){return JSON.stringify(e).length/4}export{estimateTokens};
+function estimateTokens(e) {
+  return JSON.stringify(e).length / 4;
+}
+export { estimateTokens };

@@ -1,1 +1,15 @@
-const PROJECT_NAME_REGEX=/^(?!.*---)[a-z0-9-_.]+$/,PROJECT_NAME_ERROR=`Project name can only contain up to 100 lowercase letters, digits, and the characters '.', '_', '-'.`;function validateProjectName(n){let r=n.trim();if(r.length===0)return`Project name cannot be empty.`;if(r===`.`||r===`..`)return`Project name cannot be '${r}'.`;if(!PROJECT_NAME_REGEX.test(r)||r.length>100)return PROJECT_NAME_ERROR}function parseProjectName(e){let t=e.trim(),n=validateProjectName(t);if(n!==void 0)throw Error(n);return t}export{PROJECT_NAME_ERROR,parseProjectName,validateProjectName};
+const PROJECT_NAME_REGEX = /^(?!.*---)[a-z0-9-_.]+$/,
+  PROJECT_NAME_ERROR = `Project name can only contain up to 100 lowercase letters, digits, and the characters '.', '_', '-'.`;
+function validateProjectName(n) {
+  let r = n.trim();
+  if (r.length === 0) return `Project name cannot be empty.`;
+  if (r === `.` || r === `..`) return `Project name cannot be '${r}'.`;
+  if (!PROJECT_NAME_REGEX.test(r) || r.length > 100) return PROJECT_NAME_ERROR;
+}
+function parseProjectName(e) {
+  let t = e.trim(),
+    n = validateProjectName(t);
+  if (n !== void 0) throw Error(n);
+  return t;
+}
+export { PROJECT_NAME_ERROR, parseProjectName, validateProjectName };

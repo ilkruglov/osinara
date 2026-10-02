@@ -1,2 +1,185 @@
-import{InteractionRequired,InvalidAnswerError}from"./ask-signals.js";import{SetupPrerequisiteRequired}from"./integrations/shared/prerequisite.js";import"./ask.js";import{WizardCancelledError}from"./step.js";import{setupQuestionToWire}from"./setup-question-wire.js";import"./registry-setup-protocol.js";function send(e,t){if(e.send===void 0||!e.connected)throw Error(`The registry setup host disconnected.`);e.send(t)}function registrySetupBlocker(r){if(r instanceof InteractionRequired)return{status:`input_required`,question:setupQuestionToWire(r.question)};if(r instanceof InvalidAnswerError)return{status:`input_required`,question:setupQuestionToWire(r.question),issue:{code:`invalid_answer`,message:r.message}};if(r instanceof SetupPrerequisiteRequired)return{status:`prerequisite_required`,prerequisite:r.prerequisite}}function registrySetupError(e){if(!(e instanceof Error))return{message:String(e)};let t=e.stack?.split(`
-`).slice(1).map(e=>e.trim()).filter(Boolean);return t===void 0||t.length===0?{message:e.message}:{message:e.message,details:t}}function createRegistrySetupClient(e={}){let t=e.process??process;if(t.send===void 0||process.env.EVE_SETUP_PROTOCOL===void 0)return;let n=new AbortController;e.signal!==void 0&&e.signal.addEventListener(`abort`,()=>n.abort(e.signal?.reason),{once:!0});let i=1,a=new Map,onMessage=e=>{if(e.type===`cancel`){n.abort(new WizardCancelledError);for(let e of a.values())e({type:`cancel`});a.clear();return}a.get(e.id)?.(e)};t.on(`message`,onMessage),send(t,{type:`ready`,version:2});async function prompt(e){n.signal.throwIfAborted();let o=i++,s=await new Promise(n=>{a.set(o,n),send(t,{type:`prompt`,id:o,prompt:e})});if(a.delete(o),s.type===`cancel`||s.cancelled===!0)throw new WizardCancelledError;return s.value}async function validatedText(e,t){let n=t.notices;for(;;){let r=await prompt({kind:e,message:t.message,placeholder:t.placeholder,defaultValue:t.defaultValue,notices:n}),i=t.validate?.(r);if(i===void 0)return r;n=[{tone:`error`,text:i}]}}function select(e){return prompt({kind:`select`,options:e})}let o={text:e=>validatedText(`text`,e),password:e=>validatedText(`password`,e),select,async selectEditable(e){let t=await prompt({kind:`editable-select`,options:{...e,editable:{value:e.editable.value,defaultValue:e.editable.defaultValue}}});if(t.kind===`selected`)return{kind:`selected`,value:t.value};let n=e.editable.validate?.(t.text);if(n!==void 0)throw Error(n);return{kind:`edited`,value:t.value,text:t.text}},acknowledge:e=>prompt({kind:`acknowledge`,options:e}),awaitChoice(e){let n=i++;return{choice:new Promise((i,o)=>{a.set(n,e=>{a.delete(n),e.type===`cancel`||e.cancelled===!0?o(new WizardCancelledError):i(e.value)}),send(t,{type:`prompt`,id:n,prompt:{kind:`choice`,options:e}})}),close:()=>{a.delete(n),send(t,{type:`close-prompt`,id:n})}}},note(e,n,r){send(t,{type:`note`,message:e,title:n,tone:r?.tone})},intro(e,n){send(t,{type:`intro`,text:e,subtitle:n})},outro(e){send(t,{type:`outro`,text:e})},log:{message:e=>send(t,{type:`log`,level:`message`,text:e}),info:e=>send(t,{type:`log`,level:`info`,text:e}),success:e=>send(t,{type:`log`,level:`success`,text:e}),warning:e=>send(t,{type:`log`,level:`warning`,text:e}),error:e=>send(t,{type:`log`,level:`error`,text:e}),commandOutput:e=>send(t,{type:`log`,level:`commandOutput`,text:e}),spinner(e,n){let r=i++;return send(t,{type:`status`,id:r,status:e,intent:n?.kind===`external-action`?n:void 0}),{stop:()=>send(t,{type:`status`,id:r})}}}},s=!1,finish=e=>{s||(s=!0,send(t,{type:`result`,outcome:e}),t.off(`message`,onMessage),t.disconnect?.())};return{prompter:o,signal:n.signal,complete:(e={facts:[]})=>finish({kind:`completed`,...e}),cancel:()=>finish({kind:`cancelled`}),fail(e){let t=registrySetupBlocker(e);finish(t===void 0?{kind:`failed`,error:registrySetupError(e)}:{kind:`blocked`,blocker:t})}}}export{createRegistrySetupClient};
+import { InteractionRequired, InvalidAnswerError } from "./ask-signals.js";
+import { SetupPrerequisiteRequired } from "./integrations/shared/prerequisite.js";
+import "./ask.js";
+import { WizardCancelledError } from "./step.js";
+import { setupQuestionToWire } from "./setup-question-wire.js";
+import "./registry-setup-protocol.js";
+function send(e, t) {
+  if (e.send === void 0 || !e.connected)
+    throw Error(`The registry setup host disconnected.`);
+  e.send(t);
+}
+function registrySetupBlocker(r) {
+  if (r instanceof InteractionRequired)
+    return {
+      status: `input_required`,
+      question: setupQuestionToWire(r.question),
+    };
+  if (r instanceof InvalidAnswerError)
+    return {
+      status: `input_required`,
+      question: setupQuestionToWire(r.question),
+      issue: { code: `invalid_answer`, message: r.message },
+    };
+  if (r instanceof SetupPrerequisiteRequired)
+    return { status: `prerequisite_required`, prerequisite: r.prerequisite };
+}
+function registrySetupError(e) {
+  if (!(e instanceof Error)) return { message: String(e) };
+  let t = e.stack
+    ?.split(
+      `
+`,
+    )
+    .slice(1)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  return t === void 0 || t.length === 0
+    ? { message: e.message }
+    : { message: e.message, details: t };
+}
+function createRegistrySetupClient(e = {}) {
+  let t = e.process ?? process;
+  if (t.send === void 0 || process.env.EVE_SETUP_PROTOCOL === void 0) return;
+  let n = new AbortController();
+  e.signal !== void 0 &&
+    e.signal.addEventListener(`abort`, () => n.abort(e.signal?.reason), {
+      once: !0,
+    });
+  let i = 1,
+    a = new Map(),
+    onMessage = (e) => {
+      if (e.type === `cancel`) {
+        n.abort(new WizardCancelledError());
+        for (let e of a.values()) e({ type: `cancel` });
+        a.clear();
+        return;
+      }
+      a.get(e.id)?.(e);
+    };
+  (t.on(`message`, onMessage), send(t, { type: `ready`, version: 2 }));
+  async function prompt(e) {
+    n.signal.throwIfAborted();
+    let o = i++,
+      s = await new Promise((n) => {
+        (a.set(o, n), send(t, { type: `prompt`, id: o, prompt: e }));
+      });
+    if ((a.delete(o), s.type === `cancel` || s.cancelled === !0))
+      throw new WizardCancelledError();
+    return s.value;
+  }
+  async function validatedText(e, t) {
+    let n = t.notices;
+    for (;;) {
+      let r = await prompt({
+          kind: e,
+          message: t.message,
+          placeholder: t.placeholder,
+          defaultValue: t.defaultValue,
+          notices: n,
+        }),
+        i = t.validate?.(r);
+      if (i === void 0) return r;
+      n = [{ tone: `error`, text: i }];
+    }
+  }
+  function select(e) {
+    return prompt({ kind: `select`, options: e });
+  }
+  let o = {
+      text: (e) => validatedText(`text`, e),
+      password: (e) => validatedText(`password`, e),
+      select,
+      async selectEditable(e) {
+        let t = await prompt({
+          kind: `editable-select`,
+          options: {
+            ...e,
+            editable: {
+              value: e.editable.value,
+              defaultValue: e.editable.defaultValue,
+            },
+          },
+        });
+        if (t.kind === `selected`) return { kind: `selected`, value: t.value };
+        let n = e.editable.validate?.(t.text);
+        if (n !== void 0) throw Error(n);
+        return { kind: `edited`, value: t.value, text: t.text };
+      },
+      acknowledge: (e) => prompt({ kind: `acknowledge`, options: e }),
+      awaitChoice(e) {
+        let n = i++;
+        return {
+          choice: new Promise((i, o) => {
+            (a.set(n, (e) => {
+              (a.delete(n),
+                e.type === `cancel` || e.cancelled === !0
+                  ? o(new WizardCancelledError())
+                  : i(e.value));
+            }),
+              send(t, {
+                type: `prompt`,
+                id: n,
+                prompt: { kind: `choice`, options: e },
+              }));
+          }),
+          close: () => {
+            (a.delete(n), send(t, { type: `close-prompt`, id: n }));
+          },
+        };
+      },
+      note(e, n, r) {
+        send(t, { type: `note`, message: e, title: n, tone: r?.tone });
+      },
+      intro(e, n) {
+        send(t, { type: `intro`, text: e, subtitle: n });
+      },
+      outro(e) {
+        send(t, { type: `outro`, text: e });
+      },
+      log: {
+        message: (e) => send(t, { type: `log`, level: `message`, text: e }),
+        info: (e) => send(t, { type: `log`, level: `info`, text: e }),
+        success: (e) => send(t, { type: `log`, level: `success`, text: e }),
+        warning: (e) => send(t, { type: `log`, level: `warning`, text: e }),
+        error: (e) => send(t, { type: `log`, level: `error`, text: e }),
+        commandOutput: (e) =>
+          send(t, { type: `log`, level: `commandOutput`, text: e }),
+        spinner(e, n) {
+          let r = i++;
+          return (
+            send(t, {
+              type: `status`,
+              id: r,
+              status: e,
+              intent: n?.kind === `external-action` ? n : void 0,
+            }),
+            { stop: () => send(t, { type: `status`, id: r }) }
+          );
+        },
+      },
+    },
+    s = !1,
+    finish = (e) => {
+      s ||
+        ((s = !0),
+        send(t, { type: `result`, outcome: e }),
+        t.off(`message`, onMessage),
+        t.disconnect?.());
+    };
+  return {
+    prompter: o,
+    signal: n.signal,
+    complete: (e = { facts: [] }) => finish({ kind: `completed`, ...e }),
+    cancel: () => finish({ kind: `cancelled` }),
+    fail(e) {
+      let t = registrySetupBlocker(e);
+      finish(
+        t === void 0
+          ? { kind: `failed`, error: registrySetupError(e) }
+          : { kind: `blocked`, blocker: t },
+      );
+    },
+  };
+}
+export { createRegistrySetupClient };

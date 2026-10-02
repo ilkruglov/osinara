@@ -1,1 +1,27 @@
-import{applicationCommand}from"#cli/application-command.js";function registerProjectCommands(t){applicationCommand(t.program.command(`link`),t.applicationContext).description(`Link this directory to a Vercel project and pull AI Gateway credentials.`).option(`--non-interactive`,`Run without interactive prompts`).option(`--project <name-or-id>`,`Vercel project name or ID`).option(`--team <team-id-or-slug>`,`Vercel team ID or slug`).action(async e=>{let{runLinkCommand:n}=await import(`./link.js`);await n(t.logger,t.applicationContext.root,void 0,e)}),applicationCommand(t.program.command(`deploy`),t.applicationContext).description(`Deploy the agent to Vercel production (links first if needed).`).option(`--non-interactive`,`Run without interactive prompts`).option(`--project <name-or-id>`,`Vercel project name or ID`).option(`--team <team-id-or-slug>`,`Vercel team ID or slug`).option(`-y, --yes`,`Confirm a non-interactive production deployment`).action(async e=>{let{runDeployCommand:n}=await import(`./deploy.js`);await n(t.logger,t.applicationContext.root,void 0,e)})}export{registerProjectCommands};
+import { applicationCommand } from "#cli/application-command.js";
+function registerProjectCommands(t) {
+  (applicationCommand(t.program.command(`link`), t.applicationContext)
+    .description(
+      `Link this directory to a Vercel project and pull AI Gateway credentials.`,
+    )
+    .option(`--non-interactive`, `Run without interactive prompts`)
+    .option(`--project <name-or-id>`, `Vercel project name or ID`)
+    .option(`--team <team-id-or-slug>`, `Vercel team ID or slug`)
+    .action(async (e) => {
+      let { runLinkCommand: n } = await import(`./link.js`);
+      await n(t.logger, t.applicationContext.root, void 0, e);
+    }),
+    applicationCommand(t.program.command(`deploy`), t.applicationContext)
+      .description(
+        `Deploy the agent to Vercel production (links first if needed).`,
+      )
+      .option(`--non-interactive`, `Run without interactive prompts`)
+      .option(`--project <name-or-id>`, `Vercel project name or ID`)
+      .option(`--team <team-id-or-slug>`, `Vercel team ID or slug`)
+      .option(`-y, --yes`, `Confirm a non-interactive production deployment`)
+      .action(async (e) => {
+        let { runDeployCommand: n } = await import(`./deploy.js`);
+        await n(t.logger, t.applicationContext.root, void 0, e);
+      }));
+}
+export { registerProjectCommands };

@@ -1,1 +1,2 @@
-import{defineHook}from"#public/definitions/hook.js";export{defineHook};
+import { defineHook } from "#public/definitions/hook.js";
+export { defineHook };

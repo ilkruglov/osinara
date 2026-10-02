@@ -1,1 +1,42 @@
-import{WizardCancelledError}from"#setup/step.js";function errorMessage(e){return e instanceof Error?e.message:String(e)}function isRegistryNotFoundError(e){return e instanceof Error&&`code`in e&&e.code===`NOT_FOUND`}async function runRegistryAction(t,n,r){try{return await r()}catch(n){if(n instanceof WizardCancelledError)return;t.error(errorMessage(n)),process.exitCode=1;return}}async function resolveRegistryItemForAdd(e,t,n){try{return{found:!0,item:await t()}}catch(t){if(!isRegistryNotFoundError(t))throw t;return e.error(errorMessage(t)),await n(),process.exitCode=1,{found:!1}}}function setupResumeCommand(e){return`eve add ${/^[\w@./:-]+$/.test(e)?e:`'${e.replaceAll(`'`,`'\\''`)}'`} --skip-install`}function setupReminder(e,t){return`${t===`cancelled`?`Setup cancelled.`:`Setup skipped.`} Run \`${setupResumeCommand(e)}\` when you're ready.`}export{errorMessage,resolveRegistryItemForAdd,runRegistryAction,setupReminder,setupResumeCommand};
+import { WizardCancelledError } from "#setup/step.js";
+function errorMessage(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+function isRegistryNotFoundError(e) {
+  return e instanceof Error && `code` in e && e.code === `NOT_FOUND`;
+}
+async function runRegistryAction(t, n, r) {
+  try {
+    return await r();
+  } catch (n) {
+    if (n instanceof WizardCancelledError) return;
+    (t.error(errorMessage(n)), (process.exitCode = 1));
+    return;
+  }
+}
+async function resolveRegistryItemForAdd(e, t, n) {
+  try {
+    return { found: !0, item: await t() };
+  } catch (t) {
+    if (!isRegistryNotFoundError(t)) throw t;
+    return (
+      e.error(errorMessage(t)),
+      await n(),
+      (process.exitCode = 1),
+      { found: !1 }
+    );
+  }
+}
+function setupResumeCommand(e) {
+  return `eve add ${/^[\w@./:-]+$/.test(e) ? e : `'${e.replaceAll(`'`, `'\\''`)}'`} --skip-install`;
+}
+function setupReminder(e, t) {
+  return `${t === `cancelled` ? `Setup cancelled.` : `Setup skipped.`} Run \`${setupResumeCommand(e)}\` when you're ready.`;
+}
+export {
+  errorMessage,
+  resolveRegistryItemForAdd,
+  runRegistryAction,
+  setupReminder,
+  setupResumeCommand,
+};

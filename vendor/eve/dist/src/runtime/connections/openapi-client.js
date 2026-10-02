@@ -1,1 +1,355 @@
-import{createLogger}from"#internal/logging.js";import{isLoopbackHostname}from"#shared/network-address.js";import{isObject}from"#shared/guards.js";import{toInputSchema}from"#shared/tool-schema.js";import{tool}from"ai";import{omitProvidedArgumentsFromSchema,resolveProvidedArguments}from"#runtime/connections/provided-arguments.js";import{passesToolFilter,resolveHeaders}from"#runtime/connections/mcp-client.js";import{HTTP_METHODS,operationDescription,operationName,uniqueName}from"#runtime/connections/openapi-operations.js";import{buildInputSchema,deref,derefSchema,isArray}from"#runtime/connections/openapi-schema.js";import{applySecurity,resolveSecurity}from"#runtime/connections/openapi-security.js";import{extractServerUrl,parseSpecDocument}from"#runtime/connections/openapi-spec.js";const log=createLogger(`runtime.connections.openapi-client`),SWAGGER_PARAMETER_SCHEMA_KEYS=[`default`,`enum`,`exclusiveMaximum`,`exclusiveMinimum`,`format`,`items`,`maximum`,`maxItems`,`maxLength`,`minimum`,`minItems`,`minLength`,`multipleOf`,`pattern`,`type`,`uniqueItems`];var OpenApiConnectionClient=class{#e;#t;#n;constructor(e){this.#n=e}async connect(){return this.#r()}async getToolMetadata(){return(await this.#r()).metadata}async getTools(){return(await this.#r()).tools}async executeTool(e,t,r){let i=await this.#r(),a=i.operations.get(e);if(a===void 0)throw Error(`Tool "${e}" not found in connection "${this.#n.connectionName}".`);return this.#f(a,i.baseUrl,isObject(t)?t:{},{abortSignal:r?.abortSignal})}async close(){this.#e=void 0,this.#t=void 0}async#r(){if(this.#t!==void 0)return this.#t;if(this.#e!==void 0)return this.#e;this.#e=this.#i();try{return this.#t=await this.#e,this.#t}catch(e){throw this.#e=void 0,e}}async#i(){let e=await this.#o(),t=this.#a(e),o=this.#s(e),c=this.#n.tools,l=c===void 0?o:o.filter(e=>passesToolFilter(e.toolName,c)),u=[],d=new Map,f={},p=Object.keys(this.#n.toolCall?.providedArguments??{});for(let e of l){let o=omitProvidedArgumentsFromSchema(e.inputSchema,p),s;try{s=toInputSchema(o)}catch(t){log.warn(`omitting OpenAPI operation with an invalid input schema`,{connectionName:this.#n.connectionName,error:t,toolName:e.toolName});continue}d.set(e.toolName,e),u.push({description:e.description,inputSchema:o,name:e.toolName}),f[e.toolName]=tool({description:e.description,inputSchema:s,execute:async(r,i)=>this.#f(e,t,isObject(r)?r:{},{abortSignal:i?.abortSignal})})}return{metadata:u,operations:d,tools:f,baseUrl:t}}#a(e){let t=this.#n.url,n=typeof t==`string`&&t.trim().length>0?t:extractServerUrl(e,this.#n.spec);if(n===void 0)throw Error(`OpenAPI connection "${this.#n.connectionName}" has no base URL: set "baseUrl" or ensure the document declares an absolute "servers" entry or Swagger "host".`);return assertSecureUrl(n,this.#n.connectionName,`base`),n}async#o(){let e=this.#n.spec;if(e===void 0)throw Error(`OpenAPI connection "${this.#n.connectionName}" is missing its "spec" source.`);if(typeof e!=`string`)return e;assertSecureUrl(e,this.#n.connectionName,`spec`);let t;try{t=await fetch(e,{headers:{accept:`application/json, application/yaml, text/yaml, */*`}})}catch(t){throw Error(`OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": ${String(t)}`)}if(t.redirected&&assertSecureUrl(t.url,this.#n.connectionName,`spec`),!t.ok)throw Error(`OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": HTTP ${t.status}.`);let r=await t.text(),i;try{i=parseSpecDocument(r)}catch(t){throw Error(`OpenAPI connection "${this.#n.connectionName}" spec at "${e}" could not be parsed as JSON or YAML: ${String(t)}`)}if(!isObject(i))throw Error(`OpenAPI connection "${this.#n.connectionName}" spec at "${e}" is not an OpenAPI document object.`);return i}#s(e){let t=e.paths;if(!isObject(t))return[];let r=[],i=new Set;for(let[a,o]of Object.entries(t)){if(!isObject(o))continue;let t=isArray(o.parameters)?o.parameters:[];for(let s of HTTP_METHODS){let c=o[s];if(!isObject(c))continue;let l=uniqueName(operationName(c,s,a),i),m=isArray(c.parameters)?c.parameters:[],h=[...t,...m],g=this.#c(e,h),_=this.#l(e,c.requestBody,h);r.push({toolName:l,method:s,pathTemplate:a,description:operationDescription(c),parameters:g,requestBody:_,inputSchema:buildInputSchema(g,_),security:resolveSecurity(e,c)})}}return r}#c(e,t){let r=[];for(let i of t){let t=isObject(i)?deref(e,i):i;if(!isObject(t))continue;let a=t.in;if(a!==`path`&&a!==`query`&&a!==`header`&&a!==`cookie`||typeof t.name!=`string`)continue;let o=this.#u(e,t);r.push({name:t.name,location:a,required:t.required===!0||a===`path`,schema:o,description:typeof t.description==`string`?t.description:void 0})}return r}#l(e,t,r=[]){if(isObject(t)){let r=deref(e,t);if(isObject(r)&&isObject(r.content)){let t=r.content,i=`application/json`in t?`application/json`:Object.keys(t)[0];if(i!==void 0){let a=t[i],o=isObject(a)&&isObject(a.schema)?derefSchema(e,a.schema):{};return{required:r.required===!0,contentType:i,schema:o}}}}return this.#d(e,r)}#u(e,t){if(isObject(t.schema))return derefSchema(e,t.schema);let r={};for(let e of SWAGGER_PARAMETER_SCHEMA_KEYS)t[e]!==void 0&&(r[e]=t[e]);return derefSchema(e,r)}#d(e,t){for(let r of t){let t=isObject(r)?deref(e,r):r;if(!isObject(t)||t.in!==`body`)continue;let i=isObject(t.schema)?derefSchema(e,t.schema):{};return{required:t.required===!0,contentType:`application/json`,schema:i}}}async#f(e,t,n,r){let i=await resolveProvidedArguments({args:n,connection:this.#n,toolName:e.toolName}),a=await resolveHeaders(this.#n),s=e.pathTemplate,l=new URLSearchParams,u=[];for(let t of e.parameters){let e=i[t.name];e!=null&&(t.location===`path`?s=s.replace(`{${t.name}}`,encodeURIComponent(String(e))):t.location===`query`?appendQuery(l,t.name,e):t.location===`cookie`?u.push(`${t.name}=${encodeURIComponent(String(e))}`):a[t.name]=String(e))}if(applySecurity(e.security,this.#n,a,l,u),u.length>0){let e=a.cookie??a.Cookie;delete a.Cookie,a.cookie=[e,...u].filter(e=>!!e).join(`; `)}let d=new URL(joinPath(t,s));d.search=l.toString();let f;e.requestBody!==void 0&&i.body!==void 0&&(f=JSON.stringify(i.body),a[`content-type`]=e.requestBody.contentType);let p=await fetch(d,{method:e.method.toUpperCase(),headers:a,body:f,signal:r?.abortSignal});return{status:p.status,statusText:p.statusText,body:await readResponseBody(p)}}};function appendQuery(e,t,n){if(isArray(n)){for(let r of n)e.append(t,String(r));return}e.append(t,String(n))}function joinPath(e,t){return`${e.endsWith(`/`)?e.slice(0,-1):e}${t.startsWith(`/`)?t:`/${t}`}`}function assertSecureUrl(e,n,r){let i;try{i=new URL(e)}catch{throw Error(`OpenAPI connection "${n}" has an invalid ${r} URL "${e}".`)}if(i.protocol!==`https:`&&!(i.protocol===`http:`&&isLoopbackHostname(i.hostname)))throw Error(`OpenAPI connection "${n}" must use https for its ${r} (got "${i.protocol}//${i.host}").`)}async function readResponseBody(e){let t=await e.text();if(t.length===0)return null;if((e.headers.get(`content-type`)??``).includes(`application/json`))try{return JSON.parse(t)}catch{return t}return t}export{OpenApiConnectionClient};
+import { createLogger } from "#internal/logging.js";
+import { isLoopbackHostname } from "#shared/network-address.js";
+import { isObject } from "#shared/guards.js";
+import { toInputSchema } from "#shared/tool-schema.js";
+import { tool } from "ai";
+import {
+  omitProvidedArgumentsFromSchema,
+  resolveProvidedArguments,
+} from "#runtime/connections/provided-arguments.js";
+import {
+  passesToolFilter,
+  resolveHeaders,
+} from "#runtime/connections/mcp-client.js";
+import {
+  HTTP_METHODS,
+  operationDescription,
+  operationName,
+  uniqueName,
+} from "#runtime/connections/openapi-operations.js";
+import {
+  buildInputSchema,
+  deref,
+  derefSchema,
+  isArray,
+} from "#runtime/connections/openapi-schema.js";
+import {
+  applySecurity,
+  resolveSecurity,
+} from "#runtime/connections/openapi-security.js";
+import {
+  extractServerUrl,
+  parseSpecDocument,
+} from "#runtime/connections/openapi-spec.js";
+const log = createLogger(`runtime.connections.openapi-client`),
+  SWAGGER_PARAMETER_SCHEMA_KEYS = [
+    `default`,
+    `enum`,
+    `exclusiveMaximum`,
+    `exclusiveMinimum`,
+    `format`,
+    `items`,
+    `maximum`,
+    `maxItems`,
+    `maxLength`,
+    `minimum`,
+    `minItems`,
+    `minLength`,
+    `multipleOf`,
+    `pattern`,
+    `type`,
+    `uniqueItems`,
+  ];
+var OpenApiConnectionClient = class {
+  #e;
+  #t;
+  #n;
+  constructor(e) {
+    this.#n = e;
+  }
+  async connect() {
+    return this.#r();
+  }
+  async getToolMetadata() {
+    return (await this.#r()).metadata;
+  }
+  async getTools() {
+    return (await this.#r()).tools;
+  }
+  async executeTool(e, t, r) {
+    let i = await this.#r(),
+      a = i.operations.get(e);
+    if (a === void 0)
+      throw Error(
+        `Tool "${e}" not found in connection "${this.#n.connectionName}".`,
+      );
+    return this.#f(a, i.baseUrl, isObject(t) ? t : {}, {
+      abortSignal: r?.abortSignal,
+    });
+  }
+  async close() {
+    ((this.#e = void 0), (this.#t = void 0));
+  }
+  async #r() {
+    if (this.#t !== void 0) return this.#t;
+    if (this.#e !== void 0) return this.#e;
+    this.#e = this.#i();
+    try {
+      return ((this.#t = await this.#e), this.#t);
+    } catch (e) {
+      throw ((this.#e = void 0), e);
+    }
+  }
+  async #i() {
+    let e = await this.#o(),
+      t = this.#a(e),
+      o = this.#s(e),
+      c = this.#n.tools,
+      l = c === void 0 ? o : o.filter((e) => passesToolFilter(e.toolName, c)),
+      u = [],
+      d = new Map(),
+      f = {},
+      p = Object.keys(this.#n.toolCall?.providedArguments ?? {});
+    for (let e of l) {
+      let o = omitProvidedArgumentsFromSchema(e.inputSchema, p),
+        s;
+      try {
+        s = toInputSchema(o);
+      } catch (t) {
+        log.warn(`omitting OpenAPI operation with an invalid input schema`, {
+          connectionName: this.#n.connectionName,
+          error: t,
+          toolName: e.toolName,
+        });
+        continue;
+      }
+      (d.set(e.toolName, e),
+        u.push({
+          description: e.description,
+          inputSchema: o,
+          name: e.toolName,
+        }),
+        (f[e.toolName] = tool({
+          description: e.description,
+          inputSchema: s,
+          execute: async (r, i) =>
+            this.#f(e, t, isObject(r) ? r : {}, {
+              abortSignal: i?.abortSignal,
+            }),
+        })));
+    }
+    return { metadata: u, operations: d, tools: f, baseUrl: t };
+  }
+  #a(e) {
+    let t = this.#n.url,
+      n =
+        typeof t == `string` && t.trim().length > 0
+          ? t
+          : extractServerUrl(e, this.#n.spec);
+    if (n === void 0)
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" has no base URL: set "baseUrl" or ensure the document declares an absolute "servers" entry or Swagger "host".`,
+      );
+    return (assertSecureUrl(n, this.#n.connectionName, `base`), n);
+  }
+  async #o() {
+    let e = this.#n.spec;
+    if (e === void 0)
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" is missing its "spec" source.`,
+      );
+    if (typeof e != `string`) return e;
+    assertSecureUrl(e, this.#n.connectionName, `spec`);
+    let t;
+    try {
+      t = await fetch(e, {
+        headers: {
+          accept: `application/json, application/yaml, text/yaml, */*`,
+        },
+      });
+    } catch (t) {
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": ${String(t)}`,
+      );
+    }
+    if (
+      (t.redirected && assertSecureUrl(t.url, this.#n.connectionName, `spec`),
+      !t.ok)
+    )
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" failed to fetch its spec from "${e}": HTTP ${t.status}.`,
+      );
+    let r = await t.text(),
+      i;
+    try {
+      i = parseSpecDocument(r);
+    } catch (t) {
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" spec at "${e}" could not be parsed as JSON or YAML: ${String(t)}`,
+      );
+    }
+    if (!isObject(i))
+      throw Error(
+        `OpenAPI connection "${this.#n.connectionName}" spec at "${e}" is not an OpenAPI document object.`,
+      );
+    return i;
+  }
+  #s(e) {
+    let t = e.paths;
+    if (!isObject(t)) return [];
+    let r = [],
+      i = new Set();
+    for (let [a, o] of Object.entries(t)) {
+      if (!isObject(o)) continue;
+      let t = isArray(o.parameters) ? o.parameters : [];
+      for (let s of HTTP_METHODS) {
+        let c = o[s];
+        if (!isObject(c)) continue;
+        let l = uniqueName(operationName(c, s, a), i),
+          m = isArray(c.parameters) ? c.parameters : [],
+          h = [...t, ...m],
+          g = this.#c(e, h),
+          _ = this.#l(e, c.requestBody, h);
+        r.push({
+          toolName: l,
+          method: s,
+          pathTemplate: a,
+          description: operationDescription(c),
+          parameters: g,
+          requestBody: _,
+          inputSchema: buildInputSchema(g, _),
+          security: resolveSecurity(e, c),
+        });
+      }
+    }
+    return r;
+  }
+  #c(e, t) {
+    let r = [];
+    for (let i of t) {
+      let t = isObject(i) ? deref(e, i) : i;
+      if (!isObject(t)) continue;
+      let a = t.in;
+      if (
+        (a !== `path` && a !== `query` && a !== `header` && a !== `cookie`) ||
+        typeof t.name != `string`
+      )
+        continue;
+      let o = this.#u(e, t);
+      r.push({
+        name: t.name,
+        location: a,
+        required: t.required === !0 || a === `path`,
+        schema: o,
+        description: typeof t.description == `string` ? t.description : void 0,
+      });
+    }
+    return r;
+  }
+  #l(e, t, r = []) {
+    if (isObject(t)) {
+      let r = deref(e, t);
+      if (isObject(r) && isObject(r.content)) {
+        let t = r.content,
+          i = `application/json` in t ? `application/json` : Object.keys(t)[0];
+        if (i !== void 0) {
+          let a = t[i],
+            o =
+              isObject(a) && isObject(a.schema) ? derefSchema(e, a.schema) : {};
+          return { required: r.required === !0, contentType: i, schema: o };
+        }
+      }
+    }
+    return this.#d(e, r);
+  }
+  #u(e, t) {
+    if (isObject(t.schema)) return derefSchema(e, t.schema);
+    let r = {};
+    for (let e of SWAGGER_PARAMETER_SCHEMA_KEYS)
+      t[e] !== void 0 && (r[e] = t[e]);
+    return derefSchema(e, r);
+  }
+  #d(e, t) {
+    for (let r of t) {
+      let t = isObject(r) ? deref(e, r) : r;
+      if (!isObject(t) || t.in !== `body`) continue;
+      let i = isObject(t.schema) ? derefSchema(e, t.schema) : {};
+      return {
+        required: t.required === !0,
+        contentType: `application/json`,
+        schema: i,
+      };
+    }
+  }
+  async #f(e, t, n, r) {
+    let i = await resolveProvidedArguments({
+        args: n,
+        connection: this.#n,
+        toolName: e.toolName,
+      }),
+      a = await resolveHeaders(this.#n),
+      s = e.pathTemplate,
+      l = new URLSearchParams(),
+      u = [];
+    for (let t of e.parameters) {
+      let e = i[t.name];
+      e != null &&
+        (t.location === `path`
+          ? (s = s.replace(`{${t.name}}`, encodeURIComponent(String(e))))
+          : t.location === `query`
+            ? appendQuery(l, t.name, e)
+            : t.location === `cookie`
+              ? u.push(`${t.name}=${encodeURIComponent(String(e))}`)
+              : (a[t.name] = String(e)));
+    }
+    if ((applySecurity(e.security, this.#n, a, l, u), u.length > 0)) {
+      let e = a.cookie ?? a.Cookie;
+      (delete a.Cookie, (a.cookie = [e, ...u].filter((e) => !!e).join(`; `)));
+    }
+    let d = new URL(joinPath(t, s));
+    d.search = l.toString();
+    let f;
+    e.requestBody !== void 0 &&
+      i.body !== void 0 &&
+      ((f = JSON.stringify(i.body)),
+      (a[`content-type`] = e.requestBody.contentType));
+    let p = await fetch(d, {
+      method: e.method.toUpperCase(),
+      headers: a,
+      body: f,
+      signal: r?.abortSignal,
+    });
+    return {
+      status: p.status,
+      statusText: p.statusText,
+      body: await readResponseBody(p),
+    };
+  }
+};
+function appendQuery(e, t, n) {
+  if (isArray(n)) {
+    for (let r of n) e.append(t, String(r));
+    return;
+  }
+  e.append(t, String(n));
+}
+function joinPath(e, t) {
+  return `${e.endsWith(`/`) ? e.slice(0, -1) : e}${t.startsWith(`/`) ? t : `/${t}`}`;
+}
+function assertSecureUrl(e, n, r) {
+  let i;
+  try {
+    i = new URL(e);
+  } catch {
+    throw Error(`OpenAPI connection "${n}" has an invalid ${r} URL "${e}".`);
+  }
+  if (
+    i.protocol !== `https:` &&
+    !(i.protocol === `http:` && isLoopbackHostname(i.hostname))
+  )
+    throw Error(
+      `OpenAPI connection "${n}" must use https for its ${r} (got "${i.protocol}//${i.host}").`,
+    );
+}
+async function readResponseBody(e) {
+  let t = await e.text();
+  if (t.length === 0) return null;
+  if ((e.headers.get(`content-type`) ?? ``).includes(`application/json`))
+    try {
+      return JSON.parse(t);
+    } catch {
+      return t;
+    }
+  return t;
+}
+export { OpenApiConnectionClient };

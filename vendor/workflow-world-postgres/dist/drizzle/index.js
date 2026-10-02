@@ -1,7 +1,7 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import * as Schema from './schema.js';
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as Schema from "./schema.js";
 export { Schema };
 export function createClient(pool) {
-    return drizzle(pool, { schema: Schema });
+  return drizzle(pool, { schema: Schema });
 }
 //# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9zcmMvZHJpenpsZS9pbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLEVBQUUsT0FBTyxFQUFFLE1BQU0sMkJBQTJCLENBQUM7QUFFcEQsT0FBTyxLQUFLLE1BQU0sTUFBTSxhQUFhLENBQUM7QUFFdEMsT0FBTyxFQUFFLE1BQU0sRUFBRSxDQUFDO0FBSWxCLE1BQU0sVUFBVSxZQUFZLENBQUMsSUFBVTtJQUNyQyxPQUFPLE9BQU8sQ0FBQyxJQUFJLEVBQUUsRUFBRSxNQUFNLEVBQUUsTUFBTSxFQUFFLENBQUMsQ0FBQztBQUMzQyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgZHJpenpsZSB9IGZyb20gJ2RyaXp6bGUtb3JtL25vZGUtcG9zdGdyZXMnO1xuaW1wb3J0IHR5cGUgeyBQb29sIH0gZnJvbSAncGcnO1xuaW1wb3J0ICogYXMgU2NoZW1hIGZyb20gJy4vc2NoZW1hLmpzJztcblxuZXhwb3J0IHsgU2NoZW1hIH07XG5cbmV4cG9ydCB0eXBlIERyaXp6bGUgPSBSZXR1cm5UeXBlPHR5cGVvZiBjcmVhdGVDbGllbnQ+O1xuXG5leHBvcnQgZnVuY3Rpb24gY3JlYXRlQ2xpZW50KHBvb2w6IFBvb2wpIHtcbiAgcmV0dXJuIGRyaXp6bGUocG9vbCwgeyBzY2hlbWE6IFNjaGVtYSB9KTtcbn1cbiJdfQ==

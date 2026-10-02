@@ -1,1 +1,42 @@
-const SHOW_CURSOR=`\x1B[?25h`;var AltScreen=class{#e;#t=!1;#n=!1;constructor(e){this.#e=e.write.bind(e)}get active(){return this.#t}enter(t={}){if(this.#t)return;let n=t.mouse??!0,r=t.cursor??`hidden`;this.#e(`[?1049h${r===`hidden`?`\x1B[?25l`:SHOW_CURSOR}${n?`\x1B[?1002h\x1B[?1006h`:``}`),this.#n=n,this.#t=!0}paint(e,t){if(!this.#t)return;let n=e.slice(0,Math.max(0,t)).map((e,t)=>`[${t+1}H${e}`).join(``);this.#e(`[?2026h[H[0J${n}[?2026l`)}writeRaw(e){this.#t&&this.#e(e)}exit(){this.#t&&=(this.#e(`${this.#n?`\x1B[?1006l\x1B[?1002l`:``}${SHOW_CURSOR}[?1049l`),this.#n=!1,!1)}};export{AltScreen};
+const SHOW_CURSOR = `\x1B[?25h`;
+var AltScreen = class {
+  #e;
+  #t = !1;
+  #n = !1;
+  constructor(e) {
+    this.#e = e.write.bind(e);
+  }
+  get active() {
+    return this.#t;
+  }
+  enter(t = {}) {
+    if (this.#t) return;
+    let n = t.mouse ?? !0,
+      r = t.cursor ?? `hidden`;
+    (this.#e(
+      `[?1049h${r === `hidden` ? `\x1B[?25l` : SHOW_CURSOR}${n ? `\x1B[?1002h\x1B[?1006h` : ``}`,
+    ),
+      (this.#n = n),
+      (this.#t = !0));
+  }
+  paint(e, t) {
+    if (!this.#t) return;
+    let n = e
+      .slice(0, Math.max(0, t))
+      .map((e, t) => `[${t + 1}H${e}`)
+      .join(``);
+    this.#e(`[?2026h[H[0J${n}[?2026l`);
+  }
+  writeRaw(e) {
+    this.#t && this.#e(e);
+  }
+  exit() {
+    this.#t &&=
+      (this.#e(
+        `${this.#n ? `\x1B[?1006l\x1B[?1002l` : ``}${SHOW_CURSOR}[?1049l`,
+      ),
+      (this.#n = !1),
+      !1);
+  }
+};
+export { AltScreen };

@@ -1,1 +1,9 @@
-function isAsyncIterable(e){return typeof e==`object`&&!!e&&Symbol.asyncIterator in e&&typeof e[Symbol.asyncIterator]==`function`}export{isAsyncIterable};
+function isAsyncIterable(e) {
+  return (
+    typeof e == `object` &&
+    !!e &&
+    Symbol.asyncIterator in e &&
+    typeof e[Symbol.asyncIterator] == `function`
+  );
+}
+export { isAsyncIterable };

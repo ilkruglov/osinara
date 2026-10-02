@@ -1,1 +1,206 @@
-import{isApprovalRequest}from"#harness/input-request-class.js";import{queueDeferredStepInput,removePendingInputBatches}from"#harness/pending-input-batches.js";import{TOOL_EXECUTION_DENIED_MESSAGE,buildResolvedInputBatch,resolveApprovalOutcome}from"#harness/input-request-resolution.js";import{appendResolvedBatchTranscript,compactStepInput,finishResolvedInput,responsesForBatches}from"#harness/hitl/pending-input-resolution.js";import{buildQuestionToolResponsePart,findAnsweredQuestionBatches,resolveQuestionBatches}from"#harness/hitl/question-input-requests.js";const APPROVED_TOOLS_KEY=`eve.runtime.hitl.approvedTools`;function hasAnsweredApprovalBatch(t,n){let r=new Set(n.map(e=>e.requestId));return t.some(t=>t.requests.every(t=>!isApprovalRequest(t)||r.has(t.requestId)))}function resolveApprovalInputBatches(r){let a=new Set(r.responses.map(e=>e.requestId)),o=new Set(r.approvalBatches.filter(t=>t.requests.every(t=>!isApprovalRequest(t)||a.has(t.requestId)))),l=new Set(findAnsweredQuestionBatches(r.questionBatches,r.responses)),u=r.batches.filter(e=>o.has(e)||l.has(e)),d=u.findIndex(t=>t.requests.some(t=>isApprovalRequest(t)));d>=0&&(u=u.slice(0,d+1));let f=r.batches.filter(e=>!u.includes(e)),p=responsesForBatches(r.responses,f);if(u.length===0){if(r.resolvedStepInput?.message===void 0)return{outcome:`unresolved`,messages:[...r.baseHistory],session:queueDeferredStepInput(r.session,compactStepInput(r.resolvedStepInput))};let e=p.length===0?r.session:queueDeferredStepInput(r.session,{inputResponses:p});return{consumedMessage:r.resolvedStepInput.messageConsumed,outcome:`continue`,messages:[...r.baseHistory],session:e}}let m=u.find(t=>t.requests.some(t=>isApprovalRequest(t))),h=resolveQuestionBatches({batches:u.filter(e=>e!==m),messages:[...r.baseHistory],responses:r.responses}),g=m===void 0?{messages:h,session:r.session}:resolveApprovalBatch({batch:m,messages:h,resolveApprovalKey:r.resolveApprovalKey,responses:r.responses,session:r.session});return finishResolvedInput({deferTurnInput:m!==void 0||r.deferTurnInput,leftoverResponses:p,messages:g.messages,rejectedActions:g.rejectedActions,resolvedInputs:u.flatMap(e=>{let t=buildResolvedInputBatch(e,r.responses);return t===void 0?[]:[t]}),resolvedStepInput:r.resolvedStepInput,session:removePendingInputBatches(g.session,u)})}function getApprovedTools(e){let t=e.state?.[APPROVED_TOOLS_KEY];return Array.isArray(t)?new Set(t):new Set}function resolveApprovalBatch(e){let t=recordApprovedTools({pendingBatch:e.batch,resolveApprovalKey:e.resolveApprovalKey,responses:e.responses,session:e.session}),n=buildApprovalBatchToolResponseParts(e.batch,e.responses);appendResolvedBatchTranscript(e.messages,e.batch,n);let r=buildRejectedActionBatch(e.batch,e.responses);return{messages:e.messages,rejectedActions:r===void 0?void 0:[r],session:t}}function recordApprovedTools(t){let n=new Set(t.responses.filter(e=>e.optionId===`approve`).map(e=>e.requestId)),r=t.pendingBatch.requests.filter(t=>isApprovalRequest(t)&&n.has(t.requestId)).map(e=>t.resolveApprovalKey?.(e)??e.action.toolName);if(r.length===0)return t.session;let i={...t.session.state};return i[APPROVED_TOOLS_KEY]=[...new Set([...getApprovedTools(t.session),...r])],{...t.session,state:i}}function buildRejectedActionBatch(t,n){if(t.event===void 0)return;let i=new Map(n.map(e=>[e.requestId,e])),o=[];for(let n of t.requests){if(!isApprovalRequest(n))continue;let{approved:t,reason:s,status:c}=resolveApprovalOutcome(i.get(n.requestId));t||o.push({callId:n.action.callId,isError:!0,kind:`tool-result`,output:{approval:{requestId:n.requestId,status:c},code:`TOOL_EXECUTION_DENIED`,message:s??TOOL_EXECUTION_DENIED_MESSAGE,tool:{result:`not_run`}},toolName:n.action.toolName})}return o.length>0?{event:t.event,results:o}:void 0}function buildApprovalBatchToolResponseParts(e,t){let n=new Map(t.map(e=>[e.requestId,e])),r=[];for(let t of e.requests){let e=n.get(t.requestId);switch(t.kind){case`tool-approval`:r.push(...buildApprovalToolResponseParts(t,e));break;case`question`:r.push(buildQuestionToolResponsePart(t,e));break;case`session-limit`:throw TypeError(`Session-limit pending input batches must contain only session-limit requests.`);default:{let e=t.kind;throw TypeError(`Unhandled pending input request kind: ${String(e)}`)}}}return r}function buildApprovalToolResponseParts(e,t){let{approved:n,reason:r}=resolveApprovalOutcome(t),i=[{approvalId:e.requestId,approved:n,reason:r,type:`tool-approval-response`}];return n||i.push({output:{type:`execution-denied`,reason:r},toolCallId:e.action.callId,toolName:e.action.toolName,type:`tool-result`}),i}export{getApprovedTools,hasAnsweredApprovalBatch,resolveApprovalInputBatches};
+import { isApprovalRequest } from "#harness/input-request-class.js";
+import {
+  queueDeferredStepInput,
+  removePendingInputBatches,
+} from "#harness/pending-input-batches.js";
+import {
+  TOOL_EXECUTION_DENIED_MESSAGE,
+  buildResolvedInputBatch,
+  resolveApprovalOutcome,
+} from "#harness/input-request-resolution.js";
+import {
+  appendResolvedBatchTranscript,
+  compactStepInput,
+  finishResolvedInput,
+  responsesForBatches,
+} from "#harness/hitl/pending-input-resolution.js";
+import {
+  buildQuestionToolResponsePart,
+  findAnsweredQuestionBatches,
+  resolveQuestionBatches,
+} from "#harness/hitl/question-input-requests.js";
+const APPROVED_TOOLS_KEY = `eve.runtime.hitl.approvedTools`;
+function hasAnsweredApprovalBatch(t, n) {
+  let r = new Set(n.map((e) => e.requestId));
+  return t.some((t) =>
+    t.requests.every((t) => !isApprovalRequest(t) || r.has(t.requestId)),
+  );
+}
+function resolveApprovalInputBatches(r) {
+  let a = new Set(r.responses.map((e) => e.requestId)),
+    o = new Set(
+      r.approvalBatches.filter((t) =>
+        t.requests.every((t) => !isApprovalRequest(t) || a.has(t.requestId)),
+      ),
+    ),
+    l = new Set(findAnsweredQuestionBatches(r.questionBatches, r.responses)),
+    u = r.batches.filter((e) => o.has(e) || l.has(e)),
+    d = u.findIndex((t) => t.requests.some((t) => isApprovalRequest(t)));
+  d >= 0 && (u = u.slice(0, d + 1));
+  let f = r.batches.filter((e) => !u.includes(e)),
+    p = responsesForBatches(r.responses, f);
+  if (u.length === 0) {
+    if (r.resolvedStepInput?.message === void 0)
+      return {
+        outcome: `unresolved`,
+        messages: [...r.baseHistory],
+        session: queueDeferredStepInput(
+          r.session,
+          compactStepInput(r.resolvedStepInput),
+        ),
+      };
+    let e =
+      p.length === 0
+        ? r.session
+        : queueDeferredStepInput(r.session, { inputResponses: p });
+    return {
+      consumedMessage: r.resolvedStepInput.messageConsumed,
+      outcome: `continue`,
+      messages: [...r.baseHistory],
+      session: e,
+    };
+  }
+  let m = u.find((t) => t.requests.some((t) => isApprovalRequest(t))),
+    h = resolveQuestionBatches({
+      batches: u.filter((e) => e !== m),
+      messages: [...r.baseHistory],
+      responses: r.responses,
+    }),
+    g =
+      m === void 0
+        ? { messages: h, session: r.session }
+        : resolveApprovalBatch({
+            batch: m,
+            messages: h,
+            resolveApprovalKey: r.resolveApprovalKey,
+            responses: r.responses,
+            session: r.session,
+          });
+  return finishResolvedInput({
+    deferTurnInput: m !== void 0 || r.deferTurnInput,
+    leftoverResponses: p,
+    messages: g.messages,
+    rejectedActions: g.rejectedActions,
+    resolvedInputs: u.flatMap((e) => {
+      let t = buildResolvedInputBatch(e, r.responses);
+      return t === void 0 ? [] : [t];
+    }),
+    resolvedStepInput: r.resolvedStepInput,
+    session: removePendingInputBatches(g.session, u),
+  });
+}
+function getApprovedTools(e) {
+  let t = e.state?.[APPROVED_TOOLS_KEY];
+  return Array.isArray(t) ? new Set(t) : new Set();
+}
+function resolveApprovalBatch(e) {
+  let t = recordApprovedTools({
+      pendingBatch: e.batch,
+      resolveApprovalKey: e.resolveApprovalKey,
+      responses: e.responses,
+      session: e.session,
+    }),
+    n = buildApprovalBatchToolResponseParts(e.batch, e.responses);
+  appendResolvedBatchTranscript(e.messages, e.batch, n);
+  let r = buildRejectedActionBatch(e.batch, e.responses);
+  return {
+    messages: e.messages,
+    rejectedActions: r === void 0 ? void 0 : [r],
+    session: t,
+  };
+}
+function recordApprovedTools(t) {
+  let n = new Set(
+      t.responses
+        .filter((e) => e.optionId === `approve`)
+        .map((e) => e.requestId),
+    ),
+    r = t.pendingBatch.requests
+      .filter((t) => isApprovalRequest(t) && n.has(t.requestId))
+      .map((e) => t.resolveApprovalKey?.(e) ?? e.action.toolName);
+  if (r.length === 0) return t.session;
+  let i = { ...t.session.state };
+  return (
+    (i[APPROVED_TOOLS_KEY] = [
+      ...new Set([...getApprovedTools(t.session), ...r]),
+    ]),
+    { ...t.session, state: i }
+  );
+}
+function buildRejectedActionBatch(t, n) {
+  if (t.event === void 0) return;
+  let i = new Map(n.map((e) => [e.requestId, e])),
+    o = [];
+  for (let n of t.requests) {
+    if (!isApprovalRequest(n)) continue;
+    let {
+      approved: t,
+      reason: s,
+      status: c,
+    } = resolveApprovalOutcome(i.get(n.requestId));
+    t ||
+      o.push({
+        callId: n.action.callId,
+        isError: !0,
+        kind: `tool-result`,
+        output: {
+          approval: { requestId: n.requestId, status: c },
+          code: `TOOL_EXECUTION_DENIED`,
+          message: s ?? TOOL_EXECUTION_DENIED_MESSAGE,
+          tool: { result: `not_run` },
+        },
+        toolName: n.action.toolName,
+      });
+  }
+  return o.length > 0 ? { event: t.event, results: o } : void 0;
+}
+function buildApprovalBatchToolResponseParts(e, t) {
+  let n = new Map(t.map((e) => [e.requestId, e])),
+    r = [];
+  for (let t of e.requests) {
+    let e = n.get(t.requestId);
+    switch (t.kind) {
+      case `tool-approval`:
+        r.push(...buildApprovalToolResponseParts(t, e));
+        break;
+      case `question`:
+        r.push(buildQuestionToolResponsePart(t, e));
+        break;
+      case `session-limit`:
+        throw TypeError(
+          `Session-limit pending input batches must contain only session-limit requests.`,
+        );
+      default: {
+        let e = t.kind;
+        throw TypeError(`Unhandled pending input request kind: ${String(e)}`);
+      }
+    }
+  }
+  return r;
+}
+function buildApprovalToolResponseParts(e, t) {
+  let { approved: n, reason: r } = resolveApprovalOutcome(t),
+    i = [
+      {
+        approvalId: e.requestId,
+        approved: n,
+        reason: r,
+        type: `tool-approval-response`,
+      },
+    ];
+  return (
+    n ||
+      i.push({
+        output: { type: `execution-denied`, reason: r },
+        toolCallId: e.action.callId,
+        toolName: e.action.toolName,
+        type: `tool-result`,
+      }),
+    i
+  );
+}
+export {
+  getApprovedTools,
+  hasAnsweredApprovalBatch,
+  resolveApprovalInputBatches,
+};

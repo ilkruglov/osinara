@@ -12,6 +12,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { codeShape } from "./vendored-code.js";
+
 const COMPACTION_PATH = "vendor/eve/dist/src/harness/compaction.js";
 const execFileAsync = promisify(execFile);
 
@@ -21,9 +23,9 @@ describe("Eve compaction decision log patch", () => {
 
     // Prod sessions grew to 133k prompt tokens with a 120k threshold and no compaction event in
     // three days (10 сентября 2026); the decision inputs were invisible until this line.
-    expect(compaction).toContain('code:"AGENT_COMPACTION_CHECK"');
-    expect(compaction).toMatch(/function shouldCompact\(e,t,i\)\{[^}]*AGENT_COMPACTION_CHECK[^}]*threshold:t\.threshold/u);
-    expect(compaction).not.toContain("function shouldCompact(e,t){return e.length>0&&");
+    expect(codeShape(compaction)).toContain(codeShape('code:"AGENT_COMPACTION_CHECK"'));
+    expect(codeShape(compaction)).toMatch(/functionshouldCompacte,t,i\{[^}]*AGENT_COMPACTION_CHECK[^}]*threshold:t\.threshold/u);
+    expect(codeShape(compaction)).not.toContain(codeShape("function shouldCompact(e,t){return e.length>0&&"));
   });
 
   it("names the session and turn of every check", async () => {
@@ -33,8 +35,8 @@ describe("Eve compaction decision log patch", () => {
     ]);
     // Without them a check was matched to model steps by log adjacency, which parallel sessions
     // interleave (25 сентября 2026: two separate analyses of the same week had to guess).
-    expect(compaction).toMatch(/function shouldCompact\(e,t,i\)\{[^}]*sessionId:i\?\.sessionId\?\?null,turnId:i\?\.turnId\?\?null/u);
-    expect(toolLoop).toContain("shouldCompact(r,i.compaction,{sessionId:i.sessionId,turnId:n.turnId})");
+    expect(codeShape(compaction)).toMatch(/functionshouldCompacte,t,i\{[^}]*sessionId:i\?\.sessionId\?\?null,turnId:i\?\.turnId\?\?null/u);
+    expect(codeShape(toolLoop)).toContain(codeShape("shouldCompact(r,i.compaction,{sessionId:i.sessionId,turnId:n.turnId})"));
   });
 
   it("keeps the patched compaction runtime syntactically valid", async () => {

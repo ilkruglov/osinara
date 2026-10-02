@@ -1,1 +1,16 @@
-import{resolveRemoteAgentStreamHeaders}from"#execution/remote-agent-dispatch.js";import{createWorkflowRuntime}from"#execution/workflow-runtime.js";import{getCompiledRuntimeAgentBundle}from"#runtime/sessions/compiled-agent-cache.js";import{resolveNitroCompiledArtifactsSource}from"#internal/nitro/routes/runtime-artifacts.js";async function resolveNitroChannelRuntimeBundle(t){let n=resolveNitroCompiledArtifactsSource(t),r=await getCompiledRuntimeAgentBundle({compiledArtifactsSource:n}),i=createWorkflowRuntime({compiledArtifactsSource:n});return{channels:r.graph.root.channels,resolveRemoteAgentStreamHeaders:async e=>await resolveRemoteAgentStreamHeaders({bundle:r,...e}),runtime:i}}export{resolveNitroChannelRuntimeBundle};
+import { resolveRemoteAgentStreamHeaders } from "#execution/remote-agent-dispatch.js";
+import { createWorkflowRuntime } from "#execution/workflow-runtime.js";
+import { getCompiledRuntimeAgentBundle } from "#runtime/sessions/compiled-agent-cache.js";
+import { resolveNitroCompiledArtifactsSource } from "#internal/nitro/routes/runtime-artifacts.js";
+async function resolveNitroChannelRuntimeBundle(t) {
+  let n = resolveNitroCompiledArtifactsSource(t),
+    r = await getCompiledRuntimeAgentBundle({ compiledArtifactsSource: n }),
+    i = createWorkflowRuntime({ compiledArtifactsSource: n });
+  return {
+    channels: r.graph.root.channels,
+    resolveRemoteAgentStreamHeaders: async (e) =>
+      await resolveRemoteAgentStreamHeaders({ bundle: r, ...e }),
+    runtime: i,
+  };
+}
+export { resolveNitroChannelRuntimeBundle };

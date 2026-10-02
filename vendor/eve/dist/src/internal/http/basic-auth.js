@@ -1,1 +1,6 @@
-function encodeBasicCredentials(e,t){let n=new TextEncoder().encode(`${e}:${t}`),r=Array.from(n,e=>String.fromCodePoint(e)).join(``);return btoa(r)}export{encodeBasicCredentials};
+function encodeBasicCredentials(e, t) {
+  let n = new TextEncoder().encode(`${e}:${t}`),
+    r = Array.from(n, (e) => String.fromCodePoint(e)).join(``);
+  return btoa(r);
+}
+export { encodeBasicCredentials };

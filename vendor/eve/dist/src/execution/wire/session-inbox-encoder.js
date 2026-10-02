@@ -1,1 +1,18 @@
-import{SessionInboxWireError,isSessionInboxWireVersion}from"#execution/wire/session-inbox-contract.js";import{encodeSessionCommandV1}from"#execution/wire/session-inbox-wire.v1.js";import{encodeSessionCommandV0}from"#execution/wire/session-inbox-wire.v0.js";const versionedEncoders={1:encodeSessionCommandV1};function encode(e,t){if(t.version===0)return encodeSessionCommandV0(encodeSessionCommandV1(e),t.variant);if(isSessionInboxWireVersion(t.version))return versionedEncoders[t.version](e);throw new SessionInboxWireError(`Cannot encode session inbox payload for unknown wire version ${JSON.stringify(t.version)}.`)}const sessionInboxWire={encode};export{sessionInboxWire};
+import {
+  SessionInboxWireError,
+  isSessionInboxWireVersion,
+} from "#execution/wire/session-inbox-contract.js";
+import { encodeSessionCommandV1 } from "#execution/wire/session-inbox-wire.v1.js";
+import { encodeSessionCommandV0 } from "#execution/wire/session-inbox-wire.v0.js";
+const versionedEncoders = { 1: encodeSessionCommandV1 };
+function encode(e, t) {
+  if (t.version === 0)
+    return encodeSessionCommandV0(encodeSessionCommandV1(e), t.variant);
+  if (isSessionInboxWireVersion(t.version))
+    return versionedEncoders[t.version](e);
+  throw new SessionInboxWireError(
+    `Cannot encode session inbox payload for unknown wire version ${JSON.stringify(t.version)}.`,
+  );
+}
+const sessionInboxWire = { encode };
+export { sessionInboxWire };

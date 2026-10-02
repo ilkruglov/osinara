@@ -1,1 +1,49 @@
-import{EveAgentStore,detachEveAgentStore}from"#client/eve-agent-store.js";import{defaultMessageReducer}from"#client/message-reducer.js";import{useCallback,useEffect,useMemo,useRef,useSyncExternalStore}from"react";import{resolveEveAgentHost}from"#client/agent-host.js";function useEveAgent(n={}){let r=useRef(void 0);if(!r.current){let t=n.reducer??defaultMessageReducer();r.current=new EveAgentStore({auth:n.auth,headers:n.headers,host:resolveEveAgentHost({agent:n.agent,host:n.host}),initialEvents:n.initialEvents,initialSession:n.initialSession,optimistic:n.optimistic,reducer:t,session:n.session})}let i=r.current;i.setCallbacks({onError:n.onError,onEvent:n.onEvent,onFinish:n.onFinish,onSessionChange:n.onSessionChange,prepareSend:n.prepareSend});let a=useSyncExternalStore(useCallback(e=>i.subscribe(e),[i]),()=>i.snapshot,()=>i.snapshot);useEffect(()=>()=>detachEveAgentStore(i),[i]);let o=useCallback(()=>i.cancel(),[i]),s=useCallback(()=>i.reset(),[i]),c=useCallback((e,t)=>i.send({...t,message:e}),[i]),l=useCallback((e,t)=>i.send({...t,inputResponses:e}),[i]);return useMemo(()=>({...a,cancel:o,reset:s,respond:l,send:c}),[o,s,l,c,a])}export{useEveAgent};
+import { EveAgentStore, detachEveAgentStore } from "#client/eve-agent-store.js";
+import { defaultMessageReducer } from "#client/message-reducer.js";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
+import { resolveEveAgentHost } from "#client/agent-host.js";
+function useEveAgent(n = {}) {
+  let r = useRef(void 0);
+  if (!r.current) {
+    let t = n.reducer ?? defaultMessageReducer();
+    r.current = new EveAgentStore({
+      auth: n.auth,
+      headers: n.headers,
+      host: resolveEveAgentHost({ agent: n.agent, host: n.host }),
+      initialEvents: n.initialEvents,
+      initialSession: n.initialSession,
+      optimistic: n.optimistic,
+      reducer: t,
+      session: n.session,
+    });
+  }
+  let i = r.current;
+  i.setCallbacks({
+    onError: n.onError,
+    onEvent: n.onEvent,
+    onFinish: n.onFinish,
+    onSessionChange: n.onSessionChange,
+    prepareSend: n.prepareSend,
+  });
+  let a = useSyncExternalStore(
+    useCallback((e) => i.subscribe(e), [i]),
+    () => i.snapshot,
+    () => i.snapshot,
+  );
+  useEffect(() => () => detachEveAgentStore(i), [i]);
+  let o = useCallback(() => i.cancel(), [i]),
+    s = useCallback(() => i.reset(), [i]),
+    c = useCallback((e, t) => i.send({ ...t, message: e }), [i]),
+    l = useCallback((e, t) => i.send({ ...t, inputResponses: e }), [i]);
+  return useMemo(
+    () => ({ ...a, cancel: o, reset: s, respond: l, send: c }),
+    [o, s, l, c, a],
+  );
+}
+export { useEveAgent };

@@ -1,1 +1,29 @@
-import{defaultSandbox}from"#public/sandbox/backends/default.js";const DEFAULT_SANDBOX_SOURCE_ID=`eve:default-sandbox`;function createRuntimeSandboxRegistry(e){let t=e.authoredSandbox??createFrameworkSandboxDefinition();if(t.inheritsParent===!0&&(e.workspaceResourceRoot.contentHash!==void 0||e.workspaceResourceRoot.rootEntries.length>0))throw Error(`Sandbox "${t.logicalPath}" selects parent.sandbox but has managed workspace resources. Remove the child workspace or give the child its own sandbox.`);return{sandbox:{definition:t,workspaceResourceRoot:e.workspaceResourceRoot}}}function createFrameworkSandboxDefinition(){return{backend:defaultSandbox(),logicalPath:`eve:framework/default-sandbox`,sourceId:DEFAULT_SANDBOX_SOURCE_ID,sourceKind:`module`}}export{DEFAULT_SANDBOX_SOURCE_ID,createFrameworkSandboxDefinition,createRuntimeSandboxRegistry};
+import { defaultSandbox } from "#public/sandbox/backends/default.js";
+const DEFAULT_SANDBOX_SOURCE_ID = `eve:default-sandbox`;
+function createRuntimeSandboxRegistry(e) {
+  let t = e.authoredSandbox ?? createFrameworkSandboxDefinition();
+  if (
+    t.inheritsParent === !0 &&
+    (e.workspaceResourceRoot.contentHash !== void 0 ||
+      e.workspaceResourceRoot.rootEntries.length > 0)
+  )
+    throw Error(
+      `Sandbox "${t.logicalPath}" selects parent.sandbox but has managed workspace resources. Remove the child workspace or give the child its own sandbox.`,
+    );
+  return {
+    sandbox: { definition: t, workspaceResourceRoot: e.workspaceResourceRoot },
+  };
+}
+function createFrameworkSandboxDefinition() {
+  return {
+    backend: defaultSandbox(),
+    logicalPath: `eve:framework/default-sandbox`,
+    sourceId: DEFAULT_SANDBOX_SOURCE_ID,
+    sourceKind: `module`,
+  };
+}
+export {
+  DEFAULT_SANDBOX_SOURCE_ID,
+  createFrameworkSandboxDefinition,
+  createRuntimeSandboxRegistry,
+};

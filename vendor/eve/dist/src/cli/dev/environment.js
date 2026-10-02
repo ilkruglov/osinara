@@ -1,1 +1,118 @@
-import{join,resolve}from"node:path";import{readFileSync}from"node:fs";import{parseEnv}from"node:util";import{isObject}from"#shared/guards.js";import{readProviderSelectionSync}from"#setup/provider-settings.js";const DEVELOPMENT_ENV_FILE_NAMES=[`.env.development.local`,`.env.local`,`.env.development`,`.env`];function isMissingEnvironmentFileError(e){return isObject(e)&&e.code===`ENOENT`}const developmentEnvironmentLoaders=new Map;function getDevelopmentEnvironmentFilePaths(n){let r=resolve(n);return DEVELOPMENT_ENV_FILE_NAMES.map(t=>join(r,t))}function loadDevelopmentEnvironmentFiles(e){getDevelopmentEnvironmentLoader(e).reload()}function stageDevelopmentEnvironmentFiles(e){return getDevelopmentEnvironmentLoader(e).stageReload()}function readDevelopmentEnvironmentHostValues(e){let n={},r=readDevelopmentEnvironmentValues(resolve(e)),i=new Set(r.keys());i.add(`AI_GATEWAY_API_KEY`);for(let e of[...i].sort((e,t)=>e.localeCompare(t)))n[e]=process.env[e]??null;return n}function getDevelopmentEnvironmentLoader(e){let n=resolve(e),r=developmentEnvironmentLoaders.get(n);if(r!==void 0)return r;let i=createDevelopmentEnvironmentLoader(n);return developmentEnvironmentLoaders.set(n,i),i}function createDevelopmentEnvironmentLoader(e){let t=new Map(Object.entries(process.env)),n=new Set(t.keys()),r=new Map,stageReload=()=>{let i=new Map(r),a=readDevelopmentEnvironmentValues(e),o=applyProviderSelection(e,a),s=new Set([...r.keys(),...a.keys()]);o?(s.add(`AI_GATEWAY_API_KEY`),n.delete(`AI_GATEWAY_API_KEY`)):t.has(`AI_GATEWAY_API_KEY`)&&(n.add(`AI_GATEWAY_API_KEY`),process.env.AI_GATEWAY_API_KEY=t.get(`AI_GATEWAY_API_KEY`));let c=new Map([...s].map(e=>[e,process.env[e]])),l=!1;return o&&delete process.env.AI_GATEWAY_API_KEY,applyDevelopmentEnvironmentValues({managedValues:r,nextValues:a,protectedKeys:n}),{commit(){l=!0},rollback(){if(!l){l=!0,r.clear();for(let[e,t]of i)r.set(e,t);for(let[e,t]of c)t===void 0?delete process.env[e]:process.env[e]=t}}}};return{reload(){stageReload().commit()},stageReload}}function applyProviderSelection(e,t){return readProviderSelectionSync(e)===`ai-gateway-project`?(t.delete(`AI_GATEWAY_API_KEY`),!0):!1}function applyDevelopmentEnvironmentValues(e){for(let[t,n]of e.managedValues)e.nextValues.has(t)||e.protectedKeys.has(t)||(process.env[t]===n&&delete process.env[t],e.managedValues.delete(t));for(let[t,n]of e.nextValues)e.protectedKeys.has(t)||(process.env[t]=n,e.managedValues.set(t,n))}function readDevelopmentEnvironmentValues(t){let i=new Map;for(let a of[...DEVELOPMENT_ENV_FILE_NAMES].reverse())try{let o=parseEnv(readFileSync(join(t,a),`utf8`));for(let[e,t]of Object.entries(o))t!==void 0&&i.set(e,t)}catch(e){if(!isMissingEnvironmentFileError(e))throw e}return i}export{DEVELOPMENT_ENV_FILE_NAMES,getDevelopmentEnvironmentFilePaths,loadDevelopmentEnvironmentFiles,readDevelopmentEnvironmentHostValues,stageDevelopmentEnvironmentFiles};
+import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { isObject } from "#shared/guards.js";
+import { readProviderSelectionSync } from "#setup/provider-settings.js";
+const DEVELOPMENT_ENV_FILE_NAMES = [
+  `.env.development.local`,
+  `.env.local`,
+  `.env.development`,
+  `.env`,
+];
+function isMissingEnvironmentFileError(e) {
+  return isObject(e) && e.code === `ENOENT`;
+}
+const developmentEnvironmentLoaders = new Map();
+function getDevelopmentEnvironmentFilePaths(n) {
+  let r = resolve(n);
+  return DEVELOPMENT_ENV_FILE_NAMES.map((t) => join(r, t));
+}
+function loadDevelopmentEnvironmentFiles(e) {
+  getDevelopmentEnvironmentLoader(e).reload();
+}
+function stageDevelopmentEnvironmentFiles(e) {
+  return getDevelopmentEnvironmentLoader(e).stageReload();
+}
+function readDevelopmentEnvironmentHostValues(e) {
+  let n = {},
+    r = readDevelopmentEnvironmentValues(resolve(e)),
+    i = new Set(r.keys());
+  i.add(`AI_GATEWAY_API_KEY`);
+  for (let e of [...i].sort((e, t) => e.localeCompare(t)))
+    n[e] = process.env[e] ?? null;
+  return n;
+}
+function getDevelopmentEnvironmentLoader(e) {
+  let n = resolve(e),
+    r = developmentEnvironmentLoaders.get(n);
+  if (r !== void 0) return r;
+  let i = createDevelopmentEnvironmentLoader(n);
+  return (developmentEnvironmentLoaders.set(n, i), i);
+}
+function createDevelopmentEnvironmentLoader(e) {
+  let t = new Map(Object.entries(process.env)),
+    n = new Set(t.keys()),
+    r = new Map(),
+    stageReload = () => {
+      let i = new Map(r),
+        a = readDevelopmentEnvironmentValues(e),
+        o = applyProviderSelection(e, a),
+        s = new Set([...r.keys(), ...a.keys()]);
+      o
+        ? (s.add(`AI_GATEWAY_API_KEY`), n.delete(`AI_GATEWAY_API_KEY`))
+        : t.has(`AI_GATEWAY_API_KEY`) &&
+          (n.add(`AI_GATEWAY_API_KEY`),
+          (process.env.AI_GATEWAY_API_KEY = t.get(`AI_GATEWAY_API_KEY`)));
+      let c = new Map([...s].map((e) => [e, process.env[e]])),
+        l = !1;
+      return (
+        o && delete process.env.AI_GATEWAY_API_KEY,
+        applyDevelopmentEnvironmentValues({
+          managedValues: r,
+          nextValues: a,
+          protectedKeys: n,
+        }),
+        {
+          commit() {
+            l = !0;
+          },
+          rollback() {
+            if (!l) {
+              ((l = !0), r.clear());
+              for (let [e, t] of i) r.set(e, t);
+              for (let [e, t] of c)
+                t === void 0 ? delete process.env[e] : (process.env[e] = t);
+            }
+          },
+        }
+      );
+    };
+  return {
+    reload() {
+      stageReload().commit();
+    },
+    stageReload,
+  };
+}
+function applyProviderSelection(e, t) {
+  return readProviderSelectionSync(e) === `ai-gateway-project`
+    ? (t.delete(`AI_GATEWAY_API_KEY`), !0)
+    : !1;
+}
+function applyDevelopmentEnvironmentValues(e) {
+  for (let [t, n] of e.managedValues)
+    e.nextValues.has(t) ||
+      e.protectedKeys.has(t) ||
+      (process.env[t] === n && delete process.env[t],
+      e.managedValues.delete(t));
+  for (let [t, n] of e.nextValues)
+    e.protectedKeys.has(t) || ((process.env[t] = n), e.managedValues.set(t, n));
+}
+function readDevelopmentEnvironmentValues(t) {
+  let i = new Map();
+  for (let a of [...DEVELOPMENT_ENV_FILE_NAMES].reverse())
+    try {
+      let o = parseEnv(readFileSync(join(t, a), `utf8`));
+      for (let [e, t] of Object.entries(o)) t !== void 0 && i.set(e, t);
+    } catch (e) {
+      if (!isMissingEnvironmentFileError(e)) throw e;
+    }
+  return i;
+}
+export {
+  DEVELOPMENT_ENV_FILE_NAMES,
+  getDevelopmentEnvironmentFilePaths,
+  loadDevelopmentEnvironmentFiles,
+  readDevelopmentEnvironmentHostValues,
+  stageDevelopmentEnvironmentFiles,
+};

@@ -1,1 +1,50 @@
-import{readTaskUsage,taskAuthorizationRequestId}from"#tasks/types.js";function translateTaskInboundPayload(n){switch(n.kind){case`task-command`:return n.command;case`runtime-action-result`:{let t=n.results[0];if(t===void 0)return;if(t.outcome!==void 0){let n=readTaskUsage(t.outcome.usageDelta);switch(t.outcome.result.kind){case`succeeded`:return withUsage({data:t.output,kind:`complete`,lifecycle:t.outcome.kind},n);case`failed`:return withUsage({data:t.output,kind:`fail`,lifecycle:t.outcome.kind},n);case`cancelled`:return withUsage({kind:`cancel`,lifecycle:t.outcome.kind},n)}}return}case`subagent-input-request`:return{inputRequests:n.event.requests,kind:`require-input`};case`turn-started`:return{childSessionId:n.childSessionId,childTurnId:n.childTurnId,kind:`start-turn`,taskId:n.taskId};case`authorization-event`:{let e=taskAuthorizationRequestId(n.event);return n.event.type===`authorization.required`?{kind:`require-authorization`,requestId:e}:{kind:`answered`,requestIds:[e]}}default:return}}function withUsage(e,t){return t===void 0?e:{...e,usage:t}}export{translateTaskInboundPayload};
+import { readTaskUsage, taskAuthorizationRequestId } from "#tasks/types.js";
+function translateTaskInboundPayload(n) {
+  switch (n.kind) {
+    case `task-command`:
+      return n.command;
+    case `runtime-action-result`: {
+      let t = n.results[0];
+      if (t === void 0) return;
+      if (t.outcome !== void 0) {
+        let n = readTaskUsage(t.outcome.usageDelta);
+        switch (t.outcome.result.kind) {
+          case `succeeded`:
+            return withUsage(
+              { data: t.output, kind: `complete`, lifecycle: t.outcome.kind },
+              n,
+            );
+          case `failed`:
+            return withUsage(
+              { data: t.output, kind: `fail`, lifecycle: t.outcome.kind },
+              n,
+            );
+          case `cancelled`:
+            return withUsage({ kind: `cancel`, lifecycle: t.outcome.kind }, n);
+        }
+      }
+      return;
+    }
+    case `subagent-input-request`:
+      return { inputRequests: n.event.requests, kind: `require-input` };
+    case `turn-started`:
+      return {
+        childSessionId: n.childSessionId,
+        childTurnId: n.childTurnId,
+        kind: `start-turn`,
+        taskId: n.taskId,
+      };
+    case `authorization-event`: {
+      let e = taskAuthorizationRequestId(n.event);
+      return n.event.type === `authorization.required`
+        ? { kind: `require-authorization`, requestId: e }
+        : { kind: `answered`, requestIds: [e] };
+    }
+    default:
+      return;
+  }
+}
+function withUsage(e, t) {
+  return t === void 0 ? e : { ...e, usage: t };
+}
+export { translateTaskInboundPayload };

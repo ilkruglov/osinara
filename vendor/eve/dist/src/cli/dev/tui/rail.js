@@ -1,1 +1,5 @@
-const TOOL_COLUMN_LEAD=`  `;function elisionText(e,t){return t.colors.dim(`${t.glyph.ellipsis} (${e} more)`)}export{TOOL_COLUMN_LEAD,elisionText};
+const TOOL_COLUMN_LEAD = `  `;
+function elisionText(e, t) {
+  return t.colors.dim(`${t.glyph.ellipsis} (${e} more)`);
+}
+export { TOOL_COLUMN_LEAD, elisionText };

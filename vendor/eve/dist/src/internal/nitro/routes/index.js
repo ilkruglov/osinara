@@ -1,4 +1,6 @@
-const DEPLOYMENT_URL_PLACEHOLDER=`{{DEPLOYMENT_URL}}`,AGENT_NAME_PLACEHOLDER=`{{AGENT_NAME}}`,HOME_PAGE_HTML_TEMPLATE=`<!doctype html>
+const DEPLOYMENT_URL_PLACEHOLDER = `{{DEPLOYMENT_URL}}`,
+  AGENT_NAME_PLACEHOLDER = `{{AGENT_NAME}}`,
+  HOME_PAGE_HTML_TEMPLATE = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -178,4 +180,48 @@ const DEPLOYMENT_URL_PLACEHOLDER=`{{DEPLOYMENT_URL}}`,AGENT_NAME_PLACEHOLDER=`{{
 </main>
 </body>
 </html>
-`;function escapeHtml(e){return e.replaceAll(`&`,`&amp;`).replaceAll(`<`,`&lt;`).replaceAll(`>`,`&gt;`).replaceAll(`"`,`&quot;`).replaceAll(`'`,`&#39;`)}function pickFirstForwardedValue(e){if(e===null)return;let t=e.split(`,`)[0]?.trim();if(!(t===void 0||t.length===0))return t}function resolveDeploymentUrl(e){let t=e.headers,n=new URL(e.url),r=pickFirstForwardedValue(t.get(`x-forwarded-host`)),i=pickFirstForwardedValue(t.get(`x-forwarded-proto`)),a=r??t.get(`host`)??n.host;return`${i??n.protocol.replace(/:$/,``)}://${a}`}function buildHomePageResponse(r,i){let a=resolveDeploymentUrl(i),o=HOME_PAGE_HTML_TEMPLATE.replace(AGENT_NAME_PLACEHOLDER,()=>escapeHtml(r.agentName)).replace(DEPLOYMENT_URL_PLACEHOLDER,()=>escapeHtml(a));return new Response(o,{headers:{"cache-control":`no-store`,"content-type":`text/html; charset=utf-8`}})}function handleHomePageRequest(e,t){return buildHomePageResponse(e,t)}function handleStaticHomePageRequest(e){return buildHomePageResponse({agentName:`eve`},e.req)}export{buildHomePageResponse,handleStaticHomePageRequest as default,handleHomePageRequest};
+`;
+function escapeHtml(e) {
+  return e
+    .replaceAll(`&`, `&amp;`)
+    .replaceAll(`<`, `&lt;`)
+    .replaceAll(`>`, `&gt;`)
+    .replaceAll(`"`, `&quot;`)
+    .replaceAll(`'`, `&#39;`);
+}
+function pickFirstForwardedValue(e) {
+  if (e === null) return;
+  let t = e.split(`,`)[0]?.trim();
+  if (!(t === void 0 || t.length === 0)) return t;
+}
+function resolveDeploymentUrl(e) {
+  let t = e.headers,
+    n = new URL(e.url),
+    r = pickFirstForwardedValue(t.get(`x-forwarded-host`)),
+    i = pickFirstForwardedValue(t.get(`x-forwarded-proto`)),
+    a = r ?? t.get(`host`) ?? n.host;
+  return `${i ?? n.protocol.replace(/:$/, ``)}://${a}`;
+}
+function buildHomePageResponse(r, i) {
+  let a = resolveDeploymentUrl(i),
+    o = HOME_PAGE_HTML_TEMPLATE.replace(AGENT_NAME_PLACEHOLDER, () =>
+      escapeHtml(r.agentName),
+    ).replace(DEPLOYMENT_URL_PLACEHOLDER, () => escapeHtml(a));
+  return new Response(o, {
+    headers: {
+      "cache-control": `no-store`,
+      "content-type": `text/html; charset=utf-8`,
+    },
+  });
+}
+function handleHomePageRequest(e, t) {
+  return buildHomePageResponse(e, t);
+}
+function handleStaticHomePageRequest(e) {
+  return buildHomePageResponse({ agentName: `eve` }, e.req);
+}
+export {
+  buildHomePageResponse,
+  handleStaticHomePageRequest as default,
+  handleHomePageRequest,
+};

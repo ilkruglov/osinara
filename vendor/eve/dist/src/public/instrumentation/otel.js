@@ -1,1 +1,29 @@
-import{agentRunsIntegration,isOtelDeclaration,isOtelIntegration,otel,otelIntegration,otelIntegration as otelIntegration$1}from"#tracing/otel-declaration.js";import{createLocalTracesProcessor,resolveLocalTracesContent}from"#tracing/local-traces.js";function agentRuns(t={}){return agentRunsIntegration(t)}function localTraces(e={}){return otelIntegration$1({...resolveLocalTracesContent(e),spanProcessors:[createLocalTracesProcessor()]})}export{agentRuns,isOtelDeclaration,isOtelIntegration,localTraces,otel,otelIntegration};
+import {
+  agentRunsIntegration,
+  isOtelDeclaration,
+  isOtelIntegration,
+  otel,
+  otelIntegration,
+  otelIntegration as otelIntegration$1,
+} from "#tracing/otel-declaration.js";
+import {
+  createLocalTracesProcessor,
+  resolveLocalTracesContent,
+} from "#tracing/local-traces.js";
+function agentRuns(t = {}) {
+  return agentRunsIntegration(t);
+}
+function localTraces(e = {}) {
+  return otelIntegration$1({
+    ...resolveLocalTracesContent(e),
+    spanProcessors: [createLocalTracesProcessor()],
+  });
+}
+export {
+  agentRuns,
+  isOtelDeclaration,
+  isOtelIntegration,
+  localTraces,
+  otel,
+  otelIntegration,
+};

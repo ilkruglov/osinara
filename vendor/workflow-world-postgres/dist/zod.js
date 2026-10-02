@@ -1,10 +1,10 @@
-import { z } from 'zod/v4';
+import { z } from "zod/v4";
 export const Base64Buffer = z.codec(z.base64(), z.instanceof(Buffer), {
-    decode(b64) {
-        return Buffer.from(b64, 'base64');
-    },
-    encode(buf) {
-        return buf.toString('base64');
-    },
+  decode(b64) {
+    return Buffer.from(b64, "base64");
+  },
+  encode(buf) {
+    return buf.toString("base64");
+  },
 });
 //# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiem9kLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vc3JjL3pvZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLEVBQUUsQ0FBQyxFQUFFLE1BQU0sUUFBUSxDQUFDO0FBRTNCLE1BQU0sQ0FBQyxNQUFNLFlBQVksR0FBRyxDQUFDLENBQUMsS0FBSyxDQUFDLENBQUMsQ0FBQyxNQUFNLEVBQUUsRUFBRSxDQUFDLENBQUMsVUFBVSxDQUFDLE1BQU0sQ0FBQyxFQUFFO0lBQ3BFLE1BQU0sQ0FBQyxHQUFHO1FBQ1IsT0FBTyxNQUFNLENBQUMsSUFBSSxDQUFDLEdBQUcsRUFBRSxRQUFRLENBQUMsQ0FBQztJQUNwQyxDQUFDO0lBQ0QsTUFBTSxDQUFDLEdBQUc7UUFDUixPQUFPLEdBQUcsQ0FBQyxRQUFRLENBQUMsUUFBUSxDQUFDLENBQUM7SUFDaEMsQ0FBQztDQUNGLENBQUMsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHogfSBmcm9tICd6b2QvdjQnO1xuXG5leHBvcnQgY29uc3QgQmFzZTY0QnVmZmVyID0gei5jb2RlYyh6LmJhc2U2NCgpLCB6Lmluc3RhbmNlb2YoQnVmZmVyKSwge1xuICBkZWNvZGUoYjY0KSB7XG4gICAgcmV0dXJuIEJ1ZmZlci5mcm9tKGI2NCwgJ2Jhc2U2NCcpO1xuICB9LFxuICBlbmNvZGUoYnVmKSB7XG4gICAgcmV0dXJuIGJ1Zi50b1N0cmluZygnYmFzZTY0Jyk7XG4gIH0sXG59KTtcbiJdfQ==

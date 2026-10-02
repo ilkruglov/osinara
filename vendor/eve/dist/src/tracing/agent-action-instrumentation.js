@@ -1,1 +1,149 @@
-import{ROOT_CONTEXT,SpanStatusCode,trace}from"#compiled/@opentelemetry/api/index.js";import{actionIdempotencyKey,attemptIdempotencyKey}from"#harness/instrumentation/lifecycle.js";import{contentAttribute}from"#tracing/agent-otel-content.js";import{setAgentUsage}from"#tracing/agent-otel-usage.js";function createAgentActionInstrumentation(e){let t=new Map,onStarted=async n=>{let r=await e.resolveTraceContext(n);if(r===void 0)return;let o=await e.stateStore.getAction(n.idempotencyKey)??{attemptIndex:n.scope.attemptIndex,callId:n.callId,inputAttribute:e.recordInputs?contentAttribute(n.input,!1):void 0,kind:n.kind,name:n.name,parent:{spanId:e.idGenerator.deriveSpanId(attemptIdempotencyKey(n.scope)),traceFlags:r.traceFlags,traceId:r.traceId},rootSessionId:n.scope.rootSessionId??n.scope.sessionId,sessionId:n.scope.sessionId,spanId:e.idGenerator.deriveSpanId(`action:${n.idempotencyKey}`),startTimeMs:Date.now(),stepIndex:n.scope.stepIndex,turnId:n.scope.turnId};await e.stateStore.setAction(n.idempotencyKey,o);let s=t.get(n.scope.attemptId)??new Set;s.add(n.idempotencyKey),t.set(n.scope.attemptId,s)},onTerminal=async t=>{let n=await e.stateStore.getAction(t.idempotencyKey);if(n!==void 0)try{let r=startSpan(n);if(r.setAttribute(`agent.action.outcome`,t.outcome),t.type===`action.failed`)t.errorCode!==void 0&&(r.setAttribute(`agent.action.error.code`,t.errorCode),r.setAttribute(`error.type`,t.errorCode)),recordError(r,t.error);else if(t.output.type===`error`)recordError(r,t.output.error);else if(t.usage!==void 0&&setAgentUsage(r,t.usage),e.recordOutputs){let e=contentAttribute(t.output.output,!1);e!==void 0&&r.setAttribute(`gen_ai.tool.call.result`,e)}r.end(t.acceptedAtMs)}finally{await e.stateStore.deleteAction(t.idempotencyKey),forget(t.idempotencyKey)}},startSpan=t=>{let n=e.idGenerator.withSpanId(t.spanId,()=>e.tracer.startSpan(`agent.action`,{attributes:{"agent.action.call_id":t.callId,"agent.action.kind":t.kind,"agent.action.name":t.name,"agent.framework.name":`eve`,"agent.framework.version":e.frameworkVersion,"agent.root.session.id":t.rootSessionId,"agent.session.id":t.sessionId,"agent.step.attempt":t.attemptIndex,"agent.step.index":t.stepIndex,"agent.turn.id":t.turnId},startTime:t.startTimeMs},contextFromActionState(t)));return t.inputAttribute!==void 0&&n.setAttribute(`gen_ai.tool.call.arguments`,t.inputAttribute),n};return{async contextFor(t,n,i){let a=actionIdempotencyKey(t,n,i),o=await e.stateStore.getAction(a);if(o!==void 0)return actionContext(o);let s=await e.stateStore.findAction(t,i);return s===void 0?void 0:actionContext(s)},deleteForSession:t=>e.stateStore.deleteActions(t),deleteForTurn:(t,n)=>e.stateStore.deleteActions(t,n),async failForAttempt(n,r){let i=t.get(n.attemptId);if(i!==void 0){t.delete(n.attemptId);for(let t of i){let n=await e.stateStore.getAction(t);if(n===void 0)continue;let i=startSpan(n);recordError(i,r),i.end(),await e.stateStore.deleteAction(t)}}},events:{"action.completed":onTerminal,"action.failed":onTerminal,"action.started":onStarted}};function forget(e){for(let[n,r]of t)r.delete(e),r.size===0&&t.delete(n)}}function actionContext(t){let r={isRemote:!1,spanId:t.spanId,traceFlags:t.parent.traceFlags,traceId:t.parent.traceId};return{context:trace.setSpan(ROOT_CONTEXT,trace.wrapSpanContext(r)),spanContext:r}}function contextFromActionState(t){return trace.setSpan(ROOT_CONTEXT,trace.wrapSpanContext({...t.parent,isRemote:!1}))}function recordError(e,n){n instanceof Error?(e.recordException(n),e.setStatus({code:SpanStatusCode.ERROR,message:n.message})):e.setStatus({code:SpanStatusCode.ERROR})}export{createAgentActionInstrumentation};
+import {
+  ROOT_CONTEXT,
+  SpanStatusCode,
+  trace,
+} from "#compiled/@opentelemetry/api/index.js";
+import {
+  actionIdempotencyKey,
+  attemptIdempotencyKey,
+} from "#harness/instrumentation/lifecycle.js";
+import { contentAttribute } from "#tracing/agent-otel-content.js";
+import { setAgentUsage } from "#tracing/agent-otel-usage.js";
+function createAgentActionInstrumentation(e) {
+  let t = new Map(),
+    onStarted = async (n) => {
+      let r = await e.resolveTraceContext(n);
+      if (r === void 0) return;
+      let o = (await e.stateStore.getAction(n.idempotencyKey)) ?? {
+        attemptIndex: n.scope.attemptIndex,
+        callId: n.callId,
+        inputAttribute: e.recordInputs ? contentAttribute(n.input, !1) : void 0,
+        kind: n.kind,
+        name: n.name,
+        parent: {
+          spanId: e.idGenerator.deriveSpanId(attemptIdempotencyKey(n.scope)),
+          traceFlags: r.traceFlags,
+          traceId: r.traceId,
+        },
+        rootSessionId: n.scope.rootSessionId ?? n.scope.sessionId,
+        sessionId: n.scope.sessionId,
+        spanId: e.idGenerator.deriveSpanId(`action:${n.idempotencyKey}`),
+        startTimeMs: Date.now(),
+        stepIndex: n.scope.stepIndex,
+        turnId: n.scope.turnId,
+      };
+      await e.stateStore.setAction(n.idempotencyKey, o);
+      let s = t.get(n.scope.attemptId) ?? new Set();
+      (s.add(n.idempotencyKey), t.set(n.scope.attemptId, s));
+    },
+    onTerminal = async (t) => {
+      let n = await e.stateStore.getAction(t.idempotencyKey);
+      if (n !== void 0)
+        try {
+          let r = startSpan(n);
+          if (
+            (r.setAttribute(`agent.action.outcome`, t.outcome),
+            t.type === `action.failed`)
+          )
+            (t.errorCode !== void 0 &&
+              (r.setAttribute(`agent.action.error.code`, t.errorCode),
+              r.setAttribute(`error.type`, t.errorCode)),
+              recordError(r, t.error));
+          else if (t.output.type === `error`) recordError(r, t.output.error);
+          else if (
+            (t.usage !== void 0 && setAgentUsage(r, t.usage), e.recordOutputs)
+          ) {
+            let e = contentAttribute(t.output.output, !1);
+            e !== void 0 && r.setAttribute(`gen_ai.tool.call.result`, e);
+          }
+          r.end(t.acceptedAtMs);
+        } finally {
+          (await e.stateStore.deleteAction(t.idempotencyKey),
+            forget(t.idempotencyKey));
+        }
+    },
+    startSpan = (t) => {
+      let n = e.idGenerator.withSpanId(t.spanId, () =>
+        e.tracer.startSpan(
+          `agent.action`,
+          {
+            attributes: {
+              "agent.action.call_id": t.callId,
+              "agent.action.kind": t.kind,
+              "agent.action.name": t.name,
+              "agent.framework.name": `eve`,
+              "agent.framework.version": e.frameworkVersion,
+              "agent.root.session.id": t.rootSessionId,
+              "agent.session.id": t.sessionId,
+              "agent.step.attempt": t.attemptIndex,
+              "agent.step.index": t.stepIndex,
+              "agent.turn.id": t.turnId,
+            },
+            startTime: t.startTimeMs,
+          },
+          contextFromActionState(t),
+        ),
+      );
+      return (
+        t.inputAttribute !== void 0 &&
+          n.setAttribute(`gen_ai.tool.call.arguments`, t.inputAttribute),
+        n
+      );
+    };
+  return {
+    async contextFor(t, n, i) {
+      let a = actionIdempotencyKey(t, n, i),
+        o = await e.stateStore.getAction(a);
+      if (o !== void 0) return actionContext(o);
+      let s = await e.stateStore.findAction(t, i);
+      return s === void 0 ? void 0 : actionContext(s);
+    },
+    deleteForSession: (t) => e.stateStore.deleteActions(t),
+    deleteForTurn: (t, n) => e.stateStore.deleteActions(t, n),
+    async failForAttempt(n, r) {
+      let i = t.get(n.attemptId);
+      if (i !== void 0) {
+        t.delete(n.attemptId);
+        for (let t of i) {
+          let n = await e.stateStore.getAction(t);
+          if (n === void 0) continue;
+          let i = startSpan(n);
+          (recordError(i, r), i.end(), await e.stateStore.deleteAction(t));
+        }
+      }
+    },
+    events: {
+      "action.completed": onTerminal,
+      "action.failed": onTerminal,
+      "action.started": onStarted,
+    },
+  };
+  function forget(e) {
+    for (let [n, r] of t) (r.delete(e), r.size === 0 && t.delete(n));
+  }
+}
+function actionContext(t) {
+  let r = {
+    isRemote: !1,
+    spanId: t.spanId,
+    traceFlags: t.parent.traceFlags,
+    traceId: t.parent.traceId,
+  };
+  return {
+    context: trace.setSpan(ROOT_CONTEXT, trace.wrapSpanContext(r)),
+    spanContext: r,
+  };
+}
+function contextFromActionState(t) {
+  return trace.setSpan(
+    ROOT_CONTEXT,
+    trace.wrapSpanContext({ ...t.parent, isRemote: !1 }),
+  );
+}
+function recordError(e, n) {
+  n instanceof Error
+    ? (e.recordException(n),
+      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    : e.setStatus({ code: SpanStatusCode.ERROR });
+}
+export { createAgentActionInstrumentation };

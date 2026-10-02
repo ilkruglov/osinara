@@ -1,1 +1,37 @@
-function readSlackConversationPrivacy(e){switch(e?.channel_type){case`im`:case`mpim`:case`group`:return`private`;case`channel`:return`public`;default:return`unknown`}}async function isPrivateSlackConversation(e){let t=readSlackConversationPrivacy(e.raw);if(t!==`unknown`)return t===`private`;try{let t=readConversationInfoPrivacy(await e.request(`conversations.info`,{channel:e.channelId}));return t===`unknown`||t===`private`}catch{return!0}}function readConversationInfoPrivacy(e){if(e.ok!==!0||!isRecord(e.channel))return`unknown`;let t=e.channel;return t.is_im===!0||t.is_mpim===!0||t.is_private===!0?`private`:t.is_private===!1?`public`:`unknown`}function isRecord(e){return typeof e==`object`&&!!e&&!Array.isArray(e)}export{isPrivateSlackConversation,readSlackConversationPrivacy};
+function readSlackConversationPrivacy(e) {
+  switch (e?.channel_type) {
+    case `im`:
+    case `mpim`:
+    case `group`:
+      return `private`;
+    case `channel`:
+      return `public`;
+    default:
+      return `unknown`;
+  }
+}
+async function isPrivateSlackConversation(e) {
+  let t = readSlackConversationPrivacy(e.raw);
+  if (t !== `unknown`) return t === `private`;
+  try {
+    let t = readConversationInfoPrivacy(
+      await e.request(`conversations.info`, { channel: e.channelId }),
+    );
+    return t === `unknown` || t === `private`;
+  } catch {
+    return !0;
+  }
+}
+function readConversationInfoPrivacy(e) {
+  if (e.ok !== !0 || !isRecord(e.channel)) return `unknown`;
+  let t = e.channel;
+  return t.is_im === !0 || t.is_mpim === !0 || t.is_private === !0
+    ? `private`
+    : t.is_private === !1
+      ? `public`
+      : `unknown`;
+}
+function isRecord(e) {
+  return typeof e == `object` && !!e && !Array.isArray(e);
+}
+export { isPrivateSlackConversation, readSlackConversationPrivacy };

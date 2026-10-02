@@ -1,1 +1,5 @@
-import{defineDynamic,defineInstructions}from"#public/definitions/instructions.js";export{defineDynamic,defineInstructions};
+import {
+  defineDynamic,
+  defineInstructions,
+} from "#public/definitions/instructions.js";
+export { defineDynamic, defineInstructions };

@@ -1,1 +1,52 @@
-import{sendTurnControlStep}from"#execution/turn-control-protocol.js";import{SessionStateCursor}from"#execution/session-state-cursor.js";var TurnExecutionCursor=class extends SessionStateCursor{controlToken;parentWritable;lastReportedContinuationToken;constructor(e){super({serializedContext:e.serializedContext,sessionState:e.sessionState}),this.controlToken=e.controlToken,this.lastReportedContinuationToken=e.sessionState.continuationToken,this.parentWritable=e.parentWritable}async adopt(e){this.adoptState(e);let t=e.sessionState.continuationToken;t===``||t===this.lastReportedContinuationToken||(this.lastReportedContinuationToken=t,await this.send({continuationToken:t,kind:`turn-continuation-token`}))}createStepInput(e,t){return{abortSignal:t,input:e,parentWritable:this.parentWritable,serializedContext:this.serializedContext,sessionState:this.sessionState}}async finish(e,t,n){this.adoptState(e),await this.send({action:{...t,serializedContext:this.serializedContext,sessionState:this.sessionState},bufferedDeliveries:n.length===0?void 0:[...n],kind:`turn-result`})}async send(t){await sendTurnControlStep({controlToken:this.controlToken,payload:t})}};export{TurnExecutionCursor};
+import { sendTurnControlStep } from "#execution/turn-control-protocol.js";
+import { SessionStateCursor } from "#execution/session-state-cursor.js";
+var TurnExecutionCursor = class extends SessionStateCursor {
+  controlToken;
+  parentWritable;
+  lastReportedContinuationToken;
+  constructor(e) {
+    (super({
+      serializedContext: e.serializedContext,
+      sessionState: e.sessionState,
+    }),
+      (this.controlToken = e.controlToken),
+      (this.lastReportedContinuationToken = e.sessionState.continuationToken),
+      (this.parentWritable = e.parentWritable));
+  }
+  async adopt(e) {
+    this.adoptState(e);
+    let t = e.sessionState.continuationToken;
+    t === `` ||
+      t === this.lastReportedContinuationToken ||
+      ((this.lastReportedContinuationToken = t),
+      await this.send({
+        continuationToken: t,
+        kind: `turn-continuation-token`,
+      }));
+  }
+  createStepInput(e, t) {
+    return {
+      abortSignal: t,
+      input: e,
+      parentWritable: this.parentWritable,
+      serializedContext: this.serializedContext,
+      sessionState: this.sessionState,
+    };
+  }
+  async finish(e, t, n) {
+    (this.adoptState(e),
+      await this.send({
+        action: {
+          ...t,
+          serializedContext: this.serializedContext,
+          sessionState: this.sessionState,
+        },
+        bufferedDeliveries: n.length === 0 ? void 0 : [...n],
+        kind: `turn-result`,
+      }));
+  }
+  async send(t) {
+    await sendTurnControlStep({ controlToken: this.controlToken, payload: t });
+  }
+};
+export { TurnExecutionCursor };

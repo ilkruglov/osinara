@@ -1,1 +1,219 @@
-import{EVE_SESSION_ROUTE_PATH,createEveSessionRoutePath}from"#protocol/routes.js";import{EVE_SESSION_ID_HEADER,isCurrentTurnBoundaryEvent}from"#protocol/message.js";import{ClientError}from"#client/client-error.js";import{createClientUrl}from"#client/url.js";import{MessageResponse}from"#client/message-response.js";import{followStreamIterable}from"#client/open-stream.js";import{cancelClientSession,clearClientSession,compactClientSession,resetClientSession}from"#client/session-controls.js";import{serializeOutputSchema}from"#shared/tool-schema.js";var ClientSession=class ClientSession{#e;#t;constructor(e,t){this.#e=e,this.#t=t}static async create(t,n){let r=await postTurn(t,EVE_SESSION_ROUTE_PATH,n,!0),i=await readSessionId(r),a=new ClientSession(t,{sessionId:i,streamIndex:0});return{response:a.#r(r,n,0),session:a}}get state(){return this.#t}async snapshot(e){e?.signal?.throwIfAborted();let t=[];for await(let n of this.#o({follow:!1,signal:e?.signal,startIndex:0}))t.push(n);return e?.signal?.throwIfAborted(),{events:t,session:{sessionId:this.#t.sessionId,streamIndex:t.length}}}async send(e,t={}){return await this.#n({...t,message:e})}async respond(e,t={}){if(e.length===0)throw Error(`ClientSession.respond() requires at least one input response.`);return await this.#n({...t,inputResponses:e})}async#n(e){let n=this.#t.streamIndex,r=await postTurn(this.#e,createEveSessionRoutePath(this.#t.sessionId),e,!1);if(await readSessionId(r,this.#t.sessionId)!==this.#t.sessionId)throw Error(`Message route returned a different session id.`);return this.#r(r,e,n)}async cancel(e){return await cancelClientSession({context:this.#e,options:e,sessionId:this.#t.sessionId})}async clear(){return await clearClientSession({context:this.#e,sessionId:this.#t.sessionId})}async compact(){return await compactClientSession({context:this.#e,sessionId:this.#t.sessionId})}async reset(e){return await resetClientSession({context:this.#e,options:e,sessionId:this.#t.sessionId})}stream(e){if(e?.follow===!1&&(e.startIndex??this.#t.streamIndex)<0)throw Error(`stream({ follow: false }) requires a nonnegative startIndex; a tail-relative cursor cannot be bounded.`);return this.#a(e)}#r(e,t,n){return e.body?.cancel().catch(()=>{}),new MessageResponse({cancelTurn:async e=>await this.cancel({turnId:e}),createStream:()=>this.#i(n,t),sessionId:this.#t.sessionId})}async*#i(e,t){let n=0;try{for await(let i of this.#o({headers:t.headers,keepAlive:shouldKeepActiveTurnAlive(t.streamReconnectPolicy),signal:t.signal,startIndex:e,streamReconnectPolicy:t.streamReconnectPolicy}))if(n+=1,yield i,isCurrentTurnBoundaryEvent(i))break}finally{this.#t={sessionId:this.#t.sessionId,streamIndex:e+n}}}async*#a(e){let t=e?.startIndex??this.#t.streamIndex,n=0;try{for await(let r of this.#o({follow:e?.follow,signal:e?.signal,startIndex:t,streamReconnectPolicy:e?.streamReconnectPolicy}))n+=1,yield r}finally{t>=0&&(this.#t={sessionId:this.#t.sessionId,streamIndex:t+n})}}#o(e){return followStreamIterable({follow:e.follow,host:this.#e.host,keepAlive:e.keepAlive,resolveHeaders:()=>this.#e.resolveHeaders(e.headers),redirect:this.#e.redirect,sessionId:this.#t.sessionId,signal:e.signal,startIndex:e.startIndex,streamReconnectPolicy:e.streamReconnectPolicy})}};function shouldKeepActiveTurnAlive(e){return e&&`reconnect`in e?!1:e?.streamIdleReconnectPolicy?.maxAttempts===void 0}async function postTurn(e,t,n,r){let o=createMessageBody(n,r);if(o===null)throw Error(r?`Creating a session requires a non-empty message.`:`A session turn requires a non-empty message or inputResponses.`);let s=await e.resolveHeaders(n.headers);s.set(`content-type`,`application/json`);let c=await fetch(createClientUrl(e.host,t),{body:JSON.stringify(o),headers:s,method:`POST`,redirect:e.redirect,signal:n.signal??null});if(!c.ok){let e=await c.text();throw new ClientError(c.status,e,c.headers)}return c}async function readSessionId(e,t){let r=await e.json(),i=(typeof r.sessionId==`string`?r.sessionId:void 0)??e.headers.get(EVE_SESSION_ID_HEADER)?.trim()??t;if(!i)throw Error(`Message route did not return a session id.`);return i}function createMessageBody(e,t){let n={};e.message!==void 0&&(n.message=e.message),e.inputResponses!==void 0&&e.inputResponses.length>0&&(n.inputResponses=e.inputResponses),!t&&e.message!==void 0&&e.turnPolicy!==void 0&&(n.turnPolicy=e.turnPolicy),e.clientContext!==void 0&&(n.clientContext=e.clientContext);let r=serializeOutputSchema(e.outputSchema);return r!==void 0&&(n.outputSchema=r),t&&n.message===void 0||n.message===void 0&&n.inputResponses===void 0?null:n}export{ClientSession};
+import {
+  EVE_SESSION_ROUTE_PATH,
+  createEveSessionRoutePath,
+} from "#protocol/routes.js";
+import {
+  EVE_SESSION_ID_HEADER,
+  isCurrentTurnBoundaryEvent,
+} from "#protocol/message.js";
+import { ClientError } from "#client/client-error.js";
+import { createClientUrl } from "#client/url.js";
+import { MessageResponse } from "#client/message-response.js";
+import { followStreamIterable } from "#client/open-stream.js";
+import {
+  cancelClientSession,
+  clearClientSession,
+  compactClientSession,
+  resetClientSession,
+} from "#client/session-controls.js";
+import { serializeOutputSchema } from "#shared/tool-schema.js";
+var ClientSession = class ClientSession {
+  #e;
+  #t;
+  constructor(e, t) {
+    ((this.#e = e), (this.#t = t));
+  }
+  static async create(t, n) {
+    let r = await postTurn(t, EVE_SESSION_ROUTE_PATH, n, !0),
+      i = await readSessionId(r),
+      a = new ClientSession(t, { sessionId: i, streamIndex: 0 });
+    return { response: a.#r(r, n, 0), session: a };
+  }
+  get state() {
+    return this.#t;
+  }
+  async snapshot(e) {
+    e?.signal?.throwIfAborted();
+    let t = [];
+    for await (let n of this.#o({
+      follow: !1,
+      signal: e?.signal,
+      startIndex: 0,
+    }))
+      t.push(n);
+    return (
+      e?.signal?.throwIfAborted(),
+      {
+        events: t,
+        session: { sessionId: this.#t.sessionId, streamIndex: t.length },
+      }
+    );
+  }
+  async send(e, t = {}) {
+    return await this.#n({ ...t, message: e });
+  }
+  async respond(e, t = {}) {
+    if (e.length === 0)
+      throw Error(
+        `ClientSession.respond() requires at least one input response.`,
+      );
+    return await this.#n({ ...t, inputResponses: e });
+  }
+  async #n(e) {
+    let n = this.#t.streamIndex,
+      r = await postTurn(
+        this.#e,
+        createEveSessionRoutePath(this.#t.sessionId),
+        e,
+        !1,
+      );
+    if ((await readSessionId(r, this.#t.sessionId)) !== this.#t.sessionId)
+      throw Error(`Message route returned a different session id.`);
+    return this.#r(r, e, n);
+  }
+  async cancel(e) {
+    return await cancelClientSession({
+      context: this.#e,
+      options: e,
+      sessionId: this.#t.sessionId,
+    });
+  }
+  async clear() {
+    return await clearClientSession({
+      context: this.#e,
+      sessionId: this.#t.sessionId,
+    });
+  }
+  async compact() {
+    return await compactClientSession({
+      context: this.#e,
+      sessionId: this.#t.sessionId,
+    });
+  }
+  async reset(e) {
+    return await resetClientSession({
+      context: this.#e,
+      options: e,
+      sessionId: this.#t.sessionId,
+    });
+  }
+  stream(e) {
+    if (e?.follow === !1 && (e.startIndex ?? this.#t.streamIndex) < 0)
+      throw Error(
+        `stream({ follow: false }) requires a nonnegative startIndex; a tail-relative cursor cannot be bounded.`,
+      );
+    return this.#a(e);
+  }
+  #r(e, t, n) {
+    return (
+      e.body?.cancel().catch(() => {}),
+      new MessageResponse({
+        cancelTurn: async (e) => await this.cancel({ turnId: e }),
+        createStream: () => this.#i(n, t),
+        sessionId: this.#t.sessionId,
+      })
+    );
+  }
+  async *#i(e, t) {
+    let n = 0;
+    try {
+      for await (let i of this.#o({
+        headers: t.headers,
+        keepAlive: shouldKeepActiveTurnAlive(t.streamReconnectPolicy),
+        signal: t.signal,
+        startIndex: e,
+        streamReconnectPolicy: t.streamReconnectPolicy,
+      }))
+        if (((n += 1), yield i, isCurrentTurnBoundaryEvent(i))) break;
+    } finally {
+      this.#t = { sessionId: this.#t.sessionId, streamIndex: e + n };
+    }
+  }
+  async *#a(e) {
+    let t = e?.startIndex ?? this.#t.streamIndex,
+      n = 0;
+    try {
+      for await (let r of this.#o({
+        follow: e?.follow,
+        signal: e?.signal,
+        startIndex: t,
+        streamReconnectPolicy: e?.streamReconnectPolicy,
+      }))
+        ((n += 1), yield r);
+    } finally {
+      t >= 0 &&
+        (this.#t = { sessionId: this.#t.sessionId, streamIndex: t + n });
+    }
+  }
+  #o(e) {
+    return followStreamIterable({
+      follow: e.follow,
+      host: this.#e.host,
+      keepAlive: e.keepAlive,
+      resolveHeaders: () => this.#e.resolveHeaders(e.headers),
+      redirect: this.#e.redirect,
+      sessionId: this.#t.sessionId,
+      signal: e.signal,
+      startIndex: e.startIndex,
+      streamReconnectPolicy: e.streamReconnectPolicy,
+    });
+  }
+};
+function shouldKeepActiveTurnAlive(e) {
+  return e && `reconnect` in e
+    ? !1
+    : e?.streamIdleReconnectPolicy?.maxAttempts === void 0;
+}
+async function postTurn(e, t, n, r) {
+  let o = createMessageBody(n, r);
+  if (o === null)
+    throw Error(
+      r
+        ? `Creating a session requires a non-empty message.`
+        : `A session turn requires a non-empty message or inputResponses.`,
+    );
+  let s = await e.resolveHeaders(n.headers);
+  s.set(`content-type`, `application/json`);
+  let c = await fetch(createClientUrl(e.host, t), {
+    body: JSON.stringify(o),
+    headers: s,
+    method: `POST`,
+    redirect: e.redirect,
+    signal: n.signal ?? null,
+  });
+  if (!c.ok) {
+    let e = await c.text();
+    throw new ClientError(c.status, e, c.headers);
+  }
+  return c;
+}
+async function readSessionId(e, t) {
+  let r = await e.json(),
+    i =
+      (typeof r.sessionId == `string` ? r.sessionId : void 0) ??
+      e.headers.get(EVE_SESSION_ID_HEADER)?.trim() ??
+      t;
+  if (!i) throw Error(`Message route did not return a session id.`);
+  return i;
+}
+function createMessageBody(e, t) {
+  let n = {};
+  (e.message !== void 0 && (n.message = e.message),
+    e.inputResponses !== void 0 &&
+      e.inputResponses.length > 0 &&
+      (n.inputResponses = e.inputResponses),
+    !t &&
+      e.message !== void 0 &&
+      e.turnPolicy !== void 0 &&
+      (n.turnPolicy = e.turnPolicy),
+    e.clientContext !== void 0 && (n.clientContext = e.clientContext));
+  let r = serializeOutputSchema(e.outputSchema);
+  return (
+    r !== void 0 && (n.outputSchema = r),
+    (t && n.message === void 0) ||
+    (n.message === void 0 && n.inputResponses === void 0)
+      ? null
+      : n
+  );
+}
+export { ClientSession };

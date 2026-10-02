@@ -1,1 +1,254 @@
-import{createLogger}from"#internal/logging.js";import{isObject,readNonEmptyString}from"#shared/guards.js";import{POST,defineChannel}from"#public/definitions/channel.js";import{createLinearAgentActivity,createLinearAgentSessionOnComment,createLinearAgentSessionOnIssue,listLinearAgentSessionActivities,updateLinearAgentSession}from"#public/channels/linear/api.js";import{LINEAR_CHANNEL_DEFAULT_ROUTE}from"#public/channels/linear/constants.js";import{createDefaultEvents,defaultOnAgentSession}from"#public/channels/linear/defaults.js";import{formatLinearContextBlock,linearContinuationToken,messageFromLinearAgentSessionEvent,parseLinearWebhookEvent}from"#public/channels/linear/inbound.js";import{verifyLinearRequest}from"#public/channels/linear/verify.js";import{attachLinearInboundImages}from"#public/channels/linear/inbound-images.js";const log=createLogger(`linear.channel`);function linearChannel(e={}){let t=e.onAgentSession??defaultOnAgentSession,o={...createDefaultEvents({api:e.api,credentials:e.credentials}),...e.events};return defineChannel({kindHint:`linear`,turnPolicy:e.turnPolicy,state:initialLinearState(),metadata(e){return{agentSessionId:e.agentSessionId,commentId:e.commentId??null,issueId:e.issueId??null,issueIdentifier:e.issueIdentifier??null,organizationId:e.organizationId??null}},context(t,n){return rebuildLinearContext(t,n,e)},routes:[POST(e.route??LINEAR_CHANNEL_DEFAULT_ROUTE,async(n,{from:r,waitUntil:i})=>{let a=await verifyInbound(n,e.credentials,e.maxSkewMs);if(a===null)return new Response(`unauthorized`,{status:401});let o;try{o=parseLinearWebhookEvent({body:a,headers:n.headers})}catch(e){return log.warn(`inbound Linear body is not valid JSON`,{error:e}),jsonOk({ignored:!0,ok:!0})}return o===null?jsonOk({ignored:!0,ok:!0}):o.kind===`agent_session`?(i(dispatchAgentSession({config:e,event:o,from:r,onAgentSession:t})),jsonOk({ok:!0})):e.onDataWebhook===void 0?jsonOk({ignored:!0,ok:!0}):(i(Promise.resolve(e.onDataWebhook(o))),jsonOk({ok:!0}))})],async receive(t,{from:r}){let i=t.target,o=await resolveReceiveSession(i,e),s=readNonEmptyString(i.initialActivity);return s!==void 0&&await createLinearAgentActivity({api:e.api,credentials:e.credentials,activity:{agentSessionId:o.id,content:{body:s,type:`thought`}}}),r(linearContinuationToken(o.id)).send(t.message,{auth:t.auth,state:stateFromAgentSession(o)})},events:o})}function rebuildLinearContext(e,t,n){return{linear:buildLinearHandle({agentSessionId:e.agentSessionId??``,config:n}),state:e}}function buildLinearHandle(e){return{agentSessionId:e.agentSessionId,createActivity(t,n){return createLinearAgentActivity({api:e.config.api,credentials:e.config.credentials,activity:{agentSessionId:e.agentSessionId,content:t,ephemeral:n?.ephemeral,signal:n?.signal,signalMetadata:n?.signalMetadata}})},listActivities(t){return listLinearAgentSessionActivities({api:e.config.api,credentials:e.config.credentials,agentSessionId:e.agentSessionId,last:t?.last})},updateSession(t){return updateLinearAgentSession({api:e.config.api,credentials:e.config.credentials,id:e.agentSessionId,update:t})}}}async function dispatchAgentSession(e){let{event:t}=e,n={delivery:t.delivery,linear:buildLinearHandle({agentSessionId:t.agentSession.id,config:e.config}),session:t.agentSession},r=await e.onAgentSession(n,t);if(r===null)return;let i=await attachLinearInboundImages({content:messageFromLinearAgentSessionEvent(t),credentials:e.config.credentials,fetch:e.config.api?.fetch});await e.from(linearContinuationToken(t.agentSession.id)).send(i,{auth:r.auth,context:[formatLinearContextBlock(t),...t.previousComments,...r.context??[]],state:stateFromAgentSession(t.agentSession),title:r.title})}async function resolveReceiveSession(e,t){if(hasString(e,`agentSessionId`))return{id:e.agentSessionId};if(hasString(e,`issueId`))return createLinearAgentSessionOnIssue({api:t.api,credentials:t.credentials,externalLink:readNonEmptyString(e.externalLink),externalUrls:readExternalUrls(e.externalUrls),issueId:e.issueId});if(hasString(e,`commentId`))return createLinearAgentSessionOnComment({api:t.api,credentials:t.credentials,commentId:e.commentId,externalLink:readNonEmptyString(e.externalLink),externalUrls:readExternalUrls(e.externalUrls)});throw Error(`linearChannel().receive requires target.agentSessionId, issueId, or commentId.`)}function stateFromAgentSession(e){return{agentSessionId:e.id,agentSessionUrl:e.url??null,commentId:e.commentId??null,issueId:e.issueId??e.issue?.id??null,issueIdentifier:e.issue?.identifier??null,issueTitle:e.issue?.title??null,issueUrl:e.issue?.url??null,organizationId:`organizationId`in e?e.organizationId??null:null,pendingToolCallMessage:null,sourceCommentId:e.sourceCommentId??null}}function initialLinearState(){return{agentSessionId:null,agentSessionUrl:null,commentId:null,issueId:null,issueIdentifier:null,issueTitle:null,issueUrl:null,organizationId:null,pendingToolCallMessage:null,sourceCommentId:null}}async function verifyInbound(e,t,n){try{return await verifyLinearRequest(e,{maxSkewMs:n,webhookSecret:t?.webhookSecret,webhookVerifier:t?.webhookVerifier})}catch(e){return log.warn(`linear inbound verification failed`,{error:e}),null}}function hasString(e,t){return typeof e[t]==`string`&&e[t].length>0}function readExternalUrls(e){if(!Array.isArray(e))return;let n=e.filter(e=>isObject(e)&&typeof e.label==`string`&&typeof e.url==`string`);return n.length>0?n:void 0}function jsonOk(e){return new Response(JSON.stringify(e),{headers:{"content-type":`application/json; charset=utf-8`},status:200})}export{linearChannel};
+import { createLogger } from "#internal/logging.js";
+import { isObject, readNonEmptyString } from "#shared/guards.js";
+import { POST, defineChannel } from "#public/definitions/channel.js";
+import {
+  createLinearAgentActivity,
+  createLinearAgentSessionOnComment,
+  createLinearAgentSessionOnIssue,
+  listLinearAgentSessionActivities,
+  updateLinearAgentSession,
+} from "#public/channels/linear/api.js";
+import { LINEAR_CHANNEL_DEFAULT_ROUTE } from "#public/channels/linear/constants.js";
+import {
+  createDefaultEvents,
+  defaultOnAgentSession,
+} from "#public/channels/linear/defaults.js";
+import {
+  formatLinearContextBlock,
+  linearContinuationToken,
+  messageFromLinearAgentSessionEvent,
+  parseLinearWebhookEvent,
+} from "#public/channels/linear/inbound.js";
+import { verifyLinearRequest } from "#public/channels/linear/verify.js";
+import { attachLinearInboundImages } from "#public/channels/linear/inbound-images.js";
+const log = createLogger(`linear.channel`);
+function linearChannel(e = {}) {
+  let t = e.onAgentSession ?? defaultOnAgentSession,
+    o = {
+      ...createDefaultEvents({ api: e.api, credentials: e.credentials }),
+      ...e.events,
+    };
+  return defineChannel({
+    kindHint: `linear`,
+    turnPolicy: e.turnPolicy,
+    state: initialLinearState(),
+    metadata(e) {
+      return {
+        agentSessionId: e.agentSessionId,
+        commentId: e.commentId ?? null,
+        issueId: e.issueId ?? null,
+        issueIdentifier: e.issueIdentifier ?? null,
+        organizationId: e.organizationId ?? null,
+      };
+    },
+    context(t, n) {
+      return rebuildLinearContext(t, n, e);
+    },
+    routes: [
+      POST(
+        e.route ?? LINEAR_CHANNEL_DEFAULT_ROUTE,
+        async (n, { from: r, waitUntil: i }) => {
+          let a = await verifyInbound(n, e.credentials, e.maxSkewMs);
+          if (a === null) return new Response(`unauthorized`, { status: 401 });
+          let o;
+          try {
+            o = parseLinearWebhookEvent({ body: a, headers: n.headers });
+          } catch (e) {
+            return (
+              log.warn(`inbound Linear body is not valid JSON`, { error: e }),
+              jsonOk({ ignored: !0, ok: !0 })
+            );
+          }
+          return o === null
+            ? jsonOk({ ignored: !0, ok: !0 })
+            : o.kind === `agent_session`
+              ? (i(
+                  dispatchAgentSession({
+                    config: e,
+                    event: o,
+                    from: r,
+                    onAgentSession: t,
+                  }),
+                ),
+                jsonOk({ ok: !0 }))
+              : e.onDataWebhook === void 0
+                ? jsonOk({ ignored: !0, ok: !0 })
+                : (i(Promise.resolve(e.onDataWebhook(o))), jsonOk({ ok: !0 }));
+        },
+      ),
+    ],
+    async receive(t, { from: r }) {
+      let i = t.target,
+        o = await resolveReceiveSession(i, e),
+        s = readNonEmptyString(i.initialActivity);
+      return (
+        s !== void 0 &&
+          (await createLinearAgentActivity({
+            api: e.api,
+            credentials: e.credentials,
+            activity: {
+              agentSessionId: o.id,
+              content: { body: s, type: `thought` },
+            },
+          })),
+        r(linearContinuationToken(o.id)).send(t.message, {
+          auth: t.auth,
+          state: stateFromAgentSession(o),
+        })
+      );
+    },
+    events: o,
+  });
+}
+function rebuildLinearContext(e, t, n) {
+  return {
+    linear: buildLinearHandle({
+      agentSessionId: e.agentSessionId ?? ``,
+      config: n,
+    }),
+    state: e,
+  };
+}
+function buildLinearHandle(e) {
+  return {
+    agentSessionId: e.agentSessionId,
+    createActivity(t, n) {
+      return createLinearAgentActivity({
+        api: e.config.api,
+        credentials: e.config.credentials,
+        activity: {
+          agentSessionId: e.agentSessionId,
+          content: t,
+          ephemeral: n?.ephemeral,
+          signal: n?.signal,
+          signalMetadata: n?.signalMetadata,
+        },
+      });
+    },
+    listActivities(t) {
+      return listLinearAgentSessionActivities({
+        api: e.config.api,
+        credentials: e.config.credentials,
+        agentSessionId: e.agentSessionId,
+        last: t?.last,
+      });
+    },
+    updateSession(t) {
+      return updateLinearAgentSession({
+        api: e.config.api,
+        credentials: e.config.credentials,
+        id: e.agentSessionId,
+        update: t,
+      });
+    },
+  };
+}
+async function dispatchAgentSession(e) {
+  let { event: t } = e,
+    n = {
+      delivery: t.delivery,
+      linear: buildLinearHandle({
+        agentSessionId: t.agentSession.id,
+        config: e.config,
+      }),
+      session: t.agentSession,
+    },
+    r = await e.onAgentSession(n, t);
+  if (r === null) return;
+  let i = await attachLinearInboundImages({
+    content: messageFromLinearAgentSessionEvent(t),
+    credentials: e.config.credentials,
+    fetch: e.config.api?.fetch,
+  });
+  await e
+    .from(linearContinuationToken(t.agentSession.id))
+    .send(i, {
+      auth: r.auth,
+      context: [
+        formatLinearContextBlock(t),
+        ...t.previousComments,
+        ...(r.context ?? []),
+      ],
+      state: stateFromAgentSession(t.agentSession),
+      title: r.title,
+    });
+}
+async function resolveReceiveSession(e, t) {
+  if (hasString(e, `agentSessionId`)) return { id: e.agentSessionId };
+  if (hasString(e, `issueId`))
+    return createLinearAgentSessionOnIssue({
+      api: t.api,
+      credentials: t.credentials,
+      externalLink: readNonEmptyString(e.externalLink),
+      externalUrls: readExternalUrls(e.externalUrls),
+      issueId: e.issueId,
+    });
+  if (hasString(e, `commentId`))
+    return createLinearAgentSessionOnComment({
+      api: t.api,
+      credentials: t.credentials,
+      commentId: e.commentId,
+      externalLink: readNonEmptyString(e.externalLink),
+      externalUrls: readExternalUrls(e.externalUrls),
+    });
+  throw Error(
+    `linearChannel().receive requires target.agentSessionId, issueId, or commentId.`,
+  );
+}
+function stateFromAgentSession(e) {
+  return {
+    agentSessionId: e.id,
+    agentSessionUrl: e.url ?? null,
+    commentId: e.commentId ?? null,
+    issueId: e.issueId ?? e.issue?.id ?? null,
+    issueIdentifier: e.issue?.identifier ?? null,
+    issueTitle: e.issue?.title ?? null,
+    issueUrl: e.issue?.url ?? null,
+    organizationId: `organizationId` in e ? (e.organizationId ?? null) : null,
+    pendingToolCallMessage: null,
+    sourceCommentId: e.sourceCommentId ?? null,
+  };
+}
+function initialLinearState() {
+  return {
+    agentSessionId: null,
+    agentSessionUrl: null,
+    commentId: null,
+    issueId: null,
+    issueIdentifier: null,
+    issueTitle: null,
+    issueUrl: null,
+    organizationId: null,
+    pendingToolCallMessage: null,
+    sourceCommentId: null,
+  };
+}
+async function verifyInbound(e, t, n) {
+  try {
+    return await verifyLinearRequest(e, {
+      maxSkewMs: n,
+      webhookSecret: t?.webhookSecret,
+      webhookVerifier: t?.webhookVerifier,
+    });
+  } catch (e) {
+    return (log.warn(`linear inbound verification failed`, { error: e }), null);
+  }
+}
+function hasString(e, t) {
+  return typeof e[t] == `string` && e[t].length > 0;
+}
+function readExternalUrls(e) {
+  if (!Array.isArray(e)) return;
+  let n = e.filter(
+    (e) =>
+      isObject(e) && typeof e.label == `string` && typeof e.url == `string`,
+  );
+  return n.length > 0 ? n : void 0;
+}
+function jsonOk(e) {
+  return new Response(JSON.stringify(e), {
+    headers: { "content-type": `application/json; charset=utf-8` },
+    status: 200,
+  });
+}
+export { linearChannel };

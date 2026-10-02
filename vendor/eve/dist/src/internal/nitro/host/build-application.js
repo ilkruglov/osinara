@@ -1,1 +1,350 @@
-import{readFile}from"node:fs/promises";import{dirname,isAbsolute,join,relative,resolve,sep}from"node:path";import{resolveDiscoveryProject}from"#discover/project.js";import{resolvePackageSourceFilePath}from"#internal/application/package.js";import{tryReadExtensionBuildConfig}from"#internal/nitro/host/build-extension.js";import{toErrorMessage}from"#shared/errors.js";import{createDiskRuntimeCompiledArtifactsSource}from"#runtime/compiled-artifacts-source.js";import{build,copyPublicAssets,prepare,prerender}from"nitro/builder";import{prepareEveVersionedCacheDirectory,writeEveVersionedCacheMetadata}from"#internal/application/cache-metadata.js";import{createApplicationBuildWorkspace,removeApplicationBuildWorkspace}from"#internal/application/build-workspace.js";import{ApplicationBuildProfiler,createApplicationBuildProfile,measureApplicationBuildOutput,writeApplicationBuildProfile}from"#internal/application/build-profile.js";import{RecoverablePublicationError,publishApplicationBuildArtifacts}from"#internal/application/output-publication.js";import{stageProductionCompilerArtifacts}from"#internal/application/production-compiler-artifacts.js";import{materializeVercelWorkflowFunctionOutput,normalizeEveVercelFunctionOutput}from"#internal/workflow-bundle/vercel-workflow-output.js";import{createProductionApplicationNitro}from"#internal/nitro/host/create-application-nitro.js";import{emitVercelAgentSummary}from"#internal/nitro/host/build-vercel-agent-summary.js";import{copyHostMiddlewareFunctions}from"#internal/nitro/host/copy-host-middleware.js";import{normalizeVercelServiceCrons}from"#internal/nitro/host/normalize-vercel-service-crons.js";import{prepareProductionApplicationHost}from"#internal/nitro/host/prepare-application-host.js";import{runVercelBuildPrewarm}from"#internal/nitro/host/vercel-build-prewarm.js";import{findClosestVercelOutputDirectory}from"#shared/vercel-output-directory.js";function trimTrailingSlash(e){return e.replace(/[\\/]+$/,``)}async function measureBuildPhase(e,t,n){return e===void 0?n():e.measure(t,n)}function isPathInside(e,t){let r=relative(e,t);return r.length===0||!r.startsWith(`..${sep}`)&&r!==`..`&&!isAbsolute(r)}function assertProfileOutputOutsideBuildOutput(e,t){if(e!==void 0&&isPathInside(t,e))throw Error(`Build profile path ${e} must be outside the published output directory ${t}.`)}async function writeOptionalApplicationBuildProfile(e){try{assertProfileOutputOutsideBuildOutput(e.profileOutputPath,e.outputDirectory);let t=e.profiler.finish(),n=await measureApplicationBuildOutput(e.outputDirectory);await writeApplicationBuildProfile(e.profileOutputPath,createApplicationBuildProfile({output:n,target:process.env.VERCEL?`vercel`:`local`,timing:t}))}catch(t){console.warn(`eve: failed to write optional build profile to ${e.profileOutputPath}; continuing with the published build output: ${toErrorMessage(t)}`)}}function isRecord(e){return typeof e==`object`&&!!e&&!Array.isArray(e)}function normalizeEntrypoint(e,t){return typeof t!=`string`||t.trim().length===0?null:resolve(e,t)}function normalizeServiceRoot(e,t){return typeof t.root==`string`&&t.root.trim().length>0?resolve(e,t.root):normalizeEntrypoint(e,t.entrypoint)}function normalizeServicePrefix(e){return typeof e.routePrefix==`string`?e.routePrefix.trim():typeof e.mount==`string`?e.mount.trim():isRecord(e.mount)&&typeof e.mount.path==`string`&&e.mount.path.trim().length>0?e.mount.path.trim():``}function normalizeServiceCollection(e){if(isRecord(e))return Object.values(e).filter(isRecord);if(Array.isArray(e))return e.filter(isRecord)}function resolveCoDeployedEveServicePrefix(e){if(!isRecord(e.config))return;let t=normalizeServiceCollection(e.config.experimentalServices)??normalizeServiceCollection(e.config.experimentalServicesV2)??normalizeServiceCollection(e.config.services);if(t===void 0)return;let n=!1,r;for(let i of t){if(i.framework!==`eve`){n=!0;continue}let t=normalizeServiceRoot(e.configRoot,i),a=normalizeServicePrefix(i);t!==null&&e.appRoots.includes(t)&&a.length>0&&a!==`/`&&(r=a)}return n?r:void 0}async function resolveCoDeployedEveServicePrefixForVercelFunctionOutput(n,i){let o=Array.from(new Set([resolve(n),resolve(i)])),s=await findClosestVercelOutputDirectory(n);if(s!==void 0)try{let t=JSON.parse(await readFile(join(s,`config.json`),`utf8`)),n=resolveCoDeployedEveServicePrefix({appRoots:o,configRoot:await resolveVercelOutputConfigRoot(s),config:t});if(n!==void 0)return n}catch(e){if(!(e instanceof Error&&`code`in e&&e.code===`ENOENT`))throw e}let c=n;for(;;){for(let n of[join(c,`vercel.json`),join(c,`.vercel`,`output`,`config.json`)])try{let r=JSON.parse(await readFile(n,`utf8`)),i=resolveCoDeployedEveServicePrefix({appRoots:o,configRoot:n.endsWith(`vercel.json`)?c:await resolveVercelOutputConfigRoot(dirname(n)),config:r});if(i!==void 0)return i}catch(e){if(!(e instanceof Error&&`code`in e&&e.code===`ENOENT`))throw e}let n=dirname(c);if(n===c)return;c=n}}async function resolveVercelOutputConfigRoot(n){let i=dirname(dirname(n));try{let t=JSON.parse(await readFile(join(i,`.vercel`,`project.json`),`utf8`));if(isRecord(t)&&isRecord(t.settings)&&typeof t.settings.rootDirectory==`string`&&t.settings.rootDirectory.trim().length>0)return resolve(i,t.settings.rootDirectory)}catch(e){if(!(e instanceof Error&&`code`in e&&e.code===`ENOENT`))throw e}return i}async function buildNitroOutput(e,t,n){let r=trimTrailingSlash(e.options.output.dir);return await measureBuildPhase(t,`${n}.cache.prepare`,()=>prepareEveVersionedCacheDirectory(r)),await measureBuildPhase(t,`${n}.prepare`,()=>prepare(e)),await measureBuildPhase(t,`${n}.public-assets`,()=>copyPublicAssets(e)),await measureBuildPhase(t,`${n}.prerender`,()=>prerender(e)),await measureBuildPhase(t,`${n}.bundle`,()=>build(e)),await measureBuildPhase(t,`${n}.cache.write`,()=>writeEveVersionedCacheMetadata(r)),r}async function buildApplication(e,t){let n=t.profileOutputPath===void 0?void 0:resolve(t.profileOutputPath),r=n===void 0?void 0:new ApplicationBuildProfiler,i=await measureBuildPhase(r,`extension.check`,()=>tryReadExtensionBuildConfig(e));if(i!==null)throw Error(`Package "${i.packageName}" is an eve extension. Run \`eve extension build\` instead of \`eve build\`.`);let o=await measureBuildPhase(r,`project.resolve`,()=>resolveDiscoveryProject(e)),c=await measureBuildPhase(r,`workspace.create`,()=>createApplicationBuildWorkspace(o.appRoot,t.vercelServiceOutput?.serviceOutputDirectory)),l=!1,u;try{u=await buildApplicationInWorkspace(c,t,r)}catch(e){throw l=e instanceof RecoverablePublicationError,e}finally{l||await measureBuildPhase(r,`workspace.remove`,()=>removeApplicationBuildWorkspace(c))}return r!==void 0&&n!==void 0&&await writeOptionalApplicationBuildProfile({outputDirectory:u,profileOutputPath:n,profiler:r}),u}async function buildApplicationInWorkspace(e,t,n){let r=await measureBuildPhase(n,`host.prepare`,()=>prepareProductionApplicationHost(e)),i=!!process.env.VERCEL,a=i?await measureBuildPhase(n,`vercel.service-prefix.resolve`,()=>resolveCoDeployedEveServicePrefixForVercelFunctionOutput(r.appRoot,r.compileResult.project.agentRoot)):void 0,o=await measureBuildPhase(n,`nitro.create`,()=>createProductionApplicationNitro(r,{buildDir:e.nitro.buildDir,outputDir:e.publication.output.stagedDir,publicRoutePrefix:t.publicRoutePrefix}));try{i&&!t.skipVercelSandboxPrewarm&&await measureBuildPhase(n,`sandbox.prewarm`,()=>runVercelBuildPrewarm({appRoot:r.appRoot,compiledArtifactsSource:createDiskRuntimeCompiledArtifactsSource(e.compiler.rootDir,{moduleMapLoaderPath:resolvePackageSourceFilePath(`src/internal/authored-module-map-loader.ts`),sandboxAppRoot:r.appRoot}),log(e){console.log(e)}})),await buildNitroOutput(o,n,`nitro`),i&&await measureBuildPhase(n,`vercel.workflow-function.materialize`,()=>materializeVercelWorkflowFunctionOutput(e.publication.output.stagedDir)),a!==void 0&&await measureBuildPhase(n,`vercel.functions.normalize`,()=>normalizeEveVercelFunctionOutput(e.publication.output.stagedDir,{servicePrefix:a}));let s=t.vercelServiceOutput;s!==void 0&&(await measureBuildPhase(n,`vercel.service-crons.normalize`,()=>normalizeVercelServiceCrons({publicRoutePrefix:t.publicRoutePrefix,serviceOutputDirectory:e.publication.output.stagedDir})),await measureBuildPhase(n,`vercel.host-middleware.copy`,()=>copyHostMiddlewareFunctions({hostOutputDirectory:s.hostOutputDirectory,serviceOutputDirectory:e.publication.output.stagedDir}))),await measureBuildPhase(n,`agent-summary.emit`,()=>emitVercelAgentSummary({manifest:r.compileResult.manifest,outputPath:e.publication.summary.stagedPath})),i||await measureBuildPhase(n,`compiler-artifacts.stage`,()=>stageProductionCompilerArtifacts({compilerArtifactsRoot:e.compiler.artifactsDir,outputDir:e.publication.output.stagedDir}))}finally{await measureBuildPhase(n,`nitro.close`,()=>o.close())}return await measureBuildPhase(n,`output.publish`,()=>publishCompletedApplicationBuild(e)),e.publication.output.finalDir}async function publishCompletedApplicationBuild(e){await publishApplicationBuildArtifacts({appRoot:e.appRoot,finalOutputDir:e.publication.output.finalDir,finalSummaryPath:e.publication.summary.finalPath,scratchDir:e.rootDir,stagedOutputDir:e.publication.output.stagedDir,stagedSummaryPath:e.publication.summary.stagedPath})}export{buildApplication};
+import { readFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { resolveDiscoveryProject } from "#discover/project.js";
+import { resolvePackageSourceFilePath } from "#internal/application/package.js";
+import { tryReadExtensionBuildConfig } from "#internal/nitro/host/build-extension.js";
+import { toErrorMessage } from "#shared/errors.js";
+import { createDiskRuntimeCompiledArtifactsSource } from "#runtime/compiled-artifacts-source.js";
+import { build, copyPublicAssets, prepare, prerender } from "nitro/builder";
+import {
+  prepareEveVersionedCacheDirectory,
+  writeEveVersionedCacheMetadata,
+} from "#internal/application/cache-metadata.js";
+import {
+  createApplicationBuildWorkspace,
+  removeApplicationBuildWorkspace,
+} from "#internal/application/build-workspace.js";
+import {
+  ApplicationBuildProfiler,
+  createApplicationBuildProfile,
+  measureApplicationBuildOutput,
+  writeApplicationBuildProfile,
+} from "#internal/application/build-profile.js";
+import {
+  RecoverablePublicationError,
+  publishApplicationBuildArtifacts,
+} from "#internal/application/output-publication.js";
+import { stageProductionCompilerArtifacts } from "#internal/application/production-compiler-artifacts.js";
+import {
+  materializeVercelWorkflowFunctionOutput,
+  normalizeEveVercelFunctionOutput,
+} from "#internal/workflow-bundle/vercel-workflow-output.js";
+import { createProductionApplicationNitro } from "#internal/nitro/host/create-application-nitro.js";
+import { emitVercelAgentSummary } from "#internal/nitro/host/build-vercel-agent-summary.js";
+import { copyHostMiddlewareFunctions } from "#internal/nitro/host/copy-host-middleware.js";
+import { normalizeVercelServiceCrons } from "#internal/nitro/host/normalize-vercel-service-crons.js";
+import { prepareProductionApplicationHost } from "#internal/nitro/host/prepare-application-host.js";
+import { runVercelBuildPrewarm } from "#internal/nitro/host/vercel-build-prewarm.js";
+import { findClosestVercelOutputDirectory } from "#shared/vercel-output-directory.js";
+function trimTrailingSlash(e) {
+  return e.replace(/[\\/]+$/, ``);
+}
+async function measureBuildPhase(e, t, n) {
+  return e === void 0 ? n() : e.measure(t, n);
+}
+function isPathInside(e, t) {
+  let r = relative(e, t);
+  return (
+    r.length === 0 ||
+    (!r.startsWith(`..${sep}`) && r !== `..` && !isAbsolute(r))
+  );
+}
+function assertProfileOutputOutsideBuildOutput(e, t) {
+  if (e !== void 0 && isPathInside(t, e))
+    throw Error(
+      `Build profile path ${e} must be outside the published output directory ${t}.`,
+    );
+}
+async function writeOptionalApplicationBuildProfile(e) {
+  try {
+    assertProfileOutputOutsideBuildOutput(
+      e.profileOutputPath,
+      e.outputDirectory,
+    );
+    let t = e.profiler.finish(),
+      n = await measureApplicationBuildOutput(e.outputDirectory);
+    await writeApplicationBuildProfile(
+      e.profileOutputPath,
+      createApplicationBuildProfile({
+        output: n,
+        target: process.env.VERCEL ? `vercel` : `local`,
+        timing: t,
+      }),
+    );
+  } catch (t) {
+    console.warn(
+      `eve: failed to write optional build profile to ${e.profileOutputPath}; continuing with the published build output: ${toErrorMessage(t)}`,
+    );
+  }
+}
+function isRecord(e) {
+  return typeof e == `object` && !!e && !Array.isArray(e);
+}
+function normalizeEntrypoint(e, t) {
+  return typeof t != `string` || t.trim().length === 0 ? null : resolve(e, t);
+}
+function normalizeServiceRoot(e, t) {
+  return typeof t.root == `string` && t.root.trim().length > 0
+    ? resolve(e, t.root)
+    : normalizeEntrypoint(e, t.entrypoint);
+}
+function normalizeServicePrefix(e) {
+  return typeof e.routePrefix == `string`
+    ? e.routePrefix.trim()
+    : typeof e.mount == `string`
+      ? e.mount.trim()
+      : isRecord(e.mount) &&
+          typeof e.mount.path == `string` &&
+          e.mount.path.trim().length > 0
+        ? e.mount.path.trim()
+        : ``;
+}
+function normalizeServiceCollection(e) {
+  if (isRecord(e)) return Object.values(e).filter(isRecord);
+  if (Array.isArray(e)) return e.filter(isRecord);
+}
+function resolveCoDeployedEveServicePrefix(e) {
+  if (!isRecord(e.config)) return;
+  let t =
+    normalizeServiceCollection(e.config.experimentalServices) ??
+    normalizeServiceCollection(e.config.experimentalServicesV2) ??
+    normalizeServiceCollection(e.config.services);
+  if (t === void 0) return;
+  let n = !1,
+    r;
+  for (let i of t) {
+    if (i.framework !== `eve`) {
+      n = !0;
+      continue;
+    }
+    let t = normalizeServiceRoot(e.configRoot, i),
+      a = normalizeServicePrefix(i);
+    t !== null &&
+      e.appRoots.includes(t) &&
+      a.length > 0 &&
+      a !== `/` &&
+      (r = a);
+  }
+  return n ? r : void 0;
+}
+async function resolveCoDeployedEveServicePrefixForVercelFunctionOutput(n, i) {
+  let o = Array.from(new Set([resolve(n), resolve(i)])),
+    s = await findClosestVercelOutputDirectory(n);
+  if (s !== void 0)
+    try {
+      let t = JSON.parse(await readFile(join(s, `config.json`), `utf8`)),
+        n = resolveCoDeployedEveServicePrefix({
+          appRoots: o,
+          configRoot: await resolveVercelOutputConfigRoot(s),
+          config: t,
+        });
+      if (n !== void 0) return n;
+    } catch (e) {
+      if (!(e instanceof Error && `code` in e && e.code === `ENOENT`)) throw e;
+    }
+  let c = n;
+  for (;;) {
+    for (let n of [
+      join(c, `vercel.json`),
+      join(c, `.vercel`, `output`, `config.json`),
+    ])
+      try {
+        let r = JSON.parse(await readFile(n, `utf8`)),
+          i = resolveCoDeployedEveServicePrefix({
+            appRoots: o,
+            configRoot: n.endsWith(`vercel.json`)
+              ? c
+              : await resolveVercelOutputConfigRoot(dirname(n)),
+            config: r,
+          });
+        if (i !== void 0) return i;
+      } catch (e) {
+        if (!(e instanceof Error && `code` in e && e.code === `ENOENT`))
+          throw e;
+      }
+    let n = dirname(c);
+    if (n === c) return;
+    c = n;
+  }
+}
+async function resolveVercelOutputConfigRoot(n) {
+  let i = dirname(dirname(n));
+  try {
+    let t = JSON.parse(
+      await readFile(join(i, `.vercel`, `project.json`), `utf8`),
+    );
+    if (
+      isRecord(t) &&
+      isRecord(t.settings) &&
+      typeof t.settings.rootDirectory == `string` &&
+      t.settings.rootDirectory.trim().length > 0
+    )
+      return resolve(i, t.settings.rootDirectory);
+  } catch (e) {
+    if (!(e instanceof Error && `code` in e && e.code === `ENOENT`)) throw e;
+  }
+  return i;
+}
+async function buildNitroOutput(e, t, n) {
+  let r = trimTrailingSlash(e.options.output.dir);
+  return (
+    await measureBuildPhase(t, `${n}.cache.prepare`, () =>
+      prepareEveVersionedCacheDirectory(r),
+    ),
+    await measureBuildPhase(t, `${n}.prepare`, () => prepare(e)),
+    await measureBuildPhase(t, `${n}.public-assets`, () => copyPublicAssets(e)),
+    await measureBuildPhase(t, `${n}.prerender`, () => prerender(e)),
+    await measureBuildPhase(t, `${n}.bundle`, () => build(e)),
+    await measureBuildPhase(t, `${n}.cache.write`, () =>
+      writeEveVersionedCacheMetadata(r),
+    ),
+    r
+  );
+}
+async function buildApplication(e, t) {
+  let n =
+      t.profileOutputPath === void 0 ? void 0 : resolve(t.profileOutputPath),
+    r = n === void 0 ? void 0 : new ApplicationBuildProfiler(),
+    i = await measureBuildPhase(r, `extension.check`, () =>
+      tryReadExtensionBuildConfig(e),
+    );
+  if (i !== null)
+    throw Error(
+      `Package "${i.packageName}" is an eve extension. Run \`eve extension build\` instead of \`eve build\`.`,
+    );
+  let o = await measureBuildPhase(r, `project.resolve`, () =>
+      resolveDiscoveryProject(e),
+    ),
+    c = await measureBuildPhase(r, `workspace.create`, () =>
+      createApplicationBuildWorkspace(
+        o.appRoot,
+        t.vercelServiceOutput?.serviceOutputDirectory,
+      ),
+    ),
+    l = !1,
+    u;
+  try {
+    u = await buildApplicationInWorkspace(c, t, r);
+  } catch (e) {
+    throw ((l = e instanceof RecoverablePublicationError), e);
+  } finally {
+    l ||
+      (await measureBuildPhase(r, `workspace.remove`, () =>
+        removeApplicationBuildWorkspace(c),
+      ));
+  }
+  return (
+    r !== void 0 &&
+      n !== void 0 &&
+      (await writeOptionalApplicationBuildProfile({
+        outputDirectory: u,
+        profileOutputPath: n,
+        profiler: r,
+      })),
+    u
+  );
+}
+async function buildApplicationInWorkspace(e, t, n) {
+  let r = await measureBuildPhase(n, `host.prepare`, () =>
+      prepareProductionApplicationHost(e),
+    ),
+    i = !!process.env.VERCEL,
+    a = i
+      ? await measureBuildPhase(n, `vercel.service-prefix.resolve`, () =>
+          resolveCoDeployedEveServicePrefixForVercelFunctionOutput(
+            r.appRoot,
+            r.compileResult.project.agentRoot,
+          ),
+        )
+      : void 0,
+    o = await measureBuildPhase(n, `nitro.create`, () =>
+      createProductionApplicationNitro(r, {
+        buildDir: e.nitro.buildDir,
+        outputDir: e.publication.output.stagedDir,
+        publicRoutePrefix: t.publicRoutePrefix,
+      }),
+    );
+  try {
+    (i &&
+      !t.skipVercelSandboxPrewarm &&
+      (await measureBuildPhase(n, `sandbox.prewarm`, () =>
+        runVercelBuildPrewarm({
+          appRoot: r.appRoot,
+          compiledArtifactsSource: createDiskRuntimeCompiledArtifactsSource(
+            e.compiler.rootDir,
+            {
+              moduleMapLoaderPath: resolvePackageSourceFilePath(
+                `src/internal/authored-module-map-loader.ts`,
+              ),
+              sandboxAppRoot: r.appRoot,
+            },
+          ),
+          log(e) {
+            console.log(e);
+          },
+        }),
+      )),
+      await buildNitroOutput(o, n, `nitro`),
+      i &&
+        (await measureBuildPhase(
+          n,
+          `vercel.workflow-function.materialize`,
+          () =>
+            materializeVercelWorkflowFunctionOutput(
+              e.publication.output.stagedDir,
+            ),
+        )),
+      a !== void 0 &&
+        (await measureBuildPhase(n, `vercel.functions.normalize`, () =>
+          normalizeEveVercelFunctionOutput(e.publication.output.stagedDir, {
+            servicePrefix: a,
+          }),
+        )));
+    let s = t.vercelServiceOutput;
+    (s !== void 0 &&
+      (await measureBuildPhase(n, `vercel.service-crons.normalize`, () =>
+        normalizeVercelServiceCrons({
+          publicRoutePrefix: t.publicRoutePrefix,
+          serviceOutputDirectory: e.publication.output.stagedDir,
+        }),
+      ),
+      await measureBuildPhase(n, `vercel.host-middleware.copy`, () =>
+        copyHostMiddlewareFunctions({
+          hostOutputDirectory: s.hostOutputDirectory,
+          serviceOutputDirectory: e.publication.output.stagedDir,
+        }),
+      )),
+      await measureBuildPhase(n, `agent-summary.emit`, () =>
+        emitVercelAgentSummary({
+          manifest: r.compileResult.manifest,
+          outputPath: e.publication.summary.stagedPath,
+        }),
+      ),
+      i ||
+        (await measureBuildPhase(n, `compiler-artifacts.stage`, () =>
+          stageProductionCompilerArtifacts({
+            compilerArtifactsRoot: e.compiler.artifactsDir,
+            outputDir: e.publication.output.stagedDir,
+          }),
+        )));
+  } finally {
+    await measureBuildPhase(n, `nitro.close`, () => o.close());
+  }
+  return (
+    await measureBuildPhase(n, `output.publish`, () =>
+      publishCompletedApplicationBuild(e),
+    ),
+    e.publication.output.finalDir
+  );
+}
+async function publishCompletedApplicationBuild(e) {
+  await publishApplicationBuildArtifacts({
+    appRoot: e.appRoot,
+    finalOutputDir: e.publication.output.finalDir,
+    finalSummaryPath: e.publication.summary.finalPath,
+    scratchDir: e.rootDir,
+    stagedOutputDir: e.publication.output.stagedDir,
+    stagedSummaryPath: e.publication.summary.stagedPath,
+  });
+}
+export { buildApplication };

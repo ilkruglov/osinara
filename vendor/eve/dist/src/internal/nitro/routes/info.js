@@ -1,1 +1,46 @@
-import{hasEnvValue}from"#internal/resolve-model-endpoint-status.js";import{isChatGptModelRouting}from"#shared/chatgpt-model.js";import{getVercelOidcToken}from"#compiled/@vercel/oidc/index.js";import{buildAgentInfoResponseFromManifest}from"#internal/nitro/routes/agent-info/build-agent-info-response-from-manifest.js";import{loadAgentInfoManifestData,resolveAgentInfoCompiledArtifactsSource}from"#internal/nitro/routes/agent-info/load-agent-info-data.js";import{getDefaultCodexTokenBroker}from"#public/models/openai/chatgpt/token-broker.js";async function createAgentInfoPayload(e){let n=await loadAgentInfoManifestData({compiledArtifactsSource:resolveAgentInfoCompiledArtifactsSource(e)}),i=n.manifest.config.dynamicModel===void 0?n.manifest.config.model.routing:void 0;return buildAgentInfoResponseFromManifest(n,{mode:e.kind,gatewayCredentials:i===void 0?{apiKey:!1,oidc:!1}:await resolveGatewayCredentialPresence(i),...isChatGptModelRouting(i)?{chatgptAuth:await getDefaultCodexTokenBroker().refreshState()}:{}})}async function resolveGatewayCredentialPresence(t){let r=hasEnvValue(process.env.AI_GATEWAY_API_KEY);if(t.kind===`external`||r)return{apiKey:r,oidc:!1};try{return await getVercelOidcToken(),{apiKey:!1,oidc:!0}}catch{return{apiKey:!1,oidc:!1}}}async function handleAgentInfoRequest(e){return new Response(JSON.stringify(await createAgentInfoPayload(e)),{headers:{"cache-control":`no-store`,"content-type":`application/json; charset=utf-8`}})}export{handleAgentInfoRequest};
+import { hasEnvValue } from "#internal/resolve-model-endpoint-status.js";
+import { isChatGptModelRouting } from "#shared/chatgpt-model.js";
+import { getVercelOidcToken } from "#compiled/@vercel/oidc/index.js";
+import { buildAgentInfoResponseFromManifest } from "#internal/nitro/routes/agent-info/build-agent-info-response-from-manifest.js";
+import {
+  loadAgentInfoManifestData,
+  resolveAgentInfoCompiledArtifactsSource,
+} from "#internal/nitro/routes/agent-info/load-agent-info-data.js";
+import { getDefaultCodexTokenBroker } from "#public/models/openai/chatgpt/token-broker.js";
+async function createAgentInfoPayload(e) {
+  let n = await loadAgentInfoManifestData({
+      compiledArtifactsSource: resolveAgentInfoCompiledArtifactsSource(e),
+    }),
+    i =
+      n.manifest.config.dynamicModel === void 0
+        ? n.manifest.config.model.routing
+        : void 0;
+  return buildAgentInfoResponseFromManifest(n, {
+    mode: e.kind,
+    gatewayCredentials:
+      i === void 0
+        ? { apiKey: !1, oidc: !1 }
+        : await resolveGatewayCredentialPresence(i),
+    ...(isChatGptModelRouting(i)
+      ? { chatgptAuth: await getDefaultCodexTokenBroker().refreshState() }
+      : {}),
+  });
+}
+async function resolveGatewayCredentialPresence(t) {
+  let r = hasEnvValue(process.env.AI_GATEWAY_API_KEY);
+  if (t.kind === `external` || r) return { apiKey: r, oidc: !1 };
+  try {
+    return (await getVercelOidcToken(), { apiKey: !1, oidc: !0 });
+  } catch {
+    return { apiKey: !1, oidc: !1 };
+  }
+}
+async function handleAgentInfoRequest(e) {
+  return new Response(JSON.stringify(await createAgentInfoPayload(e)), {
+    headers: {
+      "cache-control": `no-store`,
+      "content-type": `application/json; charset=utf-8`,
+    },
+  });
+}
+export { handleAgentInfoRequest };

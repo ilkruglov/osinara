@@ -1,1 +1,2 @@
-export*from"#public/index.js";export{};
+export * from "#public/index.js";
+export {};

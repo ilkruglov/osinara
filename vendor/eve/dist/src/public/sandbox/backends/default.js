@@ -1,1 +1,27 @@
-import{isLinuxDockerDaemonAvailableSync,isMicrosandboxPlatformSupported}from"#execution/sandbox/bindings/local.js";import{lazyBackend}from"#execution/sandbox/lazy-backend.js";import{docker}from"#public/sandbox/backends/docker.js";import{justbash}from"#public/sandbox/backends/just-bash.js";import{microsandbox}from"#public/sandbox/backends/microsandbox.js";import{vercel}from"#public/sandbox/backends/vercel.js";const PRODUCTION_PROBES={isDeployedOnVercel:()=>!!process.env.VERCEL,isDockerAvailable:()=>isLinuxDockerDaemonAvailableSync(),isMicrosandboxSupported:()=>isMicrosandboxPlatformSupported()};function defaultSandbox(e){return lazyBackend(()=>selectDefaultSandbox(e,PRODUCTION_PROBES))}function selectDefaultSandbox(e,t){return t.isDeployedOnVercel()?vercel(e?.vercel):t.isDockerAvailable()?docker(e?.docker):t.isMicrosandboxSupported()?microsandbox(e?.microsandbox):justbash(e?.justBash)}export{defaultSandbox,selectDefaultSandbox};
+import {
+  isLinuxDockerDaemonAvailableSync,
+  isMicrosandboxPlatformSupported,
+} from "#execution/sandbox/bindings/local.js";
+import { lazyBackend } from "#execution/sandbox/lazy-backend.js";
+import { docker } from "#public/sandbox/backends/docker.js";
+import { justbash } from "#public/sandbox/backends/just-bash.js";
+import { microsandbox } from "#public/sandbox/backends/microsandbox.js";
+import { vercel } from "#public/sandbox/backends/vercel.js";
+const PRODUCTION_PROBES = {
+  isDeployedOnVercel: () => !!process.env.VERCEL,
+  isDockerAvailable: () => isLinuxDockerDaemonAvailableSync(),
+  isMicrosandboxSupported: () => isMicrosandboxPlatformSupported(),
+};
+function defaultSandbox(e) {
+  return lazyBackend(() => selectDefaultSandbox(e, PRODUCTION_PROBES));
+}
+function selectDefaultSandbox(e, t) {
+  return t.isDeployedOnVercel()
+    ? vercel(e?.vercel)
+    : t.isDockerAvailable()
+      ? docker(e?.docker)
+      : t.isMicrosandboxSupported()
+        ? microsandbox(e?.microsandbox)
+        : justbash(e?.justBash);
+}
+export { defaultSandbox, selectDefaultSandbox };

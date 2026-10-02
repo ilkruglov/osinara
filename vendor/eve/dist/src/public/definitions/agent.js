@@ -1,1 +1,9 @@
-import{defineDynamic as defineDynamic$1}from"#public/definitions/tool.js";const defineDynamic=(t=>{let n=defineDynamic$1({events:t.events});return t.build===void 0?n:{...n,build:t.build}});function defineAgent(e){return e}export{defineAgent,defineDynamic};
+import { defineDynamic as defineDynamic$1 } from "#public/definitions/tool.js";
+const defineDynamic = (t) => {
+  let n = defineDynamic$1({ events: t.events });
+  return t.build === void 0 ? n : { ...n, build: t.build };
+};
+function defineAgent(e) {
+  return e;
+}
+export { defineAgent, defineDynamic };

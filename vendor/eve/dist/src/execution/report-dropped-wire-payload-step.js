@@ -1,1 +1,10 @@
-import{createLogger}from"#internal/logging.js";const log=createLogger(`execution.wire`);async function reportDroppedWirePayloadStep(e){"use step";log.error(`dropping undecodable wire payload`,{detail:e.detail,family:e.family})}export{reportDroppedWirePayloadStep};
+import { createLogger } from "#internal/logging.js";
+const log = createLogger(`execution.wire`);
+async function reportDroppedWirePayloadStep(e) {
+  "use step";
+  log.error(`dropping undecodable wire payload`, {
+    detail: e.detail,
+    family: e.family,
+  });
+}
+export { reportDroppedWirePayloadStep };

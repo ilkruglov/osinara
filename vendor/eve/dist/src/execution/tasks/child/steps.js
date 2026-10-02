@@ -1,1 +1,164 @@
-import{createLogger}from"#internal/logging.js";import{resumeSessionInbox}from"#execution/wire/session-inbox-resume.js";import{getWritable}from"#compiled/@workflow/core/index.js";import{isTaskWorkflowTargetGone}from"#execution/tasks/workflow-target.js";import{TASK_VIEW_STREAM_NAMESPACE,isTerminalTaskStatus,taskAuthorizationRequestId}from"#tasks/types.js";const log=createLogger(`execution.tasks.run`);async function appendTaskViewStep(e){"use step";let t=getWritable({namespace:TASK_VIEW_STREAM_NAMESPACE}).getWriter();try{await t.write(e.view)}finally{t.releaseLock()}}async function wakeTaskAuthorizationParentStep(e){"use step";let n={callId:e.request.callId,childSessionId:e.request.childSessionId,event:e.request.event,kind:`subagent-authorization-event`,subagentName:e.request.subagentName},r=e.request.event.data,i={task:{authorizationEvents:[{hookPayload:n,taskId:e.taskId}]}};e.request.event.type===`authorization.required`&&(i.message=`Background task ${e.taskId} needs authorization.`);let a={auth:e.auth,kind:`send`,payload:i,taskDeliveryId:`${e.taskId}:authorization:${e.request.event.type}:${r.turnId}:${r.stepIndex}:${r.sequence}:${taskAuthorizationRequestId(e.request.event)}`};try{await resumeSessionInbox(e.token,a)}catch(e){if(isTaskWorkflowTargetGone(e))return;throw e}}async function wakeTaskParentStep(e){"use step";let n={message:formatTaskNotification(e.view)};isTerminalTaskStatus(e.view.status)&&(n.task={views:[e.view]});let r={auth:e.auth,kind:`send`,payload:n,taskDeliveryId:`${e.view.taskId}:ready:${e.view.status}`};try{await resumeSessionInbox(e.token,r)}catch(t){if(isTaskWorkflowTargetGone(t)){log.warn(`task wake target is gone; the parent session already ended`,{status:e.view.status,taskId:e.view.taskId});return}throw t}}async function wakeTaskUpdateParentStep(e){"use step";let n={auth:e.auth,kind:`send`,payload:{message:`Background task ${e.view.taskId} (${e.view.metadata.name}) update: ${e.update.message}`},taskDeliveryId:`${e.view.taskId}:update:${e.update.childTurnId}:${e.update.childStepIndex}:${e.update.callId}`};try{await resumeSessionInbox(e.token,n)}catch(e){if(isTaskWorkflowTargetGone(e))return;throw e}}async function wakeTaskInputRequestParentStep(e){"use step";let n={auth:e.auth,kind:`send`,payload:{task:{inputRequests:[{hookPayload:e.request,taskId:e.taskId}]}},taskDeliveryId:`${e.taskId}:input:${e.request.event.turnId}:${e.request.event.stepIndex}:${e.request.event.sequence}`};try{await resumeSessionInbox(e.token,n)}catch(e){if(isTaskWorkflowTargetGone(e))return;throw e}}async function deliverTaskInputResponsesStep(e){"use step";let n=new Set(e.requestIds),r={auth:e.answer.auth,kind:`send`,payload:{inputResponses:e.answer.inputResponses.filter(e=>n.has(e.requestId))},taskDeliveryId:`${e.answer.taskId}:${[...e.requestIds].sort().join(`,`)}`};try{if(e.answer.childResponseUrl!==void 0){let t=await fetch(e.answer.childResponseUrl,{body:JSON.stringify({inputResponses:r.payload.inputResponses}),headers:{"content-type":`application/json`},method:`POST`,redirect:`error`});if(t.status===404)return`unreachable`;if(!t.ok)throw Error(`Remote task input delivery failed with HTTP ${t.status}.`)}else await resumeSessionInbox(e.answer.childContinuationToken,r);return`delivered`}catch(t){if(isTaskWorkflowTargetGone(t))return log.warn(`task input answer target is gone; the child turn already ended`,{taskId:e.answer.taskId}),`unreachable`;throw t}}function formatTaskNotification(e){let t=`Background task ${e.taskId} (${e.metadata.name})`;return e.status===`input_required`?`${t} needs input.`:e.status===`completed`?`${t} is completed.\n\nResult:\n${formatTaskOutput(e.lastOutput.data)}`:e.status===`failed`?`${t} failed.\n\nError:\n${formatTaskOutput(e.lastOutput.data)}`:`${t} is cancelled.`}function formatTaskOutput(e){return typeof e==`string`?e:JSON.stringify(e)??`null`}export{appendTaskViewStep,deliverTaskInputResponsesStep,formatTaskNotification,wakeTaskAuthorizationParentStep,wakeTaskInputRequestParentStep,wakeTaskParentStep,wakeTaskUpdateParentStep};
+import { createLogger } from "#internal/logging.js";
+import { resumeSessionInbox } from "#execution/wire/session-inbox-resume.js";
+import { getWritable } from "#compiled/@workflow/core/index.js";
+import { isTaskWorkflowTargetGone } from "#execution/tasks/workflow-target.js";
+import {
+  TASK_VIEW_STREAM_NAMESPACE,
+  isTerminalTaskStatus,
+  taskAuthorizationRequestId,
+} from "#tasks/types.js";
+const log = createLogger(`execution.tasks.run`);
+async function appendTaskViewStep(e) {
+  "use step";
+  let t = getWritable({ namespace: TASK_VIEW_STREAM_NAMESPACE }).getWriter();
+  try {
+    await t.write(e.view);
+  } finally {
+    t.releaseLock();
+  }
+}
+async function wakeTaskAuthorizationParentStep(e) {
+  "use step";
+  let n = {
+      callId: e.request.callId,
+      childSessionId: e.request.childSessionId,
+      event: e.request.event,
+      kind: `subagent-authorization-event`,
+      subagentName: e.request.subagentName,
+    },
+    r = e.request.event.data,
+    i = {
+      task: { authorizationEvents: [{ hookPayload: n, taskId: e.taskId }] },
+    };
+  e.request.event.type === `authorization.required` &&
+    (i.message = `Background task ${e.taskId} needs authorization.`);
+  let a = {
+    auth: e.auth,
+    kind: `send`,
+    payload: i,
+    taskDeliveryId: `${e.taskId}:authorization:${e.request.event.type}:${r.turnId}:${r.stepIndex}:${r.sequence}:${taskAuthorizationRequestId(e.request.event)}`,
+  };
+  try {
+    await resumeSessionInbox(e.token, a);
+  } catch (e) {
+    if (isTaskWorkflowTargetGone(e)) return;
+    throw e;
+  }
+}
+async function wakeTaskParentStep(e) {
+  "use step";
+  let n = { message: formatTaskNotification(e.view) };
+  isTerminalTaskStatus(e.view.status) && (n.task = { views: [e.view] });
+  let r = {
+    auth: e.auth,
+    kind: `send`,
+    payload: n,
+    taskDeliveryId: `${e.view.taskId}:ready:${e.view.status}`,
+  };
+  try {
+    await resumeSessionInbox(e.token, r);
+  } catch (t) {
+    if (isTaskWorkflowTargetGone(t)) {
+      log.warn(`task wake target is gone; the parent session already ended`, {
+        status: e.view.status,
+        taskId: e.view.taskId,
+      });
+      return;
+    }
+    throw t;
+  }
+}
+async function wakeTaskUpdateParentStep(e) {
+  "use step";
+  let n = {
+    auth: e.auth,
+    kind: `send`,
+    payload: {
+      message: `Background task ${e.view.taskId} (${e.view.metadata.name}) update: ${e.update.message}`,
+    },
+    taskDeliveryId: `${e.view.taskId}:update:${e.update.childTurnId}:${e.update.childStepIndex}:${e.update.callId}`,
+  };
+  try {
+    await resumeSessionInbox(e.token, n);
+  } catch (e) {
+    if (isTaskWorkflowTargetGone(e)) return;
+    throw e;
+  }
+}
+async function wakeTaskInputRequestParentStep(e) {
+  "use step";
+  let n = {
+    auth: e.auth,
+    kind: `send`,
+    payload: {
+      task: { inputRequests: [{ hookPayload: e.request, taskId: e.taskId }] },
+    },
+    taskDeliveryId: `${e.taskId}:input:${e.request.event.turnId}:${e.request.event.stepIndex}:${e.request.event.sequence}`,
+  };
+  try {
+    await resumeSessionInbox(e.token, n);
+  } catch (e) {
+    if (isTaskWorkflowTargetGone(e)) return;
+    throw e;
+  }
+}
+async function deliverTaskInputResponsesStep(e) {
+  "use step";
+  let n = new Set(e.requestIds),
+    r = {
+      auth: e.answer.auth,
+      kind: `send`,
+      payload: {
+        inputResponses: e.answer.inputResponses.filter((e) =>
+          n.has(e.requestId),
+        ),
+      },
+      taskDeliveryId: `${e.answer.taskId}:${[...e.requestIds].sort().join(`,`)}`,
+    };
+  try {
+    if (e.answer.childResponseUrl !== void 0) {
+      let t = await fetch(e.answer.childResponseUrl, {
+        body: JSON.stringify({ inputResponses: r.payload.inputResponses }),
+        headers: { "content-type": `application/json` },
+        method: `POST`,
+        redirect: `error`,
+      });
+      if (t.status === 404) return `unreachable`;
+      if (!t.ok)
+        throw Error(`Remote task input delivery failed with HTTP ${t.status}.`);
+    } else await resumeSessionInbox(e.answer.childContinuationToken, r);
+    return `delivered`;
+  } catch (t) {
+    if (isTaskWorkflowTargetGone(t))
+      return (
+        log.warn(
+          `task input answer target is gone; the child turn already ended`,
+          { taskId: e.answer.taskId },
+        ),
+        `unreachable`
+      );
+    throw t;
+  }
+}
+function formatTaskNotification(e) {
+  let t = `Background task ${e.taskId} (${e.metadata.name})`;
+  return e.status === `input_required`
+    ? `${t} needs input.`
+    : e.status === `completed`
+      ? `${t} is completed.\n\nResult:\n${formatTaskOutput(e.lastOutput.data)}`
+      : e.status === `failed`
+        ? `${t} failed.\n\nError:\n${formatTaskOutput(e.lastOutput.data)}`
+        : `${t} is cancelled.`;
+}
+function formatTaskOutput(e) {
+  return typeof e == `string` ? e : (JSON.stringify(e) ?? `null`);
+}
+export {
+  appendTaskViewStep,
+  deliverTaskInputResponsesStep,
+  formatTaskNotification,
+  wakeTaskAuthorizationParentStep,
+  wakeTaskInputRequestParentStep,
+  wakeTaskParentStep,
+  wakeTaskUpdateParentStep,
+};

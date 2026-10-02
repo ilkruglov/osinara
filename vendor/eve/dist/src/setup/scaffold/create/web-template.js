@@ -1,4 +1,5 @@
-const WEB_APP_TEMPLATE_FILES={"agent/channels/eve.ts":`import { eveChannel } from "eve/channels/eve";
+const WEB_APP_TEMPLATE_FILES = {
+    "agent/channels/eve.ts": `import { eveChannel } from "eve/channels/eve";
 import { localDev, placeholderAuth, vercelOidc } from "eve/channels/auth";
 
 export default eveChannel({
@@ -13,7 +14,8 @@ export default eveChannel({
     placeholderAuth(),
   ],
 });
-`,"app/_components/agent-chat.tsx":`"use client";
+`,
+    "app/_components/agent-chat.tsx": `"use client";
 
 import type { UserContent } from "ai";
 import { useEveAgent } from "eve/react";
@@ -178,7 +180,8 @@ function StatusDot({ status }: { readonly status: AgentStatus }) {
     </span>
   );
 }
-`,"app/_components/agent-message.tsx":`"use client";
+`,
+    "app/_components/agent-message.tsx": `"use client";
 
 import type {
   EveAuthorizationPart,
@@ -506,7 +509,8 @@ function partKey(part: EveMessagePart, index: number): string {
       return \`\${part.type}:\${index}\`;
   }
 }
-`,"app/globals.css":`@import "tailwindcss";
+`,
+    "app/globals.css": `@import "tailwindcss";
 @source "../node_modules/streamdown/dist/*.js";
 
 @theme inline {
@@ -604,7 +608,8 @@ input,
 textarea {
   font: inherit;
 }
-`,"app/layout.tsx":`import type { Metadata } from "next";
+`,
+    "app/layout.tsx": `import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -639,12 +644,14 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     </html>
   );
 }
-`,"app/page.tsx":`import { AgentChat } from "@/app/_components/agent-chat";
+`,
+    "app/page.tsx": `import { AgentChat } from "@/app/_components/agent-chat";
 
 export default function Page() {
   return <AgentChat />;
 }
-`,"components/ai-elements/chain-of-thought.tsx":`"use client";
+`,
+    "components/ai-elements/chain-of-thought.tsx": `"use client";
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Badge } from "@/components/ui/badge";
@@ -841,7 +848,8 @@ ChainOfThoughtSearchResults.displayName = "ChainOfThoughtSearchResults";
 ChainOfThoughtSearchResult.displayName = "ChainOfThoughtSearchResult";
 ChainOfThoughtContent.displayName = "ChainOfThoughtContent";
 ChainOfThoughtImage.displayName = "ChainOfThoughtImage";
-`,"components/ai-elements/code-block.tsx":`"use client";
+`,
+    "components/ai-elements/code-block.tsx": `"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -1363,7 +1371,8 @@ export type CodeBlockLanguageSelectorItemProps = ComponentProps<typeof SelectIte
 export const CodeBlockLanguageSelectorItem = (props: CodeBlockLanguageSelectorItemProps) => (
   <SelectItem {...props} />
 );
-`,"components/ai-elements/conversation.tsx":`"use client";
+`,
+    "components/ai-elements/conversation.tsx": `"use client";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -1514,7 +1523,8 @@ export const ConversationDownload = ({
     </Button>
   );
 };
-`,"components/ai-elements/message.tsx":`"use client";
+`,
+    "components/ai-elements/message.tsx": `"use client";
 
 import { Button } from "@/components/ui/button";
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
@@ -1810,7 +1820,8 @@ export const MessageToolbar = ({ className, children, ...props }: MessageToolbar
     {children}
   </div>
 );
-`,"components/ai-elements/prompt-input.tsx":`"use client";
+`,
+    "components/ai-elements/prompt-input.tsx": `"use client";
 
 import {
   Command,
@@ -3125,7 +3136,8 @@ export const PromptInputCommandSeparator = ({
   className,
   ...props
 }: PromptInputCommandSeparatorProps) => <CommandSeparator className={cn(className)} {...props} />;
-`,"components/ai-elements/reasoning.tsx":`"use client";
+`,
+    "components/ai-elements/reasoning.tsx": `"use client";
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -3333,7 +3345,8 @@ export const ReasoningContent = memo(({ className, children, ...props }: Reasoni
 Reasoning.displayName = "Reasoning";
 ReasoningTrigger.displayName = "ReasoningTrigger";
 ReasoningContent.displayName = "ReasoningContent";
-`,"components/ai-elements/shimmer.tsx":`"use client";
+`,
+    "components/ai-elements/shimmer.tsx": `"use client";
 
 import { cn } from "@/lib/utils";
 import type { MotionProps } from "motion/react";
@@ -3405,7 +3418,8 @@ const ShimmerComponent = ({
 };
 
 export const Shimmer = memo(ShimmerComponent);
-`,"components/ai-elements/tool.tsx":`"use client";
+`,
+    "components/ai-elements/tool.tsx": `"use client";
 
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -3561,7 +3575,8 @@ export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutpu
     </div>
   );
 };
-`,"components/ui/badge.tsx":`import * as React from "react";
+`,
+    "components/ui/badge.tsx": `import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
 
@@ -3607,7 +3622,8 @@ function Badge({
 }
 
 export { Badge, badgeVariants };
-`,"components/ui/button-group.tsx":`import { cva, type VariantProps } from "class-variance-authority";
+`,
+    "components/ui/button-group.tsx": `import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
 
 import { cn } from "@/lib/utils";
@@ -3685,7 +3701,8 @@ function ButtonGroupSeparator({
 }
 
 export { ButtonGroup, ButtonGroupSeparator, ButtonGroupText, buttonGroupVariants };
-`,"components/ui/button.tsx":`import * as React from "react";
+`,
+    "components/ui/button.tsx": `import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
 
@@ -3747,7 +3764,8 @@ function Button({
 }
 
 export { Button, buttonVariants };
-`,"components/ui/collapsible.tsx":`"use client";
+`,
+    "components/ui/collapsible.tsx": `"use client";
 
 import { Collapsible as CollapsiblePrimitive } from "radix-ui";
 
@@ -3768,7 +3786,8 @@ function CollapsibleContent({
 }
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent };
-`,"components/ui/command.tsx":`"use client";
+`,
+    "components/ui/command.tsx": `"use client";
 
 import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
@@ -3929,7 +3948,8 @@ export {
   CommandShortcut,
   CommandSeparator,
 };
-`,"components/ui/dialog.tsx":`"use client";
+`,
+    "components/ui/dialog.tsx": `"use client";
 
 import * as React from "react";
 import { XIcon } from "lucide-react";
@@ -4073,7 +4093,8 @@ export {
   DialogTitle,
   DialogTrigger,
 };
-`,"components/ui/dropdown-menu.tsx":`"use client";
+`,
+    "components/ui/dropdown-menu.tsx": `"use client";
 
 import * as React from "react";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
@@ -4301,7 +4322,8 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 };
-`,"components/ui/hover-card.tsx":`"use client";
+`,
+    "components/ui/hover-card.tsx": `"use client";
 
 import * as React from "react";
 import { HoverCard as HoverCardPrimitive } from "radix-ui";
@@ -4339,7 +4361,8 @@ function HoverCardContent({
 }
 
 export { HoverCard, HoverCardTrigger, HoverCardContent };
-`,"components/ui/input-group.tsx":`"use client";
+`,
+    "components/ui/input-group.tsx": `"use client";
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -4497,7 +4520,8 @@ export {
   InputGroupInput,
   InputGroupTextarea,
 };
-`,"components/ui/input.tsx":`import * as React from "react";
+`,
+    "components/ui/input.tsx": `import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -4518,7 +4542,8 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 }
 
 export { Input };
-`,"components/ui/select.tsx":`"use client";
+`,
+    "components/ui/select.tsx": `"use client";
 
 import * as React from "react";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
@@ -4693,7 +4718,8 @@ export {
   SelectTrigger,
   SelectValue,
 };
-`,"components/ui/separator.tsx":`"use client";
+`,
+    "components/ui/separator.tsx": `"use client";
 
 import * as React from "react";
 import { Separator as SeparatorPrimitive } from "radix-ui";
@@ -4721,7 +4747,8 @@ function Separator({
 }
 
 export { Separator };
-`,"components/ui/spinner.tsx":`import { Loader2Icon } from "lucide-react";
+`,
+    "components/ui/spinner.tsx": `import { Loader2Icon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -4737,7 +4764,8 @@ function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
 }
 
 export { Spinner };
-`,"components/ui/textarea.tsx":`import * as React from "react";
+`,
+    "components/ui/textarea.tsx": `import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -4755,7 +4783,8 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
 }
 
 export { Textarea };
-`,"components/ui/tooltip.tsx":`"use client";
+`,
+    "components/ui/tooltip.tsx": `"use client";
 
 import * as React from "react";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
@@ -4808,7 +4837,8 @@ function TooltipContent({
 }
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
-`,"components.json":`{
+`,
+    "components.json": `{
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "new-york",
   "rsc": true,
@@ -4830,34 +4860,40 @@ export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
   },
   "registries": {}
 }
-`,"css.d.ts":`declare module "*.css";
-`,"lib/utils.ts":`import { clsx, type ClassValue } from "clsx";
+`,
+    "css.d.ts": `declare module "*.css";
+`,
+    "lib/utils.ts": `import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
-`,"next-env.d.ts":`/// <reference types="next" />
+`,
+    "next-env.d.ts": `/// <reference types="next" />
 /// <reference types="next/image-types/global" />
 import "./.next/types/routes.d.ts";
 import "./.next/types/root-params.d.ts";
 
 // NOTE: This file should not be edited
 // see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
-`,"next.config.ts":`import type { NextConfig } from "next";
+`,
+    "next.config.ts": `import type { NextConfig } from "next";
 import { withEve } from "eve/next";
 
 const nextConfig: NextConfig = {};
 
 export default withEve(nextConfig__EVE_INIT_WITH_EVE_OPTIONS__);
-`,"postcss.config.mjs":`const config = {
+`,
+    "postcss.config.mjs": `const config = {
   plugins: {
     "@tailwindcss/postcss": {},
   },
 };
 
 export default config;
-`,"tsconfig.json":`{
+`,
+    "tsconfig.json": `{
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ES2017",
@@ -4891,7 +4927,10 @@ export default config;
   ],
   "exclude": ["node_modules"]
 }
-`},WEB_APP_SIGN_IN_WITH_VERCEL_TEMPLATE_FILES={"agent/channels/eve.ts":`import { eveChannel } from "eve/channels/eve";
+`,
+  },
+  WEB_APP_SIGN_IN_WITH_VERCEL_TEMPLATE_FILES = {
+    "agent/channels/eve.ts": `import { eveChannel } from "eve/channels/eve";
 import { localDev, type AuthFn, vercelOidc } from "eve/channels/auth";
 import { auth } from "@/lib/auth";
 
@@ -4918,7 +4957,8 @@ const betterAuthSession: AuthFn<Request> = async (request) => {
 export default eveChannel({
   auth: [betterAuthSession, vercelOidc(), localDev()],
 });
-`,"app/_components/web-chat-auth.tsx":`"use client";
+`,
+    "app/_components/web-chat-auth.tsx": `"use client";
 
 import { LogOutIcon } from "lucide-react";
 import { useState } from "react";
@@ -5090,11 +5130,13 @@ function getInitials(name: string, email: string): string {
   }
   return (parts[0]?.[0] ?? email[0] ?? "?").toUpperCase();
 }
-`,"app/api/auth/[...all]/route.ts":`import { toNextJsHandler } from "better-auth/next-js";
+`,
+    "app/api/auth/[...all]/route.ts": `import { toNextJsHandler } from "better-auth/next-js";
 import { auth } from "@/lib/auth";
 
 export const { GET, POST } = toNextJsHandler(auth);
-`,"app/layout.tsx":`import type { Metadata } from "next";
+`,
+    "app/layout.tsx": `import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5130,7 +5172,8 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
     </html>
   );
 }
-`,"app/page.tsx":`import { headers } from "next/headers";
+`,
+    "app/page.tsx": `import { headers } from "next/headers";
 import { AgentChat } from "./_components/agent-chat";
 import { AccountControl, SignIn } from "./_components/web-chat-auth";
 import { auth } from "@/lib/auth";
@@ -5156,12 +5199,14 @@ export default async function Page() {
     </>
   );
 }
-`,"lib/auth-client.ts":`"use client";
+`,
+    "lib/auth-client.ts": `"use client";
 
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient();
-`,"lib/auth.ts":`import { betterAuth } from "better-auth";
+`,
+    "lib/auth.ts": `import { betterAuth } from "better-auth";
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const DEVELOPMENT_ALLOWED_HOSTS = ["localhost:*", "127.0.0.1:*"];
@@ -5211,4 +5256,55 @@ export const auth = betterAuth({
     },
   },
 });
-`},WEB_APP_TEMPLATE_PACKAGE_JSON={scripts:{build:`next build`,"build:eve":`eve build`,dev:`next dev`,"dev:eve":`eve dev`,start:`next start`,"start:eve":`eve start`,typecheck:`tsc --noEmit -p tsconfig.json`},dependencies:{"@radix-ui/react-use-controllable-state":`1.2.2`,"@shikijs/core":`4.1.0`,"@shikijs/engine-javascript":`4.1.0`,"@shikijs/engine-oniguruma":`4.1.0`,"@streamdown/cjk":`1.0.3`,"@streamdown/code":`1.1.1`,"@streamdown/math":`1.0.2`,"@streamdown/mermaid":`1.0.2`,"@tailwindcss/postcss":`4.3.0`,ai:`^7.0.38`,"class-variance-authority":`0.7.1`,clsx:`2.1.1`,cmdk:`1.1.1`,"lucide-react":`1.16.0`,motion:`12.40.0`,nanoid:`5.1.11`,next:`16.3.0-preview.6`,"radix-ui":`1.4.3`,react:`19.2.6`,"react-dom":`19.2.6`,shiki:`4.1.0`,streamdown:`2.5.0`,"tailwind-merge":`3.6.0`,tailwindcss:`4.3.0`,"use-stick-to-bottom":`1.1.4`,zod:`4.4.3`},devDependencies:{"@types/node":`26`,"@types/react":`19.2.15`,"@types/react-dom":`19.2.3`,typescript:`6.0.3`}};export{WEB_APP_SIGN_IN_WITH_VERCEL_TEMPLATE_FILES,WEB_APP_TEMPLATE_FILES,WEB_APP_TEMPLATE_PACKAGE_JSON};
+`,
+  },
+  WEB_APP_TEMPLATE_PACKAGE_JSON = {
+    scripts: {
+      build: `next build`,
+      "build:eve": `eve build`,
+      dev: `next dev`,
+      "dev:eve": `eve dev`,
+      start: `next start`,
+      "start:eve": `eve start`,
+      typecheck: `tsc --noEmit -p tsconfig.json`,
+    },
+    dependencies: {
+      "@radix-ui/react-use-controllable-state": `1.2.2`,
+      "@shikijs/core": `4.1.0`,
+      "@shikijs/engine-javascript": `4.1.0`,
+      "@shikijs/engine-oniguruma": `4.1.0`,
+      "@streamdown/cjk": `1.0.3`,
+      "@streamdown/code": `1.1.1`,
+      "@streamdown/math": `1.0.2`,
+      "@streamdown/mermaid": `1.0.2`,
+      "@tailwindcss/postcss": `4.3.0`,
+      ai: `^7.0.38`,
+      "class-variance-authority": `0.7.1`,
+      clsx: `2.1.1`,
+      cmdk: `1.1.1`,
+      "lucide-react": `1.16.0`,
+      motion: `12.40.0`,
+      nanoid: `5.1.11`,
+      next: `16.3.0-preview.6`,
+      "radix-ui": `1.4.3`,
+      react: `19.2.6`,
+      "react-dom": `19.2.6`,
+      shiki: `4.1.0`,
+      streamdown: `2.5.0`,
+      "tailwind-merge": `3.6.0`,
+      tailwindcss: `4.3.0`,
+      "use-stick-to-bottom": `1.1.4`,
+      zod: `4.4.3`,
+    },
+    devDependencies: {
+      "@types/node": `26`,
+      "@types/react": `19.2.15`,
+      "@types/react-dom": `19.2.3`,
+      typescript: `6.0.3`,
+    },
+  };
+export {
+  WEB_APP_SIGN_IN_WITH_VERCEL_TEMPLATE_FILES,
+  WEB_APP_TEMPLATE_FILES,
+  WEB_APP_TEMPLATE_PACKAGE_JSON,
+};

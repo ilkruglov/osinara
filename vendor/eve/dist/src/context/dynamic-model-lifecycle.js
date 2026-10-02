@@ -1,1 +1,104 @@
-import{LiveStepDynamicModelSelectionKey,SessionDynamicModelReferenceKey,TurnDynamicModelReferenceKey}from"#context/keys.js";import{toErrorMessage}from"#shared/errors.js";import{buildResolveContext}from"#context/dynamic-resolve-context.js";import{loadDynamicRuntimeModelDefinition,resolveRuntimeModelSelection,shouldMockAuthoredRuntimeModels}from"#runtime/agent/resolve-model.js";const ALLOWED_DYNAMIC_MODEL_EVENTS=new Set([`session.started`,`turn.started`,`step.started`]),DYNAMIC_MODEL_SELECTION_ERROR_CODE=`EVE_DYNAMIC_MODEL_SELECTION_FAILED`;var DynamicModelSelectionError=class extends Error{code=DYNAMIC_MODEL_SELECTION_ERROR_CODE;name=`DynamicModelSelectionError`;constructor(e){super(toErrorMessage(e),{cause:e})}};function isDynamicModelSelectionError(e){return e instanceof DynamicModelSelectionError||typeof e==`object`&&!!e&&e.code===DYNAMIC_MODEL_SELECTION_ERROR_CODE}function isDynamicModelEventName(e){return ALLOWED_DYNAMIC_MODEL_EVENTS.has(e)}function durableKeyForEvent(e){switch(e){case`session.started`:return SessionDynamicModelReferenceKey;case`turn.started`:return TurnDynamicModelReferenceKey;case`step.started`:return}}function getActiveDynamicModelSelection(r){let i=r.get(LiveStepDynamicModelSelectionKey);if(i!=null)return i;let a=r.get(TurnDynamicModelReferenceKey);if(a!=null)return{reference:a};let o=r.get(SessionDynamicModelReferenceKey);return o==null?null:{reference:o}}async function dispatchDynamicModelEvent(e){if(e.dynamicModel!==void 0&&isDynamicModelEventName(e.event.type)&&e.dynamicModel.eventNames.includes(e.event.type)){setSelectionForEvent(e.ctx,e.event.type,null);try{let t=(await loadDynamicRuntimeModelDefinition({dynamicModel:e.dynamicModel,scope:e.scope})).events[e.event.type];if(t===void 0)throw Error(`Dynamic model resolver is missing its compiled "${e.event.type}" handler.`);let n=await t(e.event,buildResolveContext(e.ctx,e.messages)),r=await resolveRuntimeModelSelection({durability:e.event.type===`step.started`?`live`:`durable`,selection:n,state:e.ctx});setSelectionForEvent(e.ctx,e.event.type,r)}catch(e){throw isDynamicModelSelectionError(e)?e:new DynamicModelSelectionError(e)}}}function setSelectionForEvent(t,n,r){if(n===`step.started`){let n=r!==null&&r.model!==void 0&&shouldMockAuthoredRuntimeModels()?{reference:r.reference}:r;t.setVirtualContext(LiveStepDynamicModelSelectionKey,n);return}let i=durableKeyForEvent(n);i!==void 0&&t.set(i,r?.reference??null)}export{DynamicModelSelectionError,dispatchDynamicModelEvent,getActiveDynamicModelSelection,isDynamicModelSelectionError};
+import {
+  LiveStepDynamicModelSelectionKey,
+  SessionDynamicModelReferenceKey,
+  TurnDynamicModelReferenceKey,
+} from "#context/keys.js";
+import { toErrorMessage } from "#shared/errors.js";
+import { buildResolveContext } from "#context/dynamic-resolve-context.js";
+import {
+  loadDynamicRuntimeModelDefinition,
+  resolveRuntimeModelSelection,
+  shouldMockAuthoredRuntimeModels,
+} from "#runtime/agent/resolve-model.js";
+const ALLOWED_DYNAMIC_MODEL_EVENTS = new Set([
+    `session.started`,
+    `turn.started`,
+    `step.started`,
+  ]),
+  DYNAMIC_MODEL_SELECTION_ERROR_CODE = `EVE_DYNAMIC_MODEL_SELECTION_FAILED`;
+var DynamicModelSelectionError = class extends Error {
+  code = DYNAMIC_MODEL_SELECTION_ERROR_CODE;
+  name = `DynamicModelSelectionError`;
+  constructor(e) {
+    super(toErrorMessage(e), { cause: e });
+  }
+};
+function isDynamicModelSelectionError(e) {
+  return (
+    e instanceof DynamicModelSelectionError ||
+    (typeof e == `object` &&
+      !!e &&
+      e.code === DYNAMIC_MODEL_SELECTION_ERROR_CODE)
+  );
+}
+function isDynamicModelEventName(e) {
+  return ALLOWED_DYNAMIC_MODEL_EVENTS.has(e);
+}
+function durableKeyForEvent(e) {
+  switch (e) {
+    case `session.started`:
+      return SessionDynamicModelReferenceKey;
+    case `turn.started`:
+      return TurnDynamicModelReferenceKey;
+    case `step.started`:
+      return;
+  }
+}
+function getActiveDynamicModelSelection(r) {
+  let i = r.get(LiveStepDynamicModelSelectionKey);
+  if (i != null) return i;
+  let a = r.get(TurnDynamicModelReferenceKey);
+  if (a != null) return { reference: a };
+  let o = r.get(SessionDynamicModelReferenceKey);
+  return o == null ? null : { reference: o };
+}
+async function dispatchDynamicModelEvent(e) {
+  if (
+    e.dynamicModel !== void 0 &&
+    isDynamicModelEventName(e.event.type) &&
+    e.dynamicModel.eventNames.includes(e.event.type)
+  ) {
+    setSelectionForEvent(e.ctx, e.event.type, null);
+    try {
+      let t = (
+        await loadDynamicRuntimeModelDefinition({
+          dynamicModel: e.dynamicModel,
+          scope: e.scope,
+        })
+      ).events[e.event.type];
+      if (t === void 0)
+        throw Error(
+          `Dynamic model resolver is missing its compiled "${e.event.type}" handler.`,
+        );
+      let n = await t(e.event, buildResolveContext(e.ctx, e.messages)),
+        r = await resolveRuntimeModelSelection({
+          durability: e.event.type === `step.started` ? `live` : `durable`,
+          selection: n,
+          state: e.ctx,
+        });
+      setSelectionForEvent(e.ctx, e.event.type, r);
+    } catch (e) {
+      throw isDynamicModelSelectionError(e)
+        ? e
+        : new DynamicModelSelectionError(e);
+    }
+  }
+}
+function setSelectionForEvent(t, n, r) {
+  if (n === `step.started`) {
+    let n =
+      r !== null && r.model !== void 0 && shouldMockAuthoredRuntimeModels()
+        ? { reference: r.reference }
+        : r;
+    t.setVirtualContext(LiveStepDynamicModelSelectionKey, n);
+    return;
+  }
+  let i = durableKeyForEvent(n);
+  i !== void 0 && t.set(i, r?.reference ?? null);
+}
+export {
+  DynamicModelSelectionError,
+  dispatchDynamicModelEvent,
+  getActiveDynamicModelSelection,
+  isDynamicModelSelectionError,
+};

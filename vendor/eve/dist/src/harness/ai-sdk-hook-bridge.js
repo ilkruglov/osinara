@@ -1,1 +1,238 @@
-import{attemptIdempotencyKey,modelCallIdempotencyKey,toolCallIdempotencyKey}from"#harness/instrumentation/lifecycle.js";import{structuralProviderMetadata}from"#harness/instrumentation/content.js";function createAiSdkHookBridge(i,a,o=directRunInContext,s){let c={capturesContent:a.capturesContent,modelKeys:new Map,runtimeContext:s!==void 0&&Object.keys(s).length>0?Object.freeze({...s}):void 0,scope:i,toolKeys:new Map};return{onStart(e){c.operation=Object.freeze({modelId:e.modelId,operationId:e.operationId,provider:e.provider})},async onStepStart(e){c.stepNumber=e.stepNumber;let t=toStepAttemptStarted(c);t!==void 0&&await a.publish(t)},async onLanguageModelCallStart(e){let n=modelCallIdempotencyKey(c.scope,c.stepNumber??0);c.modelKeys.set(e.callId,n);let r=toModelCallStarted(c,n,e);await a.publish(r)},executeLanguageModelCall({callId:e,execute:t}){let n=c.modelKeys.get(e);return n===void 0?t():o({idempotencyKey:n,scope:i,type:`model.call`},t)},async onLanguageModelCallEnd(e){let t=c.modelKeys.get(e.callId);if(t===void 0)return;c.modelKeys.delete(e.callId);let n=toModelCallCompleted(c,t,e);await a.publish(n)},async onStepEnd(t){if(t.providerMetadata===void 0)return;let n=c.capturesContent?t.providerMetadata:structuralProviderMetadata(t.providerMetadata);await a.publish(Object.freeze({idempotencyKey:attemptIdempotencyKey(c.scope),providerMetadata:n,scope:c.scope,type:`step.attempt.metadata`}))},async onToolExecutionStart(e){let t=toolCallIdempotencyKey(c.scope,e.toolCall.toolCallId,c.stepNumber??0);c.toolKeys.set(e.toolCall.toolCallId,t);let r=toToolCallStarted(c,t,e);await a.publish(r)},executeTool({toolCallId:e,execute:t}){let n=c.toolKeys.get(e);return n===void 0?t():o({idempotencyKey:n,scope:i,type:`tool.call`},t)},async onToolExecutionEnd(e){let t=e.toolCall.toolCallId,n=c.toolKeys.get(t);if(n===void 0)return;c.toolKeys.delete(t);let r=toToolCallCompleted(c,n,e);await a.publish(r)},async onAbort(e){await failOpenOperations(e.reason)},async onError(e){await failOpenOperations(e.error)}};async function failOpenOperations(e){let t=[];for(let n of c.modelKeys.values())t.push(a.publish(Object.freeze({error:e,idempotencyKey:n,scope:i,type:`model.call.failed`})));for(let n of c.toolKeys.values())t.push(a.publish(Object.freeze({error:e,idempotencyKey:n,scope:i,type:`tool.call.failed`})));c.modelKeys.clear(),c.toolKeys.clear(),await Promise.all(t)}}const directRunInContext=(e,t)=>t();function toStepAttemptStarted(t){if(!(t.operation===void 0||t.stepNumber===void 0))return Object.freeze({idempotencyKey:attemptIdempotencyKey(t.scope),operation:t.operation,runtimeContext:t.runtimeContext,scope:t.scope,type:`step.attempt.started`})}function toModelCallStarted(e,t,n){return Object.freeze({idempotencyKey:t,input:e.capturesContent?Object.freeze({instructions:n.instructions,messages:Object.freeze([...n.messages])}):void 0,model:Object.freeze({modelId:n.modelId,provider:n.provider}),runtimeContext:e.runtimeContext,scope:e.scope,type:`model.call.started`})}function toModelCallCompleted(e,t,n){return Object.freeze({content:e.capturesContent?toContentParts(n.content):void 0,finishReason:n.finishReason,idempotencyKey:t,scope:e.scope,type:`model.call.completed`,usage:toUsage(n.usage)})}function toUsage(e){return Object.freeze({inputTokenDetails:Object.freeze({cacheReadTokens:e.inputTokenDetails?.cacheReadTokens,cacheWriteTokens:e.inputTokenDetails?.cacheWriteTokens}),inputTokens:e.inputTokens,outputTokens:e.outputTokens})}function toContentParts(e){let t=[];for(let n of e)switch(n.type){case`text`:case`reasoning`:t.push(Object.freeze({text:n.text,type:n.type}));break;case`tool-call`:t.push(Object.freeze({callId:n.toolCallId,input:n.input,toolName:n.toolName,type:`tool-call`}));break;case`tool-result`:t.push(Object.freeze({callId:n.toolCallId,input:n.input,output:n.output,toolName:n.toolName,type:`tool-result`}));break;case`tool-error`:t.push(Object.freeze({callId:n.toolCallId,error:n.error,input:n.input,toolName:n.toolName,type:`tool-error`}));break;default:break}return Object.freeze(t)}function toToolCallStarted(e,t,n){return Object.freeze({callId:n.toolCall.toolCallId,idempotencyKey:t,input:e.capturesContent?n.toolCall.input:void 0,scope:e.scope,toolName:n.toolCall.toolName,type:`tool.call.started`})}function toToolCallCompleted(e,t,n){return Object.freeze({idempotencyKey:t,output:toToolOutput(n.toolOutput,e.capturesContent),scope:e.scope,type:`tool.call.completed`})}function toToolOutput(e,t){return e.type===`tool-result`?Object.freeze(t?{output:e.output,type:`result`}:{type:`result`}):Object.freeze(t?{error:e.error,type:`error`}:{type:`error`})}export{createAiSdkHookBridge};
+import {
+  attemptIdempotencyKey,
+  modelCallIdempotencyKey,
+  toolCallIdempotencyKey,
+} from "#harness/instrumentation/lifecycle.js";
+import { structuralProviderMetadata } from "#harness/instrumentation/content.js";
+function createAiSdkHookBridge(i, a, o = directRunInContext, s) {
+  let c = {
+    capturesContent: a.capturesContent,
+    modelKeys: new Map(),
+    runtimeContext:
+      s !== void 0 && Object.keys(s).length > 0
+        ? Object.freeze({ ...s })
+        : void 0,
+    scope: i,
+    toolKeys: new Map(),
+  };
+  return {
+    onStart(e) {
+      c.operation = Object.freeze({
+        modelId: e.modelId,
+        operationId: e.operationId,
+        provider: e.provider,
+      });
+    },
+    async onStepStart(e) {
+      c.stepNumber = e.stepNumber;
+      let t = toStepAttemptStarted(c);
+      t !== void 0 && (await a.publish(t));
+    },
+    async onLanguageModelCallStart(e) {
+      let n = modelCallIdempotencyKey(c.scope, c.stepNumber ?? 0);
+      c.modelKeys.set(e.callId, n);
+      let r = toModelCallStarted(c, n, e);
+      await a.publish(r);
+    },
+    executeLanguageModelCall({ callId: e, execute: t }) {
+      let n = c.modelKeys.get(e);
+      return n === void 0
+        ? t()
+        : o({ idempotencyKey: n, scope: i, type: `model.call` }, t);
+    },
+    async onLanguageModelCallEnd(e) {
+      let t = c.modelKeys.get(e.callId);
+      if (t === void 0) return;
+      c.modelKeys.delete(e.callId);
+      let n = toModelCallCompleted(c, t, e);
+      await a.publish(n);
+    },
+    async onStepEnd(t) {
+      if (t.providerMetadata === void 0) return;
+      let n = c.capturesContent
+        ? t.providerMetadata
+        : structuralProviderMetadata(t.providerMetadata);
+      await a.publish(
+        Object.freeze({
+          idempotencyKey: attemptIdempotencyKey(c.scope),
+          providerMetadata: n,
+          scope: c.scope,
+          type: `step.attempt.metadata`,
+        }),
+      );
+    },
+    async onToolExecutionStart(e) {
+      let t = toolCallIdempotencyKey(
+        c.scope,
+        e.toolCall.toolCallId,
+        c.stepNumber ?? 0,
+      );
+      c.toolKeys.set(e.toolCall.toolCallId, t);
+      let r = toToolCallStarted(c, t, e);
+      await a.publish(r);
+    },
+    executeTool({ toolCallId: e, execute: t }) {
+      let n = c.toolKeys.get(e);
+      return n === void 0
+        ? t()
+        : o({ idempotencyKey: n, scope: i, type: `tool.call` }, t);
+    },
+    async onToolExecutionEnd(e) {
+      let t = e.toolCall.toolCallId,
+        n = c.toolKeys.get(t);
+      if (n === void 0) return;
+      c.toolKeys.delete(t);
+      let r = toToolCallCompleted(c, n, e);
+      await a.publish(r);
+    },
+    async onAbort(e) {
+      await failOpenOperations(e.reason);
+    },
+    async onError(e) {
+      await failOpenOperations(e.error);
+    },
+  };
+  async function failOpenOperations(e) {
+    let t = [];
+    for (let n of c.modelKeys.values())
+      t.push(
+        a.publish(
+          Object.freeze({
+            error: e,
+            idempotencyKey: n,
+            scope: i,
+            type: `model.call.failed`,
+          }),
+        ),
+      );
+    for (let n of c.toolKeys.values())
+      t.push(
+        a.publish(
+          Object.freeze({
+            error: e,
+            idempotencyKey: n,
+            scope: i,
+            type: `tool.call.failed`,
+          }),
+        ),
+      );
+    (c.modelKeys.clear(), c.toolKeys.clear(), await Promise.all(t));
+  }
+}
+const directRunInContext = (e, t) => t();
+function toStepAttemptStarted(t) {
+  if (!(t.operation === void 0 || t.stepNumber === void 0))
+    return Object.freeze({
+      idempotencyKey: attemptIdempotencyKey(t.scope),
+      operation: t.operation,
+      runtimeContext: t.runtimeContext,
+      scope: t.scope,
+      type: `step.attempt.started`,
+    });
+}
+function toModelCallStarted(e, t, n) {
+  return Object.freeze({
+    idempotencyKey: t,
+    input: e.capturesContent
+      ? Object.freeze({
+          instructions: n.instructions,
+          messages: Object.freeze([...n.messages]),
+        })
+      : void 0,
+    model: Object.freeze({ modelId: n.modelId, provider: n.provider }),
+    runtimeContext: e.runtimeContext,
+    scope: e.scope,
+    type: `model.call.started`,
+  });
+}
+function toModelCallCompleted(e, t, n) {
+  return Object.freeze({
+    content: e.capturesContent ? toContentParts(n.content) : void 0,
+    finishReason: n.finishReason,
+    idempotencyKey: t,
+    scope: e.scope,
+    type: `model.call.completed`,
+    usage: toUsage(n.usage),
+  });
+}
+function toUsage(e) {
+  return Object.freeze({
+    inputTokenDetails: Object.freeze({
+      cacheReadTokens: e.inputTokenDetails?.cacheReadTokens,
+      cacheWriteTokens: e.inputTokenDetails?.cacheWriteTokens,
+    }),
+    inputTokens: e.inputTokens,
+    outputTokens: e.outputTokens,
+  });
+}
+function toContentParts(e) {
+  let t = [];
+  for (let n of e)
+    switch (n.type) {
+      case `text`:
+      case `reasoning`:
+        t.push(Object.freeze({ text: n.text, type: n.type }));
+        break;
+      case `tool-call`:
+        t.push(
+          Object.freeze({
+            callId: n.toolCallId,
+            input: n.input,
+            toolName: n.toolName,
+            type: `tool-call`,
+          }),
+        );
+        break;
+      case `tool-result`:
+        t.push(
+          Object.freeze({
+            callId: n.toolCallId,
+            input: n.input,
+            output: n.output,
+            toolName: n.toolName,
+            type: `tool-result`,
+          }),
+        );
+        break;
+      case `tool-error`:
+        t.push(
+          Object.freeze({
+            callId: n.toolCallId,
+            error: n.error,
+            input: n.input,
+            toolName: n.toolName,
+            type: `tool-error`,
+          }),
+        );
+        break;
+      default:
+        break;
+    }
+  return Object.freeze(t);
+}
+function toToolCallStarted(e, t, n) {
+  return Object.freeze({
+    callId: n.toolCall.toolCallId,
+    idempotencyKey: t,
+    input: e.capturesContent ? n.toolCall.input : void 0,
+    scope: e.scope,
+    toolName: n.toolCall.toolName,
+    type: `tool.call.started`,
+  });
+}
+function toToolCallCompleted(e, t, n) {
+  return Object.freeze({
+    idempotencyKey: t,
+    output: toToolOutput(n.toolOutput, e.capturesContent),
+    scope: e.scope,
+    type: `tool.call.completed`,
+  });
+}
+function toToolOutput(e, t) {
+  return e.type === `tool-result`
+    ? Object.freeze(
+        t ? { output: e.output, type: `result` } : { type: `result` },
+      )
+    : Object.freeze(t ? { error: e.error, type: `error` } : { type: `error` });
+}
+export { createAiSdkHookBridge };

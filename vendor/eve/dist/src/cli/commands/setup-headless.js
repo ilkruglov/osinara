@@ -1,1 +1,45 @@
-function headlessSetupContinuation(e){let t=e.question?.kind===`environment`||e.question===void 0?[]:[`--answer`,`${e.question.key}=<JSON value>`];return{command:`eve`,args:[`add`,e.item,`--non-interactive`,...e.installed?[`--skip-install`]:[],...t]}}function reportHeadlessSetupCompletion(e){if(e.completion!==!1)return e.nonInteractive===!0&&e.logger.log(serializeHeadlessSetupEvent({version:1,type:`completed`,item:e.item,completedItems:[e.item],...e.completion.deploymentRequired===!0?{deploymentRequired:!0,next:{command:`eve`,args:[`deploy`]}}:{}})),e.completion}function serializeHeadlessSetupEvent(e){return JSON.stringify(e)}export{headlessSetupContinuation,reportHeadlessSetupCompletion,serializeHeadlessSetupEvent};
+function headlessSetupContinuation(e) {
+  let t =
+    e.question?.kind === `environment` || e.question === void 0
+      ? []
+      : [`--answer`, `${e.question.key}=<JSON value>`];
+  return {
+    command: `eve`,
+    args: [
+      `add`,
+      e.item,
+      `--non-interactive`,
+      ...(e.installed ? [`--skip-install`] : []),
+      ...t,
+    ],
+  };
+}
+function reportHeadlessSetupCompletion(e) {
+  if (e.completion !== !1)
+    return (
+      e.nonInteractive === !0 &&
+        e.logger.log(
+          serializeHeadlessSetupEvent({
+            version: 1,
+            type: `completed`,
+            item: e.item,
+            completedItems: [e.item],
+            ...(e.completion.deploymentRequired === !0
+              ? {
+                  deploymentRequired: !0,
+                  next: { command: `eve`, args: [`deploy`] },
+                }
+              : {}),
+          }),
+        ),
+      e.completion
+    );
+}
+function serializeHeadlessSetupEvent(e) {
+  return JSON.stringify(e);
+}
+export {
+  headlessSetupContinuation,
+  reportHeadlessSetupCompletion,
+  serializeHeadlessSetupEvent,
+};

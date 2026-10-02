@@ -1,1 +1,60 @@
-import{hasInteractiveTerminal}from"./preconditions.js";import{isNonInteractiveProjectCommand,runNonInteractiveLink}from"./vercel-non-interactive.js";import{runDeployFlow}from"#setup/flows/deploy.js";import{createPrompter}from"#setup/prompter.js";const defaultDependencies={hasInteractiveTerminal};async function runDeployCommand(e,r,i=defaultDependencies,a={}){if(isNonInteractiveProjectCommand(a)){if(a.yes!==!0){e.error("`eve deploy --non-interactive` requires `--yes` to confirm production deployment."),process.exitCode=1;return}if(a.project!==void 0&&!await runNonInteractiveLink({logger:e,appRoot:r,options:a}))return}let o=i.createPrompter?.()??createPrompter();o.intro(`Deploy your eve agent to Vercel`);try{let n=await runDeployFlow({appRoot:r,prompter:o,interactive:!isNonInteractiveProjectCommand(a)&&i.hasInteractiveTerminal(),deps:i.flowDeps});if(n.kind===`needs-link`){e.error("This directory is not linked to a Vercel project. Run `eve link` first, or name the project on the deploy itself: `eve deploy --project <name-or-id> --non-interactive --yes`."),process.exitCode=1;return}if(n.kind===`local-model`){e.error("ChatGPT subscription models use local Codex credentials and cannot be deployed. Switch to an AI Gateway or server-authenticated model before running `eve deploy`."),process.exitCode=1;return}o.outro(n.kind===`cancelled`?`Cancelled.`:n.productionUrl===void 0?`Deployed.`:`Deployed: ${n.productionUrl}`)}catch(t){e.error(t instanceof Error?t.message:String(t)),process.exitCode=1}}export{runDeployCommand};
+import { hasInteractiveTerminal } from "./preconditions.js";
+import {
+  isNonInteractiveProjectCommand,
+  runNonInteractiveLink,
+} from "./vercel-non-interactive.js";
+import { runDeployFlow } from "#setup/flows/deploy.js";
+import { createPrompter } from "#setup/prompter.js";
+const defaultDependencies = { hasInteractiveTerminal };
+async function runDeployCommand(e, r, i = defaultDependencies, a = {}) {
+  if (isNonInteractiveProjectCommand(a)) {
+    if (a.yes !== !0) {
+      (e.error(
+        "`eve deploy --non-interactive` requires `--yes` to confirm production deployment.",
+      ),
+        (process.exitCode = 1));
+      return;
+    }
+    if (
+      a.project !== void 0 &&
+      !(await runNonInteractiveLink({ logger: e, appRoot: r, options: a }))
+    )
+      return;
+  }
+  let o = i.createPrompter?.() ?? createPrompter();
+  o.intro(`Deploy your eve agent to Vercel`);
+  try {
+    let n = await runDeployFlow({
+      appRoot: r,
+      prompter: o,
+      interactive:
+        !isNonInteractiveProjectCommand(a) && i.hasInteractiveTerminal(),
+      deps: i.flowDeps,
+    });
+    if (n.kind === `needs-link`) {
+      (e.error(
+        "This directory is not linked to a Vercel project. Run `eve link` first, or name the project on the deploy itself: `eve deploy --project <name-or-id> --non-interactive --yes`.",
+      ),
+        (process.exitCode = 1));
+      return;
+    }
+    if (n.kind === `local-model`) {
+      (e.error(
+        "ChatGPT subscription models use local Codex credentials and cannot be deployed. Switch to an AI Gateway or server-authenticated model before running `eve deploy`.",
+      ),
+        (process.exitCode = 1));
+      return;
+    }
+    o.outro(
+      n.kind === `cancelled`
+        ? `Cancelled.`
+        : n.productionUrl === void 0
+          ? `Deployed.`
+          : `Deployed: ${n.productionUrl}`,
+    );
+  } catch (t) {
+    (e.error(t instanceof Error ? t.message : String(t)),
+      (process.exitCode = 1));
+  }
+}
+export { runDeployCommand };

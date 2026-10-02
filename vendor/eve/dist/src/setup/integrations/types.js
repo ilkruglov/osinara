@@ -1,1 +1,18 @@
-import{WizardCancelledError}from"#setup/step.js";function defineSetupIntegration(t){let n={kind:t.kind,label:t.label,async run(n){try{let e=await t.prepare(n.prepare);return{kind:`done`,completion:await t.apply(e,n.apply)}}catch(t){if(t instanceof WizardCancelledError)return{kind:`cancelled`};throw t}}};return t.hint!==void 0&&(n.hint=t.hint),n}export{defineSetupIntegration};
+import { WizardCancelledError } from "#setup/step.js";
+function defineSetupIntegration(t) {
+  let n = {
+    kind: t.kind,
+    label: t.label,
+    async run(n) {
+      try {
+        let e = await t.prepare(n.prepare);
+        return { kind: `done`, completion: await t.apply(e, n.apply) };
+      } catch (t) {
+        if (t instanceof WizardCancelledError) return { kind: `cancelled` };
+        throw t;
+      }
+    },
+  };
+  return (t.hint !== void 0 && (n.hint = t.hint), n);
+}
+export { defineSetupIntegration };

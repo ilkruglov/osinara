@@ -1,3 +1,186 @@
-import{formatAvailableSkillsSection}from"#execution/skills/instructions.js";const DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION=4e7;function createCompactionConfig(e={}){let t=e.thresholdPercent??.9,n={recentWindowSize:10,threshold:e.contextWindowTokens===void 0?1e5:Math.max(1,Math.floor(e.contextWindowTokens*t)),thresholdPercent:t};return e.lastKnownInputTokens===void 0?n:{...n,lastKnownInputTokens:e.lastKnownInputTokens,lastKnownPromptMessageCount:e.lastKnownPromptMessageCount}}function createSession(e){let{turnAgent:t}=e,n=createSessionToolDefinitions(t),r={agent:createSessionAgent(t,createSessionSystemPrompt({additions:e.systemPromptAdditions,turnAgent:t}),n),compaction:createCompactionConfig({contextWindowTokens:t.model?.contextWindowTokens,thresholdPercent:e.compactionOverrides?.thresholdPercent}),continuationToken:e.continuationToken,history:[...t.initialMessages??[]],sessionId:e.sessionId};return e.rootSessionId!==void 0&&(r.rootSessionId=e.rootSessionId),r.limits=resolveSessionLimits(e),e.outputSchema!==void 0&&(r.outputSchema=e.outputSchema),e.subagentDepth!==void 0&&(r.subagentDepth=e.subagentDepth),e.workflowMaxSubagents!==void 0&&(r.workflowMaxSubagents=e.workflowMaxSubagents),r}function createSessionAgent(e,t,n){let r={compactionModelReference:e.compactionModel,reasoning:e.reasoning,system:t,tools:n};if(e.model!==void 0)return{...r,modelReference:e.model};if(e.dynamicModel!==void 0)return{...r,dynamicModel:!0};throw Error(`Cannot create a session before dynamic subagent config is selected.`)}function refreshSessionFromTurnAgent(e){return{...e.session,agent:createSessionAgent(e.turnAgent,createSessionSystemPrompt({additions:e.systemPromptAdditions,turnAgent:e.turnAgent}),createSessionToolDefinitions(e.turnAgent)),compaction:createCompactionConfig({contextWindowTokens:e.turnAgent.model?.contextWindowTokens,lastKnownInputTokens:e.session.compaction.lastKnownInputTokens,lastKnownPromptMessageCount:e.session.compaction.lastKnownPromptMessageCount,thresholdPercent:e.compactionOverrides?.thresholdPercent})}}function createSessionSystemPrompt(t){let n=formatAvailableSkillsSection(t.turnAgent.availableSkills??[]);return[...n===null?t.turnAgent.instructions:[...t.turnAgent.instructions,n],...t.additions??[]].join(`
+import { formatAvailableSkillsSection } from "#execution/skills/instructions.js";
+const DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION = 4e7;
+function createCompactionConfig(e = {}) {
+  let t = e.thresholdPercent ?? 0.9,
+    n = {
+      recentWindowSize: 10,
+      threshold:
+        e.contextWindowTokens === void 0
+          ? 1e5
+          : Math.max(1, Math.floor(e.contextWindowTokens * t)),
+      thresholdPercent: t,
+    };
+  return e.lastKnownInputTokens === void 0
+    ? n
+    : {
+        ...n,
+        lastKnownInputTokens: e.lastKnownInputTokens,
+        lastKnownPromptMessageCount: e.lastKnownPromptMessageCount,
+      };
+}
+function createSession(e) {
+  let { turnAgent: t } = e,
+    n = createSessionToolDefinitions(t),
+    r = {
+      agent: createSessionAgent(
+        t,
+        createSessionSystemPrompt({
+          additions: e.systemPromptAdditions,
+          turnAgent: t,
+        }),
+        n,
+      ),
+      compaction: createCompactionConfig({
+        contextWindowTokens: t.model?.contextWindowTokens,
+        thresholdPercent: e.compactionOverrides?.thresholdPercent,
+      }),
+      continuationToken: e.continuationToken,
+      history: [...(t.initialMessages ?? [])],
+      sessionId: e.sessionId,
+    };
+  return (
+    e.rootSessionId !== void 0 && (r.rootSessionId = e.rootSessionId),
+    (r.limits = resolveSessionLimits(e)),
+    e.outputSchema !== void 0 && (r.outputSchema = e.outputSchema),
+    e.subagentDepth !== void 0 && (r.subagentDepth = e.subagentDepth),
+    e.workflowMaxSubagents !== void 0 &&
+      (r.workflowMaxSubagents = e.workflowMaxSubagents),
+    r
+  );
+}
+function createSessionAgent(e, t, n) {
+  let r = {
+    compactionModelReference: e.compactionModel,
+    reasoning: e.reasoning,
+    system: t,
+    tools: n,
+  };
+  if (e.model !== void 0) return { ...r, modelReference: e.model };
+  if (e.dynamicModel !== void 0) return { ...r, dynamicModel: !0 };
+  throw Error(
+    `Cannot create a session before dynamic subagent config is selected.`,
+  );
+}
+function refreshSessionFromTurnAgent(e) {
+  return {
+    ...e.session,
+    agent: createSessionAgent(
+      e.turnAgent,
+      createSessionSystemPrompt({
+        additions: e.systemPromptAdditions,
+        turnAgent: e.turnAgent,
+      }),
+      createSessionToolDefinitions(e.turnAgent),
+    ),
+    compaction: createCompactionConfig({
+      contextWindowTokens: e.turnAgent.model?.contextWindowTokens,
+      lastKnownInputTokens: e.session.compaction.lastKnownInputTokens,
+      lastKnownPromptMessageCount:
+        e.session.compaction.lastKnownPromptMessageCount,
+      thresholdPercent: e.compactionOverrides?.thresholdPercent,
+    }),
+  };
+}
+function createSessionSystemPrompt(t) {
+  let n = formatAvailableSkillsSection(t.turnAgent.availableSkills ?? []);
+  return [
+    ...(n === null
+      ? t.turnAgent.instructions
+      : [...t.turnAgent.instructions, n]),
+    ...(t.additions ?? []),
+  ].join(`
 
-`)}function mintSubagentContinuationToken(e){return`subagent:${e??crypto.randomUUID()}`}function projectToDurableSession(e){let t={agent:{system:e.agent.system},continuationToken:e.continuationToken,history:e.history,sessionId:e.sessionId};return(e.compaction.lastKnownInputTokens!==void 0||e.compaction.lastKnownPromptMessageCount!==void 0)&&(t.compaction={lastKnownInputTokens:e.compaction.lastKnownInputTokens,lastKnownPromptMessageCount:e.compaction.lastKnownPromptMessageCount}),e.rootSessionId!==void 0&&(t.rootSessionId=e.rootSessionId),e.limits!==void 0&&(t.limits=e.limits),e.outputSchema!==void 0&&(t.outputSchema=e.outputSchema),e.sandboxState!==void 0&&(t.sandboxState=e.sandboxState),e.state!==void 0&&(t.state=e.state),e.subagentDepth!==void 0&&(t.subagentDepth=e.subagentDepth),e.workflowMaxSubagents!==void 0&&(t.workflowMaxSubagents=e.workflowMaxSubagents),t}function hydrateDurableSession(e){let{durable:t,turnAgent:n}=e,r=createSessionToolDefinitions(n),i={agent:createSessionAgent(n,t.agent.system,r),compaction:createCompactionConfig({contextWindowTokens:n.model?.contextWindowTokens,lastKnownInputTokens:t.compaction?.lastKnownInputTokens,lastKnownPromptMessageCount:t.compaction?.lastKnownPromptMessageCount,thresholdPercent:e.compactionOverrides?.thresholdPercent}),continuationToken:t.continuationToken,history:t.history,sessionId:t.sessionId};return t.rootSessionId!==void 0&&(i.rootSessionId=t.rootSessionId),t.limits!==void 0&&(i.limits=t.limits),t.outputSchema!==void 0&&(i.outputSchema=t.outputSchema),t.sandboxState!==void 0&&(i.sandboxState=t.sandboxState),t.state!==void 0&&(i.state=t.state),t.subagentDepth!==void 0&&(i.subagentDepth=t.subagentDepth),t.workflowMaxSubagents!==void 0&&(i.workflowMaxSubagents=t.workflowMaxSubagents),i}function createSessionToolDefinitions(e){return e.tools.map(e=>({description:e.description??``,inputSchema:e.inputSchema,name:e.name,outputSchema:e.outputSchema}))}function resolveSessionLimits(e){let n=e.subagentDepth!==void 0&&e.subagentDepth>0,r=resolveSessionTokenLimit({authored:e.limits?.maxInputTokensPerSession,fallback:n?void 0:DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION}),i=resolveSessionTokenLimit({authored:e.limits?.maxOutputTokensPerSession,fallback:void 0}),a={};return r!==void 0&&(a.maxInputTokensPerSession=r),i!==void 0&&(a.maxOutputTokensPerSession=i),a}function resolveSessionTokenLimit(e){return e.authored===!1?void 0:e.authored??e.fallback}export{DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION,createCompactionConfig,createSession,hydrateDurableSession,mintSubagentContinuationToken,projectToDurableSession,refreshSessionFromTurnAgent};
+`);
+}
+function mintSubagentContinuationToken(e) {
+  return `subagent:${e ?? crypto.randomUUID()}`;
+}
+function projectToDurableSession(e) {
+  let t = {
+    agent: { system: e.agent.system },
+    continuationToken: e.continuationToken,
+    history: e.history,
+    sessionId: e.sessionId,
+  };
+  return (
+    (e.compaction.lastKnownInputTokens !== void 0 ||
+      e.compaction.lastKnownPromptMessageCount !== void 0) &&
+      (t.compaction = {
+        lastKnownInputTokens: e.compaction.lastKnownInputTokens,
+        lastKnownPromptMessageCount: e.compaction.lastKnownPromptMessageCount,
+      }),
+    e.rootSessionId !== void 0 && (t.rootSessionId = e.rootSessionId),
+    e.limits !== void 0 && (t.limits = e.limits),
+    e.outputSchema !== void 0 && (t.outputSchema = e.outputSchema),
+    e.sandboxState !== void 0 && (t.sandboxState = e.sandboxState),
+    e.state !== void 0 && (t.state = e.state),
+    e.subagentDepth !== void 0 && (t.subagentDepth = e.subagentDepth),
+    e.workflowMaxSubagents !== void 0 &&
+      (t.workflowMaxSubagents = e.workflowMaxSubagents),
+    t
+  );
+}
+function hydrateDurableSession(e) {
+  let { durable: t, turnAgent: n } = e,
+    r = createSessionToolDefinitions(n),
+    i = {
+      agent: createSessionAgent(n, t.agent.system, r),
+      compaction: createCompactionConfig({
+        contextWindowTokens: n.model?.contextWindowTokens,
+        lastKnownInputTokens: t.compaction?.lastKnownInputTokens,
+        lastKnownPromptMessageCount: t.compaction?.lastKnownPromptMessageCount,
+        thresholdPercent: e.compactionOverrides?.thresholdPercent,
+      }),
+      continuationToken: t.continuationToken,
+      history: t.history,
+      sessionId: t.sessionId,
+    };
+  return (
+    t.rootSessionId !== void 0 && (i.rootSessionId = t.rootSessionId),
+    t.limits !== void 0 && (i.limits = t.limits),
+    t.outputSchema !== void 0 && (i.outputSchema = t.outputSchema),
+    t.sandboxState !== void 0 && (i.sandboxState = t.sandboxState),
+    t.state !== void 0 && (i.state = t.state),
+    t.subagentDepth !== void 0 && (i.subagentDepth = t.subagentDepth),
+    t.workflowMaxSubagents !== void 0 &&
+      (i.workflowMaxSubagents = t.workflowMaxSubagents),
+    i
+  );
+}
+function createSessionToolDefinitions(e) {
+  return e.tools.map((e) => ({
+    description: e.description ?? ``,
+    inputSchema: e.inputSchema,
+    name: e.name,
+    outputSchema: e.outputSchema,
+  }));
+}
+function resolveSessionLimits(e) {
+  let n = e.subagentDepth !== void 0 && e.subagentDepth > 0,
+    r = resolveSessionTokenLimit({
+      authored: e.limits?.maxInputTokensPerSession,
+      fallback: n ? void 0 : DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION,
+    }),
+    i = resolveSessionTokenLimit({
+      authored: e.limits?.maxOutputTokensPerSession,
+      fallback: void 0,
+    }),
+    a = {};
+  return (
+    r !== void 0 && (a.maxInputTokensPerSession = r),
+    i !== void 0 && (a.maxOutputTokensPerSession = i),
+    a
+  );
+}
+function resolveSessionTokenLimit(e) {
+  return e.authored === !1 ? void 0 : (e.authored ?? e.fallback);
+}
+export {
+  DEFAULT_ROOT_MAX_INPUT_TOKENS_PER_SESSION,
+  createCompactionConfig,
+  createSession,
+  hydrateDurableSession,
+  mintSubagentContinuationToken,
+  projectToDurableSession,
+  refreshSessionFromTurnAgent,
+};

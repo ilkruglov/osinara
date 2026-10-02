@@ -1,2 +1,295 @@
-import{toError}from"#shared/errors.js";import{createEventDeduper}from"#protocol/event-dedupe.js";import{Client}from"#client/client.js";const detachStore=Symbol(`detachEveAgentStore`);var EveAgentStore=class{#e;#t;#n;#r;#i=new Set;#a=createEventDeduper();#o;#s={};#c;#l;#u;#d;#f;#p;#m;#h=`ready`;constructor(e){this.#t=e.session!==void 0,this.#e=this.#t?void 0:new Client({auth:e.auth,headers:e.headers,host:e.host??``});let t=[];for(let n of e.initialEvents??[])this.#a.admit(n)&&t.push(n);this.#u=t,this.#f=[...this.#u],this.#n=e.optimistic??!0,this.#r=e.reducer,this.#p=e.session??(e.initialSession===void 0?void 0:this.#e?.sessions.attach(e.initialSession.sessionId,{streamIndex:e.initialSession.streamIndex})),this.#c=this.#E(this.#f),this.#m=this.#D()}get snapshot(){return this.#m}setCallbacks(e){this.#s=e}subscribe(e){return this.#i.add(e),()=>{this.#i.delete(e)}}async send(t){if(this.#h===`streaming`||this.#h===`submitted`)throw Error(`eve session is already processing a turn.`);let n=Promise.withResolvers(),r={abortController:new AbortController,response:n.promise,resolveResponse:n.resolve};this.#o=r,this.#l=void 0,this.#h=`submitted`,this.#O();try{let e=await this.#s.prepareSend?.(t)??t;if(assertExclusiveTurnInput(e),!this.#v(r))return;this.#y(e),this.#b(e),this.#O();let n={...e,signal:createAbortSignal(e.signal,r.abortController.signal)},i=await this.#_(n);if(!this.#v(r))return;r.resolveResponse(i);let a=!1;for await(let e of i){if(!this.#v(r))return;a||(a=!0,this.#h=`streaming`),this.#a.admit(e)&&(this.#u=[...this.#u,e],this.#x(e),this.#s.onEvent?.(e),this.#S(e),this.#O())}if(!this.#v(r))return;this.#h=this.#l===void 0?`ready`:`error`}catch(t){if(!this.#v(r))return;isAbortError(t)?(this.#h=`ready`,this.#C(toError(t))):(this.#l=toError(t),this.#h=`error`,this.#C(this.#l),this.#s.onError?.(this.#l))}finally{this.#v(r)&&(r.resolveResponse(void 0),this.#o=void 0,this.#s.onSessionChange?.(this.#p?.state),this.#O(),this.#s.onFinish?.(this.#m))}}cancel(){let e=this.#o;return e===void 0?Promise.resolve({status:`no_active_turn`}):e.response.then(e=>e===void 0?{status:`no_active_turn`}:e.cancel())}[detachStore](){this.#o?.abortController.abort()}reset(){let e=this.#o;this.#o=void 0,e?.resolveResponse(void 0),e?.abortController.abort(),this.#t||(this.#p=void 0),this.#u=[],this.#a=createEventDeduper(),this.#d=void 0,this.#f=[],this.#c=this.#r.initial(),this.#l=void 0,this.#h=`ready`,this.#s.onSessionChange?.(this.#p?.state),this.#O()}async#g(e){if(this.#e===void 0)throw Error(`An external eve session is required before sending.`);if(e.message===void 0)throw Error(`Cannot answer an input request before the session starts.`);let t=await this.#e.sessions.create({...e,message:e.message});return this.#p=t.session,this.#s.onSessionChange?.(t.session.state),this.#O(),t.response}async#_(e){if(this.#p===void 0)return await this.#g(e);if(e.inputResponses===void 0){let{message:t,...n}=e;return await this.#p.send(t,n)}let{inputResponses:t,...n}=e;return await this.#p.respond(t,n)}#v(e){return this.#o===e}#y(e){if(!this.#n||e.message===void 0)return;let t=createSubmissionId(),n={createdAt:Date.now(),id:t,message:summarizeUserContent(e.message)};this.#d=n,this.#w({data:{createdAt:n.createdAt,message:n.message,submissionId:n.id},type:`client.message.submitted`})}#b(e){e.inputResponses===void 0||e.inputResponses.length===0||this.#w({data:{createdAt:Date.now(),responses:e.inputResponses},type:`client.input.responded`})}#x(e){if(e.type===`message.received`&&this.#d!==void 0){let t=this.#d.id;this.#d=void 0,this.#T(e=>e.type===`client.message.submitted`&&e.data.submissionId===t,e);return}this.#w(e)}#S(e){let t=toTerminalStreamFailureError(e);t!==void 0&&(this.#h=`error`,this.#C(t),this.#l===void 0&&(this.#l=t,this.#s.onError?.(t)))}#C(e){let t=this.#d;t!==void 0&&(this.#d=void 0,this.#T(e=>e.type===`client.message.submitted`&&e.data.submissionId===t.id,{data:{createdAt:t.createdAt,error:{message:e.message},message:t.message,submissionId:t.id},type:`client.message.failed`}))}#w(e){this.#f=[...this.#f,e],this.#c=this.#r.reduce(this.#c,e)}#T(e,t){let n=!1;this.#f=this.#f.map(r=>!n&&e(r)?(n=!0,t):r),n||(this.#f=[...this.#f,t]),this.#c=this.#E(this.#f)}#E(e){let t=this.#r.initial();for(let n of e)t=this.#r.reduce(t,n);return t}#D(){return{data:this.#c,error:this.#l,events:this.#u,session:this.#p?.state,status:this.#h}}#O(){this.#m=this.#D();for(let e of this.#i)e()}};function detachEveAgentStore(e){e[detachStore]()}function assertExclusiveTurnInput(e){if(e.message!==void 0==(e.inputResponses!==void 0))throw Error(`A turn requires exactly one of message or inputResponses.`)}let submissionSequence=0;function createSubmissionId(){let e=globalThis.crypto?.randomUUID;return e===void 0?(submissionSequence+=1,`submission_${submissionSequence.toString()}`):e.call(globalThis.crypto)}function createAbortSignal(e,t){return e?AbortSignal.any([e,t]):t}function summarizeUserContent(e){if(typeof e==`string`)return e;let t=[];for(let n of e){if(n.type===`text`){t.push(n.text);continue}n.type===`file`&&t.push(n.filename?`[file: ${n.filename}]`:`[file]`)}return t.join(`
-`)}function isAbortError(e){return e instanceof Error&&e.name===`AbortError`}function toTerminalStreamFailureError(e){if(e.type!==`session.failed`)return;let t=Error(e.data.message);return t.name=e.data.code,t}export{EveAgentStore,detachEveAgentStore};
+import { toError } from "#shared/errors.js";
+import { createEventDeduper } from "#protocol/event-dedupe.js";
+import { Client } from "#client/client.js";
+const detachStore = Symbol(`detachEveAgentStore`);
+var EveAgentStore = class {
+  #e;
+  #t;
+  #n;
+  #r;
+  #i = new Set();
+  #a = createEventDeduper();
+  #o;
+  #s = {};
+  #c;
+  #l;
+  #u;
+  #d;
+  #f;
+  #p;
+  #m;
+  #h = `ready`;
+  constructor(e) {
+    ((this.#t = e.session !== void 0),
+      (this.#e = this.#t
+        ? void 0
+        : new Client({
+            auth: e.auth,
+            headers: e.headers,
+            host: e.host ?? ``,
+          })));
+    let t = [];
+    for (let n of e.initialEvents ?? []) this.#a.admit(n) && t.push(n);
+    ((this.#u = t),
+      (this.#f = [...this.#u]),
+      (this.#n = e.optimistic ?? !0),
+      (this.#r = e.reducer),
+      (this.#p =
+        e.session ??
+        (e.initialSession === void 0
+          ? void 0
+          : this.#e?.sessions.attach(e.initialSession.sessionId, {
+              streamIndex: e.initialSession.streamIndex,
+            }))),
+      (this.#c = this.#E(this.#f)),
+      (this.#m = this.#D()));
+  }
+  get snapshot() {
+    return this.#m;
+  }
+  setCallbacks(e) {
+    this.#s = e;
+  }
+  subscribe(e) {
+    return (
+      this.#i.add(e),
+      () => {
+        this.#i.delete(e);
+      }
+    );
+  }
+  async send(t) {
+    if (this.#h === `streaming` || this.#h === `submitted`)
+      throw Error(`eve session is already processing a turn.`);
+    let n = Promise.withResolvers(),
+      r = {
+        abortController: new AbortController(),
+        response: n.promise,
+        resolveResponse: n.resolve,
+      };
+    ((this.#o = r), (this.#l = void 0), (this.#h = `submitted`), this.#O());
+    try {
+      let e = (await this.#s.prepareSend?.(t)) ?? t;
+      if ((assertExclusiveTurnInput(e), !this.#v(r))) return;
+      (this.#y(e), this.#b(e), this.#O());
+      let n = {
+          ...e,
+          signal: createAbortSignal(e.signal, r.abortController.signal),
+        },
+        i = await this.#_(n);
+      if (!this.#v(r)) return;
+      r.resolveResponse(i);
+      let a = !1;
+      for await (let e of i) {
+        if (!this.#v(r)) return;
+        (a || ((a = !0), (this.#h = `streaming`)),
+          this.#a.admit(e) &&
+            ((this.#u = [...this.#u, e]),
+            this.#x(e),
+            this.#s.onEvent?.(e),
+            this.#S(e),
+            this.#O()));
+      }
+      if (!this.#v(r)) return;
+      this.#h = this.#l === void 0 ? `ready` : `error`;
+    } catch (t) {
+      if (!this.#v(r)) return;
+      isAbortError(t)
+        ? ((this.#h = `ready`), this.#C(toError(t)))
+        : ((this.#l = toError(t)),
+          (this.#h = `error`),
+          this.#C(this.#l),
+          this.#s.onError?.(this.#l));
+    } finally {
+      this.#v(r) &&
+        (r.resolveResponse(void 0),
+        (this.#o = void 0),
+        this.#s.onSessionChange?.(this.#p?.state),
+        this.#O(),
+        this.#s.onFinish?.(this.#m));
+    }
+  }
+  cancel() {
+    let e = this.#o;
+    return e === void 0
+      ? Promise.resolve({ status: `no_active_turn` })
+      : e.response.then((e) =>
+          e === void 0 ? { status: `no_active_turn` } : e.cancel(),
+        );
+  }
+  [detachStore]() {
+    this.#o?.abortController.abort();
+  }
+  reset() {
+    let e = this.#o;
+    ((this.#o = void 0),
+      e?.resolveResponse(void 0),
+      e?.abortController.abort(),
+      this.#t || (this.#p = void 0),
+      (this.#u = []),
+      (this.#a = createEventDeduper()),
+      (this.#d = void 0),
+      (this.#f = []),
+      (this.#c = this.#r.initial()),
+      (this.#l = void 0),
+      (this.#h = `ready`),
+      this.#s.onSessionChange?.(this.#p?.state),
+      this.#O());
+  }
+  async #g(e) {
+    if (this.#e === void 0)
+      throw Error(`An external eve session is required before sending.`);
+    if (e.message === void 0)
+      throw Error(`Cannot answer an input request before the session starts.`);
+    let t = await this.#e.sessions.create({ ...e, message: e.message });
+    return (
+      (this.#p = t.session),
+      this.#s.onSessionChange?.(t.session.state),
+      this.#O(),
+      t.response
+    );
+  }
+  async #_(e) {
+    if (this.#p === void 0) return await this.#g(e);
+    if (e.inputResponses === void 0) {
+      let { message: t, ...n } = e;
+      return await this.#p.send(t, n);
+    }
+    let { inputResponses: t, ...n } = e;
+    return await this.#p.respond(t, n);
+  }
+  #v(e) {
+    return this.#o === e;
+  }
+  #y(e) {
+    if (!this.#n || e.message === void 0) return;
+    let t = createSubmissionId(),
+      n = {
+        createdAt: Date.now(),
+        id: t,
+        message: summarizeUserContent(e.message),
+      };
+    ((this.#d = n),
+      this.#w({
+        data: {
+          createdAt: n.createdAt,
+          message: n.message,
+          submissionId: n.id,
+        },
+        type: `client.message.submitted`,
+      }));
+  }
+  #b(e) {
+    e.inputResponses === void 0 ||
+      e.inputResponses.length === 0 ||
+      this.#w({
+        data: { createdAt: Date.now(), responses: e.inputResponses },
+        type: `client.input.responded`,
+      });
+  }
+  #x(e) {
+    if (e.type === `message.received` && this.#d !== void 0) {
+      let t = this.#d.id;
+      ((this.#d = void 0),
+        this.#T(
+          (e) =>
+            e.type === `client.message.submitted` && e.data.submissionId === t,
+          e,
+        ));
+      return;
+    }
+    this.#w(e);
+  }
+  #S(e) {
+    let t = toTerminalStreamFailureError(e);
+    t !== void 0 &&
+      ((this.#h = `error`),
+      this.#C(t),
+      this.#l === void 0 && ((this.#l = t), this.#s.onError?.(t)));
+  }
+  #C(e) {
+    let t = this.#d;
+    t !== void 0 &&
+      ((this.#d = void 0),
+      this.#T(
+        (e) =>
+          e.type === `client.message.submitted` && e.data.submissionId === t.id,
+        {
+          data: {
+            createdAt: t.createdAt,
+            error: { message: e.message },
+            message: t.message,
+            submissionId: t.id,
+          },
+          type: `client.message.failed`,
+        },
+      ));
+  }
+  #w(e) {
+    ((this.#f = [...this.#f, e]), (this.#c = this.#r.reduce(this.#c, e)));
+  }
+  #T(e, t) {
+    let n = !1;
+    ((this.#f = this.#f.map((r) => (!n && e(r) ? ((n = !0), t) : r))),
+      n || (this.#f = [...this.#f, t]),
+      (this.#c = this.#E(this.#f)));
+  }
+  #E(e) {
+    let t = this.#r.initial();
+    for (let n of e) t = this.#r.reduce(t, n);
+    return t;
+  }
+  #D() {
+    return {
+      data: this.#c,
+      error: this.#l,
+      events: this.#u,
+      session: this.#p?.state,
+      status: this.#h,
+    };
+  }
+  #O() {
+    this.#m = this.#D();
+    for (let e of this.#i) e();
+  }
+};
+function detachEveAgentStore(e) {
+  e[detachStore]();
+}
+function assertExclusiveTurnInput(e) {
+  if ((e.message !== void 0) == (e.inputResponses !== void 0))
+    throw Error(`A turn requires exactly one of message or inputResponses.`);
+}
+let submissionSequence = 0;
+function createSubmissionId() {
+  let e = globalThis.crypto?.randomUUID;
+  return e === void 0
+    ? ((submissionSequence += 1), `submission_${submissionSequence.toString()}`)
+    : e.call(globalThis.crypto);
+}
+function createAbortSignal(e, t) {
+  return e ? AbortSignal.any([e, t]) : t;
+}
+function summarizeUserContent(e) {
+  if (typeof e == `string`) return e;
+  let t = [];
+  for (let n of e) {
+    if (n.type === `text`) {
+      t.push(n.text);
+      continue;
+    }
+    n.type === `file` &&
+      t.push(n.filename ? `[file: ${n.filename}]` : `[file]`);
+  }
+  return t.join(`
+`);
+}
+function isAbortError(e) {
+  return e instanceof Error && e.name === `AbortError`;
+}
+function toTerminalStreamFailureError(e) {
+  if (e.type !== `session.failed`) return;
+  let t = Error(e.data.message);
+  return ((t.name = e.data.code), t);
+}
+export { EveAgentStore, detachEveAgentStore };

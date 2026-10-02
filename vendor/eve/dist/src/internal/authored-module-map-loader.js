@@ -1,1 +1,122 @@
-import{join}from"node:path";import{pathToFileURL}from"node:url";import{collectModuleRefsForManifest,compiledModuleMapSchema}from"#compiler/module-map.js";import{ROOT_COMPILED_AGENT_NODE_ID}from"#compiler/manifest.js";import{formatValidationError}from"#runtime/validation.js";import{loadAuthoredModuleNamespace}from"#internal/authored-module-loader.js";import{loadCompiledManifest}from"#runtime/loaders/manifest.js";import{readMaterializedAuthoredModuleIndex}from"#internal/materialized-authored-modules.js";const EXT_CONFIG_SCOPE=Symbol.for(`eve.ext-config-scope`);async function loadCompiledModuleMapFromAuthoredSource(e){return await hydrateCompiledModuleMapFromManifest(await loadCompiledManifest({compiledArtifactsSource:e.compiledArtifactsSource}),e.compiledArtifactsSource.appRoot)}async function hydrateCompiledModuleMapFromManifest(e,t){let n=await readMaterializedAuthoredModuleIndex(t);if(n!==void 0)return await loadMaterializedCompiledModuleMap({moduleMapPath:n.moduleMap,runtimeAppRoot:t});let r={},a=[{agentRoot:e.agentRoot,externalDependencies:e.config.build?.externalDependencies??[],manifest:e,nodeId:ROOT_COMPILED_AGENT_NODE_ID},...[...e.subagents].sort((e,t)=>e.nodeId.localeCompare(t.nodeId)).map(e=>({additionalModuleRef:e.configResolver,agentRoot:e.agent.agentRoot,externalDependencies:e.configResolver===void 0?e.agent.config.build?.externalDependencies??[]:e.configResolver.build?.externalDependencies??[],manifest:e.agent,nodeId:e.nodeId}))],o=new Map(a.map(e=>[e.nodeId,e.manifest])),s=new Map(e.subagentEdges.map(e=>[e.childNodeId,e.parentNodeId])),l=new Map,extensionNamespacesForNode=e=>{let t=l.get(e);if(t!==void 0)return t;let n=s.get(e),r=new Map(n===void 0?[]:extensionNamespacesForNode(n));for(let t of o.get(e)?.extensionMounts??[])r.set(t.namespace,t.packageNamespace);return l.set(e,r),r};for(let e of a){let t={byMountNamespace:extensionNamespacesForNode(e.nodeId),byMountSourceId:new Map(e.manifest.extensionMounts.map(e=>[e.mountSourceId,e.packageNamespace]))};r[e.nodeId]={modules:await hydrateCompiledNodeScope({agentRoot:e.agentRoot,additionalModuleRef:e.additionalModuleRef,externalDependencies:e.externalDependencies,manifest:e.manifest,scopeIndex:t})}}return{nodes:r}}async function loadMaterializedCompiledModuleMap(n){let i=join(n.runtimeAppRoot,`.eve`,`compile`,n.moduleMapPath),o=await import(`${pathToFileURL(i).href}?generation=${encodeURIComponent(n.moduleMapPath)}`),s=compiledModuleMapSchema.safeParse(o.moduleMap??o.default);if(!s.success)throw Error(`Expected materialized authored module map "${i}" to export a valid compiled eve module map. ${formatValidationError(s.error)}`);return s.data}function extensionNamespaceForSourceId(e,t){let n=e.match(/^ext:([^:]+):/);return n===null?void 0:t.byMountNamespace.get(n[1])}async function hydrateCompiledNodeScope(t){let r=[...collectModuleRefsForManifest(t.manifest),...t.additionalModuleRef===void 0?[]:[t.additionalModuleRef]].sort((e,t)=>e.sourceId.localeCompare(t.sourceId)),i=globalThis,a={};for(let n of r){let r=join(t.agentRoot,n.logicalPath),s=extensionNamespaceForSourceId(n.sourceId,t.scopeIndex),c=t.scopeIndex.byMountSourceId.get(n.sourceId);c!==void 0&&(i[EXT_CONFIG_SCOPE]=c);try{a[n.sourceId]=await loadAuthoredModuleNamespace(r,{externalDependencies:t.externalDependencies,extensionScopeNamespace:s})}finally{c!==void 0&&(i[EXT_CONFIG_SCOPE]=void 0)}}return a}export{loadCompiledModuleMapFromAuthoredSource};
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+  collectModuleRefsForManifest,
+  compiledModuleMapSchema,
+} from "#compiler/module-map.js";
+import { ROOT_COMPILED_AGENT_NODE_ID } from "#compiler/manifest.js";
+import { formatValidationError } from "#runtime/validation.js";
+import { loadAuthoredModuleNamespace } from "#internal/authored-module-loader.js";
+import { loadCompiledManifest } from "#runtime/loaders/manifest.js";
+import { readMaterializedAuthoredModuleIndex } from "#internal/materialized-authored-modules.js";
+const EXT_CONFIG_SCOPE = Symbol.for(`eve.ext-config-scope`);
+async function loadCompiledModuleMapFromAuthoredSource(e) {
+  return await hydrateCompiledModuleMapFromManifest(
+    await loadCompiledManifest({
+      compiledArtifactsSource: e.compiledArtifactsSource,
+    }),
+    e.compiledArtifactsSource.appRoot,
+  );
+}
+async function hydrateCompiledModuleMapFromManifest(e, t) {
+  let n = await readMaterializedAuthoredModuleIndex(t);
+  if (n !== void 0)
+    return await loadMaterializedCompiledModuleMap({
+      moduleMapPath: n.moduleMap,
+      runtimeAppRoot: t,
+    });
+  let r = {},
+    a = [
+      {
+        agentRoot: e.agentRoot,
+        externalDependencies: e.config.build?.externalDependencies ?? [],
+        manifest: e,
+        nodeId: ROOT_COMPILED_AGENT_NODE_ID,
+      },
+      ...[...e.subagents]
+        .sort((e, t) => e.nodeId.localeCompare(t.nodeId))
+        .map((e) => ({
+          additionalModuleRef: e.configResolver,
+          agentRoot: e.agent.agentRoot,
+          externalDependencies:
+            e.configResolver === void 0
+              ? (e.agent.config.build?.externalDependencies ?? [])
+              : (e.configResolver.build?.externalDependencies ?? []),
+          manifest: e.agent,
+          nodeId: e.nodeId,
+        })),
+    ],
+    o = new Map(a.map((e) => [e.nodeId, e.manifest])),
+    s = new Map(e.subagentEdges.map((e) => [e.childNodeId, e.parentNodeId])),
+    l = new Map(),
+    extensionNamespacesForNode = (e) => {
+      let t = l.get(e);
+      if (t !== void 0) return t;
+      let n = s.get(e),
+        r = new Map(n === void 0 ? [] : extensionNamespacesForNode(n));
+      for (let t of o.get(e)?.extensionMounts ?? [])
+        r.set(t.namespace, t.packageNamespace);
+      return (l.set(e, r), r);
+    };
+  for (let e of a) {
+    let t = {
+      byMountNamespace: extensionNamespacesForNode(e.nodeId),
+      byMountSourceId: new Map(
+        e.manifest.extensionMounts.map((e) => [
+          e.mountSourceId,
+          e.packageNamespace,
+        ]),
+      ),
+    };
+    r[e.nodeId] = {
+      modules: await hydrateCompiledNodeScope({
+        agentRoot: e.agentRoot,
+        additionalModuleRef: e.additionalModuleRef,
+        externalDependencies: e.externalDependencies,
+        manifest: e.manifest,
+        scopeIndex: t,
+      }),
+    };
+  }
+  return { nodes: r };
+}
+async function loadMaterializedCompiledModuleMap(n) {
+  let i = join(n.runtimeAppRoot, `.eve`, `compile`, n.moduleMapPath),
+    o = await import(
+      `${pathToFileURL(i).href}?generation=${encodeURIComponent(n.moduleMapPath)}`
+    ),
+    s = compiledModuleMapSchema.safeParse(o.moduleMap ?? o.default);
+  if (!s.success)
+    throw Error(
+      `Expected materialized authored module map "${i}" to export a valid compiled eve module map. ${formatValidationError(s.error)}`,
+    );
+  return s.data;
+}
+function extensionNamespaceForSourceId(e, t) {
+  let n = e.match(/^ext:([^:]+):/);
+  return n === null ? void 0 : t.byMountNamespace.get(n[1]);
+}
+async function hydrateCompiledNodeScope(t) {
+  let r = [
+      ...collectModuleRefsForManifest(t.manifest),
+      ...(t.additionalModuleRef === void 0 ? [] : [t.additionalModuleRef]),
+    ].sort((e, t) => e.sourceId.localeCompare(t.sourceId)),
+    i = globalThis,
+    a = {};
+  for (let n of r) {
+    let r = join(t.agentRoot, n.logicalPath),
+      s = extensionNamespaceForSourceId(n.sourceId, t.scopeIndex),
+      c = t.scopeIndex.byMountSourceId.get(n.sourceId);
+    c !== void 0 && (i[EXT_CONFIG_SCOPE] = c);
+    try {
+      a[n.sourceId] = await loadAuthoredModuleNamespace(r, {
+        externalDependencies: t.externalDependencies,
+        extensionScopeNamespace: s,
+      });
+    } finally {
+      c !== void 0 && (i[EXT_CONFIG_SCOPE] = void 0);
+    }
+  }
+  return a;
+}
+export { loadCompiledModuleMapFromAuthoredSource };

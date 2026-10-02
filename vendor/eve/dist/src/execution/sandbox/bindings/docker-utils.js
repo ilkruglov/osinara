@@ -1,1 +1,7 @@
-function expectDockerSuccess(e,t){if(e.exitCode!==0){let n=e.stderr.trim()||e.stdout.trim()||`exit code ${e.exitCode}`;throw Error(`Failed to ${t}: ${n}`)}}export{expectDockerSuccess};
+function expectDockerSuccess(e, t) {
+  if (e.exitCode !== 0) {
+    let n = e.stderr.trim() || e.stdout.trim() || `exit code ${e.exitCode}`;
+    throw Error(`Failed to ${t}: ${n}`);
+  }
+}
+export { expectDockerSuccess };

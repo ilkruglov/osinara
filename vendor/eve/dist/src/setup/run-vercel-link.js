@@ -1,1 +1,10 @@
-import{runVercel}from"#setup/primitives/index.js";async function runVercelEnvPull(e,t,n,r=!1){return runVercel([`env`,`pull`,`--yes`],{cwd:e,nonInteractive:r,onOutput:t,signal:n})}export{runVercelEnvPull};
+import { runVercel } from "#setup/primitives/index.js";
+async function runVercelEnvPull(e, t, n, r = !1) {
+  return runVercel([`env`, `pull`, `--yes`], {
+    cwd: e,
+    nonInteractive: r,
+    onOutput: t,
+    signal: n,
+  });
+}
+export { runVercelEnvPull };

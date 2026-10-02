@@ -1,1 +1,3 @@
-import{defineDynamic}from"#public/definitions/tool.js";import{defineSkill}from"#public/definitions/skill.js";export{defineDynamic,defineSkill};
+import { defineDynamic } from "#public/definitions/tool.js";
+import { defineSkill } from "#public/definitions/skill.js";
+export { defineDynamic, defineSkill };

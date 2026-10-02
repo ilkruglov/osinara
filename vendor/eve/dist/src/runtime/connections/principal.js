@@ -1,1 +1,57 @@
-import{AuthKey}from"#context/keys.js";import{contextStorage}from"#context/container.js";import{ConnectionAuthorizationFailedError}from"#public/connections/errors.js";function principalKey(e){return e.type===`app`?`app`:e.issuer===void 0?`user:${e.id}`:`user:${e.issuer}:${e.id}`}function resolveConnectionPrincipal(n,r,i=contextStorage.getStore()){return resolveConnectionPrincipalFromAuth(n,r,i?.get(AuthKey),i)}function resolveConnectionPrincipalFromAuth(e,t,r,i){if(t.principalType===`app`)return{type:`app`};if(r==null||r.principalType!==`user`)throw new ConnectionAuthorizationFailedError(e,{message:buildUserPrincipalRequiredMessage(e,t,i,r),reason:`principal_required`,retryable:!1});return t.vercelConnect!==void 0&&isVercelDevelopmentUser(r)?{attributes:r.attributes,id:r.subject??r.principalId,type:`user`}:{attributes:r.attributes,id:r.principalId,issuer:r.issuer??r.authenticator,type:`user`}}function isVercelDevelopmentUser(e){return e.authenticator===`oidc`&&e.issuer?.startsWith(`https://oidc.vercel.com/`)===!0&&e.attributes.environment===`development`&&e.subject===e.attributes.user_id}function buildUserPrincipalRequiredMessage(e,t,n,r){let i;return i=n===void 0?`it was invoked outside an eve context, so no authenticated user can be resolved.`:r==null?`the active session has no authenticated user.`:t.vercelConnect!==void 0&&r.authenticator===`local-dev`?`the local request fell back to local development access instead of authenticating a Vercel user. Ensure this directory is linked and the Vercel CLI can mint a Vercel OIDC token, then retry.`:`the active session is scoped to "${r.principalType}", not an authenticated user.`,`Connection "${e}" is user-scoped, but ${i} User-scoped connections require route auth that resolves an authenticated user. If this connection should use credentials shared by the agent instead, configure it as an app-scoped connection.`}export{principalKey,resolveConnectionPrincipal,resolveConnectionPrincipalFromAuth};
+import { AuthKey } from "#context/keys.js";
+import { contextStorage } from "#context/container.js";
+import { ConnectionAuthorizationFailedError } from "#public/connections/errors.js";
+function principalKey(e) {
+  return e.type === `app`
+    ? `app`
+    : e.issuer === void 0
+      ? `user:${e.id}`
+      : `user:${e.issuer}:${e.id}`;
+}
+function resolveConnectionPrincipal(n, r, i = contextStorage.getStore()) {
+  return resolveConnectionPrincipalFromAuth(n, r, i?.get(AuthKey), i);
+}
+function resolveConnectionPrincipalFromAuth(e, t, r, i) {
+  if (t.principalType === `app`) return { type: `app` };
+  if (r == null || r.principalType !== `user`)
+    throw new ConnectionAuthorizationFailedError(e, {
+      message: buildUserPrincipalRequiredMessage(e, t, i, r),
+      reason: `principal_required`,
+      retryable: !1,
+    });
+  return t.vercelConnect !== void 0 && isVercelDevelopmentUser(r)
+    ? { attributes: r.attributes, id: r.subject ?? r.principalId, type: `user` }
+    : {
+        attributes: r.attributes,
+        id: r.principalId,
+        issuer: r.issuer ?? r.authenticator,
+        type: `user`,
+      };
+}
+function isVercelDevelopmentUser(e) {
+  return (
+    e.authenticator === `oidc` &&
+    e.issuer?.startsWith(`https://oidc.vercel.com/`) === !0 &&
+    e.attributes.environment === `development` &&
+    e.subject === e.attributes.user_id
+  );
+}
+function buildUserPrincipalRequiredMessage(e, t, n, r) {
+  let i;
+  return (
+    (i =
+      n === void 0
+        ? `it was invoked outside an eve context, so no authenticated user can be resolved.`
+        : r == null
+          ? `the active session has no authenticated user.`
+          : t.vercelConnect !== void 0 && r.authenticator === `local-dev`
+            ? `the local request fell back to local development access instead of authenticating a Vercel user. Ensure this directory is linked and the Vercel CLI can mint a Vercel OIDC token, then retry.`
+            : `the active session is scoped to "${r.principalType}", not an authenticated user.`),
+    `Connection "${e}" is user-scoped, but ${i} User-scoped connections require route auth that resolves an authenticated user. If this connection should use credentials shared by the agent instead, configure it as an app-scoped connection.`
+  );
+}
+export {
+  principalKey,
+  resolveConnectionPrincipal,
+  resolveConnectionPrincipalFromAuth,
+};

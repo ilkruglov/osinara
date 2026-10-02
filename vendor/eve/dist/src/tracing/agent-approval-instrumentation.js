@@ -1,1 +1,128 @@
-import{ROOT_CONTEXT,SpanStatusCode,trace}from"#compiled/@opentelemetry/api/index.js";import{contentAttribute}from"#tracing/agent-otel-content.js";function createAgentApprovalInstrumentation(t){return{"input.requested":async(e,n)=>{if(e.kind!==`tool-approval`||readState(n.state.get())!==void 0)return;let i=await t.actionContextFor(e.scope.sessionId,e.scope.turnId,e.action.callId);if(i===void 0)return;let a={actionCallId:e.action.callId,actionName:e.action.name,attemptIndex:e.scope.attemptIndex,parent:{spanId:i.spanContext.spanId,traceFlags:i.spanContext.traceFlags,traceId:i.spanContext.traceId},requestId:e.requestId,rootSessionId:e.scope.rootSessionId??e.scope.sessionId,sessionId:e.scope.sessionId,startTimeMs:Date.now(),stepIndex:e.scope.stepIndex,turnId:e.scope.turnId},o=t.recordInputs?contentAttribute(e.request,!1):void 0;o!==void 0&&(a.requestAttribute=o),n.state.set(a)},"input.resolved":(i,a)=>{let o=readState(a.state.get());if(o===void 0)return;let s=t.idGenerator.withSpanId(t.idGenerator.deriveSpanId(`approval:${i.idempotencyKey}`),()=>t.tracer.startSpan(`agent.approval`,{attributes:{"agent.action.call_id":o.actionCallId,"agent.action.name":o.actionName,"agent.approval.kind":`tool-approval`,"agent.approval.outcome":i.outcome,"agent.approval.request_id":o.requestId,"agent.framework.name":`eve`,"agent.framework.version":t.frameworkVersion,"agent.root.session.id":o.rootSessionId,"agent.session.id":o.sessionId,"agent.step.attempt":o.attemptIndex,"agent.step.index":o.stepIndex,"agent.turn.id":o.turnId},startTime:o.startTimeMs},trace.setSpan(ROOT_CONTEXT,trace.wrapSpanContext({...o.parent,isRemote:!1}))));if(o.requestAttribute!==void 0&&s.setAttribute(`agent.approval.request`,o.requestAttribute),t.recordOutputs&&i.response!==void 0){let e=contentAttribute(i.response,!1);e!==void 0&&s.setAttribute(`agent.approval.response`,e)}i.outcome===`failed`&&recordError(s,i.error),s.end()}}}function readState(e){if(typeof e!=`object`||!e||Array.isArray(e))return;let t=e,n=t.parent;if(typeof n!=`object`||!n||Array.isArray(n))return;let r=n;if(typeof t.actionCallId!=`string`||typeof t.actionName!=`string`||typeof t.attemptIndex!=`number`||typeof r.spanId!=`string`||typeof r.traceFlags!=`number`||typeof r.traceId!=`string`||typeof t.requestId!=`string`||typeof t.rootSessionId!=`string`||typeof t.sessionId!=`string`||typeof t.startTimeMs!=`number`||typeof t.stepIndex!=`number`||typeof t.turnId!=`string`)return;let i=t.requestAttribute;if(!(i!==void 0&&typeof i!=`string`))return{actionCallId:t.actionCallId,actionName:t.actionName,attemptIndex:t.attemptIndex,parent:{isRemote:!1,spanId:r.spanId,traceFlags:r.traceFlags,traceId:r.traceId},requestAttribute:i,requestId:t.requestId,rootSessionId:t.rootSessionId,sessionId:t.sessionId,startTimeMs:t.startTimeMs,stepIndex:t.stepIndex,turnId:t.turnId}}function recordError(e,n){n instanceof Error?(e.recordException(n),e.setStatus({code:SpanStatusCode.ERROR,message:n.message})):e.setStatus({code:SpanStatusCode.ERROR})}export{createAgentApprovalInstrumentation};
+import {
+  ROOT_CONTEXT,
+  SpanStatusCode,
+  trace,
+} from "#compiled/@opentelemetry/api/index.js";
+import { contentAttribute } from "#tracing/agent-otel-content.js";
+function createAgentApprovalInstrumentation(t) {
+  return {
+    "input.requested": async (e, n) => {
+      if (e.kind !== `tool-approval` || readState(n.state.get()) !== void 0)
+        return;
+      let i = await t.actionContextFor(
+        e.scope.sessionId,
+        e.scope.turnId,
+        e.action.callId,
+      );
+      if (i === void 0) return;
+      let a = {
+          actionCallId: e.action.callId,
+          actionName: e.action.name,
+          attemptIndex: e.scope.attemptIndex,
+          parent: {
+            spanId: i.spanContext.spanId,
+            traceFlags: i.spanContext.traceFlags,
+            traceId: i.spanContext.traceId,
+          },
+          requestId: e.requestId,
+          rootSessionId: e.scope.rootSessionId ?? e.scope.sessionId,
+          sessionId: e.scope.sessionId,
+          startTimeMs: Date.now(),
+          stepIndex: e.scope.stepIndex,
+          turnId: e.scope.turnId,
+        },
+        o = t.recordInputs ? contentAttribute(e.request, !1) : void 0;
+      (o !== void 0 && (a.requestAttribute = o), n.state.set(a));
+    },
+    "input.resolved": (i, a) => {
+      let o = readState(a.state.get());
+      if (o === void 0) return;
+      let s = t.idGenerator.withSpanId(
+        t.idGenerator.deriveSpanId(`approval:${i.idempotencyKey}`),
+        () =>
+          t.tracer.startSpan(
+            `agent.approval`,
+            {
+              attributes: {
+                "agent.action.call_id": o.actionCallId,
+                "agent.action.name": o.actionName,
+                "agent.approval.kind": `tool-approval`,
+                "agent.approval.outcome": i.outcome,
+                "agent.approval.request_id": o.requestId,
+                "agent.framework.name": `eve`,
+                "agent.framework.version": t.frameworkVersion,
+                "agent.root.session.id": o.rootSessionId,
+                "agent.session.id": o.sessionId,
+                "agent.step.attempt": o.attemptIndex,
+                "agent.step.index": o.stepIndex,
+                "agent.turn.id": o.turnId,
+              },
+              startTime: o.startTimeMs,
+            },
+            trace.setSpan(
+              ROOT_CONTEXT,
+              trace.wrapSpanContext({ ...o.parent, isRemote: !1 }),
+            ),
+          ),
+      );
+      if (
+        (o.requestAttribute !== void 0 &&
+          s.setAttribute(`agent.approval.request`, o.requestAttribute),
+        t.recordOutputs && i.response !== void 0)
+      ) {
+        let e = contentAttribute(i.response, !1);
+        e !== void 0 && s.setAttribute(`agent.approval.response`, e);
+      }
+      (i.outcome === `failed` && recordError(s, i.error), s.end());
+    },
+  };
+}
+function readState(e) {
+  if (typeof e != `object` || !e || Array.isArray(e)) return;
+  let t = e,
+    n = t.parent;
+  if (typeof n != `object` || !n || Array.isArray(n)) return;
+  let r = n;
+  if (
+    typeof t.actionCallId != `string` ||
+    typeof t.actionName != `string` ||
+    typeof t.attemptIndex != `number` ||
+    typeof r.spanId != `string` ||
+    typeof r.traceFlags != `number` ||
+    typeof r.traceId != `string` ||
+    typeof t.requestId != `string` ||
+    typeof t.rootSessionId != `string` ||
+    typeof t.sessionId != `string` ||
+    typeof t.startTimeMs != `number` ||
+    typeof t.stepIndex != `number` ||
+    typeof t.turnId != `string`
+  )
+    return;
+  let i = t.requestAttribute;
+  if (!(i !== void 0 && typeof i != `string`))
+    return {
+      actionCallId: t.actionCallId,
+      actionName: t.actionName,
+      attemptIndex: t.attemptIndex,
+      parent: {
+        isRemote: !1,
+        spanId: r.spanId,
+        traceFlags: r.traceFlags,
+        traceId: r.traceId,
+      },
+      requestAttribute: i,
+      requestId: t.requestId,
+      rootSessionId: t.rootSessionId,
+      sessionId: t.sessionId,
+      startTimeMs: t.startTimeMs,
+      stepIndex: t.stepIndex,
+      turnId: t.turnId,
+    };
+}
+function recordError(e, n) {
+  n instanceof Error
+    ? (e.recordException(n),
+      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    : e.setStatus({ code: SpanStatusCode.ERROR });
+}
+export { createAgentApprovalInstrumentation };

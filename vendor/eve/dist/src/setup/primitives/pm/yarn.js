@@ -1,1 +1,14 @@
-import{applyNoProjectConfiguration,resolveStandardInvocation}from"./shared.js";const yarnPackageManager={kind:`yarn`,scaffoldFiles:{},applyProjectConfiguration:applyNoProjectConfiguration,devArguments:()=>[`eve`,`dev`],installArguments:()=>[`install`],prepareArguments:(e,t)=>t,resolveInvocation:e=>resolveStandardInvocation(`yarn`,e)};export{yarnPackageManager};
+import {
+  applyNoProjectConfiguration,
+  resolveStandardInvocation,
+} from "./shared.js";
+const yarnPackageManager = {
+  kind: `yarn`,
+  scaffoldFiles: {},
+  applyProjectConfiguration: applyNoProjectConfiguration,
+  devArguments: () => [`eve`, `dev`],
+  installArguments: () => [`install`],
+  prepareArguments: (e, t) => t,
+  resolveInvocation: (e) => resolveStandardInvocation(`yarn`, e),
+};
+export { yarnPackageManager };

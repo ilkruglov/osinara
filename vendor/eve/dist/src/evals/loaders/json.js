@@ -1,1 +1,10 @@
-import{readFile}from"node:fs/promises";import{isAbsolute,resolve}from"node:path";async function loadJson(e){let t=await readFile(isAbsolute(e)?e:resolve(process.cwd(),e),`utf-8`);return JSON.parse(t)}export{loadJson};
+import { readFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
+async function loadJson(e) {
+  let t = await readFile(
+    isAbsolute(e) ? e : resolve(process.cwd(), e),
+    `utf-8`,
+  );
+  return JSON.parse(t);
+}
+export { loadJson };

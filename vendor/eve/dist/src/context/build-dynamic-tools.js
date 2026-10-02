@@ -1,1 +1,90 @@
-import{createLogger}from"#internal/logging.js";import{LiveStepToolsKey,SessionDynamicToolMetadataKey,TurnDynamicToolMetadataKey}from"#context/keys.js";import{toInputSchema,toOutputSchema}from"#shared/tool-schema.js";import{createToolExecuteWithAuth}from"#execution/tool-auth.js";const log=createLogger(`dynamic-tools`);function lookupStepFunction(e){try{let t=globalThis[Symbol.for(`@workflow/core//registeredSteps`)];return t===void 0?null:t.get(e)||null}catch{return null}}function replayTools(e){let t=[];for(let n of e){if(!n.executeStepFnName||!n.closureVars){log.warn(`Dynamic tool "${n.name}" has no registered step function — skipping on this step. The bundler transform may not have processed this tool file.`);continue}let e=lookupStepFunction(n.executeStepFnName);if(!e){log.warn(`Dynamic tool "${n.name}" references step function "${n.executeStepFnName}" which is not registered — skipping on this step.`);continue}t.push({description:n.description,execute:createToolExecuteWithAuth({scope:n.name,execute:(t,r)=>e(n.closureVars,t,r)}),inputSchema:toInputSchema(n.inputSchema),name:n.name,approval:buildReplayedApproval(n),outputSchema:toOutputSchema(n.outputSchema)})}return t}function buildReplayedApproval(e){if(e.approvalStepFnName===void 0)return;let t=lookupStepFunction(e.approvalStepFnName);if(t===null)return log.warn(`Dynamic tool "${e.name}" references approval function "${e.approvalStepFnName}" which is not registered — requiring approval by default.`),()=>`user-approval`;let policy=async n=>await t(e.closureVars??{},n);if(e.approvalResponseStepFnName===void 0)return policy;let n=lookupStepFunction(e.approvalResponseStepFnName);return n===null?(log.warn(`Dynamic tool "${e.name}" references response authorizer "${e.approvalResponseStepFnName}" which is not registered — rejecting responses.`),{request:policy,response:async()=>({reason:`Approval response authorization is temporarily unavailable.`,status:`rejected`})}):{request:policy,response:async t=>await n(e.closureVars??{},t)}}function buildResponseAuthorizationTools(e){let t=new Map;for(let n of e.context===void 0?[]:buildDynamicTools(e.context))t.has(n.name)||t.set(n.name,n);for(let[n,r]of e.authoredTools)t.has(n)||t.set(n,r);return t}function buildDynamicTools(e){let i=e.get(LiveStepToolsKey)??[],a=replayTools(e.get(TurnDynamicToolMetadataKey)??[]),o=replayTools(e.get(SessionDynamicToolMetadataKey)??[]);return[...i,...a,...o]}export{buildDynamicTools,buildResponseAuthorizationTools};
+import { createLogger } from "#internal/logging.js";
+import {
+  LiveStepToolsKey,
+  SessionDynamicToolMetadataKey,
+  TurnDynamicToolMetadataKey,
+} from "#context/keys.js";
+import { toInputSchema, toOutputSchema } from "#shared/tool-schema.js";
+import { createToolExecuteWithAuth } from "#execution/tool-auth.js";
+const log = createLogger(`dynamic-tools`);
+function lookupStepFunction(e) {
+  try {
+    let t = globalThis[Symbol.for(`@workflow/core//registeredSteps`)];
+    return t === void 0 ? null : t.get(e) || null;
+  } catch {
+    return null;
+  }
+}
+function replayTools(e) {
+  let t = [];
+  for (let n of e) {
+    if (!n.executeStepFnName || !n.closureVars) {
+      log.warn(
+        `Dynamic tool "${n.name}" has no registered step function — skipping on this step. The bundler transform may not have processed this tool file.`,
+      );
+      continue;
+    }
+    let e = lookupStepFunction(n.executeStepFnName);
+    if (!e) {
+      log.warn(
+        `Dynamic tool "${n.name}" references step function "${n.executeStepFnName}" which is not registered — skipping on this step.`,
+      );
+      continue;
+    }
+    t.push({
+      description: n.description,
+      execute: createToolExecuteWithAuth({
+        scope: n.name,
+        execute: (t, r) => e(n.closureVars, t, r),
+      }),
+      inputSchema: toInputSchema(n.inputSchema),
+      name: n.name,
+      approval: buildReplayedApproval(n),
+      outputSchema: toOutputSchema(n.outputSchema),
+    });
+  }
+  return t;
+}
+function buildReplayedApproval(e) {
+  if (e.approvalStepFnName === void 0) return;
+  let t = lookupStepFunction(e.approvalStepFnName);
+  if (t === null)
+    return (
+      log.warn(
+        `Dynamic tool "${e.name}" references approval function "${e.approvalStepFnName}" which is not registered — requiring approval by default.`,
+      ),
+      () => `user-approval`
+    );
+  let policy = async (n) => await t(e.closureVars ?? {}, n);
+  if (e.approvalResponseStepFnName === void 0) return policy;
+  let n = lookupStepFunction(e.approvalResponseStepFnName);
+  return n === null
+    ? (log.warn(
+        `Dynamic tool "${e.name}" references response authorizer "${e.approvalResponseStepFnName}" which is not registered — rejecting responses.`,
+      ),
+      {
+        request: policy,
+        response: async () => ({
+          reason: `Approval response authorization is temporarily unavailable.`,
+          status: `rejected`,
+        }),
+      })
+    : {
+        request: policy,
+        response: async (t) => await n(e.closureVars ?? {}, t),
+      };
+}
+function buildResponseAuthorizationTools(e) {
+  let t = new Map();
+  for (let n of e.context === void 0 ? [] : buildDynamicTools(e.context))
+    t.has(n.name) || t.set(n.name, n);
+  for (let [n, r] of e.authoredTools) t.has(n) || t.set(n, r);
+  return t;
+}
+function buildDynamicTools(e) {
+  let i = e.get(LiveStepToolsKey) ?? [],
+    a = replayTools(e.get(TurnDynamicToolMetadataKey) ?? []),
+    o = replayTools(e.get(SessionDynamicToolMetadataKey) ?? []);
+  return [...i, ...a, ...o];
+}
+export { buildDynamicTools, buildResponseAuthorizationTools };

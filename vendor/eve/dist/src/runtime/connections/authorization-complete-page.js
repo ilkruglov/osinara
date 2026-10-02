@@ -1,4 +1,6 @@
-function buildAuthorizationCompletePage(){return new Response(`<!doctype html>
+function buildAuthorizationCompletePage() {
+  return new Response(
+    `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -92,4 +94,14 @@ function buildAuthorizationCompletePage(){return new Response(`<!doctype html>
       </div>
     </main>
   </body>
-</html>`,{headers:{"cache-control":`no-store`,"content-type":`text/html; charset=utf-8`},status:200})}export{buildAuthorizationCompletePage};
+</html>`,
+    {
+      headers: {
+        "cache-control": `no-store`,
+        "content-type": `text/html; charset=utf-8`,
+      },
+      status: 200,
+    },
+  );
+}
+export { buildAuthorizationCompletePage };

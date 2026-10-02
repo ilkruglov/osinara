@@ -1,1 +1,4 @@
-function defineHook(e){return e}export{defineHook};
+function defineHook(e) {
+  return e;
+}
+export { defineHook };

@@ -1,1 +1,248 @@
-import{createLogger}from"#internal/logging.js";import{readNonEmptyString}from"#shared/guards.js";import{POST,defineChannel}from"#public/definitions/channel.js";import{createGitHubBotNameResolver}from"#public/channels/github/auth.js";import{getGitHubRepository}from"#public/channels/github/api.js";import{parseGitHubWebhookEvent}from"#public/channels/github/inbound.js";import{buildGitHubBinding}from"#public/channels/github/binding.js";import{continuationTokenFromState,conversationFromState,initialGitHubState,stateFromReceiveTarget}from"#public/channels/github/state.js";import{GITHUB_CHANNEL_DEFAULT_ROUTE}from"#public/channels/github/constants.js";import{createDefaultEvents,defaultOnComment}from"#public/channels/github/defaults.js";import{dispatchCheckRun,dispatchCheckSuite,dispatchIssue,dispatchIssueComment,dispatchPullRequest,dispatchPullRequestReviewComment,dispatchWorkflowRun}from"#public/channels/github/dispatch.js";import{verifyGitHubRequest}from"#public/channels/github/verify.js";const log=createLogger(`github.channel`);function githubChannel(e={}){let c=createGitHubBotNameResolver({botName:e.botName,credentials:e.credentials}),u={botName:c},d={...createDefaultEvents({api:e.api,botName:c,credentials:e.credentials,progress:e.progress}),...e.events};return defineChannel({kindHint:`github`,turnPolicy:e.turnPolicy,state:initialGitHubState(),context(t,n){return rebuildGitHubContext(t,n,e)},routes:[POST(e.route??GITHUB_CHANNEL_DEFAULT_ROUTE,async(t,{from:n,waitUntil:r})=>{let i=await verifyInbound(t,e.credentials);if(i===null)return new Response(`unauthorized`,{status:401});let a=missingGitHubWebhookHeaders(t.headers),s;try{s=parseGitHubWebhookEvent({body:i,contentType:t.headers.get(`content-type`)??void 0,headers:t.headers})}catch(e){return log.warn(`inbound GitHub body is not valid JSON`,{error:e}),jsonOk({ignored:!0,ok:!0})}return s===null?(a.length>0&&log.warn(`GitHub webhook ignored because standard headers were missing`,{missingHeaders:a}),jsonOk({ignored:!0,ok:!0})):(a.length>0&&log.warn(`GitHub webhook missing standard headers; inferred metadata from payload`,{deliveryId:s.delivery.id,event:s.delivery.event,missingHeaders:a,repository:s.repository.fullName}),s.kind===`ping`?jsonOk({ok:!0}):s.kind===`issue_comment`&&s.action===`created`?(r(dispatchIssueComment({botName:c,config:e,event:s,handler:e.onComment??((e,t)=>defaultOnComment(e,t,u)),from:n})),jsonOk({ok:!0})):s.kind===`pull_request_review_comment`&&s.action===`created`?(r(dispatchPullRequestReviewComment({botName:c,config:e,event:s,handler:e.onComment??((e,t)=>defaultOnComment(e,t,u)),from:n})),jsonOk({ok:!0})):s.kind===`issues`&&e.onIssue!==void 0?(r(dispatchIssue({config:e,event:s,handler:e.onIssue,from:n})),jsonOk({ok:!0})):s.kind===`pull_request`&&e.onPullRequest!==void 0?(r(dispatchPullRequest({config:e,event:s,handler:e.onPullRequest,from:n})),jsonOk({ok:!0})):s.kind===`check_suite`&&e.onCheckSuite!==void 0?(r(dispatchCheckSuite({config:e,event:s,handler:e.onCheckSuite,from:n})),jsonOk({ok:!0})):s.kind===`check_run`&&e.onCheckRun!==void 0?(r(dispatchCheckRun({config:e,event:s,handler:e.onCheckRun,from:n})),jsonOk({ok:!0})):s.kind===`workflow_run`&&e.onWorkflowRun!==void 0?(r(dispatchWorkflowRun({config:e,event:s,handler:e.onWorkflowRun,from:n})),jsonOk({ok:!0})):jsonOk({ignored:!0,ok:!0}))})],async receive(n,{from:r}){let i=n.target,o=readNonEmptyString(i.owner),c=readNonEmptyString(i.repo);if(o===void 0||c===void 0)throw Error(`githubChannel().receive requires target.owner and target.repo.`);if([i.issueNumber!==void 0,i.pullRequestNumber!==void 0].filter(Boolean).length!==1)throw Error(`githubChannel().receive requires exactly one of issueNumber or pullRequestNumber.`);let l=stateFromReceiveTarget({target:i,owner:o,repo:c,repositoryId:i.repositoryId??(await getGitHubRepository({api:e.api,credentials:e.credentials,installationId:i.installationId,owner:o,repo:c})).id});if(i.initialMessage!==void 0){let{thread:t}=buildGitHubBinding({config:e,state:l});await t.post(i.initialMessage)}return r(continuationTokenFromState(l)).send(n.message,{auth:n.auth,state:l})},events:d})}function rebuildGitHubContext(e,t,n){let r=buildGitHubBinding({config:n,state:e});return{conversation:conversationFromState(e),github:r.github,repository:r.github.repository,state:e,thread:r.thread}}async function verifyInbound(e,t){try{return await verifyGitHubRequest(e,{webhookSecret:t?.webhookSecret,webhookVerifier:t?.webhookVerifier})}catch(e){return log.warn(`github inbound verification failed`,{error:e}),null}}function missingGitHubWebhookHeaders(e){return[`x-github-event`,`x-github-delivery`].filter(t=>{let n=e.get(t);return n===null||n.trim().length===0})}function jsonOk(e){return new Response(JSON.stringify(e),{headers:{"content-type":`application/json; charset=utf-8`},status:200})}export{githubChannel};
+import { createLogger } from "#internal/logging.js";
+import { readNonEmptyString } from "#shared/guards.js";
+import { POST, defineChannel } from "#public/definitions/channel.js";
+import { createGitHubBotNameResolver } from "#public/channels/github/auth.js";
+import { getGitHubRepository } from "#public/channels/github/api.js";
+import { parseGitHubWebhookEvent } from "#public/channels/github/inbound.js";
+import { buildGitHubBinding } from "#public/channels/github/binding.js";
+import {
+  continuationTokenFromState,
+  conversationFromState,
+  initialGitHubState,
+  stateFromReceiveTarget,
+} from "#public/channels/github/state.js";
+import { GITHUB_CHANNEL_DEFAULT_ROUTE } from "#public/channels/github/constants.js";
+import {
+  createDefaultEvents,
+  defaultOnComment,
+} from "#public/channels/github/defaults.js";
+import {
+  dispatchCheckRun,
+  dispatchCheckSuite,
+  dispatchIssue,
+  dispatchIssueComment,
+  dispatchPullRequest,
+  dispatchPullRequestReviewComment,
+  dispatchWorkflowRun,
+} from "#public/channels/github/dispatch.js";
+import { verifyGitHubRequest } from "#public/channels/github/verify.js";
+const log = createLogger(`github.channel`);
+function githubChannel(e = {}) {
+  let c = createGitHubBotNameResolver({
+      botName: e.botName,
+      credentials: e.credentials,
+    }),
+    u = { botName: c },
+    d = {
+      ...createDefaultEvents({
+        api: e.api,
+        botName: c,
+        credentials: e.credentials,
+        progress: e.progress,
+      }),
+      ...e.events,
+    };
+  return defineChannel({
+    kindHint: `github`,
+    turnPolicy: e.turnPolicy,
+    state: initialGitHubState(),
+    context(t, n) {
+      return rebuildGitHubContext(t, n, e);
+    },
+    routes: [
+      POST(
+        e.route ?? GITHUB_CHANNEL_DEFAULT_ROUTE,
+        async (t, { from: n, waitUntil: r }) => {
+          let i = await verifyInbound(t, e.credentials);
+          if (i === null) return new Response(`unauthorized`, { status: 401 });
+          let a = missingGitHubWebhookHeaders(t.headers),
+            s;
+          try {
+            s = parseGitHubWebhookEvent({
+              body: i,
+              contentType: t.headers.get(`content-type`) ?? void 0,
+              headers: t.headers,
+            });
+          } catch (e) {
+            return (
+              log.warn(`inbound GitHub body is not valid JSON`, { error: e }),
+              jsonOk({ ignored: !0, ok: !0 })
+            );
+          }
+          return s === null
+            ? (a.length > 0 &&
+                log.warn(
+                  `GitHub webhook ignored because standard headers were missing`,
+                  { missingHeaders: a },
+                ),
+              jsonOk({ ignored: !0, ok: !0 }))
+            : (a.length > 0 &&
+                log.warn(
+                  `GitHub webhook missing standard headers; inferred metadata from payload`,
+                  {
+                    deliveryId: s.delivery.id,
+                    event: s.delivery.event,
+                    missingHeaders: a,
+                    repository: s.repository.fullName,
+                  },
+                ),
+              s.kind === `ping`
+                ? jsonOk({ ok: !0 })
+                : s.kind === `issue_comment` && s.action === `created`
+                  ? (r(
+                      dispatchIssueComment({
+                        botName: c,
+                        config: e,
+                        event: s,
+                        handler:
+                          e.onComment ?? ((e, t) => defaultOnComment(e, t, u)),
+                        from: n,
+                      }),
+                    ),
+                    jsonOk({ ok: !0 }))
+                  : s.kind === `pull_request_review_comment` &&
+                      s.action === `created`
+                    ? (r(
+                        dispatchPullRequestReviewComment({
+                          botName: c,
+                          config: e,
+                          event: s,
+                          handler:
+                            e.onComment ??
+                            ((e, t) => defaultOnComment(e, t, u)),
+                          from: n,
+                        }),
+                      ),
+                      jsonOk({ ok: !0 }))
+                    : s.kind === `issues` && e.onIssue !== void 0
+                      ? (r(
+                          dispatchIssue({
+                            config: e,
+                            event: s,
+                            handler: e.onIssue,
+                            from: n,
+                          }),
+                        ),
+                        jsonOk({ ok: !0 }))
+                      : s.kind === `pull_request` && e.onPullRequest !== void 0
+                        ? (r(
+                            dispatchPullRequest({
+                              config: e,
+                              event: s,
+                              handler: e.onPullRequest,
+                              from: n,
+                            }),
+                          ),
+                          jsonOk({ ok: !0 }))
+                        : s.kind === `check_suite` && e.onCheckSuite !== void 0
+                          ? (r(
+                              dispatchCheckSuite({
+                                config: e,
+                                event: s,
+                                handler: e.onCheckSuite,
+                                from: n,
+                              }),
+                            ),
+                            jsonOk({ ok: !0 }))
+                          : s.kind === `check_run` && e.onCheckRun !== void 0
+                            ? (r(
+                                dispatchCheckRun({
+                                  config: e,
+                                  event: s,
+                                  handler: e.onCheckRun,
+                                  from: n,
+                                }),
+                              ),
+                              jsonOk({ ok: !0 }))
+                            : s.kind === `workflow_run` &&
+                                e.onWorkflowRun !== void 0
+                              ? (r(
+                                  dispatchWorkflowRun({
+                                    config: e,
+                                    event: s,
+                                    handler: e.onWorkflowRun,
+                                    from: n,
+                                  }),
+                                ),
+                                jsonOk({ ok: !0 }))
+                              : jsonOk({ ignored: !0, ok: !0 }));
+        },
+      ),
+    ],
+    async receive(n, { from: r }) {
+      let i = n.target,
+        o = readNonEmptyString(i.owner),
+        c = readNonEmptyString(i.repo);
+      if (o === void 0 || c === void 0)
+        throw Error(
+          `githubChannel().receive requires target.owner and target.repo.`,
+        );
+      if (
+        [i.issueNumber !== void 0, i.pullRequestNumber !== void 0].filter(
+          Boolean,
+        ).length !== 1
+      )
+        throw Error(
+          `githubChannel().receive requires exactly one of issueNumber or pullRequestNumber.`,
+        );
+      let l = stateFromReceiveTarget({
+        target: i,
+        owner: o,
+        repo: c,
+        repositoryId:
+          i.repositoryId ??
+          (
+            await getGitHubRepository({
+              api: e.api,
+              credentials: e.credentials,
+              installationId: i.installationId,
+              owner: o,
+              repo: c,
+            })
+          ).id,
+      });
+      if (i.initialMessage !== void 0) {
+        let { thread: t } = buildGitHubBinding({ config: e, state: l });
+        await t.post(i.initialMessage);
+      }
+      return r(continuationTokenFromState(l)).send(n.message, {
+        auth: n.auth,
+        state: l,
+      });
+    },
+    events: d,
+  });
+}
+function rebuildGitHubContext(e, t, n) {
+  let r = buildGitHubBinding({ config: n, state: e });
+  return {
+    conversation: conversationFromState(e),
+    github: r.github,
+    repository: r.github.repository,
+    state: e,
+    thread: r.thread,
+  };
+}
+async function verifyInbound(e, t) {
+  try {
+    return await verifyGitHubRequest(e, {
+      webhookSecret: t?.webhookSecret,
+      webhookVerifier: t?.webhookVerifier,
+    });
+  } catch (e) {
+    return (log.warn(`github inbound verification failed`, { error: e }), null);
+  }
+}
+function missingGitHubWebhookHeaders(e) {
+  return [`x-github-event`, `x-github-delivery`].filter((t) => {
+    let n = e.get(t);
+    return n === null || n.trim().length === 0;
+  });
+}
+function jsonOk(e) {
+  return new Response(JSON.stringify(e), {
+    headers: { "content-type": `application/json; charset=utf-8` },
+    status: 200,
+  });
+}
+export { githubChannel };

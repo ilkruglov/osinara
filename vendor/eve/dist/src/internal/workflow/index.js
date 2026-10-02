@@ -1,1 +1,6 @@
-export*from"#compiled/@workflow/core/index.js";async function fetch(...e){"use step";return await globalThis.fetch(...e)}export{fetch};
+export * from "#compiled/@workflow/core/index.js";
+async function fetch(...e) {
+  "use step";
+  return await globalThis.fetch(...e);
+}
+export { fetch };

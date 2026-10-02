@@ -1,1 +1,68 @@
-import{expectObjectRecord}from"#internal/authored-module.js";import{toErrorMessage}from"#shared/errors.js";import{lazyBackend}from"#execution/sandbox/lazy-backend.js";import{ResolveAgentError,loadResolvedModuleExport}from"#runtime/resolve-helpers.js";import{defaultSandbox}from"#public/sandbox/backends/default.js";async function resolveSandboxDefinition(n,a,o){try{let t=n.inheritsParent?void 0:await loadResolvedModuleExport({definition:n,kindLabel:`sandbox`,moduleMap:a,nodeId:o}),r=n.inheritsParent?{}:expectObjectRecord(t,`Expected the sandbox export "${n.exportName??`default`}" from "${n.logicalPath}" to return an object.`);return{backend:resolveBackend(r.backend,n.logicalPath),bootstrap:r.bootstrap,description:n.description,inheritsParent:n.inheritsParent,exportName:n.exportName,logicalPath:n.logicalPath,onSession:r.onSession,revalidationKey:n.revalidationKey,sourceHash:n.sourceHash,sourceId:n.sourceId,sourceKind:`module`}}catch(e){throw e instanceof ResolveAgentError?e:new ResolveAgentError(`Failed to attach the sandbox lifecycle handlers from "${n.logicalPath}": ${toErrorMessage(e)}`,{logicalPath:n.logicalPath,sourceId:n.sourceId})}}function resolveBackend(e,t){if(e===void 0)return defaultSandbox();if(typeof e==`function`)return lazyBackend(e);if(typeof e!=`object`||!e)throw new ResolveAgentError(`Sandbox "${t}" exposed a non-object "backend" field. Use docker(), vercel(), another factory that returns a SandboxBackend value, or a zero-arg callback returning one.`,{logicalPath:t});let i=e;if(typeof i.name!=`string`||i.name.length===0)throw new ResolveAgentError(`Sandbox "${t}" backend is missing a non-empty string "name" identifier.`,{logicalPath:t});if(typeof i.create!=`function`)throw new ResolveAgentError(`Sandbox "${t}" backend is missing a "create" function.`,{logicalPath:t});return i}export{resolveSandboxDefinition};
+import { expectObjectRecord } from "#internal/authored-module.js";
+import { toErrorMessage } from "#shared/errors.js";
+import { lazyBackend } from "#execution/sandbox/lazy-backend.js";
+import {
+  ResolveAgentError,
+  loadResolvedModuleExport,
+} from "#runtime/resolve-helpers.js";
+import { defaultSandbox } from "#public/sandbox/backends/default.js";
+async function resolveSandboxDefinition(n, a, o) {
+  try {
+    let t = n.inheritsParent
+        ? void 0
+        : await loadResolvedModuleExport({
+            definition: n,
+            kindLabel: `sandbox`,
+            moduleMap: a,
+            nodeId: o,
+          }),
+      r = n.inheritsParent
+        ? {}
+        : expectObjectRecord(
+            t,
+            `Expected the sandbox export "${n.exportName ?? `default`}" from "${n.logicalPath}" to return an object.`,
+          );
+    return {
+      backend: resolveBackend(r.backend, n.logicalPath),
+      bootstrap: r.bootstrap,
+      description: n.description,
+      inheritsParent: n.inheritsParent,
+      exportName: n.exportName,
+      logicalPath: n.logicalPath,
+      onSession: r.onSession,
+      revalidationKey: n.revalidationKey,
+      sourceHash: n.sourceHash,
+      sourceId: n.sourceId,
+      sourceKind: `module`,
+    };
+  } catch (e) {
+    throw e instanceof ResolveAgentError
+      ? e
+      : new ResolveAgentError(
+          `Failed to attach the sandbox lifecycle handlers from "${n.logicalPath}": ${toErrorMessage(e)}`,
+          { logicalPath: n.logicalPath, sourceId: n.sourceId },
+        );
+  }
+}
+function resolveBackend(e, t) {
+  if (e === void 0) return defaultSandbox();
+  if (typeof e == `function`) return lazyBackend(e);
+  if (typeof e != `object` || !e)
+    throw new ResolveAgentError(
+      `Sandbox "${t}" exposed a non-object "backend" field. Use docker(), vercel(), another factory that returns a SandboxBackend value, or a zero-arg callback returning one.`,
+      { logicalPath: t },
+    );
+  let i = e;
+  if (typeof i.name != `string` || i.name.length === 0)
+    throw new ResolveAgentError(
+      `Sandbox "${t}" backend is missing a non-empty string "name" identifier.`,
+      { logicalPath: t },
+    );
+  if (typeof i.create != `function`)
+    throw new ResolveAgentError(
+      `Sandbox "${t}" backend is missing a "create" function.`,
+      { logicalPath: t },
+    );
+  return i;
+}
+export { resolveSandboxDefinition };

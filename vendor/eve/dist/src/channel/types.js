@@ -1,1 +1,2 @@
-const DEFAULT_TURN_POLICY=`steer`;export{DEFAULT_TURN_POLICY};
+const DEFAULT_TURN_POLICY = `steer`;
+export { DEFAULT_TURN_POLICY };

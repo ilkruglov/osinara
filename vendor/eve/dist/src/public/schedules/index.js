@@ -1,1 +1,2 @@
-import{defineSchedule}from"#public/definitions/schedule.js";export{defineSchedule};
+import { defineSchedule } from "#public/definitions/schedule.js";
+export { defineSchedule };

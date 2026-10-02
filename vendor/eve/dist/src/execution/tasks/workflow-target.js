@@ -1,1 +1,19 @@
-import{walkCauseChain}from"#shared/errors.js";import{EntityConflictError,HookNotFoundError,RunExpiredError,WorkflowRunNotFoundError}from"#compiled/@workflow/errors/index.js";function isTaskWorkflowTargetGone(e){for(let t of walkCauseChain(e))if(HookNotFoundError.is(t)||WorkflowRunNotFoundError.is(t)||RunExpiredError.is(t)||EntityConflictError.is(t))return!0;return!1}export{isTaskWorkflowTargetGone};
+import { walkCauseChain } from "#shared/errors.js";
+import {
+  EntityConflictError,
+  HookNotFoundError,
+  RunExpiredError,
+  WorkflowRunNotFoundError,
+} from "#compiled/@workflow/errors/index.js";
+function isTaskWorkflowTargetGone(e) {
+  for (let t of walkCauseChain(e))
+    if (
+      HookNotFoundError.is(t) ||
+      WorkflowRunNotFoundError.is(t) ||
+      RunExpiredError.is(t) ||
+      EntityConflictError.is(t)
+    )
+      return !0;
+  return !1;
+}
+export { isTaskWorkflowTargetGone };

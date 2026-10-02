@@ -1,1 +1,19 @@
-import{extname,join}from"node:path";import{existsSync}from"node:fs";function resolvePnpmInvocation(n){let r=process.env.PNPM_HOME;if(r!==void 0){let e=join(r,process.platform===`win32`?`pnpm.CMD`:`pnpm`);if(existsSync(e))return{args:n,command:e,shell:process.platform===`win32`}}let i=process.env.npm_execpath;if(i!==void 0&&i.toLowerCase().includes(`pnpm`)){let t=extname(i).toLowerCase();return t===`.cjs`||t===`.js`?{args:[i,...n],command:process.execPath}:{args:n,command:i,shell:process.platform===`win32`}}return{args:n,command:`pnpm`}}export{resolvePnpmInvocation};
+import { extname, join } from "node:path";
+import { existsSync } from "node:fs";
+function resolvePnpmInvocation(n) {
+  let r = process.env.PNPM_HOME;
+  if (r !== void 0) {
+    let e = join(r, process.platform === `win32` ? `pnpm.CMD` : `pnpm`);
+    if (existsSync(e))
+      return { args: n, command: e, shell: process.platform === `win32` };
+  }
+  let i = process.env.npm_execpath;
+  if (i !== void 0 && i.toLowerCase().includes(`pnpm`)) {
+    let t = extname(i).toLowerCase();
+    return t === `.cjs` || t === `.js`
+      ? { args: [i, ...n], command: process.execPath }
+      : { args: n, command: i, shell: process.platform === `win32` };
+  }
+  return { args: n, command: `pnpm` };
+}
+export { resolvePnpmInvocation };

@@ -1,1 +1,2 @@
-import{photonIMessageChannel}from"#public/channels/photon/photonIMessageChannel.js";export{photonIMessageChannel};
+import { photonIMessageChannel } from "#public/channels/photon/photonIMessageChannel.js";
+export { photonIMessageChannel };

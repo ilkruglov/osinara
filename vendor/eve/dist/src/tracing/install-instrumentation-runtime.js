@@ -1,1 +1,87 @@
-import{createLogger,formatError}from"#internal/logging.js";import{ContextAgentTraceStateStore}from"#tracing/agent-trace-context-store.js";import{registerInstrumentationRuntime}from"#harness/instrumentation/runtime.js";import{trace}from"#compiled/@opentelemetry/api/index.js";import{createInstrumentationHooks}from"#harness/instrumentation/lifecycle.js";import{hasSessionRelease}from"#tracing/local-traces.js";import{createAgentOtelInstrumentation}from"#tracing/agent-otel-provider.js";import{registerOtelPipeline}from"#tracing/otel-registration.js";const log=createLogger(`tracing.install-instrumentation-runtime`);function installInstrumentationRuntime(e){let t=[],a=[],o,s,c,runInContext=(e,t)=>t();if(e.collected.declared){o=registerOtelPipeline({pipeline:e.collected.pipeline,serviceName:e.serviceName});let r=createAgentOtelInstrumentation({frameworkVersion:e.frameworkVersion,idGenerator:o.idGenerator,recordInputs:e.collected.settings.recordInputs,recordOutputs:e.collected.settings.recordOutputs,stateStore:new ContextAgentTraceStateStore,tracer:trace.getTracer(`eve.agent`,e.frameworkVersion)});t.push({...r.hook,stateNamespace:`internal:otel`}),s=r.prepareSessionTrace,c=r.prepareTurnTrace,runInContext=r.runInContext;let i=e.collected.pipeline.spanProcessors.filter(isSpanProcessor).filter(hasSessionRelease);i.length>0&&a.push(sessionReleaseProvider(i))}let l=[...t,...e.providers,...a],u;return registerInstrumentationRuntime({forceFlush:()=>settleAll([...o===void 0?[]:[o.forceFlush],...l.map(e=>()=>e.flush?.())]),hooks:createInstrumentationHooks({parallel:e.providers,serialAfter:a,serialBefore:t}),otelSettings:e.collected.declared?e.collected.settings:void 0,prepareSessionTrace:s,prepareTurnTrace:c,runtimeContextResolvers:e.runtimeContextResolvers,runInContext,shutdown:()=>(u??=settleAll([...o===void 0?[]:[o.shutdown],...l.map(e=>()=>e.shutdown?.())]),u)})}function isSpanProcessor(e){return e!==`auto`}function sessionReleaseProvider(e){let release=async t=>{await Promise.all(e.map(e=>e.releaseSession(t.sessionId)))};return{events:{"session.completed":release,"session.failed":release},name:`eve.session-release`,stateNamespace:`internal:session-release`}}async function settleAll(e){let n=await Promise.allSettled(e.map(async e=>e()));for(let e of n)e.status===`rejected`&&log.warn(`instrumentation drain failed`,{error:formatError(e.reason)})}export{installInstrumentationRuntime};
+import { createLogger, formatError } from "#internal/logging.js";
+import { ContextAgentTraceStateStore } from "#tracing/agent-trace-context-store.js";
+import { registerInstrumentationRuntime } from "#harness/instrumentation/runtime.js";
+import { trace } from "#compiled/@opentelemetry/api/index.js";
+import { createInstrumentationHooks } from "#harness/instrumentation/lifecycle.js";
+import { hasSessionRelease } from "#tracing/local-traces.js";
+import { createAgentOtelInstrumentation } from "#tracing/agent-otel-provider.js";
+import { registerOtelPipeline } from "#tracing/otel-registration.js";
+const log = createLogger(`tracing.install-instrumentation-runtime`);
+function installInstrumentationRuntime(e) {
+  let t = [],
+    a = [],
+    o,
+    s,
+    c,
+    runInContext = (e, t) => t();
+  if (e.collected.declared) {
+    o = registerOtelPipeline({
+      pipeline: e.collected.pipeline,
+      serviceName: e.serviceName,
+    });
+    let r = createAgentOtelInstrumentation({
+      frameworkVersion: e.frameworkVersion,
+      idGenerator: o.idGenerator,
+      recordInputs: e.collected.settings.recordInputs,
+      recordOutputs: e.collected.settings.recordOutputs,
+      stateStore: new ContextAgentTraceStateStore(),
+      tracer: trace.getTracer(`eve.agent`, e.frameworkVersion),
+    });
+    (t.push({ ...r.hook, stateNamespace: `internal:otel` }),
+      (s = r.prepareSessionTrace),
+      (c = r.prepareTurnTrace),
+      (runInContext = r.runInContext));
+    let i = e.collected.pipeline.spanProcessors
+      .filter(isSpanProcessor)
+      .filter(hasSessionRelease);
+    i.length > 0 && a.push(sessionReleaseProvider(i));
+  }
+  let l = [...t, ...e.providers, ...a],
+    u;
+  return registerInstrumentationRuntime({
+    forceFlush: () =>
+      settleAll([
+        ...(o === void 0 ? [] : [o.forceFlush]),
+        ...l.map((e) => () => e.flush?.()),
+      ]),
+    hooks: createInstrumentationHooks({
+      parallel: e.providers,
+      serialAfter: a,
+      serialBefore: t,
+    }),
+    otelSettings: e.collected.declared ? e.collected.settings : void 0,
+    prepareSessionTrace: s,
+    prepareTurnTrace: c,
+    runtimeContextResolvers: e.runtimeContextResolvers,
+    runInContext,
+    shutdown: () => (
+      (u ??= settleAll([
+        ...(o === void 0 ? [] : [o.shutdown]),
+        ...l.map((e) => () => e.shutdown?.()),
+      ])),
+      u
+    ),
+  });
+}
+function isSpanProcessor(e) {
+  return e !== `auto`;
+}
+function sessionReleaseProvider(e) {
+  let release = async (t) => {
+    await Promise.all(e.map((e) => e.releaseSession(t.sessionId)));
+  };
+  return {
+    events: { "session.completed": release, "session.failed": release },
+    name: `eve.session-release`,
+    stateNamespace: `internal:session-release`,
+  };
+}
+async function settleAll(e) {
+  let n = await Promise.allSettled(e.map(async (e) => e()));
+  for (let e of n)
+    e.status === `rejected` &&
+      log.warn(`instrumentation drain failed`, {
+        error: formatError(e.reason),
+      });
+}
+export { installInstrumentationRuntime };

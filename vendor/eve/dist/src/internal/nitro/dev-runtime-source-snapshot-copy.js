@@ -1,1 +1,51 @@
-import{cp,mkdir,symlink,writeFile}from"node:fs/promises";import{dirname,join}from"node:path";import{constants,existsSync}from"node:fs";import{DevelopmentRuntimeSourceSnapshotError,toDevelopmentSourceSnapshotPath}from"#internal/nitro/dev-runtime-source-snapshot.js";const SNAPSHOT_COPY_MODE=constants.COPYFILE_FICLONE;async function copyDevelopmentSourceSnapshot(n){await mkdir(n.snapshotSourceRoot,{recursive:!0});for(let r of n.copyFiles){if(!existsSync(r))continue;let i=toSnapshotPathForPlan(n,r);try{await mkdir(dirname(i),{recursive:!0}),await cp(r,i,{mode:SNAPSHOT_COPY_MODE,recursive:!0})}catch(e){throw new DevelopmentRuntimeSourceSnapshotError(`Failed to copy development runtime source snapshot path "${r}" to "${i}": ${formatErrorMessage(e)}`)}}await createSnapshotDependencyMounts(n),await ensureRuntimePackageJson(n)}async function createSnapshotDependencyMounts(e){for(let r of e.dependencyMounts){let i=toSnapshotPathForPlan(e,r.mountPath);await mkdir(dirname(i),{recursive:!0}),await symlink(r.sourcePath,i,`junction`)}}async function ensureRuntimePackageJson(e){let n=join(e.runtimeAppRoot,`package.json`);existsSync(n)||(await mkdir(e.runtimeAppRoot,{recursive:!0}),await writeFile(n,`${JSON.stringify({private:!0,type:`module`},null,2)}\n`))}function toSnapshotPathForPlan(e,t){return toDevelopmentSourceSnapshotPath({snapshotSourceRoot:e.snapshotSourceRoot,sourcePath:t,sourceRoot:e.sourceRoot})}function formatErrorMessage(e){return e instanceof Error?e.message:String(e)}export{copyDevelopmentSourceSnapshot};
+import { cp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { constants, existsSync } from "node:fs";
+import {
+  DevelopmentRuntimeSourceSnapshotError,
+  toDevelopmentSourceSnapshotPath,
+} from "#internal/nitro/dev-runtime-source-snapshot.js";
+const SNAPSHOT_COPY_MODE = constants.COPYFILE_FICLONE;
+async function copyDevelopmentSourceSnapshot(n) {
+  await mkdir(n.snapshotSourceRoot, { recursive: !0 });
+  for (let r of n.copyFiles) {
+    if (!existsSync(r)) continue;
+    let i = toSnapshotPathForPlan(n, r);
+    try {
+      (await mkdir(dirname(i), { recursive: !0 }),
+        await cp(r, i, { mode: SNAPSHOT_COPY_MODE, recursive: !0 }));
+    } catch (e) {
+      throw new DevelopmentRuntimeSourceSnapshotError(
+        `Failed to copy development runtime source snapshot path "${r}" to "${i}": ${formatErrorMessage(e)}`,
+      );
+    }
+  }
+  (await createSnapshotDependencyMounts(n), await ensureRuntimePackageJson(n));
+}
+async function createSnapshotDependencyMounts(e) {
+  for (let r of e.dependencyMounts) {
+    let i = toSnapshotPathForPlan(e, r.mountPath);
+    (await mkdir(dirname(i), { recursive: !0 }),
+      await symlink(r.sourcePath, i, `junction`));
+  }
+}
+async function ensureRuntimePackageJson(e) {
+  let n = join(e.runtimeAppRoot, `package.json`);
+  existsSync(n) ||
+    (await mkdir(e.runtimeAppRoot, { recursive: !0 }),
+    await writeFile(
+      n,
+      `${JSON.stringify({ private: !0, type: `module` }, null, 2)}\n`,
+    ));
+}
+function toSnapshotPathForPlan(e, t) {
+  return toDevelopmentSourceSnapshotPath({
+    snapshotSourceRoot: e.snapshotSourceRoot,
+    sourcePath: t,
+    sourceRoot: e.sourceRoot,
+  });
+}
+function formatErrorMessage(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+export { copyDevelopmentSourceSnapshot };

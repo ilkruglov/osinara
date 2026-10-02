@@ -1,1 +1,390 @@
-import{AuthKey,SessionKey}from"#context/keys.js";import{contextStorage}from"#context/container.js";import{buildCallbackContext}from"#context/build-callback-context.js";import{buildApprovalResponseAuth,handleApprovalResponsePolicyError}from"#execution/tool-auth.js";import{clearPendingAuthorization,getAuthorizationResult,getPendingAuthorization,isAuthorizationSignal}from"#harness/authorization.js";import{createApprovalCandidate,expireApprovalCandidates,finishApprovalCandidate,getActiveApprovalCandidate,getApprovalAuditState,markApprovalCandidateAuthorizationRequired,settleAllowedCandidate,settleDirectApprovalResponse}from"#harness/approval-candidates.js";import{isApprovalRequest}from"#harness/input-request-class.js";import{getPendingInputBatches}from"#harness/pending-input-batches.js";const UNAUTHENTICATED_APPROVAL_FEEDBACK=`Authentication is required to respond to this approval.`;function shouldPrepareApprovalPolicyTools(e){let t=getPendingInputBatches(e.session.state),n=[...(e.stepInput?.attributedInputResponses??[]).map(({response:e})=>e),...e.stepInput?.inputResponses??[]];if(t.some(e=>e.requests.some(e=>isApprovalRequest(e)&&n.some(t=>t.requestId===e.requestId))))return!1;let r=e.now??Date.now();return getApprovalAuditState(e.session.state).activeCandidates.some(e=>e.expiresAt>r&&(e.status===`pending`||(e.authorizationChallenges?.some(e=>getAuthorizationResult(e.name)!==void 0)??!1)))}async function coordinateApprovalDelivery(i){let a=i.now??Date.now(),l=getApprovalAuditState(i.session.state).activeCandidates.filter(e=>e.expiresAt<=a).flatMap(e=>e.authorizationChallenges?.map(e=>e.name)??[]),u=expireApprovalCandidates({now:a,state:i.session.state}),d={...i.session,state:clearPendingAuthorization(u,l)},f=getApprovalAuditState(d.state),p=getPendingInputBatches(d.state),m=new Set(p.flatMap(e=>e.requests.map(e=>e.requestId))),h=f.settlements.filter(e=>m.has(e.requestId)),g=new Set(f.settlements.map(e=>e.requestId)),_=hasResponseForRequest(i.stepInput,g),v=_?removeConsumedResponses(i.stepInput,g):i.stepInput;if(_&&h.length===0&&!hasMeaningfulInput(v))return deliveryResult(d,v,`park`);if(p.length===0)return deliveryResult(d,v);let y=v,b=new Set(p.flatMap(e=>e.responseAuthRequiredRequestIds??[])),x=p.flatMap(e=>e.requests),S=new Map(x.map(e=>[e.requestId,e]));if(y?.message!==void 0&&(y.attributedInputResponses?.length??0)===0&&(y.inputResponses?.length??0)===0&&f.activeCandidates.length===0&&b.size>0)return deliveryResult(d,{...y,message:void 0,messageAuth:void 0},`park`,[],[`Please use the Approve or Cancel buttons to respond to this approval.`]);let C=[],w=[],T=new Set,E=!1,D=getApprovalAuditState(d.state).activeCandidates,O=[...y?.attributedInputResponses??[],...(y?.inputResponses??[]).map(e=>({auth:void 0,response:e}))];for(let{auth:i,response:o}of O){let s=S.get(o.requestId);if(s===void 0||!isApprovalRequest(s))continue;if(!b.has(o.requestId)){let r=contextStorage.getStore(),s=i===void 0?r?.get(AuthKey)??r?.get(SessionKey)?.auth.current??null:i;if(s!==null&&(o.optionId===`approve`||o.optionId===`cancel`)){let e=settleDirectApprovalResponse({actor:s,outcome:o.optionId===`approve`?`allowed`:`cancelled`,requestId:o.requestId,settledAt:a,state:d.state});d={...d,state:e.state},E||=e.changed}continue}if(T.add(o.requestId),o.optionId===`cancel`){let e=i===void 0?buildCallbackContext().session.auth.current:i;if(e===null){w.push(UNAUTHENTICATED_APPROVAL_FEEDBACK);continue}let t=settleDirectApprovalResponse({actor:e,outcome:`cancelled`,requestId:o.requestId,settledAt:a,state:d.state});d={...d,state:t.state},E||=t.changed;continue}if(o.optionId!==`approve`)continue;let c=i===void 0?buildCallbackContext().session.auth.current:i;if(c===null){w.push(UNAUTHENTICATED_APPROVAL_FEEDBACK);continue}let l=createApprovalCandidate({candidateIdPrefix:approvalCandidateIdPrefix(s.requestId,c),createdAt:a,expiresAt:a+6e5,requestId:s.requestId,responder:c,state:d.state});d={...d,state:l.state},E||=l.changed}let k=removeConsumedResponses(y,T);if(T.size>0)return deliveryResult(d,k,E?`continue-coordination`:`continue`,[],w);if(E)return deliveryResult(d,k,`continue`,[],w);let A=new Set(getPendingAuthorization(d.state)?.challenges.map(e=>e.name)??[]);for(let e of D){if(e.status===`authorization-required`){let t=e.authorizationChallenges??[];if(!t.some(e=>getAuthorizationResult(e.name)!==void 0)){C.push(...t.filter(e=>!A.has(e.name)));continue}}let t=S.get(e.requestId);if(t===void 0||getActiveApprovalCandidate(d.state,e.candidateId)===void 0)continue;let n=await authorizeCandidate({candidateId:e.candidateId,now:a,request:t,responder:e.responder,session:d,tools:i.tools});d=n.session,E||=n.didCommit,C.push(...n.challenges);let r=getApprovalAuditState(d.state).settlements.find(t=>t.requestId===e.requestId);r!==void 0&&h.push(r)}let j=appendSettledResponses(k,h);return h.length>0?deliveryResult(d,j,`continue`):E?deliveryResult(d,j,`continue-coordination`):deliveryResult(d,j,C.length>0?`authorization-required`:`continue`,C)}async function authorizeCandidate(e){let t={...e.session,state:expireApprovalCandidates({now:e.now,state:e.session.state})};if(getActiveApprovalCandidate(t.state,e.candidateId)===void 0)return{challenges:[],didCommit:!1,session:t};let n=e.tools.get(e.request.action.toolName)?.approval,o=n!==void 0&&typeof n!=`function`?n.response:void 0;if(o===void 0)return failCandidate({...e,reason:`Approval authorization is temporarily unavailable. Please try again.`,session:t});try{let n=buildCallbackContext(),a=await withAuthorizerTimeout(o({auth:buildApprovalResponseAuth({responder:e.responder,scope:e.candidateId}),request:{callId:e.request.action.callId,requestId:e.request.requestId,toolInput:e.request.action.input,toolName:e.request.action.toolName},response:{decision:`approve`},responder:e.responder,session:{id:n.session.id,initiator:n.session.auth.initiator,parent:n.session.parent,turn:n.session.turn}}));if(a.status===`rejected`)return t={...t,state:finishApprovalCandidate({candidateId:e.candidateId,completedAt:e.now,reason:a.reason,state:t.state,status:`rejected`})},{challenges:[],didCommit:!0,session:t};if(a.status!==`allowed`)return failCandidate({...e,session:t});let s=settleAllowedCandidate({candidateId:e.candidateId,settledAt:e.now,state:t.state});return{challenges:[],didCommit:s.changed,session:{...t,state:s.state}}}catch(n){let r=await handleApprovalResponsePolicyError(n).catch(()=>void 0);if(isAuthorizationSignal(r)){let n=r.challenges.map(e=>Date.parse(e.challenge.expiresAt??``)).filter(Number.isFinite).sort((e,t)=>e-t)[0];return t={...t,state:markApprovalCandidateAuthorizationRequired({authorizationChallenges:r.challenges.map(t=>({...t,candidateId:e.candidateId})),candidateId:e.candidateId,expiresAt:n,state:t.state})},{challenges:r.challenges.map(t=>({...t,candidateId:e.candidateId})),didCommit:!0,session:t}}return failCandidate({...e,session:t})}}function failCandidate(e){let t=e.reason??`We couldn’t verify your approval. Please try again.`;return{challenges:[],didCommit:!0,session:{...e.session,state:finishApprovalCandidate({candidateId:e.candidateId,completedAt:e.now,reason:t,state:e.session.state,status:`failed`})}}}function hasResponseForRequest(e,t){return e?.attributedInputResponses?.some(({response:e})=>t.has(e.requestId))===!0||e?.inputResponses?.some(e=>t.has(e.requestId))===!0}function hasMeaningfulInput(e){return e?.message!==void 0||(e?.attributedInputResponses?.length??0)>0||(e?.inputResponses?.length??0)>0||(e?.runtimeActionResults?.length??0)>0}function appendSettledResponses(e,t){return t.length===0?e:{...e,inputResponses:[...e?.inputResponses??[],...t.map(e=>({optionId:e.outcome===`allowed`?`approve`:`cancel`,requestId:e.requestId}))]}}function removeConsumedResponses(e,t){if(e===void 0)return;let n=(e.attributedInputResponses??[]).filter(({response:e})=>!t.has(e.requestId)),r=[...(e.inputResponses??[]).filter(e=>!t.has(e.requestId)),...n.map(({response:e})=>e)];return{...e,attributedInputResponses:void 0,inputResponses:r}}function deliveryResult(e,t,n=`continue`,r=[],i=[]){return{challenges:r,feedback:i,kind:n,session:e,stepInput:t}}function approvalCandidateIdPrefix(e,t){let n=[t.authenticator,t.issuer??``,t.principalType,t.principalId].join(`:`);return`${encodeCandidateIdPart(e)}.${encodeCandidateIdPart(n)}`}function encodeCandidateIdPart(e){return Array.from(e,e=>e.codePointAt(0).toString(36)).join(`-`)}async function withAuthorizerTimeout(e){let t;try{return await Promise.race([Promise.resolve(e),new Promise((e,n)=>{t=setTimeout(()=>n(Error(`Approval response authorizer timed out.`)),1e4)})])}finally{t!==void 0&&clearTimeout(t)}}export{coordinateApprovalDelivery,shouldPrepareApprovalPolicyTools};
+import { AuthKey, SessionKey } from "#context/keys.js";
+import { contextStorage } from "#context/container.js";
+import { buildCallbackContext } from "#context/build-callback-context.js";
+import {
+  buildApprovalResponseAuth,
+  handleApprovalResponsePolicyError,
+} from "#execution/tool-auth.js";
+import {
+  clearPendingAuthorization,
+  getAuthorizationResult,
+  getPendingAuthorization,
+  isAuthorizationSignal,
+} from "#harness/authorization.js";
+import {
+  createApprovalCandidate,
+  expireApprovalCandidates,
+  finishApprovalCandidate,
+  getActiveApprovalCandidate,
+  getApprovalAuditState,
+  markApprovalCandidateAuthorizationRequired,
+  settleAllowedCandidate,
+  settleDirectApprovalResponse,
+} from "#harness/approval-candidates.js";
+import { isApprovalRequest } from "#harness/input-request-class.js";
+import { getPendingInputBatches } from "#harness/pending-input-batches.js";
+const UNAUTHENTICATED_APPROVAL_FEEDBACK = `Authentication is required to respond to this approval.`;
+function shouldPrepareApprovalPolicyTools(e) {
+  let t = getPendingInputBatches(e.session.state),
+    n = [
+      ...(e.stepInput?.attributedInputResponses ?? []).map(
+        ({ response: e }) => e,
+      ),
+      ...(e.stepInput?.inputResponses ?? []),
+    ];
+  if (
+    t.some((e) =>
+      e.requests.some(
+        (e) =>
+          isApprovalRequest(e) && n.some((t) => t.requestId === e.requestId),
+      ),
+    )
+  )
+    return !1;
+  let r = e.now ?? Date.now();
+  return getApprovalAuditState(e.session.state).activeCandidates.some(
+    (e) =>
+      e.expiresAt > r &&
+      (e.status === `pending` ||
+        (e.authorizationChallenges?.some(
+          (e) => getAuthorizationResult(e.name) !== void 0,
+        ) ??
+          !1)),
+  );
+}
+async function coordinateApprovalDelivery(i) {
+  let a = i.now ?? Date.now(),
+    l = getApprovalAuditState(i.session.state)
+      .activeCandidates.filter((e) => e.expiresAt <= a)
+      .flatMap((e) => e.authorizationChallenges?.map((e) => e.name) ?? []),
+    u = expireApprovalCandidates({ now: a, state: i.session.state }),
+    d = { ...i.session, state: clearPendingAuthorization(u, l) },
+    f = getApprovalAuditState(d.state),
+    p = getPendingInputBatches(d.state),
+    m = new Set(p.flatMap((e) => e.requests.map((e) => e.requestId))),
+    h = f.settlements.filter((e) => m.has(e.requestId)),
+    g = new Set(f.settlements.map((e) => e.requestId)),
+    _ = hasResponseForRequest(i.stepInput, g),
+    v = _ ? removeConsumedResponses(i.stepInput, g) : i.stepInput;
+  if (_ && h.length === 0 && !hasMeaningfulInput(v))
+    return deliveryResult(d, v, `park`);
+  if (p.length === 0) return deliveryResult(d, v);
+  let y = v,
+    b = new Set(p.flatMap((e) => e.responseAuthRequiredRequestIds ?? [])),
+    x = p.flatMap((e) => e.requests),
+    S = new Map(x.map((e) => [e.requestId, e]));
+  if (
+    y?.message !== void 0 &&
+    (y.attributedInputResponses?.length ?? 0) === 0 &&
+    (y.inputResponses?.length ?? 0) === 0 &&
+    f.activeCandidates.length === 0 &&
+    b.size > 0
+  )
+    return deliveryResult(
+      d,
+      { ...y, message: void 0, messageAuth: void 0 },
+      `park`,
+      [],
+      [`Please use the Approve or Cancel buttons to respond to this approval.`],
+    );
+  let C = [],
+    w = [],
+    T = new Set(),
+    E = !1,
+    D = getApprovalAuditState(d.state).activeCandidates,
+    O = [
+      ...(y?.attributedInputResponses ?? []),
+      ...(y?.inputResponses ?? []).map((e) => ({ auth: void 0, response: e })),
+    ];
+  for (let { auth: i, response: o } of O) {
+    let s = S.get(o.requestId);
+    if (s === void 0 || !isApprovalRequest(s)) continue;
+    if (!b.has(o.requestId)) {
+      let r = contextStorage.getStore(),
+        s =
+          i === void 0
+            ? (r?.get(AuthKey) ?? r?.get(SessionKey)?.auth.current ?? null)
+            : i;
+      if (s !== null && (o.optionId === `approve` || o.optionId === `cancel`)) {
+        let e = settleDirectApprovalResponse({
+          actor: s,
+          outcome: o.optionId === `approve` ? `allowed` : `cancelled`,
+          requestId: o.requestId,
+          settledAt: a,
+          state: d.state,
+        });
+        ((d = { ...d, state: e.state }), (E ||= e.changed));
+      }
+      continue;
+    }
+    if ((T.add(o.requestId), o.optionId === `cancel`)) {
+      let e = i === void 0 ? buildCallbackContext().session.auth.current : i;
+      if (e === null) {
+        w.push(UNAUTHENTICATED_APPROVAL_FEEDBACK);
+        continue;
+      }
+      let t = settleDirectApprovalResponse({
+        actor: e,
+        outcome: `cancelled`,
+        requestId: o.requestId,
+        settledAt: a,
+        state: d.state,
+      });
+      ((d = { ...d, state: t.state }), (E ||= t.changed));
+      continue;
+    }
+    if (o.optionId !== `approve`) continue;
+    let c = i === void 0 ? buildCallbackContext().session.auth.current : i;
+    if (c === null) {
+      w.push(UNAUTHENTICATED_APPROVAL_FEEDBACK);
+      continue;
+    }
+    let l = createApprovalCandidate({
+      candidateIdPrefix: approvalCandidateIdPrefix(s.requestId, c),
+      createdAt: a,
+      expiresAt: a + 6e5,
+      requestId: s.requestId,
+      responder: c,
+      state: d.state,
+    });
+    ((d = { ...d, state: l.state }), (E ||= l.changed));
+  }
+  let k = removeConsumedResponses(y, T);
+  if (T.size > 0)
+    return deliveryResult(
+      d,
+      k,
+      E ? `continue-coordination` : `continue`,
+      [],
+      w,
+    );
+  if (E) return deliveryResult(d, k, `continue`, [], w);
+  let A = new Set(
+    getPendingAuthorization(d.state)?.challenges.map((e) => e.name) ?? [],
+  );
+  for (let e of D) {
+    if (e.status === `authorization-required`) {
+      let t = e.authorizationChallenges ?? [];
+      if (!t.some((e) => getAuthorizationResult(e.name) !== void 0)) {
+        C.push(...t.filter((e) => !A.has(e.name)));
+        continue;
+      }
+    }
+    let t = S.get(e.requestId);
+    if (
+      t === void 0 ||
+      getActiveApprovalCandidate(d.state, e.candidateId) === void 0
+    )
+      continue;
+    let n = await authorizeCandidate({
+      candidateId: e.candidateId,
+      now: a,
+      request: t,
+      responder: e.responder,
+      session: d,
+      tools: i.tools,
+    });
+    ((d = n.session), (E ||= n.didCommit), C.push(...n.challenges));
+    let r = getApprovalAuditState(d.state).settlements.find(
+      (t) => t.requestId === e.requestId,
+    );
+    r !== void 0 && h.push(r);
+  }
+  let j = appendSettledResponses(k, h);
+  return h.length > 0
+    ? deliveryResult(d, j, `continue`)
+    : E
+      ? deliveryResult(d, j, `continue-coordination`)
+      : deliveryResult(
+          d,
+          j,
+          C.length > 0 ? `authorization-required` : `continue`,
+          C,
+        );
+}
+async function authorizeCandidate(e) {
+  let t = {
+    ...e.session,
+    state: expireApprovalCandidates({ now: e.now, state: e.session.state }),
+  };
+  if (getActiveApprovalCandidate(t.state, e.candidateId) === void 0)
+    return { challenges: [], didCommit: !1, session: t };
+  let n = e.tools.get(e.request.action.toolName)?.approval,
+    o = n !== void 0 && typeof n != `function` ? n.response : void 0;
+  if (o === void 0)
+    return failCandidate({
+      ...e,
+      reason: `Approval authorization is temporarily unavailable. Please try again.`,
+      session: t,
+    });
+  try {
+    let n = buildCallbackContext(),
+      a = await withAuthorizerTimeout(
+        o({
+          auth: buildApprovalResponseAuth({
+            responder: e.responder,
+            scope: e.candidateId,
+          }),
+          request: {
+            callId: e.request.action.callId,
+            requestId: e.request.requestId,
+            toolInput: e.request.action.input,
+            toolName: e.request.action.toolName,
+          },
+          response: { decision: `approve` },
+          responder: e.responder,
+          session: {
+            id: n.session.id,
+            initiator: n.session.auth.initiator,
+            parent: n.session.parent,
+            turn: n.session.turn,
+          },
+        }),
+      );
+    if (a.status === `rejected`)
+      return (
+        (t = {
+          ...t,
+          state: finishApprovalCandidate({
+            candidateId: e.candidateId,
+            completedAt: e.now,
+            reason: a.reason,
+            state: t.state,
+            status: `rejected`,
+          }),
+        }),
+        { challenges: [], didCommit: !0, session: t }
+      );
+    if (a.status !== `allowed`) return failCandidate({ ...e, session: t });
+    let s = settleAllowedCandidate({
+      candidateId: e.candidateId,
+      settledAt: e.now,
+      state: t.state,
+    });
+    return {
+      challenges: [],
+      didCommit: s.changed,
+      session: { ...t, state: s.state },
+    };
+  } catch (n) {
+    let r = await handleApprovalResponsePolicyError(n).catch(() => void 0);
+    if (isAuthorizationSignal(r)) {
+      let n = r.challenges
+        .map((e) => Date.parse(e.challenge.expiresAt ?? ``))
+        .filter(Number.isFinite)
+        .sort((e, t) => e - t)[0];
+      return (
+        (t = {
+          ...t,
+          state: markApprovalCandidateAuthorizationRequired({
+            authorizationChallenges: r.challenges.map((t) => ({
+              ...t,
+              candidateId: e.candidateId,
+            })),
+            candidateId: e.candidateId,
+            expiresAt: n,
+            state: t.state,
+          }),
+        }),
+        {
+          challenges: r.challenges.map((t) => ({
+            ...t,
+            candidateId: e.candidateId,
+          })),
+          didCommit: !0,
+          session: t,
+        }
+      );
+    }
+    return failCandidate({ ...e, session: t });
+  }
+}
+function failCandidate(e) {
+  let t = e.reason ?? `We couldn’t verify your approval. Please try again.`;
+  return {
+    challenges: [],
+    didCommit: !0,
+    session: {
+      ...e.session,
+      state: finishApprovalCandidate({
+        candidateId: e.candidateId,
+        completedAt: e.now,
+        reason: t,
+        state: e.session.state,
+        status: `failed`,
+      }),
+    },
+  };
+}
+function hasResponseForRequest(e, t) {
+  return (
+    e?.attributedInputResponses?.some(({ response: e }) =>
+      t.has(e.requestId),
+    ) === !0 || e?.inputResponses?.some((e) => t.has(e.requestId)) === !0
+  );
+}
+function hasMeaningfulInput(e) {
+  return (
+    e?.message !== void 0 ||
+    (e?.attributedInputResponses?.length ?? 0) > 0 ||
+    (e?.inputResponses?.length ?? 0) > 0 ||
+    (e?.runtimeActionResults?.length ?? 0) > 0
+  );
+}
+function appendSettledResponses(e, t) {
+  return t.length === 0
+    ? e
+    : {
+        ...e,
+        inputResponses: [
+          ...(e?.inputResponses ?? []),
+          ...t.map((e) => ({
+            optionId: e.outcome === `allowed` ? `approve` : `cancel`,
+            requestId: e.requestId,
+          })),
+        ],
+      };
+}
+function removeConsumedResponses(e, t) {
+  if (e === void 0) return;
+  let n = (e.attributedInputResponses ?? []).filter(
+      ({ response: e }) => !t.has(e.requestId),
+    ),
+    r = [
+      ...(e.inputResponses ?? []).filter((e) => !t.has(e.requestId)),
+      ...n.map(({ response: e }) => e),
+    ];
+  return { ...e, attributedInputResponses: void 0, inputResponses: r };
+}
+function deliveryResult(e, t, n = `continue`, r = [], i = []) {
+  return { challenges: r, feedback: i, kind: n, session: e, stepInput: t };
+}
+function approvalCandidateIdPrefix(e, t) {
+  let n = [
+    t.authenticator,
+    t.issuer ?? ``,
+    t.principalType,
+    t.principalId,
+  ].join(`:`);
+  return `${encodeCandidateIdPart(e)}.${encodeCandidateIdPart(n)}`;
+}
+function encodeCandidateIdPart(e) {
+  return Array.from(e, (e) => e.codePointAt(0).toString(36)).join(`-`);
+}
+async function withAuthorizerTimeout(e) {
+  let t;
+  try {
+    return await Promise.race([
+      Promise.resolve(e),
+      new Promise((e, n) => {
+        t = setTimeout(
+          () => n(Error(`Approval response authorizer timed out.`)),
+          1e4,
+        );
+      }),
+    ]);
+  } finally {
+    t !== void 0 && clearTimeout(t);
+  }
+}
+export { coordinateApprovalDelivery, shouldPrepareApprovalPolicyTools };

@@ -1,1 +1,7 @@
-function ok(e){return{ok:!0,value:e}}function err(e){return{ok:!1,error:e}}export{err,ok};
+function ok(e) {
+  return { ok: !0, value: e };
+}
+function err(e) {
+  return { ok: !1, error: e };
+}
+export { err, ok };

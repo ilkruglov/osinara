@@ -14,6 +14,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { codeShape } from "./vendored-code.js";
+
 const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
 const COMPACTION_PATH = "vendor/eve/dist/src/harness/compaction.js";
 const execFileAsync = promisify(execFile);
@@ -49,23 +51,23 @@ describe("Eve model retry policy patch", () => {
     ]);
 
     // AI SDK 7 owns its documented two-retry transport default; Eve must not override it.
-    expect(runtime).not.toContain("AI_SDK_TRANSPORT_MAX_RETRIES");
+    expect(codeShape(runtime)).not.toContain(codeShape("AI_SDK_TRANSPORT_MAX_RETRIES"));
     expect(aiRuntime).toContain("maxRetries = 2");
     expect(runtime).not.toMatch(/ToolLoopAgent\([^)]*maxRetries/u);
     expect(compaction).not.toMatch(/generateText\([^)]*maxRetries/u);
     // Stable function names and log messages survive Eve's package build and guard semantic reissues.
-    expect(runtime).toContain("async function runModelCallWithRetries");
-    expect(runtime).toContain("async function attemptEmptyResponseRecovery");
-    expect(runtime).toContain("async function attemptUnsupportedProviderToolRecovery");
-    expect(runtime).not.toContain("model call failed transiently — retrying");
+    expect(codeShape(runtime)).toContain(codeShape("async function runModelCallWithRetries"));
+    expect(codeShape(runtime)).toContain(codeShape("async function attemptEmptyResponseRecovery"));
+    expect(codeShape(runtime)).toContain(codeShape("async function attemptUnsupportedProviderToolRecovery"));
+    expect(codeShape(runtime)).not.toContain(codeShape("model call failed transiently — retrying"));
     // An empty model response has no side effect to duplicate, so Eve's single nudge-and-reissue
     // stays: without it a reasoning-only reply parks the whole session for the user.
-    expect(runtime).toContain("reissuing the model call once");
-    expect(runtime).not.toContain("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}");
-    expect(runtime).not.toContain("disabling unsupported provider tool(s); retrying step once");
+    expect(codeShape(runtime)).toContain(codeShape("reissuing the model call once"));
+    expect(codeShape(runtime)).not.toContain(codeShape("async function attemptEmptyResponseRecovery(e){return{outcome:`skipped`}}"));
+    expect(codeShape(runtime)).not.toContain(codeShape("disabling unsupported provider tool(s); retrying step once"));
     // Compaction never buys a second summary call: an oversized summary is returned and logged.
-    expect(compaction).not.toContain("||m===0)return v;--m");
-    expect(compaction).toContain("AGENT_COMPACTION_OUTPUT_OVER_LIMIT");
+    expect(codeShape(compaction)).not.toContain(codeShape("||m===0)return v;--m"));
+    expect(codeShape(compaction)).toContain(codeShape("AGENT_COMPACTION_OUTPUT_OVER_LIMIT"));
   });
 
   it("keeps every patched model runtime syntactically valid", async () => {

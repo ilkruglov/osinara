@@ -1,1 +1,2 @@
-import"#channel/cors.js";export{};
+import "#channel/cors.js";
+export {};

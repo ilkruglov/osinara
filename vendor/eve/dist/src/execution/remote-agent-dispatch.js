@@ -1,1 +1,346 @@
-import{z}from"#compiled/zod/index.js";import{expectFunction,expectObjectRecord}from"#internal/authored-module.js";import{createEveCallbackRoutePath,createEveSessionCancelRoutePath,createEveSessionRoutePath}from"#protocol/routes.js";import{CancelTurnResponseSchema}from"#protocol/cancel-turn.js";import{formatSubagentInput,normalizeRequestedOutputSchema}from"#execution/subagent-invocation.js";import{createWorkflowCallbackUrl}from"#execution/workflow-callback-url.js";import{readTaskIdFromInboxToken}from"#tasks/task-id.js";import{AgentHandleError}from"#protocol/agent-handle-error.js";import{createRemoteAgentRouteUrl}from"#execution/remote-agent-route-url.js";import{formatTraceparent}from"#protocol/traceparent.js";const CreateSessionResponseSchema=z.object({ok:z.literal(!0),sessionId:z.string().min(1),status:z.literal(`accepted`)});var RemoteAgentCancelRequestError=class extends Error{retryable;constructor(e,t){super(e),this.name=`RemoteAgentCancelRequestError`,this.retryable=t.retryable}};async function startRemoteAgentSession(e){let t=e.callbackToken??e.session.continuationToken;if(!t)throw Error(`Cannot dispatch remote agent without a parent continuation token.`);if(!e.callbackBaseUrl)throw Error(`Cannot dispatch remote agent without a callback base URL.`);let n=buildForwardedPrincipalField(e),i={capabilities:{},callback:{callId:e.action.callId,subagentName:e.action.remoteAgentName,taskId:readTaskIdFromInboxToken(t),token:t,url:createWorkflowCallbackUrl(e.callbackBaseUrl,createEveCallbackRoutePath(t))},message:formatRemoteAgentCallInputMessage({action:e.action,persistentSession:e.persistentSessions,remote:e.remote}),mode:e.persistentSessions===!0?`conversation`:`task`,outputSchema:normalizeRequestedOutputSchema(e.action.input.outputSchema)??e.remote.outputSchema};n!==void 0&&(i.forwardedPrincipal=n),e.operationId!==void 0&&(i.operationId=e.operationId);let a=await resolveRemoteAgentRequestHeaders(e.remote),o=formatTraceparent(e.parentTraceContext);if(o!==void 0){for(let e of Object.keys(a))e.toLowerCase()===`traceparent`&&delete a[e];a.traceparent=o}let s=await fetch(createRemoteAgentSessionUrl(e.remote),{body:JSON.stringify(i),headers:{"content-type":`application/json`,...a},method:`POST`});if(!s.ok)throw Error(`Remote agent "${e.action.remoteAgentName}" create-session request failed with HTTP ${s.status}.`);let c;try{c=await s.json()}catch{throw Error(`Remote agent "${e.action.remoteAgentName}" create-session response was not valid JSON.`)}let l=CreateSessionResponseSchema.safeParse(c);if(!l.success)throw Error(`Remote agent "${e.action.remoteAgentName}" create-session response was invalid.`);return{sessionId:l.data.sessionId}}async function continueRemoteAgentSession(e){let t=await fetch(createRemoteAgentContinueUrl(e.remote,e.sessionId),{body:JSON.stringify({callback:e.callback,message:e.message,outputSchema:e.outputSchema}),headers:{"content-type":`application/json`,...await resolveRemoteAgentRequestHeaders(e.remote)},method:`POST`});if(!t.ok){let n=await readRemoteAgentErrorCode(t),r=t.status===404||n===AgentHandleError.SessionNotResumable.code;throw new RemoteAgentContinueRequestError(`Remote agent "${e.remote.name}" continue-session request failed${r?` permanently`:``} with HTTP ${t.status}.`,{deliveryAmbiguous:isAmbiguousRemoteContinueStatus(t.status),retryable:!r})}}var RemoteAgentContinueRequestError=class extends Error{deliveryAmbiguous;retryable;constructor(e,t){super(e),this.name=`RemoteAgentContinueRequestError`,this.deliveryAmbiguous=t.deliveryAmbiguous,this.retryable=t.retryable}};function isRetryableRemoteAgentContinueError(e){return!(e instanceof RemoteAgentContinueRequestError)||e.retryable}function isAmbiguousRemoteAgentContinueError(e){return!(e instanceof RemoteAgentContinueRequestError)||e.deliveryAmbiguous}function isAmbiguousRemoteContinueStatus(e){return e===408||e===425||e>=500}async function readRemoteAgentErrorCode(e){let t;try{t=await e.json()}catch{return}if(typeof t!=`object`||!t)return;let n=Reflect.get(t,`code`);return typeof n==`string`?n:void 0}function buildForwardedPrincipalField(e){if(e.remote.forwardPrincipal!==!0||e.auth===null||e.auth===void 0)return;let t={current:e.auth};return e.initiatorAuth!==null&&e.initiatorAuth!==void 0&&(t.initiator=e.initiatorAuth),t}async function cancelRemoteAgentTurn(e){let t=await resolveRemoteAgentRequestHeaders(e.remote),n=await fetch(createRemoteAgentCancelTurnUrl(e.remote,e.sessionId),{body:e.turnId===void 0&&e.taskId===void 0?void 0:JSON.stringify({taskId:e.taskId,turnId:e.turnId}),headers:t,method:`POST`});if(!n.ok)throw new RemoteAgentCancelRequestError(`Remote agent "${e.remote.name}" cancel-turn request failed with HTTP ${n.status}.`,{retryable:isRetryableRemoteCancelStatus(n.status)});let r;try{r=await n.json()}catch{throw new RemoteAgentCancelRequestError(`Remote agent "${e.remote.name}" cancel-turn response was not valid JSON.`,{retryable:!1})}let i=CancelTurnResponseSchema.safeParse(r);if(!i.success||i.data.status===`accepted`&&i.data.sessionId!==e.sessionId)throw new RemoteAgentCancelRequestError(`Remote agent "${e.remote.name}" cancel-turn response was invalid.`,{retryable:!1});return i.data.status===`accepted`?{sessionId:i.data.sessionId,status:`accepted`}:{status:`no_active_turn`}}function isRetryableRemoteAgentCancelError(e){return!(e instanceof RemoteAgentCancelRequestError)||e.retryable}function resolveRemoteAgentForAction(e){let t=e.registry.get(e.nodeId)?.definition;if(e.dynamicRemoteAgent!==void 0){if(t===void 0)throw Error(`Missing remote agent "${e.remoteAgentName}" in runtime registry.`);let n=resolveDynamicRemoteAgentCredentials(e.dynamicRemoteAgent),r=e.dynamicRemoteAgent,i={description:r.description,kind:`remote`,logicalPath:t.logicalPath,name:e.remoteAgentName,nodeId:e.nodeId,outputSchema:r.outputSchema,path:r.path,sourceId:t.sourceId,sourceKind:`module`,url:r.url};return r.forwardPrincipal!==void 0&&(i.forwardPrincipal=r.forwardPrincipal),n.auth!==void 0&&(i.auth=n.auth),n.headers!==void 0&&(i.headers=n.headers),i}if(t?.kind!==`remote`)throw Error(`Missing remote agent "${e.remoteAgentName}" in runtime registry.`);return t}async function resolveRemoteAgentStreamHeaders(e){if(e.resolverId===void 0)return{};let t=new Set([e.bundle.graph.root,...e.bundle.graph.nodesByNodeId.values()]);for(let n of t){let t=n.subagentRegistry.subagentsByNodeId.get(e.resolverId)?.definition;if(t!==void 0){if(t.kind!==`remote`||t.name!==e.name||t.url!==e.url)throw Error(`Remote child stream resolver does not match the authored remote agent.`);return await resolveRemoteAgentRequestHeaders(t)}}return await resolveRemoteAgentRequestHeaders(resolveDynamicRemoteAgentCredentials({credentialsStepId:e.resolverId,description:``,path:``,url:e.url}))}function resolveDynamicRemoteAgentCredentials(e){if(e.credentialsStepId===void 0)return{};let r=getStepRegistry().get(e.credentialsStepId);if(r===void 0)throw Error(`Dynamic remote subagent credentials function "${e.credentialsStepId}" is not registered.`);let i=expectObjectRecord(r(),`Dynamic remote subagent credentials are invalid.`),a={};return i.auth!==void 0&&(a.auth=expectFunction(i.auth,`Dynamic remote subagent auth is invalid.`)),i.headers!==void 0&&(a.headers=resolveDynamicRemoteAgentHeaders(i.headers)),a}function resolveDynamicRemoteAgentHeaders(e){if(typeof e==`function`)return e;let t=expectObjectRecord(e,`Dynamic remote subagent headers are invalid.`);for(let e of Object.values(t))if(typeof e!=`string`)throw Error(`Dynamic remote subagent headers are invalid.`);return t}function getStepRegistry(){let e=Symbol.for(`@workflow/core//registeredSteps`),t=globalThis,n=t[e];return n===void 0&&(n=new Map,t[e]=n),n}function createRemoteAgentSessionUrl(e){return createRemoteAgentRouteUrl(e.url,e.path)}function createRemoteAgentCancelTurnUrl(e,t){return createRemoteAgentRouteUrl(e.url,createEveSessionCancelRoutePath(t))}function createRemoteAgentContinueUrl(e,t){return createRemoteAgentRouteUrl(e.url,createEveSessionRoutePath(t))}function isRetryableRemoteCancelStatus(e){return e===408||e===425||e===429||e>=500}async function resolveRemoteAgentRequestHeaders(e){let t={};return e.headers!==void 0&&Object.assign(t,typeof e.headers==`function`?await e.headers():e.headers),e.auth!==void 0&&Object.assign(t,(await e.auth()).headers),t}function formatRemoteAgentCallInputMessage(e){let t=typeof e.action.input.message==`string`?e.action.input.message:``;return formatSubagentInput({description:e.remote.description,message:t,name:e.action.remoteAgentName,persistentSession:e.persistentSession,type:`remote`}).message}export{RemoteAgentContinueRequestError,cancelRemoteAgentTurn,continueRemoteAgentSession,isAmbiguousRemoteAgentContinueError,isRetryableRemoteAgentCancelError,isRetryableRemoteAgentContinueError,resolveRemoteAgentForAction,resolveRemoteAgentStreamHeaders,startRemoteAgentSession};
+import { z } from "#compiled/zod/index.js";
+import {
+  expectFunction,
+  expectObjectRecord,
+} from "#internal/authored-module.js";
+import {
+  createEveCallbackRoutePath,
+  createEveSessionCancelRoutePath,
+  createEveSessionRoutePath,
+} from "#protocol/routes.js";
+import { CancelTurnResponseSchema } from "#protocol/cancel-turn.js";
+import {
+  formatSubagentInput,
+  normalizeRequestedOutputSchema,
+} from "#execution/subagent-invocation.js";
+import { createWorkflowCallbackUrl } from "#execution/workflow-callback-url.js";
+import { readTaskIdFromInboxToken } from "#tasks/task-id.js";
+import { AgentHandleError } from "#protocol/agent-handle-error.js";
+import { createRemoteAgentRouteUrl } from "#execution/remote-agent-route-url.js";
+import { formatTraceparent } from "#protocol/traceparent.js";
+const CreateSessionResponseSchema = z.object({
+  ok: z.literal(!0),
+  sessionId: z.string().min(1),
+  status: z.literal(`accepted`),
+});
+var RemoteAgentCancelRequestError = class extends Error {
+  retryable;
+  constructor(e, t) {
+    (super(e),
+      (this.name = `RemoteAgentCancelRequestError`),
+      (this.retryable = t.retryable));
+  }
+};
+async function startRemoteAgentSession(e) {
+  let t = e.callbackToken ?? e.session.continuationToken;
+  if (!t)
+    throw Error(
+      `Cannot dispatch remote agent without a parent continuation token.`,
+    );
+  if (!e.callbackBaseUrl)
+    throw Error(`Cannot dispatch remote agent without a callback base URL.`);
+  let n = buildForwardedPrincipalField(e),
+    i = {
+      capabilities: {},
+      callback: {
+        callId: e.action.callId,
+        subagentName: e.action.remoteAgentName,
+        taskId: readTaskIdFromInboxToken(t),
+        token: t,
+        url: createWorkflowCallbackUrl(
+          e.callbackBaseUrl,
+          createEveCallbackRoutePath(t),
+        ),
+      },
+      message: formatRemoteAgentCallInputMessage({
+        action: e.action,
+        persistentSession: e.persistentSessions,
+        remote: e.remote,
+      }),
+      mode: e.persistentSessions === !0 ? `conversation` : `task`,
+      outputSchema:
+        normalizeRequestedOutputSchema(e.action.input.outputSchema) ??
+        e.remote.outputSchema,
+    };
+  (n !== void 0 && (i.forwardedPrincipal = n),
+    e.operationId !== void 0 && (i.operationId = e.operationId));
+  let a = await resolveRemoteAgentRequestHeaders(e.remote),
+    o = formatTraceparent(e.parentTraceContext);
+  if (o !== void 0) {
+    for (let e of Object.keys(a))
+      e.toLowerCase() === `traceparent` && delete a[e];
+    a.traceparent = o;
+  }
+  let s = await fetch(createRemoteAgentSessionUrl(e.remote), {
+    body: JSON.stringify(i),
+    headers: { "content-type": `application/json`, ...a },
+    method: `POST`,
+  });
+  if (!s.ok)
+    throw Error(
+      `Remote agent "${e.action.remoteAgentName}" create-session request failed with HTTP ${s.status}.`,
+    );
+  let c;
+  try {
+    c = await s.json();
+  } catch {
+    throw Error(
+      `Remote agent "${e.action.remoteAgentName}" create-session response was not valid JSON.`,
+    );
+  }
+  let l = CreateSessionResponseSchema.safeParse(c);
+  if (!l.success)
+    throw Error(
+      `Remote agent "${e.action.remoteAgentName}" create-session response was invalid.`,
+    );
+  return { sessionId: l.data.sessionId };
+}
+async function continueRemoteAgentSession(e) {
+  let t = await fetch(createRemoteAgentContinueUrl(e.remote, e.sessionId), {
+    body: JSON.stringify({
+      callback: e.callback,
+      message: e.message,
+      outputSchema: e.outputSchema,
+    }),
+    headers: {
+      "content-type": `application/json`,
+      ...(await resolveRemoteAgentRequestHeaders(e.remote)),
+    },
+    method: `POST`,
+  });
+  if (!t.ok) {
+    let n = await readRemoteAgentErrorCode(t),
+      r = t.status === 404 || n === AgentHandleError.SessionNotResumable.code;
+    throw new RemoteAgentContinueRequestError(
+      `Remote agent "${e.remote.name}" continue-session request failed${r ? ` permanently` : ``} with HTTP ${t.status}.`,
+      {
+        deliveryAmbiguous: isAmbiguousRemoteContinueStatus(t.status),
+        retryable: !r,
+      },
+    );
+  }
+}
+var RemoteAgentContinueRequestError = class extends Error {
+  deliveryAmbiguous;
+  retryable;
+  constructor(e, t) {
+    (super(e),
+      (this.name = `RemoteAgentContinueRequestError`),
+      (this.deliveryAmbiguous = t.deliveryAmbiguous),
+      (this.retryable = t.retryable));
+  }
+};
+function isRetryableRemoteAgentContinueError(e) {
+  return !(e instanceof RemoteAgentContinueRequestError) || e.retryable;
+}
+function isAmbiguousRemoteAgentContinueError(e) {
+  return !(e instanceof RemoteAgentContinueRequestError) || e.deliveryAmbiguous;
+}
+function isAmbiguousRemoteContinueStatus(e) {
+  return e === 408 || e === 425 || e >= 500;
+}
+async function readRemoteAgentErrorCode(e) {
+  let t;
+  try {
+    t = await e.json();
+  } catch {
+    return;
+  }
+  if (typeof t != `object` || !t) return;
+  let n = Reflect.get(t, `code`);
+  return typeof n == `string` ? n : void 0;
+}
+function buildForwardedPrincipalField(e) {
+  if (e.remote.forwardPrincipal !== !0 || e.auth === null || e.auth === void 0)
+    return;
+  let t = { current: e.auth };
+  return (
+    e.initiatorAuth !== null &&
+      e.initiatorAuth !== void 0 &&
+      (t.initiator = e.initiatorAuth),
+    t
+  );
+}
+async function cancelRemoteAgentTurn(e) {
+  let t = await resolveRemoteAgentRequestHeaders(e.remote),
+    n = await fetch(createRemoteAgentCancelTurnUrl(e.remote, e.sessionId), {
+      body:
+        e.turnId === void 0 && e.taskId === void 0
+          ? void 0
+          : JSON.stringify({ taskId: e.taskId, turnId: e.turnId }),
+      headers: t,
+      method: `POST`,
+    });
+  if (!n.ok)
+    throw new RemoteAgentCancelRequestError(
+      `Remote agent "${e.remote.name}" cancel-turn request failed with HTTP ${n.status}.`,
+      { retryable: isRetryableRemoteCancelStatus(n.status) },
+    );
+  let r;
+  try {
+    r = await n.json();
+  } catch {
+    throw new RemoteAgentCancelRequestError(
+      `Remote agent "${e.remote.name}" cancel-turn response was not valid JSON.`,
+      { retryable: !1 },
+    );
+  }
+  let i = CancelTurnResponseSchema.safeParse(r);
+  if (
+    !i.success ||
+    (i.data.status === `accepted` && i.data.sessionId !== e.sessionId)
+  )
+    throw new RemoteAgentCancelRequestError(
+      `Remote agent "${e.remote.name}" cancel-turn response was invalid.`,
+      { retryable: !1 },
+    );
+  return i.data.status === `accepted`
+    ? { sessionId: i.data.sessionId, status: `accepted` }
+    : { status: `no_active_turn` };
+}
+function isRetryableRemoteAgentCancelError(e) {
+  return !(e instanceof RemoteAgentCancelRequestError) || e.retryable;
+}
+function resolveRemoteAgentForAction(e) {
+  let t = e.registry.get(e.nodeId)?.definition;
+  if (e.dynamicRemoteAgent !== void 0) {
+    if (t === void 0)
+      throw Error(
+        `Missing remote agent "${e.remoteAgentName}" in runtime registry.`,
+      );
+    let n = resolveDynamicRemoteAgentCredentials(e.dynamicRemoteAgent),
+      r = e.dynamicRemoteAgent,
+      i = {
+        description: r.description,
+        kind: `remote`,
+        logicalPath: t.logicalPath,
+        name: e.remoteAgentName,
+        nodeId: e.nodeId,
+        outputSchema: r.outputSchema,
+        path: r.path,
+        sourceId: t.sourceId,
+        sourceKind: `module`,
+        url: r.url,
+      };
+    return (
+      r.forwardPrincipal !== void 0 &&
+        (i.forwardPrincipal = r.forwardPrincipal),
+      n.auth !== void 0 && (i.auth = n.auth),
+      n.headers !== void 0 && (i.headers = n.headers),
+      i
+    );
+  }
+  if (t?.kind !== `remote`)
+    throw Error(
+      `Missing remote agent "${e.remoteAgentName}" in runtime registry.`,
+    );
+  return t;
+}
+async function resolveRemoteAgentStreamHeaders(e) {
+  if (e.resolverId === void 0) return {};
+  let t = new Set([
+    e.bundle.graph.root,
+    ...e.bundle.graph.nodesByNodeId.values(),
+  ]);
+  for (let n of t) {
+    let t = n.subagentRegistry.subagentsByNodeId.get(e.resolverId)?.definition;
+    if (t !== void 0) {
+      if (t.kind !== `remote` || t.name !== e.name || t.url !== e.url)
+        throw Error(
+          `Remote child stream resolver does not match the authored remote agent.`,
+        );
+      return await resolveRemoteAgentRequestHeaders(t);
+    }
+  }
+  return await resolveRemoteAgentRequestHeaders(
+    resolveDynamicRemoteAgentCredentials({
+      credentialsStepId: e.resolverId,
+      description: ``,
+      path: ``,
+      url: e.url,
+    }),
+  );
+}
+function resolveDynamicRemoteAgentCredentials(e) {
+  if (e.credentialsStepId === void 0) return {};
+  let r = getStepRegistry().get(e.credentialsStepId);
+  if (r === void 0)
+    throw Error(
+      `Dynamic remote subagent credentials function "${e.credentialsStepId}" is not registered.`,
+    );
+  let i = expectObjectRecord(
+      r(),
+      `Dynamic remote subagent credentials are invalid.`,
+    ),
+    a = {};
+  return (
+    i.auth !== void 0 &&
+      (a.auth = expectFunction(
+        i.auth,
+        `Dynamic remote subagent auth is invalid.`,
+      )),
+    i.headers !== void 0 &&
+      (a.headers = resolveDynamicRemoteAgentHeaders(i.headers)),
+    a
+  );
+}
+function resolveDynamicRemoteAgentHeaders(e) {
+  if (typeof e == `function`) return e;
+  let t = expectObjectRecord(e, `Dynamic remote subagent headers are invalid.`);
+  for (let e of Object.values(t))
+    if (typeof e != `string`)
+      throw Error(`Dynamic remote subagent headers are invalid.`);
+  return t;
+}
+function getStepRegistry() {
+  let e = Symbol.for(`@workflow/core//registeredSteps`),
+    t = globalThis,
+    n = t[e];
+  return (n === void 0 && ((n = new Map()), (t[e] = n)), n);
+}
+function createRemoteAgentSessionUrl(e) {
+  return createRemoteAgentRouteUrl(e.url, e.path);
+}
+function createRemoteAgentCancelTurnUrl(e, t) {
+  return createRemoteAgentRouteUrl(e.url, createEveSessionCancelRoutePath(t));
+}
+function createRemoteAgentContinueUrl(e, t) {
+  return createRemoteAgentRouteUrl(e.url, createEveSessionRoutePath(t));
+}
+function isRetryableRemoteCancelStatus(e) {
+  return e === 408 || e === 425 || e === 429 || e >= 500;
+}
+async function resolveRemoteAgentRequestHeaders(e) {
+  let t = {};
+  return (
+    e.headers !== void 0 &&
+      Object.assign(
+        t,
+        typeof e.headers == `function` ? await e.headers() : e.headers,
+      ),
+    e.auth !== void 0 && Object.assign(t, (await e.auth()).headers),
+    t
+  );
+}
+function formatRemoteAgentCallInputMessage(e) {
+  let t =
+    typeof e.action.input.message == `string` ? e.action.input.message : ``;
+  return formatSubagentInput({
+    description: e.remote.description,
+    message: t,
+    name: e.action.remoteAgentName,
+    persistentSession: e.persistentSession,
+    type: `remote`,
+  }).message;
+}
+export {
+  RemoteAgentContinueRequestError,
+  cancelRemoteAgentTurn,
+  continueRemoteAgentSession,
+  isAmbiguousRemoteAgentContinueError,
+  isRetryableRemoteAgentCancelError,
+  isRetryableRemoteAgentContinueError,
+  resolveRemoteAgentForAction,
+  resolveRemoteAgentStreamHeaders,
+  startRemoteAgentSession,
+};

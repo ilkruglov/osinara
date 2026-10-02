@@ -1,1 +1,9 @@
-function requireSessionModelReference(e){let t=e.agent.modelReference;if(t===void 0)throw Error(`Expected a concrete model selection for the active model call.`);return t}export{requireSessionModelReference};
+function requireSessionModelReference(e) {
+  let t = e.agent.modelReference;
+  if (t === void 0)
+    throw Error(
+      `Expected a concrete model selection for the active model call.`,
+    );
+  return t;
+}
+export { requireSessionModelReference };

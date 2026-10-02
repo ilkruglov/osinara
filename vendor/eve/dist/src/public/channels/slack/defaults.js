@@ -1,4 +1,318 @@
-import{createLogger,extractErrorId,formatErrorHint}from"#internal/logging.js";import{SLACK_MAX_BLOCKS_PER_MESSAGE,truncateMessageText,truncateTypingStatus}from"#public/channels/slack/limits.js";import{describeActionRequests}from"#public/channels/slack/action-status.js";import{buildSlackAuthContext,slackUserIdFromAuthContext}from"#public/channels/slack/auth.js";import{buildAuthCompletedText,buildAuthEphemeralBlocks,buildAuthRequiredPublicText,formatConnectionDisplayName}from"#public/channels/slack/connections.js";import{buildAnsweredBlocks,renderInputRequestPostParts}from"#public/channels/slack/hitl.js";const log=createLogger(`slack.defaults`);function blockContainsRequestAction(e,t){if(typeof e!=`object`||!e)return!1;let n=e,r=`eve_input:${t}`,i=`eve_input:tool-approval:${t}`;return[n.actions,n.elements].some(e=>Array.isArray(e)&&e.some(e=>{if(typeof e!=`object`||!e)return!1;let t=e.action_id;return typeof t==`string`&&(t.startsWith(r)||t.startsWith(i))}))}function defaultSlackAuth(e,t){let n=e.author;return n?buildSlackAuthContext({channelId:t.slack.channelId,fullName:n.fullName,isBot:n.isBot,teamId:e.teamId,threadTs:t.slack.threadTs,userId:n.userId,userName:n.userName}):null}async function defaultOnAppMention(e,t){return await e.thread.startTyping(`Thinking...`),{auth:defaultSlackAuth(t,e)}}async function defaultOnDirectMessage(e,t){return await e.thread.startTyping(`Thinking...`),{auth:defaultSlackAuth(t,e)}}function firstNonEmptyLine(e){for(let t of e.split(/\r?\n/u)){let e=t.trim();if(e.length>0)return e}}function defaultInputRequestedHandler(){return async(e,t,n)=>{for(let n of buildInputRequestPosts(e.requests)){let e=await t.thread.post({blocks:n.blocks,text:n.text});if(!e.id)continue;let r={...t.state.pendingApprovalCards};for(let t of n.requests)t.kind===`tool-approval`&&(r[t.requestId]={messageBlocks:n.blocks,messageTs:e.id});t.state.pendingApprovalCards=r}}}function buildInputRequestPosts(e){let t=[],n=[];for(let r of e){let e=renderInputRequestPostParts(r);e.details&&t.push({...e.details,request:r}),n.push({...e.controls,request:r})}return[...groupInputRequestPostParts(t),...groupInputRequestPostParts(n)]}function groupInputRequestPostParts(e){let t=[];for(let n of e){let e=t.at(-1);e&&e.blocks.length+n.blocks.length<=SLACK_MAX_BLOCKS_PER_MESSAGE?(e.blocks.push(...n.blocks),e.fallbacks.push(n.text),e.requests.push(n.request)):t.push({blocks:[...n.blocks],fallbacks:[n.text],requests:[n.request]})}return t.map(e=>({blocks:e.blocks,requests:e.requests,text:truncateMessageText(e.fallbacks.join(`
-`))}))}const defaultEvents={async"approval.candidate"(e,t,n){let r=t.state.pendingApprovalCandidateUsers?.[e.candidateId];if(e.outcome===`pending`&&r!==void 0){await t.thread.postEphemeral(r,`Checking whether you can approve this action…`);return}r!==void 0&&(e.outcome===`rejected`||e.outcome===`failed`)&&await t.thread.postEphemeral(r,e.reason??`We couldn’t verify your approval. Please try again.`)},async"approval.settled"(e,t,n){let r=t.state.pendingApprovalCards??{},i=r[e.requestId];if(i===void 0||t.state.channelId===null)return;let a=e.outcome===`approved`?`Approve`:`Cancel`,o=t.state.approvalResponderUsers?.[e.responderPrincipalId],s=i.messageBlocks.flatMap(t=>{if(!blockContainsRequestAction(t,e.requestId))return[t];if(typeof t!=`object`||!t)return[];let n=t;if(n.type!==`card`)return buildAnsweredBlocks({answerLabel:a,promptBlocks:[],userId:o});let{actions:r,...i}=n;return buildAnsweredBlocks({answerLabel:a,promptBlocks:[i],userId:o})});await t.slack.request(`chat.update`,{blocks:s,channel:t.state.channelId,text:`Answered: ${a}`,ts:i.messageTs});let c={...r};delete c[e.requestId],t.state.pendingApprovalCards=c},async"turn.started"(e,t,n){t.state.pendingToolCallMessage=null,t.state.lastReasoningTypingAtMs=null,t.state.lastReasoningTypingStatus=null,await t.thread.startTyping(`Working...`)},async"reasoning.appended"(e,t,n){let r=firstNonEmptyLine(e.reasoningSoFar);if(r===void 0)return;let i=truncateTypingStatus(r),o=t.state.lastReasoningTypingStatus,s=o!=null&&i.startsWith(o)&&i.length>=o.length+4,c=Date.now(),l=t.state.lastReasoningTypingAtMs;if(!s&&l!=null){let e=c-l;if(e>=0&&e<5e3)return}await t.thread.startTyping(i),t.state.lastReasoningTypingAtMs=c,t.state.lastReasoningTypingStatus=i},async"actions.requested"(e,t,n){let r=t.state.pendingToolCallMessage;if(t.state.pendingToolCallMessage=null,r){await t.thread.startTyping(truncateTypingStatus(r));return}await t.thread.startTyping(truncateTypingStatus(describeActionRequests(e.actions)))},async"message.completed"(e,t,n){if(e.finishReason===`tool-calls`){t.state.pendingToolCallMessage=e.message?firstNonEmptyLine(e.message)??null:null;return}if(t.state.pendingToolCallMessage=null,!e.message){await t.thread.startTyping();return}await t.thread.post(e.message)},async"turn.failed"(e,r,i){let a=formatErrorHint(e),o=extractErrorId(e.details);await r.thread.post([`I hit an error while handling your request${a}.`,``,`Please try again, rephrase, or reach out if it keeps failing.`,...o?[``,`_Error id: \`${o}\`_`]:[]].join(`
-`))},async"session.failed"(e,r){let i=formatErrorHint(e),a=extractErrorId(e.details);await r.thread.post([`This session couldn't recover from an error${i}.`,``,`Start a new thread to continue — I can't pick this one back up.`,...a?[``,`_Error id: \`${a}\`_`]:[]].join(`
-`))},async"authorization.required"(e,t,n){let r=e.authorization?.displayName??formatConnectionDisplayName(e.name),i=e.candidateId===void 0?slackUserIdFromAuthContext(n.session.auth.current)??t.state.triggeringUserId??null:t.state.pendingApprovalCandidateUsers?.[e.candidateId]??null,a=e.authorization?.url,o=t.state.pendingAuthMessageTs??{};if(e.candidateId===void 0&&o[e.name]===void 0){let n=buildAuthRequiredPublicText({displayName:r,hasUser:i!==null});try{let r=await t.thread.post(n);r.id&&(t.state.pendingAuthMessageTs={...o,[e.name]:r.id})}catch(t){log.error(`Slack auth public message delivery failed`,{name:e.name,error:t})}}if(i&&a){let n=e.authorization?.userCode;try{await t.thread.postEphemeral(i,{blocks:buildAuthEphemeralBlocks({displayName:r,url:a,userCode:n}),text:n?`Sign in with ${r}: ${a} (code: ${n})`:`Sign in with ${r}: ${a}`})}catch(t){log.error(`Slack auth ephemeral delivery failed`,{name:e.name,error:t})}}},async"authorization.completed"(e,t,n){let r=e.authorization?.displayName??formatConnectionDisplayName(e.name);e.outcome===`authorized`&&e.candidateId===void 0&&await t.thread.startTyping(`Connected to ${r}. Resuming...`);let i=t.state.pendingAuthMessageTs??{},a=i[e.name];if(a===void 0)return;let o=buildAuthCompletedText({displayName:r,outcome:e.outcome,reason:e.reason});try{await t.slack.request(`chat.update`,{channel:t.slack.channelId,ts:a,text:o})}catch(t){log.error(`Slack auth status edit failed`,{name:e.name,error:t})}let s={...i};delete s[e.name],t.state.pendingAuthMessageTs=s}};export{defaultEvents,defaultInputRequestedHandler,defaultOnAppMention,defaultOnDirectMessage,defaultSlackAuth};
+import {
+  createLogger,
+  extractErrorId,
+  formatErrorHint,
+} from "#internal/logging.js";
+import {
+  SLACK_MAX_BLOCKS_PER_MESSAGE,
+  truncateMessageText,
+  truncateTypingStatus,
+} from "#public/channels/slack/limits.js";
+import { describeActionRequests } from "#public/channels/slack/action-status.js";
+import {
+  buildSlackAuthContext,
+  slackUserIdFromAuthContext,
+} from "#public/channels/slack/auth.js";
+import {
+  buildAuthCompletedText,
+  buildAuthEphemeralBlocks,
+  buildAuthRequiredPublicText,
+  formatConnectionDisplayName,
+} from "#public/channels/slack/connections.js";
+import {
+  buildAnsweredBlocks,
+  renderInputRequestPostParts,
+} from "#public/channels/slack/hitl.js";
+const log = createLogger(`slack.defaults`);
+function blockContainsRequestAction(e, t) {
+  if (typeof e != `object` || !e) return !1;
+  let n = e,
+    r = `eve_input:${t}`,
+    i = `eve_input:tool-approval:${t}`;
+  return [n.actions, n.elements].some(
+    (e) =>
+      Array.isArray(e) &&
+      e.some((e) => {
+        if (typeof e != `object` || !e) return !1;
+        let t = e.action_id;
+        return typeof t == `string` && (t.startsWith(r) || t.startsWith(i));
+      }),
+  );
+}
+function defaultSlackAuth(e, t) {
+  let n = e.author;
+  return n
+    ? buildSlackAuthContext({
+        channelId: t.slack.channelId,
+        fullName: n.fullName,
+        isBot: n.isBot,
+        teamId: e.teamId,
+        threadTs: t.slack.threadTs,
+        userId: n.userId,
+        userName: n.userName,
+      })
+    : null;
+}
+async function defaultOnAppMention(e, t) {
+  return (
+    await e.thread.startTyping(`Thinking...`),
+    { auth: defaultSlackAuth(t, e) }
+  );
+}
+async function defaultOnDirectMessage(e, t) {
+  return (
+    await e.thread.startTyping(`Thinking...`),
+    { auth: defaultSlackAuth(t, e) }
+  );
+}
+function firstNonEmptyLine(e) {
+  for (let t of e.split(/\r?\n/u)) {
+    let e = t.trim();
+    if (e.length > 0) return e;
+  }
+}
+function defaultInputRequestedHandler() {
+  return async (e, t, n) => {
+    for (let n of buildInputRequestPosts(e.requests)) {
+      let e = await t.thread.post({ blocks: n.blocks, text: n.text });
+      if (!e.id) continue;
+      let r = { ...t.state.pendingApprovalCards };
+      for (let t of n.requests)
+        t.kind === `tool-approval` &&
+          (r[t.requestId] = { messageBlocks: n.blocks, messageTs: e.id });
+      t.state.pendingApprovalCards = r;
+    }
+  };
+}
+function buildInputRequestPosts(e) {
+  let t = [],
+    n = [];
+  for (let r of e) {
+    let e = renderInputRequestPostParts(r);
+    (e.details && t.push({ ...e.details, request: r }),
+      n.push({ ...e.controls, request: r }));
+  }
+  return [...groupInputRequestPostParts(t), ...groupInputRequestPostParts(n)];
+}
+function groupInputRequestPostParts(e) {
+  let t = [];
+  for (let n of e) {
+    let e = t.at(-1);
+    e && e.blocks.length + n.blocks.length <= SLACK_MAX_BLOCKS_PER_MESSAGE
+      ? (e.blocks.push(...n.blocks),
+        e.fallbacks.push(n.text),
+        e.requests.push(n.request))
+      : t.push({
+          blocks: [...n.blocks],
+          fallbacks: [n.text],
+          requests: [n.request],
+        });
+  }
+  return t.map((e) => ({
+    blocks: e.blocks,
+    requests: e.requests,
+    text: truncateMessageText(
+      e.fallbacks.join(`
+`),
+    ),
+  }));
+}
+const defaultEvents = {
+  async "approval.candidate"(e, t, n) {
+    let r = t.state.pendingApprovalCandidateUsers?.[e.candidateId];
+    if (e.outcome === `pending` && r !== void 0) {
+      await t.thread.postEphemeral(
+        r,
+        `Checking whether you can approve this action…`,
+      );
+      return;
+    }
+    r !== void 0 &&
+      (e.outcome === `rejected` || e.outcome === `failed`) &&
+      (await t.thread.postEphemeral(
+        r,
+        e.reason ?? `We couldn’t verify your approval. Please try again.`,
+      ));
+  },
+  async "approval.settled"(e, t, n) {
+    let r = t.state.pendingApprovalCards ?? {},
+      i = r[e.requestId];
+    if (i === void 0 || t.state.channelId === null) return;
+    let a = e.outcome === `approved` ? `Approve` : `Cancel`,
+      o = t.state.approvalResponderUsers?.[e.responderPrincipalId],
+      s = i.messageBlocks.flatMap((t) => {
+        if (!blockContainsRequestAction(t, e.requestId)) return [t];
+        if (typeof t != `object` || !t) return [];
+        let n = t;
+        if (n.type !== `card`)
+          return buildAnsweredBlocks({
+            answerLabel: a,
+            promptBlocks: [],
+            userId: o,
+          });
+        let { actions: r, ...i } = n;
+        return buildAnsweredBlocks({
+          answerLabel: a,
+          promptBlocks: [i],
+          userId: o,
+        });
+      });
+    await t.slack.request(`chat.update`, {
+      blocks: s,
+      channel: t.state.channelId,
+      text: `Answered: ${a}`,
+      ts: i.messageTs,
+    });
+    let c = { ...r };
+    (delete c[e.requestId], (t.state.pendingApprovalCards = c));
+  },
+  async "turn.started"(e, t, n) {
+    ((t.state.pendingToolCallMessage = null),
+      (t.state.lastReasoningTypingAtMs = null),
+      (t.state.lastReasoningTypingStatus = null),
+      await t.thread.startTyping(`Working...`));
+  },
+  async "reasoning.appended"(e, t, n) {
+    let r = firstNonEmptyLine(e.reasoningSoFar);
+    if (r === void 0) return;
+    let i = truncateTypingStatus(r),
+      o = t.state.lastReasoningTypingStatus,
+      s = o != null && i.startsWith(o) && i.length >= o.length + 4,
+      c = Date.now(),
+      l = t.state.lastReasoningTypingAtMs;
+    if (!s && l != null) {
+      let e = c - l;
+      if (e >= 0 && e < 5e3) return;
+    }
+    (await t.thread.startTyping(i),
+      (t.state.lastReasoningTypingAtMs = c),
+      (t.state.lastReasoningTypingStatus = i));
+  },
+  async "actions.requested"(e, t, n) {
+    let r = t.state.pendingToolCallMessage;
+    if (((t.state.pendingToolCallMessage = null), r)) {
+      await t.thread.startTyping(truncateTypingStatus(r));
+      return;
+    }
+    await t.thread.startTyping(
+      truncateTypingStatus(describeActionRequests(e.actions)),
+    );
+  },
+  async "message.completed"(e, t, n) {
+    if (e.finishReason === `tool-calls`) {
+      t.state.pendingToolCallMessage = e.message
+        ? (firstNonEmptyLine(e.message) ?? null)
+        : null;
+      return;
+    }
+    if (((t.state.pendingToolCallMessage = null), !e.message)) {
+      await t.thread.startTyping();
+      return;
+    }
+    await t.thread.post(e.message);
+  },
+  async "turn.failed"(e, r, i) {
+    let a = formatErrorHint(e),
+      o = extractErrorId(e.details);
+    await r.thread.post(
+      [
+        `I hit an error while handling your request${a}.`,
+        ``,
+        `Please try again, rephrase, or reach out if it keeps failing.`,
+        ...(o ? [``, `_Error id: \`${o}\`_`] : []),
+      ].join(`
+`),
+    );
+  },
+  async "session.failed"(e, r) {
+    let i = formatErrorHint(e),
+      a = extractErrorId(e.details);
+    await r.thread.post(
+      [
+        `This session couldn't recover from an error${i}.`,
+        ``,
+        `Start a new thread to continue — I can't pick this one back up.`,
+        ...(a ? [``, `_Error id: \`${a}\`_`] : []),
+      ].join(`
+`),
+    );
+  },
+  async "authorization.required"(e, t, n) {
+    let r = e.authorization?.displayName ?? formatConnectionDisplayName(e.name),
+      i =
+        e.candidateId === void 0
+          ? (slackUserIdFromAuthContext(n.session.auth.current) ??
+            t.state.triggeringUserId ??
+            null)
+          : (t.state.pendingApprovalCandidateUsers?.[e.candidateId] ?? null),
+      a = e.authorization?.url,
+      o = t.state.pendingAuthMessageTs ?? {};
+    if (e.candidateId === void 0 && o[e.name] === void 0) {
+      let n = buildAuthRequiredPublicText({
+        displayName: r,
+        hasUser: i !== null,
+      });
+      try {
+        let r = await t.thread.post(n);
+        r.id && (t.state.pendingAuthMessageTs = { ...o, [e.name]: r.id });
+      } catch (t) {
+        log.error(`Slack auth public message delivery failed`, {
+          name: e.name,
+          error: t,
+        });
+      }
+    }
+    if (i && a) {
+      let n = e.authorization?.userCode;
+      try {
+        await t.thread.postEphemeral(i, {
+          blocks: buildAuthEphemeralBlocks({
+            displayName: r,
+            url: a,
+            userCode: n,
+          }),
+          text: n
+            ? `Sign in with ${r}: ${a} (code: ${n})`
+            : `Sign in with ${r}: ${a}`,
+        });
+      } catch (t) {
+        log.error(`Slack auth ephemeral delivery failed`, {
+          name: e.name,
+          error: t,
+        });
+      }
+    }
+  },
+  async "authorization.completed"(e, t, n) {
+    let r = e.authorization?.displayName ?? formatConnectionDisplayName(e.name);
+    e.outcome === `authorized` &&
+      e.candidateId === void 0 &&
+      (await t.thread.startTyping(`Connected to ${r}. Resuming...`));
+    let i = t.state.pendingAuthMessageTs ?? {},
+      a = i[e.name];
+    if (a === void 0) return;
+    let o = buildAuthCompletedText({
+      displayName: r,
+      outcome: e.outcome,
+      reason: e.reason,
+    });
+    try {
+      await t.slack.request(`chat.update`, {
+        channel: t.slack.channelId,
+        ts: a,
+        text: o,
+      });
+    } catch (t) {
+      log.error(`Slack auth status edit failed`, { name: e.name, error: t });
+    }
+    let s = { ...i };
+    (delete s[e.name], (t.state.pendingAuthMessageTs = s));
+  },
+};
+export {
+  defaultEvents,
+  defaultInputRequestedHandler,
+  defaultOnAppMention,
+  defaultOnDirectMessage,
+  defaultSlackAuth,
+};

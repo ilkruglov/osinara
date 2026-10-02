@@ -1,15 +1,114 @@
-import{defineSetupIntegration}from"../types.js";import{provisionGitHubConnector}from"./connect.js";import{join}from"node:path";import{deriveSlackConnectorSlug}from"#setup/scaffold/index.js";import{writeTextFile}from"#setup/scaffold/files.js";const defaultDeps={deriveConnectorSlug:deriveSlackConnectorSlug,provisionConnector:provisionGitHubConnector,writeTextFile},githubEventsQuestion={key:`github-events`,message:`What should this GitHub App respond to?`,options:[{id:`issue_comment`,label:`New issue and PR comments`,value:`issue_comment`,hint:"Reply when a new timeline comment includes `@<bot-name>`."},{id:`pull_request_review_comment`,label:`New inline PR review comments`,value:`pull_request_review_comment`,hint:"Reply when a new inline review comment includes `@<bot-name>`."},{id:`issues`,label:`New issues`,value:`issues`,hint:`Add comments to new issues.`},{id:`pull_request`,label:`New PRs`,value:`pull_request`,hint:`Add comments to new pull requests.`}],recommended:[`issue_comment`,`pull_request_review_comment`],required:!0,requireSelection:!0};function connectTemplate(e,t,n){let r=[n.includes(`issues`)?`  onIssue(ctx, issue) {
+import { defineSetupIntegration } from "../types.js";
+import { provisionGitHubConnector } from "./connect.js";
+import { join } from "node:path";
+import { deriveSlackConnectorSlug } from "#setup/scaffold/index.js";
+import { writeTextFile } from "#setup/scaffold/files.js";
+const defaultDeps = {
+    deriveConnectorSlug: deriveSlackConnectorSlug,
+    provisionConnector: provisionGitHubConnector,
+    writeTextFile,
+  },
+  githubEventsQuestion = {
+    key: `github-events`,
+    message: `What should this GitHub App respond to?`,
+    options: [
+      {
+        id: `issue_comment`,
+        label: `New issue and PR comments`,
+        value: `issue_comment`,
+        hint: "Reply when a new timeline comment includes `@<bot-name>`.",
+      },
+      {
+        id: `pull_request_review_comment`,
+        label: `New inline PR review comments`,
+        value: `pull_request_review_comment`,
+        hint: "Reply when a new inline review comment includes `@<bot-name>`.",
+      },
+      {
+        id: `issues`,
+        label: `New issues`,
+        value: `issues`,
+        hint: `Add comments to new issues.`,
+      },
+      {
+        id: `pull_request`,
+        label: `New PRs`,
+        value: `pull_request`,
+        hint: `Add comments to new pull requests.`,
+      },
+    ],
+    recommended: [`issue_comment`, `pull_request_review_comment`],
+    required: !0,
+    requireSelection: !0,
+  };
+function connectTemplate(e, t, n) {
+  let r = [
+      n.includes(`issues`)
+        ? `  onIssue(ctx, issue) {
     if (issue.action !== "opened") return null;
     return { auth: defaultGitHubAuth(ctx) };
-  },`:void 0,n.includes(`pull_request`)?`  onPullRequest(ctx, pullRequest) {
+  },`
+        : void 0,
+      n.includes(`pull_request`)
+        ? `  onPullRequest(ctx, pullRequest) {
     if (pullRequest.action !== "opened") return null;
     return { auth: defaultGitHubAuth(ctx) };
-  },`:void 0].filter(e=>e!==void 0),i=r.length>0?`, defaultGitHubAuth`:``,a=r.length>0?`\n${r.join(`
-`)}`:``;return`import { connectGitHubCredentials } from "@vercel/connect/eve";
+  },`
+        : void 0,
+    ].filter((e) => e !== void 0),
+    i = r.length > 0 ? `, defaultGitHubAuth` : ``,
+    a =
+      r.length > 0
+        ? `\n${r.join(`
+`)}`
+        : ``;
+  return `import { connectGitHubCredentials } from "@vercel/connect/eve";
 import { githubChannel${i} } from "eve/channels/github";
 
 export default githubChannel({
   botName: ${JSON.stringify(t)},
   credentials: connectGitHubCredentials(${JSON.stringify(e)}),${a}
 });
-`}async function prepareGitHubSetup(e,t=defaultDeps){return{events:await e.asker.askMany(githubEventsQuestion),project:await e.resolveVercelProject(`GitHub`),slug:await t.deriveConnectorSlug(e.appRoot)}}async function applyGitHubSetup(e,t,r=defaultDeps){t.presenter.log.info(`GitHub App`),t.presenter.log.info(`Vercel Connect creates a GitHub App and routes verified webhooks to your deployed agent.`);let i=await r.provisionConnector({log:t.presenter.log,events:e.events,project:e.project,projectRoot:t.appRoot,slug:e.slug,signal:t.signal});return await r.writeTextFile(join(t.appRoot,`agent/channels/github.ts`),connectTemplate(i.uid,i.appSlug,e.events),{force:t.force}),t.presenter.nextSteps([`Deploy the agent, then open the GitHub App in Vercel Connect and install it in the organization or account where you want to use it.`,`Add @${i.appSlug} to a new issue, pull request, or review comment to invoke the agent. GitHub may not autocomplete or render the token as a linked mention.`]),{facts:[],deploymentRequired:!0}}const GITHUB_SETUP=defineSetupIntegration({kind:`github`,label:`GitHub`,hint:`Respond to issues, pull requests, and comments`,prepare:prepareGitHubSetup,apply:applyGitHubSetup});export{GITHUB_SETUP,applyGitHubSetup,prepareGitHubSetup};
+`;
+}
+async function prepareGitHubSetup(e, t = defaultDeps) {
+  return {
+    events: await e.asker.askMany(githubEventsQuestion),
+    project: await e.resolveVercelProject(`GitHub`),
+    slug: await t.deriveConnectorSlug(e.appRoot),
+  };
+}
+async function applyGitHubSetup(e, t, r = defaultDeps) {
+  (t.presenter.log.info(`GitHub App`),
+    t.presenter.log.info(
+      `Vercel Connect creates a GitHub App and routes verified webhooks to your deployed agent.`,
+    ));
+  let i = await r.provisionConnector({
+    log: t.presenter.log,
+    events: e.events,
+    project: e.project,
+    projectRoot: t.appRoot,
+    slug: e.slug,
+    signal: t.signal,
+  });
+  return (
+    await r.writeTextFile(
+      join(t.appRoot, `agent/channels/github.ts`),
+      connectTemplate(i.uid, i.appSlug, e.events),
+      { force: t.force },
+    ),
+    t.presenter.nextSteps([
+      `Deploy the agent, then open the GitHub App in Vercel Connect and install it in the organization or account where you want to use it.`,
+      `Add @${i.appSlug} to a new issue, pull request, or review comment to invoke the agent. GitHub may not autocomplete or render the token as a linked mention.`,
+    ]),
+    { facts: [], deploymentRequired: !0 }
+  );
+}
+const GITHUB_SETUP = defineSetupIntegration({
+  kind: `github`,
+  label: `GitHub`,
+  hint: `Respond to issues, pull requests, and comments`,
+  prepare: prepareGitHubSetup,
+  apply: applyGitHubSetup,
+});
+export { GITHUB_SETUP, applyGitHubSetup, prepareGitHubSetup };

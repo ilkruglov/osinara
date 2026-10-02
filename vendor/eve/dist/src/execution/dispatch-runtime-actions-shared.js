@@ -1,1 +1,329 @@
-import{createLogger,logError}from"#internal/logging.js";import{callAdapterEventHandler}from"#channel/adapter.js";import{AuthKey,CapabilitiesKey,ChannelInstrumentationKey,InitiatorAuthKey,SandboxKey,TurnOriginAuthKey}from"#context/keys.js";import{createSubagentCalledEvent,encodeMessageStreamEvent,stampMessageStreamEvent}from"#protocol/message.js";import{BundleKey,ChannelKey}from"#runtime/sessions/runtime-context-keys.js";import{getAgentHandleStore}from"#harness/handles/store.js";import{workflowEntryReference}from"#execution/workflow-runtime.js";import{deserializeContext}from"#context/serialize.js";import{readDurableSession}from"#execution/durable-session-store.js";import{getDynamicSubagentSelection}from"#context/dynamic-subagent-lifecycle.js";import{hydrateDurableSession}from"#execution/session.js";import{resolveEffectiveAgentRuntime}from"#execution/effective-agent-config.js";import{buildAdapterContext}from"#channel/adapter-context.js";import{withContextScope}from"#context/run-step.js";import{isAgentHandleAction}from"#execution/agent-handle-dispatch.js";import{readActionTraceContext,readSessionTraceContext}from"#tracing/agent-trace-context-store.js";import{assertUniqueRuntimeActionCallIds,getPendingRuntimeActionBatch}from"#harness/runtime-actions.js";import{createRecursiveAgentRootOnlyResult,createUnavailableDynamicSubagentResult,getSubagentName}from"#execution/dispatch-action-failures.js";import{startLocalSubagent}from"#execution/subagent-start-local.js";import{startRemoteSubagent}from"#execution/subagent-start-remote.js";import"#execution/subagent-tool.js";import{resolveSubagentDepth}from"#harness/subagent-depth.js";import{isTaskControlAction}from"#execution/tasks/parent/dispatch.js";const log=createLogger(`execution.dispatch-runtime-actions`);async function prepareRuntimeActionDispatch(e){let t=await readDurableSession(e.sessionState),n=getPendingRuntimeActionBatch(t.state);if(n===void 0||n.actions.length===0)return;assertUniqueRuntimeActionCallIds(n.actions);let s=await deserializeContext(e.serializedContext),c=s.require(BundleKey),l=resolveEffectiveAgentRuntime(c,s),u=hydrateDurableSession({compactionOverrides:{thresholdPercent:l.thresholdPercent},durable:t,turnAgent:l.turnAgent}),d=s.require(ChannelKey);getAgentHandleStore(t.state);let f=planDispatch({actions:n.actions,bundle:c,ctx:s,session:u,taskControls:e.taskControls}),p=resolveActiveSandboxSessionId(d.state,u.sessionId);if(planSharesSandbox({bundle:c,plan:f}))try{u=(await withContextScope(s,u,async e=>(await s.require(SandboxKey).get(),{result:void 0,session:e}))).session}finally{s.clearVirtualContext()}return{adapter:d,adapterCtx:buildAdapterContext(d,s),auth:s.get(AuthKey)??null,batch:n,bundle:c,capabilities:s.get(CapabilitiesKey),channelMetadata:s.get(ChannelInstrumentationKey),fanoutSize:f.filter(e=>e.kind===`start`&&e.target.kind===`local`).length,initiatorAuth:s.get(InitiatorAuthKey)??null,parentTraceContext:readSessionTraceContext(e.serializedContext,u.sessionId),plan:f,sandboxSessionId:p,serializedContext:e.serializedContext,session:u,turnOriginAuth:s.get(TurnOriginAuthKey)}}function planSharesSandbox(e){let t=e.bundle.graph;return e.plan.some(n=>{if(n.kind!==`start`||n.target.kind!==`local`)return!1;let r=n.target.action;return r.subagentName===`agent`&&!e.bundle.subagentRegistry.subagentsByNodeId.has(r.nodeId)||t?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox.definition.inheritsParent===!0})}function resolveActiveSandboxSessionId(e,t){if(typeof e!=`object`||!e)return t;let n=e.sandboxSessionId;return typeof n==`string`&&n.length>0?n:t}async function emitSubagentCalled(e){let{entry:r,outcome:i}=e;try{let t=r.kind===`resume`?r.action:r.target.action,a=r.kind===`resume`?r.dynamicRemoteAgent:r.target.kind===`remote`?r.target.dynamicRemoteAgent:void 0,o=await callAdapterEventHandler(e.adapter,createSubagentCalledEvent({callId:i.callId,childSessionId:i.address.sessionId,name:i.name,remote:i.address.kind===`agent/remote`?{resolverId:a===void 0?t.nodeId:a.credentialsStepId,url:i.address.url}:void 0,sequence:e.batchEvent.sequence,sessionId:e.sessionId,toolName:i.toolName,turnId:e.batchEvent.turnId,workflowId:workflowEntryReference.workflowId}),e.adapterCtx);await e.writer.write(encodeMessageStreamEvent(stampMessageStreamEvent(o)))}catch(e){logError(log,`subagent.called emission failed`,e,{callId:i.callId,childSessionId:i.address.sessionId,toolName:i.toolName})}}function planDispatch(e){let t=getAgentHandleStore(e.session.state)?.handles??[];return e.actions.map(n=>{if(e.taskControls&&isTaskControlAction(n))return{action:n,kind:`task-control`};let r=n.input.agentId,i=typeof r==`string`&&r.trim()!==``?r:void 0;if(i!==void 0&&isAgentHandleAction(n)){if(t.some(e=>e.identity.id===i)){let t=e.bundle.subagentRegistry.dynamicNodeIds?.has(n.nodeId)===!0?getDynamicSubagentSelection(e.ctx,n.nodeId):void 0;return{action:n,agentId:i,dynamicRemoteAgent:n.kind===`remote-agent-call`&&t?.kind===`remote`?t.remoteAgent:void 0,kind:`resume`}}log.warn(`unknown agentId on subagent call; starting a new agent`,{agentId:i,callId:n.callId})}return classifyFreshStart({action:n,bundle:e.bundle,ctx:e.ctx,session:e.session})})}function classifyFreshStart(e){let{action:t}=e,n=e.bundle.subagentRegistry.subagentsByNodeId,r=resolveSubagentDepth(e.session),i=e.session.rootSessionId!==void 0||r.currentDepth>0,a=(t.kind===`subagent-call`||t.kind===`remote-agent-call`)&&e.bundle.subagentRegistry.dynamicNodeIds?.has(t.nodeId)===!0,o=a?getDynamicSubagentSelection(e.ctx,t.nodeId):void 0;if(a&&(o===void 0||t.kind===`subagent-call`&&o.kind!==`subagent`||t.kind===`remote-agent-call`&&o.kind!==`remote`)){let e=getSubagentName(t);return log.warn(`dynamic subagent call blocked after availability changed`,{callId:t.callId,nodeId:t.nodeId,subagentName:e}),{kind:`reject`,result:createUnavailableDynamicSubagentResult(t)}}if(isRecursiveAgentAction(t,n)&&i)return log.warn(`recursive agent call blocked outside the root session`,{callId:t.callId,currentDepth:r.currentDepth,nodeId:t.nodeId,subagentName:t.subagentName}),{kind:`reject`,result:createRecursiveAgentRootOnlyResult(t)};switch(t.kind){case`subagent-call`:{let e=o?.kind===`subagent`?o.agentConfig:void 0,r=n.get(t.nodeId),i=e?.description??(r?.definition.kind===`subagent`?r.definition.description:void 0);return{kind:`start`,target:{action:t,dynamicSubagentAgentConfig:e,kind:`local`,source:i===void 0?{type:`runtime`}:{description:i,type:`local`}}}}case`remote-agent-call`:return{kind:`start`,target:{action:t,dynamicRemoteAgent:o?.kind===`remote`?o.remoteAgent:void 0,kind:`remote`}};default:throw Error(`Unsupported runtime action kind "${t.kind}" in workflow runtime.`)}}async function startSubagent(e){let t=readActionTraceContext(e.serializedContext,e.session.sessionId,e.batchEvent.turnId,e.target.action.callId)??e.parentTraceContext;switch(e.target.kind){case`local`:return startLocalSubagent({action:e.target.action,auth:e.auth,batchEvent:e.batchEvent,bundle:e.bundle,capabilities:e.capabilities,channelMetadata:e.channelMetadata,currentSession:e.currentSession,dynamicSubagentAgentConfig:e.target.dynamicSubagentAgentConfig,fanoutSize:e.fanoutSize,initiatorAuth:e.initiatorAuth,parentContinuationToken:e.parentContinuationToken,parentTraceContext:t,persistentSessions:e.persistentSessions,sandboxSessionId:e.sandboxSessionId,session:e.session,source:e.target.source,taskOwned:e.taskOwned});case`remote`:return startRemoteSubagent({action:e.target.action,auth:e.auth,batchEvent:e.batchEvent,bundle:e.bundle,callbackBaseUrl:e.callbackBaseUrl,currentSession:e.currentSession,dynamicRemoteAgent:e.target.dynamicRemoteAgent,initiatorAuth:e.initiatorAuth,parentContinuationToken:e.parentContinuationToken,parentTraceContext:t,persistentSessions:e.persistentSessions,session:e.session,taskOwned:e.taskOwned});default:return e.target}}function isRecursiveAgentAction(e,t){return e.kind===`subagent-call`&&e.subagentName===`agent`&&!t.has(e.nodeId)}export{emitSubagentCalled,prepareRuntimeActionDispatch,startSubagent};
+import { createLogger, logError } from "#internal/logging.js";
+import { callAdapterEventHandler } from "#channel/adapter.js";
+import {
+  AuthKey,
+  CapabilitiesKey,
+  ChannelInstrumentationKey,
+  InitiatorAuthKey,
+  SandboxKey,
+  TurnOriginAuthKey,
+} from "#context/keys.js";
+import {
+  createSubagentCalledEvent,
+  encodeMessageStreamEvent,
+  stampMessageStreamEvent,
+} from "#protocol/message.js";
+import {
+  BundleKey,
+  ChannelKey,
+} from "#runtime/sessions/runtime-context-keys.js";
+import { getAgentHandleStore } from "#harness/handles/store.js";
+import { workflowEntryReference } from "#execution/workflow-runtime.js";
+import { deserializeContext } from "#context/serialize.js";
+import { readDurableSession } from "#execution/durable-session-store.js";
+import { getDynamicSubagentSelection } from "#context/dynamic-subagent-lifecycle.js";
+import { hydrateDurableSession } from "#execution/session.js";
+import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
+import { buildAdapterContext } from "#channel/adapter-context.js";
+import { withContextScope } from "#context/run-step.js";
+import { isAgentHandleAction } from "#execution/agent-handle-dispatch.js";
+import {
+  readActionTraceContext,
+  readSessionTraceContext,
+} from "#tracing/agent-trace-context-store.js";
+import {
+  assertUniqueRuntimeActionCallIds,
+  getPendingRuntimeActionBatch,
+} from "#harness/runtime-actions.js";
+import {
+  createRecursiveAgentRootOnlyResult,
+  createUnavailableDynamicSubagentResult,
+  getSubagentName,
+} from "#execution/dispatch-action-failures.js";
+import { startLocalSubagent } from "#execution/subagent-start-local.js";
+import { startRemoteSubagent } from "#execution/subagent-start-remote.js";
+import "#execution/subagent-tool.js";
+import { resolveSubagentDepth } from "#harness/subagent-depth.js";
+import { isTaskControlAction } from "#execution/tasks/parent/dispatch.js";
+const log = createLogger(`execution.dispatch-runtime-actions`);
+async function prepareRuntimeActionDispatch(e) {
+  let t = await readDurableSession(e.sessionState),
+    n = getPendingRuntimeActionBatch(t.state);
+  if (n === void 0 || n.actions.length === 0) return;
+  assertUniqueRuntimeActionCallIds(n.actions);
+  let s = await deserializeContext(e.serializedContext),
+    c = s.require(BundleKey),
+    l = resolveEffectiveAgentRuntime(c, s),
+    u = hydrateDurableSession({
+      compactionOverrides: { thresholdPercent: l.thresholdPercent },
+      durable: t,
+      turnAgent: l.turnAgent,
+    }),
+    d = s.require(ChannelKey);
+  getAgentHandleStore(t.state);
+  let f = planDispatch({
+      actions: n.actions,
+      bundle: c,
+      ctx: s,
+      session: u,
+      taskControls: e.taskControls,
+    }),
+    p = resolveActiveSandboxSessionId(d.state, u.sessionId);
+  if (planSharesSandbox({ bundle: c, plan: f }))
+    try {
+      u = (
+        await withContextScope(
+          s,
+          u,
+          async (e) => (
+            await s.require(SandboxKey).get(),
+            { result: void 0, session: e }
+          ),
+        )
+      ).session;
+    } finally {
+      s.clearVirtualContext();
+    }
+  return {
+    adapter: d,
+    adapterCtx: buildAdapterContext(d, s),
+    auth: s.get(AuthKey) ?? null,
+    batch: n,
+    bundle: c,
+    capabilities: s.get(CapabilitiesKey),
+    channelMetadata: s.get(ChannelInstrumentationKey),
+    fanoutSize: f.filter((e) => e.kind === `start` && e.target.kind === `local`)
+      .length,
+    initiatorAuth: s.get(InitiatorAuthKey) ?? null,
+    parentTraceContext: readSessionTraceContext(
+      e.serializedContext,
+      u.sessionId,
+    ),
+    plan: f,
+    sandboxSessionId: p,
+    serializedContext: e.serializedContext,
+    session: u,
+    turnOriginAuth: s.get(TurnOriginAuthKey),
+  };
+}
+function planSharesSandbox(e) {
+  let t = e.bundle.graph;
+  return e.plan.some((n) => {
+    if (n.kind !== `start` || n.target.kind !== `local`) return !1;
+    let r = n.target.action;
+    return (
+      (r.subagentName === `agent` &&
+        !e.bundle.subagentRegistry.subagentsByNodeId.has(r.nodeId)) ||
+      t?.nodesByNodeId.get(r.nodeId)?.sandboxRegistry.sandbox.definition
+        .inheritsParent === !0
+    );
+  });
+}
+function resolveActiveSandboxSessionId(e, t) {
+  if (typeof e != `object` || !e) return t;
+  let n = e.sandboxSessionId;
+  return typeof n == `string` && n.length > 0 ? n : t;
+}
+async function emitSubagentCalled(e) {
+  let { entry: r, outcome: i } = e;
+  try {
+    let t = r.kind === `resume` ? r.action : r.target.action,
+      a =
+        r.kind === `resume`
+          ? r.dynamicRemoteAgent
+          : r.target.kind === `remote`
+            ? r.target.dynamicRemoteAgent
+            : void 0,
+      o = await callAdapterEventHandler(
+        e.adapter,
+        createSubagentCalledEvent({
+          callId: i.callId,
+          childSessionId: i.address.sessionId,
+          name: i.name,
+          remote:
+            i.address.kind === `agent/remote`
+              ? {
+                  resolverId: a === void 0 ? t.nodeId : a.credentialsStepId,
+                  url: i.address.url,
+                }
+              : void 0,
+          sequence: e.batchEvent.sequence,
+          sessionId: e.sessionId,
+          toolName: i.toolName,
+          turnId: e.batchEvent.turnId,
+          workflowId: workflowEntryReference.workflowId,
+        }),
+        e.adapterCtx,
+      );
+    await e.writer.write(encodeMessageStreamEvent(stampMessageStreamEvent(o)));
+  } catch (e) {
+    logError(log, `subagent.called emission failed`, e, {
+      callId: i.callId,
+      childSessionId: i.address.sessionId,
+      toolName: i.toolName,
+    });
+  }
+}
+function planDispatch(e) {
+  let t = getAgentHandleStore(e.session.state)?.handles ?? [];
+  return e.actions.map((n) => {
+    if (e.taskControls && isTaskControlAction(n))
+      return { action: n, kind: `task-control` };
+    let r = n.input.agentId,
+      i = typeof r == `string` && r.trim() !== `` ? r : void 0;
+    if (i !== void 0 && isAgentHandleAction(n)) {
+      if (t.some((e) => e.identity.id === i)) {
+        let t =
+          e.bundle.subagentRegistry.dynamicNodeIds?.has(n.nodeId) === !0
+            ? getDynamicSubagentSelection(e.ctx, n.nodeId)
+            : void 0;
+        return {
+          action: n,
+          agentId: i,
+          dynamicRemoteAgent:
+            n.kind === `remote-agent-call` && t?.kind === `remote`
+              ? t.remoteAgent
+              : void 0,
+          kind: `resume`,
+        };
+      }
+      log.warn(`unknown agentId on subagent call; starting a new agent`, {
+        agentId: i,
+        callId: n.callId,
+      });
+    }
+    return classifyFreshStart({
+      action: n,
+      bundle: e.bundle,
+      ctx: e.ctx,
+      session: e.session,
+    });
+  });
+}
+function classifyFreshStart(e) {
+  let { action: t } = e,
+    n = e.bundle.subagentRegistry.subagentsByNodeId,
+    r = resolveSubagentDepth(e.session),
+    i = e.session.rootSessionId !== void 0 || r.currentDepth > 0,
+    a =
+      (t.kind === `subagent-call` || t.kind === `remote-agent-call`) &&
+      e.bundle.subagentRegistry.dynamicNodeIds?.has(t.nodeId) === !0,
+    o = a ? getDynamicSubagentSelection(e.ctx, t.nodeId) : void 0;
+  if (
+    a &&
+    (o === void 0 ||
+      (t.kind === `subagent-call` && o.kind !== `subagent`) ||
+      (t.kind === `remote-agent-call` && o.kind !== `remote`))
+  ) {
+    let e = getSubagentName(t);
+    return (
+      log.warn(`dynamic subagent call blocked after availability changed`, {
+        callId: t.callId,
+        nodeId: t.nodeId,
+        subagentName: e,
+      }),
+      { kind: `reject`, result: createUnavailableDynamicSubagentResult(t) }
+    );
+  }
+  if (isRecursiveAgentAction(t, n) && i)
+    return (
+      log.warn(`recursive agent call blocked outside the root session`, {
+        callId: t.callId,
+        currentDepth: r.currentDepth,
+        nodeId: t.nodeId,
+        subagentName: t.subagentName,
+      }),
+      { kind: `reject`, result: createRecursiveAgentRootOnlyResult(t) }
+    );
+  switch (t.kind) {
+    case `subagent-call`: {
+      let e = o?.kind === `subagent` ? o.agentConfig : void 0,
+        r = n.get(t.nodeId),
+        i =
+          e?.description ??
+          (r?.definition.kind === `subagent`
+            ? r.definition.description
+            : void 0);
+      return {
+        kind: `start`,
+        target: {
+          action: t,
+          dynamicSubagentAgentConfig: e,
+          kind: `local`,
+          source:
+            i === void 0
+              ? { type: `runtime` }
+              : { description: i, type: `local` },
+        },
+      };
+    }
+    case `remote-agent-call`:
+      return {
+        kind: `start`,
+        target: {
+          action: t,
+          dynamicRemoteAgent: o?.kind === `remote` ? o.remoteAgent : void 0,
+          kind: `remote`,
+        },
+      };
+    default:
+      throw Error(
+        `Unsupported runtime action kind "${t.kind}" in workflow runtime.`,
+      );
+  }
+}
+async function startSubagent(e) {
+  let t =
+    readActionTraceContext(
+      e.serializedContext,
+      e.session.sessionId,
+      e.batchEvent.turnId,
+      e.target.action.callId,
+    ) ?? e.parentTraceContext;
+  switch (e.target.kind) {
+    case `local`:
+      return startLocalSubagent({
+        action: e.target.action,
+        auth: e.auth,
+        batchEvent: e.batchEvent,
+        bundle: e.bundle,
+        capabilities: e.capabilities,
+        channelMetadata: e.channelMetadata,
+        currentSession: e.currentSession,
+        dynamicSubagentAgentConfig: e.target.dynamicSubagentAgentConfig,
+        fanoutSize: e.fanoutSize,
+        initiatorAuth: e.initiatorAuth,
+        parentContinuationToken: e.parentContinuationToken,
+        parentTraceContext: t,
+        persistentSessions: e.persistentSessions,
+        sandboxSessionId: e.sandboxSessionId,
+        session: e.session,
+        source: e.target.source,
+        taskOwned: e.taskOwned,
+      });
+    case `remote`:
+      return startRemoteSubagent({
+        action: e.target.action,
+        auth: e.auth,
+        batchEvent: e.batchEvent,
+        bundle: e.bundle,
+        callbackBaseUrl: e.callbackBaseUrl,
+        currentSession: e.currentSession,
+        dynamicRemoteAgent: e.target.dynamicRemoteAgent,
+        initiatorAuth: e.initiatorAuth,
+        parentContinuationToken: e.parentContinuationToken,
+        parentTraceContext: t,
+        persistentSessions: e.persistentSessions,
+        session: e.session,
+        taskOwned: e.taskOwned,
+      });
+    default:
+      return e.target;
+  }
+}
+function isRecursiveAgentAction(e, t) {
+  return (
+    e.kind === `subagent-call` && e.subagentName === `agent` && !t.has(e.nodeId)
+  );
+}
+export { emitSubagentCalled, prepareRuntimeActionDispatch, startSubagent };

@@ -1,1 +1,478 @@
-import{z}from"#compiled/zod/index.js";import{resolveInstalledPackageInfo}from"#internal/application/package.js";import{inputRequestSchema,inputResponseSchema}from"#runtime/input/types.js";import{parseJsonObject}from"#shared/json.js";import{DELETE,GET,HEAD,OPTIONS,POST,defineChannel}from"#public/definitions/channel.js";import{escapeAuthChallengeParameter,readOAuthResourceOptions,routeAuth}from"#public/channels/auth.js";import{readAgentInfoRouteResponse,readRouteChannelName,readRouteSessionCreator}from"#internal/nitro/routes/channel-route-context.js";import{WorkflowAgentInvocationExecution}from"#internal/invocation/workflow-execution.js";import{validateMcpHttpRequest,validateMcpMetadataRequest}from"#internal/mcp/http-security.js";import{createMcpStreamableHttpServer,defineMcpTool}from"#internal/mcp/streamable-http-server.js";import{createMcpProtectedResourceMetadata,createMcpResourceChallenge}from"#internal/mcp/protected-resource.js";function mcpChannel(e){if(e?.auth===void 0)throw Error(`mcpChannel requires auth. Use none() for explicit public access.`);let t=e.route??`/eve/v1/mcp`,n=readOAuthResourceOptions(e.auth),r=[GET(t,async(t,r)=>await authenticateMcpRequest(t,r,e.auth,n)),POST(t,async(t,r)=>await authenticateMcpRequest(t,r,e.auth,n)),DELETE(t,async(t,r)=>await authenticateMcpRequest(t,r,e.auth,n))];return n!==void 0&&r.unshift(...protectedResourceMetadataRoutes(n,t)),defineChannel({routes:r})}function protectedResourceMetadataRoutes(e,t){let n=protectedResourceMetadataPath(e,t);return[GET(n,async n=>protectedResourceMetadataResponse(n,e,t,!1)),HEAD(n,async n=>protectedResourceMetadataResponse(n,e,t,!0)),OPTIONS(n,async e=>protectedResourceMetadataOptionsResponse(e))]}function protectedResourceMetadataPath(e,t){if(e.metadataPath!==void 0)return e.metadataPath;let n=e.resource===void 0?t:new URL(e.resource).pathname;return n===`/`?`/.well-known/oauth-protected-resource`:`/.well-known/oauth-protected-resource${n}`}function protectedResourceMetadataResponse(e,t,n,r){let i=validateMcpMetadataRequest(e);if(i!==void 0)return i;let a=t.resource??new URL(n,new URL(e.url).origin).toString(),o=t.issuer===void 0?t.authorizationServers:[t.issuer],s=Response.json(createMcpProtectedResourceMetadata({authorizationServers:o,resource:a,scopesSupported:t.scopes}),{headers:{"access-control-allow-origin":`*`,"cache-control":`no-store`}});return r?new Response(null,{headers:s.headers,status:s.status}):s}function protectedResourceMetadataOptionsResponse(e){let t=validateMcpMetadataRequest(e);if(t!==void 0)return t;let n=new Headers({"access-control-allow-methods":`GET, HEAD, OPTIONS`,"access-control-allow-origin":`*`,"cache-control":`no-store`}),r=e.headers.get(`access-control-request-headers`);return r!==null&&(n.set(`access-control-allow-headers`,r),n.set(`vary`,`Access-Control-Request-Headers`)),new Response(null,{headers:n,status:204})}function addResourceChallenge(e,t,n){if(e.status!==401&&e.status!==403)return e;let r=protectedResourceMetadataPath(n,new URL(t.url).pathname),i=n.resource??new URL(t.url).origin,a=new URL(r,i).toString(),o=new Headers(e.headers),s=o.get(`www-authenticate`);if(e.status===401)o.set(`www-authenticate`,mergeMcpBearerChallenge(s,a,n.scopes));else{let t=augmentInsufficientScopeChallenge(s,a);if(t===void 0)return e;o.set(`www-authenticate`,t)}return new Response(e.body,{headers:o,status:e.status,statusText:e.statusText})}function mergeMcpBearerChallenge(e,t,n){let r=parseAuthChallenges(e),i=r.find(e=>e.scheme.toLowerCase()===`bearer`&&hasAuthParameter(e.value,`error`))??r.find(e=>e.scheme.toLowerCase()===`bearer`);return replaceBearerChallenges(r,i,i===void 0?createMcpResourceChallenge(t,n):augmentBearerChallenge(i.value,t,n))}function augmentInsufficientScopeChallenge(e,t){let n=parseAuthChallenges(e),r=n.find(e=>e.scheme.toLowerCase()===`bearer`&&hasAuthParameter(e.value,`error`,`insufficient_scope`));if(r!==void 0)return replaceBearerChallenges(n,r,augmentBearerChallenge(r.value,t))}function replaceBearerChallenges(e,t,n){let r=[],i=!1;for(let a of e){if(a.scheme.toLowerCase()!==`bearer`){r.push(a.value);continue}!i&&a===t&&(r.push(n),i=!0)}return i||r.push(n),r.join(`, `)}function augmentBearerChallenge(e,t,n){let r=e;return hasAuthParameter(r,`resource_metadata`)||(r=appendAuthParameter(r,`resource_metadata`,t)),n?.length&&!hasAuthParameter(r,`scope`)&&(r=appendAuthParameter(r,`scope`,n.join(` `))),r}function appendAuthParameter(e,t,n){return`${e}${e.trim().toLowerCase()===`bearer`?` `:`, `}${t}="${escapeAuthChallengeParameter(n)}"`}function hasAuthParameter(e,t,n){let r=t.replaceAll(/[.*+?^${}()|[\]\\]/g,`\\$&`);if(n===void 0)return RegExp(`(?:^|[\\s,])${r}\\s*=`,`i`).test(e);let i=n.replaceAll(/[.*+?^${}()|[\]\\]/g,`\\$&`);return RegExp(`(?:^|[\\s,])${r}\\s*=\\s*(?:"${i}"|${i})(?=$|[\\s,])`,`i`).test(e)}function parseAuthChallenges(e){if(e===null)return[];let t=[];for(let n of splitQuotedHeaderList(e)){let e=readChallengeScheme(n);if(e!==void 0){t.push({scheme:e,value:n});continue}let r=t.at(-1);r!==void 0&&(r.value+=`, ${n}`)}return t}function splitQuotedHeaderList(e){let t=[],n=!1,r=!1,i=0;for(let a=0;a<e.length;a++){let o=e[a];if(n)n=!1;else if(o===`\\`)n=!0;else if(o===`"`)r=!r;else if(o===`,`&&!r){let n=e.slice(i,a).trim();n.length>0&&t.push(n),i=a+1}}let a=e.slice(i).trim();return a.length>0&&t.push(a),t}function readChallengeScheme(e){let t=/^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)(?:\s+|$)/.exec(e);if(t===null)return;let n=t[1];if(n!==void 0)return e.slice(n.length).trimStart().startsWith(`=`)?void 0:n}async function authenticateMcpRequest(e,t,n,r){let i=validateMcpHttpRequest(e);if(i!==void 0)return i;let a=await routeAuth(e,n);return a instanceof Response?r===void 0?a:addResourceChallenge(a,e,r):await handleMcpRequest(e,t,a)}async function handleMcpRequest(e,n,r){let i=readRouteSessionCreator(n),a=readRouteChannelName(n),o=readAgentInfoRouteResponse(n);if(a===void 0||i===void 0||o===void 0)return Response.json({error:`MCP requires agent route context.`},{status:500});let s=await o();if(!s.ok)return s;let c=await s.json();if(typeof c.agent?.name!=`string`)return Response.json({error:`MCP requires compiled agent metadata.`},{status:500});let l=typeof c.agent.description==`string`?c.agent.description:void 0,u=new WorkflowAgentInvocationExecution({createSession:i,from:n.from});return await createMcpStreamableHttpServer({authenticate:async()=>r,name:c.agent.name,tools:createInvocationTools(u,l,r.authenticator===`none`&&r.principalType===`anonymous`),version:resolveInstalledPackageInfo().version})(e)}function createInvocationTools(t,n,i){let a=i?` On this public channel, the invocation ID is a bearer capability until workflow retention expires.`:``,o=`Starts durable work and returns an invocation handle immediately.${a}`;return[defineMcpTool({definition:{annotations:{destructiveHint:!0,idempotentHint:!1,openWorldHint:!0,readOnlyHint:!1},description:n===void 0?o:`${n} ${o}`,inputSchema:z.strictObject({message:z.string().min(1),outputSchema:z.looseObject({}).optional()}),name:`agent_start`,outputSchema:AGENT_INVOCATION_OUTPUT_SCHEMA},async call(e,n){return invocationResult(await t.create({auth:n.auth,message:e.message,outputSchema:asJsonObject(e.outputSchema)}))}}),defineMcpTool({definition:{annotations:{destructiveHint:!1,idempotentHint:!0,openWorldHint:!1,readOnlyHint:!0},description:`Reads complete durable invocation state.${a}`,inputSchema:z.strictObject({invocationId:z.string().min(1)}),name:`agent_get`,outputSchema:AGENT_INVOCATION_OUTPUT_SCHEMA},async call(e,n){return invocationResult(requiredInvocation(await t.read({auth:n.auth,invocationId:e.invocationId})))}}),defineMcpTool({definition:{annotations:{destructiveHint:!0,idempotentHint:!1,openWorldHint:!0,readOnlyHint:!1},description:`Answers a pending input request on a durable invocation.`,inputSchema:z.strictObject({invocationId:z.string().min(1),responses:z.array(inputResponseSchema).min(1)}),name:`agent_update`,outputSchema:AGENT_INVOCATION_OUTPUT_SCHEMA},async call(e,n){return invocationResult(requiredMutation(await t.update({auth:n.auth,invocationId:e.invocationId,responses:e.responses})))}}),defineMcpTool({definition:{annotations:{destructiveHint:!0,idempotentHint:!0,openWorldHint:!1,readOnlyHint:!1},description:`Requests cancellation of a durable invocation. Read it again to observe acknowledgement.`,inputSchema:z.strictObject({invocationId:z.string().min(1)}),name:`agent_cancel`,outputSchema:AGENT_INVOCATION_OUTPUT_SCHEMA},async call(e,n){return invocationResult(requiredInvocation(await t.cancel({auth:n.auth,invocationId:e.invocationId})))}})]}function requiredInvocation(e){if(e===void 0)throw Error(`Invocation not found.`);return e}function requiredMutation(e){switch(e.type){case`success`:return e.invocation;case`conflict`:throw Error(e.message);case`not_found`:throw Error(`Invocation not found.`)}}function invocationResult(e){let t=parseJsonObject(e);return{content:[{text:JSON.stringify(t),type:`text`}],structuredContent:t}}function asJsonObject(e){if(e===void 0)return;let t=parseJsonObject(e);return validateOutputSchemaComplexity(t),t}const AUTHORIZATION_CHALLENGE_SCHEMA=z.strictObject({displayName:z.string().optional(),expiresAt:z.iso.datetime().optional(),instructions:z.string().optional(),url:z.url().optional(),userCode:z.string().optional()}),AUTHORIZATION_REQUEST_SCHEMA=z.strictObject({authorization:AUTHORIZATION_CHALLENGE_SCHEMA.optional(),description:z.string(),name:z.string(),webhookUrl:z.url().optional()}),MCP_INPUT_REQUEST_SCHEMA=inputRequestSchema.safeExtend({action:z.strictObject({callId:z.string(),input:z.record(z.string(),z.json()),kind:z.literal(`tool-call`),toolName:z.string()})}),AGENT_INVOCATION_BASE_SCHEMA=z.strictObject({createdAt:z.iso.datetime(),expiresAt:z.iso.datetime().optional(),invocationId:z.string()}),AGENT_INVOCATION_OUTPUT_SCHEMA=z.discriminatedUnion(`status`,[AGENT_INVOCATION_BASE_SCHEMA.extend({pollAfterMs:z.number().int().nonnegative(),result:z.json().optional(),status:z.literal(`working`)}),AGENT_INVOCATION_BASE_SCHEMA.extend({inputRequests:z.record(z.string(),MCP_INPUT_REQUEST_SCHEMA),result:z.json().optional(),status:z.literal(`input_required`)}),AGENT_INVOCATION_BASE_SCHEMA.extend({authorizations:z.array(AUTHORIZATION_REQUEST_SCHEMA).min(1),pollAfterMs:z.number().int().nonnegative(),result:z.json().optional(),status:z.literal(`authorization_required`)}),AGENT_INVOCATION_BASE_SCHEMA.extend({result:z.json().optional(),status:z.literal(`completed`)}),AGENT_INVOCATION_BASE_SCHEMA.extend({error:z.strictObject({code:z.number().int(),data:z.json().optional(),message:z.string()}),status:z.literal(`failed`)}),AGENT_INVOCATION_BASE_SCHEMA.extend({status:z.literal(`cancelled`)})]);function validateOutputSchemaComplexity(e){if(new TextEncoder().encode(JSON.stringify(e)).byteLength>65536)throw Error(`outputSchema must be at most 65536 bytes.`);let t=0,visit=(e,n)=>{if(t++,t>2048)throw Error(`outputSchema must contain at most 2048 nodes.`);if(n>32)throw Error(`outputSchema must be at most 32 levels deep.`);if(Array.isArray(e)){for(let t of e)visit(t,n+1);return}if(!(typeof e!=`object`||!e))for(let[t,r]of Object.entries(e)){if(t===`$ref`&&typeof r==`string`&&!r.startsWith(`#`))throw Error(`outputSchema external $ref values are not supported.`);visit(r,n+1)}};visit(e,0)}export{mcpChannel};
+import { z } from "#compiled/zod/index.js";
+import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import {
+  inputRequestSchema,
+  inputResponseSchema,
+} from "#runtime/input/types.js";
+import { parseJsonObject } from "#shared/json.js";
+import {
+  DELETE,
+  GET,
+  HEAD,
+  OPTIONS,
+  POST,
+  defineChannel,
+} from "#public/definitions/channel.js";
+import {
+  escapeAuthChallengeParameter,
+  readOAuthResourceOptions,
+  routeAuth,
+} from "#public/channels/auth.js";
+import {
+  readAgentInfoRouteResponse,
+  readRouteChannelName,
+  readRouteSessionCreator,
+} from "#internal/nitro/routes/channel-route-context.js";
+import { WorkflowAgentInvocationExecution } from "#internal/invocation/workflow-execution.js";
+import {
+  validateMcpHttpRequest,
+  validateMcpMetadataRequest,
+} from "#internal/mcp/http-security.js";
+import {
+  createMcpStreamableHttpServer,
+  defineMcpTool,
+} from "#internal/mcp/streamable-http-server.js";
+import {
+  createMcpProtectedResourceMetadata,
+  createMcpResourceChallenge,
+} from "#internal/mcp/protected-resource.js";
+function mcpChannel(e) {
+  if (e?.auth === void 0)
+    throw Error(
+      `mcpChannel requires auth. Use none() for explicit public access.`,
+    );
+  let t = e.route ?? `/eve/v1/mcp`,
+    n = readOAuthResourceOptions(e.auth),
+    r = [
+      GET(t, async (t, r) => await authenticateMcpRequest(t, r, e.auth, n)),
+      POST(t, async (t, r) => await authenticateMcpRequest(t, r, e.auth, n)),
+      DELETE(t, async (t, r) => await authenticateMcpRequest(t, r, e.auth, n)),
+    ];
+  return (
+    n !== void 0 && r.unshift(...protectedResourceMetadataRoutes(n, t)),
+    defineChannel({ routes: r })
+  );
+}
+function protectedResourceMetadataRoutes(e, t) {
+  let n = protectedResourceMetadataPath(e, t);
+  return [
+    GET(n, async (n) => protectedResourceMetadataResponse(n, e, t, !1)),
+    HEAD(n, async (n) => protectedResourceMetadataResponse(n, e, t, !0)),
+    OPTIONS(n, async (e) => protectedResourceMetadataOptionsResponse(e)),
+  ];
+}
+function protectedResourceMetadataPath(e, t) {
+  if (e.metadataPath !== void 0) return e.metadataPath;
+  let n = e.resource === void 0 ? t : new URL(e.resource).pathname;
+  return n === `/`
+    ? `/.well-known/oauth-protected-resource`
+    : `/.well-known/oauth-protected-resource${n}`;
+}
+function protectedResourceMetadataResponse(e, t, n, r) {
+  let i = validateMcpMetadataRequest(e);
+  if (i !== void 0) return i;
+  let a = t.resource ?? new URL(n, new URL(e.url).origin).toString(),
+    o = t.issuer === void 0 ? t.authorizationServers : [t.issuer],
+    s = Response.json(
+      createMcpProtectedResourceMetadata({
+        authorizationServers: o,
+        resource: a,
+        scopesSupported: t.scopes,
+      }),
+      {
+        headers: {
+          "access-control-allow-origin": `*`,
+          "cache-control": `no-store`,
+        },
+      },
+    );
+  return r ? new Response(null, { headers: s.headers, status: s.status }) : s;
+}
+function protectedResourceMetadataOptionsResponse(e) {
+  let t = validateMcpMetadataRequest(e);
+  if (t !== void 0) return t;
+  let n = new Headers({
+      "access-control-allow-methods": `GET, HEAD, OPTIONS`,
+      "access-control-allow-origin": `*`,
+      "cache-control": `no-store`,
+    }),
+    r = e.headers.get(`access-control-request-headers`);
+  return (
+    r !== null &&
+      (n.set(`access-control-allow-headers`, r),
+      n.set(`vary`, `Access-Control-Request-Headers`)),
+    new Response(null, { headers: n, status: 204 })
+  );
+}
+function addResourceChallenge(e, t, n) {
+  if (e.status !== 401 && e.status !== 403) return e;
+  let r = protectedResourceMetadataPath(n, new URL(t.url).pathname),
+    i = n.resource ?? new URL(t.url).origin,
+    a = new URL(r, i).toString(),
+    o = new Headers(e.headers),
+    s = o.get(`www-authenticate`);
+  if (e.status === 401)
+    o.set(`www-authenticate`, mergeMcpBearerChallenge(s, a, n.scopes));
+  else {
+    let t = augmentInsufficientScopeChallenge(s, a);
+    if (t === void 0) return e;
+    o.set(`www-authenticate`, t);
+  }
+  return new Response(e.body, {
+    headers: o,
+    status: e.status,
+    statusText: e.statusText,
+  });
+}
+function mergeMcpBearerChallenge(e, t, n) {
+  let r = parseAuthChallenges(e),
+    i =
+      r.find(
+        (e) =>
+          e.scheme.toLowerCase() === `bearer` &&
+          hasAuthParameter(e.value, `error`),
+      ) ?? r.find((e) => e.scheme.toLowerCase() === `bearer`);
+  return replaceBearerChallenges(
+    r,
+    i,
+    i === void 0
+      ? createMcpResourceChallenge(t, n)
+      : augmentBearerChallenge(i.value, t, n),
+  );
+}
+function augmentInsufficientScopeChallenge(e, t) {
+  let n = parseAuthChallenges(e),
+    r = n.find(
+      (e) =>
+        e.scheme.toLowerCase() === `bearer` &&
+        hasAuthParameter(e.value, `error`, `insufficient_scope`),
+    );
+  if (r !== void 0)
+    return replaceBearerChallenges(n, r, augmentBearerChallenge(r.value, t));
+}
+function replaceBearerChallenges(e, t, n) {
+  let r = [],
+    i = !1;
+  for (let a of e) {
+    if (a.scheme.toLowerCase() !== `bearer`) {
+      r.push(a.value);
+      continue;
+    }
+    !i && a === t && (r.push(n), (i = !0));
+  }
+  return (i || r.push(n), r.join(`, `));
+}
+function augmentBearerChallenge(e, t, n) {
+  let r = e;
+  return (
+    hasAuthParameter(r, `resource_metadata`) ||
+      (r = appendAuthParameter(r, `resource_metadata`, t)),
+    n?.length &&
+      !hasAuthParameter(r, `scope`) &&
+      (r = appendAuthParameter(r, `scope`, n.join(` `))),
+    r
+  );
+}
+function appendAuthParameter(e, t, n) {
+  return `${e}${e.trim().toLowerCase() === `bearer` ? ` ` : `, `}${t}="${escapeAuthChallengeParameter(n)}"`;
+}
+function hasAuthParameter(e, t, n) {
+  let r = t.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`);
+  if (n === void 0) return RegExp(`(?:^|[\\s,])${r}\\s*=`, `i`).test(e);
+  let i = n.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`);
+  return RegExp(
+    `(?:^|[\\s,])${r}\\s*=\\s*(?:"${i}"|${i})(?=$|[\\s,])`,
+    `i`,
+  ).test(e);
+}
+function parseAuthChallenges(e) {
+  if (e === null) return [];
+  let t = [];
+  for (let n of splitQuotedHeaderList(e)) {
+    let e = readChallengeScheme(n);
+    if (e !== void 0) {
+      t.push({ scheme: e, value: n });
+      continue;
+    }
+    let r = t.at(-1);
+    r !== void 0 && (r.value += `, ${n}`);
+  }
+  return t;
+}
+function splitQuotedHeaderList(e) {
+  let t = [],
+    n = !1,
+    r = !1,
+    i = 0;
+  for (let a = 0; a < e.length; a++) {
+    let o = e[a];
+    if (n) n = !1;
+    else if (o === `\\`) n = !0;
+    else if (o === `"`) r = !r;
+    else if (o === `,` && !r) {
+      let n = e.slice(i, a).trim();
+      (n.length > 0 && t.push(n), (i = a + 1));
+    }
+  }
+  let a = e.slice(i).trim();
+  return (a.length > 0 && t.push(a), t);
+}
+function readChallengeScheme(e) {
+  let t = /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)(?:\s+|$)/.exec(e);
+  if (t === null) return;
+  let n = t[1];
+  if (n !== void 0)
+    return e.slice(n.length).trimStart().startsWith(`=`) ? void 0 : n;
+}
+async function authenticateMcpRequest(e, t, n, r) {
+  let i = validateMcpHttpRequest(e);
+  if (i !== void 0) return i;
+  let a = await routeAuth(e, n);
+  return a instanceof Response
+    ? r === void 0
+      ? a
+      : addResourceChallenge(a, e, r)
+    : await handleMcpRequest(e, t, a);
+}
+async function handleMcpRequest(e, n, r) {
+  let i = readRouteSessionCreator(n),
+    a = readRouteChannelName(n),
+    o = readAgentInfoRouteResponse(n);
+  if (a === void 0 || i === void 0 || o === void 0)
+    return Response.json(
+      { error: `MCP requires agent route context.` },
+      { status: 500 },
+    );
+  let s = await o();
+  if (!s.ok) return s;
+  let c = await s.json();
+  if (typeof c.agent?.name != `string`)
+    return Response.json(
+      { error: `MCP requires compiled agent metadata.` },
+      { status: 500 },
+    );
+  let l = typeof c.agent.description == `string` ? c.agent.description : void 0,
+    u = new WorkflowAgentInvocationExecution({
+      createSession: i,
+      from: n.from,
+    });
+  return await createMcpStreamableHttpServer({
+    authenticate: async () => r,
+    name: c.agent.name,
+    tools: createInvocationTools(
+      u,
+      l,
+      r.authenticator === `none` && r.principalType === `anonymous`,
+    ),
+    version: resolveInstalledPackageInfo().version,
+  })(e);
+}
+function createInvocationTools(t, n, i) {
+  let a = i
+      ? ` On this public channel, the invocation ID is a bearer capability until workflow retention expires.`
+      : ``,
+    o = `Starts durable work and returns an invocation handle immediately.${a}`;
+  return [
+    defineMcpTool({
+      definition: {
+        annotations: {
+          destructiveHint: !0,
+          idempotentHint: !1,
+          openWorldHint: !0,
+          readOnlyHint: !1,
+        },
+        description: n === void 0 ? o : `${n} ${o}`,
+        inputSchema: z.strictObject({
+          message: z.string().min(1),
+          outputSchema: z.looseObject({}).optional(),
+        }),
+        name: `agent_start`,
+        outputSchema: AGENT_INVOCATION_OUTPUT_SCHEMA,
+      },
+      async call(e, n) {
+        return invocationResult(
+          await t.create({
+            auth: n.auth,
+            message: e.message,
+            outputSchema: asJsonObject(e.outputSchema),
+          }),
+        );
+      },
+    }),
+    defineMcpTool({
+      definition: {
+        annotations: {
+          destructiveHint: !1,
+          idempotentHint: !0,
+          openWorldHint: !1,
+          readOnlyHint: !0,
+        },
+        description: `Reads complete durable invocation state.${a}`,
+        inputSchema: z.strictObject({ invocationId: z.string().min(1) }),
+        name: `agent_get`,
+        outputSchema: AGENT_INVOCATION_OUTPUT_SCHEMA,
+      },
+      async call(e, n) {
+        return invocationResult(
+          requiredInvocation(
+            await t.read({ auth: n.auth, invocationId: e.invocationId }),
+          ),
+        );
+      },
+    }),
+    defineMcpTool({
+      definition: {
+        annotations: {
+          destructiveHint: !0,
+          idempotentHint: !1,
+          openWorldHint: !0,
+          readOnlyHint: !1,
+        },
+        description: `Answers a pending input request on a durable invocation.`,
+        inputSchema: z.strictObject({
+          invocationId: z.string().min(1),
+          responses: z.array(inputResponseSchema).min(1),
+        }),
+        name: `agent_update`,
+        outputSchema: AGENT_INVOCATION_OUTPUT_SCHEMA,
+      },
+      async call(e, n) {
+        return invocationResult(
+          requiredMutation(
+            await t.update({
+              auth: n.auth,
+              invocationId: e.invocationId,
+              responses: e.responses,
+            }),
+          ),
+        );
+      },
+    }),
+    defineMcpTool({
+      definition: {
+        annotations: {
+          destructiveHint: !0,
+          idempotentHint: !0,
+          openWorldHint: !1,
+          readOnlyHint: !1,
+        },
+        description: `Requests cancellation of a durable invocation. Read it again to observe acknowledgement.`,
+        inputSchema: z.strictObject({ invocationId: z.string().min(1) }),
+        name: `agent_cancel`,
+        outputSchema: AGENT_INVOCATION_OUTPUT_SCHEMA,
+      },
+      async call(e, n) {
+        return invocationResult(
+          requiredInvocation(
+            await t.cancel({ auth: n.auth, invocationId: e.invocationId }),
+          ),
+        );
+      },
+    }),
+  ];
+}
+function requiredInvocation(e) {
+  if (e === void 0) throw Error(`Invocation not found.`);
+  return e;
+}
+function requiredMutation(e) {
+  switch (e.type) {
+    case `success`:
+      return e.invocation;
+    case `conflict`:
+      throw Error(e.message);
+    case `not_found`:
+      throw Error(`Invocation not found.`);
+  }
+}
+function invocationResult(e) {
+  let t = parseJsonObject(e);
+  return {
+    content: [{ text: JSON.stringify(t), type: `text` }],
+    structuredContent: t,
+  };
+}
+function asJsonObject(e) {
+  if (e === void 0) return;
+  let t = parseJsonObject(e);
+  return (validateOutputSchemaComplexity(t), t);
+}
+const AUTHORIZATION_CHALLENGE_SCHEMA = z.strictObject({
+    displayName: z.string().optional(),
+    expiresAt: z.iso.datetime().optional(),
+    instructions: z.string().optional(),
+    url: z.url().optional(),
+    userCode: z.string().optional(),
+  }),
+  AUTHORIZATION_REQUEST_SCHEMA = z.strictObject({
+    authorization: AUTHORIZATION_CHALLENGE_SCHEMA.optional(),
+    description: z.string(),
+    name: z.string(),
+    webhookUrl: z.url().optional(),
+  }),
+  MCP_INPUT_REQUEST_SCHEMA = inputRequestSchema.safeExtend({
+    action: z.strictObject({
+      callId: z.string(),
+      input: z.record(z.string(), z.json()),
+      kind: z.literal(`tool-call`),
+      toolName: z.string(),
+    }),
+  }),
+  AGENT_INVOCATION_BASE_SCHEMA = z.strictObject({
+    createdAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime().optional(),
+    invocationId: z.string(),
+  }),
+  AGENT_INVOCATION_OUTPUT_SCHEMA = z.discriminatedUnion(`status`, [
+    AGENT_INVOCATION_BASE_SCHEMA.extend({
+      pollAfterMs: z.number().int().nonnegative(),
+      result: z.json().optional(),
+      status: z.literal(`working`),
+    }),
+    AGENT_INVOCATION_BASE_SCHEMA.extend({
+      inputRequests: z.record(z.string(), MCP_INPUT_REQUEST_SCHEMA),
+      result: z.json().optional(),
+      status: z.literal(`input_required`),
+    }),
+    AGENT_INVOCATION_BASE_SCHEMA.extend({
+      authorizations: z.array(AUTHORIZATION_REQUEST_SCHEMA).min(1),
+      pollAfterMs: z.number().int().nonnegative(),
+      result: z.json().optional(),
+      status: z.literal(`authorization_required`),
+    }),
+    AGENT_INVOCATION_BASE_SCHEMA.extend({
+      result: z.json().optional(),
+      status: z.literal(`completed`),
+    }),
+    AGENT_INVOCATION_BASE_SCHEMA.extend({
+      error: z.strictObject({
+        code: z.number().int(),
+        data: z.json().optional(),
+        message: z.string(),
+      }),
+      status: z.literal(`failed`),
+    }),
+    AGENT_INVOCATION_BASE_SCHEMA.extend({ status: z.literal(`cancelled`) }),
+  ]);
+function validateOutputSchemaComplexity(e) {
+  if (new TextEncoder().encode(JSON.stringify(e)).byteLength > 65536)
+    throw Error(`outputSchema must be at most 65536 bytes.`);
+  let t = 0,
+    visit = (e, n) => {
+      if ((t++, t > 2048))
+        throw Error(`outputSchema must contain at most 2048 nodes.`);
+      if (n > 32) throw Error(`outputSchema must be at most 32 levels deep.`);
+      if (Array.isArray(e)) {
+        for (let t of e) visit(t, n + 1);
+        return;
+      }
+      if (!(typeof e != `object` || !e))
+        for (let [t, r] of Object.entries(e)) {
+          if (t === `$ref` && typeof r == `string` && !r.startsWith(`#`))
+            throw Error(`outputSchema external $ref values are not supported.`);
+          visit(r, n + 1);
+        }
+    };
+  visit(e, 0);
+}
+export { mcpChannel };

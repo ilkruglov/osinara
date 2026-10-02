@@ -1,1 +1,2 @@
-const WORKSPACE_ROOT=`/workspace`;export{WORKSPACE_ROOT};
+const WORKSPACE_ROOT = `/workspace`;
+export { WORKSPACE_ROOT };

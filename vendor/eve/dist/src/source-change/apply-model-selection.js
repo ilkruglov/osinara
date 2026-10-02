@@ -1,2 +1,104 @@
-import{escapeForQuote,isAstNode,keyMatches,lineAt,parseAgentObject,unwrapExpression}from"./agent-config-ast.js";import{CHATGPT_MODEL_SELECTION_PREFIX,DEFAULT_CHATGPT_MODEL_SELECTION,normalizeChatGptModelId,parseChatGptModelSelection}from"#shared/chatgpt-model.js";async function applyModelSelectionToSource(t,n){let a=await parseAgentObject(t);if(a.kind===`bail`)return a;let o=findModelValue(a.object);if(o===void 0||o.start===void 0||o.end===void 0)return{kind:`bail`,reason:"`model` is absent or cannot be edited safely",line:lineAt(t,a.object.start)};let s=currentSelection(o);if(s===void 0)return{kind:`bail`,reason:"`model` is neither a string literal nor an eve `chatgpt()` call",line:lineAt(t,o.start)};let c=parseChatGptModelSelection(n),u=c===void 0?`${t[o.start]===`'`?`'`:`"`}${escapeForQuote(n,t[o.start]===`'`?`'`:`"`)}${t[o.start]===`'`?`'`:`"`}`:`chatgpt(${JSON.stringify(c)})`,d=t.slice(0,o.start)+u+t.slice(o.end);return c===void 0?parseChatGptModelSelection(s)!==void 0&&!/\bchatgpt\s*\(/u.test(d)&&(d=removeChatGptImport(d)):d=ensureChatGptImport(d),{kind:`applied`,from:s,to:n,nextSource:d}}function findModelValue(e){for(let r of e.properties)if(!(r.type!==`Property`||r.computed||!keyMatches(r.key,`model`)))return isAstNode(r.value)?unwrapExpression(r.value):void 0}function currentSelection(e){if(e.type===`Literal`&&typeof e.value==`string`)return e.value;if(e.type!==`CallExpression`||!isAstNode(e.callee))return;let n=unwrapExpression(e.callee);if(n.type!==`Identifier`||n.name!==`chatgpt`)return;let r=e.arguments?.[0];if(r===void 0)return DEFAULT_CHATGPT_MODEL_SELECTION;if(!isAstNode(r))return;let i=unwrapExpression(r);if(i.type!==`Literal`||typeof i.value!=`string`)return;let l=normalizeChatGptModelId(i.value);return l===void 0?void 0:`${CHATGPT_MODEL_SELECTION_PREFIX}${l}`}function ensureChatGptImport(e){let t=e.match(/import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?/u);if(t!==null){let n=t[1].split(`,`).map(e=>e.trim()).filter(Boolean);if(n.includes(`chatgpt`))return e;let r=`import { ${[...n,`chatgpt`].join(`, `)} } from "eve/models/openai";`;return e.slice(0,t.index)+r+e.slice(t.index+t[0].length)}let n=[...e.matchAll(/^import .*;\s*$/gmu)].at(-1),r=n===void 0?0:n.index+n[0].length,i=r===0?``:`
-`;return`${e.slice(0,r)}${i}import { chatgpt } from "eve/models/openai";${e.slice(r)}`}function removeChatGptImport(e){return e.replace(/import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?\n?/u,(e,t)=>{let n=t.split(`,`).map(e=>e.trim()).filter(Boolean),r=n.filter(e=>e!==`chatgpt`);return r.length===n.length?e:r.length===0?``:`import { ${r.join(`, `)} } from "eve/models/openai";\n`})}export{applyModelSelectionToSource};
+import {
+  escapeForQuote,
+  isAstNode,
+  keyMatches,
+  lineAt,
+  parseAgentObject,
+  unwrapExpression,
+} from "./agent-config-ast.js";
+import {
+  CHATGPT_MODEL_SELECTION_PREFIX,
+  DEFAULT_CHATGPT_MODEL_SELECTION,
+  normalizeChatGptModelId,
+  parseChatGptModelSelection,
+} from "#shared/chatgpt-model.js";
+async function applyModelSelectionToSource(t, n) {
+  let a = await parseAgentObject(t);
+  if (a.kind === `bail`) return a;
+  let o = findModelValue(a.object);
+  if (o === void 0 || o.start === void 0 || o.end === void 0)
+    return {
+      kind: `bail`,
+      reason: "`model` is absent or cannot be edited safely",
+      line: lineAt(t, a.object.start),
+    };
+  let s = currentSelection(o);
+  if (s === void 0)
+    return {
+      kind: `bail`,
+      reason: "`model` is neither a string literal nor an eve `chatgpt()` call",
+      line: lineAt(t, o.start),
+    };
+  let c = parseChatGptModelSelection(n),
+    u =
+      c === void 0
+        ? `${t[o.start] === `'` ? `'` : `"`}${escapeForQuote(n, t[o.start] === `'` ? `'` : `"`)}${t[o.start] === `'` ? `'` : `"`}`
+        : `chatgpt(${JSON.stringify(c)})`,
+    d = t.slice(0, o.start) + u + t.slice(o.end);
+  return (
+    c === void 0
+      ? parseChatGptModelSelection(s) !== void 0 &&
+        !/\bchatgpt\s*\(/u.test(d) &&
+        (d = removeChatGptImport(d))
+      : (d = ensureChatGptImport(d)),
+    { kind: `applied`, from: s, to: n, nextSource: d }
+  );
+}
+function findModelValue(e) {
+  for (let r of e.properties)
+    if (!(r.type !== `Property` || r.computed || !keyMatches(r.key, `model`)))
+      return isAstNode(r.value) ? unwrapExpression(r.value) : void 0;
+}
+function currentSelection(e) {
+  if (e.type === `Literal` && typeof e.value == `string`) return e.value;
+  if (e.type !== `CallExpression` || !isAstNode(e.callee)) return;
+  let n = unwrapExpression(e.callee);
+  if (n.type !== `Identifier` || n.name !== `chatgpt`) return;
+  let r = e.arguments?.[0];
+  if (r === void 0) return DEFAULT_CHATGPT_MODEL_SELECTION;
+  if (!isAstNode(r)) return;
+  let i = unwrapExpression(r);
+  if (i.type !== `Literal` || typeof i.value != `string`) return;
+  let l = normalizeChatGptModelId(i.value);
+  return l === void 0 ? void 0 : `${CHATGPT_MODEL_SELECTION_PREFIX}${l}`;
+}
+function ensureChatGptImport(e) {
+  let t = e.match(
+    /import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?/u,
+  );
+  if (t !== null) {
+    let n = t[1]
+      .split(`,`)
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (n.includes(`chatgpt`)) return e;
+    let r = `import { ${[...n, `chatgpt`].join(`, `)} } from "eve/models/openai";`;
+    return e.slice(0, t.index) + r + e.slice(t.index + t[0].length);
+  }
+  let n = [...e.matchAll(/^import .*;\s*$/gmu)].at(-1),
+    r = n === void 0 ? 0 : n.index + n[0].length,
+    i =
+      r === 0
+        ? ``
+        : `
+`;
+  return `${e.slice(0, r)}${i}import { chatgpt } from "eve/models/openai";${e.slice(r)}`;
+}
+function removeChatGptImport(e) {
+  return e.replace(
+    /import\s*\{([^}]*)\}\s*from\s*["']eve\/models\/openai["'];?\n?/u,
+    (e, t) => {
+      let n = t
+          .split(`,`)
+          .map((e) => e.trim())
+          .filter(Boolean),
+        r = n.filter((e) => e !== `chatgpt`);
+      return r.length === n.length
+        ? e
+        : r.length === 0
+          ? ``
+          : `import { ${r.join(`, `)} } from "eve/models/openai";\n`;
+    },
+  );
+}
+export { applyModelSelectionToSource };

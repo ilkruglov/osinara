@@ -1,1 +1,532 @@
-import{markEventHandled}from"./utils.js";import{createLogger,logError}from"#internal/logging.js";import{defaultDeliverResult}from"#channel/adapter.js";import{POST,defineChannel}from"#public/definitions/channel.js";import{mergeUploadPolicy}from"#public/channels/upload-policy.js";import{buildSlackBinding,buildSlackWorkspaceHandle,slackContinuationToken}from"#public/channels/slack/api.js";import{buildSlackAuthContext,slackUserIdFromAuthContext}from"#public/channels/slack/auth.js";import{defaultEvents,defaultInputRequestedHandler,defaultOnAppMention,defaultOnDirectMessage}from"#public/channels/slack/defaults.js";import{loadThreadContextMessages}from"#public/channels/slack/thread.js";import{parseSlackWebhookBody}from"#compiled/@chat-adapter/slack/webhook.js";import{bindSlackSessionOperations}from"#public/channels/slack/session-operations.js";import{buildSlackTurnMessage,collectInboundFileParts,createSlackFetchFile}from"#public/channels/slack/attachments.js";import{parseMessageEvent,parseSlackEventEnvelope,slackEventBotUserId,slackMessageFromWebhookPayload}from"#public/channels/slack/inbound.js";import{formatSlackInboundMessage,formatSlackThreadContext}from"#public/channels/slack/model-context.js";import{isPrivateSlackConversation}from"#public/channels/slack/privacy.js";import{SLACK_CHANNEL_DEFAULT_ROUTE}from"#public/channels/slack/constants.js";import{handleInteractionPost}from"#public/channels/slack/interactions.js";import{verifySlackRequest as verifySlackRequest$1}from"#public/channels/slack/verify.js";const log=createLogger(`slack.channel`);function rebuildSlackContext(e,t,n){let{thread:r,slack:i}=buildSlackBinding({botToken:n?.botToken,channelId:e.channelId??``,threadTs:e.threadTs??``,teamId:e.teamId??void 0,onThreadTsChanged(n){e.threadTs=n,e.channelId&&t.continuation?.rekey(slackContinuationToken(e.channelId,n))}});return{thread:r,slack:i,state:e}}function slackChannel(e={}){let t=mergeUploadPolicy(e.uploadPolicy),n=createSlackFetchFile({botToken:e.credentials?.botToken}),s=e.onInputResponse??defaultOnInputResponse,c=e.events?.[`authorization.required`],l=e.events?.[`approval.candidate`]??defaultEvents[`approval.candidate`],u=e.events?.[`turn.started`]??defaultEvents[`turn.started`],p={...defaultEvents,...e.events,async"approval.candidate"(e,t,n){let r=t.state.approvalResponderUsers?.[e.responderPrincipalId];if(e.outcome===`pending`&&r!==void 0&&(t.state.pendingApprovalCandidateUsers={...t.state.pendingApprovalCandidateUsers,[e.candidateId]:r}),await l(e,t,n),e.outcome!==`pending`){let n={...t.state.pendingApprovalCandidateUsers};delete n[e.candidateId],t.state.pendingApprovalCandidateUsers=n}},async"turn.started"(e,t,n){let r=slackUserIdFromAuthContext(n.session.auth.current);r!==void 0&&(t.state.triggeringUserId=r),await u(e,t,n)},"input.requested":e.events?.[`input.requested`]??defaultInputRequestedHandler(),"authorization.required":c===void 0?defaultEvents[`authorization.required`]:constrainAuthorizationRequired(c)},m=new Set;return defineChannel({kindHint:`slack`,turnPolicy:e.turnPolicy,state:{channelId:null,threadTs:null,teamId:null,triggeringUserId:null,pendingToolCallMessage:null,lastReasoningTypingAtMs:null,lastReasoningTypingStatus:null,pendingAuthMessageTs:{},pendingApprovalCards:{},pendingApprovalCandidateUsers:{},approvalResponderUsers:{}},fetchFile:n,metadata(e){return{channelId:e.channelId,teamId:e.teamId,threadTs:e.threadTs,triggeringUserId:e.triggeringUserId??null}},context(t,n){return rebuildSlackContext(t,n,e.credentials)},deliver(e,t){let n=e.pendingApprovalCards;typeof n==`object`&&n&&(t.state.pendingApprovalCards={...t.state.pendingApprovalCards,...n});let i=e.state?.approvalResponderUsers;return typeof i==`object`&&i&&(t.state.approvalResponderUsers={...t.state.approvalResponderUsers,...i}),defaultDeliverResult(e)},routes:[POST(e.route??SLACK_CHANNEL_DEFAULT_ROUTE,async(n,r)=>{let{waitUntil:i}=r,{from:a,resolveSession:o}=r,c=await verifyInbound(n,e.credentials);return c===null?new Response(`unauthorized`,{status:401}):shouldDropSlackHttpTimeoutRetry(n.headers)?new Response(`ok`):(n.headers.get(`content-type`)??``).includes(`application/x-www-form-urlencoded`)?handleInteractionPost(c,{from:a,resolveSession:o,waitUntil:i},{config:e,onInputResponse:s}):handleEventPost({body:c,from:a,resolveSession:o,waitUntil:i,config:e,uploadPolicy:t,handledEvents:m,headers:n.headers})})],receive(t,{from:n}){return receiveOnSlack(t,{from:n,credentials:e.credentials})},events:p})}function defaultOnInputResponse(e){return{auth:e.defaultAuth}}async function receiveOnSlack(e,t){let n=e.target,r=n.channelId;if(!r||typeof r!=`string`)throw Error(`slackChannel().receive requires target.channelId.`);let i=typeof n.threadTs==`string`?n.threadTs:``,a=n.initialMessage;if(a&&i.length>0)throw Error("slackChannel().receive: `threadTs` and `initialMessage` are mutually exclusive.");let o=i;if(a){let{thread:e}=buildSlackBinding({botToken:t.credentials?.botToken,channelId:r,threadTs:``,teamId:t.teamId}),n={card:a.card};a.fallbackText!==void 0&&(n.fallbackText=a.fallbackText),o=(await e.post(n)).id}let c=o||crypto.randomUUID();return t.from(slackContinuationToken(r,c)).send(e.message,{auth:e.auth,state:{channelId:r,threadTs:o||null,teamId:t.teamId??null,triggeringUserId:t.triggeringUserId??null},title:e.title})}function constrainAuthorizationRequired(e){return(t,n,r)=>e(t,{postEphemeral:(e,t)=>n.thread.postEphemeral(e,t),postDirectMessage:(e,t)=>n.thread.postDirectMessage(e,t),state:n.state},r)}function shouldDropSlackHttpTimeoutRetry(e){return Number(e.get(`x-slack-retry-num`)??`0`)>=1&&e.get(`x-slack-retry-reason`)===`http_timeout`}async function handleEventPost(t){let{config:n}=t,r,i;try{r=parseSlackWebhookBody(t.body,{headers:t.headers}),i=parseSlackEventEnvelope(t.body)}catch(e){return log.warn(`inbound webhook body is not valid JSON`,{error:e}),new Response(`ok`)}if(r.kind===`url_verification`)return new Response(r.challenge,{status:200,headers:{"content-type":`text/plain`}});if(i===null)return new Response(`ok`);let a=typeof i.api_app_id==`string`?i.api_app_id:void 0,o=slackEventBotUserId(i),dispatch=null,s=null;if(r.kind===`app_mention`||r.kind===`direct_message`){let e=r.kind,i=slackMessageFromWebhookPayload(r);if(i!==null&&!isSelfAuthoredSlackMessage({appId:a,botUserId:o},i)){let dispatchMessageWith=r=>()=>dispatchSlackMessage({appId:a,botUserId:o,from:t.from,resolveSession:t.resolveSession,credentials:n.credentials,handler:r,kind:e,message:i,threadContext:n.threadContext,uploadPolicy:t.uploadPolicy}),r=(e===`app_mention`?n.onAppMention:n.onDirectMessage)??n.onMessage;r===void 0?s=dispatchMessageWith(e===`app_mention`?defaultOnAppMention:defaultOnDirectMessage):dispatch=()=>dispatchSlackMessage({appId:a,botUserId:o,from:t.from,resolveSession:t.resolveSession,credentials:n.credentials,handler:r,kind:e,message:i,threadContext:n.threadContext,uploadPolicy:t.uploadPolicy})}}if(dispatch===null&&n.onMessage!==void 0){let e=parseMessageEvent(i);e!==null&&!isSelfAuthoredSlackMessage({appId:a,botUserId:o},e)&&(o===void 0||!e.text.includes(`<@${o}`))&&(dispatch=()=>dispatchSlackMessage({appId:a,botUserId:o,from:t.from,resolveSession:t.resolveSession,credentials:n.credentials,handler:n.onMessage,kind:`channel_message`,message:e,threadContext:n.threadContext,uploadPolicy:t.uploadPolicy}))}let c=n.onEvent;if(dispatch===null&&c!==void 0&&(dispatch=()=>dispatchSlackEvent({from:t.from,resolveSession:t.resolveSession,credentials:n.credentials,envelope:i,handler:c})),dispatch??=s,dispatch===null)return new Response(`ok`);let l=i.event_id;if(l){if(t.handledEvents.has(l))return log.warn(`received a duplicate event`,{event_id:l,event_time:i.event_time,retry_num:r.retry?.num??`(null)`,retry_reason:r.retry?.reason??`(null)`}),new Response(`ok`);markEventHandled(l,t.handledEvents)}return t.waitUntil(dispatch()),new Response(`ok`)}function isSelfAuthoredSlackMessage(e,t){return e.botUserId!==void 0&&t.author?.userId===e.botUserId||e.appId!==void 0&&t.raw.app_id===e.appId}async function dispatchSlackMessage(e){let t=slackContinuationToken(e.message.channelId,e.message.threadTs),{thread:r,slack:i}=buildSlackBinding({appId:e.appId,botToken:e.credentials?.botToken,botUserId:e.botUserId,channelId:e.message.channelId,threadTs:e.message.threadTs,teamId:e.message.teamId}),a=e.message.author,o=bindSlackSessionOperations({address:t,defaultAuth:a===void 0?null:buildSlackAuthContext({channelId:e.message.channelId,fullName:a.fullName,isBot:a.isBot,teamId:e.message.teamId,threadTs:e.message.threadTs,userId:a.userId,userName:a.userName}),from:e.from,resolveSession:e.resolveSession,state:{channelId:e.message.channelId,teamId:e.message.teamId??null,threadTs:e.message.threadTs,triggeringUserId:a?.userId??null}}),c,isDMOrPrivateChannel=()=>c??=isPrivateSlackConversation({channelId:e.message.channelId,raw:e.message.raw,request:i.request}),d={...o,isBotMentioned:()=>e.kind===`app_mention`||e.botUserId!==void 0&&e.message.text.includes(`<@${e.botUserId}`),isDMOrPrivateChannel,isSubscribed:async()=>await o.resolveSession()!==void 0,slack:i,thread:r},f;try{f=await e.handler(d,e.message)}catch(t){logError(log,`${e.kind} handler failed`,t,{channelId:e.message.channelId});return}f!=null&&await deliverSlackMessage({credentials:e.credentials,kind:e.kind,isPrivateConversation:await isDMOrPrivateChannel(),message:e.message,result:f,sessionOperations:o,thread:r,threadContext:e.threadContext,uploadPolicy:e.uploadPolicy})}async function dispatchSlackEvent(e){let t=e.envelope.event.team_id,r=typeof t==`string`?t:typeof e.envelope.team_id==`string`?e.envelope.team_id:void 0,i=[],sourceFor=t=>e.from(slackContinuationToken(t.channelId,t.threadTs)),a={cancel:({target:e,turnId:t})=>sourceFor(e).cancel({turnId:t}),clear:({target:e})=>sourceFor(e).clear(),compact:({target:e})=>sourceFor(e).compact(),envelope:e.envelope,reset:({reason:e,target:t})=>sourceFor(t).reset({reason:e}),resolveSession:({target:t})=>e.resolveSession(slackContinuationToken(t.channelId,t.threadTs)),respond:(e,{auth:t,target:n})=>sourceFor(n).respond(e,{auth:t}),send:(t,{auth:n,target:i,title:a})=>receiveOnSlack({auth:n,message:t,target:i,title:a},{from:e.from,credentials:e.credentials,teamId:r,...typeof e.envelope.event.user==`string`?{triggeringUserId:e.envelope.event.user}:{}}),slack:buildSlackWorkspaceHandle({botToken:e.credentials?.botToken,teamId:r}),waitUntil(e){i.push(e)}};try{await e.handler(a,e.envelope.event)}catch(t){logError(log,`event handler failed`,t,{eventId:e.envelope.event_id,eventType:e.envelope.event.type})}await Promise.allSettled(i)}async function verifyInbound(e,t){try{return await verifySlackRequest$1(e,{signingSecret:t?.signingSecret??(t?.webhookVerifier?void 0:process.env.SLACK_SIGNING_SECRET),webhookVerifier:t?.webhookVerifier})}catch(e){return log.warn(`slack inbound verification failed`,{error:e}),null}}async function deliverSlackMessage(e){let{message:t,thread:r}=e;try{let n=formatSlackThreadContext(e.threadContext===void 0?[]:await loadThreadContextMessages(r,t,e.threadContext)),i=await collectInboundFileParts({mention:t,thread:r,policy:e.uploadPolicy}),a=formatSlackInboundMessage({channelId:t.channelId,fullName:t.author?.fullName,teamId:t.teamId,threadTs:t.threadTs,userId:t.author?.userId??``,userName:t.author?.userName},t),o=buildSlackTurnMessage(n===void 0?a:`${n}\n\n${a}`,i),s=e.result.context??[],c=e.isPrivateConversation?`Private message`:e.result.title??t.markdown,l=s.length===0?{auth:e.result.auth,title:c}:{auth:e.result.auth,context:s,title:c};await e.sessionOperations.send(o,l)}catch(r){logError(log,`${e.kind} delivery failed`,r,{channelId:t.channelId})}}export{constrainAuthorizationRequired,slackChannel};
+import { markEventHandled } from "./utils.js";
+import { createLogger, logError } from "#internal/logging.js";
+import { defaultDeliverResult } from "#channel/adapter.js";
+import { POST, defineChannel } from "#public/definitions/channel.js";
+import { mergeUploadPolicy } from "#public/channels/upload-policy.js";
+import {
+  buildSlackBinding,
+  buildSlackWorkspaceHandle,
+  slackContinuationToken,
+} from "#public/channels/slack/api.js";
+import {
+  buildSlackAuthContext,
+  slackUserIdFromAuthContext,
+} from "#public/channels/slack/auth.js";
+import {
+  defaultEvents,
+  defaultInputRequestedHandler,
+  defaultOnAppMention,
+  defaultOnDirectMessage,
+} from "#public/channels/slack/defaults.js";
+import { loadThreadContextMessages } from "#public/channels/slack/thread.js";
+import { parseSlackWebhookBody } from "#compiled/@chat-adapter/slack/webhook.js";
+import { bindSlackSessionOperations } from "#public/channels/slack/session-operations.js";
+import {
+  buildSlackTurnMessage,
+  collectInboundFileParts,
+  createSlackFetchFile,
+} from "#public/channels/slack/attachments.js";
+import {
+  parseMessageEvent,
+  parseSlackEventEnvelope,
+  slackEventBotUserId,
+  slackMessageFromWebhookPayload,
+} from "#public/channels/slack/inbound.js";
+import {
+  formatSlackInboundMessage,
+  formatSlackThreadContext,
+} from "#public/channels/slack/model-context.js";
+import { isPrivateSlackConversation } from "#public/channels/slack/privacy.js";
+import { SLACK_CHANNEL_DEFAULT_ROUTE } from "#public/channels/slack/constants.js";
+import { handleInteractionPost } from "#public/channels/slack/interactions.js";
+import { verifySlackRequest as verifySlackRequest$1 } from "#public/channels/slack/verify.js";
+const log = createLogger(`slack.channel`);
+function rebuildSlackContext(e, t, n) {
+  let { thread: r, slack: i } = buildSlackBinding({
+    botToken: n?.botToken,
+    channelId: e.channelId ?? ``,
+    threadTs: e.threadTs ?? ``,
+    teamId: e.teamId ?? void 0,
+    onThreadTsChanged(n) {
+      ((e.threadTs = n),
+        e.channelId &&
+          t.continuation?.rekey(slackContinuationToken(e.channelId, n)));
+    },
+  });
+  return { thread: r, slack: i, state: e };
+}
+function slackChannel(e = {}) {
+  let t = mergeUploadPolicy(e.uploadPolicy),
+    n = createSlackFetchFile({ botToken: e.credentials?.botToken }),
+    s = e.onInputResponse ?? defaultOnInputResponse,
+    c = e.events?.[`authorization.required`],
+    l = e.events?.[`approval.candidate`] ?? defaultEvents[`approval.candidate`],
+    u = e.events?.[`turn.started`] ?? defaultEvents[`turn.started`],
+    p = {
+      ...defaultEvents,
+      ...e.events,
+      async "approval.candidate"(e, t, n) {
+        let r = t.state.approvalResponderUsers?.[e.responderPrincipalId];
+        if (
+          (e.outcome === `pending` &&
+            r !== void 0 &&
+            (t.state.pendingApprovalCandidateUsers = {
+              ...t.state.pendingApprovalCandidateUsers,
+              [e.candidateId]: r,
+            }),
+          await l(e, t, n),
+          e.outcome !== `pending`)
+        ) {
+          let n = { ...t.state.pendingApprovalCandidateUsers };
+          (delete n[e.candidateId],
+            (t.state.pendingApprovalCandidateUsers = n));
+        }
+      },
+      async "turn.started"(e, t, n) {
+        let r = slackUserIdFromAuthContext(n.session.auth.current);
+        (r !== void 0 && (t.state.triggeringUserId = r), await u(e, t, n));
+      },
+      "input.requested":
+        e.events?.[`input.requested`] ?? defaultInputRequestedHandler(),
+      "authorization.required":
+        c === void 0
+          ? defaultEvents[`authorization.required`]
+          : constrainAuthorizationRequired(c),
+    },
+    m = new Set();
+  return defineChannel({
+    kindHint: `slack`,
+    turnPolicy: e.turnPolicy,
+    state: {
+      channelId: null,
+      threadTs: null,
+      teamId: null,
+      triggeringUserId: null,
+      pendingToolCallMessage: null,
+      lastReasoningTypingAtMs: null,
+      lastReasoningTypingStatus: null,
+      pendingAuthMessageTs: {},
+      pendingApprovalCards: {},
+      pendingApprovalCandidateUsers: {},
+      approvalResponderUsers: {},
+    },
+    fetchFile: n,
+    metadata(e) {
+      return {
+        channelId: e.channelId,
+        teamId: e.teamId,
+        threadTs: e.threadTs,
+        triggeringUserId: e.triggeringUserId ?? null,
+      };
+    },
+    context(t, n) {
+      return rebuildSlackContext(t, n, e.credentials);
+    },
+    deliver(e, t) {
+      let n = e.pendingApprovalCards;
+      typeof n == `object` &&
+        n &&
+        (t.state.pendingApprovalCards = {
+          ...t.state.pendingApprovalCards,
+          ...n,
+        });
+      let i = e.state?.approvalResponderUsers;
+      return (
+        typeof i == `object` &&
+          i &&
+          (t.state.approvalResponderUsers = {
+            ...t.state.approvalResponderUsers,
+            ...i,
+          }),
+        defaultDeliverResult(e)
+      );
+    },
+    routes: [
+      POST(e.route ?? SLACK_CHANNEL_DEFAULT_ROUTE, async (n, r) => {
+        let { waitUntil: i } = r,
+          { from: a, resolveSession: o } = r,
+          c = await verifyInbound(n, e.credentials);
+        return c === null
+          ? new Response(`unauthorized`, { status: 401 })
+          : shouldDropSlackHttpTimeoutRetry(n.headers)
+            ? new Response(`ok`)
+            : (n.headers.get(`content-type`) ?? ``).includes(
+                  `application/x-www-form-urlencoded`,
+                )
+              ? handleInteractionPost(
+                  c,
+                  { from: a, resolveSession: o, waitUntil: i },
+                  { config: e, onInputResponse: s },
+                )
+              : handleEventPost({
+                  body: c,
+                  from: a,
+                  resolveSession: o,
+                  waitUntil: i,
+                  config: e,
+                  uploadPolicy: t,
+                  handledEvents: m,
+                  headers: n.headers,
+                });
+      }),
+    ],
+    receive(t, { from: n }) {
+      return receiveOnSlack(t, { from: n, credentials: e.credentials });
+    },
+    events: p,
+  });
+}
+function defaultOnInputResponse(e) {
+  return { auth: e.defaultAuth };
+}
+async function receiveOnSlack(e, t) {
+  let n = e.target,
+    r = n.channelId;
+  if (!r || typeof r != `string`)
+    throw Error(`slackChannel().receive requires target.channelId.`);
+  let i = typeof n.threadTs == `string` ? n.threadTs : ``,
+    a = n.initialMessage;
+  if (a && i.length > 0)
+    throw Error(
+      "slackChannel().receive: `threadTs` and `initialMessage` are mutually exclusive.",
+    );
+  let o = i;
+  if (a) {
+    let { thread: e } = buildSlackBinding({
+        botToken: t.credentials?.botToken,
+        channelId: r,
+        threadTs: ``,
+        teamId: t.teamId,
+      }),
+      n = { card: a.card };
+    (a.fallbackText !== void 0 && (n.fallbackText = a.fallbackText),
+      (o = (await e.post(n)).id));
+  }
+  let c = o || crypto.randomUUID();
+  return t
+    .from(slackContinuationToken(r, c))
+    .send(e.message, {
+      auth: e.auth,
+      state: {
+        channelId: r,
+        threadTs: o || null,
+        teamId: t.teamId ?? null,
+        triggeringUserId: t.triggeringUserId ?? null,
+      },
+      title: e.title,
+    });
+}
+function constrainAuthorizationRequired(e) {
+  return (t, n, r) =>
+    e(
+      t,
+      {
+        postEphemeral: (e, t) => n.thread.postEphemeral(e, t),
+        postDirectMessage: (e, t) => n.thread.postDirectMessage(e, t),
+        state: n.state,
+      },
+      r,
+    );
+}
+function shouldDropSlackHttpTimeoutRetry(e) {
+  return (
+    Number(e.get(`x-slack-retry-num`) ?? `0`) >= 1 &&
+    e.get(`x-slack-retry-reason`) === `http_timeout`
+  );
+}
+async function handleEventPost(t) {
+  let { config: n } = t,
+    r,
+    i;
+  try {
+    ((r = parseSlackWebhookBody(t.body, { headers: t.headers })),
+      (i = parseSlackEventEnvelope(t.body)));
+  } catch (e) {
+    return (
+      log.warn(`inbound webhook body is not valid JSON`, { error: e }),
+      new Response(`ok`)
+    );
+  }
+  if (r.kind === `url_verification`)
+    return new Response(r.challenge, {
+      status: 200,
+      headers: { "content-type": `text/plain` },
+    });
+  if (i === null) return new Response(`ok`);
+  let a = typeof i.api_app_id == `string` ? i.api_app_id : void 0,
+    o = slackEventBotUserId(i),
+    dispatch = null,
+    s = null;
+  if (r.kind === `app_mention` || r.kind === `direct_message`) {
+    let e = r.kind,
+      i = slackMessageFromWebhookPayload(r);
+    if (
+      i !== null &&
+      !isSelfAuthoredSlackMessage({ appId: a, botUserId: o }, i)
+    ) {
+      let dispatchMessageWith = (r) => () =>
+          dispatchSlackMessage({
+            appId: a,
+            botUserId: o,
+            from: t.from,
+            resolveSession: t.resolveSession,
+            credentials: n.credentials,
+            handler: r,
+            kind: e,
+            message: i,
+            threadContext: n.threadContext,
+            uploadPolicy: t.uploadPolicy,
+          }),
+        r =
+          (e === `app_mention` ? n.onAppMention : n.onDirectMessage) ??
+          n.onMessage;
+      r === void 0
+        ? (s = dispatchMessageWith(
+            e === `app_mention` ? defaultOnAppMention : defaultOnDirectMessage,
+          ))
+        : (dispatch = () =>
+            dispatchSlackMessage({
+              appId: a,
+              botUserId: o,
+              from: t.from,
+              resolveSession: t.resolveSession,
+              credentials: n.credentials,
+              handler: r,
+              kind: e,
+              message: i,
+              threadContext: n.threadContext,
+              uploadPolicy: t.uploadPolicy,
+            }));
+    }
+  }
+  if (dispatch === null && n.onMessage !== void 0) {
+    let e = parseMessageEvent(i);
+    e !== null &&
+      !isSelfAuthoredSlackMessage({ appId: a, botUserId: o }, e) &&
+      (o === void 0 || !e.text.includes(`<@${o}`)) &&
+      (dispatch = () =>
+        dispatchSlackMessage({
+          appId: a,
+          botUserId: o,
+          from: t.from,
+          resolveSession: t.resolveSession,
+          credentials: n.credentials,
+          handler: n.onMessage,
+          kind: `channel_message`,
+          message: e,
+          threadContext: n.threadContext,
+          uploadPolicy: t.uploadPolicy,
+        }));
+  }
+  let c = n.onEvent;
+  if (
+    (dispatch === null &&
+      c !== void 0 &&
+      (dispatch = () =>
+        dispatchSlackEvent({
+          from: t.from,
+          resolveSession: t.resolveSession,
+          credentials: n.credentials,
+          envelope: i,
+          handler: c,
+        })),
+    (dispatch ??= s),
+    dispatch === null)
+  )
+    return new Response(`ok`);
+  let l = i.event_id;
+  if (l) {
+    if (t.handledEvents.has(l))
+      return (
+        log.warn(`received a duplicate event`, {
+          event_id: l,
+          event_time: i.event_time,
+          retry_num: r.retry?.num ?? `(null)`,
+          retry_reason: r.retry?.reason ?? `(null)`,
+        }),
+        new Response(`ok`)
+      );
+    markEventHandled(l, t.handledEvents);
+  }
+  return (t.waitUntil(dispatch()), new Response(`ok`));
+}
+function isSelfAuthoredSlackMessage(e, t) {
+  return (
+    (e.botUserId !== void 0 && t.author?.userId === e.botUserId) ||
+    (e.appId !== void 0 && t.raw.app_id === e.appId)
+  );
+}
+async function dispatchSlackMessage(e) {
+  let t = slackContinuationToken(e.message.channelId, e.message.threadTs),
+    { thread: r, slack: i } = buildSlackBinding({
+      appId: e.appId,
+      botToken: e.credentials?.botToken,
+      botUserId: e.botUserId,
+      channelId: e.message.channelId,
+      threadTs: e.message.threadTs,
+      teamId: e.message.teamId,
+    }),
+    a = e.message.author,
+    o = bindSlackSessionOperations({
+      address: t,
+      defaultAuth:
+        a === void 0
+          ? null
+          : buildSlackAuthContext({
+              channelId: e.message.channelId,
+              fullName: a.fullName,
+              isBot: a.isBot,
+              teamId: e.message.teamId,
+              threadTs: e.message.threadTs,
+              userId: a.userId,
+              userName: a.userName,
+            }),
+      from: e.from,
+      resolveSession: e.resolveSession,
+      state: {
+        channelId: e.message.channelId,
+        teamId: e.message.teamId ?? null,
+        threadTs: e.message.threadTs,
+        triggeringUserId: a?.userId ?? null,
+      },
+    }),
+    c,
+    isDMOrPrivateChannel = () =>
+      (c ??= isPrivateSlackConversation({
+        channelId: e.message.channelId,
+        raw: e.message.raw,
+        request: i.request,
+      })),
+    d = {
+      ...o,
+      isBotMentioned: () =>
+        e.kind === `app_mention` ||
+        (e.botUserId !== void 0 && e.message.text.includes(`<@${e.botUserId}`)),
+      isDMOrPrivateChannel,
+      isSubscribed: async () => (await o.resolveSession()) !== void 0,
+      slack: i,
+      thread: r,
+    },
+    f;
+  try {
+    f = await e.handler(d, e.message);
+  } catch (t) {
+    logError(log, `${e.kind} handler failed`, t, {
+      channelId: e.message.channelId,
+    });
+    return;
+  }
+  f != null &&
+    (await deliverSlackMessage({
+      credentials: e.credentials,
+      kind: e.kind,
+      isPrivateConversation: await isDMOrPrivateChannel(),
+      message: e.message,
+      result: f,
+      sessionOperations: o,
+      thread: r,
+      threadContext: e.threadContext,
+      uploadPolicy: e.uploadPolicy,
+    }));
+}
+async function dispatchSlackEvent(e) {
+  let t = e.envelope.event.team_id,
+    r =
+      typeof t == `string`
+        ? t
+        : typeof e.envelope.team_id == `string`
+          ? e.envelope.team_id
+          : void 0,
+    i = [],
+    sourceFor = (t) => e.from(slackContinuationToken(t.channelId, t.threadTs)),
+    a = {
+      cancel: ({ target: e, turnId: t }) => sourceFor(e).cancel({ turnId: t }),
+      clear: ({ target: e }) => sourceFor(e).clear(),
+      compact: ({ target: e }) => sourceFor(e).compact(),
+      envelope: e.envelope,
+      reset: ({ reason: e, target: t }) => sourceFor(t).reset({ reason: e }),
+      resolveSession: ({ target: t }) =>
+        e.resolveSession(slackContinuationToken(t.channelId, t.threadTs)),
+      respond: (e, { auth: t, target: n }) =>
+        sourceFor(n).respond(e, { auth: t }),
+      send: (t, { auth: n, target: i, title: a }) =>
+        receiveOnSlack(
+          { auth: n, message: t, target: i, title: a },
+          {
+            from: e.from,
+            credentials: e.credentials,
+            teamId: r,
+            ...(typeof e.envelope.event.user == `string`
+              ? { triggeringUserId: e.envelope.event.user }
+              : {}),
+          },
+        ),
+      slack: buildSlackWorkspaceHandle({
+        botToken: e.credentials?.botToken,
+        teamId: r,
+      }),
+      waitUntil(e) {
+        i.push(e);
+      },
+    };
+  try {
+    await e.handler(a, e.envelope.event);
+  } catch (t) {
+    logError(log, `event handler failed`, t, {
+      eventId: e.envelope.event_id,
+      eventType: e.envelope.event.type,
+    });
+  }
+  await Promise.allSettled(i);
+}
+async function verifyInbound(e, t) {
+  try {
+    return await verifySlackRequest$1(e, {
+      signingSecret:
+        t?.signingSecret ??
+        (t?.webhookVerifier ? void 0 : process.env.SLACK_SIGNING_SECRET),
+      webhookVerifier: t?.webhookVerifier,
+    });
+  } catch (e) {
+    return (log.warn(`slack inbound verification failed`, { error: e }), null);
+  }
+}
+async function deliverSlackMessage(e) {
+  let { message: t, thread: r } = e;
+  try {
+    let n = formatSlackThreadContext(
+        e.threadContext === void 0
+          ? []
+          : await loadThreadContextMessages(r, t, e.threadContext),
+      ),
+      i = await collectInboundFileParts({
+        mention: t,
+        thread: r,
+        policy: e.uploadPolicy,
+      }),
+      a = formatSlackInboundMessage(
+        {
+          channelId: t.channelId,
+          fullName: t.author?.fullName,
+          teamId: t.teamId,
+          threadTs: t.threadTs,
+          userId: t.author?.userId ?? ``,
+          userName: t.author?.userName,
+        },
+        t,
+      ),
+      o = buildSlackTurnMessage(n === void 0 ? a : `${n}\n\n${a}`, i),
+      s = e.result.context ?? [],
+      c = e.isPrivateConversation
+        ? `Private message`
+        : (e.result.title ?? t.markdown),
+      l =
+        s.length === 0
+          ? { auth: e.result.auth, title: c }
+          : { auth: e.result.auth, context: s, title: c };
+    await e.sessionOperations.send(o, l);
+  } catch (r) {
+    logError(log, `${e.kind} delivery failed`, r, { channelId: t.channelId });
+  }
+}
+export { constrainAuthorizationRequired, slackChannel };

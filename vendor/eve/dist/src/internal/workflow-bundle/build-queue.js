@@ -1,1 +1,11 @@
-const activeBuilds=new Map;async function runQueuedWorkflowBuild(e,t){let n=(activeBuilds.get(e)??Promise.resolve()).then(t,t);activeBuilds.set(e,n);try{await n}finally{activeBuilds.get(e)===n&&activeBuilds.delete(e)}}export{runQueuedWorkflowBuild};
+const activeBuilds = new Map();
+async function runQueuedWorkflowBuild(e, t) {
+  let n = (activeBuilds.get(e) ?? Promise.resolve()).then(t, t);
+  activeBuilds.set(e, n);
+  try {
+    await n;
+  } finally {
+    activeBuilds.get(e) === n && activeBuilds.delete(e);
+  }
+}
+export { runQueuedWorkflowBuild };

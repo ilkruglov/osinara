@@ -1,4 +1,14 @@
-import{DEFAULT_WORKFLOW_MAX_SUBAGENTS}from"#harness/workflow-subagent-limit.js";function workflowToolDescription(t,n){let r=n?.maxSubagents??DEFAULT_WORKFLOW_MAX_SUBAGENTS,i=t.length>0?t:[`agent`],a=i.map(e=>`\`${e}\``).join(`, `),o=i.filter(e=>e!==`agent`),s=o.length>0?`\n\nDeclared subagents use the same API — e.g. \`const note = await ${agentAccess(o[0])}({ message: "..." });\`.`:``;return`Use \`Workflow\` when a task needs JavaScript to coordinate multiple child-agent calls as one durable step. It is an orchestration tool, not a general-purpose tool runner.
+import { DEFAULT_WORKFLOW_MAX_SUBAGENTS } from "#harness/workflow-subagent-limit.js";
+function workflowToolDescription(t, n) {
+  let r = n?.maxSubagents ?? DEFAULT_WORKFLOW_MAX_SUBAGENTS,
+    i = t.length > 0 ? t : [`agent`],
+    a = i.map((e) => `\`${e}\``).join(`, `),
+    o = i.filter((e) => e !== `agent`),
+    s =
+      o.length > 0
+        ? `\n\nDeclared subagents use the same API — e.g. \`const note = await ${agentAccess(o[0])}({ message: "..." });\`.`
+        : ``;
+  return `Use \`Workflow\` when a task needs JavaScript to coordinate multiple child-agent calls as one durable step. It is an orchestration tool, not a general-purpose tool runner.
 
 Use \`Workflow\` for:
 - fan-out or map-reduce over a list, especially when the number of calls comes from runtime data;
@@ -34,4 +44,11 @@ const verdict = await tools.agent({
   outputSchema: { type: "object", properties: { verdict: { type: "string" }, blocking: { type: "boolean" } } },
 });
 return verdict;
-\`\`\`${s}`}function agentAccess(e){return/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(e)?`tools.${e}`:`tools[${JSON.stringify(e)}]`}export{workflowToolDescription};
+\`\`\`${s}`;
+}
+function agentAccess(e) {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(e)
+    ? `tools.${e}`
+    : `tools[${JSON.stringify(e)}]`;
+}
+export { workflowToolDescription };

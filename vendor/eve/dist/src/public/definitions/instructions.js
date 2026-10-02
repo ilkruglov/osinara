@@ -1,1 +1,19 @@
-import{DYNAMIC_SENTINEL_KIND,INSTRUCTIONS_BRAND}from"#shared/dynamic-tool-definition.js";import{stampDefinitionKey}from"#public/tool-result-narrowing.js";function defineInstructions(e){return Object.assign(e,{[INSTRUCTIONS_BRAND]:!0}),e}function defineDynamic(t){let n={kind:DYNAMIC_SENTINEL_KIND,events:t.events};return stampDefinitionKey(n,`dynamic-instructions:${Object.keys(t.events).join(`,`)}`),n}export{defineDynamic,defineInstructions};
+import {
+  DYNAMIC_SENTINEL_KIND,
+  INSTRUCTIONS_BRAND,
+} from "#shared/dynamic-tool-definition.js";
+import { stampDefinitionKey } from "#public/tool-result-narrowing.js";
+function defineInstructions(e) {
+  return (Object.assign(e, { [INSTRUCTIONS_BRAND]: !0 }), e);
+}
+function defineDynamic(t) {
+  let n = { kind: DYNAMIC_SENTINEL_KIND, events: t.events };
+  return (
+    stampDefinitionKey(
+      n,
+      `dynamic-instructions:${Object.keys(t.events).join(`,`)}`,
+    ),
+    n
+  );
+}
+export { defineDynamic, defineInstructions };

@@ -1,1 +1,10 @@
-function defineAgentHandleError(e,t){return{code:e,toJson:()=>({code:e,error:t,ok:!1})}}const AgentHandleError={SessionNotResumable:defineAgentHandleError(`SESSION_NOT_RESUMABLE`,`Session is not active and cannot be resumed.`)};export{AgentHandleError};
+function defineAgentHandleError(e, t) {
+  return { code: e, toJson: () => ({ code: e, error: t, ok: !1 }) };
+}
+const AgentHandleError = {
+  SessionNotResumable: defineAgentHandleError(
+    `SESSION_NOT_RESUMABLE`,
+    `Session is not active and cannot be resumed.`,
+  ),
+};
+export { AgentHandleError };

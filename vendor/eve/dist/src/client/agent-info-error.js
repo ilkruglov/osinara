@@ -1,1 +1,12 @@
-var AgentInfoResponseError=class extends Error{issues;constructor(e=[]){let t=e.length===0?``:` (${e.join(`; `)})`;super(`The server returned an unrecognized response from the eve agent info route.${t}`),this.name=`AgentInfoResponseError`,this.issues=e}};export{AgentInfoResponseError};
+var AgentInfoResponseError = class extends Error {
+  issues;
+  constructor(e = []) {
+    let t = e.length === 0 ? `` : ` (${e.join(`; `)})`;
+    (super(
+      `The server returned an unrecognized response from the eve agent info route.${t}`,
+    ),
+      (this.name = `AgentInfoResponseError`),
+      (this.issues = e));
+  }
+};
+export { AgentInfoResponseError };

@@ -1,2 +1,41 @@
-function createSetupPresenter(e,t){return{log:e.log,note:e.note.bind(e),nextSteps(t){t.length>0&&e.note(t.join(`
-`),`Next steps`,{tone:`success`})},beginExternalAction(n){return t===void 0?(e.log.message(n.message),e.log.message(n.url),n.userCode!==void 0&&e.log.message(`Code: ${n.userCode}`),{complete(){}}):t(n)}}}function createSetupContexts(e){let t=createSetupPresenter(e.prompter,e.beginExternalAction),n={appRoot:e.appRoot,presenter:t};return e.signal!==void 0&&(n.signal=e.signal),e.force!==void 0&&(n.force=e.force),{prepare:{...n,asker:e.asker,environment:e.environment,resolveVercelProject:e.resolveVercelProject},apply:n}}export{createSetupContexts,createSetupPresenter};
+function createSetupPresenter(e, t) {
+  return {
+    log: e.log,
+    note: e.note.bind(e),
+    nextSteps(t) {
+      t.length > 0 &&
+        e.note(
+          t.join(`
+`),
+          `Next steps`,
+          { tone: `success` },
+        );
+    },
+    beginExternalAction(n) {
+      return t === void 0
+        ? (e.log.message(n.message),
+          e.log.message(n.url),
+          n.userCode !== void 0 && e.log.message(`Code: ${n.userCode}`),
+          { complete() {} })
+        : t(n);
+    },
+  };
+}
+function createSetupContexts(e) {
+  let t = createSetupPresenter(e.prompter, e.beginExternalAction),
+    n = { appRoot: e.appRoot, presenter: t };
+  return (
+    e.signal !== void 0 && (n.signal = e.signal),
+    e.force !== void 0 && (n.force = e.force),
+    {
+      prepare: {
+        ...n,
+        asker: e.asker,
+        environment: e.environment,
+        resolveVercelProject: e.resolveVercelProject,
+      },
+      apply: n,
+    }
+  );
+}
+export { createSetupContexts, createSetupPresenter };

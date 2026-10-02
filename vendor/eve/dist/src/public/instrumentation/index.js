@@ -1,1 +1,7 @@
-import{PROVIDER}from"#public/instrumentation/provider.js";import{isChannel}from"#public/channels/index.js";export*from"#public/instrumentation/provider.js";function defineInstrumentation(e){return{...e,[PROVIDER]:!0}}export{defineInstrumentation,isChannel};
+import { PROVIDER } from "#public/instrumentation/provider.js";
+import { isChannel } from "#public/channels/index.js";
+export * from "#public/instrumentation/provider.js";
+function defineInstrumentation(e) {
+  return { ...e, [PROVIDER]: !0 };
+}
+export { defineInstrumentation, isChannel };

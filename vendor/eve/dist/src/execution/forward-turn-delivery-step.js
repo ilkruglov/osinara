@@ -1,1 +1,6 @@
-import{resumeHook}from"#internal/workflow/runtime.js";async function forwardTurnDeliveryStep(e){"use step";await resumeHook(e.inboxToken,e.payload)}export{forwardTurnDeliveryStep};
+import { resumeHook } from "#internal/workflow/runtime.js";
+async function forwardTurnDeliveryStep(e) {
+  "use step";
+  await resumeHook(e.inboxToken, e.payload);
+}
+export { forwardTurnDeliveryStep };

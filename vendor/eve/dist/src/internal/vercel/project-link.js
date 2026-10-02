@@ -1,1 +1,70 @@
-import{readFile}from"node:fs/promises";import{z}from"#compiled/zod/index.js";import{dirname,join,relative}from"node:path";const VercelProjectLinkSchema=z.object({projectId:z.string().min(1),orgId:z.string().min(1),projectName:z.string().min(1).optional()}),VercelRepoProjectSchema=z.object({directory:z.string().min(1),id:z.string().min(1),name:z.string().min(1),orgId:z.string().min(1).optional()}),VercelRepoLinkSchema=z.object({orgId:z.string().min(1).optional(),projects:z.array(VercelRepoProjectSchema)});function normalizeDirectory(e){return e===`.`?e:e.replaceAll(`\\`,`/`).replace(/\/+$/,``)}function containsDirectory(e,t){return e===`.`||t===e||t.startsWith(`${e}/`)}function resolveRepoProject(e,t,n){let r=normalizeDirectory(relative(t,n)),a=e.projects.filter(e=>containsDirectory(normalizeDirectory(e.directory),r)),o=Math.max(...a.map(e=>e.directory.length)),s=a.filter(e=>e.directory.length===o),c=s.length===1?s[0]:void 0;if(c===void 0)return;let l=c.orgId??e.orgId;return l===void 0?void 0:{orgId:l,projectId:c.id,projectName:c.name}}async function readProjectFile(t){try{let n=await readFile(join(t,`.vercel`,`project.json`),`utf8`),i=VercelProjectLinkSchema.safeParse(JSON.parse(n));return i.success?i.data:void 0}catch{return}}async function readRepoFile(t){try{let n=await readFile(join(t,`.vercel`,`repo.json`),`utf8`),i=VercelRepoLinkSchema.safeParse(JSON.parse(n));return i.success?i.data:void 0}catch{return}}async function readRepoProjectLink(e){let t=e;for(;;){let r=await readRepoFile(t);if(r!==void 0)return resolveRepoProject(r,t,e);let i=dirname(t);if(i===t)return;t=i}}async function readVercelProjectLink(e){return await readProjectFile(e)??await readRepoProjectLink(e)}export{VercelProjectLinkSchema,readVercelProjectLink};
+import { readFile } from "node:fs/promises";
+import { z } from "#compiled/zod/index.js";
+import { dirname, join, relative } from "node:path";
+const VercelProjectLinkSchema = z.object({
+    projectId: z.string().min(1),
+    orgId: z.string().min(1),
+    projectName: z.string().min(1).optional(),
+  }),
+  VercelRepoProjectSchema = z.object({
+    directory: z.string().min(1),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    orgId: z.string().min(1).optional(),
+  }),
+  VercelRepoLinkSchema = z.object({
+    orgId: z.string().min(1).optional(),
+    projects: z.array(VercelRepoProjectSchema),
+  });
+function normalizeDirectory(e) {
+  return e === `.` ? e : e.replaceAll(`\\`, `/`).replace(/\/+$/, ``);
+}
+function containsDirectory(e, t) {
+  return e === `.` || t === e || t.startsWith(`${e}/`);
+}
+function resolveRepoProject(e, t, n) {
+  let r = normalizeDirectory(relative(t, n)),
+    a = e.projects.filter((e) =>
+      containsDirectory(normalizeDirectory(e.directory), r),
+    ),
+    o = Math.max(...a.map((e) => e.directory.length)),
+    s = a.filter((e) => e.directory.length === o),
+    c = s.length === 1 ? s[0] : void 0;
+  if (c === void 0) return;
+  let l = c.orgId ?? e.orgId;
+  return l === void 0
+    ? void 0
+    : { orgId: l, projectId: c.id, projectName: c.name };
+}
+async function readProjectFile(t) {
+  try {
+    let n = await readFile(join(t, `.vercel`, `project.json`), `utf8`),
+      i = VercelProjectLinkSchema.safeParse(JSON.parse(n));
+    return i.success ? i.data : void 0;
+  } catch {
+    return;
+  }
+}
+async function readRepoFile(t) {
+  try {
+    let n = await readFile(join(t, `.vercel`, `repo.json`), `utf8`),
+      i = VercelRepoLinkSchema.safeParse(JSON.parse(n));
+    return i.success ? i.data : void 0;
+  } catch {
+    return;
+  }
+}
+async function readRepoProjectLink(e) {
+  let t = e;
+  for (;;) {
+    let r = await readRepoFile(t);
+    if (r !== void 0) return resolveRepoProject(r, t, e);
+    let i = dirname(t);
+    if (i === t) return;
+    t = i;
+  }
+}
+async function readVercelProjectLink(e) {
+  return (await readProjectFile(e)) ?? (await readRepoProjectLink(e));
+}
+export { VercelProjectLinkSchema, readVercelProjectLink };

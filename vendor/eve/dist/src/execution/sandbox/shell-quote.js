@@ -1,1 +1,4 @@
-function shellQuote(e){return`'${e.replace(/'/g,`'\\''`)}'`}export{shellQuote};
+function shellQuote(e) {
+  return `'${e.replace(/'/g, `'\\''`)}'`;
+}
+export { shellQuote };

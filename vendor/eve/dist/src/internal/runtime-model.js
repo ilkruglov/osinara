@@ -1,1 +1,6 @@
-function formatLanguageModelGatewayId(e){return typeof e==`string`?e:`${e.provider.split(`.`)[0]}/${e.modelId.replace(/^(claude-[a-z]+-\d+)-(\d+)$/,`$1.$2`)}`}export{formatLanguageModelGatewayId};
+function formatLanguageModelGatewayId(e) {
+  return typeof e == `string`
+    ? e
+    : `${e.provider.split(`.`)[0]}/${e.modelId.replace(/^(claude-[a-z]+-\d+)-(\d+)$/, `$1.$2`)}`;
+}
+export { formatLanguageModelGatewayId };

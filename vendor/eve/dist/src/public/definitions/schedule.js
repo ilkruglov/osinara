@@ -1,1 +1,4 @@
-function defineSchedule(e){return e}export{defineSchedule};
+function defineSchedule(e) {
+  return e;
+}
+export { defineSchedule };

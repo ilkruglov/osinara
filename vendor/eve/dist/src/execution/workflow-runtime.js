@@ -1,1 +1,327 @@
-import{createLogger,logError}from"#internal/logging.js";import{RuntimeSessionOwnershipConflictError}from"#execution/runtime-errors.js";import{sessionCommandHookToken}from"#execution/session-command-token.js";import{resolveInstalledPackageInfo}from"#internal/application/package.js";import{walkCauseChain}from"#shared/errors.js";import{isEveDevEnvironment}from"#internal/application/dev-environment.js";import{serializeContext}from"#context/serialize.js";import{getCompiledRuntimeAgentBundle}from"#runtime/sessions/compiled-agent-cache.js";import{resolveEffectiveAgentRuntime}from"#execution/effective-agent-config.js";import{EntityConflictError,HookNotFoundError,RunExpiredError,WorkflowRunNotFoundError}from"#compiled/@workflow/errors/index.js";import{getHookByToken,getRun,start}from"#internal/workflow/runtime.js";import{buildSessionAttributes,buildSubagentRootAttributes,readParentLineage}from"#execution/eve-workflow-attributes.js";import{normalizeEveAttributes}from"#runtime/attributes/normalize.js";import{resumeSessionInbox}from"#execution/wire/session-inbox-resume.js";import{ROOT_RUNTIME_AGENT_NODE_ID}from"#runtime/graph.js";import{SpanKind,trace}from"#compiled/@opentelemetry/api/index.js";import{buildRunContext}from"#execution/runtime-context.js";import{parseNdjsonStream}from"#execution/ndjson-stream.js";import{buildInvocationAttributes}from"#internal/invocation/metadata.js";const WORKFLOW_ENTRY_NAME=`workflowEntry`,TURN_WORKFLOW_NAME=`turnWorkflow`,SESSION_TIMEOUT_WORKFLOW_NAME=`sessionTimeoutWorkflow`,TASK_RUN_WORKFLOW_NAME=`taskRunWorkflow`,EVE_PACKAGE_INFO=resolveInstalledPackageInfo(),COMMAND_HOOK_READY_TIMEOUT_MS=3e4,LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE=`deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()`,STABLE_WORKFLOW_NAMES=new Set([WORKFLOW_ENTRY_NAME,TURN_WORKFLOW_NAME,SESSION_TIMEOUT_WORKFLOW_NAME,TASK_RUN_WORKFLOW_NAME]),STABLE_ID_BASE=EVE_PACKAGE_INFO.name,log=createLogger(`execution.workflow-runtime`),workflowTracer=trace.getTracer(`workflow`),workflowEntryReference={workflowId:`workflow//${STABLE_ID_BASE}//${WORKFLOW_ENTRY_NAME}`},turnWorkflowReference={workflowId:`workflow//${STABLE_ID_BASE}//${TURN_WORKFLOW_NAME}`},sessionTimeoutWorkflowReference={workflowId:`workflow//${STABLE_ID_BASE}//${SESSION_TIMEOUT_WORKFLOW_NAME}`},taskRunWorkflowReference={workflowId:`workflow//${STABLE_ID_BASE}//${TASK_RUN_WORKFLOW_NAME}`};function createWorkflowRuntime(e){return{async createSession(i){let a=await getCompiledRuntimeAgentBundle({compiledArtifactsSource:e.compiledArtifactsSource,nodeId:e.nodeId}),o=buildRunContext({bundle:a,dynamicSubagentAgentConfig:e.dynamicSubagentAgentConfig,run:i}),s=resolveEffectiveAgentRuntime(a,o),c=serializeContext(o),l=readParentLineage(c),u=s.limits?.sessionTimeoutMs,d={input:i.input,limits:i.limits,serializedContext:c};u!==void 0&&(d.sessionTimeoutMs=u);let f={...l.sessionId===void 0?buildSessionAttributes({inputMessage:i.title??i.input.message,serializedContext:c}):buildSubagentRootAttributes({identity:{nodeId:a.nodeId??ROOT_RUNTIME_AGENT_NODE_ID},parentCallId:l.callId,parentSessionId:l.sessionId,parentTurnId:l.turnId,rootSessionId:l.rootSessionId??l.sessionId,serializedContext:c}),...i.externalInvocation===void 0?{}:buildInvocationAttributes(i.externalInvocation)},p;try{p=await startWorkflowPreferLatest(workflowEntryReference,[d],{allowReservedAttributes:!0,attributes:normalizeEveAttributes(f)})}catch(e){throw logError(log,`failed to start workflow run`,e,{continuationToken:i.continuationToken}),e}if(i.continuationToken){let e=await waitForCommandHookOwner(i.continuationToken);if(e.runId!==p.runId)throw new RuntimeSessionOwnershipConflictError({continuationToken:i.continuationToken,ownerSessionId:e.runId,sessionId:p.runId})}await waitForOwnedCommandHook(sessionCommandHookToken(p.runId),p.runId);let m,getEvents=()=>(m??=createLiveEventStream(p.runId),m);return{get events(){return getEvents()},sessionId:p.runId}},async dispatchContinuation(e){return await dispatchWorkflowCommand(e.continuationToken,e.command)},async dispatchSession(e){return await dispatchWorkflowCommand(sessionCommandHookToken(e.sessionId),e.command)},async getEventStream(e,t){return parseNdjsonStream(()=>getRun(e).getReadable({startIndex:t?.startIndex}))},async getStreamTailIndex(e){let t=getRun(e).getReadable();try{return await t.getTailIndex()}finally{await t.cancel().catch(()=>{})}},async resolveContinuation(e){try{return{sessionId:(await getHookByToken(e)).runId}}catch(n){if(HookNotFoundError.is(n))return;throw logError(log,`failed to resolve session by continuation token`,n,{continuationToken:e}),n}}}}async function dispatchWorkflowCommand(e,n){let i;try{i=normalizeWorkflowHook(await resumeSessionInbox(e,n))}catch(r){if(isInactiveCommandTarget(r))return inactiveCommandResult(n);throw logError(log,`failed to dispatch session command`,r,{command:n.kind,token:e}),r}return n.kind===`reset`&&await waitForCommandHookRelease(sessionCommandHookToken(i.runId),i.runId),activeCommandResult(n,i.runId)}function activeCommandResult(e,t){return e.kind===`reset`?{previousSessionId:t,status:`reset`}:(e.kind,{sessionId:t,status:`accepted`})}function inactiveCommandResult(e){return e.kind===`send`?{status:`session_not_active`}:e.kind===`cancel`?{status:`no_active_turn`}:{status:`no_active_session`}}async function requestWorkflowTurnCancellation(e){let t={kind:`cancel`};return e.taskId!==void 0&&(t.taskId=e.taskId),e.turnId!==void 0&&(t.turnId=e.turnId),await dispatchWorkflowCommand(sessionCommandHookToken(e.sessionId),t)}function isInactiveCommandTarget(e){if(HookNotFoundError.is(e))return!0;for(let t of walkCauseChain(e))if(WorkflowRunNotFoundError.is(t)||RunExpiredError.is(t)||EntityConflictError.is(t))return!0;return!1}async function waitForOwnedCommandHook(e,t){let r=await waitForCommandHookOwner(e);if(r.runId!==t)throw new RuntimeSessionOwnershipConflictError({continuationToken:e,ownerSessionId:r.runId,sessionId:t})}async function waitForCommandHookOwner(e){let t=Date.now()+COMMAND_HOOK_READY_TIMEOUT_MS;for(;;)try{return normalizeWorkflowHook(await getHookByToken(e))}catch(e){if(!HookNotFoundError.is(e)||Date.now()>=t)throw e;await new Promise(e=>setTimeout(e,20))}}async function waitForCommandHookRelease(e,t){let n=Date.now()+COMMAND_HOOK_READY_TIMEOUT_MS;for(;;){try{if(normalizeWorkflowHook(await getHookByToken(e)).runId!==t)return}catch(e){if(HookNotFoundError.is(e))return;throw e}if(Date.now()>=n)throw Error(`Timed out waiting for session "${t}" to release its command inbox.`);await new Promise(e=>setTimeout(e,20))}}async function startWorkflowPreferLatest(e,t,n){if(!shouldRouteToLatestDeployment())return n===void 0?await start(e,t):await start(e,t,n);try{return await start(e,t,{...n,deploymentId:`latest`})}catch(r){if(!isLatestDeploymentUnsupportedError(r))throw r;return n===void 0?await start(e,t):await start(e,t,n)}}function shouldRouteToLatestDeployment(){return process.env.VERCEL_ENV===`production`||isEveDevEnvironment()}function createLiveEventStream(e){let t=0;return parseNdjsonStream(()=>getRun(e).getReadable()).pipeThrough(new TransformStream({transform(n,r){let i=t;t+=1;let a=Date.now();r.enqueue(n),recordLiveStreamEventRead({event:n,readAtMs:a,sequence:i,sessionId:e})}}))}function recordLiveStreamEventRead(e){let t=Date.parse(e.event.meta?.at??``);if(Number.isFinite(t))try{workflowTracer.startSpan(`workflow.stream.follow.read`,{attributes:{"workflow.run.id":e.sessionId,"workflow.stream.sequence":e.sequence},kind:SpanKind.CLIENT,startTime:t}).end(e.readAtMs)}catch{}}function isLatestDeploymentUnsupportedError(e){return e instanceof Error&&e.message.includes(`deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()`)}function normalizeWorkflowHook(e){if(typeof e!=`object`||!e||!(`runId`in e))throw Error(`Workflow hook did not include a run id.`);let t=e.runId;if(typeof t!=`string`||t.length===0)throw Error(`Workflow hook did not include a run id.`);return{runId:t}}export{LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE,STABLE_WORKFLOW_NAMES,createWorkflowRuntime,requestWorkflowTurnCancellation,sessionTimeoutWorkflowReference,startWorkflowPreferLatest,taskRunWorkflowReference,turnWorkflowReference,waitForCommandHookOwner,workflowEntryReference};
+import { createLogger, logError } from "#internal/logging.js";
+import { RuntimeSessionOwnershipConflictError } from "#execution/runtime-errors.js";
+import { sessionCommandHookToken } from "#execution/session-command-token.js";
+import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import { walkCauseChain } from "#shared/errors.js";
+import { isEveDevEnvironment } from "#internal/application/dev-environment.js";
+import { serializeContext } from "#context/serialize.js";
+import { getCompiledRuntimeAgentBundle } from "#runtime/sessions/compiled-agent-cache.js";
+import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
+import {
+  EntityConflictError,
+  HookNotFoundError,
+  RunExpiredError,
+  WorkflowRunNotFoundError,
+} from "#compiled/@workflow/errors/index.js";
+import { getHookByToken, getRun, start } from "#internal/workflow/runtime.js";
+import {
+  buildSessionAttributes,
+  buildSubagentRootAttributes,
+  readParentLineage,
+} from "#execution/eve-workflow-attributes.js";
+import { normalizeEveAttributes } from "#runtime/attributes/normalize.js";
+import { resumeSessionInbox } from "#execution/wire/session-inbox-resume.js";
+import { ROOT_RUNTIME_AGENT_NODE_ID } from "#runtime/graph.js";
+import { SpanKind, trace } from "#compiled/@opentelemetry/api/index.js";
+import { buildRunContext } from "#execution/runtime-context.js";
+import { parseNdjsonStream } from "#execution/ndjson-stream.js";
+import { buildInvocationAttributes } from "#internal/invocation/metadata.js";
+const WORKFLOW_ENTRY_NAME = `workflowEntry`,
+  TURN_WORKFLOW_NAME = `turnWorkflow`,
+  SESSION_TIMEOUT_WORKFLOW_NAME = `sessionTimeoutWorkflow`,
+  TASK_RUN_WORKFLOW_NAME = `taskRunWorkflow`,
+  EVE_PACKAGE_INFO = resolveInstalledPackageInfo(),
+  COMMAND_HOOK_READY_TIMEOUT_MS = 3e4,
+  LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE = `deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()`,
+  STABLE_WORKFLOW_NAMES = new Set([
+    WORKFLOW_ENTRY_NAME,
+    TURN_WORKFLOW_NAME,
+    SESSION_TIMEOUT_WORKFLOW_NAME,
+    TASK_RUN_WORKFLOW_NAME,
+  ]),
+  STABLE_ID_BASE = EVE_PACKAGE_INFO.name,
+  log = createLogger(`execution.workflow-runtime`),
+  workflowTracer = trace.getTracer(`workflow`),
+  workflowEntryReference = {
+    workflowId: `workflow//${STABLE_ID_BASE}//${WORKFLOW_ENTRY_NAME}`,
+  },
+  turnWorkflowReference = {
+    workflowId: `workflow//${STABLE_ID_BASE}//${TURN_WORKFLOW_NAME}`,
+  },
+  sessionTimeoutWorkflowReference = {
+    workflowId: `workflow//${STABLE_ID_BASE}//${SESSION_TIMEOUT_WORKFLOW_NAME}`,
+  },
+  taskRunWorkflowReference = {
+    workflowId: `workflow//${STABLE_ID_BASE}//${TASK_RUN_WORKFLOW_NAME}`,
+  };
+function createWorkflowRuntime(e) {
+  return {
+    async createSession(i) {
+      let a = await getCompiledRuntimeAgentBundle({
+          compiledArtifactsSource: e.compiledArtifactsSource,
+          nodeId: e.nodeId,
+        }),
+        o = buildRunContext({
+          bundle: a,
+          dynamicSubagentAgentConfig: e.dynamicSubagentAgentConfig,
+          run: i,
+        }),
+        s = resolveEffectiveAgentRuntime(a, o),
+        c = serializeContext(o),
+        l = readParentLineage(c),
+        u = s.limits?.sessionTimeoutMs,
+        d = { input: i.input, limits: i.limits, serializedContext: c };
+      u !== void 0 && (d.sessionTimeoutMs = u);
+      let f = {
+          ...(l.sessionId === void 0
+            ? buildSessionAttributes({
+                inputMessage: i.title ?? i.input.message,
+                serializedContext: c,
+              })
+            : buildSubagentRootAttributes({
+                identity: { nodeId: a.nodeId ?? ROOT_RUNTIME_AGENT_NODE_ID },
+                parentCallId: l.callId,
+                parentSessionId: l.sessionId,
+                parentTurnId: l.turnId,
+                rootSessionId: l.rootSessionId ?? l.sessionId,
+                serializedContext: c,
+              })),
+          ...(i.externalInvocation === void 0
+            ? {}
+            : buildInvocationAttributes(i.externalInvocation)),
+        },
+        p;
+      try {
+        p = await startWorkflowPreferLatest(workflowEntryReference, [d], {
+          allowReservedAttributes: !0,
+          attributes: normalizeEveAttributes(f),
+        });
+      } catch (e) {
+        throw (
+          logError(log, `failed to start workflow run`, e, {
+            continuationToken: i.continuationToken,
+          }),
+          e
+        );
+      }
+      if (i.continuationToken) {
+        let e = await waitForCommandHookOwner(i.continuationToken);
+        if (e.runId !== p.runId)
+          throw new RuntimeSessionOwnershipConflictError({
+            continuationToken: i.continuationToken,
+            ownerSessionId: e.runId,
+            sessionId: p.runId,
+          });
+      }
+      await waitForOwnedCommandHook(sessionCommandHookToken(p.runId), p.runId);
+      let m,
+        getEvents = () => ((m ??= createLiveEventStream(p.runId)), m);
+      return {
+        get events() {
+          return getEvents();
+        },
+        sessionId: p.runId,
+      };
+    },
+    async dispatchContinuation(e) {
+      return await dispatchWorkflowCommand(e.continuationToken, e.command);
+    },
+    async dispatchSession(e) {
+      return await dispatchWorkflowCommand(
+        sessionCommandHookToken(e.sessionId),
+        e.command,
+      );
+    },
+    async getEventStream(e, t) {
+      return parseNdjsonStream(() =>
+        getRun(e).getReadable({ startIndex: t?.startIndex }),
+      );
+    },
+    async getStreamTailIndex(e) {
+      let t = getRun(e).getReadable();
+      try {
+        return await t.getTailIndex();
+      } finally {
+        await t.cancel().catch(() => {});
+      }
+    },
+    async resolveContinuation(e) {
+      try {
+        return { sessionId: (await getHookByToken(e)).runId };
+      } catch (n) {
+        if (HookNotFoundError.is(n)) return;
+        throw (
+          logError(log, `failed to resolve session by continuation token`, n, {
+            continuationToken: e,
+          }),
+          n
+        );
+      }
+    },
+  };
+}
+async function dispatchWorkflowCommand(e, n) {
+  let i;
+  try {
+    i = normalizeWorkflowHook(await resumeSessionInbox(e, n));
+  } catch (r) {
+    if (isInactiveCommandTarget(r)) return inactiveCommandResult(n);
+    throw (
+      logError(log, `failed to dispatch session command`, r, {
+        command: n.kind,
+        token: e,
+      }),
+      r
+    );
+  }
+  return (
+    n.kind === `reset` &&
+      (await waitForCommandHookRelease(
+        sessionCommandHookToken(i.runId),
+        i.runId,
+      )),
+    activeCommandResult(n, i.runId)
+  );
+}
+function activeCommandResult(e, t) {
+  return e.kind === `reset`
+    ? { previousSessionId: t, status: `reset` }
+    : (e.kind, { sessionId: t, status: `accepted` });
+}
+function inactiveCommandResult(e) {
+  return e.kind === `send`
+    ? { status: `session_not_active` }
+    : e.kind === `cancel`
+      ? { status: `no_active_turn` }
+      : { status: `no_active_session` };
+}
+async function requestWorkflowTurnCancellation(e) {
+  let t = { kind: `cancel` };
+  return (
+    e.taskId !== void 0 && (t.taskId = e.taskId),
+    e.turnId !== void 0 && (t.turnId = e.turnId),
+    await dispatchWorkflowCommand(sessionCommandHookToken(e.sessionId), t)
+  );
+}
+function isInactiveCommandTarget(e) {
+  if (HookNotFoundError.is(e)) return !0;
+  for (let t of walkCauseChain(e))
+    if (
+      WorkflowRunNotFoundError.is(t) ||
+      RunExpiredError.is(t) ||
+      EntityConflictError.is(t)
+    )
+      return !0;
+  return !1;
+}
+async function waitForOwnedCommandHook(e, t) {
+  let r = await waitForCommandHookOwner(e);
+  if (r.runId !== t)
+    throw new RuntimeSessionOwnershipConflictError({
+      continuationToken: e,
+      ownerSessionId: r.runId,
+      sessionId: t,
+    });
+}
+async function waitForCommandHookOwner(e) {
+  let t = Date.now() + COMMAND_HOOK_READY_TIMEOUT_MS;
+  for (;;)
+    try {
+      return normalizeWorkflowHook(await getHookByToken(e));
+    } catch (e) {
+      if (!HookNotFoundError.is(e) || Date.now() >= t) throw e;
+      await new Promise((e) => setTimeout(e, 20));
+    }
+}
+async function waitForCommandHookRelease(e, t) {
+  let n = Date.now() + COMMAND_HOOK_READY_TIMEOUT_MS;
+  for (;;) {
+    try {
+      if (normalizeWorkflowHook(await getHookByToken(e)).runId !== t) return;
+    } catch (e) {
+      if (HookNotFoundError.is(e)) return;
+      throw e;
+    }
+    if (Date.now() >= n)
+      throw Error(
+        `Timed out waiting for session "${t}" to release its command inbox.`,
+      );
+    await new Promise((e) => setTimeout(e, 20));
+  }
+}
+async function startWorkflowPreferLatest(e, t, n) {
+  if (!shouldRouteToLatestDeployment())
+    return n === void 0 ? await start(e, t) : await start(e, t, n);
+  try {
+    return await start(e, t, { ...n, deploymentId: `latest` });
+  } catch (r) {
+    if (!isLatestDeploymentUnsupportedError(r)) throw r;
+    return n === void 0 ? await start(e, t) : await start(e, t, n);
+  }
+}
+function shouldRouteToLatestDeployment() {
+  return process.env.VERCEL_ENV === `production` || isEveDevEnvironment();
+}
+function createLiveEventStream(e) {
+  let t = 0;
+  return parseNdjsonStream(() => getRun(e).getReadable()).pipeThrough(
+    new TransformStream({
+      transform(n, r) {
+        let i = t;
+        t += 1;
+        let a = Date.now();
+        (r.enqueue(n),
+          recordLiveStreamEventRead({
+            event: n,
+            readAtMs: a,
+            sequence: i,
+            sessionId: e,
+          }));
+      },
+    }),
+  );
+}
+function recordLiveStreamEventRead(e) {
+  let t = Date.parse(e.event.meta?.at ?? ``);
+  if (Number.isFinite(t))
+    try {
+      workflowTracer
+        .startSpan(`workflow.stream.follow.read`, {
+          attributes: {
+            "workflow.run.id": e.sessionId,
+            "workflow.stream.sequence": e.sequence,
+          },
+          kind: SpanKind.CLIENT,
+          startTime: t,
+        })
+        .end(e.readAtMs);
+    } catch {}
+}
+function isLatestDeploymentUnsupportedError(e) {
+  return (
+    e instanceof Error &&
+    e.message.includes(
+      `deploymentId 'latest' requires a World that implements resolveLatestDeploymentId()`,
+    )
+  );
+}
+function normalizeWorkflowHook(e) {
+  if (typeof e != `object` || !e || !(`runId` in e))
+    throw Error(`Workflow hook did not include a run id.`);
+  let t = e.runId;
+  if (typeof t != `string` || t.length === 0)
+    throw Error(`Workflow hook did not include a run id.`);
+  return { runId: t };
+}
+export {
+  LATEST_DEPLOYMENT_UNSUPPORTED_MESSAGE,
+  STABLE_WORKFLOW_NAMES,
+  createWorkflowRuntime,
+  requestWorkflowTurnCancellation,
+  sessionTimeoutWorkflowReference,
+  startWorkflowPreferLatest,
+  taskRunWorkflowReference,
+  turnWorkflowReference,
+  waitForCommandHookOwner,
+  workflowEntryReference,
+};

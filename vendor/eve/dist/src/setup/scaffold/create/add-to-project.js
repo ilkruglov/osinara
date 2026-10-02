@@ -1,1 +1,114 @@
-import{pathExists,writeTextFile}from"../files.js";import{resolveVersionToken}from"../version-tokens.js";import{patchPackageJson}from"../update/package-json.js";import{applyPackageManagerWorkspaceConfiguration,isPackageManagerWorkspaceMember,patchWorkspaceRootPackageJson}from"../workspace-root.js";import{agentTemplateFiles,formatEveDependencySpecifier,resolveEvePackageContract}from"./project.js";import{readFile}from"node:fs/promises";import{join}from"node:path";const DEPENDENCY_FIELDS=[`dependencies`,`devDependencies`,`optionalDependencies`,`peerDependencies`];function isJsonObject(e){return typeof e==`object`&&!!e&&!Array.isArray(e)}function hasDeclaredDependency(e,t){if(!isJsonObject(e))return!1;for(let n of DEPENDENCY_FIELDS){let r=e[n];if(isJsonObject(r)&&typeof r[t]==`string`)return!0}return!1}async function addAgentToProject(i){let a=i.packageManager??`pnpm`,o=join(i.projectRoot,`package.json`);if(!await pathExists(o))throw Error(`Cannot add an eve agent to "${i.projectRoot}" because it has no package.json. Run \`eve init <name>\` to create a new project instead.`);let s;try{s=JSON.parse(await readFile(o,`utf8`))}catch(e){let t=e instanceof Error?e.message:String(e);throw Error(`Cannot add an eve agent because "${o}" is not valid JSON. No files were changed. Fix the file, then retry eve init. ${t}`)}let c=agentTemplateFiles(i.model,i.reasoning),l=[];for(let t of Object.keys(c))await pathExists(join(i.projectRoot,t))&&l.push(t);if(l.length===0&&await pathExists(join(i.projectRoot,`agent`))&&l.push(`agent/`),l.length>0)throw Error(`Cannot add an eve agent to "${i.projectRoot}" because it already has: ${l.join(`, `)}.`);let u=resolveEvePackageContract(i.evePackage),d=resolveVersionToken(`aiPackageVersion`,i.aiPackageVersion??`^7.0.58`),f=resolveVersionToken(`connectPackageVersion`,i.connectPackageVersion??`0.4.3`),p=resolveVersionToken(`zodPackageVersion`,i.zodPackageVersion??`4.4.3`),m=[];for(let[e,n]of Object.entries(c)){let r=join(i.projectRoot,e);await writeTextFile(r,n),m.push(r)}let h={"@vercel/connect":f,ai:d,eve:formatEveDependencySpecifier(u.version),zod:p},g={};for(let[e,t]of Object.entries(h))hasDeclaredDependency(s,e)||(g[e]=t);let _={};Object.keys(g).length>0&&(_.dependencies=g),isPackageManagerWorkspaceMember(a,i.projectRoot)||(_.nodeEngineRequirement=u.nodeEngine);let v=await patchPackageJson(o,_),y=await patchWorkspaceRootPackageJson(a,i.projectRoot,{aiPackageVersion:d,nodeEngineRequirement:u.nodeEngine}),b=y.nodeEngineOverride??v.nodeEngineOverride,x=await applyPackageManagerWorkspaceConfiguration({packageManager:a,projectRoot:i.projectRoot});return{filesWritten:m,dependenciesAdded:Object.keys(g).sort(),nodeEngineOverride:b,configurationFilesChanged:[...v.changed?[o]:[],...y.changed&&y.path!==void 0?[y.path]:[],...x.filesWritten]}}export{addAgentToProject};
+import { pathExists, writeTextFile } from "../files.js";
+import { resolveVersionToken } from "../version-tokens.js";
+import { patchPackageJson } from "../update/package-json.js";
+import {
+  applyPackageManagerWorkspaceConfiguration,
+  isPackageManagerWorkspaceMember,
+  patchWorkspaceRootPackageJson,
+} from "../workspace-root.js";
+import {
+  agentTemplateFiles,
+  formatEveDependencySpecifier,
+  resolveEvePackageContract,
+} from "./project.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+const DEPENDENCY_FIELDS = [
+  `dependencies`,
+  `devDependencies`,
+  `optionalDependencies`,
+  `peerDependencies`,
+];
+function isJsonObject(e) {
+  return typeof e == `object` && !!e && !Array.isArray(e);
+}
+function hasDeclaredDependency(e, t) {
+  if (!isJsonObject(e)) return !1;
+  for (let n of DEPENDENCY_FIELDS) {
+    let r = e[n];
+    if (isJsonObject(r) && typeof r[t] == `string`) return !0;
+  }
+  return !1;
+}
+async function addAgentToProject(i) {
+  let a = i.packageManager ?? `pnpm`,
+    o = join(i.projectRoot, `package.json`);
+  if (!(await pathExists(o)))
+    throw Error(
+      `Cannot add an eve agent to "${i.projectRoot}" because it has no package.json. Run \`eve init <name>\` to create a new project instead.`,
+    );
+  let s;
+  try {
+    s = JSON.parse(await readFile(o, `utf8`));
+  } catch (e) {
+    let t = e instanceof Error ? e.message : String(e);
+    throw Error(
+      `Cannot add an eve agent because "${o}" is not valid JSON. No files were changed. Fix the file, then retry eve init. ${t}`,
+    );
+  }
+  let c = agentTemplateFiles(i.model, i.reasoning),
+    l = [];
+  for (let t of Object.keys(c))
+    (await pathExists(join(i.projectRoot, t))) && l.push(t);
+  if (
+    (l.length === 0 &&
+      (await pathExists(join(i.projectRoot, `agent`))) &&
+      l.push(`agent/`),
+    l.length > 0)
+  )
+    throw Error(
+      `Cannot add an eve agent to "${i.projectRoot}" because it already has: ${l.join(`, `)}.`,
+    );
+  let u = resolveEvePackageContract(i.evePackage),
+    d = resolveVersionToken(
+      `aiPackageVersion`,
+      i.aiPackageVersion ?? `^7.0.58`,
+    ),
+    f = resolveVersionToken(
+      `connectPackageVersion`,
+      i.connectPackageVersion ?? `0.4.3`,
+    ),
+    p = resolveVersionToken(
+      `zodPackageVersion`,
+      i.zodPackageVersion ?? `4.4.3`,
+    ),
+    m = [];
+  for (let [e, n] of Object.entries(c)) {
+    let r = join(i.projectRoot, e);
+    (await writeTextFile(r, n), m.push(r));
+  }
+  let h = {
+      "@vercel/connect": f,
+      ai: d,
+      eve: formatEveDependencySpecifier(u.version),
+      zod: p,
+    },
+    g = {};
+  for (let [e, t] of Object.entries(h))
+    hasDeclaredDependency(s, e) || (g[e] = t);
+  let _ = {};
+  (Object.keys(g).length > 0 && (_.dependencies = g),
+    isPackageManagerWorkspaceMember(a, i.projectRoot) ||
+      (_.nodeEngineRequirement = u.nodeEngine));
+  let v = await patchPackageJson(o, _),
+    y = await patchWorkspaceRootPackageJson(a, i.projectRoot, {
+      aiPackageVersion: d,
+      nodeEngineRequirement: u.nodeEngine,
+    }),
+    b = y.nodeEngineOverride ?? v.nodeEngineOverride,
+    x = await applyPackageManagerWorkspaceConfiguration({
+      packageManager: a,
+      projectRoot: i.projectRoot,
+    });
+  return {
+    filesWritten: m,
+    dependenciesAdded: Object.keys(g).sort(),
+    nodeEngineOverride: b,
+    configurationFilesChanged: [
+      ...(v.changed ? [o] : []),
+      ...(y.changed && y.path !== void 0 ? [y.path] : []),
+      ...x.filesWritten,
+    ],
+  };
+}
+export { addAgentToProject };

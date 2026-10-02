@@ -1,1 +1,2 @@
-import{justbash}from"#public/sandbox/backends/just-bash.js";export{justbash};
+import { justbash } from "#public/sandbox/backends/just-bash.js";
+export { justbash };

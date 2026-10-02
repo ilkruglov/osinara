@@ -1,1 +1,31 @@
-import{activeTurnId}from"#harness/active-turn-id.js";import{dispatchTurnStep}from"#execution/dispatch-turn-step.js";import{TurnControlReceiver}from"#execution/turn-control-receiver.js";async function dispatchAndAwaitTurn(t){let n=new TurnControlReceiver({bufferedDeliveries:t.bufferedDeliveries,bufferedSessionControls:t.bufferedSessionControls,cancelledTaskIds:t.cancelledTaskIds,commandInbox:t.commandInbox,expectedTurnId:activeTurnId(t.sessionState.emissionState),seenTaskDeliveries:t.seenTaskDeliveries??new Set,token:t.controlToken});try{return await dispatchTurnStep({capabilities:t.capabilities,completionToken:n.token,delivery:t.delivery,mode:t.mode,parentWritable:t.parentWritable,serializedContext:t.serializedContext,sessionState:t.sessionState}),{action:await n.waitForAction(),dispose:()=>n.dispose()}}catch(e){throw await n.dispose(),e}}export{dispatchAndAwaitTurn};
+import { activeTurnId } from "#harness/active-turn-id.js";
+import { dispatchTurnStep } from "#execution/dispatch-turn-step.js";
+import { TurnControlReceiver } from "#execution/turn-control-receiver.js";
+async function dispatchAndAwaitTurn(t) {
+  let n = new TurnControlReceiver({
+    bufferedDeliveries: t.bufferedDeliveries,
+    bufferedSessionControls: t.bufferedSessionControls,
+    cancelledTaskIds: t.cancelledTaskIds,
+    commandInbox: t.commandInbox,
+    expectedTurnId: activeTurnId(t.sessionState.emissionState),
+    seenTaskDeliveries: t.seenTaskDeliveries ?? new Set(),
+    token: t.controlToken,
+  });
+  try {
+    return (
+      await dispatchTurnStep({
+        capabilities: t.capabilities,
+        completionToken: n.token,
+        delivery: t.delivery,
+        mode: t.mode,
+        parentWritable: t.parentWritable,
+        serializedContext: t.serializedContext,
+        sessionState: t.sessionState,
+      }),
+      { action: await n.waitForAction(), dispose: () => n.dispose() }
+    );
+  } catch (e) {
+    throw (await n.dispose(), e);
+  }
+}
+export { dispatchAndAwaitTurn };

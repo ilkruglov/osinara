@@ -1,1 +1,34 @@
-import{resolve}from"node:path";import{DiscoveryProjectResolutionError,resolveDiscoveryProject}from"#discover/project.js";const defaultDependencies={resolveDiscoveryProject};async function resolveCliApplicationProject(e=process.cwd(),t=defaultDependencies){return t.resolveDiscoveryProject(e)}async function findCliApplicationRoot(e=process.cwd(),n=defaultDependencies){try{return(await n.resolveDiscoveryProject(e)).appRoot}catch(e){if(e instanceof DiscoveryProjectResolutionError)return;throw e}}async function resolveCliApplicationRoot(t=process.cwd(),n=defaultDependencies){return await findCliApplicationRoot(t,n)??resolve(t)}export{findCliApplicationRoot,resolveCliApplicationProject,resolveCliApplicationRoot};
+import { resolve } from "node:path";
+import {
+  DiscoveryProjectResolutionError,
+  resolveDiscoveryProject,
+} from "#discover/project.js";
+const defaultDependencies = { resolveDiscoveryProject };
+async function resolveCliApplicationProject(
+  e = process.cwd(),
+  t = defaultDependencies,
+) {
+  return t.resolveDiscoveryProject(e);
+}
+async function findCliApplicationRoot(
+  e = process.cwd(),
+  n = defaultDependencies,
+) {
+  try {
+    return (await n.resolveDiscoveryProject(e)).appRoot;
+  } catch (e) {
+    if (e instanceof DiscoveryProjectResolutionError) return;
+    throw e;
+  }
+}
+async function resolveCliApplicationRoot(
+  t = process.cwd(),
+  n = defaultDependencies,
+) {
+  return (await findCliApplicationRoot(t, n)) ?? resolve(t);
+}
+export {
+  findCliApplicationRoot,
+  resolveCliApplicationProject,
+  resolveCliApplicationRoot,
+};

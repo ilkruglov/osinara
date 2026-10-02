@@ -1,10 +1,10 @@
-import { decode, encode } from 'cbor-x';
-import { customType } from 'drizzle-orm/pg-core';
+import { decode, encode } from "cbor-x";
+import { customType } from "drizzle-orm/pg-core";
 export function Cbor() {
-    return customType({
-        dataType: () => 'bytea',
-        fromDriver: (value) => decode(value),
-        toDriver: (value) => encode(value),
-    });
+  return customType({
+    dataType: () => "bytea",
+    fromDriver: (value) => decode(value),
+    toDriver: (value) => encode(value),
+  });
 }
 //# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2Jvci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9kcml6emxlL2Nib3IudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxFQUFFLE1BQU0sRUFBRSxNQUFNLEVBQUUsTUFBTSxRQUFRLENBQUM7QUFDeEMsT0FBTyxFQUFFLFVBQVUsRUFBRSxNQUFNLHFCQUFxQixDQUFDO0FBRWpELE1BQU0sVUFBVSxJQUFJO0lBQ2xCLE9BQU8sVUFBVSxDQUFrQztRQUNqRCxRQUFRLEVBQUUsR0FBRyxFQUFFLENBQUMsT0FBTztRQUN2QixVQUFVLEVBQUUsQ0FBQyxLQUFLLEVBQUUsRUFBRSxDQUFDLE1BQU0sQ0FBQyxLQUFLLENBQUM7UUFDcEMsUUFBUSxFQUFFLENBQUMsS0FBSyxFQUFFLEVBQUUsQ0FBQyxNQUFNLENBQUMsS0FBSyxDQUFDO0tBQ25DLENBQUMsQ0FBQztBQUNMLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBkZWNvZGUsIGVuY29kZSB9IGZyb20gJ2Nib3IteCc7XG5pbXBvcnQgeyBjdXN0b21UeXBlIH0gZnJvbSAnZHJpenpsZS1vcm0vcGctY29yZSc7XG5cbmV4cG9ydCBmdW5jdGlvbiBDYm9yPFQ+KCkge1xuICByZXR1cm4gY3VzdG9tVHlwZTx7IGRhdGE6IFQ7IGRyaXZlckRhdGE6IEJ1ZmZlciB9Pih7XG4gICAgZGF0YVR5cGU6ICgpID0+ICdieXRlYScsXG4gICAgZnJvbURyaXZlcjogKHZhbHVlKSA9PiBkZWNvZGUodmFsdWUpLFxuICAgIHRvRHJpdmVyOiAodmFsdWUpID0+IGVuY29kZSh2YWx1ZSksXG4gIH0pO1xufVxuXG4vKipcbiAqIEFkZHMgYSBge2tleX1Kc29uYCBwcm9wZXJ0eSB0byB0aGUgZ2l2ZW4gdHlwZSBWLCByZXByZXNlbnRpbmcgYSBrZXkgdGhhdCB3YXNcbiAqIG1pZ3JhdGVkIHRvIENCT1IgYW5kIGNhbiBjb250YWluIGEgcHJldmlvdXMgSlNPTkIgcmVwcmVzZW50YXRpb24uXG4gKlxuICogV2UgbWlncmF0ZWQgZnJvbSBKU09OQiB0byBDQk9SLCBidXQgdG8gYXZvaWQgYnJlYWtpbmcgY2hhbmdlcyBpbiB0aGUgY29kZWJhc2UsXG4gKiB3ZSBrZWVwIGJvdGggcmVwcmVzZW50YXRpb25zIGluIHRoZSBkYXRhYmFzZSwgYW5kIHRoZXJlZm9yZSB3ZSBuZWVkIHRvIGV4dGVuZFxuICogdGhlIHR5cGVzIGFjY29yZGluZ2x5LlxuICovXG5leHBvcnQgdHlwZSBDYm9yaXplZDxWIGV4dGVuZHMgb2JqZWN0LCBLIGV4dGVuZHMga2V5b2YgVj4gPSBWICYge1xuICBba2V5IGluIGAke0V4dHJhY3Q8Sywgc3RyaW5nPn1Kc29uYF06IHVua25vd247XG59O1xuIl19

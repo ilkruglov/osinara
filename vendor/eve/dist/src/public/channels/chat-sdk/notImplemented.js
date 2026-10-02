@@ -1,1 +1,7 @@
-function isNotImplemented(e){return e instanceof Error&&(e.name===`NotImplementedError`||e.code===`NOT_IMPLEMENTED`)}export{isNotImplemented};
+function isNotImplemented(e) {
+  return (
+    e instanceof Error &&
+    (e.name === `NotImplementedError` || e.code === `NOT_IMPLEMENTED`)
+  );
+}
+export { isNotImplemented };

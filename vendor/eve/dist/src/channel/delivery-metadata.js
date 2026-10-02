@@ -1,1 +1,14 @@
-function createChannelDeliveryMetadata(e){let t={channelKind:e.channelKind,channelName:e.channelName,deliveryId:crypto.randomUUID()};return e.requestId!==void 0&&(t.requestId=e.requestId),e.requestTraceContext!==void 0&&(t.requestTraceContext=e.requestTraceContext),t}export{createChannelDeliveryMetadata};
+function createChannelDeliveryMetadata(e) {
+  let t = {
+    channelKind: e.channelKind,
+    channelName: e.channelName,
+    deliveryId: crypto.randomUUID(),
+  };
+  return (
+    e.requestId !== void 0 && (t.requestId = e.requestId),
+    e.requestTraceContext !== void 0 &&
+      (t.requestTraceContext = e.requestTraceContext),
+    t
+  );
+}
+export { createChannelDeliveryMetadata };

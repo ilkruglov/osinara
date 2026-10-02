@@ -1,1 +1,508 @@
-import{hasInteractiveTerminal}from"./preconditions.js";import{reportHeadlessSetupCompletion,serializeHeadlessSetupEvent}from"./setup-headless.js";import{runDeclaredSetups}from"./registry-declared-setups.js";import{runRegistryPackage}from"./registry-package.js";import{eveMetadataFromRegistryItem,parseOfficialRegistrySearchMetadata}from"./registry-metadata.js";import{printRegistrySearchResults,registryViewText}from"./registry-presentation.js";import{addRegistryMappings,readRegistryConfig}from"./registry-project.js";import{errorMessage,resolveRegistryItemForAdd,runRegistryAction,setupReminder,setupResumeCommand}from"./registry-recovery.js";import{resolveInstalledPackageInfo}from"#internal/application/package.js";import{createPrompter}from"#setup/prompter.js";import{WizardCancelledError}from"#setup/step.js";import{addRegistryItems,getRegistryItems,searchRegistries}from"#compiled/shadcn-registry/index.js";import semver from"#compiled/semver/index.js";const defaultAddCommandDependencies={createPrompter,hasInteractiveTerminal,loadSetupCommandRunner:async()=>(await import(`./registry-setup-command.js`)).runRegistrySetupCommand};function resolveOfficialRegistryUrl(e=process.env.EVE_DEV_OFFICIAL_REGISTRY_URL){if(e===void 0)return`https://eve.dev/r`;let t;try{t=new URL(e)}catch{throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must be an HTTP(S) URL.`)}if(t.protocol!==`http:`&&t.protocol!==`https:`)throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must be an HTTP(S) URL.`);if(t.username!==``||t.password!==``)throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must not include credentials.`);if(t.search!==``||t.hash!==``)throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must not include a query or fragment.`);return t.pathname=t.pathname.replace(/\/+$/,``),t.toString().replace(/\/$/,``)}const OFFICIAL_REGISTRY=resolveOfficialRegistryUrl(),OFFICIAL_CATALOG=`${OFFICIAL_REGISTRY}/registry.json`,SKILLS_REGISTRY=`@skills`;function isRegistryAddress(e){return e.startsWith(`@`)||/^https?:\/\//.test(e)}function itemAddress(e){return isRegistryAddress(e)?e:`${OFFICIAL_REGISTRY}/${e}.json`}async function installOfficialRegistryItem(e,t,n={}){let r=await readEveRegistryConfig(e);await addRegistryItems([itemAddress(t)],{config:r,cwd:e,overwrite:n.overwrite})}function assertCompatibleEveVersion(e){if(e===void 0)return;let t=resolveInstalledPackageInfo().version;if(semver.validRange(e)===null)throw Error(`Registry item has an invalid eve version requirement: ${e}.`);if(!semver.subset(t,e))throw Error(`This registry item requires eve ${e}, but this project is using eve ${t}. Upgrade eve and run the command again.`)}function isOfficialItemAddress(e){return e.startsWith(`${OFFICIAL_REGISTRY}/`)}function withBuiltInRegistries(e){return{...e,registries:{[SKILLS_REGISTRY]:`https://www.skills.sh/r/{name}?agent=eve`,...e.registries}}}async function readEveRegistryConfig(e){return withBuiltInRegistries(await readRegistryConfig(e))}function configuredRegistrySources(e){return Object.keys(e.registries??{})}function validateRegistrySource(e){if(e!==void 0&&!isRegistryAddress(e))throw Error(`Registry sources must be a namespace or URL: ${e}`)}async function loadOfficialSearchMetadata(){let e=await fetch(OFFICIAL_CATALOG);if(!e.ok)throw Error(`Could not read the eve registry (${e.status}).`);return parseOfficialRegistrySearchMetadata(await e.json())}function searchItemAddress(e){return e.registry===OFFICIAL_CATALOG?e.name:e.addCommandArgument}function enrichSearchItem(e,t){let n=searchItemAddress(e);return{item:e,address:n,...t.get(n)}}function registrySourceLabel(e){return e===OFFICIAL_CATALOG?`eve`:e===SKILLS_REGISTRY?`skills.sh`:e}function searchPresentationSections(e,t,n){return e.flatMap(e=>{let r=t.get(e);return r===void 0?[]:[{label:registrySourceLabel(e),items:r.items.map(e=>enrichSearchItem(e,n)),total:r.pagination.total}]})}async function printAddSuggestions(e,t,n){try{let r=n.split(`/`).at(-1)||n,{resultsBySource:i,sources:a,metadataByAddress:o}=await searchRegistryCatalog(t,{limit:5,query:r}),c=searchPresentationSections(a,i,o);if(c.every(e=>e.items.length===0))return;e.log(`Did you mean?`),printRegistrySearchResults(e,{query:r,sections:c})}catch{}}async function searchRegistryCatalog(e,t){validateRegistrySource(t.source);let n=await readEveRegistryConfig(e),r=t.source?[t.source]:[OFFICIAL_CATALOG,...configuredRegistrySources(n).filter(e=>t.query!==void 0||e!==SKILLS_REGISTRY)],i=await Promise.all(r.map(async e=>{try{return{result:await searchRegistries([e],{config:n,limit:t.limit??100,query:t.query}),source:e}}catch(t){return{error:t,source:e}}})),a=[],o=new Map;for(let e of i)if(`error`in e)a.push({message:errorMessage(e.error),registry:e.source});else{let t=e.result.errors??[];if(a.push(...t),t.length===0){let t=e.result.items.filter(t=>t.registry===e.source);o.set(e.source,{...e.result,items:t,pagination:{...e.result.pagination,total:e.result.items.length===t.length?e.result.pagination.total:0}})}}let s=new Map(a.map(e=>[`${e.registry}\0${e.message}`,e])),c=o.has(OFFICIAL_CATALOG)?await loadOfficialSearchMetadata():new Map,l=o.get(OFFICIAL_CATALOG);l!==void 0&&l.items.sort((e,t)=>{let rank=e=>c.get(searchItemAddress(e))?.implementation===`native`?0:1;return rank(e)-rank(t)});let u=[...o.values()];return{config:n,result:{items:u.flatMap(e=>e.items),pagination:{hasMore:u.some(e=>e.pagination.hasMore),limit:t.limit??100,offset:0,total:u.reduce((e,t)=>e+t.pagination.total,0)},...s.size>0?{errors:[...s.values()]}:{}},resultsBySource:o,sources:r,metadataByAddress:c}}async function browseRegistryCatalog(e,t={}){let{result:n}=await searchRegistryCatalog(e,t);return{items:n.items.map(e=>{let t={address:e.registry===OFFICIAL_CATALOG?e.name:e.addCommandArgument,name:e.name,source:e.registry===OFFICIAL_CATALOG?`Vercel`:e.registry};return e.title!==void 0&&(t.title=e.title),e.type!==void 0&&(t.type=e.type),e.description!==void 0&&(t.description=e.description),t}),total:n.pagination.total,errors:n.errors??[]}}async function browseRegistryItems(e,t,n,r,i={}){let{result:a,resultsBySource:o,sources:c,metadataByAddress:l}=await searchRegistryCatalog(t,{limit:i.limit,query:n,source:r}),u=a.errors??[];if(i.json||o.size>0){let t=a.items.map(e=>({...e,...l.get(searchItemAddress(e))})),r={query:n,sections:searchPresentationSections(c,o,l)};i.json&&(r.json={...a,items:t}),printRegistrySearchResults(e,r)}for(let t of u)e.error(`${t.registry}: ${t.message}`);u.length>0&&(process.exitCode=1)}async function getRegistryItemManifest(e,t){let n=await readEveRegistryConfig(e),r=await getRegistryItems([itemAddress(t)],{config:n});return r.length===1?r[0]:r}async function installRegistryItem(e,t,n={},r=defaultAddCommandDependencies){let i,a=[],o={error:e=>{i=e},log:e=>a.push(e)},s=process.exitCode,c=await runAddCommand(o,e,t,{...n,yes:n.prompter===void 0||n.yes,setupAuthorized:n.prompter!==void 0},r);if(process.exitCode=s,i!==void 0)throw Error(i);let l={output:a};return c!==void 0&&(l.setup=c),l}async function runAddCommand(e,t,o,s,c=defaultAddCommandDependencies){return runRegistryAction(e,t,async()=>{let l=await readEveRegistryConfig(t),u=itemAddress(o);if(s.skipInstall===!0){if(s.overwrite===!0)throw Error(`--overwrite cannot be used with --skip-install.`);if(s.skipSetup===!0)throw Error(`--skip-install cannot be used with --skip-setup.`);if(!isOfficialItemAddress(u))throw Error(`Setup flows are currently supported only for official eve registry items.`)}let d=await resolveRegistryItemForAdd(e,async()=>(await getRegistryItems([u],{config:l}))[0],()=>printAddSuggestions(e,t,o));if(!d.found)return;let f=d.item,p=isOfficialItemAddress(u)?eveMetadataFromRegistryItem(f):void 0;if(assertCompatibleEveVersion(p?.requires),p?.components!==void 0){if(!isOfficialItemAddress(u))throw Error(`Registry packages require the official eve registry.`);return reportCompletion(e,o,await runRegistryPackage({logger:e,appRoot:t,item:o,components:p.components,config:l,options:s,dependencies:c,operations:{itemAddress,metadata:eveMetadataFromRegistryItem,assertCompatibleVersion:assertCompatibleEveVersion,runSetups:({item:n,setups:i,prompter:a})=>runDeclaredSetups({logger:e,appRoot:t,item:n,setups:i,options:{yes:s.yes,nonInteractive:s.nonInteractive,answers:s.answers,prompter:a,signal:s.signal},dependencies:c,cancelledReminder:setupReminder(n,`cancelled`),resumeCommand:setupResumeCommand(n)}),setupReminder:e=>setupReminder(e,`skipped`)}}),s)}if(s.skipInstall===!0){if(p?.setup===void 0)throw Error(`Registry item "${o}" does not declare a setup flow.`);return reportCompletion(e,o,await runDeclaredSetups({logger:e,appRoot:t,item:o,setups:p.setup,options:s,dependencies:c,cancelledReminder:setupReminder(o,`cancelled`),resumeCommand:setupResumeCommand(o)}),s)}if(await addRegistryItems([u],{config:l,cwd:t,overwrite:s.overwrite,silent:s.silent}),p?.setup===void 0)return reportCompletion(e,o,{facts:[]},s);let m=c.hasInteractiveTerminal?.()??defaultAddCommandDependencies.hasInteractiveTerminal();if(s.nonInteractive&&e.log(serializeHeadlessSetupEvent({version:1,type:`progress`,message:s.skipInstall?`Setup ${o}`:`Installed ${o}`})),s.skipSetup===!0){if(s.nonInteractive)return reportCompletion(e,o,{facts:[]},s);e.log(setupReminder(o,`skipped`));return}if(!s.nonInteractive&&!s.yes&&!m&&s.setupAuthorized!==!0){e.log(setupReminder(o,`skipped`));return}if(!s.nonInteractive&&!s.yes&&s.setupAuthorized!==!0)try{if(await(s.prompter??c.createPrompter?.()??defaultAddCommandDependencies.createPrompter()).select({message:`Set up ${o} now?`,initialValue:`yes`,options:[{value:`yes`,label:`Yes`},{value:`no`,label:`No`}]})===`no`){e.log(setupReminder(o,`skipped`));return}}catch(t){if(!(t instanceof WizardCancelledError))throw t;e.log(setupReminder(o,`cancelled`));return}return reportCompletion(e,o,await runDeclaredSetups({logger:e,appRoot:t,item:o,setups:p.setup,options:s,dependencies:c,cancelledReminder:setupReminder(o,`cancelled`),resumeCommand:setupResumeCommand(o)}),s)})}function reportCompletion(e,n,r,i){return reportHeadlessSetupCompletion({logger:e,item:n,completion:r,nonInteractive:i.nonInteractive})}async function runRegistryAddCommand(e,t,n){await runRegistryAction(e,t,async()=>{let r=await addRegistryMappings(t,n);for(let t of r.skippedBuiltIn)e.log(`Skipped ${t} because it is built in.`);for(let t of r.skippedExisting)e.log(`Skipped ${t} because it is already configured.`);r.added.length>0&&e.log(`Added ${r.added.join(`, `)} to package.json.`)})}async function runRegistryListCommand(e,t,n,r={}){await runRegistryAction(e,t,()=>browseRegistryItems(e,t,void 0,n,r))}async function runRegistrySearchCommand(e,t,n,r,i={}){await runRegistryAction(e,t,()=>browseRegistryItems(e,t,n,r,{...i,limit:i.limit??10}))}async function runRegistryViewCommand(e,t,n,r={}){await runRegistryAction(e,t,async()=>{let i=await readEveRegistryConfig(t),a=await getRegistryItems([itemAddress(n)],{config:i}),o=a.length===1?a[0]:a;e.log(r.json?JSON.stringify(o,null,2):registryViewText(n,o))})}export{browseRegistryCatalog,getRegistryItemManifest,installOfficialRegistryItem,installRegistryItem,resolveOfficialRegistryUrl,runAddCommand,runRegistryAddCommand,runRegistryListCommand,runRegistrySearchCommand,runRegistryViewCommand};
+import { hasInteractiveTerminal } from "./preconditions.js";
+import {
+  reportHeadlessSetupCompletion,
+  serializeHeadlessSetupEvent,
+} from "./setup-headless.js";
+import { runDeclaredSetups } from "./registry-declared-setups.js";
+import { runRegistryPackage } from "./registry-package.js";
+import {
+  eveMetadataFromRegistryItem,
+  parseOfficialRegistrySearchMetadata,
+} from "./registry-metadata.js";
+import {
+  printRegistrySearchResults,
+  registryViewText,
+} from "./registry-presentation.js";
+import { addRegistryMappings, readRegistryConfig } from "./registry-project.js";
+import {
+  errorMessage,
+  resolveRegistryItemForAdd,
+  runRegistryAction,
+  setupReminder,
+  setupResumeCommand,
+} from "./registry-recovery.js";
+import { resolveInstalledPackageInfo } from "#internal/application/package.js";
+import { createPrompter } from "#setup/prompter.js";
+import { WizardCancelledError } from "#setup/step.js";
+import {
+  addRegistryItems,
+  getRegistryItems,
+  searchRegistries,
+} from "#compiled/shadcn-registry/index.js";
+import semver from "#compiled/semver/index.js";
+const defaultAddCommandDependencies = {
+  createPrompter,
+  hasInteractiveTerminal,
+  loadSetupCommandRunner: async () =>
+    (await import(`./registry-setup-command.js`)).runRegistrySetupCommand,
+};
+function resolveOfficialRegistryUrl(
+  e = process.env.EVE_DEV_OFFICIAL_REGISTRY_URL,
+) {
+  if (e === void 0) return `https://eve.dev/r`;
+  let t;
+  try {
+    t = new URL(e);
+  } catch {
+    throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must be an HTTP(S) URL.`);
+  }
+  if (t.protocol !== `http:` && t.protocol !== `https:`)
+    throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must be an HTTP(S) URL.`);
+  if (t.username !== `` || t.password !== ``)
+    throw Error(`EVE_DEV_OFFICIAL_REGISTRY_URL must not include credentials.`);
+  if (t.search !== `` || t.hash !== ``)
+    throw Error(
+      `EVE_DEV_OFFICIAL_REGISTRY_URL must not include a query or fragment.`,
+    );
+  return (
+    (t.pathname = t.pathname.replace(/\/+$/, ``)),
+    t.toString().replace(/\/$/, ``)
+  );
+}
+const OFFICIAL_REGISTRY = resolveOfficialRegistryUrl(),
+  OFFICIAL_CATALOG = `${OFFICIAL_REGISTRY}/registry.json`,
+  SKILLS_REGISTRY = `@skills`;
+function isRegistryAddress(e) {
+  return e.startsWith(`@`) || /^https?:\/\//.test(e);
+}
+function itemAddress(e) {
+  return isRegistryAddress(e) ? e : `${OFFICIAL_REGISTRY}/${e}.json`;
+}
+async function installOfficialRegistryItem(e, t, n = {}) {
+  let r = await readEveRegistryConfig(e);
+  await addRegistryItems([itemAddress(t)], {
+    config: r,
+    cwd: e,
+    overwrite: n.overwrite,
+  });
+}
+function assertCompatibleEveVersion(e) {
+  if (e === void 0) return;
+  let t = resolveInstalledPackageInfo().version;
+  if (semver.validRange(e) === null)
+    throw Error(`Registry item has an invalid eve version requirement: ${e}.`);
+  if (!semver.subset(t, e))
+    throw Error(
+      `This registry item requires eve ${e}, but this project is using eve ${t}. Upgrade eve and run the command again.`,
+    );
+}
+function isOfficialItemAddress(e) {
+  return e.startsWith(`${OFFICIAL_REGISTRY}/`);
+}
+function withBuiltInRegistries(e) {
+  return {
+    ...e,
+    registries: {
+      [SKILLS_REGISTRY]: `https://www.skills.sh/r/{name}?agent=eve`,
+      ...e.registries,
+    },
+  };
+}
+async function readEveRegistryConfig(e) {
+  return withBuiltInRegistries(await readRegistryConfig(e));
+}
+function configuredRegistrySources(e) {
+  return Object.keys(e.registries ?? {});
+}
+function validateRegistrySource(e) {
+  if (e !== void 0 && !isRegistryAddress(e))
+    throw Error(`Registry sources must be a namespace or URL: ${e}`);
+}
+async function loadOfficialSearchMetadata() {
+  let e = await fetch(OFFICIAL_CATALOG);
+  if (!e.ok) throw Error(`Could not read the eve registry (${e.status}).`);
+  return parseOfficialRegistrySearchMetadata(await e.json());
+}
+function searchItemAddress(e) {
+  return e.registry === OFFICIAL_CATALOG ? e.name : e.addCommandArgument;
+}
+function enrichSearchItem(e, t) {
+  let n = searchItemAddress(e);
+  return { item: e, address: n, ...t.get(n) };
+}
+function registrySourceLabel(e) {
+  return e === OFFICIAL_CATALOG
+    ? `eve`
+    : e === SKILLS_REGISTRY
+      ? `skills.sh`
+      : e;
+}
+function searchPresentationSections(e, t, n) {
+  return e.flatMap((e) => {
+    let r = t.get(e);
+    return r === void 0
+      ? []
+      : [
+          {
+            label: registrySourceLabel(e),
+            items: r.items.map((e) => enrichSearchItem(e, n)),
+            total: r.pagination.total,
+          },
+        ];
+  });
+}
+async function printAddSuggestions(e, t, n) {
+  try {
+    let r = n.split(`/`).at(-1) || n,
+      {
+        resultsBySource: i,
+        sources: a,
+        metadataByAddress: o,
+      } = await searchRegistryCatalog(t, { limit: 5, query: r }),
+      c = searchPresentationSections(a, i, o);
+    if (c.every((e) => e.items.length === 0)) return;
+    (e.log(`Did you mean?`),
+      printRegistrySearchResults(e, { query: r, sections: c }));
+  } catch {}
+}
+async function searchRegistryCatalog(e, t) {
+  validateRegistrySource(t.source);
+  let n = await readEveRegistryConfig(e),
+    r = t.source
+      ? [t.source]
+      : [
+          OFFICIAL_CATALOG,
+          ...configuredRegistrySources(n).filter(
+            (e) => t.query !== void 0 || e !== SKILLS_REGISTRY,
+          ),
+        ],
+    i = await Promise.all(
+      r.map(async (e) => {
+        try {
+          return {
+            result: await searchRegistries([e], {
+              config: n,
+              limit: t.limit ?? 100,
+              query: t.query,
+            }),
+            source: e,
+          };
+        } catch (t) {
+          return { error: t, source: e };
+        }
+      }),
+    ),
+    a = [],
+    o = new Map();
+  for (let e of i)
+    if (`error` in e)
+      a.push({ message: errorMessage(e.error), registry: e.source });
+    else {
+      let t = e.result.errors ?? [];
+      if ((a.push(...t), t.length === 0)) {
+        let t = e.result.items.filter((t) => t.registry === e.source);
+        o.set(e.source, {
+          ...e.result,
+          items: t,
+          pagination: {
+            ...e.result.pagination,
+            total:
+              e.result.items.length === t.length
+                ? e.result.pagination.total
+                : 0,
+          },
+        });
+      }
+    }
+  let s = new Map(a.map((e) => [`${e.registry}\0${e.message}`, e])),
+    c = o.has(OFFICIAL_CATALOG)
+      ? await loadOfficialSearchMetadata()
+      : new Map(),
+    l = o.get(OFFICIAL_CATALOG);
+  l !== void 0 &&
+    l.items.sort((e, t) => {
+      let rank = (e) =>
+        c.get(searchItemAddress(e))?.implementation === `native` ? 0 : 1;
+      return rank(e) - rank(t);
+    });
+  let u = [...o.values()];
+  return {
+    config: n,
+    result: {
+      items: u.flatMap((e) => e.items),
+      pagination: {
+        hasMore: u.some((e) => e.pagination.hasMore),
+        limit: t.limit ?? 100,
+        offset: 0,
+        total: u.reduce((e, t) => e + t.pagination.total, 0),
+      },
+      ...(s.size > 0 ? { errors: [...s.values()] } : {}),
+    },
+    resultsBySource: o,
+    sources: r,
+    metadataByAddress: c,
+  };
+}
+async function browseRegistryCatalog(e, t = {}) {
+  let { result: n } = await searchRegistryCatalog(e, t);
+  return {
+    items: n.items.map((e) => {
+      let t = {
+        address:
+          e.registry === OFFICIAL_CATALOG ? e.name : e.addCommandArgument,
+        name: e.name,
+        source: e.registry === OFFICIAL_CATALOG ? `Vercel` : e.registry,
+      };
+      return (
+        e.title !== void 0 && (t.title = e.title),
+        e.type !== void 0 && (t.type = e.type),
+        e.description !== void 0 && (t.description = e.description),
+        t
+      );
+    }),
+    total: n.pagination.total,
+    errors: n.errors ?? [],
+  };
+}
+async function browseRegistryItems(e, t, n, r, i = {}) {
+  let {
+      result: a,
+      resultsBySource: o,
+      sources: c,
+      metadataByAddress: l,
+    } = await searchRegistryCatalog(t, { limit: i.limit, query: n, source: r }),
+    u = a.errors ?? [];
+  if (i.json || o.size > 0) {
+    let t = a.items.map((e) => ({ ...e, ...l.get(searchItemAddress(e)) })),
+      r = { query: n, sections: searchPresentationSections(c, o, l) };
+    (i.json && (r.json = { ...a, items: t }), printRegistrySearchResults(e, r));
+  }
+  for (let t of u) e.error(`${t.registry}: ${t.message}`);
+  u.length > 0 && (process.exitCode = 1);
+}
+async function getRegistryItemManifest(e, t) {
+  let n = await readEveRegistryConfig(e),
+    r = await getRegistryItems([itemAddress(t)], { config: n });
+  return r.length === 1 ? r[0] : r;
+}
+async function installRegistryItem(
+  e,
+  t,
+  n = {},
+  r = defaultAddCommandDependencies,
+) {
+  let i,
+    a = [],
+    o = {
+      error: (e) => {
+        i = e;
+      },
+      log: (e) => a.push(e),
+    },
+    s = process.exitCode,
+    c = await runAddCommand(
+      o,
+      e,
+      t,
+      {
+        ...n,
+        yes: n.prompter === void 0 || n.yes,
+        setupAuthorized: n.prompter !== void 0,
+      },
+      r,
+    );
+  if (((process.exitCode = s), i !== void 0)) throw Error(i);
+  let l = { output: a };
+  return (c !== void 0 && (l.setup = c), l);
+}
+async function runAddCommand(e, t, o, s, c = defaultAddCommandDependencies) {
+  return runRegistryAction(e, t, async () => {
+    let l = await readEveRegistryConfig(t),
+      u = itemAddress(o);
+    if (s.skipInstall === !0) {
+      if (s.overwrite === !0)
+        throw Error(`--overwrite cannot be used with --skip-install.`);
+      if (s.skipSetup === !0)
+        throw Error(`--skip-install cannot be used with --skip-setup.`);
+      if (!isOfficialItemAddress(u))
+        throw Error(
+          `Setup flows are currently supported only for official eve registry items.`,
+        );
+    }
+    let d = await resolveRegistryItemForAdd(
+      e,
+      async () => (await getRegistryItems([u], { config: l }))[0],
+      () => printAddSuggestions(e, t, o),
+    );
+    if (!d.found) return;
+    let f = d.item,
+      p = isOfficialItemAddress(u) ? eveMetadataFromRegistryItem(f) : void 0;
+    if ((assertCompatibleEveVersion(p?.requires), p?.components !== void 0)) {
+      if (!isOfficialItemAddress(u))
+        throw Error(`Registry packages require the official eve registry.`);
+      return reportCompletion(
+        e,
+        o,
+        await runRegistryPackage({
+          logger: e,
+          appRoot: t,
+          item: o,
+          components: p.components,
+          config: l,
+          options: s,
+          dependencies: c,
+          operations: {
+            itemAddress,
+            metadata: eveMetadataFromRegistryItem,
+            assertCompatibleVersion: assertCompatibleEveVersion,
+            runSetups: ({ item: n, setups: i, prompter: a }) =>
+              runDeclaredSetups({
+                logger: e,
+                appRoot: t,
+                item: n,
+                setups: i,
+                options: {
+                  yes: s.yes,
+                  nonInteractive: s.nonInteractive,
+                  answers: s.answers,
+                  prompter: a,
+                  signal: s.signal,
+                },
+                dependencies: c,
+                cancelledReminder: setupReminder(n, `cancelled`),
+                resumeCommand: setupResumeCommand(n),
+              }),
+            setupReminder: (e) => setupReminder(e, `skipped`),
+          },
+        }),
+        s,
+      );
+    }
+    if (s.skipInstall === !0) {
+      if (p?.setup === void 0)
+        throw Error(`Registry item "${o}" does not declare a setup flow.`);
+      return reportCompletion(
+        e,
+        o,
+        await runDeclaredSetups({
+          logger: e,
+          appRoot: t,
+          item: o,
+          setups: p.setup,
+          options: s,
+          dependencies: c,
+          cancelledReminder: setupReminder(o, `cancelled`),
+          resumeCommand: setupResumeCommand(o),
+        }),
+        s,
+      );
+    }
+    if (
+      (await addRegistryItems([u], {
+        config: l,
+        cwd: t,
+        overwrite: s.overwrite,
+        silent: s.silent,
+      }),
+      p?.setup === void 0)
+    )
+      return reportCompletion(e, o, { facts: [] }, s);
+    let m =
+      c.hasInteractiveTerminal?.() ??
+      defaultAddCommandDependencies.hasInteractiveTerminal();
+    if (
+      (s.nonInteractive &&
+        e.log(
+          serializeHeadlessSetupEvent({
+            version: 1,
+            type: `progress`,
+            message: s.skipInstall ? `Setup ${o}` : `Installed ${o}`,
+          }),
+        ),
+      s.skipSetup === !0)
+    ) {
+      if (s.nonInteractive) return reportCompletion(e, o, { facts: [] }, s);
+      e.log(setupReminder(o, `skipped`));
+      return;
+    }
+    if (!s.nonInteractive && !s.yes && !m && s.setupAuthorized !== !0) {
+      e.log(setupReminder(o, `skipped`));
+      return;
+    }
+    if (!s.nonInteractive && !s.yes && s.setupAuthorized !== !0)
+      try {
+        if (
+          (await (
+            s.prompter ??
+            c.createPrompter?.() ??
+            defaultAddCommandDependencies.createPrompter()
+          ).select({
+            message: `Set up ${o} now?`,
+            initialValue: `yes`,
+            options: [
+              { value: `yes`, label: `Yes` },
+              { value: `no`, label: `No` },
+            ],
+          })) === `no`
+        ) {
+          e.log(setupReminder(o, `skipped`));
+          return;
+        }
+      } catch (t) {
+        if (!(t instanceof WizardCancelledError)) throw t;
+        e.log(setupReminder(o, `cancelled`));
+        return;
+      }
+    return reportCompletion(
+      e,
+      o,
+      await runDeclaredSetups({
+        logger: e,
+        appRoot: t,
+        item: o,
+        setups: p.setup,
+        options: s,
+        dependencies: c,
+        cancelledReminder: setupReminder(o, `cancelled`),
+        resumeCommand: setupResumeCommand(o),
+      }),
+      s,
+    );
+  });
+}
+function reportCompletion(e, n, r, i) {
+  return reportHeadlessSetupCompletion({
+    logger: e,
+    item: n,
+    completion: r,
+    nonInteractive: i.nonInteractive,
+  });
+}
+async function runRegistryAddCommand(e, t, n) {
+  await runRegistryAction(e, t, async () => {
+    let r = await addRegistryMappings(t, n);
+    for (let t of r.skippedBuiltIn)
+      e.log(`Skipped ${t} because it is built in.`);
+    for (let t of r.skippedExisting)
+      e.log(`Skipped ${t} because it is already configured.`);
+    r.added.length > 0 && e.log(`Added ${r.added.join(`, `)} to package.json.`);
+  });
+}
+async function runRegistryListCommand(e, t, n, r = {}) {
+  await runRegistryAction(e, t, () => browseRegistryItems(e, t, void 0, n, r));
+}
+async function runRegistrySearchCommand(e, t, n, r, i = {}) {
+  await runRegistryAction(e, t, () =>
+    browseRegistryItems(e, t, n, r, { ...i, limit: i.limit ?? 10 }),
+  );
+}
+async function runRegistryViewCommand(e, t, n, r = {}) {
+  await runRegistryAction(e, t, async () => {
+    let i = await readEveRegistryConfig(t),
+      a = await getRegistryItems([itemAddress(n)], { config: i }),
+      o = a.length === 1 ? a[0] : a;
+    e.log(r.json ? JSON.stringify(o, null, 2) : registryViewText(n, o));
+  });
+}
+export {
+  browseRegistryCatalog,
+  getRegistryItemManifest,
+  installOfficialRegistryItem,
+  installRegistryItem,
+  resolveOfficialRegistryUrl,
+  runAddCommand,
+  runRegistryAddCommand,
+  runRegistryListCommand,
+  runRegistrySearchCommand,
+  runRegistryViewCommand,
+};

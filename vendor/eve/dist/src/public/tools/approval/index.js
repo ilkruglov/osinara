@@ -1,1 +1,6 @@
-import{always,never,once}from"#public/tools/approval/approval-helpers.js";export{always,never,once};
+import {
+  always,
+  never,
+  once,
+} from "#public/tools/approval/approval-helpers.js";
+export { always, never, once };

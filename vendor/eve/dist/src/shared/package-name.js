@@ -1,1 +1,5 @@
-function stripNpmPackageScope(e){let t=e.lastIndexOf(`/`);return t===-1?e:e.slice(t+1)}export{stripNpmPackageScope};
+function stripNpmPackageScope(e) {
+  let t = e.lastIndexOf(`/`);
+  return t === -1 ? e : e.slice(t + 1);
+}
+export { stripNpmPackageScope };

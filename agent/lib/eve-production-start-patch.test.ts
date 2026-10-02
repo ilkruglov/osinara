@@ -3,11 +3,12 @@
  *
  * Constructs covered:
  * - Patched Eve health timeout: permits bounded first-start sandbox initialization.
- * - Patch source: pins the reviewed timeout and exact Eve runtime artifact.
  */
 import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
+
+import { codeShape } from "./vendored-code.js";
 
 const PATCHED_HEALTH_TIMEOUT_MARKER = "const HEALTH_TIMEOUT_MS=3e5";
 
@@ -23,7 +24,7 @@ describe("Eve production startup patch", () => {
     const evePackage = JSON.parse(evePackageSource) as { version?: string };
 
     expect(evePackage.version).toBe("0.40.0");
-    expect(runtime).toContain(PATCHED_HEALTH_TIMEOUT_MARKER);
-    expect(runtime).not.toContain("const HEALTH_TIMEOUT_MS=6e4");
+    expect(codeShape(runtime)).toContain(codeShape(PATCHED_HEALTH_TIMEOUT_MARKER));
+    expect(codeShape(runtime)).not.toContain(codeShape("const HEALTH_TIMEOUT_MS=6e4"));
   });
 });

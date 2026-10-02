@@ -1,1 +1,5 @@
-import{createMicrosandboxSandboxBackend}from"#execution/sandbox/bindings/local.js";function microsandbox(e){return createMicrosandboxSandboxBackend({createOptions:e})}export{microsandbox};
+import { createMicrosandboxSandboxBackend } from "#execution/sandbox/bindings/local.js";
+function microsandbox(e) {
+  return createMicrosandboxSandboxBackend({ createOptions: e });
+}
+export { microsandbox };

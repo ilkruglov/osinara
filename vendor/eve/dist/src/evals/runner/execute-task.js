@@ -1,1 +1,124 @@
-import{toErrorMessage}from"#shared/errors.js";import{AssertionCollector}from"#evals/assertions/collector.js";import{scopeEvalTargetHandle}from"#evals/target.js";import{EvalSessionManager}from"#evals/session.js";import{EvalRequirementFailed,EvalSkipped}from"#evals/control-flow.js";import{createEmptyDerivedFacts}from"#evals/runner/derive-run-facts.js";import{createEvalContext}from"#evals/context.js";async function executeTask(a){let{client:o,evaluation:s,target:c,timeoutMs:l}=a,u=l===void 0?neverAbortSignal():AbortSignal.timeout(l),d=new AssertionCollector,f=new EvalSessionManager({client:o,collector:d,onSessionStart:a.onSessionStart,signal:u}),p=scopeEvalTargetHandle(c,{sessions:f}),m=[],{context:h}=createEvalContext({collector:d,manager:f,target:p,signal:u,judge:s.judge,log:e=>{m.push(e),a.onLog?.(e)}}),g,_;try{await runUntilAborted(s.test(h),u)}catch(t){t instanceof EvalSkipped?_=t.reason:t instanceof EvalRequirementFailed||(g=toErrorMessage(t))}let v=buildTaskResult({logs:m,sessions:f.snapshots(),turn:f.lastTurnSession()?.lastTurn});return{result:v,assertions:await d.finalize(v),error:g,skipReason:_}}function buildTaskResult(e){let t=e.sessions.flatMap(e=>e.events),n=e.turn?.message??null;return{output:e.turn?.data===void 0?n:e.turn.data,finalMessage:n,sessionId:selectPrimarySessionId(e.sessions),status:e.turn?.status??`completed`,events:t,logs:e.logs,derived:combineDerivedFacts(e.sessions),sessions:e.sessions,runtimeIdentity:extractRuntimeIdentity(t),traceContexts:collectTraceContexts(e.sessions)}}function collectTraceContexts(e){return e.flatMap(e=>{let t=e.sessionId;return t===void 0?[]:e.traceContexts.map(n=>({...n,primary:e.primary,sessionId:t}))})}function combineDerivedFacts(e){if(e.length===0)return createEmptyDerivedFacts();let t=e.flatMap(e=>e.derived.toolCalls),n=e.flatMap(e=>e.derived.subagentCalls),r=e.flatMap(e=>e.derived.inputRequests),i=e.find(e=>e.derived.failureCode!==void 0)?.derived.failureCode;return{toolCalls:t,toolCallCount:t.length,subagentCalls:n,subagentCallCount:n.length,inputRequests:r,parked:e.some(e=>e.derived.parked),messageCount:sum(e,e=>e.derived.messageCount),reasoningBlockCount:sum(e,e=>e.derived.reasoningBlockCount),failureCode:i}}function selectPrimarySessionId(e){return e.find(e=>e.primary)?.sessionId??e[0]?.sessionId}function extractRuntimeIdentity(e){for(let t of e)if(t.type===`session.started`&&t.data.runtime!==void 0)return t.data.runtime}function sum(e,t){return e.reduce((e,n)=>e+t(n),0)}function neverAbortSignal(){return new AbortController().signal}async function runUntilAborted(e,t){t.throwIfAborted();let onAbort,n=new Promise((e,n)=>{onAbort=()=>n(t.reason),t.addEventListener(`abort`,onAbort,{once:!0})});try{await Promise.race([e,n])}finally{onAbort!==void 0&&t.removeEventListener(`abort`,onAbort)}}export{executeTask};
+import { toErrorMessage } from "#shared/errors.js";
+import { AssertionCollector } from "#evals/assertions/collector.js";
+import { scopeEvalTargetHandle } from "#evals/target.js";
+import { EvalSessionManager } from "#evals/session.js";
+import { EvalRequirementFailed, EvalSkipped } from "#evals/control-flow.js";
+import { createEmptyDerivedFacts } from "#evals/runner/derive-run-facts.js";
+import { createEvalContext } from "#evals/context.js";
+async function executeTask(a) {
+  let { client: o, evaluation: s, target: c, timeoutMs: l } = a,
+    u = l === void 0 ? neverAbortSignal() : AbortSignal.timeout(l),
+    d = new AssertionCollector(),
+    f = new EvalSessionManager({
+      client: o,
+      collector: d,
+      onSessionStart: a.onSessionStart,
+      signal: u,
+    }),
+    p = scopeEvalTargetHandle(c, { sessions: f }),
+    m = [],
+    { context: h } = createEvalContext({
+      collector: d,
+      manager: f,
+      target: p,
+      signal: u,
+      judge: s.judge,
+      log: (e) => {
+        (m.push(e), a.onLog?.(e));
+      },
+    }),
+    g,
+    _;
+  try {
+    await runUntilAborted(s.test(h), u);
+  } catch (t) {
+    t instanceof EvalSkipped
+      ? (_ = t.reason)
+      : t instanceof EvalRequirementFailed || (g = toErrorMessage(t));
+  }
+  let v = buildTaskResult({
+    logs: m,
+    sessions: f.snapshots(),
+    turn: f.lastTurnSession()?.lastTurn,
+  });
+  return {
+    result: v,
+    assertions: await d.finalize(v),
+    error: g,
+    skipReason: _,
+  };
+}
+function buildTaskResult(e) {
+  let t = e.sessions.flatMap((e) => e.events),
+    n = e.turn?.message ?? null;
+  return {
+    output: e.turn?.data === void 0 ? n : e.turn.data,
+    finalMessage: n,
+    sessionId: selectPrimarySessionId(e.sessions),
+    status: e.turn?.status ?? `completed`,
+    events: t,
+    logs: e.logs,
+    derived: combineDerivedFacts(e.sessions),
+    sessions: e.sessions,
+    runtimeIdentity: extractRuntimeIdentity(t),
+    traceContexts: collectTraceContexts(e.sessions),
+  };
+}
+function collectTraceContexts(e) {
+  return e.flatMap((e) => {
+    let t = e.sessionId;
+    return t === void 0
+      ? []
+      : e.traceContexts.map((n) => ({
+          ...n,
+          primary: e.primary,
+          sessionId: t,
+        }));
+  });
+}
+function combineDerivedFacts(e) {
+  if (e.length === 0) return createEmptyDerivedFacts();
+  let t = e.flatMap((e) => e.derived.toolCalls),
+    n = e.flatMap((e) => e.derived.subagentCalls),
+    r = e.flatMap((e) => e.derived.inputRequests),
+    i = e.find((e) => e.derived.failureCode !== void 0)?.derived.failureCode;
+  return {
+    toolCalls: t,
+    toolCallCount: t.length,
+    subagentCalls: n,
+    subagentCallCount: n.length,
+    inputRequests: r,
+    parked: e.some((e) => e.derived.parked),
+    messageCount: sum(e, (e) => e.derived.messageCount),
+    reasoningBlockCount: sum(e, (e) => e.derived.reasoningBlockCount),
+    failureCode: i,
+  };
+}
+function selectPrimarySessionId(e) {
+  return e.find((e) => e.primary)?.sessionId ?? e[0]?.sessionId;
+}
+function extractRuntimeIdentity(e) {
+  for (let t of e)
+    if (t.type === `session.started` && t.data.runtime !== void 0)
+      return t.data.runtime;
+}
+function sum(e, t) {
+  return e.reduce((e, n) => e + t(n), 0);
+}
+function neverAbortSignal() {
+  return new AbortController().signal;
+}
+async function runUntilAborted(e, t) {
+  t.throwIfAborted();
+  let onAbort,
+    n = new Promise((e, n) => {
+      ((onAbort = () => n(t.reason)),
+        t.addEventListener(`abort`, onAbort, { once: !0 }));
+    });
+  try {
+    await Promise.race([e, n]);
+  } finally {
+    onAbort !== void 0 && t.removeEventListener(`abort`, onAbort);
+  }
+}
+export { executeTask };

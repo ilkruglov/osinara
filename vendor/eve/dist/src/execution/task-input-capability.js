@@ -1,1 +1,21 @@
-const OPERATION_TOKEN_PREFIX=`eve:eve:op:`,TASK_INPUT_TOKEN_PREFIX=`eve:task-input:`,TOKEN_DIGEST=/^[a-f0-9]{32}$/;function createTaskInputCapabilityToken(n){let r=readTokenDigest(n,OPERATION_TOKEN_PREFIX);if(r===void 0)throw Error(`Remote task input requires an eve create-once session capability.`);return`${TASK_INPUT_TOKEN_PREFIX}${r}`}function readTaskInputTargetToken(n){let r=readTokenDigest(n,TASK_INPUT_TOKEN_PREFIX);return r===void 0?void 0:`${OPERATION_TOKEN_PREFIX}${r}`}function readTokenDigest(e,t){if(!e.startsWith(t))return;let r=e.slice(t.length);return TOKEN_DIGEST.test(r)?r:void 0}export{createTaskInputCapabilityToken,readTaskInputTargetToken};
+const OPERATION_TOKEN_PREFIX = `eve:eve:op:`,
+  TASK_INPUT_TOKEN_PREFIX = `eve:task-input:`,
+  TOKEN_DIGEST = /^[a-f0-9]{32}$/;
+function createTaskInputCapabilityToken(n) {
+  let r = readTokenDigest(n, OPERATION_TOKEN_PREFIX);
+  if (r === void 0)
+    throw Error(
+      `Remote task input requires an eve create-once session capability.`,
+    );
+  return `${TASK_INPUT_TOKEN_PREFIX}${r}`;
+}
+function readTaskInputTargetToken(n) {
+  let r = readTokenDigest(n, TASK_INPUT_TOKEN_PREFIX);
+  return r === void 0 ? void 0 : `${OPERATION_TOKEN_PREFIX}${r}`;
+}
+function readTokenDigest(e, t) {
+  if (!e.startsWith(t)) return;
+  let r = e.slice(t.length);
+  return TOKEN_DIGEST.test(r) ? r : void 0;
+}
+export { createTaskInputCapabilityToken, readTaskInputTargetToken };

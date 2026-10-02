@@ -1,1 +1,5 @@
-import{createJustBashSandboxBackend}from"#execution/sandbox/bindings/local.js";function justbash(e){return createJustBashSandboxBackend({createOptions:e})}export{justbash};
+import { createJustBashSandboxBackend } from "#execution/sandbox/bindings/local.js";
+function justbash(e) {
+  return createJustBashSandboxBackend({ createOptions: e });
+}
+export { justbash };

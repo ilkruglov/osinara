@@ -1,1 +1,142 @@
-import{createProcessOutputBuffer}from"../process-output.js";import{armProcessAbort}from"../process-abort.js";import{PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS,hasAncestorPnpmWorkspace,pnpmWorkspaceClaimsProject}from"./pnpm.js";import{getPackageManagerStrategy}from"./index.js";import{createPackageProcessStdoutCollector,resultSucceeded}from"./process-result.js";import{spawn}from"node:child_process";function abortedTermination(e){let t=e?.reason;return t===void 0?{kind:`aborted`}:{kind:`aborted`,reason:t instanceof Error?t.message:String(t)}}function spawnPackageManager(n,r,i,s={}){let l=getPackageManagerStrategy(n),u=l.prepareArguments(r,i),d=l.resolveInvocation(u),f={executable:d.command,args:[...d.args],cwd:r};return s.signal?.aborted===!0?Promise.resolve({command:f,termination:abortedTermination(s.signal),stdout:``}):new Promise(n=>{let i=s.onOutput!==void 0||s.nonInteractive===!0,a=s.onOutput&&createProcessOutputBuffer(s.onOutput),l=s.captureStdout===!0?createPackageProcessStdoutCollector({command:f}):void 0,u;try{u=spawn(d.command,[...d.args],{cwd:r,stdio:i?[s.nonInteractive?`ignore`:`inherit`,`pipe`,`pipe`]:`inherit`,shell:d.shell,signal:s.signal})}catch(e){a?.flush();let t=e;n({command:f,termination:{kind:`spawn-error`,code:t.code,message:t.message},stdout:``});return}let p=armProcessAbort(u,s.signal);u.stdout?.on(`data`,e=>{l?.write(e),a?.write(`stdout`,e)}),u.stderr?.on(`data`,e=>a?.write(`stderr`,e));let m=!1;function settle(e){m||(m=!0,p(),l?.end(),a?.flush(),n(l?.result(e)??{command:f,termination:e,stdout:``}))}u.on(`error`,e=>{s.signal?.aborted===!0||e.name===`AbortError`?settle(abortedTermination(s.signal)):settle({kind:`spawn-error`,code:e.code,message:e.message})}),u.on(`close`,(e,t)=>{s.signal?.aborted===!0?settle(abortedTermination(s.signal)):settle(typeof t==`string`?{kind:`signal`,signal:t}:{kind:`exit`,code:e??1})})})}function packageManagerInstallSucceeded(e){return e.kind===`installed`&&resultSucceeded(e.result)}function packageManagerInstallFailureMessage(e){if(e.result.termination.kind===`spawn-error`)return e.result.termination.code===`ENOENT`?`${e.result.command.executable} was not found. Install it before running this step.`:`Could not start ${e.result.command.executable}: ${e.result.termination.message}`;if(e.kind===`workspace-probe-unrecognized`)return`Could not determine whether the ancestor pnpm workspace includes this project.`}async function runPackageManagerInstall(e,t,o={}){let c=getPackageManagerStrategy(e),l=o;if(e===`pnpm`&&o.ignoreWorkspace!==!0&&hasAncestorPnpmWorkspace(t)){let r=await spawnPackageManager(e,t,PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS,{...o,captureStdout:!0,nonInteractive:!0});if(!resultSucceeded(r))return{kind:`workspace-probe-failed`,result:r};let a=pnpmWorkspaceClaimsProject(r.stdout,t);if(a===void 0)return{kind:`workspace-probe-unrecognized`,result:r};a||(l={...o,ignoreWorkspace:!0})}return{kind:`installed`,result:await spawnPackageManager(e,t,c.installArguments(l),o)}}function eveDevArguments(e){return getPackageManagerStrategy(e).devArguments()}function spawnPnpm(e,t,n={}){return spawnPackageManager(`pnpm`,e,t,n)}function runPnpmInstall(e,t={}){return runPackageManagerInstall(`pnpm`,e,t)}export{eveDevArguments,packageManagerInstallFailureMessage,packageManagerInstallSucceeded,runPackageManagerInstall,runPnpmInstall,spawnPackageManager,spawnPnpm};
+import { createProcessOutputBuffer } from "../process-output.js";
+import { armProcessAbort } from "../process-abort.js";
+import {
+  PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS,
+  hasAncestorPnpmWorkspace,
+  pnpmWorkspaceClaimsProject,
+} from "./pnpm.js";
+import { getPackageManagerStrategy } from "./index.js";
+import {
+  createPackageProcessStdoutCollector,
+  resultSucceeded,
+} from "./process-result.js";
+import { spawn } from "node:child_process";
+function abortedTermination(e) {
+  let t = e?.reason;
+  return t === void 0
+    ? { kind: `aborted` }
+    : { kind: `aborted`, reason: t instanceof Error ? t.message : String(t) };
+}
+function spawnPackageManager(n, r, i, s = {}) {
+  let l = getPackageManagerStrategy(n),
+    u = l.prepareArguments(r, i),
+    d = l.resolveInvocation(u),
+    f = { executable: d.command, args: [...d.args], cwd: r };
+  return s.signal?.aborted === !0
+    ? Promise.resolve({
+        command: f,
+        termination: abortedTermination(s.signal),
+        stdout: ``,
+      })
+    : new Promise((n) => {
+        let i = s.onOutput !== void 0 || s.nonInteractive === !0,
+          a = s.onOutput && createProcessOutputBuffer(s.onOutput),
+          l =
+            s.captureStdout === !0
+              ? createPackageProcessStdoutCollector({ command: f })
+              : void 0,
+          u;
+        try {
+          u = spawn(d.command, [...d.args], {
+            cwd: r,
+            stdio: i
+              ? [s.nonInteractive ? `ignore` : `inherit`, `pipe`, `pipe`]
+              : `inherit`,
+            shell: d.shell,
+            signal: s.signal,
+          });
+        } catch (e) {
+          a?.flush();
+          let t = e;
+          n({
+            command: f,
+            termination: {
+              kind: `spawn-error`,
+              code: t.code,
+              message: t.message,
+            },
+            stdout: ``,
+          });
+          return;
+        }
+        let p = armProcessAbort(u, s.signal);
+        (u.stdout?.on(`data`, (e) => {
+          (l?.write(e), a?.write(`stdout`, e));
+        }),
+          u.stderr?.on(`data`, (e) => a?.write(`stderr`, e)));
+        let m = !1;
+        function settle(e) {
+          m ||
+            ((m = !0),
+            p(),
+            l?.end(),
+            a?.flush(),
+            n(l?.result(e) ?? { command: f, termination: e, stdout: `` }));
+        }
+        (u.on(`error`, (e) => {
+          s.signal?.aborted === !0 || e.name === `AbortError`
+            ? settle(abortedTermination(s.signal))
+            : settle({ kind: `spawn-error`, code: e.code, message: e.message });
+        }),
+          u.on(`close`, (e, t) => {
+            s.signal?.aborted === !0
+              ? settle(abortedTermination(s.signal))
+              : settle(
+                  typeof t == `string`
+                    ? { kind: `signal`, signal: t }
+                    : { kind: `exit`, code: e ?? 1 },
+                );
+          }));
+      });
+}
+function packageManagerInstallSucceeded(e) {
+  return e.kind === `installed` && resultSucceeded(e.result);
+}
+function packageManagerInstallFailureMessage(e) {
+  if (e.result.termination.kind === `spawn-error`)
+    return e.result.termination.code === `ENOENT`
+      ? `${e.result.command.executable} was not found. Install it before running this step.`
+      : `Could not start ${e.result.command.executable}: ${e.result.termination.message}`;
+  if (e.kind === `workspace-probe-unrecognized`)
+    return `Could not determine whether the ancestor pnpm workspace includes this project.`;
+}
+async function runPackageManagerInstall(e, t, o = {}) {
+  let c = getPackageManagerStrategy(e),
+    l = o;
+  if (e === `pnpm` && o.ignoreWorkspace !== !0 && hasAncestorPnpmWorkspace(t)) {
+    let r = await spawnPackageManager(
+      e,
+      t,
+      PNPM_WORKSPACE_MEMBERSHIP_ARGUMENTS,
+      { ...o, captureStdout: !0, nonInteractive: !0 },
+    );
+    if (!resultSucceeded(r))
+      return { kind: `workspace-probe-failed`, result: r };
+    let a = pnpmWorkspaceClaimsProject(r.stdout, t);
+    if (a === void 0)
+      return { kind: `workspace-probe-unrecognized`, result: r };
+    a || (l = { ...o, ignoreWorkspace: !0 });
+  }
+  return {
+    kind: `installed`,
+    result: await spawnPackageManager(e, t, c.installArguments(l), o),
+  };
+}
+function eveDevArguments(e) {
+  return getPackageManagerStrategy(e).devArguments();
+}
+function spawnPnpm(e, t, n = {}) {
+  return spawnPackageManager(`pnpm`, e, t, n);
+}
+function runPnpmInstall(e, t = {}) {
+  return runPackageManagerInstall(`pnpm`, e, t);
+}
+export {
+  eveDevArguments,
+  packageManagerInstallFailureMessage,
+  packageManagerInstallSucceeded,
+  runPackageManagerInstall,
+  runPnpmInstall,
+  spawnPackageManager,
+  spawnPnpm,
+};

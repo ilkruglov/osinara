@@ -1,1 +1,464 @@
-import{__toESM}from"../../_virtual/_rolldown/runtime.js";import{require_picocolors}from"../../node_modules/.pnpm/picocolors@1.1.1/node_modules/picocolors/picocolors.js";import{initAgentDevHandoff,initAgentReadySummary,initAgentReplPrompt}from"./agent-instructions.js";import{tryInitializeGit}from"./init-git.js";import{confirmInitInNonEmptyDirectory}from"./init-confirm.js";import{cleanupFreshInitTarget,workspaceFailureNote}from"./init-recovery.js";import{selectInitHandoff,spawnCodingAgentRepl}from"./init-repl.js";import{resolveInitTarget}from"./init-target.js";import{mkdtemp,readdir,rename,rm}from"node:fs/promises";import{createLogger,isLogLevelEnabled}from"#internal/logging.js";import{basename,join,relative,resolve}from"node:path";import{DEFAULT_AGENT_MODEL_ID}from"#shared/default-agent-model.js";import{ensureChannel,scaffoldBaseProject}from"#setup/scaffold/index.js";import{eveDevArguments,packageManagerInstallFailureMessage,packageManagerInstallSucceeded,resultSucceeded,runPackageManagerInstall,spawnPackageManager}from"#setup/primitives/index.js";import{performance}from"node:perf_hooks";import{isCodingAgentLaunch}from"#cli/agent-detection.js";import{EVE_WORDMARK}from"#cli/banner.js";import{formatElapsed}from"#cli/format-elapsed.js";import{startCliLiveRow}from"#cli/ui/live-row.js";import{formatNodeEngineOverrideWarning}from"#setup/node-engine.js";import{detectInvokingPackageManager,detectPackageManager}from"#setup/package-manager.js";import{pathExists}from"#setup/path-exists.js";import{DEFAULT_EVE_PACKAGE_CONTRACT}from"#setup/scaffold/create/project.js";import{addAgentToProject}from"#setup/scaffold/create/add-to-project.js";import{WizardCancelledError}from"#setup/step.js";import{validateModelSlug}from"#setup/flows/model-source-change.js";import{isPackageManagerWorkspaceMember}from"#setup/scaffold/workspace-root.js";var import_picocolors=__toESM(require_picocolors(),1);const defaultDependencies={addAgentToProject,confirmInitInNonEmptyDirectory,detectInvokingPackageManager,detectPackageManager,ensureChannel,isCodingAgentLaunch,now:()=>performance.now(),runPackageManagerInstall,scaffoldBaseProject,selectInitHandoff,spawnCodingAgentRepl,spawnPackageManager,tryInitializeGit,validateModelSlug},EVE_INIT_PACKAGE_SPEC_ENV=`EVE_INIT_PACKAGE_SPEC`,initLog=createLogger(`init`);async function moveDirectoryContents(e,t){for(let n of await readdir(e))await rename(join(e,n),join(t,n))}function uniqueWorkspaceRootMutations(e){let t=new Map;for(let n of e){let e=`${n.kind}:${n.path}`,r=t.get(e);t.set(e,{...n,nodeEngineOverride:n.nodeEngineOverride??r?.nodeEngineOverride})}return[...t.values()]}function formatWorkspaceRootMutationWarning(e){let t=e.kind===`package-json`?`package.json`:`configuration`,n=e.nodeEngineOverride===void 0?``:` (${formatNodeEngineOverrideWarning(e.nodeEngineOverride)})`;return`Updated workspace root ${t} at ${e.path}${n}`}function initDevArguments(e){let t=[...eveDevArguments(e)];return e===`pnpm`?[`--config.minimum-release-age=0`,...t]:t}async function addToExistingProject(e,t,n,r){if(t.channelWebNextjs===!0)throw Error("`--channel-web-nextjs` is not supported when adding an agent to an existing project. Run `eve add channel/web` from the project afterwards instead.");if(t.model!==void 0){let r=await n.validateModelSlug(e,t.model);if(r!==null)throw Error(r)}let i=await n.detectPackageManager(e),a=await n.addAgentToProject({projectRoot:e,model:t.model??DEFAULT_AGENT_MODEL_ID,reasoning:t.reasoning,packageManager:i.kind,evePackage:r});return{configurationFilesChanged:a.configurationFilesChanged,dependenciesAdded:a.dependenciesAdded,filesWritten:a.filesWritten,packageManager:i.kind,nodeEngineOverride:a.nodeEngineOverride}}async function resolveScaffoldPackageManager(e,t){let n=await t.detectPackageManager(e);return n.source==="default"?t.detectInvokingPackageManager()??`pnpm`:n.kind}async function scaffoldProject(e,t,n,r,i,a,o,s){let c=resolve(e,`..`),l=!n&&await pathExists(e)&&(await readdir(e)).length===0;if(!n&&await pathExists(e)&&!l)throw Error(`Cannot create project because "${e}" already exists.`);let u=n&&s?void 0:await mkdtemp(join(c,`.eve-init-`)),d=[];try{let c=u??e;if(i.model!==void 0){let e=await a.validateModelSlug(c,i.model);if(e!==null)throw Error(e)}let f={projectName:u===void 0?`.`:n?basename(e):t,model:i.model??DEFAULT_AGENT_MODEL_ID,reasoning:i.reasoning,evePackage:o,targetDirectory:c,overwriteExisting:s,workspaceProbeDirectory:e,packageManager:r,onWorkspaceRootMutation:e=>{d.push(e)}},p=await a.scaffoldBaseProject(f);return i.channelWebNextjs===!0&&await a.ensureChannel({projectRoot:p,kind:`web`,packageManager:r,force:s,workspaceProbeDirectory:e,configureVercelServices:!1,onWorkspaceRootMutation:e=>{d.push(e)}}),u!==void 0&&(n||l?await moveDirectoryContents(p,e):await rename(p,e)),{projectPath:e,workspaceRootMutations:uniqueWorkspaceRootMutations(d)}}finally{u!==void 0&&await rm(u,{recursive:!0,force:!0})}}function installProgressDetail(e,t){let n=t.text.trim();if(n===``||e!==`npm`)return n||void 0;let r=/^npm silly fetch manifest (.+)$/u.exec(n);if(r!==null)return`Resolving ${r[1]}`;let i=/^npm http fetch \S+ \S+ attempt (\d+) failed with (\S+)$/u.exec(n);if(i!==null)return`npm registry · attempt ${i[1]} failed: ${i[2]}`;if(t.stream===`stdout`||/^npm (?:error|warn)\b/u.test(n))return n}const NPM_NOISE_LINE=/^\s*npm (?:silly|verbose|http|timing)\b/u;function reportExistingProjectChanges(e,t){e.log(`Updated existing project:`);for(let n of t.filesWritten)e.log(`  Created ${relative(t.projectPath,n).replaceAll(`\\`,`/`)}`);t.dependenciesAdded.length>0&&e.log(`  Added dependencies: ${t.dependenciesAdded.join(`, `)}`);for(let n of t.configurationFilesChanged)e.log(`  Updated ${n}`);t.nodeEngineOverride!==void 0&&e.log(import_picocolors.default.yellow(`  ⚠ ${formatNodeEngineOverrideWarning(t.nodeEngineOverride)}`))}async function runInitSteps(e){let{dependencies:t,logger:n,options:r,parentDirectory:i,target:a}=e,o=isLogLevelEnabled(`debug`),l=await t.isCodingAgentLaunch(),u=await resolveInitTarget({parentDirectory:i,target:a}),f=resolveInitEvePackageOverride(),p=startCliLiveRow(n);p.update(`Preparing project`);try{let e=u.kind===`fresh`?`creating agent`:`adding agent`;p.update(u.kind===`fresh`?`Creating agent`:`Adding agent`),initLog.debug(e);let i=t.now(),a;if(u.kind===`fresh`){let e=await resolveScaffoldPackageManager(u.projectPath,t),n=isPackageManagerWorkspaceMember(e,u.projectPath),i;try{i=await scaffoldProject(u.projectPath,u.projectName,u.createInPlace,e,r,t,f,u.overwriteExisting)}catch(e){if(u.failurePolicy===`clear`){let t=await cleanupFreshInitTarget(u.projectPath,u.failurePolicy,u.preservedEntries),r=e instanceof Error?e.message:String(e),i=t?`eve restored "${u.projectPath}" to its original state.`:`eve could not completely clean "${u.projectPath}".`;throw Error(`${r}\n\n${i}${workspaceFailureNote(n)}`)}if(u.failurePolicy===`remove`&&n){let t=e instanceof Error?e.message:String(e);throw Error(`${t}${workspaceFailureNote(!0)}`)}throw e}a={failurePolicy:u.failurePolicy,kind:`created`,packageManager:e,preservedTargetEntries:u.preservedEntries,projectPath:i.projectPath,retryCommand:`eve init ${u.projectPath}`,workspaceMember:n,workspaceRootMutations:i.workspaceRootMutations}}else{let e=await addToExistingProject(u.projectPath,r,t,f);a=e.nodeEngineOverride===void 0?{configurationFilesChanged:e.configurationFilesChanged,dependenciesAdded:e.dependenciesAdded,failurePolicy:`preserve`,filesWritten:e.filesWritten,kind:`added`,packageManager:e.packageManager,projectPath:u.projectPath}:{configurationFilesChanged:e.configurationFilesChanged,dependenciesAdded:e.dependenciesAdded,failurePolicy:`preserve`,filesWritten:e.filesWritten,kind:`added`,nodeEngineOverride:e.nodeEngineOverride,packageManager:e.packageManager,projectPath:u.projectPath}}let d=t.now()-i;initLog.debug(`${e} done`,{ms:d}),a.kind===`added`&&(p.stop(),reportExistingProjectChanges(n,a),p=startCliLiveRow(n)),p.update(`Installing dependencies`,`${a.packageManager} install`),initLog.debug(`installing dependencies with ${a.packageManager}`);let m=t.now(),h=[],g=[],_=await t.runPackageManagerInstall(a.packageManager,a.projectPath,{bypassMinimumReleaseAge:!0,progressDetails:process.stdout.isTTY===!0&&!o,onOutput:e=>{e.text.trim()!==``&&(g.push(e.text),g.length>20&&g.shift(),NPM_NOISE_LINE.test(e.text)||h.push(e.text)),o&&initLog.debug(e.text);let t=installProgressDetail(a.packageManager,e);t!==void 0&&p.update(`Installing dependencies`,t)}}),v=t.now()-m;if(!packageManagerInstallSucceeded(_)){initLog.debug(`dependency installation failed`,{ms:v}),p.stop();let e=h.length>0?h:g;for(let t of e)n.error(t);if(e.length===0){let e=packageManagerInstallFailureMessage(_);e!==void 0&&n.error(e)}if(a.failurePolicy!==`preserve`){if(await cleanupFreshInitTarget(a.projectPath,a.failurePolicy,a.preservedTargetEntries)){let e=a.failurePolicy===`remove`?`eve removed the incomplete project at "${a.projectPath}".`:`eve restored "${a.projectPath}" to its original state.`,t=a.workspaceMember||a.workspaceRootMutations.length>0;throw Error(`Failed to install dependencies.\n\n${e}\n\nResolve the package-manager error above, then retry:\n  ${a.retryCommand}${workspaceFailureNote(t)}`)}let e=a.workspaceMember||a.workspaceRootMutations.length>0;throw Error(`Failed to install dependencies, and eve could not completely clean "${a.projectPath}".\n\nResolve the package-manager error above, then install dependencies with ${a.packageManager} in that directory. Or clean the target manually before rerunning eve init.${workspaceFailureNote(e)}`)}throw Error(`The eve agent was added, but dependency installation failed.\n\nResolve the package-manager error above, then install dependencies with ${a.packageManager} in "${a.projectPath}".\n\nDo not rerun eve init; the agent is already configured.`)}return initLog.debug(`dependencies installed`,{ms:v}),a.kind===`created`?(p.update(`Initializing Git repository`),initLog.debug(`initializing git repository`),{...a,agentElapsedMs:d,agentLaunched:l,gitResult:await t.tryInitializeGit(a.projectPath),installElapsedMs:v}):{...a,agentElapsedMs:d,agentLaunched:l,installElapsedMs:v}}finally{p.stop()}}async function runInitCommand(e,t,a,o,s=defaultDependencies){let c;try{c=await runInitSteps({dependencies:s,logger:e,options:o,parentDirectory:t,target:a})}catch(e){if(e instanceof WizardCancelledError)return;throw e}if(c.kind===`created`){e.log(`${import_picocolors.default.green(`✓`)} Created an ${EVE_WORDMARK} agent in ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`);for(let t of c.workspaceRootMutations)e.log(import_picocolors.default.yellow(`⚠ ${formatWorkspaceRootMutationWarning(t)}`))}else e.log(`${import_picocolors.default.green(`✓`)} Added an ${EVE_WORDMARK} agent to ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`);e.log(`${import_picocolors.default.green(`✓`)} Installed dependencies ${import_picocolors.default.dim(`in ${formatElapsed(c.installElapsedMs)}`)}`),c.kind===`created`&&c.gitResult.kind===`failed`&&(e.error(import_picocolors.default.yellow(`Git initialization failed during ${c.gitResult.stage}: ${c.gitResult.reason}`)),c.gitResult.stage===`commit`&&e.error(import_picocolors.default.yellow(`The eve agent was created successfully. Git repository metadata and staged files were preserved at "${c.projectPath}"; the initial commit is optional.\n\nTo create it later, configure Git identity and run:\n  git -C ${JSON.stringify(c.projectPath)} commit -m "Initial commit from eve"`)));let l=initDevArguments(c.packageManager),u=[c.packageManager,...l].join(` `),d=initAgentDevHandoff({projectPath:c.projectPath,devCommand:u});if(c.agentLaunched){e.log(initAgentReadySummary(o.model,c.projectPath)),e.log(d);return}let f;try{f=await s.selectInitHandoff({agentName:basename(c.projectPath)})}catch(e){if(e instanceof WizardCancelledError)return;throw e}if(f===`exit`)return;if(f!==`eve-dev`){if(e.log(import_picocolors.default.dim(`$ ${f}`)),!await s.spawnCodingAgentRepl({command:f,cwd:c.projectPath,prompt:initAgentReplPrompt({devCommand:u}),onPromptUnseeded:t=>{e.log(import_picocolors.default.yellow(`Could not seed ${f} automatically. Paste this prompt into it:`)),e.log(t)}}))throw Error(`Coding-agent REPL exited unsuccessfully in "${c.projectPath}".`);return}let p=c.kind===`created`,m=p?[...l,`--input`,`/model`]:l;if(e.log(import_picocolors.default.dim(p?`$ eve dev --input /model`:`$ eve dev`)),!resultSucceeded(await s.spawnPackageManager(c.packageManager,c.projectPath,m)))throw Error(`Development server exited unsuccessfully in "${c.projectPath}".`)}function resolveInitEvePackageOverride(){let e=process.env[EVE_INIT_PACKAGE_SPEC_ENV]?.trim();if(!(e===void 0||e.length===0))return{nodeEngine:DEFAULT_EVE_PACKAGE_CONTRACT.nodeEngine,version:e}}export{EVE_INIT_PACKAGE_SPEC_ENV,runInitCommand};
+import { __toESM } from "../../_virtual/_rolldown/runtime.js";
+import { require_picocolors } from "../../node_modules/.pnpm/picocolors@1.1.1/node_modules/picocolors/picocolors.js";
+import {
+  initAgentDevHandoff,
+  initAgentReadySummary,
+  initAgentReplPrompt,
+} from "./agent-instructions.js";
+import { tryInitializeGit } from "./init-git.js";
+import { confirmInitInNonEmptyDirectory } from "./init-confirm.js";
+import {
+  cleanupFreshInitTarget,
+  workspaceFailureNote,
+} from "./init-recovery.js";
+import { selectInitHandoff, spawnCodingAgentRepl } from "./init-repl.js";
+import { resolveInitTarget } from "./init-target.js";
+import { mkdtemp, readdir, rename, rm } from "node:fs/promises";
+import { createLogger, isLogLevelEnabled } from "#internal/logging.js";
+import { basename, join, relative, resolve } from "node:path";
+import { DEFAULT_AGENT_MODEL_ID } from "#shared/default-agent-model.js";
+import { ensureChannel, scaffoldBaseProject } from "#setup/scaffold/index.js";
+import {
+  eveDevArguments,
+  packageManagerInstallFailureMessage,
+  packageManagerInstallSucceeded,
+  resultSucceeded,
+  runPackageManagerInstall,
+  spawnPackageManager,
+} from "#setup/primitives/index.js";
+import { performance } from "node:perf_hooks";
+import { isCodingAgentLaunch } from "#cli/agent-detection.js";
+import { EVE_WORDMARK } from "#cli/banner.js";
+import { formatElapsed } from "#cli/format-elapsed.js";
+import { startCliLiveRow } from "#cli/ui/live-row.js";
+import { formatNodeEngineOverrideWarning } from "#setup/node-engine.js";
+import {
+  detectInvokingPackageManager,
+  detectPackageManager,
+} from "#setup/package-manager.js";
+import { pathExists } from "#setup/path-exists.js";
+import { DEFAULT_EVE_PACKAGE_CONTRACT } from "#setup/scaffold/create/project.js";
+import { addAgentToProject } from "#setup/scaffold/create/add-to-project.js";
+import { WizardCancelledError } from "#setup/step.js";
+import { validateModelSlug } from "#setup/flows/model-source-change.js";
+import { isPackageManagerWorkspaceMember } from "#setup/scaffold/workspace-root.js";
+var import_picocolors = __toESM(require_picocolors(), 1);
+const defaultDependencies = {
+    addAgentToProject,
+    confirmInitInNonEmptyDirectory,
+    detectInvokingPackageManager,
+    detectPackageManager,
+    ensureChannel,
+    isCodingAgentLaunch,
+    now: () => performance.now(),
+    runPackageManagerInstall,
+    scaffoldBaseProject,
+    selectInitHandoff,
+    spawnCodingAgentRepl,
+    spawnPackageManager,
+    tryInitializeGit,
+    validateModelSlug,
+  },
+  EVE_INIT_PACKAGE_SPEC_ENV = `EVE_INIT_PACKAGE_SPEC`,
+  initLog = createLogger(`init`);
+async function moveDirectoryContents(e, t) {
+  for (let n of await readdir(e)) await rename(join(e, n), join(t, n));
+}
+function uniqueWorkspaceRootMutations(e) {
+  let t = new Map();
+  for (let n of e) {
+    let e = `${n.kind}:${n.path}`,
+      r = t.get(e);
+    t.set(e, {
+      ...n,
+      nodeEngineOverride: n.nodeEngineOverride ?? r?.nodeEngineOverride,
+    });
+  }
+  return [...t.values()];
+}
+function formatWorkspaceRootMutationWarning(e) {
+  let t = e.kind === `package-json` ? `package.json` : `configuration`,
+    n =
+      e.nodeEngineOverride === void 0
+        ? ``
+        : ` (${formatNodeEngineOverrideWarning(e.nodeEngineOverride)})`;
+  return `Updated workspace root ${t} at ${e.path}${n}`;
+}
+function initDevArguments(e) {
+  let t = [...eveDevArguments(e)];
+  return e === `pnpm` ? [`--config.minimum-release-age=0`, ...t] : t;
+}
+async function addToExistingProject(e, t, n, r) {
+  if (t.channelWebNextjs === !0)
+    throw Error(
+      "`--channel-web-nextjs` is not supported when adding an agent to an existing project. Run `eve add channel/web` from the project afterwards instead.",
+    );
+  if (t.model !== void 0) {
+    let r = await n.validateModelSlug(e, t.model);
+    if (r !== null) throw Error(r);
+  }
+  let i = await n.detectPackageManager(e),
+    a = await n.addAgentToProject({
+      projectRoot: e,
+      model: t.model ?? DEFAULT_AGENT_MODEL_ID,
+      reasoning: t.reasoning,
+      packageManager: i.kind,
+      evePackage: r,
+    });
+  return {
+    configurationFilesChanged: a.configurationFilesChanged,
+    dependenciesAdded: a.dependenciesAdded,
+    filesWritten: a.filesWritten,
+    packageManager: i.kind,
+    nodeEngineOverride: a.nodeEngineOverride,
+  };
+}
+async function resolveScaffoldPackageManager(e, t) {
+  let n = await t.detectPackageManager(e);
+  return n.source === "default"
+    ? (t.detectInvokingPackageManager() ?? `pnpm`)
+    : n.kind;
+}
+async function scaffoldProject(e, t, n, r, i, a, o, s) {
+  let c = resolve(e, `..`),
+    l = !n && (await pathExists(e)) && (await readdir(e)).length === 0;
+  if (!n && (await pathExists(e)) && !l)
+    throw Error(`Cannot create project because "${e}" already exists.`);
+  let u = n && s ? void 0 : await mkdtemp(join(c, `.eve-init-`)),
+    d = [];
+  try {
+    let c = u ?? e;
+    if (i.model !== void 0) {
+      let e = await a.validateModelSlug(c, i.model);
+      if (e !== null) throw Error(e);
+    }
+    let f = {
+        projectName: u === void 0 ? `.` : n ? basename(e) : t,
+        model: i.model ?? DEFAULT_AGENT_MODEL_ID,
+        reasoning: i.reasoning,
+        evePackage: o,
+        targetDirectory: c,
+        overwriteExisting: s,
+        workspaceProbeDirectory: e,
+        packageManager: r,
+        onWorkspaceRootMutation: (e) => {
+          d.push(e);
+        },
+      },
+      p = await a.scaffoldBaseProject(f);
+    return (
+      i.channelWebNextjs === !0 &&
+        (await a.ensureChannel({
+          projectRoot: p,
+          kind: `web`,
+          packageManager: r,
+          force: s,
+          workspaceProbeDirectory: e,
+          configureVercelServices: !1,
+          onWorkspaceRootMutation: (e) => {
+            d.push(e);
+          },
+        })),
+      u !== void 0 &&
+        (n || l ? await moveDirectoryContents(p, e) : await rename(p, e)),
+      {
+        projectPath: e,
+        workspaceRootMutations: uniqueWorkspaceRootMutations(d),
+      }
+    );
+  } finally {
+    u !== void 0 && (await rm(u, { recursive: !0, force: !0 }));
+  }
+}
+function installProgressDetail(e, t) {
+  let n = t.text.trim();
+  if (n === `` || e !== `npm`) return n || void 0;
+  let r = /^npm silly fetch manifest (.+)$/u.exec(n);
+  if (r !== null) return `Resolving ${r[1]}`;
+  let i = /^npm http fetch \S+ \S+ attempt (\d+) failed with (\S+)$/u.exec(n);
+  if (i !== null) return `npm registry · attempt ${i[1]} failed: ${i[2]}`;
+  if (t.stream === `stdout` || /^npm (?:error|warn)\b/u.test(n)) return n;
+}
+const NPM_NOISE_LINE = /^\s*npm (?:silly|verbose|http|timing)\b/u;
+function reportExistingProjectChanges(e, t) {
+  e.log(`Updated existing project:`);
+  for (let n of t.filesWritten)
+    e.log(`  Created ${relative(t.projectPath, n).replaceAll(`\\`, `/`)}`);
+  t.dependenciesAdded.length > 0 &&
+    e.log(`  Added dependencies: ${t.dependenciesAdded.join(`, `)}`);
+  for (let n of t.configurationFilesChanged) e.log(`  Updated ${n}`);
+  t.nodeEngineOverride !== void 0 &&
+    e.log(
+      import_picocolors.default.yellow(
+        `  ⚠ ${formatNodeEngineOverrideWarning(t.nodeEngineOverride)}`,
+      ),
+    );
+}
+async function runInitSteps(e) {
+  let {
+      dependencies: t,
+      logger: n,
+      options: r,
+      parentDirectory: i,
+      target: a,
+    } = e,
+    o = isLogLevelEnabled(`debug`),
+    l = await t.isCodingAgentLaunch(),
+    u = await resolveInitTarget({ parentDirectory: i, target: a }),
+    f = resolveInitEvePackageOverride(),
+    p = startCliLiveRow(n);
+  p.update(`Preparing project`);
+  try {
+    let e = u.kind === `fresh` ? `creating agent` : `adding agent`;
+    (p.update(u.kind === `fresh` ? `Creating agent` : `Adding agent`),
+      initLog.debug(e));
+    let i = t.now(),
+      a;
+    if (u.kind === `fresh`) {
+      let e = await resolveScaffoldPackageManager(u.projectPath, t),
+        n = isPackageManagerWorkspaceMember(e, u.projectPath),
+        i;
+      try {
+        i = await scaffoldProject(
+          u.projectPath,
+          u.projectName,
+          u.createInPlace,
+          e,
+          r,
+          t,
+          f,
+          u.overwriteExisting,
+        );
+      } catch (e) {
+        if (u.failurePolicy === `clear`) {
+          let t = await cleanupFreshInitTarget(
+              u.projectPath,
+              u.failurePolicy,
+              u.preservedEntries,
+            ),
+            r = e instanceof Error ? e.message : String(e),
+            i = t
+              ? `eve restored "${u.projectPath}" to its original state.`
+              : `eve could not completely clean "${u.projectPath}".`;
+          throw Error(`${r}\n\n${i}${workspaceFailureNote(n)}`);
+        }
+        if (u.failurePolicy === `remove` && n) {
+          let t = e instanceof Error ? e.message : String(e);
+          throw Error(`${t}${workspaceFailureNote(!0)}`);
+        }
+        throw e;
+      }
+      a = {
+        failurePolicy: u.failurePolicy,
+        kind: `created`,
+        packageManager: e,
+        preservedTargetEntries: u.preservedEntries,
+        projectPath: i.projectPath,
+        retryCommand: `eve init ${u.projectPath}`,
+        workspaceMember: n,
+        workspaceRootMutations: i.workspaceRootMutations,
+      };
+    } else {
+      let e = await addToExistingProject(u.projectPath, r, t, f);
+      a =
+        e.nodeEngineOverride === void 0
+          ? {
+              configurationFilesChanged: e.configurationFilesChanged,
+              dependenciesAdded: e.dependenciesAdded,
+              failurePolicy: `preserve`,
+              filesWritten: e.filesWritten,
+              kind: `added`,
+              packageManager: e.packageManager,
+              projectPath: u.projectPath,
+            }
+          : {
+              configurationFilesChanged: e.configurationFilesChanged,
+              dependenciesAdded: e.dependenciesAdded,
+              failurePolicy: `preserve`,
+              filesWritten: e.filesWritten,
+              kind: `added`,
+              nodeEngineOverride: e.nodeEngineOverride,
+              packageManager: e.packageManager,
+              projectPath: u.projectPath,
+            };
+    }
+    let d = t.now() - i;
+    (initLog.debug(`${e} done`, { ms: d }),
+      a.kind === `added` &&
+        (p.stop(),
+        reportExistingProjectChanges(n, a),
+        (p = startCliLiveRow(n))),
+      p.update(`Installing dependencies`, `${a.packageManager} install`),
+      initLog.debug(`installing dependencies with ${a.packageManager}`));
+    let m = t.now(),
+      h = [],
+      g = [],
+      _ = await t.runPackageManagerInstall(a.packageManager, a.projectPath, {
+        bypassMinimumReleaseAge: !0,
+        progressDetails: process.stdout.isTTY === !0 && !o,
+        onOutput: (e) => {
+          (e.text.trim() !== `` &&
+            (g.push(e.text),
+            g.length > 20 && g.shift(),
+            NPM_NOISE_LINE.test(e.text) || h.push(e.text)),
+            o && initLog.debug(e.text));
+          let t = installProgressDetail(a.packageManager, e);
+          t !== void 0 && p.update(`Installing dependencies`, t);
+        },
+      }),
+      v = t.now() - m;
+    if (!packageManagerInstallSucceeded(_)) {
+      (initLog.debug(`dependency installation failed`, { ms: v }), p.stop());
+      let e = h.length > 0 ? h : g;
+      for (let t of e) n.error(t);
+      if (e.length === 0) {
+        let e = packageManagerInstallFailureMessage(_);
+        e !== void 0 && n.error(e);
+      }
+      if (a.failurePolicy !== `preserve`) {
+        if (
+          await cleanupFreshInitTarget(
+            a.projectPath,
+            a.failurePolicy,
+            a.preservedTargetEntries,
+          )
+        ) {
+          let e =
+              a.failurePolicy === `remove`
+                ? `eve removed the incomplete project at "${a.projectPath}".`
+                : `eve restored "${a.projectPath}" to its original state.`,
+            t = a.workspaceMember || a.workspaceRootMutations.length > 0;
+          throw Error(
+            `Failed to install dependencies.\n\n${e}\n\nResolve the package-manager error above, then retry:\n  ${a.retryCommand}${workspaceFailureNote(t)}`,
+          );
+        }
+        let e = a.workspaceMember || a.workspaceRootMutations.length > 0;
+        throw Error(
+          `Failed to install dependencies, and eve could not completely clean "${a.projectPath}".\n\nResolve the package-manager error above, then install dependencies with ${a.packageManager} in that directory. Or clean the target manually before rerunning eve init.${workspaceFailureNote(e)}`,
+        );
+      }
+      throw Error(
+        `The eve agent was added, but dependency installation failed.\n\nResolve the package-manager error above, then install dependencies with ${a.packageManager} in "${a.projectPath}".\n\nDo not rerun eve init; the agent is already configured.`,
+      );
+    }
+    return (
+      initLog.debug(`dependencies installed`, { ms: v }),
+      a.kind === `created`
+        ? (p.update(`Initializing Git repository`),
+          initLog.debug(`initializing git repository`),
+          {
+            ...a,
+            agentElapsedMs: d,
+            agentLaunched: l,
+            gitResult: await t.tryInitializeGit(a.projectPath),
+            installElapsedMs: v,
+          })
+        : { ...a, agentElapsedMs: d, agentLaunched: l, installElapsedMs: v }
+    );
+  } finally {
+    p.stop();
+  }
+}
+async function runInitCommand(e, t, a, o, s = defaultDependencies) {
+  let c;
+  try {
+    c = await runInitSteps({
+      dependencies: s,
+      logger: e,
+      options: o,
+      parentDirectory: t,
+      target: a,
+    });
+  } catch (e) {
+    if (e instanceof WizardCancelledError) return;
+    throw e;
+  }
+  if (c.kind === `created`) {
+    e.log(
+      `${import_picocolors.default.green(`✓`)} Created an ${EVE_WORDMARK} agent in ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`,
+    );
+    for (let t of c.workspaceRootMutations)
+      e.log(
+        import_picocolors.default.yellow(
+          `⚠ ${formatWorkspaceRootMutationWarning(t)}`,
+        ),
+      );
+  } else
+    e.log(
+      `${import_picocolors.default.green(`✓`)} Added an ${EVE_WORDMARK} agent to ${import_picocolors.default.bold(c.projectPath)} ${import_picocolors.default.dim(`in ${formatElapsed(c.agentElapsedMs)}`)}`,
+    );
+  (e.log(
+    `${import_picocolors.default.green(`✓`)} Installed dependencies ${import_picocolors.default.dim(`in ${formatElapsed(c.installElapsedMs)}`)}`,
+  ),
+    c.kind === `created` &&
+      c.gitResult.kind === `failed` &&
+      (e.error(
+        import_picocolors.default.yellow(
+          `Git initialization failed during ${c.gitResult.stage}: ${c.gitResult.reason}`,
+        ),
+      ),
+      c.gitResult.stage === `commit` &&
+        e.error(
+          import_picocolors.default.yellow(
+            `The eve agent was created successfully. Git repository metadata and staged files were preserved at "${c.projectPath}"; the initial commit is optional.\n\nTo create it later, configure Git identity and run:\n  git -C ${JSON.stringify(c.projectPath)} commit -m "Initial commit from eve"`,
+          ),
+        )));
+  let l = initDevArguments(c.packageManager),
+    u = [c.packageManager, ...l].join(` `),
+    d = initAgentDevHandoff({ projectPath: c.projectPath, devCommand: u });
+  if (c.agentLaunched) {
+    (e.log(initAgentReadySummary(o.model, c.projectPath)), e.log(d));
+    return;
+  }
+  let f;
+  try {
+    f = await s.selectInitHandoff({ agentName: basename(c.projectPath) });
+  } catch (e) {
+    if (e instanceof WizardCancelledError) return;
+    throw e;
+  }
+  if (f === `exit`) return;
+  if (f !== `eve-dev`) {
+    if (
+      (e.log(import_picocolors.default.dim(`$ ${f}`)),
+      !(await s.spawnCodingAgentRepl({
+        command: f,
+        cwd: c.projectPath,
+        prompt: initAgentReplPrompt({ devCommand: u }),
+        onPromptUnseeded: (t) => {
+          (e.log(
+            import_picocolors.default.yellow(
+              `Could not seed ${f} automatically. Paste this prompt into it:`,
+            ),
+          ),
+            e.log(t));
+        },
+      })))
+    )
+      throw Error(
+        `Coding-agent REPL exited unsuccessfully in "${c.projectPath}".`,
+      );
+    return;
+  }
+  let p = c.kind === `created`,
+    m = p ? [...l, `--input`, `/model`] : l;
+  if (
+    (e.log(
+      import_picocolors.default.dim(
+        p ? `$ eve dev --input /model` : `$ eve dev`,
+      ),
+    ),
+    !resultSucceeded(
+      await s.spawnPackageManager(c.packageManager, c.projectPath, m),
+    ))
+  )
+    throw Error(
+      `Development server exited unsuccessfully in "${c.projectPath}".`,
+    );
+}
+function resolveInitEvePackageOverride() {
+  let e = process.env[EVE_INIT_PACKAGE_SPEC_ENV]?.trim();
+  if (!(e === void 0 || e.length === 0))
+    return { nodeEngine: DEFAULT_EVE_PACKAGE_CONTRACT.nodeEngine, version: e };
+}
+export { EVE_INIT_PACKAGE_SPEC_ENV, runInitCommand };

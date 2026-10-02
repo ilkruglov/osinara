@@ -1,1 +1,124 @@
-import{serializeHeadlessSetupEvent}from"./setup-headless.js";import{join}from"node:path";import{createPrompter}from"#setup/prompter.js";import{WizardCancelledError}from"#setup/step.js";import{cleanupCreatedConnectionConnector,setupConnectionConnector}from"#setup/connection-connector.js";import{ensureVercelProject}from"#setup/flows/ensure-vercel-project.js";import{createHeadlessPrompter}from"#setup/headless.js";import{SetupPrerequisiteRequired}from"#setup/integrations/shared/prerequisite.js";import{resolveIntegrationVercelProject}from"#setup/integrations/shared/vercel-project.js";import{readProjectLink}from"#setup/project-resolution.js";import{createRegistrySetupClient}from"#setup/registry-setup-client.js";import{updateConnectionConnectorUid}from"#setup/scaffold/update/update-connection-connector.js";const defaultDependencies={ensureVercelProject,readProjectLink,setupConnectionConnector,cleanupCreatedConnectionConnector,updateConnectionConnectorUid};async function runIntegrationConnect(e){let i={...defaultDependencies,...e.dependencies},a=e.options?.nonInteractive===!0,o=i.createPrompter?.()??(a?createHeadlessPrompter(()=>{}):createPrompter()),s=e.options?.signal;o.intro(`Set up ${e.slug}`);let l=await i.readProjectLink(e.appRoot);if(l===void 0)if(a)l=await resolveIntegrationVercelProject({appRoot:e.appRoot,integration:e.slug,signal:s,deps:{readProjectLink:i.readProjectLink}});else try{l=await i.ensureVercelProject({appRoot:e.appRoot,prompter:o,signal:s,teamSelectMessage:()=>`You need to link to a project to use ${e.slug} through Vercel Connect.\n\nSelect your team`,deps:i.ensureVercelProjectDeps})}catch(e){if(e instanceof WizardCancelledError)return;throw e}let u={log:o.log,prompter:o,projectRoot:e.appRoot,slug:e.slug,service:e.service,canonicalConnectorName:e.canonicalConnectorName??e.slug,project:l,signal:s},d=await i.setupConnectionConnector(u),f=join(e.appRoot,`agent`,`connections`,`${e.slug}.ts`);if(!(await i.updateConnectionConnectorUid(f,d.connectorUid)).patched)throw d.kind===`created`&&await i.cleanupCreatedConnectionConnector({log:o.log,projectRoot:e.appRoot,connectorId:d.connectorId,orgId:l.orgId}),Error(`Could not update the connector in agent/connections/${e.slug}.ts.`);o.outro(`Connection ${e.slug} set up.`)}async function runIntegrationConnectCommand(t,r,i,a,o,c={},l=defaultDependencies){let d=createRegistrySetupClient({signal:c.signal});try{await runIntegrationConnect({appRoot:r,slug:i,service:a,canonicalConnectorName:o,options:c,dependencies:{...l,createPrompter:()=>d?.prompter??(c.nonInteractive?createHeadlessPrompter(()=>{}):l.createPrompter?.()??createPrompter())}}),d?.complete()}catch(n){if(d?.fail(n),d!==void 0)return;if(c.nonInteractive&&n instanceof SetupPrerequisiteRequired){t.error(serializeHeadlessSetupEvent({version:1,type:`blocked`,status:`prerequisite_required`,prerequisite:n.prerequisite})),process.exitCode=2;return}t.error(n instanceof Error?n.message:String(n)),process.exitCode=1}}export{runIntegrationConnect,runIntegrationConnectCommand};
+import { serializeHeadlessSetupEvent } from "./setup-headless.js";
+import { join } from "node:path";
+import { createPrompter } from "#setup/prompter.js";
+import { WizardCancelledError } from "#setup/step.js";
+import {
+  cleanupCreatedConnectionConnector,
+  setupConnectionConnector,
+} from "#setup/connection-connector.js";
+import { ensureVercelProject } from "#setup/flows/ensure-vercel-project.js";
+import { createHeadlessPrompter } from "#setup/headless.js";
+import { SetupPrerequisiteRequired } from "#setup/integrations/shared/prerequisite.js";
+import { resolveIntegrationVercelProject } from "#setup/integrations/shared/vercel-project.js";
+import { readProjectLink } from "#setup/project-resolution.js";
+import { createRegistrySetupClient } from "#setup/registry-setup-client.js";
+import { updateConnectionConnectorUid } from "#setup/scaffold/update/update-connection-connector.js";
+const defaultDependencies = {
+  ensureVercelProject,
+  readProjectLink,
+  setupConnectionConnector,
+  cleanupCreatedConnectionConnector,
+  updateConnectionConnectorUid,
+};
+async function runIntegrationConnect(e) {
+  let i = { ...defaultDependencies, ...e.dependencies },
+    a = e.options?.nonInteractive === !0,
+    o =
+      i.createPrompter?.() ??
+      (a ? createHeadlessPrompter(() => {}) : createPrompter()),
+    s = e.options?.signal;
+  o.intro(`Set up ${e.slug}`);
+  let l = await i.readProjectLink(e.appRoot);
+  if (l === void 0)
+    if (a)
+      l = await resolveIntegrationVercelProject({
+        appRoot: e.appRoot,
+        integration: e.slug,
+        signal: s,
+        deps: { readProjectLink: i.readProjectLink },
+      });
+    else
+      try {
+        l = await i.ensureVercelProject({
+          appRoot: e.appRoot,
+          prompter: o,
+          signal: s,
+          teamSelectMessage: () =>
+            `You need to link to a project to use ${e.slug} through Vercel Connect.\n\nSelect your team`,
+          deps: i.ensureVercelProjectDeps,
+        });
+      } catch (e) {
+        if (e instanceof WizardCancelledError) return;
+        throw e;
+      }
+  let u = {
+      log: o.log,
+      prompter: o,
+      projectRoot: e.appRoot,
+      slug: e.slug,
+      service: e.service,
+      canonicalConnectorName: e.canonicalConnectorName ?? e.slug,
+      project: l,
+      signal: s,
+    },
+    d = await i.setupConnectionConnector(u),
+    f = join(e.appRoot, `agent`, `connections`, `${e.slug}.ts`);
+  if (!(await i.updateConnectionConnectorUid(f, d.connectorUid)).patched)
+    throw (
+      d.kind === `created` &&
+        (await i.cleanupCreatedConnectionConnector({
+          log: o.log,
+          projectRoot: e.appRoot,
+          connectorId: d.connectorId,
+          orgId: l.orgId,
+        })),
+      Error(`Could not update the connector in agent/connections/${e.slug}.ts.`)
+    );
+  o.outro(`Connection ${e.slug} set up.`);
+}
+async function runIntegrationConnectCommand(
+  t,
+  r,
+  i,
+  a,
+  o,
+  c = {},
+  l = defaultDependencies,
+) {
+  let d = createRegistrySetupClient({ signal: c.signal });
+  try {
+    (await runIntegrationConnect({
+      appRoot: r,
+      slug: i,
+      service: a,
+      canonicalConnectorName: o,
+      options: c,
+      dependencies: {
+        ...l,
+        createPrompter: () =>
+          d?.prompter ??
+          (c.nonInteractive
+            ? createHeadlessPrompter(() => {})
+            : (l.createPrompter?.() ?? createPrompter())),
+      },
+    }),
+      d?.complete());
+  } catch (n) {
+    if ((d?.fail(n), d !== void 0)) return;
+    if (c.nonInteractive && n instanceof SetupPrerequisiteRequired) {
+      (t.error(
+        serializeHeadlessSetupEvent({
+          version: 1,
+          type: `blocked`,
+          status: `prerequisite_required`,
+          prerequisite: n.prerequisite,
+        }),
+      ),
+        (process.exitCode = 2));
+      return;
+    }
+    (t.error(n instanceof Error ? n.message : String(n)),
+      (process.exitCode = 1));
+  }
+}
+export { runIntegrationConnect, runIntegrationConnectCommand };

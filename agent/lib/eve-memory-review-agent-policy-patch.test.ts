@@ -5,11 +5,13 @@
  * - The patched runtime removes Eve's implicit root `agent` from external groups and background review.
  * - Trusted interactive root sessions retain native delegation.
  * - Authored tools and non-root subagent lookalikes are never removed by the policy.
- * - The reproducible installer owns the exact Eve 0.40.0 runtime patch.
+ * - The vendored tool loop carries the policy exactly once.
  */
 import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
+
+import { codeShape, topLevelFunction } from "./vendored-code.js";
 
 const TOOL_LOOP_PATH = "vendor/eve/dist/src/harness/tool-loop.js";
 const AUTH_KEY = Symbol("eve.auth.test");
@@ -43,14 +45,7 @@ const implicitRootAgent: RuntimeTool = {
 };
 
 function extractRuntimeToolBuilder(source: string): RuntimeToolBuilder {
-  const definition = source.match(
-    /function buildHarnessToolsWithDynamicSubagents\(e,t\)\{[\s\S]*?return n\}/u,
-  )?.[0];
-  if (!definition) {
-    throw new Error(
-      "AGENT_EVE_MEMORY_REVIEW_PATCH_INVALID: Не найдена функция сборки runtime tools Eve",
-    );
-  }
+  const definition = topLevelFunction(source, "buildHarnessToolsWithDynamicSubagents");
 
   // Execute the installed function with inert dynamic subagents so this test proves behavior,
   // rather than merely asserting that a patch marker exists in a minified artifact.
@@ -148,7 +143,7 @@ describe("Eve implicit agent policy patch", () => {
   it("keeps the policy exactly once in the vendored tool loop", async () => {
     const runtime = await readFile(TOOL_LOOP_PATH, "utf8");
 
-    expect(runtime.match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
-    expect(runtime.match(/groupType===`external`/gu)).toHaveLength(1);
+    expect(codeShape(runtime).match(/memoryReviewMode===`background`/gu)).toHaveLength(1);
+    expect(codeShape(runtime).match(/groupType===`external`/gu)).toHaveLength(1);
   });
 });

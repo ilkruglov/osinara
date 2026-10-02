@@ -1,1 +1,40 @@
-import{isCurrentTurnBoundaryEvent,isTurnFailureEvent}from"#protocol/message.js";function summarizeTurnEvents(n){let r,i,a,o=[],s=new Map;for(let c of n)isCurrentTurnBoundaryEvent(c)&&(r=c),isTurnFailureEvent(c)&&(i=c),isFinalMessageCompleted(c)&&(a=c.data.message??void 0),c.type===`input.requested`&&o.push(...c.data.requests),c.type===`authorization.required`&&s.set(c.data.name,c.data),c.type===`authorization.completed`&&s.delete(c.data.name);return{boundary:r,failure:i,inputRequests:o,message:a,pendingAuthorizations:[...s.values()],status:r?.type===`session.waiting`?`waiting`:r?.type===`session.failed`?`failed`:`completed`}}async function collectTurnEvents(t){let n=[];for await(let r of t)if(n.push(r),isCurrentTurnBoundaryEvent(r))break;return n}function isFinalMessageCompleted(e){return e.type===`message.completed`&&e.data.finishReason!==`tool-calls`}export{collectTurnEvents,summarizeTurnEvents};
+import {
+  isCurrentTurnBoundaryEvent,
+  isTurnFailureEvent,
+} from "#protocol/message.js";
+function summarizeTurnEvents(n) {
+  let r,
+    i,
+    a,
+    o = [],
+    s = new Map();
+  for (let c of n)
+    (isCurrentTurnBoundaryEvent(c) && (r = c),
+      isTurnFailureEvent(c) && (i = c),
+      isFinalMessageCompleted(c) && (a = c.data.message ?? void 0),
+      c.type === `input.requested` && o.push(...c.data.requests),
+      c.type === `authorization.required` && s.set(c.data.name, c.data),
+      c.type === `authorization.completed` && s.delete(c.data.name));
+  return {
+    boundary: r,
+    failure: i,
+    inputRequests: o,
+    message: a,
+    pendingAuthorizations: [...s.values()],
+    status:
+      r?.type === `session.waiting`
+        ? `waiting`
+        : r?.type === `session.failed`
+          ? `failed`
+          : `completed`,
+  };
+}
+async function collectTurnEvents(t) {
+  let n = [];
+  for await (let r of t) if ((n.push(r), isCurrentTurnBoundaryEvent(r))) break;
+  return n;
+}
+function isFinalMessageCompleted(e) {
+  return e.type === `message.completed` && e.data.finishReason !== `tool-calls`;
+}
+export { collectTurnEvents, summarizeTurnEvents };

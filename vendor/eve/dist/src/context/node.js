@@ -1,1 +1,5 @@
-import{BundleKey}from"#runtime/sessions/runtime-context-keys.js";function getActiveRuntimeNode(e){return e.require(BundleKey).graph.root}export{getActiveRuntimeNode};
+import { BundleKey } from "#runtime/sessions/runtime-context-keys.js";
+function getActiveRuntimeNode(e) {
+  return e.require(BundleKey).graph.root;
+}
+export { getActiveRuntimeNode };

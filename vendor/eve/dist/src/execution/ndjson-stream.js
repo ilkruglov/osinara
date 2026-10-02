@@ -1,1 +1,1 @@
-export{parseNdjsonStream}from"./osinara-ndjson-stream.js";
+export { parseNdjsonStream } from "./osinara-ndjson-stream.js";

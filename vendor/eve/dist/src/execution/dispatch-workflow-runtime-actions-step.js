@@ -1,1 +1,100 @@
-import{createLogger}from"#internal/logging.js";import{BundleKey}from"#runtime/sessions/runtime-context-keys.js";import{deserializeContext}from"#context/serialize.js";import{createDurableSessionState,readDurableSession}from"#execution/durable-session-store.js";import{hydrateDurableSession}from"#execution/session.js";import{resolveEffectiveAgentRuntime}from"#execution/effective-agent-config.js";import{setPendingRuntimeActionBatch}from"#harness/runtime-actions.js";import{getSubagentDelegationName,isSubagentDelegationAction}from"#harness/subagent-depth.js";import{dispatchRuntimeActionsStep}from"#execution/dispatch-runtime-actions-step.js";import{dispatchTaskStep}from"#execution/tasks/parent/dispatch-task-step.js";import{getPendingWorkflowInterrupt}from"#harness/workflow-interrupt-state.js";import{buildRuntimeActionsFromWorkflowInterrupt}from"#harness/workflow-runtime-action-state.js";import{planWorkflowSubagentDispatch}from"#harness/workflow-subagent-limit.js";const log=createLogger(`execution.dispatch-workflow-runtime-actions`);async function dispatchWorkflowRuntimeActionsStep(e){"use step";let n=await readDurableSession(e.sessionState),r=getPendingWorkflowInterrupt(n.state);if(r===void 0)return{results:[],sessionState:e.sessionState,pendingTasks:[]};let i=buildRuntimeActionsFromWorkflowInterrupt(r.interrupt);if(i.length===0)return{results:[],sessionState:e.sessionState,pendingTasks:[]};let a=await deserializeContext(e.serializedContext),o=a.require(BundleKey),s=resolveEffectiveAgentRuntime(o,a),c=planWorkflowSubagentDispatch({actions:i,interrupt:r.interrupt,maxSubagents:n.workflowMaxSubagents}),l=c.blocked.map(e=>(log.warn(`workflow subagent limit reached; blocking delegated call`,{callId:e.callId,maxSubagents:c.maxSubagents,subagentName:isSubagentDelegationAction(e)?getSubagentDelegationName(e):e.kind,usedCalls:c.usedCalls}),createWorkflowSubagentLimitResult({action:e,plan:c})));if(c.allowed.length===0)return{results:l,sessionState:e.sessionState,pendingTasks:[]};let u=hydrateDurableSession({compactionOverrides:{thresholdPercent:s.thresholdPercent},durable:n,turnAgent:s.turnAgent}),d=setPendingRuntimeActionBatch({actions:c.allowed,event:{sequence:0,stepIndex:0,turnId:`workflow-dispatch`},responseMessages:[],session:u}),f=await(o.resolvedAgent.config?.experimental?.tasks===!0?dispatchTaskStep:dispatchRuntimeActionsStep)({callbackBaseUrl:e.callbackBaseUrl,parentContinuationToken:e.parentContinuationToken,parentWritable:e.parentWritable,serializedContext:e.serializedContext,sessionState:createDurableSessionState({session:d})});return l.length===0?f:{results:[...f.results,...l],sessionState:f.sessionState,pendingTasks:f.pendingTasks}}function createWorkflowSubagentLimitResult(e){let t=isSubagentDelegationAction(e.action)?getSubagentDelegationName(e.action):e.action.kind;return{callId:e.action.callId,isError:!0,kind:`subagent-result`,origin:`dispatch`,output:{code:`WORKFLOW_SUBAGENT_LIMIT_REACHED`,maxSubagents:e.plan.maxSubagents,message:`Workflow subagent limit reached (${String(e.plan.maxSubagents)}); "${t}" was not called.`},subagentName:t}}export{dispatchWorkflowRuntimeActionsStep};
+import { createLogger } from "#internal/logging.js";
+import { BundleKey } from "#runtime/sessions/runtime-context-keys.js";
+import { deserializeContext } from "#context/serialize.js";
+import {
+  createDurableSessionState,
+  readDurableSession,
+} from "#execution/durable-session-store.js";
+import { hydrateDurableSession } from "#execution/session.js";
+import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
+import { setPendingRuntimeActionBatch } from "#harness/runtime-actions.js";
+import {
+  getSubagentDelegationName,
+  isSubagentDelegationAction,
+} from "#harness/subagent-depth.js";
+import { dispatchRuntimeActionsStep } from "#execution/dispatch-runtime-actions-step.js";
+import { dispatchTaskStep } from "#execution/tasks/parent/dispatch-task-step.js";
+import { getPendingWorkflowInterrupt } from "#harness/workflow-interrupt-state.js";
+import { buildRuntimeActionsFromWorkflowInterrupt } from "#harness/workflow-runtime-action-state.js";
+import { planWorkflowSubagentDispatch } from "#harness/workflow-subagent-limit.js";
+const log = createLogger(`execution.dispatch-workflow-runtime-actions`);
+async function dispatchWorkflowRuntimeActionsStep(e) {
+  "use step";
+  let n = await readDurableSession(e.sessionState),
+    r = getPendingWorkflowInterrupt(n.state);
+  if (r === void 0)
+    return { results: [], sessionState: e.sessionState, pendingTasks: [] };
+  let i = buildRuntimeActionsFromWorkflowInterrupt(r.interrupt);
+  if (i.length === 0)
+    return { results: [], sessionState: e.sessionState, pendingTasks: [] };
+  let a = await deserializeContext(e.serializedContext),
+    o = a.require(BundleKey),
+    s = resolveEffectiveAgentRuntime(o, a),
+    c = planWorkflowSubagentDispatch({
+      actions: i,
+      interrupt: r.interrupt,
+      maxSubagents: n.workflowMaxSubagents,
+    }),
+    l = c.blocked.map(
+      (e) => (
+        log.warn(`workflow subagent limit reached; blocking delegated call`, {
+          callId: e.callId,
+          maxSubagents: c.maxSubagents,
+          subagentName: isSubagentDelegationAction(e)
+            ? getSubagentDelegationName(e)
+            : e.kind,
+          usedCalls: c.usedCalls,
+        }),
+        createWorkflowSubagentLimitResult({ action: e, plan: c })
+      ),
+    );
+  if (c.allowed.length === 0)
+    return { results: l, sessionState: e.sessionState, pendingTasks: [] };
+  let u = hydrateDurableSession({
+      compactionOverrides: { thresholdPercent: s.thresholdPercent },
+      durable: n,
+      turnAgent: s.turnAgent,
+    }),
+    d = setPendingRuntimeActionBatch({
+      actions: c.allowed,
+      event: { sequence: 0, stepIndex: 0, turnId: `workflow-dispatch` },
+      responseMessages: [],
+      session: u,
+    }),
+    f = await (
+      o.resolvedAgent.config?.experimental?.tasks === !0
+        ? dispatchTaskStep
+        : dispatchRuntimeActionsStep
+    )({
+      callbackBaseUrl: e.callbackBaseUrl,
+      parentContinuationToken: e.parentContinuationToken,
+      parentWritable: e.parentWritable,
+      serializedContext: e.serializedContext,
+      sessionState: createDurableSessionState({ session: d }),
+    });
+  return l.length === 0
+    ? f
+    : {
+        results: [...f.results, ...l],
+        sessionState: f.sessionState,
+        pendingTasks: f.pendingTasks,
+      };
+}
+function createWorkflowSubagentLimitResult(e) {
+  let t = isSubagentDelegationAction(e.action)
+    ? getSubagentDelegationName(e.action)
+    : e.action.kind;
+  return {
+    callId: e.action.callId,
+    isError: !0,
+    kind: `subagent-result`,
+    origin: `dispatch`,
+    output: {
+      code: `WORKFLOW_SUBAGENT_LIMIT_REACHED`,
+      maxSubagents: e.plan.maxSubagents,
+      message: `Workflow subagent limit reached (${String(e.plan.maxSubagents)}); "${t}" was not called.`,
+    },
+    subagentName: t,
+  };
+}
+export { dispatchWorkflowRuntimeActionsStep };

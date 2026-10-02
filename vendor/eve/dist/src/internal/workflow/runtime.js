@@ -1,1 +1,6 @@
-import*as workflowRuntime from"#compiled/@workflow/core/runtime.js";export*from"#compiled/@workflow/core/runtime.js";function setWorld(e){workflowRuntime.setWorld(e)}export{setWorld};
+import * as workflowRuntime from "#compiled/@workflow/core/runtime.js";
+export * from "#compiled/@workflow/core/runtime.js";
+function setWorld(e) {
+  workflowRuntime.setWorld(e);
+}
+export { setWorld };

@@ -13,6 +13,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { codeShape } from "./vendored-code.js";
+
 const QUEUE_PATH = "vendor/workflow-world-postgres/dist/queue.js";
 const INDEX_PATH = "vendor/workflow-world-postgres/dist/index.js";
 const RECOVERY_PATH = "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js";
@@ -26,22 +28,22 @@ describe("workflow queue loopback patch", () => {
   it("waits for a step longer than any step may run", async () => {
     const queue = await readFile(QUEUE_PATH, "utf8");
 
-    expect(queue).toContain("import { Agent as OsinaraLoopbackAgent, fetch as osinaraLoopbackFetch } from 'undici';");
-    expect(queue).toContain("const OSINARA_LOOPBACK_TIMEOUT_MS = 20 * 60 * 1000;");
-    expect(queue).toContain("headersTimeout: OSINARA_LOOPBACK_TIMEOUT_MS,");
-    expect(queue).toContain("bodyTimeout: OSINARA_LOOPBACK_TIMEOUT_MS,");
-    expect(queue).toContain("const response = await osinaraLoopbackFetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {");
-    expect(queue).toContain("dispatcher: OSINARA_LOOPBACK_DISPATCHER,");
-    expect(queue).not.toContain("const response = await fetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {");
+    expect(codeShape(queue)).toContain(codeShape("import { Agent as OsinaraLoopbackAgent, fetch as osinaraLoopbackFetch } from 'undici';"));
+    expect(codeShape(queue)).toContain(codeShape("const OSINARA_LOOPBACK_TIMEOUT_MS = 20 * 60 * 1000;"));
+    expect(codeShape(queue)).toContain(codeShape("headersTimeout: OSINARA_LOOPBACK_TIMEOUT_MS,"));
+    expect(codeShape(queue)).toContain(codeShape("bodyTimeout: OSINARA_LOOPBACK_TIMEOUT_MS,"));
+    expect(codeShape(queue)).toContain(codeShape("const response = await osinaraLoopbackFetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {"));
+    expect(codeShape(queue)).toContain(codeShape("dispatcher: OSINARA_LOOPBACK_DISPATCHER,"));
+    expect(codeShape(queue)).not.toContain(codeShape("const response = await fetch(createWorkflowUrl(baseUrl, { type: 'flow' }), {"));
   });
 
   it("re-enqueues runs whose retry job was lost without waiting for a restart", async () => {
     const index = await readFile(INDEX_PATH, "utf8");
 
-    expect(index).toContain("import { startStuckRunRecovery } from './osinara-stuck-run-recovery.js';");
-    expect(index).toContain("stopStuckRunRecovery ??= startStuckRunRecovery({");
-    expect(index).toContain("queuePrefix: getQueueTopicPrefix('workflow', resolveQueueNamespace(config.namespace)),");
-    expect(index).toContain("stopStuckRunRecovery?.();");
+    expect(codeShape(index)).toContain(codeShape("import { startStuckRunRecovery } from './osinara-stuck-run-recovery.js';"));
+    expect(codeShape(index)).toContain(codeShape("stopStuckRunRecovery ??= startStuckRunRecovery({"));
+    expect(codeShape(index)).toContain(codeShape("queuePrefix: getQueueTopicPrefix('workflow', resolveQueueNamespace(config.namespace)),"));
+    expect(codeShape(index)).toContain(codeShape("stopStuckRunRecovery?.();"));
   });
 
   it("keeps the patched modules syntactically valid", async () => {

@@ -1,1 +1,115 @@
-import{callAdapterEventHandler}from"#channel/adapter.js";import{ChannelInstrumentationKey}from"#context/keys.js";import{encodeMessageStreamEvent,stampMessageStreamEvent}from"#protocol/message.js";import{BundleKey,ChannelKey}from"#runtime/sessions/runtime-context-keys.js";import{getHarnessEmissionState,isHarnessBetweenTurns,setHarnessEmissionState}from"#harness/emission.js";import{abandonRunningAgentTurns}from"#harness/handles/transitions.js";import{deserializeContext,serializeContext}from"#context/serialize.js";import{createDurableSessionState,readDurableSession}from"#execution/durable-session-store.js";import{hydrateDurableSession}from"#execution/session.js";import{resolveEffectiveAgentRuntime}from"#execution/effective-agent-config.js";import{buildAdapterContext}from"#channel/adapter-context.js";import{withContextScope}from"#context/run-step.js";import{clearPendingRuntimeActionBatch}from"#harness/runtime-actions.js";import{clearPendingWorkflowInterrupt}from"#harness/workflow-interrupt-state.js";import{clearAllProxyInputRequests,getProxyInputRequests,hasProxyInputRequests}from"#harness/proxy-input-requests.js";import{getInstrumentationRuntime}from"#harness/instrumentation/runtime.js";import{setChannelContext}from"#execution/channel-context.js";import{dispatchStreamEventHooks}from"#context/hook-lifecycle.js";import{reconcileSessionContinuationToken}from"#execution/reconcile-session-continuation-token.js";import{activeTurnId}from"#harness/active-turn-id.js";import{emitCancelledTurn}from"#harness/cancelled-turn-emission.js";import{clearPendingSessionLimitPrompt}from"#harness/input-requests.js";import{createInstrumentationHandleEvent}from"#harness/instrumentation/native-events.js";import{getTurnUsageState,toUsage}from"#harness/turn-tag-state.js";async function settleCancelledTurnStep(a){"use step";let o=await readDurableSession(a.sessionState),s=await deserializeContext(a.serializedContext),c=s.require(ChannelKey),l=buildAdapterContext(c,s),u=s.require(BundleKey),d=resolveEffectiveAgentRuntime(u,s),f=getInstrumentationRuntime(),p=hydrateDurableSession({compactionOverrides:{thresholdPercent:d.thresholdPercent},durable:o,turnAgent:d.turnAgent}),m=getHarnessEmissionState(o.state),h=[...getProxyInputRequests(o.state).values()].some(e=>e.kind===`session-limit`);if(!(isHarnessBetweenTurns(p)&&hasProxyInputRequests(o.state)&&!h)){let n=a.parentWritable.getWriter();try{let r=await withContextScope(s,p,async r=>{let baseEmit=async t=>{let r=await callAdapterEventHandler(c,t,l);setChannelContext(s,{...c,state:{...l.state}});let i=stampMessageStreamEvent(r);await n.write(encodeMessageStreamEvent(i)),await dispatchStreamEventHooks({ctx:s,event:i,registry:u.hookRegistry})};return{result:await emitCancelledTurn(createInstrumentationHandleEvent({agentName:u.turnAgent.id,channelKind:s.get(ChannelInstrumentationKey)?.kind,handleEvent:baseEmit,hooks:f?.hooks,sessionId:p.sessionId,turnId:activeTurnId(m)})??baseEmit,m),session:r}});m=r.result,p=r.session}finally{await f?.forceFlush(),n.releaseLock()}}let g=reconcileSessionContinuationToken(s,setHarnessEmissionState(clearPendingSessionLimitPrompt(clearAllProxyInputRequests(clearPendingWorkflowInterrupt(clearPendingRuntimeActionBatch(abandonRunningAgentTurns(p))))),m)),_=getTurnUsageState(p.state)?.session,v={serializedContext:serializeContext(s),sessionState:createDurableSessionState({session:g})};return _===void 0?v:{...v,usage:toUsage(_)}}export{settleCancelledTurnStep};
+import { callAdapterEventHandler } from "#channel/adapter.js";
+import { ChannelInstrumentationKey } from "#context/keys.js";
+import {
+  encodeMessageStreamEvent,
+  stampMessageStreamEvent,
+} from "#protocol/message.js";
+import {
+  BundleKey,
+  ChannelKey,
+} from "#runtime/sessions/runtime-context-keys.js";
+import {
+  getHarnessEmissionState,
+  isHarnessBetweenTurns,
+  setHarnessEmissionState,
+} from "#harness/emission.js";
+import { abandonRunningAgentTurns } from "#harness/handles/transitions.js";
+import { deserializeContext, serializeContext } from "#context/serialize.js";
+import {
+  createDurableSessionState,
+  readDurableSession,
+} from "#execution/durable-session-store.js";
+import { hydrateDurableSession } from "#execution/session.js";
+import { resolveEffectiveAgentRuntime } from "#execution/effective-agent-config.js";
+import { buildAdapterContext } from "#channel/adapter-context.js";
+import { withContextScope } from "#context/run-step.js";
+import { clearPendingRuntimeActionBatch } from "#harness/runtime-actions.js";
+import { clearPendingWorkflowInterrupt } from "#harness/workflow-interrupt-state.js";
+import {
+  clearAllProxyInputRequests,
+  getProxyInputRequests,
+  hasProxyInputRequests,
+} from "#harness/proxy-input-requests.js";
+import { getInstrumentationRuntime } from "#harness/instrumentation/runtime.js";
+import { setChannelContext } from "#execution/channel-context.js";
+import { dispatchStreamEventHooks } from "#context/hook-lifecycle.js";
+import { reconcileSessionContinuationToken } from "#execution/reconcile-session-continuation-token.js";
+import { activeTurnId } from "#harness/active-turn-id.js";
+import { emitCancelledTurn } from "#harness/cancelled-turn-emission.js";
+import { clearPendingSessionLimitPrompt } from "#harness/input-requests.js";
+import { createInstrumentationHandleEvent } from "#harness/instrumentation/native-events.js";
+import { getTurnUsageState, toUsage } from "#harness/turn-tag-state.js";
+async function settleCancelledTurnStep(a) {
+  "use step";
+  let o = await readDurableSession(a.sessionState),
+    s = await deserializeContext(a.serializedContext),
+    c = s.require(ChannelKey),
+    l = buildAdapterContext(c, s),
+    u = s.require(BundleKey),
+    d = resolveEffectiveAgentRuntime(u, s),
+    f = getInstrumentationRuntime(),
+    p = hydrateDurableSession({
+      compactionOverrides: { thresholdPercent: d.thresholdPercent },
+      durable: o,
+      turnAgent: d.turnAgent,
+    }),
+    m = getHarnessEmissionState(o.state),
+    h = [...getProxyInputRequests(o.state).values()].some(
+      (e) => e.kind === `session-limit`,
+    );
+  if (!(isHarnessBetweenTurns(p) && hasProxyInputRequests(o.state) && !h)) {
+    let n = a.parentWritable.getWriter();
+    try {
+      let r = await withContextScope(s, p, async (r) => {
+        let baseEmit = async (t) => {
+          let r = await callAdapterEventHandler(c, t, l);
+          setChannelContext(s, { ...c, state: { ...l.state } });
+          let i = stampMessageStreamEvent(r);
+          (await n.write(encodeMessageStreamEvent(i)),
+            await dispatchStreamEventHooks({
+              ctx: s,
+              event: i,
+              registry: u.hookRegistry,
+            }));
+        };
+        return {
+          result: await emitCancelledTurn(
+            createInstrumentationHandleEvent({
+              agentName: u.turnAgent.id,
+              channelKind: s.get(ChannelInstrumentationKey)?.kind,
+              handleEvent: baseEmit,
+              hooks: f?.hooks,
+              sessionId: p.sessionId,
+              turnId: activeTurnId(m),
+            }) ?? baseEmit,
+            m,
+          ),
+          session: r,
+        };
+      });
+      ((m = r.result), (p = r.session));
+    } finally {
+      (await f?.forceFlush(), n.releaseLock());
+    }
+  }
+  let g = reconcileSessionContinuationToken(
+      s,
+      setHarnessEmissionState(
+        clearPendingSessionLimitPrompt(
+          clearAllProxyInputRequests(
+            clearPendingWorkflowInterrupt(
+              clearPendingRuntimeActionBatch(abandonRunningAgentTurns(p)),
+            ),
+          ),
+        ),
+        m,
+      ),
+    ),
+    _ = getTurnUsageState(p.state)?.session,
+    v = {
+      serializedContext: serializeContext(s),
+      sessionState: createDurableSessionState({ session: g }),
+    };
+  return _ === void 0 ? v : { ...v, usage: toUsage(_) };
+}
+export { settleCancelledTurnStep };

@@ -1,1 +1,3 @@
-import{ContextKey}from"#context/key.js";const ConnectionRegistryKey=new ContextKey(`eve.connectionRegistry`);export{ConnectionRegistryKey};
+import { ContextKey } from "#context/key.js";
+const ConnectionRegistryKey = new ContextKey(`eve.connectionRegistry`);
+export { ConnectionRegistryKey };

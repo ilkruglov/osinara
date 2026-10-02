@@ -1,1 +1,157 @@
-import{mkdir,readFile,writeFile}from"node:fs/promises";import{z}from"#compiled/zod/index.js";import{join}from"node:path";import{AI_GATEWAY_MODELS_CATALOG_URL,vercelGatewayFetch}from"#internal/gateway.js";import{catalogModelProviderSchema,catalogModelSchema,catalogModelSchema as catalogModelSchema$1,findCatalogModelByProviderModelId,findCatalogModelBySlug,modelCatalogLimitsFromProvider,modelCatalogResponseSchema,modelCatalogResponseSchema as modelCatalogResponseSchema$1,normalizeCatalogModelId}from"#internal/model-catalog.js";const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND=`eve-model-catalog-cache`;z.object({contextWindowTokens:z.number().int().positive(),maxOutputTokens:z.number().int().positive().optional()}).strict();const compiledRuntimeModelCatalogCacheSchema=z.object({fetchedAt:z.string(),kind:z.literal(COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND),models:z.array(catalogModelSchema$1),providerAliases:z.record(z.string(),z.string()),version:z.literal(2)}).strict(),builtInCompiledRuntimeModelLimitsById=new Map([[`anthropic/claude-opus-4.7`,{contextWindowTokens:2e5,maxOutputTokens:32e3}],[`openai/gpt-5.4`,{contextWindowTokens:4e5,maxOutputTokens:128e3}],[`openai/gpt-5.4-mini`,{contextWindowTokens:4e5,maxOutputTokens:128e3}]]);function resolveCompiledRuntimeModelCatalogCachePath(e){return join(e,`.eve`,`cache`,`model-catalog.json`)}function createCompiledRuntimeModelCatalogLoader(e){let t=null,n=null,r=null,getCachedCatalog=async()=>(t??=readModelCatalogCache(e),await t),getFetchedCatalog=async()=>{if(n!==null)throw n;if(r!==null)return await r;r=fetchAndPersistModelCatalog(e).then(e=>(t=Promise.resolve(e),e));try{return await r}catch(e){throw n=e,e}},resolveModelsFromCacheOrFetch=async()=>{let e=await getCachedCatalog();if(e!==null&&isCacheFresh(e))return e;try{return await getFetchedCatalog()}catch(t){if(e!==null)return e;throw t}};return{async getModelLimits(e){let t=normalizeCatalogModelId(e),n=builtInCompiledRuntimeModelLimitsById.get(t);if(n!==void 0)return n;let r=await resolveModelsFromCacheOrFetch();if(r!==null){let e=findCatalogModelBySlug(r.models,t);if(e)for(let t of e.providers){let e=modelCatalogLimitsFromProvider(t);if(e!==null)return e}}return null},async getByProviderModelId(e,t){let n=await resolveModelsFromCacheOrFetch();if(n===null)return null;let r=findCatalogModelByProviderModelId({models:n.models,provider:e,providerAliases:n.providerAliases,providerModelId:t});if(r!==null){let e=modelCatalogLimitsFromProvider(r.provider);if(e!==null)return{slug:r.model.slug,limits:e}}return null}}}async function fetchAndPersistModelCatalog(t){let r=await vercelGatewayFetch(AI_GATEWAY_MODELS_CATALOG_URL);if(!r.ok)throw Error(`AI Gateway model catalog request failed with HTTP ${r.status} ${r.statusText}.`);let i=modelCatalogResponseSchema$1.safeParse(await r.json());if(!i.success)throw Error(`AI Gateway model catalog response did not match the expected schema.`);let a={fetchedAt:new Date().toISOString(),kind:COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND,models:i.data.models,providerAliases:i.data.providerAliases,version:2};try{let r=resolveCompiledRuntimeModelCatalogCachePath(t);await mkdir(join(t,`.eve`,`cache`),{recursive:!0}),await writeFile(r,`${JSON.stringify(a,null,2)}\n`,`utf8`)}catch{}return a}async function readModelCatalogCache(e){try{let n=await readFile(resolveCompiledRuntimeModelCatalogCachePath(e),`utf8`),r=compiledRuntimeModelCatalogCacheSchema.safeParse(JSON.parse(n));return r.success?r.data:null}catch(e){return e instanceof Error&&`code`in e&&typeof e.code==`string`&&e.code,null}}function isCacheFresh(e){let t=Date.parse(e.fetchedAt);return Number.isFinite(t)?Date.now()-t<=864e5:!1}export{catalogModelProviderSchema,catalogModelSchema,createCompiledRuntimeModelCatalogLoader,modelCatalogResponseSchema,resolveCompiledRuntimeModelCatalogCachePath};
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { z } from "#compiled/zod/index.js";
+import { join } from "node:path";
+import {
+  AI_GATEWAY_MODELS_CATALOG_URL,
+  vercelGatewayFetch,
+} from "#internal/gateway.js";
+import {
+  catalogModelProviderSchema,
+  catalogModelSchema,
+  catalogModelSchema as catalogModelSchema$1,
+  findCatalogModelByProviderModelId,
+  findCatalogModelBySlug,
+  modelCatalogLimitsFromProvider,
+  modelCatalogResponseSchema,
+  modelCatalogResponseSchema as modelCatalogResponseSchema$1,
+  normalizeCatalogModelId,
+} from "#internal/model-catalog.js";
+const COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND = `eve-model-catalog-cache`;
+z.object({
+  contextWindowTokens: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive().optional(),
+}).strict();
+const compiledRuntimeModelCatalogCacheSchema = z
+    .object({
+      fetchedAt: z.string(),
+      kind: z.literal(COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND),
+      models: z.array(catalogModelSchema$1),
+      providerAliases: z.record(z.string(), z.string()),
+      version: z.literal(2),
+    })
+    .strict(),
+  builtInCompiledRuntimeModelLimitsById = new Map([
+    [
+      `anthropic/claude-opus-4.7`,
+      { contextWindowTokens: 2e5, maxOutputTokens: 32e3 },
+    ],
+    [`openai/gpt-5.4`, { contextWindowTokens: 4e5, maxOutputTokens: 128e3 }],
+    [
+      `openai/gpt-5.4-mini`,
+      { contextWindowTokens: 4e5, maxOutputTokens: 128e3 },
+    ],
+  ]);
+function resolveCompiledRuntimeModelCatalogCachePath(e) {
+  return join(e, `.eve`, `cache`, `model-catalog.json`);
+}
+function createCompiledRuntimeModelCatalogLoader(e) {
+  let t = null,
+    n = null,
+    r = null,
+    getCachedCatalog = async () => ((t ??= readModelCatalogCache(e)), await t),
+    getFetchedCatalog = async () => {
+      if (n !== null) throw n;
+      if (r !== null) return await r;
+      r = fetchAndPersistModelCatalog(e).then(
+        (e) => ((t = Promise.resolve(e)), e),
+      );
+      try {
+        return await r;
+      } catch (e) {
+        throw ((n = e), e);
+      }
+    },
+    resolveModelsFromCacheOrFetch = async () => {
+      let e = await getCachedCatalog();
+      if (e !== null && isCacheFresh(e)) return e;
+      try {
+        return await getFetchedCatalog();
+      } catch (t) {
+        if (e !== null) return e;
+        throw t;
+      }
+    };
+  return {
+    async getModelLimits(e) {
+      let t = normalizeCatalogModelId(e),
+        n = builtInCompiledRuntimeModelLimitsById.get(t);
+      if (n !== void 0) return n;
+      let r = await resolveModelsFromCacheOrFetch();
+      if (r !== null) {
+        let e = findCatalogModelBySlug(r.models, t);
+        if (e)
+          for (let t of e.providers) {
+            let e = modelCatalogLimitsFromProvider(t);
+            if (e !== null) return e;
+          }
+      }
+      return null;
+    },
+    async getByProviderModelId(e, t) {
+      let n = await resolveModelsFromCacheOrFetch();
+      if (n === null) return null;
+      let r = findCatalogModelByProviderModelId({
+        models: n.models,
+        provider: e,
+        providerAliases: n.providerAliases,
+        providerModelId: t,
+      });
+      if (r !== null) {
+        let e = modelCatalogLimitsFromProvider(r.provider);
+        if (e !== null) return { slug: r.model.slug, limits: e };
+      }
+      return null;
+    },
+  };
+}
+async function fetchAndPersistModelCatalog(t) {
+  let r = await vercelGatewayFetch(AI_GATEWAY_MODELS_CATALOG_URL);
+  if (!r.ok)
+    throw Error(
+      `AI Gateway model catalog request failed with HTTP ${r.status} ${r.statusText}.`,
+    );
+  let i = modelCatalogResponseSchema$1.safeParse(await r.json());
+  if (!i.success)
+    throw Error(
+      `AI Gateway model catalog response did not match the expected schema.`,
+    );
+  let a = {
+    fetchedAt: new Date().toISOString(),
+    kind: COMPILED_RUNTIME_MODEL_CATALOG_CACHE_KIND,
+    models: i.data.models,
+    providerAliases: i.data.providerAliases,
+    version: 2,
+  };
+  try {
+    let r = resolveCompiledRuntimeModelCatalogCachePath(t);
+    (await mkdir(join(t, `.eve`, `cache`), { recursive: !0 }),
+      await writeFile(r, `${JSON.stringify(a, null, 2)}\n`, `utf8`));
+  } catch {}
+  return a;
+}
+async function readModelCatalogCache(e) {
+  try {
+    let n = await readFile(
+        resolveCompiledRuntimeModelCatalogCachePath(e),
+        `utf8`,
+      ),
+      r = compiledRuntimeModelCatalogCacheSchema.safeParse(JSON.parse(n));
+    return r.success ? r.data : null;
+  } catch (e) {
+    return (
+      e instanceof Error && `code` in e && typeof e.code == `string` && e.code,
+      null
+    );
+  }
+}
+function isCacheFresh(e) {
+  let t = Date.parse(e.fetchedAt);
+  return Number.isFinite(t) ? Date.now() - t <= 864e5 : !1;
+}
+export {
+  catalogModelProviderSchema,
+  catalogModelSchema,
+  createCompiledRuntimeModelCatalogLoader,
+  modelCatalogResponseSchema,
+  resolveCompiledRuntimeModelCatalogCachePath,
+};

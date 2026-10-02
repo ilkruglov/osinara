@@ -1,1 +1,19 @@
-import{createCodexSubscriptionModel}from"./chatgpt/model.js";import{DEFAULT_CHATGPT_MODEL_ID,normalizeChatGptModelId}from"#shared/chatgpt-model.js";function chatgpt(e=DEFAULT_CHATGPT_MODEL_ID){let t=normalizeChatGptModelId(e);if(t===void 0&&e.trim().replace(/^openai\//u,``).length===0)throw Error(`Expected chatgpt "model" to name an OpenAI model, for example "gpt-5.6-sol".`);if(t===void 0)throw Error(`chatgpt serves OpenAI models through the local ChatGPT login; received "${e}".`);return createCodexSubscriptionModel({model:t})}const experimental_chatgpt=chatgpt;export{chatgpt,experimental_chatgpt};
+import { createCodexSubscriptionModel } from "./chatgpt/model.js";
+import {
+  DEFAULT_CHATGPT_MODEL_ID,
+  normalizeChatGptModelId,
+} from "#shared/chatgpt-model.js";
+function chatgpt(e = DEFAULT_CHATGPT_MODEL_ID) {
+  let t = normalizeChatGptModelId(e);
+  if (t === void 0 && e.trim().replace(/^openai\//u, ``).length === 0)
+    throw Error(
+      `Expected chatgpt "model" to name an OpenAI model, for example "gpt-5.6-sol".`,
+    );
+  if (t === void 0)
+    throw Error(
+      `chatgpt serves OpenAI models through the local ChatGPT login; received "${e}".`,
+    );
+  return createCodexSubscriptionModel({ model: t });
+}
+const experimental_chatgpt = chatgpt;
+export { chatgpt, experimental_chatgpt };

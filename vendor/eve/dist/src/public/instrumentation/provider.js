@@ -1,1 +1,18 @@
-const PROVIDER=Symbol.for(`eve.instrumentation.provider`),DISABLED=Symbol.for(`eve.instrumentation.disabled`);function disableInstrumentation(){return{[DISABLED]:!0}}function isInstrumentationProvider(t){return typeof t==`object`&&!!t&&t[PROVIDER]===!0}function isInstrumentationDisabled(e){return typeof e==`object`&&!!e&&e[DISABLED]===!0}export{DISABLED,PROVIDER,disableInstrumentation,isInstrumentationDisabled,isInstrumentationProvider};
+const PROVIDER = Symbol.for(`eve.instrumentation.provider`),
+  DISABLED = Symbol.for(`eve.instrumentation.disabled`);
+function disableInstrumentation() {
+  return { [DISABLED]: !0 };
+}
+function isInstrumentationProvider(t) {
+  return typeof t == `object` && !!t && t[PROVIDER] === !0;
+}
+function isInstrumentationDisabled(e) {
+  return typeof e == `object` && !!e && e[DISABLED] === !0;
+}
+export {
+  DISABLED,
+  PROVIDER,
+  disableInstrumentation,
+  isInstrumentationDisabled,
+  isInstrumentationProvider,
+};

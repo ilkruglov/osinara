@@ -1,1 +1,133 @@
-import{CHANNEL_SENTINEL}from"#channel/compiled-channel.js";import{defaultDeliverResult}from"#channel/adapter.js";import{buildCallbackContext}from"#context/build-callback-context.js";import{normalizeChannelCors}from"#channel/cors.js";import{HTTP_ADAPTER_KIND}from"#channel/http.js";import{DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT,WS}from"#channel/routes.js";const DISABLED_ROUTE_SENTINEL_KIND=`eve:disabled-channel`;function disableRoute(){return{kind:DISABLED_ROUTE_SENTINEL_KIND}}function isDisabledRouteSentinel(e){return typeof e==`object`&&!!e&&e.kind===DISABLED_ROUTE_SENTINEL_KIND}function defineChannel(t){let n=buildAdapter(t),i=normalizeChannelCors(t.cors);return{__kind:CHANNEL_SENTINEL,routes:t.routes,adapter:n,cors:i,receive:t.receive,turnPolicy:t.turnPolicy}}const eventTypes=Object.keys({"approval.candidate":null,"approval.settled":null,"context.cleared":null,"compaction.requested":null,"compaction.completed":null,"turn.started":null,"actions.requested":null,"action.partial":null,"action.result":null,"message.completed":null,"message.appended":null,"reasoning.appended":null,"reasoning.completed":null,"input.requested":null,"turn.failed":null,"turn.completed":null,"turn.cancelled":null,"session.failed":null,"session.completed":null,"session.waiting":null,"authorization.required":null,"authorization.completed":null});function buildAdapter(e){let r=e.state!=null,a=e.context!=null,o=e.fetchFile!==void 0,s=e.metadata,c=r||a||s!==void 0,l={},u=!1,d=e.events;for(let e of eventTypes){let t=d?.[e];t&&(u=!0,l[e]=(r,i)=>{let{session:a,...o}=i,s={...o,continuation:a?.continuation===void 0?void 0:{token:a.continuation.token,rekey:e=>a.continuation?.rekey(e)}};if(e===`session.failed`)return t(r,s);let c=buildCallbackContext();return t(r,s,c)})}return!c&&!u&&!o?{kind:e.kindHint??HTTP_ADAPTER_KIND}:{kind:e.kindHint??`defineChannel`,state:r?{...e.state}:{},fetchFile:e.fetchFile,instrumentation:s===void 0?void 0:{metadata(e){return s(e)}},createAdapterContext(t){let n=t.state,r=t.session;return{...a?e.context(n,r):{},state:n,ctx:t.ctx,session:r}},deliver(n,r){return e.deliver===void 0?defaultDeliverResult(n):e.deliver(n,r)},...l}}export{DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT,WS,defineChannel,disableRoute,isDisabledRouteSentinel};
+import { CHANNEL_SENTINEL } from "#channel/compiled-channel.js";
+import { defaultDeliverResult } from "#channel/adapter.js";
+import { buildCallbackContext } from "#context/build-callback-context.js";
+import { normalizeChannelCors } from "#channel/cors.js";
+import { HTTP_ADAPTER_KIND } from "#channel/http.js";
+import {
+  DELETE,
+  GET,
+  HEAD,
+  OPTIONS,
+  PATCH,
+  POST,
+  PUT,
+  WS,
+} from "#channel/routes.js";
+const DISABLED_ROUTE_SENTINEL_KIND = `eve:disabled-channel`;
+function disableRoute() {
+  return { kind: DISABLED_ROUTE_SENTINEL_KIND };
+}
+function isDisabledRouteSentinel(e) {
+  return typeof e == `object` && !!e && e.kind === DISABLED_ROUTE_SENTINEL_KIND;
+}
+function defineChannel(t) {
+  let n = buildAdapter(t),
+    i = normalizeChannelCors(t.cors);
+  return {
+    __kind: CHANNEL_SENTINEL,
+    routes: t.routes,
+    adapter: n,
+    cors: i,
+    receive: t.receive,
+    turnPolicy: t.turnPolicy,
+  };
+}
+const eventTypes = Object.keys({
+  "approval.candidate": null,
+  "approval.settled": null,
+  "context.cleared": null,
+  "compaction.requested": null,
+  "compaction.completed": null,
+  "turn.started": null,
+  "actions.requested": null,
+  "action.partial": null,
+  "action.result": null,
+  "message.completed": null,
+  "message.appended": null,
+  "reasoning.appended": null,
+  "reasoning.completed": null,
+  "input.requested": null,
+  "turn.failed": null,
+  "turn.completed": null,
+  "turn.cancelled": null,
+  "session.failed": null,
+  "session.completed": null,
+  "session.waiting": null,
+  "authorization.required": null,
+  "authorization.completed": null,
+});
+function buildAdapter(e) {
+  let r = e.state != null,
+    a = e.context != null,
+    o = e.fetchFile !== void 0,
+    s = e.metadata,
+    c = r || a || s !== void 0,
+    l = {},
+    u = !1,
+    d = e.events;
+  for (let e of eventTypes) {
+    let t = d?.[e];
+    t &&
+      ((u = !0),
+      (l[e] = (r, i) => {
+        let { session: a, ...o } = i,
+          s = {
+            ...o,
+            continuation:
+              a?.continuation === void 0
+                ? void 0
+                : {
+                    token: a.continuation.token,
+                    rekey: (e) => a.continuation?.rekey(e),
+                  },
+          };
+        if (e === `session.failed`) return t(r, s);
+        let c = buildCallbackContext();
+        return t(r, s, c);
+      }));
+  }
+  return !c && !u && !o
+    ? { kind: e.kindHint ?? HTTP_ADAPTER_KIND }
+    : {
+        kind: e.kindHint ?? `defineChannel`,
+        state: r ? { ...e.state } : {},
+        fetchFile: e.fetchFile,
+        instrumentation:
+          s === void 0
+            ? void 0
+            : {
+                metadata(e) {
+                  return s(e);
+                },
+              },
+        createAdapterContext(t) {
+          let n = t.state,
+            r = t.session;
+          return {
+            ...(a ? e.context(n, r) : {}),
+            state: n,
+            ctx: t.ctx,
+            session: r,
+          };
+        },
+        deliver(n, r) {
+          return e.deliver === void 0
+            ? defaultDeliverResult(n)
+            : e.deliver(n, r);
+        },
+        ...l,
+      };
+}
+export {
+  DELETE,
+  GET,
+  HEAD,
+  OPTIONS,
+  PATCH,
+  POST,
+  PUT,
+  WS,
+  defineChannel,
+  disableRoute,
+  isDisabledRouteSentinel,
+};

@@ -1,1 +1,113 @@
-import{dirname,join}from"node:path";import{existsSync,readFileSync,realpathSync}from"node:fs";import{fileURLToPath}from"node:url";function versionToken(e){return`__${e}_VERSION__`}function bareToken(e){return`__${e}__`}const NODE_ENGINE_TOKEN=bareToken(`NODE_ENGINE`),TOKEN_SOURCES={[versionToken(`EVE_PACKAGE`)]:{kind:`eve-version`},[versionToken(`EVE_PACKAGE_DEPENDENCY`)]:{kind:`eve-version`},[NODE_ENGINE_TOKEN]:{kind:`eve-node-engine`},[versionToken(`AI_SDK`)]:{kind:`catalog`,packageName:`ai`},[versionToken(`VERCEL_CONNECT`)]:{kind:`catalog`,packageName:`@vercel/connect`},[versionToken(`NEXT`)]:{kind:`catalog`,packageName:`next`},[versionToken(`REACT`)]:{kind:`catalog`,packageName:`react`},[versionToken(`REACT_DOM`)]:{kind:`catalog`,packageName:`react-dom`},[versionToken(`STREAMDOWN`)]:{kind:`catalog`,packageName:`streamdown`},[versionToken(`ZOD`)]:{kind:`catalog`,packageName:`zod`},[versionToken(`TYPESCRIPT`)]:{kind:`catalog`,packageName:`typescript`},[versionToken(`TYPES_REACT`)]:{kind:`catalog`,packageName:`@types/react`},[versionToken(`TYPES_REACT_DOM`)]:{kind:`catalog`,packageName:`@types/react-dom`}},resolvedTokens=new Map;function findEvePackageRoot(){let o=dirname(realpathSync(fileURLToPath(import.meta.url)));for(;;){let i=join(o,`package.json`);if(existsSync(i)&&JSON.parse(readFileSync(i,`utf8`)).name===`eve`)return o;let a=dirname(o);if(a===o)return;o=a}}function findWorkspaceManifest(r){let i=r;for(;;){let r=join(i,`pnpm-workspace.yaml`);if(existsSync(r))return r;let a=dirname(i);if(a===i)return;i=a}}function readCatalogVersion(e,t){let n=readFileSync(e,`utf8`).split(/\r?\n/),i=!1;for(let e of n){if(/^catalog:\s*$/.test(e)){i=!0;continue}if(!i)continue;if(/^\S/.test(e))break;let n=e.match(/^\s+(?:"([^"]+)"|([\w@/.-]+)):\s*"([^"]+)"/);if(n&&(n[1]??n[2])===t)return n[3]}}function resolveTokenFromDevTree(e){let i=TOKEN_SOURCES[e];if(i!==void 0)try{let e=findEvePackageRoot();if(e===void 0||!existsSync(join(e,`scripts/stamp-version-tokens.mjs`)))return;if(i.kind===`eve-version`){let n=JSON.parse(readFileSync(join(e,`package.json`),`utf8`));return typeof n.version==`string`?n.version:void 0}if(i.kind===`eve-node-engine`){let n=JSON.parse(readFileSync(join(e,`package.json`),`utf8`)).engines?.node;return typeof n==`string`?n:void 0}let a=findWorkspaceManifest(e);return a===void 0?void 0:readCatalogVersion(a,i.packageName)}catch{return}}function resolveVersionToken(e,t){if(!t.startsWith(`__`))return t;let n=resolvedTokens.get(t);if(n!==void 0)return n;let r=resolveTokenFromDevTree(t);if(r===void 0)throw Error(`Scaffold received unstamped version token (${e}=${t}). Build eve before using its dist entrypoint.`);return resolvedTokens.set(t,r),r}export{resolveVersionToken};
+import { dirname, join } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+function versionToken(e) {
+  return `__${e}_VERSION__`;
+}
+function bareToken(e) {
+  return `__${e}__`;
+}
+const NODE_ENGINE_TOKEN = bareToken(`NODE_ENGINE`),
+  TOKEN_SOURCES = {
+    [versionToken(`EVE_PACKAGE`)]: { kind: `eve-version` },
+    [versionToken(`EVE_PACKAGE_DEPENDENCY`)]: { kind: `eve-version` },
+    [NODE_ENGINE_TOKEN]: { kind: `eve-node-engine` },
+    [versionToken(`AI_SDK`)]: { kind: `catalog`, packageName: `ai` },
+    [versionToken(`VERCEL_CONNECT`)]: {
+      kind: `catalog`,
+      packageName: `@vercel/connect`,
+    },
+    [versionToken(`NEXT`)]: { kind: `catalog`, packageName: `next` },
+    [versionToken(`REACT`)]: { kind: `catalog`, packageName: `react` },
+    [versionToken(`REACT_DOM`)]: { kind: `catalog`, packageName: `react-dom` },
+    [versionToken(`STREAMDOWN`)]: {
+      kind: `catalog`,
+      packageName: `streamdown`,
+    },
+    [versionToken(`ZOD`)]: { kind: `catalog`, packageName: `zod` },
+    [versionToken(`TYPESCRIPT`)]: {
+      kind: `catalog`,
+      packageName: `typescript`,
+    },
+    [versionToken(`TYPES_REACT`)]: {
+      kind: `catalog`,
+      packageName: `@types/react`,
+    },
+    [versionToken(`TYPES_REACT_DOM`)]: {
+      kind: `catalog`,
+      packageName: `@types/react-dom`,
+    },
+  },
+  resolvedTokens = new Map();
+function findEvePackageRoot() {
+  let o = dirname(realpathSync(fileURLToPath(import.meta.url)));
+  for (;;) {
+    let i = join(o, `package.json`);
+    if (existsSync(i) && JSON.parse(readFileSync(i, `utf8`)).name === `eve`)
+      return o;
+    let a = dirname(o);
+    if (a === o) return;
+    o = a;
+  }
+}
+function findWorkspaceManifest(r) {
+  let i = r;
+  for (;;) {
+    let r = join(i, `pnpm-workspace.yaml`);
+    if (existsSync(r)) return r;
+    let a = dirname(i);
+    if (a === i) return;
+    i = a;
+  }
+}
+function readCatalogVersion(e, t) {
+  let n = readFileSync(e, `utf8`).split(/\r?\n/),
+    i = !1;
+  for (let e of n) {
+    if (/^catalog:\s*$/.test(e)) {
+      i = !0;
+      continue;
+    }
+    if (!i) continue;
+    if (/^\S/.test(e)) break;
+    let n = e.match(/^\s+(?:"([^"]+)"|([\w@/.-]+)):\s*"([^"]+)"/);
+    if (n && (n[1] ?? n[2]) === t) return n[3];
+  }
+}
+function resolveTokenFromDevTree(e) {
+  let i = TOKEN_SOURCES[e];
+  if (i !== void 0)
+    try {
+      let e = findEvePackageRoot();
+      if (
+        e === void 0 ||
+        !existsSync(join(e, `scripts/stamp-version-tokens.mjs`))
+      )
+        return;
+      if (i.kind === `eve-version`) {
+        let n = JSON.parse(readFileSync(join(e, `package.json`), `utf8`));
+        return typeof n.version == `string` ? n.version : void 0;
+      }
+      if (i.kind === `eve-node-engine`) {
+        let n = JSON.parse(readFileSync(join(e, `package.json`), `utf8`))
+          .engines?.node;
+        return typeof n == `string` ? n : void 0;
+      }
+      let a = findWorkspaceManifest(e);
+      return a === void 0 ? void 0 : readCatalogVersion(a, i.packageName);
+    } catch {
+      return;
+    }
+}
+function resolveVersionToken(e, t) {
+  if (!t.startsWith(`__`)) return t;
+  let n = resolvedTokens.get(t);
+  if (n !== void 0) return n;
+  let r = resolveTokenFromDevTree(t);
+  if (r === void 0)
+    throw Error(
+      `Scaffold received unstamped version token (${e}=${t}). Build eve before using its dist entrypoint.`,
+    );
+  return (resolvedTokens.set(t, r), r);
+}
+export { resolveVersionToken };

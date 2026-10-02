@@ -1,4 +1,119 @@
-import"#compiled/commander/index.js";import{applicationCommand}from"#cli/application-command.js";import{loadDevelopmentEnvironmentFiles}from"#cli/dev/environment.js";import{parseDevelopmentHeaderOption,resolveDevelopmentUrlTarget}from"#cli/dev/url-target.js";import{parseDevelopmentServerUrl}from"#cli/dev/url.js";import{FORCED_EXIT_BACKSTOP_MS,installShutdownSignal}from"#cli/shutdown.js";function registerAcpCommand(s){applicationCommand(s.program.command(`acp`),s.applicationContext,e=>resolveDevelopmentUrlTarget(e.opts(),e.processedArgs[0])===void 0).description(`Serve an eve agent through stable ACP v1 over stdio.`).argument(`[url]`,`Connect to an existing server URL`,parseDevelopmentServerUrl).option(`-u, --url <url>`,`Connect to an existing server URL`,parseDevelopmentServerUrl).option(`--scope <team>`,`Vercel team that owns the URL target`).option(`-H, --header <header>`,`Request header for a URL target, in "Name: value" form (repeatable)`,parseDevelopmentHeaderOption).addHelpText(`after`,`
+import "#compiled/commander/index.js";
+import { applicationCommand } from "#cli/application-command.js";
+import { loadDevelopmentEnvironmentFiles } from "#cli/dev/environment.js";
+import {
+  parseDevelopmentHeaderOption,
+  resolveDevelopmentUrlTarget,
+} from "#cli/dev/url-target.js";
+import { parseDevelopmentServerUrl } from "#cli/dev/url.js";
+import {
+  FORCED_EXIT_BACKSTOP_MS,
+  installShutdownSignal,
+} from "#cli/shutdown.js";
+function registerAcpCommand(s) {
+  applicationCommand(
+    s.program.command(`acp`),
+    s.applicationContext,
+    (e) => resolveDevelopmentUrlTarget(e.opts(), e.processedArgs[0]) === void 0,
+  )
+    .description(`Serve an eve agent through stable ACP v1 over stdio.`)
+    .argument(
+      `[url]`,
+      `Connect to an existing server URL`,
+      parseDevelopmentServerUrl,
+    )
+    .option(
+      `-u, --url <url>`,
+      `Connect to an existing server URL`,
+      parseDevelopmentServerUrl,
+    )
+    .option(`--scope <team>`, `Vercel team that owns the URL target`)
+    .option(
+      `-H, --header <header>`,
+      `Request header for a URL target, in "Name: value" form (repeatable)`,
+      parseDevelopmentHeaderOption,
+    )
+    .addHelpText(
+      `after`,
+      `
 Without a URL, eve supervises a local development server. You can also pass a bare URL, for example: eve acp https://example.com
 ACP does not grant the agent access to the client's workspace or terminal.
-`).action(async(e,n)=>{let i=resolveDevelopmentUrlTarget(n,e);loadDevelopmentEnvironmentFiles(s.applicationContext.root);let c=installShutdownSignal({exitAfterMs:FORCED_EXIT_BACKSTOP_MS});if(i!==void 0){try{await runAcp(s,{headers:i.headers,serverUrl:i.serverUrl,signal:c.signal,vercelScope:n.scope??process.env.EVE_VERCEL_SCOPE})}finally{c.dispose()}return}let l,u,closeServer=()=>l===void 0?Promise.resolve():(u??=l.close(),u.catch(()=>void 0),u);c.signal.addEventListener(`abort`,()=>void closeServer(),{once:!0});try{l=(s.startHost??await loadStartHost())(s.applicationContext.root,{existing:`reject`,host:`127.0.0.1`,output:`stderr`,port:0});let e=await Promise.race([l.start(),c.stopped.then(()=>void 0)]);if(e===void 0)return;await runAcp(s,{serverUrl:e.url,signal:c.signal,workspaceRoot:e.appRoot}),c.requestStop()}finally{await closeServer(),c.dispose()}})}async function runAcp(e,t){let n=e.runAcpServer??(await import(`#acp/server.js`)).runAcpServer,{vercelScope:r,...i}=t,a=typeof i.headers==`function`?void 0:i.headers,o=Object.keys(a??{}).some(e=>e.toLowerCase()===`authorization`);if(i.workspaceRoot!==void 0||o){await n({eveVersion:e.eveVersion,...i});return}let{options:s}=await(e.resolveVerifiedRemoteDevelopmentClient??(await import(`#setup/verified-remote-client.js`)).resolveVerifiedRemoteDevelopmentClient)({headers:a,serverUrl:i.serverUrl,signal:i.signal,vercelScope:r,workspaceRoot:e.applicationContext.root});await n({auth:s.auth,eveVersion:e.eveVersion,headers:s.headers,serverUrl:i.serverUrl,signal:i.signal})}async function loadStartHost(){return(await import(`#cli/dev/local-server-process.js`)).createDevelopmentServer}export{registerAcpCommand};
+`,
+    )
+    .action(async (e, n) => {
+      let i = resolveDevelopmentUrlTarget(n, e);
+      loadDevelopmentEnvironmentFiles(s.applicationContext.root);
+      let c = installShutdownSignal({ exitAfterMs: FORCED_EXIT_BACKSTOP_MS });
+      if (i !== void 0) {
+        try {
+          await runAcp(s, {
+            headers: i.headers,
+            serverUrl: i.serverUrl,
+            signal: c.signal,
+            vercelScope: n.scope ?? process.env.EVE_VERCEL_SCOPE,
+          });
+        } finally {
+          c.dispose();
+        }
+        return;
+      }
+      let l,
+        u,
+        closeServer = () =>
+          l === void 0
+            ? Promise.resolve()
+            : ((u ??= l.close()), u.catch(() => void 0), u);
+      c.signal.addEventListener(`abort`, () => void closeServer(), {
+        once: !0,
+      });
+      try {
+        l = (s.startHost ?? (await loadStartHost()))(
+          s.applicationContext.root,
+          { existing: `reject`, host: `127.0.0.1`, output: `stderr`, port: 0 },
+        );
+        let e = await Promise.race([l.start(), c.stopped.then(() => void 0)]);
+        if (e === void 0) return;
+        (await runAcp(s, {
+          serverUrl: e.url,
+          signal: c.signal,
+          workspaceRoot: e.appRoot,
+        }),
+          c.requestStop());
+      } finally {
+        (await closeServer(), c.dispose());
+      }
+    });
+}
+async function runAcp(e, t) {
+  let n = e.runAcpServer ?? (await import(`#acp/server.js`)).runAcpServer,
+    { vercelScope: r, ...i } = t,
+    a = typeof i.headers == `function` ? void 0 : i.headers,
+    o = Object.keys(a ?? {}).some((e) => e.toLowerCase() === `authorization`);
+  if (i.workspaceRoot !== void 0 || o) {
+    await n({ eveVersion: e.eveVersion, ...i });
+    return;
+  }
+  let { options: s } = await (
+    e.resolveVerifiedRemoteDevelopmentClient ??
+    (await import(`#setup/verified-remote-client.js`))
+      .resolveVerifiedRemoteDevelopmentClient
+  )({
+    headers: a,
+    serverUrl: i.serverUrl,
+    signal: i.signal,
+    vercelScope: r,
+    workspaceRoot: e.applicationContext.root,
+  });
+  await n({
+    auth: s.auth,
+    eveVersion: e.eveVersion,
+    headers: s.headers,
+    serverUrl: i.serverUrl,
+    signal: i.signal,
+  });
+}
+async function loadStartHost() {
+  return (await import(`#cli/dev/local-server-process.js`))
+    .createDevelopmentServer;
+}
+export { registerAcpCommand };

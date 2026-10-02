@@ -1,1 +1,196 @@
-import{ResolveAgentError,createResolvedModuleSourceRef}from"#runtime/resolve-helpers.js";import{resolveDynamicToolDefinition}from"#runtime/resolve-dynamic-tool.js";import{resolveChannelDefinition}from"#runtime/resolve-channel.js";import{resolveConnectionDefinition}from"#runtime/resolve-connection.js";import{resolveHookDefinition}from"#runtime/resolve-hook.js";import{resolveSandboxDefinition}from"#runtime/resolve-sandbox.js";import{resolveDynamicInstructionsDefinition}from"#runtime/resolve-dynamic-instructions.js";import{resolveDynamicSkillDefinition}from"#runtime/resolve-dynamic-skill.js";import{resolveToolDefinition}from"#runtime/resolve-tool.js";async function resolveAgent(e){let t=e.manifest.skills.map(e=>({...e,metadata:e.metadata===void 0?void 0:{...e.metadata}})),i=[],a=[];for(let t of e.manifest.channels){if(t.kind===`disabled`){a.push(t.name);continue}i.push(await resolveChannelDefinition(t,e.moduleMap,e.nodeId))}let o=await Promise.all(e.manifest.tools.map(t=>resolveToolDefinition(t,e.moduleMap,e.nodeId))),s=await Promise.all((e.manifest.dynamicInstructions??[]).map(t=>resolveDynamicInstructionsDefinition(t,e.moduleMap,e.nodeId))),c=await Promise.all((e.manifest.dynamicSkills??[]).map(t=>resolveDynamicSkillDefinition(t,e.moduleMap,e.nodeId))),l=await Promise.all(e.manifest.dynamicTools.map(t=>resolveDynamicToolDefinition(t,e.moduleMap,e.nodeId))),u=await Promise.all(e.manifest.hooks.map(t=>resolveHookDefinition(t,e.moduleMap,e.nodeId))),d=await Promise.all(e.manifest.connections.map(t=>resolveConnectionDefinition(t,e.moduleMap,e.nodeId))),f=e.manifest.sandbox===null?null:await resolveSandboxDefinition(e.manifest.sandbox,e.moduleMap,e.nodeId),p=e.manifest.instructions.map(createResolvedInstructionsDefinition),m=e.manifest.workspaceResourceRoot,h={channels:i,connections:d,disabledFrameworkChannels:a,disabledFrameworkTools:[...e.manifest.disabledFrameworkTools],workflowTool:e.manifest.workflowTool===void 0?void 0:{maxSubagents:e.manifest.workflowTool.maxSubagents},webSearchProvider:e.manifest.webSearchProvider,dynamicInstructionsResolvers:s,dynamicSkillResolvers:c,dynamicToolResolvers:l,hooks:u,instructions:p,metadata:{agentRoot:e.manifest.agentRoot,appRoot:e.manifest.appRoot,diagnosticsSummary:e.manifest.diagnosticsSummary},sandbox:f,workspaceResourceRoot:m,skills:t,tools:o,workspaceSpec:{rootEntries:[...m.rootEntries]}};return`config`in e.manifest?{...h,config:createResolvedAgentConfig(e.manifest)}:h}function createResolvedInstructionsDefinition(e){return{content:e.content,name:e.name,logicalPath:e.logicalPath,role:e.role,sourceId:e.sourceId,sourceKind:e.sourceKind}}function createResolvedAgentConfig(e){let n={name:e.config.name};if(e.config.compaction!==void 0){let t={};e.config.compaction.model!==void 0&&(t.model=e.config.compaction.model.source===void 0?{contextWindowTokens:e.config.compaction.model.contextWindowTokens,id:e.config.compaction.model.id,maxOutputTokens:e.config.compaction.model.maxOutputTokens,providerOptions:e.config.compaction.model.providerOptions}:{contextWindowTokens:e.config.compaction.model.contextWindowTokens,id:e.config.compaction.model.id,maxOutputTokens:e.config.compaction.model.maxOutputTokens,providerOptions:e.config.compaction.model.providerOptions,source:{exportName:e.config.compaction.model.source.exportName,sourceKind:`module`,logicalPath:e.config.compaction.model.source.logicalPath,sourceId:e.config.compaction.model.source.sourceId}}),e.config.compaction.thresholdPercent!==void 0&&(t.thresholdPercent=e.config.compaction.thresholdPercent),n.compaction=t}if(e.config.experimental!==void 0&&(n.experimental={instrumentationProviders:e.config.experimental.instrumentationProviders,subagentPersistentSessions:e.config.experimental.subagentPersistentSessions,tasks:e.config.experimental.tasks,workflow:e.config.experimental.workflow===void 0?void 0:{world:e.config.experimental.workflow.world}}),e.config.outputSchema!==void 0&&(n.outputSchema=e.config.outputSchema),e.config.reasoning!==void 0&&(n.reasoning=e.config.reasoning),e.config.source!==void 0&&(n.source=createResolvedModuleSourceRef(e.config.source)),e.config.limits!==void 0&&(n.limits={maxInputTokensPerSession:e.config.limits.maxInputTokensPerSession,maxOutputTokensPerSession:e.config.limits.maxOutputTokensPerSession,sessionTimeoutMs:e.config.limits.sessionTimeoutMs}),e.config.dynamicModel!==void 0)return{...n,dynamicModel:{...createResolvedModuleSourceRef(e.config.dynamicModel),eventNames:[...e.config.dynamicModel.eventNames]}};let r=e.config.model;return{...n,model:r.source===void 0?{id:r.id,contextWindowTokens:r.contextWindowTokens,maxOutputTokens:r.maxOutputTokens,providerOptions:r.providerOptions}:{contextWindowTokens:r.contextWindowTokens,id:r.id,maxOutputTokens:r.maxOutputTokens,providerOptions:r.providerOptions,source:{exportName:r.source.exportName,sourceKind:`module`,logicalPath:r.source.logicalPath,sourceId:r.source.sourceId}}}}export{ResolveAgentError,resolveAgent};
+import {
+  ResolveAgentError,
+  createResolvedModuleSourceRef,
+} from "#runtime/resolve-helpers.js";
+import { resolveDynamicToolDefinition } from "#runtime/resolve-dynamic-tool.js";
+import { resolveChannelDefinition } from "#runtime/resolve-channel.js";
+import { resolveConnectionDefinition } from "#runtime/resolve-connection.js";
+import { resolveHookDefinition } from "#runtime/resolve-hook.js";
+import { resolveSandboxDefinition } from "#runtime/resolve-sandbox.js";
+import { resolveDynamicInstructionsDefinition } from "#runtime/resolve-dynamic-instructions.js";
+import { resolveDynamicSkillDefinition } from "#runtime/resolve-dynamic-skill.js";
+import { resolveToolDefinition } from "#runtime/resolve-tool.js";
+async function resolveAgent(e) {
+  let t = e.manifest.skills.map((e) => ({
+      ...e,
+      metadata: e.metadata === void 0 ? void 0 : { ...e.metadata },
+    })),
+    i = [],
+    a = [];
+  for (let t of e.manifest.channels) {
+    if (t.kind === `disabled`) {
+      a.push(t.name);
+      continue;
+    }
+    i.push(await resolveChannelDefinition(t, e.moduleMap, e.nodeId));
+  }
+  let o = await Promise.all(
+      e.manifest.tools.map((t) =>
+        resolveToolDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    s = await Promise.all(
+      (e.manifest.dynamicInstructions ?? []).map((t) =>
+        resolveDynamicInstructionsDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    c = await Promise.all(
+      (e.manifest.dynamicSkills ?? []).map((t) =>
+        resolveDynamicSkillDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    l = await Promise.all(
+      e.manifest.dynamicTools.map((t) =>
+        resolveDynamicToolDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    u = await Promise.all(
+      e.manifest.hooks.map((t) =>
+        resolveHookDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    d = await Promise.all(
+      e.manifest.connections.map((t) =>
+        resolveConnectionDefinition(t, e.moduleMap, e.nodeId),
+      ),
+    ),
+    f =
+      e.manifest.sandbox === null
+        ? null
+        : await resolveSandboxDefinition(
+            e.manifest.sandbox,
+            e.moduleMap,
+            e.nodeId,
+          ),
+    p = e.manifest.instructions.map(createResolvedInstructionsDefinition),
+    m = e.manifest.workspaceResourceRoot,
+    h = {
+      channels: i,
+      connections: d,
+      disabledFrameworkChannels: a,
+      disabledFrameworkTools: [...e.manifest.disabledFrameworkTools],
+      workflowTool:
+        e.manifest.workflowTool === void 0
+          ? void 0
+          : { maxSubagents: e.manifest.workflowTool.maxSubagents },
+      webSearchProvider: e.manifest.webSearchProvider,
+      dynamicInstructionsResolvers: s,
+      dynamicSkillResolvers: c,
+      dynamicToolResolvers: l,
+      hooks: u,
+      instructions: p,
+      metadata: {
+        agentRoot: e.manifest.agentRoot,
+        appRoot: e.manifest.appRoot,
+        diagnosticsSummary: e.manifest.diagnosticsSummary,
+      },
+      sandbox: f,
+      workspaceResourceRoot: m,
+      skills: t,
+      tools: o,
+      workspaceSpec: { rootEntries: [...m.rootEntries] },
+    };
+  return `config` in e.manifest
+    ? { ...h, config: createResolvedAgentConfig(e.manifest) }
+    : h;
+}
+function createResolvedInstructionsDefinition(e) {
+  return {
+    content: e.content,
+    name: e.name,
+    logicalPath: e.logicalPath,
+    role: e.role,
+    sourceId: e.sourceId,
+    sourceKind: e.sourceKind,
+  };
+}
+function createResolvedAgentConfig(e) {
+  let n = { name: e.config.name };
+  if (e.config.compaction !== void 0) {
+    let t = {};
+    (e.config.compaction.model !== void 0 &&
+      (t.model =
+        e.config.compaction.model.source === void 0
+          ? {
+              contextWindowTokens:
+                e.config.compaction.model.contextWindowTokens,
+              id: e.config.compaction.model.id,
+              maxOutputTokens: e.config.compaction.model.maxOutputTokens,
+              providerOptions: e.config.compaction.model.providerOptions,
+            }
+          : {
+              contextWindowTokens:
+                e.config.compaction.model.contextWindowTokens,
+              id: e.config.compaction.model.id,
+              maxOutputTokens: e.config.compaction.model.maxOutputTokens,
+              providerOptions: e.config.compaction.model.providerOptions,
+              source: {
+                exportName: e.config.compaction.model.source.exportName,
+                sourceKind: `module`,
+                logicalPath: e.config.compaction.model.source.logicalPath,
+                sourceId: e.config.compaction.model.source.sourceId,
+              },
+            }),
+      e.config.compaction.thresholdPercent !== void 0 &&
+        (t.thresholdPercent = e.config.compaction.thresholdPercent),
+      (n.compaction = t));
+  }
+  if (
+    (e.config.experimental !== void 0 &&
+      (n.experimental = {
+        instrumentationProviders:
+          e.config.experimental.instrumentationProviders,
+        subagentPersistentSessions:
+          e.config.experimental.subagentPersistentSessions,
+        tasks: e.config.experimental.tasks,
+        workflow:
+          e.config.experimental.workflow === void 0
+            ? void 0
+            : { world: e.config.experimental.workflow.world },
+      }),
+    e.config.outputSchema !== void 0 &&
+      (n.outputSchema = e.config.outputSchema),
+    e.config.reasoning !== void 0 && (n.reasoning = e.config.reasoning),
+    e.config.source !== void 0 &&
+      (n.source = createResolvedModuleSourceRef(e.config.source)),
+    e.config.limits !== void 0 &&
+      (n.limits = {
+        maxInputTokensPerSession: e.config.limits.maxInputTokensPerSession,
+        maxOutputTokensPerSession: e.config.limits.maxOutputTokensPerSession,
+        sessionTimeoutMs: e.config.limits.sessionTimeoutMs,
+      }),
+    e.config.dynamicModel !== void 0)
+  )
+    return {
+      ...n,
+      dynamicModel: {
+        ...createResolvedModuleSourceRef(e.config.dynamicModel),
+        eventNames: [...e.config.dynamicModel.eventNames],
+      },
+    };
+  let r = e.config.model;
+  return {
+    ...n,
+    model:
+      r.source === void 0
+        ? {
+            id: r.id,
+            contextWindowTokens: r.contextWindowTokens,
+            maxOutputTokens: r.maxOutputTokens,
+            providerOptions: r.providerOptions,
+          }
+        : {
+            contextWindowTokens: r.contextWindowTokens,
+            id: r.id,
+            maxOutputTokens: r.maxOutputTokens,
+            providerOptions: r.providerOptions,
+            source: {
+              exportName: r.source.exportName,
+              sourceKind: `module`,
+              logicalPath: r.source.logicalPath,
+              sourceId: r.source.sourceId,
+            },
+          },
+  };
+}
+export { ResolveAgentError, resolveAgent };

@@ -13,6 +13,8 @@ import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
+import { codeShape } from "./vendored-code.js";
+
 const execFileAsync = promisify(execFile);
 const runtimePaths = [
   "vendor/eve/dist/src/context/keys.js",
@@ -30,15 +32,15 @@ describe("Eve task origin auth patch", () => {
       runtimePaths.map((path) => readFile(path, "utf8")),
     );
 
-    expect(keys).toContain("eve.turnOriginAuth");
-    expect(workflowSteps).toContain("TurnOriginAuthKey");
-    expect(workflowSteps).toContain("getHarnessEmissionState(s.state).turnId.length===0");
-    expect(dispatchShared).toContain("turnOriginAuth");
-    expect(dispatchTask).toContain("auth:i.turnOriginAuth??null");
-    expect(delegate).toContain("parentAuth:n.auth");
-    expect(childWorkflow).toContain("y=i.parentAuth??null");
-    expect(childWorkflow.match(/auth:y/g)).toHaveLength(7);
-    expect(childSteps.match(/auth:e\.auth/g)).toHaveLength(4);
+    expect(codeShape(keys)).toContain(codeShape("eve.turnOriginAuth"));
+    expect(codeShape(workflowSteps)).toContain(codeShape("TurnOriginAuthKey"));
+    expect(codeShape(workflowSteps)).toContain(codeShape("getHarnessEmissionState(s.state).turnId.length===0"));
+    expect(codeShape(dispatchShared)).toContain(codeShape("turnOriginAuth"));
+    expect(codeShape(dispatchTask)).toContain(codeShape("auth:i.turnOriginAuth??null"));
+    expect(codeShape(delegate)).toContain(codeShape("parentAuth:n.auth"));
+    expect(codeShape(childWorkflow)).toContain(codeShape("y=i.parentAuth??null"));
+    expect(codeShape(childWorkflow).match(/auth:y/g)).toHaveLength(7);
+    expect(codeShape(childSteps).match(/auth:e\.auth/g)).toHaveLength(4);
   });
 
   it("captures auth only at a new turn boundary and ignores same-turn HITL auth", async () => {
@@ -46,8 +48,9 @@ describe("Eve task origin auth patch", () => {
       "vendor/eve/dist/src/execution/workflow-steps.js",
       "utf8",
     );
-    const expressionStart = source.indexOf("a.input?.kind===`deliver`&&(");
-    const expressionEnd = source.indexOf(";let l=", expressionStart);
+    const expressionStart = source.search(/a\.input\?\.kind\s*===\s*`deliver`\s*&&\s*\(/u);
+    const endOffset = expressionStart < 0 ? -1 : source.slice(expressionStart).search(/;\s*let l\s*=/u);
+    const expressionEnd = endOffset < 0 ? -1 : expressionStart + endOffset;
     if (expressionStart < 0 || expressionEnd < 0) {
       throw new Error("TEST_EVE_TURN_ORIGIN_AUTH_SHAPE_INVALID");
     }
@@ -110,7 +113,7 @@ describe("Eve task origin auth patch", () => {
       "vendor/eve/dist/src/execution/tasks/child/steps.js",
       "utf8",
     );
-    const bodyStart = source.indexOf("const log=");
+    const bodyStart = source.search(/const log\s*=/u);
     if (bodyStart < 0) throw new Error("TEST_EVE_TASK_STEPS_SHAPE_INVALID");
     const instrumentedSource = `
       const delivered=[];

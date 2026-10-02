@@ -1,1 +1,20 @@
-import{mintStartOperation}from"#execution/dispatch-start-operation.js";function describeTaskAgent(e){let{action:t}=e,n=t.kind===`remote-agent-call`?t.remoteAgentName:t.subagentName;return{agentId:e.agentId??mintStartOperation({callId:t.callId,name:n,nodeId:t.nodeId,parentSessionId:e.parentSessionId,parentTurnId:e.parentTurnId}).identity.id,callId:t.callId,mode:t.kind===`remote-agent-call`?`remote`:`local`,name:n}}export{describeTaskAgent};
+import { mintStartOperation } from "#execution/dispatch-start-operation.js";
+function describeTaskAgent(e) {
+  let { action: t } = e,
+    n = t.kind === `remote-agent-call` ? t.remoteAgentName : t.subagentName;
+  return {
+    agentId:
+      e.agentId ??
+      mintStartOperation({
+        callId: t.callId,
+        name: n,
+        nodeId: t.nodeId,
+        parentSessionId: e.parentSessionId,
+        parentTurnId: e.parentTurnId,
+      }).identity.id,
+    callId: t.callId,
+    mode: t.kind === `remote-agent-call` ? `remote` : `local`,
+    name: n,
+  };
+}
+export { describeTaskAgent };

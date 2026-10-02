@@ -1,1 +1,303 @@
-import{lstat,readlink,realpath}from"node:fs/promises";import{dirname,join,relative,resolve}from"node:path";import{existsSync,readFileSync}from"node:fs";import{readTextFileIfExists,resolveTsConfigDependencyPaths}from"#internal/application/tsconfig-dependencies.js";import{isAuthoredSourcePath,isAuthoredSourcePath as isAuthoredSourcePath$1,isPathInsideOrEqual,resolveLocalTsConfigPathTargetRoots,resolveNearestPackageRoot}from"#internal/nitro/dev-runtime-source-snapshot-local-roots.js";const DEV_RUNTIME_SOURCE_DIRECTORY=`source`,SOURCE_ROOT_MARKER_NAMES=[`.git`,`pnpm-workspace.yaml`],WORKSPACE_METADATA_FILE_NAMES=[`package.json`,`pnpm-workspace.yaml`,`pnpm-lock.yaml`,`package-lock.json`,`yarn.lock`,`bun.lock`,`bun.lockb`,`.npmrc`],PACKAGE_DEPENDENCY_FIELDS=[`dependencies`,`devDependencies`,`optionalDependencies`,`peerDependencies`];var DevelopmentRuntimeSourceSnapshotError=class extends Error{constructor(e){super(e),this.name=`DevelopmentRuntimeSourceSnapshotError`}};async function createDevelopmentSourceSnapshotPlan(e){let t=resolve(e.appRoot),n=resolve(e.snapshotRoot),r=resolveDevelopmentSourceRoot(t),a=join(n,DEV_RUNTIME_SOURCE_DIRECTORY),o={appRoot:t,copyFiles:new Set,dependencyMountsByPath:new Map,localRootsToProcess:[t],processedLocalRoots:new Set,snapshotRoot:n,snapshotSourceRoot:a,sourceRoot:r,tsconfigPaths:new Set},s=join(t,`package.json`);for(existsSync(s)&&o.copyFiles.add(s),await addAuthoredSourceRoots(o,e.authoredSourceRoots??[]);o.localRootsToProcess.length>0;){let e=o.localRootsToProcess.shift();if(e===void 0)continue;let t=resolve(e);o.processedLocalRoots.has(t)||!isAuthoredSourcePath$1(t,r)||(o.processedLocalRoots.add(t),await addTsConfigDependenciesForRoot(o,t),await addDependencyMountsForRoot(o,t))}let c=[...o.copyFiles].filter(e=>isPathInsideOrEqual(e,r)).sort((e,t)=>e.localeCompare(t)),l=[...o.tsconfigPaths].filter(e=>isPathInsideOrEqual(e,r)).sort((e,t)=>e.localeCompare(t)),u=[...o.dependencyMountsByPath.values()].sort((e,t)=>e.mountPath.localeCompare(t.mountPath)),d=createWatchPaths({appRoot:t,copyFiles:c,dependencyMounts:u,localRoots:[...o.processedLocalRoots],sourceRoot:r,tsconfigPaths:l});return{appRoot:t,copyFiles:c,dependencyMounts:u,runtimeAppRoot:toSnapshotPath({sourcePath:t,sourceRoot:r,snapshotSourceRoot:a}),snapshotRoot:n,snapshotSourceRoot:a,sourceRoot:r,tsconfigPaths:l,watchPaths:d}}async function resolveDevelopmentSourceSnapshotWatchPaths(e){return[...(await createDevelopmentSourceSnapshotPlan({appRoot:e,snapshotRoot:join(resolve(e),`.eve`,`dev-runtime`,`__watch-plan__`)})).watchPaths]}function toDevelopmentSourceSnapshotPath(e){return toSnapshotPath(e)}function resolveDevelopmentSourceRoot(e){let t=resolve(e);for(;;){if(SOURCE_ROOT_MARKER_NAMES.some(e=>existsSync(join(t,e)))||isWorkspaceManifestRoot(t))return t;let n=dirname(t);if(n===t)return resolve(e);t=n}}async function addAuthoredSourceRoots(e,t){for(let n of t){let t=resolve(n);isAuthoredSourcePath$1(t,e.sourceRoot)&&enqueueLocalRoot(e,await resolveNearestPackageRoot(t,e.sourceRoot)??t)}}async function addTsConfigDependenciesForRoot(e,t){let n=await resolveTsConfigDependencyPaths(t);for(let t of n)if(isPathInsideOrEqual(t,e.sourceRoot)){e.tsconfigPaths.add(t);for(let n of await resolveLocalTsConfigPathTargetRoots({configPath:t,sourceRoot:e.sourceRoot}))enqueueLocalRoot(e,n)}}async function addDependencyMountsForRoot(e,t){let n=await readPackageDependencyNames(resolveDependencyDeclarationRoot(t,e.sourceRoot));for(let r of n)for(let n of listAncestorNodeModulesRoots(t,e.sourceRoot))await addDependencyMount(e,joinNodeModulesPackagePath(n,r))}function resolveDependencyDeclarationRoot(e,t){let n=resolve(e),a=resolve(t);for(;isPathInsideOrEqual(n,a);){if(existsSync(join(n,`package.json`)))return n;let e=dirname(n);if(e===n)break;n=e}return e}function listAncestorNodeModulesRoots(e,t){let n=resolve(t),i=new Set,a=resolve(e);for(;isPathInsideOrEqual(a,n);){i.add(a);let e=dirname(a);if(e===a)break;a=e}return i.add(resolve(e)),i.add(n),[...i]}function isWorkspaceManifestRoot(e){let t=join(e,`package.json`);if(!existsSync(t))return!1;try{let e=JSON.parse(readFileSync(t,`utf8`));return isObjectRecord(e)&&e.workspaces!==void 0}catch{return!1}}async function addDependencyMount(t,n){let r;try{r=await lstat(n)}catch{return}if(!r.isDirectory()&&!r.isSymbolicLink())return;let i=await resolveDependencySourcePathCandidates(n),a=i.find(e=>isAuthoredSourcePath$1(e,t.sourceRoot));if(a!==void 0){await addWorkspaceDependencyMount({mountPath:n,state:t,sourcePath:a});return}let o=i.find(e=>existsSync(e));o!==void 0&&t.dependencyMountsByPath.set(resolve(n),{mountPath:resolve(n),sourceKind:`installed`,sourcePath:o})}async function addWorkspaceDependencyMount(e){let t=await resolveNearestPackageRoot(e.sourcePath,e.state.sourceRoot);if(t===void 0||!isAuthoredSourcePath$1(t,e.state.sourceRoot))return;let{state:n}=e;enqueueLocalRoot(n,t),n.dependencyMountsByPath.set(resolve(e.mountPath),{mountPath:resolve(e.mountPath),sourceKind:`workspace`,sourcePath:t})}async function resolveDependencySourcePathCandidates(e){let i=new Set;try{let n=await readlink(e);i.add(resolve(dirname(e),n))}catch{}try{i.add(await realpath(e))}catch{}return[...i]}function enqueueLocalRoot(e,t){let n=resolve(t);e.processedLocalRoots.has(n)||e.localRootsToProcess.includes(n)||!isAuthoredSourcePath$1(n,e.sourceRoot)||e.localRootsToProcess.push(n)}async function readPackageDependencyNames(e){let t=await readTextFileIfExists(join(e,`package.json`));if(t===void 0)return[];let n;try{n=JSON.parse(t)}catch{return[]}if(!isObjectRecord(n))return[];let r=new Set;for(let e of PACKAGE_DEPENDENCY_FIELDS){let t=n[e];if(isObjectRecord(t))for(let e of Object.keys(t))r.add(e)}return[...r].sort((e,t)=>e.localeCompare(t))}function createWatchPaths(e){let t=new Set([join(e.appRoot,`package.json`),...e.copyFiles,...e.tsconfigPaths]);for(let n of e.localRoots)n!==e.appRoot&&t.add(n);for(let n of e.dependencyMounts)n.sourceKind===`workspace`&&n.sourcePath!==e.appRoot&&t.add(n.sourcePath);if(e.sourceRoot!==e.appRoot)for(let n of WORKSPACE_METADATA_FILE_NAMES){let r=join(e.sourceRoot,n);existsSync(r)&&t.add(r)}return[...t].sort((e,t)=>e.localeCompare(t))}function joinNodeModulesPackagePath(e,t){return join(e,`node_modules`,...t.split(`/`))}function toSnapshotPath(e){if(!isPathInsideOrEqual(e.sourcePath,e.sourceRoot))throw new DevelopmentRuntimeSourceSnapshotError(`Cannot map source path "${e.sourcePath}" into a development runtime snapshot because it is outside source root "${e.sourceRoot}".`);return join(e.snapshotSourceRoot,relative(e.sourceRoot,e.sourcePath))}function isObjectRecord(e){return typeof e==`object`&&!!e&&!Array.isArray(e)}export{DEV_RUNTIME_SOURCE_DIRECTORY,DevelopmentRuntimeSourceSnapshotError,createDevelopmentSourceSnapshotPlan,isAuthoredSourcePath,resolveDevelopmentSourceRoot,resolveDevelopmentSourceSnapshotWatchPaths,toDevelopmentSourceSnapshotPath};
+import { lstat, readlink, realpath } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import {
+  readTextFileIfExists,
+  resolveTsConfigDependencyPaths,
+} from "#internal/application/tsconfig-dependencies.js";
+import {
+  isAuthoredSourcePath,
+  isAuthoredSourcePath as isAuthoredSourcePath$1,
+  isPathInsideOrEqual,
+  resolveLocalTsConfigPathTargetRoots,
+  resolveNearestPackageRoot,
+} from "#internal/nitro/dev-runtime-source-snapshot-local-roots.js";
+const DEV_RUNTIME_SOURCE_DIRECTORY = `source`,
+  SOURCE_ROOT_MARKER_NAMES = [`.git`, `pnpm-workspace.yaml`],
+  WORKSPACE_METADATA_FILE_NAMES = [
+    `package.json`,
+    `pnpm-workspace.yaml`,
+    `pnpm-lock.yaml`,
+    `package-lock.json`,
+    `yarn.lock`,
+    `bun.lock`,
+    `bun.lockb`,
+    `.npmrc`,
+  ],
+  PACKAGE_DEPENDENCY_FIELDS = [
+    `dependencies`,
+    `devDependencies`,
+    `optionalDependencies`,
+    `peerDependencies`,
+  ];
+var DevelopmentRuntimeSourceSnapshotError = class extends Error {
+  constructor(e) {
+    (super(e), (this.name = `DevelopmentRuntimeSourceSnapshotError`));
+  }
+};
+async function createDevelopmentSourceSnapshotPlan(e) {
+  let t = resolve(e.appRoot),
+    n = resolve(e.snapshotRoot),
+    r = resolveDevelopmentSourceRoot(t),
+    a = join(n, DEV_RUNTIME_SOURCE_DIRECTORY),
+    o = {
+      appRoot: t,
+      copyFiles: new Set(),
+      dependencyMountsByPath: new Map(),
+      localRootsToProcess: [t],
+      processedLocalRoots: new Set(),
+      snapshotRoot: n,
+      snapshotSourceRoot: a,
+      sourceRoot: r,
+      tsconfigPaths: new Set(),
+    },
+    s = join(t, `package.json`);
+  for (
+    existsSync(s) && o.copyFiles.add(s),
+      await addAuthoredSourceRoots(o, e.authoredSourceRoots ?? []);
+    o.localRootsToProcess.length > 0;
+
+  ) {
+    let e = o.localRootsToProcess.shift();
+    if (e === void 0) continue;
+    let t = resolve(e);
+    o.processedLocalRoots.has(t) ||
+      !isAuthoredSourcePath$1(t, r) ||
+      (o.processedLocalRoots.add(t),
+      await addTsConfigDependenciesForRoot(o, t),
+      await addDependencyMountsForRoot(o, t));
+  }
+  let c = [...o.copyFiles]
+      .filter((e) => isPathInsideOrEqual(e, r))
+      .sort((e, t) => e.localeCompare(t)),
+    l = [...o.tsconfigPaths]
+      .filter((e) => isPathInsideOrEqual(e, r))
+      .sort((e, t) => e.localeCompare(t)),
+    u = [...o.dependencyMountsByPath.values()].sort((e, t) =>
+      e.mountPath.localeCompare(t.mountPath),
+    ),
+    d = createWatchPaths({
+      appRoot: t,
+      copyFiles: c,
+      dependencyMounts: u,
+      localRoots: [...o.processedLocalRoots],
+      sourceRoot: r,
+      tsconfigPaths: l,
+    });
+  return {
+    appRoot: t,
+    copyFiles: c,
+    dependencyMounts: u,
+    runtimeAppRoot: toSnapshotPath({
+      sourcePath: t,
+      sourceRoot: r,
+      snapshotSourceRoot: a,
+    }),
+    snapshotRoot: n,
+    snapshotSourceRoot: a,
+    sourceRoot: r,
+    tsconfigPaths: l,
+    watchPaths: d,
+  };
+}
+async function resolveDevelopmentSourceSnapshotWatchPaths(e) {
+  return [
+    ...(
+      await createDevelopmentSourceSnapshotPlan({
+        appRoot: e,
+        snapshotRoot: join(resolve(e), `.eve`, `dev-runtime`, `__watch-plan__`),
+      })
+    ).watchPaths,
+  ];
+}
+function toDevelopmentSourceSnapshotPath(e) {
+  return toSnapshotPath(e);
+}
+function resolveDevelopmentSourceRoot(e) {
+  let t = resolve(e);
+  for (;;) {
+    if (
+      SOURCE_ROOT_MARKER_NAMES.some((e) => existsSync(join(t, e))) ||
+      isWorkspaceManifestRoot(t)
+    )
+      return t;
+    let n = dirname(t);
+    if (n === t) return resolve(e);
+    t = n;
+  }
+}
+async function addAuthoredSourceRoots(e, t) {
+  for (let n of t) {
+    let t = resolve(n);
+    isAuthoredSourcePath$1(t, e.sourceRoot) &&
+      enqueueLocalRoot(
+        e,
+        (await resolveNearestPackageRoot(t, e.sourceRoot)) ?? t,
+      );
+  }
+}
+async function addTsConfigDependenciesForRoot(e, t) {
+  let n = await resolveTsConfigDependencyPaths(t);
+  for (let t of n)
+    if (isPathInsideOrEqual(t, e.sourceRoot)) {
+      e.tsconfigPaths.add(t);
+      for (let n of await resolveLocalTsConfigPathTargetRoots({
+        configPath: t,
+        sourceRoot: e.sourceRoot,
+      }))
+        enqueueLocalRoot(e, n);
+    }
+}
+async function addDependencyMountsForRoot(e, t) {
+  let n = await readPackageDependencyNames(
+    resolveDependencyDeclarationRoot(t, e.sourceRoot),
+  );
+  for (let r of n)
+    for (let n of listAncestorNodeModulesRoots(t, e.sourceRoot))
+      await addDependencyMount(e, joinNodeModulesPackagePath(n, r));
+}
+function resolveDependencyDeclarationRoot(e, t) {
+  let n = resolve(e),
+    a = resolve(t);
+  for (; isPathInsideOrEqual(n, a); ) {
+    if (existsSync(join(n, `package.json`))) return n;
+    let e = dirname(n);
+    if (e === n) break;
+    n = e;
+  }
+  return e;
+}
+function listAncestorNodeModulesRoots(e, t) {
+  let n = resolve(t),
+    i = new Set(),
+    a = resolve(e);
+  for (; isPathInsideOrEqual(a, n); ) {
+    i.add(a);
+    let e = dirname(a);
+    if (e === a) break;
+    a = e;
+  }
+  return (i.add(resolve(e)), i.add(n), [...i]);
+}
+function isWorkspaceManifestRoot(e) {
+  let t = join(e, `package.json`);
+  if (!existsSync(t)) return !1;
+  try {
+    let e = JSON.parse(readFileSync(t, `utf8`));
+    return isObjectRecord(e) && e.workspaces !== void 0;
+  } catch {
+    return !1;
+  }
+}
+async function addDependencyMount(t, n) {
+  let r;
+  try {
+    r = await lstat(n);
+  } catch {
+    return;
+  }
+  if (!r.isDirectory() && !r.isSymbolicLink()) return;
+  let i = await resolveDependencySourcePathCandidates(n),
+    a = i.find((e) => isAuthoredSourcePath$1(e, t.sourceRoot));
+  if (a !== void 0) {
+    await addWorkspaceDependencyMount({
+      mountPath: n,
+      state: t,
+      sourcePath: a,
+    });
+    return;
+  }
+  let o = i.find((e) => existsSync(e));
+  o !== void 0 &&
+    t.dependencyMountsByPath.set(resolve(n), {
+      mountPath: resolve(n),
+      sourceKind: `installed`,
+      sourcePath: o,
+    });
+}
+async function addWorkspaceDependencyMount(e) {
+  let t = await resolveNearestPackageRoot(e.sourcePath, e.state.sourceRoot);
+  if (t === void 0 || !isAuthoredSourcePath$1(t, e.state.sourceRoot)) return;
+  let { state: n } = e;
+  (enqueueLocalRoot(n, t),
+    n.dependencyMountsByPath.set(resolve(e.mountPath), {
+      mountPath: resolve(e.mountPath),
+      sourceKind: `workspace`,
+      sourcePath: t,
+    }));
+}
+async function resolveDependencySourcePathCandidates(e) {
+  let i = new Set();
+  try {
+    let n = await readlink(e);
+    i.add(resolve(dirname(e), n));
+  } catch {}
+  try {
+    i.add(await realpath(e));
+  } catch {}
+  return [...i];
+}
+function enqueueLocalRoot(e, t) {
+  let n = resolve(t);
+  e.processedLocalRoots.has(n) ||
+    e.localRootsToProcess.includes(n) ||
+    !isAuthoredSourcePath$1(n, e.sourceRoot) ||
+    e.localRootsToProcess.push(n);
+}
+async function readPackageDependencyNames(e) {
+  let t = await readTextFileIfExists(join(e, `package.json`));
+  if (t === void 0) return [];
+  let n;
+  try {
+    n = JSON.parse(t);
+  } catch {
+    return [];
+  }
+  if (!isObjectRecord(n)) return [];
+  let r = new Set();
+  for (let e of PACKAGE_DEPENDENCY_FIELDS) {
+    let t = n[e];
+    if (isObjectRecord(t)) for (let e of Object.keys(t)) r.add(e);
+  }
+  return [...r].sort((e, t) => e.localeCompare(t));
+}
+function createWatchPaths(e) {
+  let t = new Set([
+    join(e.appRoot, `package.json`),
+    ...e.copyFiles,
+    ...e.tsconfigPaths,
+  ]);
+  for (let n of e.localRoots) n !== e.appRoot && t.add(n);
+  for (let n of e.dependencyMounts)
+    n.sourceKind === `workspace` &&
+      n.sourcePath !== e.appRoot &&
+      t.add(n.sourcePath);
+  if (e.sourceRoot !== e.appRoot)
+    for (let n of WORKSPACE_METADATA_FILE_NAMES) {
+      let r = join(e.sourceRoot, n);
+      existsSync(r) && t.add(r);
+    }
+  return [...t].sort((e, t) => e.localeCompare(t));
+}
+function joinNodeModulesPackagePath(e, t) {
+  return join(e, `node_modules`, ...t.split(`/`));
+}
+function toSnapshotPath(e) {
+  if (!isPathInsideOrEqual(e.sourcePath, e.sourceRoot))
+    throw new DevelopmentRuntimeSourceSnapshotError(
+      `Cannot map source path "${e.sourcePath}" into a development runtime snapshot because it is outside source root "${e.sourceRoot}".`,
+    );
+  return join(e.snapshotSourceRoot, relative(e.sourceRoot, e.sourcePath));
+}
+function isObjectRecord(e) {
+  return typeof e == `object` && !!e && !Array.isArray(e);
+}
+export {
+  DEV_RUNTIME_SOURCE_DIRECTORY,
+  DevelopmentRuntimeSourceSnapshotError,
+  createDevelopmentSourceSnapshotPlan,
+  isAuthoredSourcePath,
+  resolveDevelopmentSourceRoot,
+  resolveDevelopmentSourceSnapshotWatchPaths,
+  toDevelopmentSourceSnapshotPath,
+};

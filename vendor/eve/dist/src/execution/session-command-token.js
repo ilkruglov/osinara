@@ -1,1 +1,8 @@
-const SESSION_COMMAND_NAMESPACE=`eve:session`;function isReservedSessionCommandToken(e){return e.startsWith(`${SESSION_COMMAND_NAMESPACE}:`)}function sessionCommandHookToken(e){return`${SESSION_COMMAND_NAMESPACE}:${e}:inbox`}export{isReservedSessionCommandToken,sessionCommandHookToken};
+const SESSION_COMMAND_NAMESPACE = `eve:session`;
+function isReservedSessionCommandToken(e) {
+  return e.startsWith(`${SESSION_COMMAND_NAMESPACE}:`);
+}
+function sessionCommandHookToken(e) {
+  return `${SESSION_COMMAND_NAMESPACE}:${e}:inbox`;
+}
+export { isReservedSessionCommandToken, sessionCommandHookToken };

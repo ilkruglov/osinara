@@ -1,1 +1,60 @@
-import{optionById,requiredOptionId}from"./question-options.js";function selectedValue(t,n){let r=optionById(t,n);if(r!==void 0)return r.value;let i=t.options.map(e=>e.id).join(`, `);throw Error(`Invalid answer for "${t.key}": ${String(n)}. Expected one of: ${i}.`)}async function renderEditableQuestion(e,n){let r=requiredOptionId(n,n.editable.value,`configured editable value`),i=n.options.map(e=>({value:e.id,label:e.label,hint:e.hint,featured:e.featured})),a=n.recommended===void 0?void 0:requiredOptionId(n,n.recommended,`recommendation`);if(e.selectEditable!==void 0){let t=await e.selectEditable({message:n.message,options:i,initialValue:a,editable:{value:r,defaultValue:n.editable.recommended,formatHint:e=>`${n.editable.label}: ${e}`,validate:e=>n.editable.validate?.(e)??void 0}}),o=selectedValue(n,t.value);return o===n.editable.value?{value:o,text:t.kind===`edited`?t.text.trim():n.editable.recommended.trim()}:{value:o}}let o=selectedValue(n,await e.select({message:n.message,options:i,initialValue:a}));return o===n.editable.value?{value:o,text:(await e.text({message:n.editable.label,defaultValue:n.editable.recommended,validate:e=>n.editable.validate?.(e)??void 0})).trim()}:{value:o}}export{renderEditableQuestion};
+import { optionById, requiredOptionId } from "./question-options.js";
+function selectedValue(t, n) {
+  let r = optionById(t, n);
+  if (r !== void 0) return r.value;
+  let i = t.options.map((e) => e.id).join(`, `);
+  throw Error(
+    `Invalid answer for "${t.key}": ${String(n)}. Expected one of: ${i}.`,
+  );
+}
+async function renderEditableQuestion(e, n) {
+  let r = requiredOptionId(n, n.editable.value, `configured editable value`),
+    i = n.options.map((e) => ({
+      value: e.id,
+      label: e.label,
+      hint: e.hint,
+      featured: e.featured,
+    })),
+    a =
+      n.recommended === void 0
+        ? void 0
+        : requiredOptionId(n, n.recommended, `recommendation`);
+  if (e.selectEditable !== void 0) {
+    let t = await e.selectEditable({
+        message: n.message,
+        options: i,
+        initialValue: a,
+        editable: {
+          value: r,
+          defaultValue: n.editable.recommended,
+          formatHint: (e) => `${n.editable.label}: ${e}`,
+          validate: (e) => n.editable.validate?.(e) ?? void 0,
+        },
+      }),
+      o = selectedValue(n, t.value);
+    return o === n.editable.value
+      ? {
+          value: o,
+          text:
+            t.kind === `edited` ? t.text.trim() : n.editable.recommended.trim(),
+        }
+      : { value: o };
+  }
+  let o = selectedValue(
+    n,
+    await e.select({ message: n.message, options: i, initialValue: a }),
+  );
+  return o === n.editable.value
+    ? {
+        value: o,
+        text: (
+          await e.text({
+            message: n.editable.label,
+            defaultValue: n.editable.recommended,
+            validate: (e) => n.editable.validate?.(e) ?? void 0,
+          })
+        ).trim(),
+      }
+    : { value: o };
+}
+export { renderEditableQuestion };

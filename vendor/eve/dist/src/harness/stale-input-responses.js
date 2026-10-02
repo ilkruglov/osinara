@@ -1,3 +1,107 @@
-import{appendUserContent,normalizeUserContent}from"#harness/messages.js";import{isSessionLimitContinuationRequestId}from"#harness/session-limit-continuation.js";import{isApprovalRequest}from"#harness/input-request-class.js";import{extractHistoricalInputRequests}from"#harness/input-extraction.js";function dropStaleSessionLimitContinuationResponses(e){if(e.stepInput===void 0)return;let t=e.stepInput.inputResponses??[],r=e.stepInput.attributedInputResponses??[],keep=t=>e.pendingRequestIds.has(t)||!isSessionLimitContinuationRequestId(t),i=t.filter(e=>keep(e.requestId)),a=r.filter(({response:e})=>keep(e.requestId));if(i.length===t.length&&a.length===r.length)return e.stepInput;let{attributedInputResponses:o,inputResponses:s,...c}=e.stepInput,l=c;return i.length>0&&(l.inputResponses=i),a.length>0&&(l.attributedInputResponses=a),l}function convertStaleResponsesToUserMessage(e){if(e.stepInput===void 0)return{kind:`unchanged`};let t=e.stepInput.inputResponses??[],n=e.stepInput.attributedInputResponses??[];if(t.length===0&&n.length===0)return{kind:`unchanged`,stepInput:e.stepInput};let r=[],a=[],o=[];for(let n of t)(e.pendingRequestIds.has(n.requestId)?r:o).push(n);for(let t of n)e.pendingRequestIds.has(t.response.requestId)?a.push(t):o.push(t.response);if(o.length===0)return{kind:`unchanged`,stepInput:e.stepInput};let s=extractHistoricalInputRequests({history:e.history,requestIds:new Set(o.map(e=>e.requestId))}),c=appendOptionalUserContent(e.stepInput.message,formatModelMessage(o,s)),l=appendOptionalUserContent(e.stepInput.message,formatDisplayMessage(o,s)),{attributedInputResponses:u,inputResponses:d,...f}=e.stepInput,p={...f,message:c};return r.length>0&&(p.inputResponses=r),a.length>0&&(p.attributedInputResponses=a),{displayMessage:l,kind:`converted`,stepInput:p}}function formatModelMessage(e,t){let n=e.map(e=>{let n=t.get(e.requestId),i=n?.options?.find(t=>t.id===e.optionId),a={};if(e.optionId!==void 0&&(a.optionId=e.optionId),i!==void 0){let e={id:i.id,label:i.label};i.description!==void 0&&(e.description=i.description),a.selectedOption=e}e.text!==void 0&&(a.text=e.text);let o={requestId:e.requestId,response:a};return n!==void 0&&(o.prompt=n.prompt,o.requestType=isApprovalRequest(n)?`approval`:`question`),o});return[`The user submitted the following response to an earlier interactive prompt.`,`Treat it as new input at the current point in the conversation and decide whether it is still relevant.${e.some(e=>{let n=t.get(e.requestId);return n===void 0||isApprovalRequest(n)})?` This does not authorize an earlier action; request approval again if that action is still needed.`:``}`,JSON.stringify(n,null,2)].join(`
-`)}function formatDisplayMessage(e,t){return e.map(e=>e.text!==void 0&&e.text.length>0?e.text:t.get(e.requestId)?.options?.find(t=>t.id===e.optionId)?.label??e.optionId??`Response to an earlier interactive prompt`).join(`
-`)}function appendOptionalUserContent(n,r){let i=normalizeUserContent(n);return i===void 0?r:appendUserContent({appended:r,existing:i})}export{convertStaleResponsesToUserMessage,dropStaleSessionLimitContinuationResponses};
+import { appendUserContent, normalizeUserContent } from "#harness/messages.js";
+import { isSessionLimitContinuationRequestId } from "#harness/session-limit-continuation.js";
+import { isApprovalRequest } from "#harness/input-request-class.js";
+import { extractHistoricalInputRequests } from "#harness/input-extraction.js";
+function dropStaleSessionLimitContinuationResponses(e) {
+  if (e.stepInput === void 0) return;
+  let t = e.stepInput.inputResponses ?? [],
+    r = e.stepInput.attributedInputResponses ?? [],
+    keep = (t) =>
+      e.pendingRequestIds.has(t) || !isSessionLimitContinuationRequestId(t),
+    i = t.filter((e) => keep(e.requestId)),
+    a = r.filter(({ response: e }) => keep(e.requestId));
+  if (i.length === t.length && a.length === r.length) return e.stepInput;
+  let { attributedInputResponses: o, inputResponses: s, ...c } = e.stepInput,
+    l = c;
+  return (
+    i.length > 0 && (l.inputResponses = i),
+    a.length > 0 && (l.attributedInputResponses = a),
+    l
+  );
+}
+function convertStaleResponsesToUserMessage(e) {
+  if (e.stepInput === void 0) return { kind: `unchanged` };
+  let t = e.stepInput.inputResponses ?? [],
+    n = e.stepInput.attributedInputResponses ?? [];
+  if (t.length === 0 && n.length === 0)
+    return { kind: `unchanged`, stepInput: e.stepInput };
+  let r = [],
+    a = [],
+    o = [];
+  for (let n of t) (e.pendingRequestIds.has(n.requestId) ? r : o).push(n);
+  for (let t of n)
+    e.pendingRequestIds.has(t.response.requestId)
+      ? a.push(t)
+      : o.push(t.response);
+  if (o.length === 0) return { kind: `unchanged`, stepInput: e.stepInput };
+  let s = extractHistoricalInputRequests({
+      history: e.history,
+      requestIds: new Set(o.map((e) => e.requestId)),
+    }),
+    c = appendOptionalUserContent(
+      e.stepInput.message,
+      formatModelMessage(o, s),
+    ),
+    l = appendOptionalUserContent(
+      e.stepInput.message,
+      formatDisplayMessage(o, s),
+    ),
+    { attributedInputResponses: u, inputResponses: d, ...f } = e.stepInput,
+    p = { ...f, message: c };
+  return (
+    r.length > 0 && (p.inputResponses = r),
+    a.length > 0 && (p.attributedInputResponses = a),
+    { displayMessage: l, kind: `converted`, stepInput: p }
+  );
+}
+function formatModelMessage(e, t) {
+  let n = e.map((e) => {
+    let n = t.get(e.requestId),
+      i = n?.options?.find((t) => t.id === e.optionId),
+      a = {};
+    if ((e.optionId !== void 0 && (a.optionId = e.optionId), i !== void 0)) {
+      let e = { id: i.id, label: i.label };
+      (i.description !== void 0 && (e.description = i.description),
+        (a.selectedOption = e));
+    }
+    e.text !== void 0 && (a.text = e.text);
+    let o = { requestId: e.requestId, response: a };
+    return (
+      n !== void 0 &&
+        ((o.prompt = n.prompt),
+        (o.requestType = isApprovalRequest(n) ? `approval` : `question`)),
+      o
+    );
+  });
+  return [
+    `The user submitted the following response to an earlier interactive prompt.`,
+    `Treat it as new input at the current point in the conversation and decide whether it is still relevant.${
+      e.some((e) => {
+        let n = t.get(e.requestId);
+        return n === void 0 || isApprovalRequest(n);
+      })
+        ? ` This does not authorize an earlier action; request approval again if that action is still needed.`
+        : ``
+    }`,
+    JSON.stringify(n, null, 2),
+  ].join(`
+`);
+}
+function formatDisplayMessage(e, t) {
+  return e.map((e) =>
+    e.text !== void 0 && e.text.length > 0
+      ? e.text
+      : (t.get(e.requestId)?.options?.find((t) => t.id === e.optionId)?.label ??
+        e.optionId ??
+        `Response to an earlier interactive prompt`),
+  ).join(`
+`);
+}
+function appendOptionalUserContent(n, r) {
+  let i = normalizeUserContent(n);
+  return i === void 0 ? r : appendUserContent({ appended: r, existing: i });
+}
+export {
+  convertStaleResponsesToUserMessage,
+  dropStaleSessionLimitContinuationResponses,
+};

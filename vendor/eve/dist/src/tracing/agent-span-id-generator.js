@@ -1,1 +1,36 @@
-import{createHash}from"node:crypto";var AgentSpanIdGenerator=class{#e;allocateSpanId(){return randomHexId(16)}deriveSpanId(t){let n=createHash(`sha256`).update(t).digest(`hex`).slice(0,16);return/^0+$/u.test(n)?`0000000000000001`:n}generateSpanId(){let e=this.#e;return e===void 0?randomHexId(16):(this.#e=void 0,e)}generateTraceId(){return randomHexId(32)}withSpanId(e,t){this.#e=e;try{return t()}finally{this.#e=void 0}}};function randomHexId(e){let t;do{t=``;for(let n=0;n<e;n+=1)t+=`0123456789abcdef`[Math.trunc(Math.random()*16)]}while(!/[1-9a-f]/u.test(t));return t}export{AgentSpanIdGenerator};
+import { createHash } from "node:crypto";
+var AgentSpanIdGenerator = class {
+  #e;
+  allocateSpanId() {
+    return randomHexId(16);
+  }
+  deriveSpanId(t) {
+    let n = createHash(`sha256`).update(t).digest(`hex`).slice(0, 16);
+    return /^0+$/u.test(n) ? `0000000000000001` : n;
+  }
+  generateSpanId() {
+    let e = this.#e;
+    return e === void 0 ? randomHexId(16) : ((this.#e = void 0), e);
+  }
+  generateTraceId() {
+    return randomHexId(32);
+  }
+  withSpanId(e, t) {
+    this.#e = e;
+    try {
+      return t();
+    } finally {
+      this.#e = void 0;
+    }
+  }
+};
+function randomHexId(e) {
+  let t;
+  do {
+    t = ``;
+    for (let n = 0; n < e; n += 1)
+      t += `0123456789abcdef`[Math.trunc(Math.random() * 16)];
+  } while (!/[1-9a-f]/u.test(t));
+  return t;
+}
+export { AgentSpanIdGenerator };

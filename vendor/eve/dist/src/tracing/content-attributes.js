@@ -1,1 +1,44 @@
-const INPUT_CONTENT_ATTRIBUTES=new Set([`agent.channel.delivery.input`,`ai.documents`,`ai.prompt`,`ai.prompt.messages`,`ai.prompt.system`,`ai.prompt.toolChoice`,`ai.prompt.tools`,`ai.value`,`ai.values`,`gen_ai.input.messages`,`gen_ai.system_instructions`,`gen_ai.tool.call.arguments`,`gen_ai.tool.definitions`]),OUTPUT_CONTENT_ATTRIBUTES=new Set([`ai.embedding`,`ai.embeddings`,`ai.ranking`,`ai.response.files`,`ai.response.object`,`ai.response.reasoning`,`ai.response.text`,`ai.response.toolCalls`,`ai.response.tool_calls`,`ai.response.tool_results`,`ai.toolCall.args`,`ai.toolCall.result`,`gen_ai.output.messages`,`gen_ai.tool.call.result`]);function isDeclined(n,r){return!r.recordInputs&&INPUT_CONTENT_ATTRIBUTES.has(n)?!0:!r.recordOutputs&&OUTPUT_CONTENT_ATTRIBUTES.has(n)}function withoutDeclinedContent(e,t){let n=Object.keys(e);if(!n.some(e=>isDeclined(e,t)))return;let r={};for(let i of n)isDeclined(i,t)||(r[i]=e[i]);return r}export{withoutDeclinedContent};
+const INPUT_CONTENT_ATTRIBUTES = new Set([
+    `agent.channel.delivery.input`,
+    `ai.documents`,
+    `ai.prompt`,
+    `ai.prompt.messages`,
+    `ai.prompt.system`,
+    `ai.prompt.toolChoice`,
+    `ai.prompt.tools`,
+    `ai.value`,
+    `ai.values`,
+    `gen_ai.input.messages`,
+    `gen_ai.system_instructions`,
+    `gen_ai.tool.call.arguments`,
+    `gen_ai.tool.definitions`,
+  ]),
+  OUTPUT_CONTENT_ATTRIBUTES = new Set([
+    `ai.embedding`,
+    `ai.embeddings`,
+    `ai.ranking`,
+    `ai.response.files`,
+    `ai.response.object`,
+    `ai.response.reasoning`,
+    `ai.response.text`,
+    `ai.response.toolCalls`,
+    `ai.response.tool_calls`,
+    `ai.response.tool_results`,
+    `ai.toolCall.args`,
+    `ai.toolCall.result`,
+    `gen_ai.output.messages`,
+    `gen_ai.tool.call.result`,
+  ]);
+function isDeclined(n, r) {
+  return !r.recordInputs && INPUT_CONTENT_ATTRIBUTES.has(n)
+    ? !0
+    : !r.recordOutputs && OUTPUT_CONTENT_ATTRIBUTES.has(n);
+}
+function withoutDeclinedContent(e, t) {
+  let n = Object.keys(e);
+  if (!n.some((e) => isDeclined(e, t))) return;
+  let r = {};
+  for (let i of n) isDeclined(i, t) || (r[i] = e[i]);
+  return r;
+}
+export { withoutDeclinedContent };

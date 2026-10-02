@@ -9,9 +9,9 @@ describe("Postgres stream wakeups", () => {
     // package loader does not reliably honor Vitest's pg mock across the world's module boundary.
     const root = resolve("node_modules/@workflow/world-postgres/dist");
     let source = await readFile(resolve(root, "streamer.js"), "utf8");
-    source = source.replace("import { Client } from 'pg';", `export const testClients=[];
+    source = source.replace(/import \{ Client \} from ["']pg["'];/u, `export const testClients=[];
       class Client extends EventEmitter {constructor(){super();testClients.push(this)} async connect(){} async query(){} async end(){}}`);
-    source = source.replace(/from '([^']+)'/g, (match, specifier: string) => specifier.startsWith("node:") ? match
+    source = source.replace(/from ["']([^"']+)["']/g, (match, specifier: string) => specifier.startsWith("node:") ? match
       : `from ${JSON.stringify(specifier.startsWith(".") ? pathToFileURL(resolve(root, specifier)).href : import.meta.resolve(specifier))}`);
     const { createStreamer, testClients: clients } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
     const select = vi.fn(() => { throw new Error("No payload query expected without demand"); });

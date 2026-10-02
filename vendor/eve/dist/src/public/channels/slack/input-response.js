@@ -1,1 +1,39 @@
-import{createLogger}from"#internal/logging.js";import{buildSlackBinding}from"#public/channels/slack/api.js";import{buildSlackAuthContext}from"#public/channels/slack/auth.js";import{deriveHitlResponse}from"#public/channels/slack/hitl.js";const log=createLogger(`slack.interactions`);function approvalResponderStatePatch(e,t){if(!(t?.principalId===void 0||!e.actions.some(e=>deriveHitlResponse(e)?.kind===`tool-approval`)))return{approvalResponderUsers:{[t.principalId]:e.user.id}}}async function authorizeInputResponse(e){let n=buildSlackAuthContext({channelId:e.channelId,teamId:e.teamId,threadTs:e.threadTs,userId:e.submission.user.id,userName:e.submission.user.username??e.submission.user.name}),{thread:r,slack:i}=buildSlackBinding({botToken:e.deps.config.credentials?.botToken,channelId:e.channelId,threadTs:e.threadTs,teamId:e.teamId??void 0}),a={defaultAuth:n,slack:i,thread:r};try{return await e.deps.onInputResponse(a,e.submission)}catch(e){return log.error(`HITL input response authorization failed`,{error:e}),null}}export{approvalResponderStatePatch,authorizeInputResponse};
+import { createLogger } from "#internal/logging.js";
+import { buildSlackBinding } from "#public/channels/slack/api.js";
+import { buildSlackAuthContext } from "#public/channels/slack/auth.js";
+import { deriveHitlResponse } from "#public/channels/slack/hitl.js";
+const log = createLogger(`slack.interactions`);
+function approvalResponderStatePatch(e, t) {
+  if (
+    !(
+      t?.principalId === void 0 ||
+      !e.actions.some((e) => deriveHitlResponse(e)?.kind === `tool-approval`)
+    )
+  )
+    return { approvalResponderUsers: { [t.principalId]: e.user.id } };
+}
+async function authorizeInputResponse(e) {
+  let n = buildSlackAuthContext({
+      channelId: e.channelId,
+      teamId: e.teamId,
+      threadTs: e.threadTs,
+      userId: e.submission.user.id,
+      userName: e.submission.user.username ?? e.submission.user.name,
+    }),
+    { thread: r, slack: i } = buildSlackBinding({
+      botToken: e.deps.config.credentials?.botToken,
+      channelId: e.channelId,
+      threadTs: e.threadTs,
+      teamId: e.teamId ?? void 0,
+    }),
+    a = { defaultAuth: n, slack: i, thread: r };
+  try {
+    return await e.deps.onInputResponse(a, e.submission);
+  } catch (e) {
+    return (
+      log.error(`HITL input response authorization failed`, { error: e }),
+      null
+    );
+  }
+}
+export { approvalResponderStatePatch, authorizeInputResponse };

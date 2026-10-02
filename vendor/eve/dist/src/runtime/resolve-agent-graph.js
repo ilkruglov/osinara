@@ -1,1 +1,334 @@
-import{expectObjectRecord}from"#internal/authored-module.js";import{ROOT_COMPILED_AGENT_NODE_ID}from"#compiler/manifest.js";import{createRuntimeSubagentRegistry}from"#runtime/subagents/registry.js";import{LOAD_SKILL_TOOL_NAME}from"#runtime/skills/fragment-context.js";import{createRuntimeToolRegistry}from"#runtime/tools/registry.js";import{ROOT_RUNTIME_AGENT_NODE_ID}from"#runtime/graph.js";import{WORKFLOW_TOOL_NAME}from"#shared/workflow-sandbox.js";import{getAllFrameworkChannelNames,getFrameworkChannelDefinitions}from"#runtime/framework-channels/index.js";import{getAllFrameworkToolNames,getFrameworkDynamicToolResolvers,getFrameworkToolDefinitions}from"#runtime/framework-tools/index.js";import{resolveAgent}from"#runtime/resolve-agent.js";import{loadResolvedModuleExport}from"#runtime/resolve-helpers.js";import{createResolvedRuntimeTurnAgent}from"#runtime/agent/bootstrap.js";import{createWorkspacePromptSection}from"#runtime/workspace/spec.js";import{createRuntimeHookRegistry}from"#runtime/hooks/registry.js";import{resolveDynamicSubagentDefinition}from"#runtime/resolve-dynamic-subagent.js";import{createRuntimeSandboxRegistry}from"#runtime/sandbox/registry.js";var ResolveRuntimeAgentGraphError=class extends Error{logicalPath;nodeId;sourceId;constructor(e,t={}){super(e),this.name=`ResolveRuntimeAgentGraphError`,t.logicalPath!==void 0&&(this.logicalPath=t.logicalPath),t.nodeId!==void 0&&(this.nodeId=t.nodeId),t.sourceId!==void 0&&(this.sourceId=t.sourceId)}};async function resolveRuntimeAgentGraph(e){let n=new Map,r=createChildNodeIdsByParentNodeId(e.manifest),i=new Map(e.manifest.subagents.map(e=>[e.nodeId,e])),a=await resolveRuntimeAgentNode({childNodeIdsByParentNodeId:r,manifest:e.manifest,moduleMap:e.moduleMap,nodeId:ROOT_COMPILED_AGENT_NODE_ID,nodesByNodeId:n,subagentNodesById:i});return attachInheritedSandboxWorkspaceResources({manifest:e.manifest,nodesByNodeId:n}),{nodesByNodeId:n,root:a}}async function resolveRuntimeAgentNode(e){let t=toRuntimeNodeId(e.nodeId);if(e.nodesByNodeId.has(t))throw new ResolveRuntimeAgentGraphError(`Found multiple runtime agent nodes for node id "${t}".`,{nodeId:t,sourceId:e.sourceId});let a=await resolveAgent({manifest:e.manifest,moduleMap:e.moduleMap,nodeId:e.nodeId}),s=getFrameworkToolDefinitions({authoredSkills:a.skills}),c=new Set(s.map(e=>e.name)),l=getAllFrameworkToolNames(),u=new Set(a.tools.map(e=>e.name));for(let n of a.disabledFrameworkTools)if(!l.has(n))throw new ResolveRuntimeAgentGraphError(`agent/tools/${n}.ts exports disableTool() but "${n}" is not a framework tool. Rename the file to one of: ${[...l].sort().join(`, `)}.`,{nodeId:t,sourceId:e.sourceId});let d=new Set(a.disabledFrameworkTools),f=await createRuntimeToolRegistry({tools:[...s.filter(e=>!u.has(e.name)&&!d.has(e.name)),...a.tools]},{reservedToolNames:[WORKFLOW_TOOL_NAME,...c.has(LOAD_SKILL_TOOL_NAME)||u.has(LOAD_SKILL_TOOL_NAME)?[]:[LOAD_SKILL_TOOL_NAME]]}),p=new Set(a.channels.map(e=>e.name)),m=getAllFrameworkChannelNames();for(let n of a.disabledFrameworkChannels)if(!m.has(n))throw new ResolveRuntimeAgentGraphError(`agent/channels/${n}.ts exports disableRoute() but "${n}" is not a framework channel. Rename the file to one of: ${[...m].sort().join(`, `)}.`,{nodeId:t,sourceId:e.sourceId});let h=new Set(a.disabledFrameworkChannels),g=[...getFrameworkChannelDefinitions().filter(e=>!p.has(e.name)&&!h.has(e.name)),...a.channels],_=createRuntimeSandboxRegistry({authoredSandbox:a.sandbox,workspaceResourceRoot:a.workspaceResourceRoot}),v=createRuntimeSubagentRegistry({persistentSessions:a.config?.experimental?.tasks===!0||a.config?.experimental?.subagentPersistentSessions===!0,reservedToolNames:[LOAD_SKILL_TOOL_NAME,...f.preparedTools.map(e=>e.name)],subagents:await resolveRuntimeSubagents({childNodeIdsByParentNodeId:e.childNodeIdsByParentNodeId,manifest:e.manifest,moduleMap:e.moduleMap,nodesByNodeId:e.nodesByNodeId,parentNodeId:e.nodeId,subagentNodesById:e.subagentNodesById})}),y={...a,dynamicToolResolvers:[...a.dynamicToolResolvers,...getFrameworkDynamicToolResolvers()]},b={agent:y,channels:g,hookRegistry:createRuntimeHookRegistry(y.hooks),nodeId:t,sandboxRegistry:_,sourceId:e.sourceId,subagentRegistry:v,toolRegistry:f,turnAgent:createResolvedRuntimeTurnAgent({agent:y,id:e.agentId,nodeId:t,tools:[...f.preparedTools,...v.preparedTools]})};return e.nodesByNodeId.set(t,b),b}async function resolveRuntimeSubagents(e){let t=[],n=e.childNodeIdsByParentNodeId.get(e.parentNodeId)??[];for(let r of n){let n=e.subagentNodesById.get(r);if(n===void 0)throw new ResolveRuntimeAgentGraphError(`Missing compiled subagent node "${r}" while resolving runtime subagents.`,{nodeId:toRuntimeNodeId(e.parentNodeId),sourceId:r});t.push(await resolveRuntimeSubagent({childNodeIdsByParentNodeId:e.childNodeIdsByParentNodeId,moduleMap:e.moduleMap,nodesByNodeId:e.nodesByNodeId,sourceRef:n,subagentNodesById:e.subagentNodesById}))}for(let n of e.manifest.remoteAgents)t.push(await resolveRuntimeRemoteAgent({moduleMap:e.moduleMap,nodeScopeId:e.parentNodeId,sourceRef:n}));return t}async function resolveRuntimeSubagent(e){let t={...e.sourceRef.configResolver===void 0?{description:e.sourceRef.description}:{dynamic:await resolveDynamicSubagentDefinition({definition:e.sourceRef.configResolver,moduleMap:e.moduleMap,nodeId:e.sourceRef.nodeId})},kind:`subagent`,logicalPath:e.sourceRef.logicalPath,name:e.sourceRef.name,nodeId:toRuntimeNodeId(e.sourceRef.nodeId),sourceId:e.sourceRef.sourceId,sourceKind:`module`};return await resolveRuntimeAgentNode({agentId:e.sourceRef.name,childNodeIdsByParentNodeId:e.childNodeIdsByParentNodeId,manifest:e.sourceRef.agent,moduleMap:e.moduleMap,nodeId:e.sourceRef.nodeId,nodesByNodeId:e.nodesByNodeId,sourceId:e.sourceRef.sourceId,subagentNodesById:e.subagentNodesById}),t}async function resolveRuntimeRemoteAgent(t){let n=expectObjectRecord(await loadResolvedModuleExport({definition:t.sourceRef,kindLabel:`remote agent`,moduleMap:t.moduleMap,nodeId:t.nodeScopeId}),`Expected remote agent source "${t.sourceRef.logicalPath}" to export an object.`),r={description:t.sourceRef.description,kind:`remote`,logicalPath:t.sourceRef.logicalPath,name:t.sourceRef.name,nodeId:toRuntimeNodeId(t.sourceRef.nodeId),outputSchema:t.sourceRef.outputSchema,path:t.sourceRef.path,sourceId:t.sourceRef.sourceId,sourceKind:`module`,url:await resolveRemoteAgentUrl({bakedUrl:t.sourceRef.url,logicalPath:t.sourceRef.logicalPath,resolvedUrl:n.url})};typeof n.auth==`function`&&(r.auth=n.auth),n.forwardPrincipal===!0&&(r.forwardPrincipal=!0);let i=resolveRemoteAgentHeaders(n.headers);return i!==void 0&&(r.headers=i),r}async function resolveRemoteAgentUrl(e){if(typeof e.resolvedUrl==`function`){let t=await e.resolvedUrl();if(typeof t!=`string`||t.length===0)throw Error(`Remote agent "${e.logicalPath}" url function must return a non-empty string.`);return t}let t=e.bakedUrl??(typeof e.resolvedUrl==`string`?e.resolvedUrl:``);if(t.length===0)throw Error(`Remote agent "${e.logicalPath}" is missing a url.`);return t}function resolveRemoteAgentHeaders(e){if(e===void 0)return;if(typeof e==`function`)return e;if(typeof e!=`object`||!e||Array.isArray(e))return;let t={};for(let[n,r]of Object.entries(e))typeof r==`string`&&(t[n]=r);return t}function attachInheritedSandboxWorkspaceResources(e){let t=new Map(e.manifest.subagentEdges.map(e=>[e.childNodeId,e.parentNodeId]));for(let[n,r]of e.nodesByNodeId){if(r.sandboxRegistry.sandbox.definition.inheritsParent!==!0)continue;if(r.agent.dynamicSkillResolvers.length>0)throw new ResolveRuntimeAgentGraphError(`Sandbox "${r.sandboxRegistry.sandbox.definition.logicalPath}" selects parent.sandbox but agent node "${n}" defines dynamic skills. Remove the child dynamic skills or give the child its own sandbox.`,{nodeId:n});let i=t.get(n);if(i===void 0)throw new ResolveRuntimeAgentGraphError(`Sandbox "${r.sandboxRegistry.sandbox.definition.logicalPath}" selects parent.sandbox but agent node "${n}" has no parent.`,{nodeId:n});let a=resolveSandboxOwnerNode({nodeId:i,nodesByNodeId:e.nodesByNodeId,parentNodeIdByChildNodeId:t});r.sandboxRegistry.sandbox.inheritance={definition:a.sandboxRegistry.sandbox.definition,nodeId:a.nodeId,workspaceResourceRoot:a.sandboxRegistry.sandbox.workspaceResourceRoot};let o=createWorkspacePromptSection(a.agent.workspaceSpec);o!==void 0&&(r.turnAgent.instructions=[...r.turnAgent.instructions,o])}}function resolveSandboxOwnerNode(e){let t=e.nodesByNodeId.get(toRuntimeNodeId(e.nodeId));if(t===void 0)throw new ResolveRuntimeAgentGraphError(`Missing parent runtime node "${e.nodeId}".`,{nodeId:e.nodeId});if(t.sandboxRegistry.sandbox.definition.inheritsParent!==!0)return t;let n=e.parentNodeIdByChildNodeId.get(e.nodeId);if(n===void 0)throw new ResolveRuntimeAgentGraphError(`Inherited sandbox node "${e.nodeId}" has no parent.`,{nodeId:e.nodeId});return resolveSandboxOwnerNode({...e,nodeId:n})}function createChildNodeIdsByParentNodeId(e){let t=new Map;for(let n of e.subagentEdges){let e=t.get(n.parentNodeId);if(e===void 0){t.set(n.parentNodeId,[n.childNodeId]);continue}e.push(n.childNodeId)}return t}function toRuntimeNodeId(e){return e===ROOT_COMPILED_AGENT_NODE_ID?ROOT_RUNTIME_AGENT_NODE_ID:e}export{resolveRuntimeAgentGraph};
+import { expectObjectRecord } from "#internal/authored-module.js";
+import { ROOT_COMPILED_AGENT_NODE_ID } from "#compiler/manifest.js";
+import { createRuntimeSubagentRegistry } from "#runtime/subagents/registry.js";
+import { LOAD_SKILL_TOOL_NAME } from "#runtime/skills/fragment-context.js";
+import { createRuntimeToolRegistry } from "#runtime/tools/registry.js";
+import { ROOT_RUNTIME_AGENT_NODE_ID } from "#runtime/graph.js";
+import { WORKFLOW_TOOL_NAME } from "#shared/workflow-sandbox.js";
+import {
+  getAllFrameworkChannelNames,
+  getFrameworkChannelDefinitions,
+} from "#runtime/framework-channels/index.js";
+import {
+  getAllFrameworkToolNames,
+  getFrameworkDynamicToolResolvers,
+  getFrameworkToolDefinitions,
+} from "#runtime/framework-tools/index.js";
+import { resolveAgent } from "#runtime/resolve-agent.js";
+import { loadResolvedModuleExport } from "#runtime/resolve-helpers.js";
+import { createResolvedRuntimeTurnAgent } from "#runtime/agent/bootstrap.js";
+import { createWorkspacePromptSection } from "#runtime/workspace/spec.js";
+import { createRuntimeHookRegistry } from "#runtime/hooks/registry.js";
+import { resolveDynamicSubagentDefinition } from "#runtime/resolve-dynamic-subagent.js";
+import { createRuntimeSandboxRegistry } from "#runtime/sandbox/registry.js";
+var ResolveRuntimeAgentGraphError = class extends Error {
+  logicalPath;
+  nodeId;
+  sourceId;
+  constructor(e, t = {}) {
+    (super(e),
+      (this.name = `ResolveRuntimeAgentGraphError`),
+      t.logicalPath !== void 0 && (this.logicalPath = t.logicalPath),
+      t.nodeId !== void 0 && (this.nodeId = t.nodeId),
+      t.sourceId !== void 0 && (this.sourceId = t.sourceId));
+  }
+};
+async function resolveRuntimeAgentGraph(e) {
+  let n = new Map(),
+    r = createChildNodeIdsByParentNodeId(e.manifest),
+    i = new Map(e.manifest.subagents.map((e) => [e.nodeId, e])),
+    a = await resolveRuntimeAgentNode({
+      childNodeIdsByParentNodeId: r,
+      manifest: e.manifest,
+      moduleMap: e.moduleMap,
+      nodeId: ROOT_COMPILED_AGENT_NODE_ID,
+      nodesByNodeId: n,
+      subagentNodesById: i,
+    });
+  return (
+    attachInheritedSandboxWorkspaceResources({
+      manifest: e.manifest,
+      nodesByNodeId: n,
+    }),
+    { nodesByNodeId: n, root: a }
+  );
+}
+async function resolveRuntimeAgentNode(e) {
+  let t = toRuntimeNodeId(e.nodeId);
+  if (e.nodesByNodeId.has(t))
+    throw new ResolveRuntimeAgentGraphError(
+      `Found multiple runtime agent nodes for node id "${t}".`,
+      { nodeId: t, sourceId: e.sourceId },
+    );
+  let a = await resolveAgent({
+      manifest: e.manifest,
+      moduleMap: e.moduleMap,
+      nodeId: e.nodeId,
+    }),
+    s = getFrameworkToolDefinitions({ authoredSkills: a.skills }),
+    c = new Set(s.map((e) => e.name)),
+    l = getAllFrameworkToolNames(),
+    u = new Set(a.tools.map((e) => e.name));
+  for (let n of a.disabledFrameworkTools)
+    if (!l.has(n))
+      throw new ResolveRuntimeAgentGraphError(
+        `agent/tools/${n}.ts exports disableTool() but "${n}" is not a framework tool. Rename the file to one of: ${[...l].sort().join(`, `)}.`,
+        { nodeId: t, sourceId: e.sourceId },
+      );
+  let d = new Set(a.disabledFrameworkTools),
+    f = await createRuntimeToolRegistry(
+      {
+        tools: [
+          ...s.filter((e) => !u.has(e.name) && !d.has(e.name)),
+          ...a.tools,
+        ],
+      },
+      {
+        reservedToolNames: [
+          WORKFLOW_TOOL_NAME,
+          ...(c.has(LOAD_SKILL_TOOL_NAME) || u.has(LOAD_SKILL_TOOL_NAME)
+            ? []
+            : [LOAD_SKILL_TOOL_NAME]),
+        ],
+      },
+    ),
+    p = new Set(a.channels.map((e) => e.name)),
+    m = getAllFrameworkChannelNames();
+  for (let n of a.disabledFrameworkChannels)
+    if (!m.has(n))
+      throw new ResolveRuntimeAgentGraphError(
+        `agent/channels/${n}.ts exports disableRoute() but "${n}" is not a framework channel. Rename the file to one of: ${[...m].sort().join(`, `)}.`,
+        { nodeId: t, sourceId: e.sourceId },
+      );
+  let h = new Set(a.disabledFrameworkChannels),
+    g = [
+      ...getFrameworkChannelDefinitions().filter(
+        (e) => !p.has(e.name) && !h.has(e.name),
+      ),
+      ...a.channels,
+    ],
+    _ = createRuntimeSandboxRegistry({
+      authoredSandbox: a.sandbox,
+      workspaceResourceRoot: a.workspaceResourceRoot,
+    }),
+    v = createRuntimeSubagentRegistry({
+      persistentSessions:
+        a.config?.experimental?.tasks === !0 ||
+        a.config?.experimental?.subagentPersistentSessions === !0,
+      reservedToolNames: [
+        LOAD_SKILL_TOOL_NAME,
+        ...f.preparedTools.map((e) => e.name),
+      ],
+      subagents: await resolveRuntimeSubagents({
+        childNodeIdsByParentNodeId: e.childNodeIdsByParentNodeId,
+        manifest: e.manifest,
+        moduleMap: e.moduleMap,
+        nodesByNodeId: e.nodesByNodeId,
+        parentNodeId: e.nodeId,
+        subagentNodesById: e.subagentNodesById,
+      }),
+    }),
+    y = {
+      ...a,
+      dynamicToolResolvers: [
+        ...a.dynamicToolResolvers,
+        ...getFrameworkDynamicToolResolvers(),
+      ],
+    },
+    b = {
+      agent: y,
+      channels: g,
+      hookRegistry: createRuntimeHookRegistry(y.hooks),
+      nodeId: t,
+      sandboxRegistry: _,
+      sourceId: e.sourceId,
+      subagentRegistry: v,
+      toolRegistry: f,
+      turnAgent: createResolvedRuntimeTurnAgent({
+        agent: y,
+        id: e.agentId,
+        nodeId: t,
+        tools: [...f.preparedTools, ...v.preparedTools],
+      }),
+    };
+  return (e.nodesByNodeId.set(t, b), b);
+}
+async function resolveRuntimeSubagents(e) {
+  let t = [],
+    n = e.childNodeIdsByParentNodeId.get(e.parentNodeId) ?? [];
+  for (let r of n) {
+    let n = e.subagentNodesById.get(r);
+    if (n === void 0)
+      throw new ResolveRuntimeAgentGraphError(
+        `Missing compiled subagent node "${r}" while resolving runtime subagents.`,
+        { nodeId: toRuntimeNodeId(e.parentNodeId), sourceId: r },
+      );
+    t.push(
+      await resolveRuntimeSubagent({
+        childNodeIdsByParentNodeId: e.childNodeIdsByParentNodeId,
+        moduleMap: e.moduleMap,
+        nodesByNodeId: e.nodesByNodeId,
+        sourceRef: n,
+        subagentNodesById: e.subagentNodesById,
+      }),
+    );
+  }
+  for (let n of e.manifest.remoteAgents)
+    t.push(
+      await resolveRuntimeRemoteAgent({
+        moduleMap: e.moduleMap,
+        nodeScopeId: e.parentNodeId,
+        sourceRef: n,
+      }),
+    );
+  return t;
+}
+async function resolveRuntimeSubagent(e) {
+  let t = {
+    ...(e.sourceRef.configResolver === void 0
+      ? { description: e.sourceRef.description }
+      : {
+          dynamic: await resolveDynamicSubagentDefinition({
+            definition: e.sourceRef.configResolver,
+            moduleMap: e.moduleMap,
+            nodeId: e.sourceRef.nodeId,
+          }),
+        }),
+    kind: `subagent`,
+    logicalPath: e.sourceRef.logicalPath,
+    name: e.sourceRef.name,
+    nodeId: toRuntimeNodeId(e.sourceRef.nodeId),
+    sourceId: e.sourceRef.sourceId,
+    sourceKind: `module`,
+  };
+  return (
+    await resolveRuntimeAgentNode({
+      agentId: e.sourceRef.name,
+      childNodeIdsByParentNodeId: e.childNodeIdsByParentNodeId,
+      manifest: e.sourceRef.agent,
+      moduleMap: e.moduleMap,
+      nodeId: e.sourceRef.nodeId,
+      nodesByNodeId: e.nodesByNodeId,
+      sourceId: e.sourceRef.sourceId,
+      subagentNodesById: e.subagentNodesById,
+    }),
+    t
+  );
+}
+async function resolveRuntimeRemoteAgent(t) {
+  let n = expectObjectRecord(
+      await loadResolvedModuleExport({
+        definition: t.sourceRef,
+        kindLabel: `remote agent`,
+        moduleMap: t.moduleMap,
+        nodeId: t.nodeScopeId,
+      }),
+      `Expected remote agent source "${t.sourceRef.logicalPath}" to export an object.`,
+    ),
+    r = {
+      description: t.sourceRef.description,
+      kind: `remote`,
+      logicalPath: t.sourceRef.logicalPath,
+      name: t.sourceRef.name,
+      nodeId: toRuntimeNodeId(t.sourceRef.nodeId),
+      outputSchema: t.sourceRef.outputSchema,
+      path: t.sourceRef.path,
+      sourceId: t.sourceRef.sourceId,
+      sourceKind: `module`,
+      url: await resolveRemoteAgentUrl({
+        bakedUrl: t.sourceRef.url,
+        logicalPath: t.sourceRef.logicalPath,
+        resolvedUrl: n.url,
+      }),
+    };
+  (typeof n.auth == `function` && (r.auth = n.auth),
+    n.forwardPrincipal === !0 && (r.forwardPrincipal = !0));
+  let i = resolveRemoteAgentHeaders(n.headers);
+  return (i !== void 0 && (r.headers = i), r);
+}
+async function resolveRemoteAgentUrl(e) {
+  if (typeof e.resolvedUrl == `function`) {
+    let t = await e.resolvedUrl();
+    if (typeof t != `string` || t.length === 0)
+      throw Error(
+        `Remote agent "${e.logicalPath}" url function must return a non-empty string.`,
+      );
+    return t;
+  }
+  let t = e.bakedUrl ?? (typeof e.resolvedUrl == `string` ? e.resolvedUrl : ``);
+  if (t.length === 0)
+    throw Error(`Remote agent "${e.logicalPath}" is missing a url.`);
+  return t;
+}
+function resolveRemoteAgentHeaders(e) {
+  if (e === void 0) return;
+  if (typeof e == `function`) return e;
+  if (typeof e != `object` || !e || Array.isArray(e)) return;
+  let t = {};
+  for (let [n, r] of Object.entries(e)) typeof r == `string` && (t[n] = r);
+  return t;
+}
+function attachInheritedSandboxWorkspaceResources(e) {
+  let t = new Map(
+    e.manifest.subagentEdges.map((e) => [e.childNodeId, e.parentNodeId]),
+  );
+  for (let [n, r] of e.nodesByNodeId) {
+    if (r.sandboxRegistry.sandbox.definition.inheritsParent !== !0) continue;
+    if (r.agent.dynamicSkillResolvers.length > 0)
+      throw new ResolveRuntimeAgentGraphError(
+        `Sandbox "${r.sandboxRegistry.sandbox.definition.logicalPath}" selects parent.sandbox but agent node "${n}" defines dynamic skills. Remove the child dynamic skills or give the child its own sandbox.`,
+        { nodeId: n },
+      );
+    let i = t.get(n);
+    if (i === void 0)
+      throw new ResolveRuntimeAgentGraphError(
+        `Sandbox "${r.sandboxRegistry.sandbox.definition.logicalPath}" selects parent.sandbox but agent node "${n}" has no parent.`,
+        { nodeId: n },
+      );
+    let a = resolveSandboxOwnerNode({
+      nodeId: i,
+      nodesByNodeId: e.nodesByNodeId,
+      parentNodeIdByChildNodeId: t,
+    });
+    r.sandboxRegistry.sandbox.inheritance = {
+      definition: a.sandboxRegistry.sandbox.definition,
+      nodeId: a.nodeId,
+      workspaceResourceRoot: a.sandboxRegistry.sandbox.workspaceResourceRoot,
+    };
+    let o = createWorkspacePromptSection(a.agent.workspaceSpec);
+    o !== void 0 &&
+      (r.turnAgent.instructions = [...r.turnAgent.instructions, o]);
+  }
+}
+function resolveSandboxOwnerNode(e) {
+  let t = e.nodesByNodeId.get(toRuntimeNodeId(e.nodeId));
+  if (t === void 0)
+    throw new ResolveRuntimeAgentGraphError(
+      `Missing parent runtime node "${e.nodeId}".`,
+      { nodeId: e.nodeId },
+    );
+  if (t.sandboxRegistry.sandbox.definition.inheritsParent !== !0) return t;
+  let n = e.parentNodeIdByChildNodeId.get(e.nodeId);
+  if (n === void 0)
+    throw new ResolveRuntimeAgentGraphError(
+      `Inherited sandbox node "${e.nodeId}" has no parent.`,
+      { nodeId: e.nodeId },
+    );
+  return resolveSandboxOwnerNode({ ...e, nodeId: n });
+}
+function createChildNodeIdsByParentNodeId(e) {
+  let t = new Map();
+  for (let n of e.subagentEdges) {
+    let e = t.get(n.parentNodeId);
+    if (e === void 0) {
+      t.set(n.parentNodeId, [n.childNodeId]);
+      continue;
+    }
+    e.push(n.childNodeId);
+  }
+  return t;
+}
+function toRuntimeNodeId(e) {
+  return e === ROOT_COMPILED_AGENT_NODE_ID ? ROOT_RUNTIME_AGENT_NODE_ID : e;
+}
+export { resolveRuntimeAgentGraph };

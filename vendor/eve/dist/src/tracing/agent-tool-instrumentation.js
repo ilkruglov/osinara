@@ -1,1 +1,146 @@
-import{ROOT_CONTEXT,SpanStatusCode,trace}from"#compiled/@opentelemetry/api/index.js";import{actionIdempotencyKey}from"#harness/instrumentation/lifecycle.js";import{contentAttribute}from"#tracing/agent-otel-content.js";function createAgentToolInstrumentation(e){let t=new Map,n=new Map,onStarted=async t=>{let n=actionIdempotencyKey(t.scope.sessionId,t.scope.turnId,t.callId),i=e.resolveFallback(t),a=i===void 0?void 0:reserve(t,n,i),o=await e.actionContextFor(t.scope.sessionId,t.scope.turnId,t.callId);if(a===void 0){if(o===void 0)return;a=reserve(t,n,o)}o!==void 0&&startSpan(a,o.context)},onTerminal=async t=>{let r=n.get(t.scope.attemptId)?.get(t.idempotencyKey);if(r!==void 0){if(r.terminal=t,r.span===void 0){let t=await e.actionContextFor(r.event.scope.sessionId,r.event.scope.turnId,r.event.callId);t!==void 0&&startSpan(r,t.context)}finishIfReady(r)}};return{async actionStarted(n){let r=t.get(n.idempotencyKey);if(r===void 0||r.span!==void 0||r.finished===!0)return;let i=await e.actionContextFor(n.scope.sessionId,n.scope.turnId,n.callId);i!==void 0&&(startSpan(r,i.context),finishIfReady(r))},contextFor:(e,t)=>n.get(e)?.get(t)?.context,drain(e,t){let r=n.get(e);if(r!==void 0){for(let e of r.values())e.finished!==!0&&(e.span===void 0&&startSpan(e,e.fallbackParent),finish(e,t));n.delete(e)}},events:{"tool.call.completed":onTerminal,"tool.call.failed":onTerminal,"tool.call.started":onStarted}};function getAttemptStates(e){let t=n.get(e);return t===void 0&&(t=new Map,n.set(e,t)),t}function reserve(n,r,i){let a=e.idGenerator.deriveSpanId(`tool:${n.idempotencyKey}`),o={actionKey:r,attemptId:n.scope.attemptId,context:contextFromSpanContext({isRemote:!1,spanId:a,traceFlags:i.spanContext.traceFlags,traceId:i.spanContext.traceId}),event:n,fallbackParent:i.context,idempotencyKey:n.idempotencyKey,spanId:a,startTimeMs:Date.now()};return getAttemptStates(n.scope.attemptId).set(n.idempotencyKey,o),t.set(r,o),o}function startSpan(t,n){if(!(t.span!==void 0||t.finished===!0)&&(t.span=e.idGenerator.withSpanId(t.spanId,()=>e.tracer.startSpan(`ai.toolCall`,{attributes:toolAttributes(t.event),startTime:t.startTimeMs},n)),e.recordInputs)){let e=contentAttribute(t.event.input,!1);e!==void 0&&t.span.setAttribute(`gen_ai.tool.call.arguments`,e)}}function finishIfReady(e){e.span===void 0||e.terminal===void 0||finish(e)}function finish(r,a){let o=r.span;if(o===void 0||r.finished===!0)return;r.finished=!0;let s=r.terminal;if(a!==void 0)recordError(o,a.error);else if(s?.type===`tool.call.failed`)recordError(o,s.error);else if(s?.output.type===`error`)recordError(o,s.output.error);else if(s!==void 0&&e.recordOutputs){let e=contentAttribute(s.output.output,!1);e!==void 0&&o.setAttribute(`gen_ai.tool.call.result`,e)}o.end(),t.delete(r.actionKey);let c=n.get(r.attemptId);c?.delete(r.idempotencyKey),c?.size===0&&n.delete(r.attemptId)}}function toolAttributes(e){return{"gen_ai.operation.name":`execute_tool`,"gen_ai.tool.call.id":e.callId,"gen_ai.tool.name":e.toolName}}function contextFromSpanContext(t){return trace.setSpan(ROOT_CONTEXT,trace.wrapSpanContext(t))}function recordError(e,n){n instanceof Error?(e.recordException(n),e.setStatus({code:SpanStatusCode.ERROR,message:n.message})):e.setStatus({code:SpanStatusCode.ERROR})}export{createAgentToolInstrumentation};
+import {
+  ROOT_CONTEXT,
+  SpanStatusCode,
+  trace,
+} from "#compiled/@opentelemetry/api/index.js";
+import { actionIdempotencyKey } from "#harness/instrumentation/lifecycle.js";
+import { contentAttribute } from "#tracing/agent-otel-content.js";
+function createAgentToolInstrumentation(e) {
+  let t = new Map(),
+    n = new Map(),
+    onStarted = async (t) => {
+      let n = actionIdempotencyKey(t.scope.sessionId, t.scope.turnId, t.callId),
+        i = e.resolveFallback(t),
+        a = i === void 0 ? void 0 : reserve(t, n, i),
+        o = await e.actionContextFor(
+          t.scope.sessionId,
+          t.scope.turnId,
+          t.callId,
+        );
+      if (a === void 0) {
+        if (o === void 0) return;
+        a = reserve(t, n, o);
+      }
+      o !== void 0 && startSpan(a, o.context);
+    },
+    onTerminal = async (t) => {
+      let r = n.get(t.scope.attemptId)?.get(t.idempotencyKey);
+      if (r !== void 0) {
+        if (((r.terminal = t), r.span === void 0)) {
+          let t = await e.actionContextFor(
+            r.event.scope.sessionId,
+            r.event.scope.turnId,
+            r.event.callId,
+          );
+          t !== void 0 && startSpan(r, t.context);
+        }
+        finishIfReady(r);
+      }
+    };
+  return {
+    async actionStarted(n) {
+      let r = t.get(n.idempotencyKey);
+      if (r === void 0 || r.span !== void 0 || r.finished === !0) return;
+      let i = await e.actionContextFor(
+        n.scope.sessionId,
+        n.scope.turnId,
+        n.callId,
+      );
+      i !== void 0 && (startSpan(r, i.context), finishIfReady(r));
+    },
+    contextFor: (e, t) => n.get(e)?.get(t)?.context,
+    drain(e, t) {
+      let r = n.get(e);
+      if (r !== void 0) {
+        for (let e of r.values())
+          e.finished !== !0 &&
+            (e.span === void 0 && startSpan(e, e.fallbackParent), finish(e, t));
+        n.delete(e);
+      }
+    },
+    events: {
+      "tool.call.completed": onTerminal,
+      "tool.call.failed": onTerminal,
+      "tool.call.started": onStarted,
+    },
+  };
+  function getAttemptStates(e) {
+    let t = n.get(e);
+    return (t === void 0 && ((t = new Map()), n.set(e, t)), t);
+  }
+  function reserve(n, r, i) {
+    let a = e.idGenerator.deriveSpanId(`tool:${n.idempotencyKey}`),
+      o = {
+        actionKey: r,
+        attemptId: n.scope.attemptId,
+        context: contextFromSpanContext({
+          isRemote: !1,
+          spanId: a,
+          traceFlags: i.spanContext.traceFlags,
+          traceId: i.spanContext.traceId,
+        }),
+        event: n,
+        fallbackParent: i.context,
+        idempotencyKey: n.idempotencyKey,
+        spanId: a,
+        startTimeMs: Date.now(),
+      };
+    return (
+      getAttemptStates(n.scope.attemptId).set(n.idempotencyKey, o),
+      t.set(r, o),
+      o
+    );
+  }
+  function startSpan(t, n) {
+    if (
+      !(t.span !== void 0 || t.finished === !0) &&
+      ((t.span = e.idGenerator.withSpanId(t.spanId, () =>
+        e.tracer.startSpan(
+          `ai.toolCall`,
+          { attributes: toolAttributes(t.event), startTime: t.startTimeMs },
+          n,
+        ),
+      )),
+      e.recordInputs)
+    ) {
+      let e = contentAttribute(t.event.input, !1);
+      e !== void 0 && t.span.setAttribute(`gen_ai.tool.call.arguments`, e);
+    }
+  }
+  function finishIfReady(e) {
+    e.span === void 0 || e.terminal === void 0 || finish(e);
+  }
+  function finish(r, a) {
+    let o = r.span;
+    if (o === void 0 || r.finished === !0) return;
+    r.finished = !0;
+    let s = r.terminal;
+    if (a !== void 0) recordError(o, a.error);
+    else if (s?.type === `tool.call.failed`) recordError(o, s.error);
+    else if (s?.output.type === `error`) recordError(o, s.output.error);
+    else if (s !== void 0 && e.recordOutputs) {
+      let e = contentAttribute(s.output.output, !1);
+      e !== void 0 && o.setAttribute(`gen_ai.tool.call.result`, e);
+    }
+    (o.end(), t.delete(r.actionKey));
+    let c = n.get(r.attemptId);
+    (c?.delete(r.idempotencyKey), c?.size === 0 && n.delete(r.attemptId));
+  }
+}
+function toolAttributes(e) {
+  return {
+    "gen_ai.operation.name": `execute_tool`,
+    "gen_ai.tool.call.id": e.callId,
+    "gen_ai.tool.name": e.toolName,
+  };
+}
+function contextFromSpanContext(t) {
+  return trace.setSpan(ROOT_CONTEXT, trace.wrapSpanContext(t));
+}
+function recordError(e, n) {
+  n instanceof Error
+    ? (e.recordException(n),
+      e.setStatus({ code: SpanStatusCode.ERROR, message: n.message }))
+    : e.setStatus({ code: SpanStatusCode.ERROR });
+}
+export { createAgentToolInstrumentation };

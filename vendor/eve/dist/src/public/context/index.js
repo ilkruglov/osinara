@@ -1,1 +1,2 @@
-import{defineState}from"#public/definitions/state.js";export{defineState};
+import { defineState } from "#public/definitions/state.js";
+export { defineState };

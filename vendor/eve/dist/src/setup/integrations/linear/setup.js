@@ -1,7 +1,136 @@
-import{defineSetupIntegration}from"../types.js";import{attachLinearConnector,findLinearConnector,provisionLinearConnector}from"./connect.js";import{join}from"node:path";import{deriveSlackConnectorSlug,normalizeSlackConnectorSlug}from"#setup/scaffold/index.js";import{WizardCancelledError}from"#setup/step.js";import{select,text}from"#setup/ask.js";import{writeTextFile}from"#setup/scaffold/files.js";const defaultDeps={attachConnector:attachLinearConnector,deriveConnectorSlug:deriveSlackConnectorSlug,findConnector:findLinearConnector,provisionConnector:provisionLinearConnector,writeTextFile};function linearSafeConnectorSlug(e){return normalizeSlackConnectorSlug(e.replaceAll(/linear/gi,``).replace(/[-_]{2,}/g,`-`)||`agent`)}function connectTemplate(e){return`import { connectLinearCredentials } from "@vercel/connect/eve";
+import { defineSetupIntegration } from "../types.js";
+import {
+  attachLinearConnector,
+  findLinearConnector,
+  provisionLinearConnector,
+} from "./connect.js";
+import { join } from "node:path";
+import {
+  deriveSlackConnectorSlug,
+  normalizeSlackConnectorSlug,
+} from "#setup/scaffold/index.js";
+import { WizardCancelledError } from "#setup/step.js";
+import { select, text } from "#setup/ask.js";
+import { writeTextFile } from "#setup/scaffold/files.js";
+const defaultDeps = {
+  attachConnector: attachLinearConnector,
+  deriveConnectorSlug: deriveSlackConnectorSlug,
+  findConnector: findLinearConnector,
+  provisionConnector: provisionLinearConnector,
+  writeTextFile,
+};
+function linearSafeConnectorSlug(e) {
+  return normalizeSlackConnectorSlug(
+    e.replaceAll(/linear/gi, ``).replace(/[-_]{2,}/g, `-`) || `agent`,
+  );
+}
+function connectTemplate(e) {
+  return `import { connectLinearCredentials } from "@vercel/connect/eve";
 import { linearChannel } from "eve/channels/linear";
 
 export default linearChannel({
   credentials: connectLinearCredentials(${JSON.stringify(e)}),
 });
-`}async function prepareLinearSetup(e,t=defaultDeps){let n=await e.resolveVercelProject(`Linear`),r=linearSafeConnectorSlug(await t.deriveConnectorSlug(e.appRoot)),i=linearSafeConnectorSlug(await e.asker.ask(text({key:`linear.connector-name`,message:`Name your Linear agent`,recommended:r,validate:e=>e.trim().length===0?`A Linear agent name is required.`:null}))),a=await t.findConnector({project:n,projectRoot:e.appRoot,slug:i,signal:e.signal});if(a===void 0)return{project:n,connector:{kind:`create`,slug:i}};let o=await e.asker.ask(select({key:`linear.existing-connector`,message:`A Linear connector named "${i}" already exists. What would you like to do?`,options:[{id:`reuse`,label:`Reuse existing connector`,value:`reuse`},{id:`new`,label:`Create a new connector`,value:`new`},{id:`exit`,label:`Exit setup`,value:`exit`}],recommended:`reuse`}));if(o===`exit`)throw new WizardCancelledError;return o===`reuse`?{project:n,connector:{kind:`reuse`,connector:a}}:{project:n,connector:{kind:`create`,slug:linearSafeConnectorSlug(await e.asker.ask(text({key:`linear.new-connector-name`,message:`Name the new Linear agent`,recommended:`${i}-2`,validate:e=>e.trim().length===0?`A Linear agent name is required.`:null})))}}}async function applyLinearSetup(e,t,n=defaultDeps){let r=e.connector.kind===`reuse`?(await n.attachConnector({connector:e.connector.connector,log:t.presenter.log,project:e.project,projectRoot:t.appRoot,signal:t.signal}),e.connector.connector):await n.provisionConnector({log:t.presenter.log,project:e.project,projectRoot:t.appRoot,slug:e.connector.slug,signal:t.signal});return await n.writeTextFile(join(t.appRoot,`agent/channels/linear.ts`),connectTemplate(r.uid),{force:t.force}),t.presenter.nextSteps([`Deploy the agent, then open the Linear app in Vercel Connect and install it in the workspace where you want to delegate issues and comments.`,`Delegate an issue or mention the agent in an Agent Session to start a conversation.`]),{facts:[],deploymentRequired:!0}}const LINEAR_SETUP=defineSetupIntegration({kind:`linear`,label:`Linear Agent`,hint:`Delegate Linear issues and comments`,prepare:prepareLinearSetup,apply:applyLinearSetup});export{LINEAR_SETUP,applyLinearSetup,linearSafeConnectorSlug,prepareLinearSetup};
+`;
+}
+async function prepareLinearSetup(e, t = defaultDeps) {
+  let n = await e.resolveVercelProject(`Linear`),
+    r = linearSafeConnectorSlug(await t.deriveConnectorSlug(e.appRoot)),
+    i = linearSafeConnectorSlug(
+      await e.asker.ask(
+        text({
+          key: `linear.connector-name`,
+          message: `Name your Linear agent`,
+          recommended: r,
+          validate: (e) =>
+            e.trim().length === 0 ? `A Linear agent name is required.` : null,
+        }),
+      ),
+    ),
+    a = await t.findConnector({
+      project: n,
+      projectRoot: e.appRoot,
+      slug: i,
+      signal: e.signal,
+    });
+  if (a === void 0)
+    return { project: n, connector: { kind: `create`, slug: i } };
+  let o = await e.asker.ask(
+    select({
+      key: `linear.existing-connector`,
+      message: `A Linear connector named "${i}" already exists. What would you like to do?`,
+      options: [
+        { id: `reuse`, label: `Reuse existing connector`, value: `reuse` },
+        { id: `new`, label: `Create a new connector`, value: `new` },
+        { id: `exit`, label: `Exit setup`, value: `exit` },
+      ],
+      recommended: `reuse`,
+    }),
+  );
+  if (o === `exit`) throw new WizardCancelledError();
+  return o === `reuse`
+    ? { project: n, connector: { kind: `reuse`, connector: a } }
+    : {
+        project: n,
+        connector: {
+          kind: `create`,
+          slug: linearSafeConnectorSlug(
+            await e.asker.ask(
+              text({
+                key: `linear.new-connector-name`,
+                message: `Name the new Linear agent`,
+                recommended: `${i}-2`,
+                validate: (e) =>
+                  e.trim().length === 0
+                    ? `A Linear agent name is required.`
+                    : null,
+              }),
+            ),
+          ),
+        },
+      };
+}
+async function applyLinearSetup(e, t, n = defaultDeps) {
+  let r =
+    e.connector.kind === `reuse`
+      ? (await n.attachConnector({
+          connector: e.connector.connector,
+          log: t.presenter.log,
+          project: e.project,
+          projectRoot: t.appRoot,
+          signal: t.signal,
+        }),
+        e.connector.connector)
+      : await n.provisionConnector({
+          log: t.presenter.log,
+          project: e.project,
+          projectRoot: t.appRoot,
+          slug: e.connector.slug,
+          signal: t.signal,
+        });
+  return (
+    await n.writeTextFile(
+      join(t.appRoot, `agent/channels/linear.ts`),
+      connectTemplate(r.uid),
+      { force: t.force },
+    ),
+    t.presenter.nextSteps([
+      `Deploy the agent, then open the Linear app in Vercel Connect and install it in the workspace where you want to delegate issues and comments.`,
+      `Delegate an issue or mention the agent in an Agent Session to start a conversation.`,
+    ]),
+    { facts: [], deploymentRequired: !0 }
+  );
+}
+const LINEAR_SETUP = defineSetupIntegration({
+  kind: `linear`,
+  label: `Linear Agent`,
+  hint: `Delegate Linear issues and comments`,
+  prepare: prepareLinearSetup,
+  apply: applyLinearSetup,
+});
+export {
+  LINEAR_SETUP,
+  applyLinearSetup,
+  linearSafeConnectorSlug,
+  prepareLinearSetup,
+};

@@ -1,1 +1,106 @@
-import{createLogger}from"#internal/logging.js";import{SessionCallbackKey}from"#context/keys.js";import{toErrorMessage}from"#shared/errors.js";import{SESSION_FAILED}from"#harness/agent-handle-errors.js";import{parseSessionCallback}from"#channel/session-callback.js";import{postSessionCallbackRequest}from"#execution/session-callback-request.js";const log=createLogger(`execution.session-callback`);async function fireTaskEventCallbackStep(e){"use step";let t=parseSerializedSessionCallback(e.callback);if(t.taskId===void 0)return;let n=e.event.type===`input.requested`,r=n?`task.input-requested`:`task.authorization`,i=await postSessionCallbackRequest({body:{callId:t.callId,childContinuationToken:e.childContinuationToken,childSessionId:e.childSessionId,event:n?e.event.data:e.event,kind:r,subagentName:t.subagentName,taskId:t.taskId},url:t.url});if(!i.ok)throw Error(`Task event callback failed with HTTP ${i.status}.`)}async function fireTaskUpdateCallbackStep(e){"use step";let t=parseSerializedSessionCallback(e.callback);if(t.taskId===void 0)return;let n=await postSessionCallbackRequest({body:{callId:e.callId,childStepIndex:e.childStepIndex,childTurnId:e.childTurnId,kind:`task.update`,message:e.message,taskId:t.taskId},url:t.url});if(!n.ok)throw Error(`Task update callback failed with HTTP ${n.status}.`);return t.taskId}async function fireSessionCallbackStep(e){"use step";let i=e.serializedContext[`eve.sessionId`]??``,o=e.serializedContext[SessionCallbackKey.name];if(o!==void 0)try{let t=parseSerializedSessionCallback(o),a=await postSessionCallbackRequest({body:e.status===`completed`?buildCompletedCallbackBody({callback:t,output:e.output,sessionId:i,usage:e.usage}):{callId:t.callId,error:{code:SESSION_FAILED,message:toErrorMessage(e.error)},kind:`session.failed`,sessionId:i,subagentName:t.subagentName,usage:e.usage},url:t.url});if(!a.ok)throw Error(`Session callback failed with HTTP ${a.status}.`)}catch(e){throw log.error(`failed to post session callback`,{error:e,sessionId:i}),e}}function buildCompletedCallbackBody(e){let t={callId:e.callback.callId,kind:`session.completed`,output:e.output??``,sessionId:e.sessionId,subagentName:e.callback.subagentName};return e.usage===void 0?t:{...t,usage:e.usage}}function parseSerializedSessionCallback(e){let t=parseSessionCallback(e);if(!t.ok)throw Error(`Serialized session callback is invalid.`,{cause:t.cause});return t.callback}export{fireSessionCallbackStep,fireTaskEventCallbackStep,fireTaskUpdateCallbackStep};
+import { createLogger } from "#internal/logging.js";
+import { SessionCallbackKey } from "#context/keys.js";
+import { toErrorMessage } from "#shared/errors.js";
+import { SESSION_FAILED } from "#harness/agent-handle-errors.js";
+import { parseSessionCallback } from "#channel/session-callback.js";
+import { postSessionCallbackRequest } from "#execution/session-callback-request.js";
+const log = createLogger(`execution.session-callback`);
+async function fireTaskEventCallbackStep(e) {
+  "use step";
+  let t = parseSerializedSessionCallback(e.callback);
+  if (t.taskId === void 0) return;
+  let n = e.event.type === `input.requested`,
+    r = n ? `task.input-requested` : `task.authorization`,
+    i = await postSessionCallbackRequest({
+      body: {
+        callId: t.callId,
+        childContinuationToken: e.childContinuationToken,
+        childSessionId: e.childSessionId,
+        event: n ? e.event.data : e.event,
+        kind: r,
+        subagentName: t.subagentName,
+        taskId: t.taskId,
+      },
+      url: t.url,
+    });
+  if (!i.ok) throw Error(`Task event callback failed with HTTP ${i.status}.`);
+}
+async function fireTaskUpdateCallbackStep(e) {
+  "use step";
+  let t = parseSerializedSessionCallback(e.callback);
+  if (t.taskId === void 0) return;
+  let n = await postSessionCallbackRequest({
+    body: {
+      callId: e.callId,
+      childStepIndex: e.childStepIndex,
+      childTurnId: e.childTurnId,
+      kind: `task.update`,
+      message: e.message,
+      taskId: t.taskId,
+    },
+    url: t.url,
+  });
+  if (!n.ok) throw Error(`Task update callback failed with HTTP ${n.status}.`);
+  return t.taskId;
+}
+async function fireSessionCallbackStep(e) {
+  "use step";
+  let i = e.serializedContext[`eve.sessionId`] ?? ``,
+    o = e.serializedContext[SessionCallbackKey.name];
+  if (o !== void 0)
+    try {
+      let t = parseSerializedSessionCallback(o),
+        a = await postSessionCallbackRequest({
+          body:
+            e.status === `completed`
+              ? buildCompletedCallbackBody({
+                  callback: t,
+                  output: e.output,
+                  sessionId: i,
+                  usage: e.usage,
+                })
+              : {
+                  callId: t.callId,
+                  error: {
+                    code: SESSION_FAILED,
+                    message: toErrorMessage(e.error),
+                  },
+                  kind: `session.failed`,
+                  sessionId: i,
+                  subagentName: t.subagentName,
+                  usage: e.usage,
+                },
+          url: t.url,
+        });
+      if (!a.ok) throw Error(`Session callback failed with HTTP ${a.status}.`);
+    } catch (e) {
+      throw (
+        log.error(`failed to post session callback`, {
+          error: e,
+          sessionId: i,
+        }),
+        e
+      );
+    }
+}
+function buildCompletedCallbackBody(e) {
+  let t = {
+    callId: e.callback.callId,
+    kind: `session.completed`,
+    output: e.output ?? ``,
+    sessionId: e.sessionId,
+    subagentName: e.callback.subagentName,
+  };
+  return e.usage === void 0 ? t : { ...t, usage: e.usage };
+}
+function parseSerializedSessionCallback(e) {
+  let t = parseSessionCallback(e);
+  if (!t.ok)
+    throw Error(`Serialized session callback is invalid.`, { cause: t.cause });
+  return t.callback;
+}
+export {
+  fireSessionCallbackStep,
+  fireTaskEventCallbackStep,
+  fireTaskUpdateCallbackStep,
+};
