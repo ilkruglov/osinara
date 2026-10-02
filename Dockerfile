@@ -58,8 +58,8 @@ RUN npm ci --omit=dev --ignore-scripts \
     && npm run postinstall \
     && npm run install:gws
 
-# Codex subscription gateway, unused since 2 October 2026. Still built for one release because the
-# installed deploy controller requires images.cliProxy in the manifest; remove with that key.
+# Codex subscription gateway, unused since 2 October 2026. Still built because the 1.8.9 deploy
+# controller requires images.cliProxy; remove with that key once 1.8.10 (which accepts it absent) runs.
 FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy
 ARG OCI_SOURCE
 ARG OCI_VERSION

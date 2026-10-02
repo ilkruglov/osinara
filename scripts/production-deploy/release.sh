@@ -160,19 +160,23 @@ validate_manifest() {
     (.commitSha | test("^[0-9a-f]{40}$")) and
     (.composeSha256 | test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and
-      keys == ["app", "cliProxy", "edge", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"])
+      # cliProxy (the Codex subscription gateway, removed 2 October 2026) may be absent.
+      ((keys - ["cliProxy"]) == ["app", "edge", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"]))
   ' "$manifest" >/dev/null || fail "DEPLOY_MANIFEST_INVALID" "Deployment manifest schema is invalid"
 
   MANIFEST_COMMIT="$(jq -er '.commitSha' "$manifest")"
   MANIFEST_COMPOSE_SHA="$(jq -er '.composeSha256' "$manifest")"
   APP_IMAGE="$(jq -er '.images.app' "$manifest")"
-  CLI_PROXY_IMAGE="$(jq -er '.images.cliProxy' "$manifest")"
+  # "-" stands for an absent gateway image, the same marker database.sh reads from the proposal.
+  CLI_PROXY_IMAGE="$(jq -er '.images.cliProxy // "-"' "$manifest")"
   EDGE_IMAGE="$(jq -er '.images.edge' "$manifest")"
   EGRESS_IMAGE="$(jq -er '.images.sandboxEgressProxy' "$manifest")"
   RUNNER_IMAGE="$(jq -er '.images.sandboxRunner' "$manifest")"
   RUNTIME_IMAGE="$(jq -er '.images.sandboxRuntime' "$manifest")"
   require_image_ref "$APP_IMAGE" "$APP_IMAGE_PREFIX"
-  require_image_ref "$CLI_PROXY_IMAGE" "$CLI_PROXY_IMAGE_PREFIX"
+  if [[ "$CLI_PROXY_IMAGE" != "-" ]]; then
+    require_image_ref "$CLI_PROXY_IMAGE" "$CLI_PROXY_IMAGE_PREFIX"
+  fi
   require_image_ref "$EDGE_IMAGE" "$EDGE_IMAGE_PREFIX"
   require_image_ref "$EGRESS_IMAGE" "$EGRESS_IMAGE_PREFIX"
   require_image_ref "$RUNNER_IMAGE" "$RUNNER_IMAGE_PREFIX"
@@ -257,7 +261,9 @@ prepare_candidate_release() {
   CANDIDATE_ENV="${CANDIDATE_DIR}/release.env"
   {
     printf 'OSINARA_APP_IMAGE=%s\n' "$APP_IMAGE"
-    printf 'OSINARA_CLI_PROXY_IMAGE=%s\n' "$CLI_PROXY_IMAGE"
+    if [[ "$CLI_PROXY_IMAGE" != "-" ]]; then
+      printf 'OSINARA_CLI_PROXY_IMAGE=%s\n' "$CLI_PROXY_IMAGE"
+    fi
     printf 'SANDBOX_RUNTIME_IMAGE=%s\n' "$RUNTIME_IMAGE"
     printf 'OSINARA_SANDBOX_RUNNER_IMAGE=%s\n' "$RUNNER_IMAGE"
     printf 'OSINARA_SANDBOX_EGRESS_PROXY_IMAGE=%s\n' "$EGRESS_IMAGE"

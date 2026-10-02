@@ -41,6 +41,14 @@ describe("production host contracts", () => {
     expect(environment).not.toContain("OSINARA_CLI_PROXY_IMAGE");
   });
 
+  it("accepts a manifest without the retired gateway image", () => {
+    const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
+    delete parsed.images.cliProxy;
+
+    expect(releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3").toString("utf8"))
+      .toContain(`OSINARA_APP_IMAGE=${digest("osinara-app", "a")}`);
+  });
+
   it("rejects inherited upstream image references", () => {
     const upstream = Buffer.from(manifest().toString("utf8").replaceAll("ilkruglov", "nyxandro"));
     expect(() => releaseEnvironmentFromManifest(upstream, "0.15.3")).toThrow("OSINARA_INSTALL_MANIFEST_INVALID");

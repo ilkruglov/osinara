@@ -17,9 +17,10 @@ const manifestSchema = z.object({
   composeSha256: z.string().regex(/^[0-9a-f]{64}$/u),
   images: z.object({
     app: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-app@sha256:${IMAGE_DIGEST}$`, "u")),
+    // The Codex subscription gateway was removed on 2 October 2026; releases may omit its image.
     cliProxy: z.string().regex(
       new RegExp(`^ghcr\\.io/ilkruglov/osinara-cli-proxy@sha256:${IMAGE_DIGEST}$`, "u"),
-    ),
+    ).optional(),
     edge: z.string().regex(new RegExp(`^ghcr\\.io/ilkruglov/osinara-edge@sha256:${IMAGE_DIGEST}$`, "u")),
     sandboxEgressProxy: z.string().regex(
       new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${IMAGE_DIGEST}$`, "u"),

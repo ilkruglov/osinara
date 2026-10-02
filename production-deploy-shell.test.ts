@@ -5,6 +5,7 @@
  * - Stable SemVer comparison rejects equal and lower releases.
  * - Exported release image variables fail before Compose interpolation.
  * - `composeSha256` binds the exact released Compose bytes.
+ * - A manifest may omit the retired subscription gateway image; nothing else may change shape.
  * - PostgreSQL command tags cannot masquerade as returned proposal rows.
  * - Candidate-only volumes are bootstrapped and recovered only before migration starts.
  * - The Eve 0.32 cutover archives and retires only the exact legacy workflow volume.
@@ -82,6 +83,50 @@ describe("production deploy shell policies", () => {
     expect(valid.status, valid.stderr).toBe(0);
     expect(invalid.status).toBe(1);
     expect(invalid.stderr).toContain("DEPLOY_COMPOSE_HASH_MISMATCH");
+  });
+
+  // 2 October 2026: the Codex subscription gateway was removed. This controller must accept a
+  // manifest without `cliProxy` so the release after it can stop building that image.
+  it("accepts a manifest with or without the retired gateway image, and nothing else", () => {
+    const directory = mkdtempSync(join(tmpdir(), "osinara-manifest-"));
+    temporaryDirectories.push(directory);
+    const digest = (name: string) => `ghcr.io/ilkruglov/osinara-${name}@sha256:${"a".repeat(64)}`;
+    const images = {
+      app: digest("app"),
+      edge: digest("edge"),
+      sandboxEgressProxy: digest("sandbox-egress-proxy"),
+      sandboxRunner: digest("sandbox-runner"),
+      sandboxRuntime: digest("sandbox-runtime"),
+    };
+    const validate = (manifestImages: Record<string, string>, stored: { cliProxy: string }) => {
+      const path = join(directory, `manifest-${Object.keys(manifestImages).length}-${stored.cliProxy.length}.json`);
+      writeFileSync(path, JSON.stringify({
+        commitSha: "b".repeat(40),
+        composeSha256: "c".repeat(64),
+        images: manifestImages,
+        schemaVersion: 1,
+        version: "1.8.10",
+      }), "utf8");
+      return runShell(`
+        source scripts/production-deploy/common.sh
+        source scripts/production-deploy/release.sh
+        log_event() { printf '%s\\n' "$1" >&2; }
+        STORED_VERSION=1.8.10 STORED_COMMIT=${"b".repeat(40)} STORED_COMPOSE_SHA=${"c".repeat(64)}
+        STORED_APP='${images.app}' STORED_CLI_PROXY='${stored.cliProxy}' STORED_EDGE='${images.edge}'
+        STORED_EGRESS='${images.sandboxEgressProxy}' STORED_RUNNER='${images.sandboxRunner}'
+        STORED_RUNTIME='${images.sandboxRuntime}'
+        validate_manifest '${path}' 1.8.10
+      `);
+    };
+
+    const without = validate(images, { cliProxy: "-" });
+    const withGateway = validate({ ...images, cliProxy: digest("cli-proxy") }, { cliProxy: digest("cli-proxy") });
+    const unknown = validate({ ...images, extra: digest("app") }, { cliProxy: "-" });
+
+    expect(without.status, without.stderr).toBe(0);
+    expect(withGateway.status, withGateway.stderr).toBe(0);
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain("DEPLOY_MANIFEST_INVALID");
   });
 
   it("suppresses PostgreSQL command tags for no-row state transitions", () => {

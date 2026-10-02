@@ -78,7 +78,9 @@ WITH global_owner AS (
   RETURNING proposal.id::text, proposal.target_version, proposal.telegram_chat_id,
             proposal.manifest->>'version', proposal.manifest->>'commitSha',
             proposal.manifest->>'composeSha256',
-            proposal.manifest->'images'->>'app', proposal.manifest->'images'->>'cliProxy',
+            proposal.manifest->'images'->>'app',
+            -- An empty field would shift the tab-separated read below; "-" marks an absent gateway.
+            coalesce(proposal.manifest->'images'->>'cliProxy', '-'),
             proposal.manifest->'images'->>'edge',
             proposal.manifest->'images'->>'sandboxEgressProxy',
             proposal.manifest->'images'->>'sandboxRunner',

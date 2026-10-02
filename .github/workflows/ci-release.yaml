@@ -138,9 +138,9 @@ jobs:
             ${{ env.RUNTIME_IMAGE }}:sha-${{ github.sha }}
           target: sandbox-runtime
 
-      # Unused since 2 October 2026 (the Codex subscription gateway was removed), but kept for one
-      # more release: the deploy controller installed on the host and the running agent's manifest
-      # schema still require images.cliProxy. Drop it after a release with the new controller lands.
+      # Unused since 2 October 2026 (the Codex subscription gateway was removed). The 1.8.9 deploy
+      # controller and agent still require images.cliProxy; from 1.8.10 both accept a manifest
+      # without it. Drop this build and the manifest key once 1.8.10 is installed.
       - name: Build and push CLIProxyAPI image
         id: cli-proxy
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8

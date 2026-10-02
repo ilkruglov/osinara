@@ -81,6 +81,19 @@ describe("GitHub software release client", () => {
     }
   });
 
+  // 2 October 2026: the Codex subscription gateway was removed; the release after this one stops
+  // publishing its image, and this agent must still propose it.
+  it("accepts a manifest without the retired gateway image", async () => {
+    const manifest = deploymentManifest();
+    const { cliProxy: _retired, ...images } = manifest.images;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(githubRelease()))
+      .mockResolvedValueOnce(jsonResponse({ ...manifest, images }));
+    const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
+
+    await expect(client.latestNewerThan("0.1.0")).resolves.toMatchObject({ version: "0.2.0" });
+  });
+
   it("rejects an upstream release even when its version is newer", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(githubRelease({
       html_url: "https://github.com/nyxandro/osinara/releases/tag/v0.2.0",
