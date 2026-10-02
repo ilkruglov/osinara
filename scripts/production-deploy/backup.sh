@@ -198,6 +198,39 @@ create_postgres_backup() {
   fi
 }
 
+# 2 October 2026: the 1.8.10 deploy stopped the agent while a Ft86 turn reported its end to the
+# session; the session waited 15 minutes for it, the next addressed message lost its turn and the
+# owner got AGENT_MEMORY_REVIEW_BLOCKED. Ingress stops first, so no new Telegram turn begins
+# (updates keep landing in PostgreSQL and run after the deploy), then running turns get up to
+# five minutes, the deadline of one model call plus a margin. Background schedules of the agent
+# may still start a turn meanwhile; the ceiling keeps the deploy moving.
+readonly TURN_DRAIN_TIMEOUT_SECONDS=300
+readonly TURN_DRAIN_POLL_SECONDS=3
+
+drain_current_turns() {
+  local timeout="${1:-$TURN_DRAIN_TIMEOUT_SECONDS}"
+  local started=$SECONDS
+  local active
+  # From here on a failure must bring the current release back, ingress included.
+  CURRENT_SERVICES_STOPPED=1
+  compose_current stop telegram-ingress-worker
+  while true; do
+    if ! active="$(count_active_workflow_runs)"; then
+      log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read Workflow runs; stopping without waiting"
+      return 0
+    fi
+    if [[ "$active" == "0" ]]; then
+      log_event "DEPLOY_TURNS_DRAINED" "No running turns after $((SECONDS - started)) s"
+      return 0
+    fi
+    if (( SECONDS - started >= timeout )); then
+      log_event "DEPLOY_TURN_DRAIN_TIMEOUT" "${active} Workflow runs still active after $((SECONDS - started)) s"
+      return 0
+    fi
+    sleep "$TURN_DRAIN_POLL_SECONDS"
+  done
+}
+
 stop_current_services() {
   CURRENT_SERVICES_STOPPED=1
   local services

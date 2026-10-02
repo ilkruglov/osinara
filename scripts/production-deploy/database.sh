@@ -9,6 +9,38 @@ psql_current() {
     --username osinara --dbname osinara --no-align --tuples-only --quiet "$@"
 }
 
+psql_workflow() {
+  compose_current exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
+    --username osinara --dbname osinara_workflow --no-align --tuples-only --quiet "$@"
+}
+
+# Workflow runs doing work right now: a step in flight (its last event opens or carries a step,
+# younger than 10 minutes, so a stuck run does not hold a deploy), a message the session has yet to
+# take, or any event in the last 5 seconds (the pause between two steps). A session waiting for
+# the next message and a turn waiting for an approval end on a completed step or a created hook.
+active_workflow_runs_sql() {
+  cat <<'SQL'
+SELECT count(*)
+  FROM workflow.workflow_runs AS run
+  JOIN LATERAL (
+    SELECT event.type, event.created_at
+      FROM workflow.workflow_events AS event
+     WHERE event.run_id = run.id
+     ORDER BY event.created_at DESC, event.id DESC
+     LIMIT 1
+  ) AS last ON true
+ WHERE run.status IN ('pending', 'running')
+   AND ((last.type IN ('run_created', 'run_started', 'step_created', 'step_started', 'step_retrying',
+                       'attr_set', 'hook_received')
+         AND last.created_at > LOCALTIMESTAMP - interval '10 minutes')
+     OR last.created_at > LOCALTIMESTAMP - interval '5 seconds');
+SQL
+}
+
+count_active_workflow_runs() {
+  active_workflow_runs_sql | psql_workflow
+}
+
 reconcile_stale_deployments() {
   local stale
   stale="$(psql_current --field-separator=$'\t' <<'SQL'

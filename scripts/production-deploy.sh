@@ -138,6 +138,7 @@ main() {
   pull_release_images
   recheck_claim_owner
   preflight_backup
+  drain_current_turns
   stop_current_services
   create_postgres_backup
   snapshot_durable_volumes
