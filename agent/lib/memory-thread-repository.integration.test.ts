@@ -73,7 +73,7 @@ describeWithDatabase("memory thread repositories", () => {
     const fromTitle = await briefs.activate({ ...activation, retrievedClaimIds: [] });
     const fromSkill = await briefs.activate({
       ...activation,
-      queryEmbedding: [-1, ...Array.from({ length: 383 }, () => 0)],
+      queryEmbedding: [-1, ...Array.from({ length: 767 }, () => 0)],
       retrievedClaimIds: [],
       skillHints: ["Ремонт"],
     });

@@ -11,7 +11,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
   embedMemoryPassages: vi.fn(async () => [
-    [1, ...Array.from({ length: 383 }, () => 0)],
+    [1, ...Array.from({ length: 767 }, () => 0)],
   ]),
 }));
 

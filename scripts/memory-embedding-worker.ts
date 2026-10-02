@@ -4,6 +4,8 @@
  * Constructs:
  * - Claims bounded PostgreSQL batches and calls the pinned local TEI service.
  * - Completes each lease atomically or records one terminal failure without hidden retries.
+ * - Fills thread title vectors left by a model change before records (40 titles take seconds, the
+ *   record backlog minutes); a title that fails is skipped until the worker restarts.
  * - Stops gracefully on SIGINT/SIGTERM and releases the database pool.
  */
 import { isAppError } from "../agent/lib/app-error.js";
@@ -17,6 +19,7 @@ import {
   MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE,
 } from "../agent/lib/memory-config.js";
 import { memoryIndexRepository } from "../agent/lib/memory-index-repository.js";
+import { memoryThreadTitleIndexRepository } from "../agent/lib/memory-thread-title-index.js";
 
 const IDLE_POLL_MILLISECONDS = 1_000;
 let stopping = false;
@@ -78,6 +81,31 @@ async function processBatch(): Promise<number> {
   return jobs.length;
 }
 
+const failedThreadTitles = new Set<string>();
+
+async function processThreadTitles(): Promise<number> {
+  const stale = await memoryThreadTitleIndexRepository.listStale(
+    MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE,
+    [...failedThreadTitles],
+  );
+  if (stale.length === 0) return 0;
+  try {
+    const embeddings = await embedMemoryPassages(stale.map((thread) => thread.title));
+    for (const [index, thread] of stale.entries()) {
+      await memoryThreadTitleIndexRepository.save(thread.id, thread.title, embeddings[index]!);
+    }
+  } catch (error) {
+    for (const thread of stale) failedThreadTitles.add(thread.id);
+    console.error(JSON.stringify({
+      code: errorCode(error),
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      message: "Thread title embedding failed; skipped until restart",
+      threadIds: stale.map((thread) => thread.id),
+    }));
+  }
+  return stale.length;
+}
+
 process.once("SIGINT", () => {
   stopping = true;
 });
@@ -87,7 +115,7 @@ process.once("SIGTERM", () => {
 
 try {
   while (!stopping) {
-    const processed = await processBatch();
+    const processed = await processThreadTitles() || await processBatch();
     if (processed === 0) await sleep(IDLE_POLL_MILLISECONDS);
   }
 } catch (error) {

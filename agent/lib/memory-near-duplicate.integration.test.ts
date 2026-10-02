@@ -10,7 +10,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
-  embedMemoryQuery: vi.fn(async () => [1, ...Array.from({ length: 383 }, () => 0)]),
+  embedMemoryQuery: vi.fn(async () => [1, ...Array.from({ length: 767 }, () => 0)]),
 }));
 
 import { closeDatabase, database } from "./database.js";
@@ -51,7 +51,7 @@ function claim(
 }
 
 async function indexWithVector(memoryId: string, first: number): Promise<void> {
-  const embedding = `[${[first, ...Array.from({ length: 383 }, () => 0)].join(",")}]`;
+  const embedding = `[${[first, ...Array.from({ length: 767 }, () => 0)].join(",")}]`;
   await database().query(
     `INSERT INTO memory_embedding_chunks
        (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)

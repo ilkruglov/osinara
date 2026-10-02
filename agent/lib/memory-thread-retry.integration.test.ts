@@ -11,8 +11,8 @@
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const POSITIVE_VECTOR = [1, ...Array.from({ length: 383 }, () => 0)];
-const DISTINCT_VECTOR = [0, 1, ...Array.from({ length: 382 }, () => 0)];
+const POSITIVE_VECTOR = [1, ...Array.from({ length: 767 }, () => 0)];
+const DISTINCT_VECTOR = [0, 1, ...Array.from({ length: 766 }, () => 0)];
 
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./memory-embedding-client.js")>(),

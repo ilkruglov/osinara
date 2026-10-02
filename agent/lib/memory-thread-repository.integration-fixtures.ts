@@ -24,7 +24,7 @@ export interface ThreadRepositoryFixture {
   userId: string;
 }
 
-export const THREAD_TITLE_VECTOR = [1, ...Array.from({ length: 383 }, () => 0)];
+export const THREAD_TITLE_VECTOR = [1, ...Array.from({ length: 767 }, () => 0)];
 
 export async function createThreadRepositoryFixture(): Promise<ThreadRepositoryFixture> {
   const family = await database().query<{ id: string }>(

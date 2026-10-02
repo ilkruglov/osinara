@@ -10,7 +10,7 @@ globalThis.fetch = async (request, init) => {
   if (url.hostname === "memory-test" && url.pathname === "/v1/embeddings") {
     const body = JSON.parse(String(init?.body));
     return Response.json({ model: body.model, data: body.input.map((_text: string, index: number) => ({
-      index, embedding: [1, ...Array.from({ length: 383 }, () => 0)],
+      index, embedding: [1, ...Array.from({ length: 767 }, () => 0)],
     })) });
   }
   if (url.hostname !== "api.telegram.org") return networkFetch(request, init);

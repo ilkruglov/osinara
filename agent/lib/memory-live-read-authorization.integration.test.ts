@@ -28,7 +28,7 @@ import {
 } from "./memory-thread-repository.integration-fixtures.js";
 
 const { QUERY_VECTOR, sourceEvidenceBoundary } = vi.hoisted(() => ({
-  QUERY_VECTOR: [1, ...Array.from({ length: 383 }, () => 0)],
+  QUERY_VECTOR: [1, ...Array.from({ length: 767 }, () => 0)],
   sourceEvidenceBoundary: {
     beforeRead: null as null | (() => Promise<void>),
   },

@@ -112,6 +112,31 @@ describeWithDatabase("memoryIndexRepository", () => {
     await expect(memoryIndexRepository.claim(8, MEMORY_EMBEDDING_LEASE_MILLISECONDS)).resolves.toEqual([]);
   });
 
+  // A model change requeues every record (migration 123); a record written meanwhile must not wait
+  // for the whole backlog, and the backlog itself goes from the newest records to the oldest.
+  it("claims the newest job first", async () => {
+    const older = await insertPendingMemory();
+    await database().query(
+      "UPDATE memory_embedding_jobs SET created_at = now() - interval '1 day' WHERE memory_item_id = $1",
+      [older],
+    );
+    const newer = await database().query<{ id: string }>(
+      `INSERT INTO memory_items
+         (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+          content, source, confirmation, sensitivity, operation_key)
+       SELECT family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+              'Поездка в Тверь', source, confirmation, sensitivity, 'index-operation-newer'
+       FROM memory_items WHERE id = $1
+       RETURNING id`,
+      [older],
+    );
+    await database().query("INSERT INTO memory_embedding_jobs (memory_item_id) VALUES ($1)", [newer.rows[0]!.id]);
+
+    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId))
+      .toEqual([newer.rows[0]!.id]);
+    expect((await memoryIndexRepository.claim(1, 60_000)).map((job) => job.memoryItemId)).toEqual([older]);
+  });
+
   it("rejects a stale completion after an edit resets the job", async () => {
     const memoryId = await insertPendingMemory();
     const [job] = await memoryIndexRepository.claim(1, MEMORY_EMBEDDING_LEASE_MILLISECONDS);

@@ -13,30 +13,25 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
   embedMemoryPassages: vi.fn(async () => [
-    [1, ...Array.from({ length: 383 }, () => 0)],
+    [1, ...Array.from({ length: 767 }, () => 0)],
   ]),
 }));
 
 import { closeDatabase, database } from "./database.js";
 import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-fixtures.js";
 import { embedMemoryPassages } from "./memory-embedding-client.js";
+import { THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY } from "./memory-config.js";
 import { memoryRepository } from "./memory-repository.js";
 
 const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true"
   ? describe
   : describe.skip;
-const POSITIVE_VECTOR = [1, ...Array.from({ length: 383 }, () => 0)];
-const NEGATIVE_VECTOR = [-1, ...Array.from({ length: 383 }, () => 0)];
-const SEMANTIC_DUPLICATE_VECTOR = [
-  0.925,
-  Math.sqrt(1 - 0.925 ** 2),
-  ...Array.from({ length: 382 }, () => 0),
-];
-const DISTINCT_TOPIC_VECTOR = [
-  0.9,
-  Math.sqrt(1 - 0.9 ** 2),
-  ...Array.from({ length: 382 }, () => 0),
-];
+const POSITIVE_VECTOR = [1, ...Array.from({ length: 767 }, () => 0)];
+const NEGATIVE_VECTOR = [-1, ...Array.from({ length: 767 }, () => 0)];
+// Cosine to the stored title just above and just below the creation gate.
+const unitVectorAt = (cosine: number) => [cosine, Math.sqrt(1 - cosine ** 2), ...Array.from({ length: 766 }, () => 0)];
+const SEMANTIC_DUPLICATE_VECTOR = unitVectorAt(THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY + 0.005);
+const DISTINCT_TOPIC_VECTOR = unitVectorAt(THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY - 0.02);
 
 describeWithDatabase("main-agent memory write", () => {
   beforeEach(async () => {

@@ -2,8 +2,8 @@
  * Local Text Embeddings Inference client.
  *
  * Exports:
- * - `embedMemoryPassages`: embeds indexed chunks with the E5 passage protocol.
- * - `embedMemoryQuery`: embeds retrieval queries with the E5 query protocol.
+ * - `embedMemoryPassages`: embeds indexed chunks with the BERTA `search_document` prompt.
+ * - `embedMemoryQuery`: embeds retrieval queries with the BERTA `search_query` prompt.
  */
 import { AppError } from "./app-error.js";
 import { ModelFacingError } from "./model-facing-error.js";
@@ -26,8 +26,9 @@ interface EmbeddingResponse {
   model?: unknown;
 }
 
-const E5_PASSAGE_PREFIX = "passage: ";
-const E5_QUERY_PREFIX = "query: ";
+// TEI applies no prompt of its own (no `--default-prompt-name`), so the prefix is part of the text.
+const PASSAGE_PREFIX = "search_document: ";
+const QUERY_PREFIX = "search_query: ";
 
 function requireEmbeddingBaseUrl(): string {
   const raw = process.env.MEMORY_EMBEDDING_BASE_URL;
@@ -159,7 +160,7 @@ export async function embedMemoryPassages(
   fetchImplementation: typeof fetch = fetch,
 ): Promise<number[][]> {
   return embedMemoryTexts(
-    texts.map((text) => `${E5_PASSAGE_PREFIX}${text}`),
+    texts.map((text) => `${PASSAGE_PREFIX}${text}`),
     fetchImplementation,
   );
 }
@@ -176,7 +177,7 @@ export async function embedMemoryQuery(
     embeddings.push(...await embedMemoryTexts(
       chunks
         .slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE)
-        .map((chunk) => `${E5_QUERY_PREFIX}${chunk.content}`),
+        .map((chunk) => `${QUERY_PREFIX}${chunk.content}`),
       fetchImplementation,
       signal,
     ));

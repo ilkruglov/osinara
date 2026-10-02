@@ -22,7 +22,6 @@ export interface ScoredMemoryRetrievalResult {
   memory: ReferencedMemoryItem;
   /** exp(-age / S) in [0, 1]; the automatic turn block admits only retained records. */
   retention: number;
-  rerankScore?: number;
   sourceEvidence?: ModelMemoryEvidence;
   score: number;
 }

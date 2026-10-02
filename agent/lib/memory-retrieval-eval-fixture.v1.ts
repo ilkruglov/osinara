@@ -5,7 +5,7 @@
  * - `MEMORY_RETRIEVAL_EVAL_RECORDS_V1`: fictional searchable records and duplicate pollution.
  * - `MEMORY_RETRIEVAL_EVAL_QUERIES_V1`: multilingual positive, typo, and negative queries.
  * - `MEMORY_RETRIEVAL_R0_BASELINE_V1`: measured pre-R1 quality on this exact fixture.
- * - `MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1`: pinned E5 relevance margin observations.
+ * - `MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1`: pinned embedder relevance margin observations.
  * - `MEMORY_RETRIEVAL_R1_GATES_V1`: measurable acceptance thresholds for R1.
  */
 
@@ -172,10 +172,12 @@ export const MEMORY_RETRIEVAL_R0_BASELINE_V1 = {
   typoRecovered: true,
 } as const;
 
-// Pinned E5 score observations leave a visible margin around the configured 0.78 gate.
+// Pinned BERTA score observations (2 October 2026) leave a visible margin around the 0.20 gate:
+// negatives against every record, paraphrase and typo queries against their expected record.
+// E5 had 0.73893 and 0.79002 around its 0.78 gate.
 export const MEMORY_RETRIEVAL_R1_SEMANTIC_CALIBRATION_V1 = {
-  irrelevantSimilarityMaximum: 0.73893,
-  requiredParaphraseSimilarityMinimum: 0.79002,
+  irrelevantSimilarityMaximum: 0.06523,
+  requiredParaphraseSimilarityMinimum: 0.38614,
 } as const;
 
 export const MEMORY_RETRIEVAL_R1_GATES_V1 = {

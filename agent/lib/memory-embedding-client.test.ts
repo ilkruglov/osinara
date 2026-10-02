@@ -2,7 +2,7 @@
  * Local TEI embedding client tests.
  *
  * Constructs covered:
- * - E5 query and passage requests use distinct required prefixes and pinned model identity.
+ * - BERTA query and passage requests use distinct required prompts and pinned model identity.
  * - Missing configuration, provider failures, malformed output, and wrong dimensions fail explicitly.
  * - Network and JSON decoding failures use a safe structured provider contract.
  */
@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("memory embedding client", () => {
-  it("returns ordered passage vectors with the E5 passage prefix", async () => {
+  it("returns ordered passage vectors with the search_document prompt", async () => {
     process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
     const vectors = [
       Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0.1),
@@ -54,12 +54,12 @@ describe("memory embedding client", () => {
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(request).toEqual({
       encoding_format: "float",
-      input: ["passage: один", "passage: два"],
+      input: ["search_document: один", "search_document: два"],
       model: MEMORY_EMBEDDING_MODEL,
     });
   });
 
-  it("embeds one query with the E5 query prefix", async () => {
+  it("embeds one query with the search_query prompt", async () => {
     process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
     const vector = Array.from({ length: MEMORY_EMBEDDING_DIMENSIONS }, () => 0.5);
     const fetchMock = vi.fn().mockResolvedValue(
@@ -71,7 +71,7 @@ describe("memory embedding client", () => {
 
     await expect(embedMemoryQuery("где лежат документы", fetchMock)).resolves.toEqual(vector);
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(request.input).toEqual(["query: где лежат документы"]);
+    expect(request.input).toEqual(["search_query: где лежат документы"]);
   });
 
   it("embeds every part of a long query without provider truncation", async () => {
@@ -90,7 +90,7 @@ describe("memory embedding client", () => {
     const requests = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)) as { input: string[] });
     const inputs = requests.flatMap((request) => request.input);
     expect(inputs.length).toBeGreaterThan(1);
-    expect(inputs.every((input) => input.startsWith("query: ") && input.length <= 407)).toBe(true);
+    expect(inputs.every((input) => input.startsWith("search_query: ") && input.length <= 414)).toBe(true);
   });
 
   it("fails fast when the environment-specific worker URL is absent", async () => {

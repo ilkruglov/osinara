@@ -66,7 +66,9 @@ export const memoryIndexRepository = {
            SELECT job.memory_item_id
            FROM memory_embedding_jobs AS job
            WHERE job.status = 'pending' AND job.attempts = 0
-           ORDER BY job.created_at, job.memory_item_id
+           -- Newest first: after a model change requeues everything, a fresh record is searchable
+           -- at once and the backlog fills from recent records, which turns ask about most.
+           ORDER BY job.created_at DESC, job.memory_item_id
            FOR UPDATE SKIP LOCKED
            LIMIT $1
          )

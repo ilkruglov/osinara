@@ -5,7 +5,8 @@
  * - The newest user text is extracted from plain and multipart Eve model messages.
  * - A verified group turn searches memory by the addressed message, not the whole timeline.
  * - Retrieved records enter the prompt as escaped model-safe untrusted data.
- * - Turn instructions identify the active thresholded morphology/simple/E5 retrieval pipeline.
+ * - Turn instructions identify the active thresholded morphology/simple/BERTA retrieval pipeline.
+ * - Only a semantic-only match below the strict gate is weak; any word match makes it ordinary.
  */
 import { readFile } from "node:fs/promises";
 
@@ -14,8 +15,11 @@ import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 
 import type { ModelMemory } from "./model-memory.js";
+import { MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY } from "./memory-config.js";
+import type { ScoredMemoryRetrievalResult } from "./memory-retrieval-ranking.js";
 import {
   formatRetrievedMemoryInstructions,
+  isWeakMatch,
   latestUserText,
   memoryRetrievalQuery,
 } from "./memory-retrieval.js";
@@ -202,5 +206,25 @@ describe("formatRetrievedMemoryInstructions", () => {
       "не выдумывай между ними связь",
       "unresolved_conflict",
     ]) expect(permanent).toContain(fragment);
+  });
+});
+
+describe("isWeakMatch", () => {
+  const result = (evidence: ScoredMemoryRetrievalResult["evidence"]) =>
+    ({ evidence }) as ScoredMemoryRetrievalResult;
+  const below = MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY - 0.01;
+
+  it("marks only a semantic-only match below the strict gate", () => {
+    expect(isWeakMatch(result({ russianMorphologyRank: null, semanticSimilarity: below, simpleLexicalRank: null })))
+      .toBe(true);
+    expect(isWeakMatch(result({
+      russianMorphologyRank: null,
+      semanticSimilarity: MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+      simpleLexicalRank: null,
+    }))).toBe(false);
+    expect(isWeakMatch(result({ russianMorphologyRank: 0.1, semanticSimilarity: below, simpleLexicalRank: null })))
+      .toBe(false);
+    expect(isWeakMatch(result({ russianMorphologyRank: null, semanticSimilarity: null, simpleLexicalRank: 0.1 })))
+      .toBe(false);
   });
 });

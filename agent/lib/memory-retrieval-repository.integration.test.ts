@@ -19,7 +19,6 @@ import {
 } from "./memory-config.js";
 import { memoryRetention } from "./memory-retention-score.js";
 import { memoryRetrievalRepository } from "./memory-retrieval-repository.js";
-import * as reranking from "./memory-reranking.js";
 
 const enabled = process.env.RUN_DATABASE_INTEGRATION_TESTS === "true";
 const url = process.env.DATABASE_URL;
@@ -68,27 +67,6 @@ describeWithDatabase("memoryRetrievalRepository", () => {
   });
 
   afterAll(async () => closeDatabase());
-
-  it("rechecks membership after the reranker finishes", async () => {
-    await database().query(
-      `INSERT INTO memory_items (family_id, owner_user_id, author_user_id, author_telegram_user_id,
-       scope, kind, content, source, confirmation, sensitivity, operation_key)
-       VALUES ($1, $2, $2, 'search-owner', 'personal', 'fact', 'Ключ от мастерской', 'test:rerank',
-       'model_high', 'normal', 'rerank-revoked')`, [auth.familyId, auth.userId],
-    );
-    const scorer = vi.spyOn(reranking, "rerankMemories").mockImplementation(async (_query, candidates) => {
-      expect(candidates).toHaveLength(1);
-      await database().query("DELETE FROM family_memberships WHERE family_id = $1 AND user_id = $2", [auth.familyId, auth.userId]);
-      return { results: candidates, status: "applied" };
-    });
-    try {
-      const result = await memoryRetrievalRepository.searchWithConflictClosure(auth, "мастерская", null);
-      expect(result.results).toEqual([]);
-      expect(result.relatedClaimIds).toEqual([]);
-    } finally {
-      scorer.mockRestore();
-    }
-  });
 
   it("keeps authorized lexical results and date filtering without a vector", async () => {
     for (const owner of [auth.userId!, otherUserId]) {

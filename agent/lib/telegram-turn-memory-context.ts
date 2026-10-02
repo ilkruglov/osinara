@@ -155,7 +155,7 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
           console.error(JSON.stringify({ code: "AGENT_MEMORY_EXPOSURE_FAILED", error: String(error) }));
         });
       }
-      // Per-turn cost of memory on a small server: retrieval (FTS + E5 + pgvector) and profile view.
+      // Per-turn cost of memory on a small server: retrieval (FTS + BERTA + pgvector) and profile view.
       console.info(JSON.stringify({
         code: "AGENT_MEMORY_CONTEXT",
         memories: context.memories.length,
@@ -164,7 +164,7 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         retrievalMs: Math.round(retrievedAt - startedAt),
         threads: context.threads.threads.length,
         // 26 September 2026: retrievalMs was 1.9 s median with nothing to say which step; the
-        // steps answer that (rerank has its own AGENT_MEMORY_RERANKED durationMs).
+        // steps answer that (most of it was the reranker, removed on 2 October 2026).
         ...context.timings,
       }));
       const hint = dependencies.takeSkillHint === undefined

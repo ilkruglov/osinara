@@ -62,15 +62,21 @@ describe("Docker Compose runtime wiring", () => {
     expect(productionCompose).not.toContain("/opt/osinara/model-providers.json");
   });
 
-  // 2 October 2026: TEI counts each reranked text as one request, so with --max-concurrent-requests 8
-  // every memory search with 9+ candidates (we send up to 40) got 429 «Model is overloaded» and
-  // fell back to unreranked results. The test compose left the flag at its default and never saw it.
-  it("lets the reranker take every candidate of one call at once", () => {
+  // 2 October 2026: TEI counts each text as one request. The reranker got 429 «no permits» whenever
+  // a call carried more texts than --max-concurrent-requests; the embedder has to fit a full worker
+  // batch and a turn query at the same time, or that turn searches by words only.
+  it("lets the embedder take a full worker batch and a query at once", () => {
     for (const file of ["compose.yaml", "compose.production.yaml"]) {
       const compose = readFileSync(new URL(file, projectRoot), "utf8");
-      const reranker = compose.slice(compose.indexOf("\n  memory-reranker:\n"));
-      const flag = (name: string) => Number(reranker.match(new RegExp(`- ${name}\\n\\s+- "(\\d+)"`, "u"))?.[1]);
-      expect(flag("--max-concurrent-requests"), file).toBeGreaterThanOrEqual(flag("--max-client-batch-size"));
+      const embedder = compose.slice(compose.indexOf("\n  memory-embedding:\n"));
+      const flag = (name: string) => Number(embedder.match(new RegExp(`- ${name}\\n\\s+- "(\\d+)"`, "u"))?.[1]);
+      expect(flag("--max-concurrent-requests"), file).toBeGreaterThanOrEqual(2 * flag("--max-client-batch-size"));
+    }
+  });
+
+  it("gives the agent no reranker to call", () => {
+    for (const file of ["compose.yaml", "compose.test.yaml", "compose.production.yaml"]) {
+      expect(readFileSync(new URL(file, projectRoot), "utf8"), file).not.toContain("MEMORY_RERANKER_BASE_URL");
     }
   });
 
@@ -86,11 +92,11 @@ describe("Docker Compose runtime wiring", () => {
     expect(compose).toContain(`      WORKFLOW_QUEUE_NAMESPACE: ${expectedNamespace}\n`);
   });
 
-  it("pins the multilingual E5 model and bounds its CPU and memory", () => {
+  it("pins the BERTA model and bounds its CPU and memory", () => {
     const compose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
 
-    expect(compose).toContain("      - intfloat/multilingual-e5-small\n");
-    expect(compose).toContain("      - 614241f622f53c4eeff9890bdc4f31cfecc418b3\n");
+    expect(compose).toContain("      - sergeyzh/BERTA\n");
+    expect(compose).toContain("      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7\n");
     expect(compose).toContain("    mem_limit: 1536m\n");
     expect(compose).toContain("    cpus: 1.5\n");
     expect(compose).toContain("      - --auto-truncate=false\n");

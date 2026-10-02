@@ -2,7 +2,7 @@
  * Operator-triggered memory reindex entrypoint.
  *
  * Constructs:
- * - Resets failed, missing, or incompatible E5 chunk sets to pending.
+ * - Resets failed, missing, or incompatible embedding chunk sets to pending.
  * - Creates one fresh durable job per affected memory without running provider calls itself.
  */
 import { closeDatabase, database } from "../agent/lib/database.js";

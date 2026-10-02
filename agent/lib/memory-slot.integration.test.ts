@@ -200,7 +200,7 @@ describeWithDatabase("memory slots", () => {
     });
 
     expect(episode.occurredAt).toBe("2026-09-08T00:00:00.000Z");
-    const zero = Array.from({ length: 384 }, () => 0);
+    const zero = Array.from({ length: 768 }, () => 0);
     const inside = await memoryRetrievalRepository.search(fixture.auth, "Питер", zero, 12, {
       occurredAfter: "2026-09-01",
       occurredBefore: "2026-09-30",

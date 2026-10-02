@@ -11,10 +11,14 @@
 import type { SessionAuth } from "eve/context";
 import type { ModelMessage } from "ai";
 import { AppError } from "./app-error.js";
-import { MEMORY_RERANKING_MIN_SCORE } from "./memory-reranking.js";
 import type { ScoredMemoryRetrievalResult } from "./memory-retrieval-ranking.js";
 
-import { MEMORY_RETRIEVAL_LIMIT, MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT, MEMORY_TURN_RETRIEVAL_LIMIT } from "./memory-config.js";
+import {
+  MEMORY_RETRIEVAL_LIMIT,
+  MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+  MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
+  MEMORY_TURN_RETRIEVAL_LIMIT,
+} from "./memory-config.js";
 import { memoryContextExposureRepository } from "./memory-context-exposure-repository.js";
 import { embedMemoryQuery } from "./memory-embedding-client.js";
 import { isRetainedForAutomaticContext } from "./memory-retention-score.js";
@@ -32,7 +36,7 @@ export type ModelMemoryContextItem = ModelMemory | (MemoryConflictGroup & {
   type: "unresolved_conflict";
 }) | ({
   type: "retrieval_status";
-  mode: "lexical_only" | "unreranked";
+  mode: "lexical_only";
   instruction: string;
 });
 
@@ -40,16 +44,18 @@ const LEXICAL_ONLY_STATUS = {
   type: "retrieval_status", mode: "lexical_only",
   instruction: "Смысловой поиск временно недоступен. Выполнен поиск по словам; пустой результат не доказывает отсутствие подходящих воспоминаний.",
 } as const;
-const UNRERANKED_STATUS = {
-  type: "retrieval_status", mode: "unreranked",
-  instruction: "Уточняющая проверка релевантности недоступна. Найденные совпадения могут относиться к другой сущности; проверь полный текст перед использованием.",
-} as const;
+
+/** Weak: only broad search's lower semantic gate admitted the record, no word matched. */
+export function isWeakMatch(result: ScoredMemoryRetrievalResult): boolean {
+  const { russianMorphologyRank, semanticSimilarity, simpleLexicalRank } = result.evidence;
+  return simpleLexicalRank === null && russianMorphologyRank === null &&
+    semanticSimilarity !== null && semanticSimilarity < MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY;
+}
 
 function toRetrievedMemory(result: ScoredMemoryRetrievalResult): ModelMemory {
   return {
     ...toModelMemory(result.memory, result.sourceEvidence),
-    ...(result.rerankScore !== undefined && result.rerankScore < MEMORY_RERANKING_MIN_SCORE
-      ? { matchQuality: "weak" as const } : {}),
+    ...(isWeakMatch(result) ? { matchQuality: "weak" as const } : {}),
   };
 }
 
@@ -166,7 +172,6 @@ export async function retrieveRelevantMemories(
   }
   return [
     ...(embedding === null ? [LEXICAL_ONLY_STATUS] : []),
-    ...(retrieval.reranking === "unavailable" ? [UNRERANKED_STATUS] : []),
     ...memories,
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];
@@ -203,7 +208,6 @@ export async function retrieveMemoryTurnContext(
     .slice(0, MEMORY_TURN_RETRIEVAL_LIMIT);
   const memories: ModelMemoryContextItem[] = [
     ...(embedding === null ? [LEXICAL_ONLY_STATUS] : []),
-    ...(retrieval.reranking === "unavailable" ? [UNRERANKED_STATUS] : []),
     ...admitted.map(toRetrievedMemory),
     ...retrieval.conflicts.map((conflict) => ({ ...conflict, type: "unresolved_conflict" as const })),
   ];

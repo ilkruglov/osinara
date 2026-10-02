@@ -7,7 +7,6 @@
  */
 import { AppError } from "./app-error.js";
 import { database } from "./database.js";
-import { rerankMemories } from "./memory-reranking.js";
 import {
   MEMORY_EMBEDDING_MODEL_VERSION,
   MEMORY_RETRIEVAL_CANDIDATE_LIMIT,
@@ -15,6 +14,7 @@ import {
   MEMORY_RETRIEVAL_LIMIT,
   MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
   MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+  MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY,
   MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
   MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
   MEMORY_RETENTION_RANK_FLOOR,
@@ -162,6 +162,7 @@ function rowToScoredResult(row: RetrievalRow): ScoredMemoryRetrievalResult {
 
 /** Optional inclusive date window over the event date, falling back to creation time. */
 export interface MemoryRetrievalWindow {
+  /** Admit semantic matches down to the weak gate; results found only below the strict gate are weak. */
   includeWeakMatches?: boolean;
   occurredAfter?: string;
   occurredBefore?: string;
@@ -318,7 +319,8 @@ export const memoryRetrievalRepository = {
         MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
         queryEmbedding === null ? null : vectorLiteral(queryEmbedding),
         MEMORY_EMBEDDING_MODEL_VERSION,
-        MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+        window.includeWeakMatches
+          ? MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY : MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
         MEMORY_RETRIEVAL_RRF_RANK_OFFSET,
         MEMORY_RETRIEVAL_CONFIRMATION_BOOST,
         MEMORY_RETENTION_RANK_FLOOR,
@@ -344,18 +346,13 @@ export const memoryRetrievalRepository = {
     conflicts: MemoryConflictGroup[];
     relatedClaimIds: string[];
     results: ScoredMemoryRetrievalResult[];
-    reranking?: "applied" | "unavailable";
   }> {
     if (!Number.isInteger(limit) || limit < 1 || limit > MEMORY_RETRIEVAL_CANDIDATE_LIMIT) {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный лимит поиска памяти");
     }
-    const candidates = await memoryRetrievalRepository.search(auth, query, queryEmbedding,
-      process.env.MEMORY_RERANKER_BASE_URL ? MEMORY_RETRIEVAL_CANDIDATE_LIMIT : limit, window);
-    const reranked = await rerankMemories(query, candidates, fetch, window.includeWeakMatches);
-    const diagnostic = reranked.status === "disabled" ? {} : { reranking: reranked.status };
-    const results = reranked.results.slice(0, limit);
+    const results = await memoryRetrievalRepository.search(auth, query, queryEmbedding, limit, window);
     const selectedIds = results.map((result) => result.memory.id);
-    if (selectedIds.length === 0) return { ...diagnostic, conflicts: [], relatedClaimIds: [], results };
+    if (selectedIds.length === 0) return { conflicts: [], relatedClaimIds: [], results };
 
     // Detect an inaccessible partner without selecting any partner content or metadata. Opaque refs
     // are capabilities, not authorization: one visible side of an unresolved conflict is withheld.
@@ -482,7 +479,6 @@ export const memoryRetrievalRepository = {
       }],
     }));
     return {
-      ...diagnostic,
       conflicts,
       relatedClaimIds: [...new Set([
         ...results.filter((result) => !blockedIds.has(result.memory.id))

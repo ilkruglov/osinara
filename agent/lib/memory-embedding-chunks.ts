@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `MemoryEmbeddingChunkText`: source-aligned text chunk metadata.
- * - `chunkMemoryContent`: bounded overlapping chunks that fit multilingual E5-small.
+ * - `chunkMemoryContent`: bounded overlapping chunks that fit the 512-token embedder.
  * - `chunkMemoryQuery`: the same complete coverage without the stored-memory length cap.
  */
 import { AppError } from "./app-error.js";

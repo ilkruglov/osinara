@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `MEMORY_SCOPE_QUOTAS`: agreed maximum record counts by scope.
- * - Retrieval and thread-creation gates, ranking calibration, pagination, E5, and chunking.
+ * - Retrieval and thread-creation gates, ranking calibration, pagination, the embedder, and chunking.
  * - Timeline-selection limits.
  * - R3 always-on profile subject, claim, character, and inactivity limits.
  * - Durable profile-projection notice delivery lease.
@@ -45,10 +45,9 @@ export const THREAD_EPISODE_MAX_CHARACTERS = 2_000;
 export const THREAD_HISTORY_PAGE_MAX_ENTRIES = 20;
 export const THREAD_HISTORY_PAGE_MAX_CHARACTERS = 12_000;
 export const THREAD_SOURCE_INPUT_MAX_CHARACTERS = 40_000;
-export const THREAD_TITLE_MIN_SEMANTIC_SIMILARITY = 0.78;
-// Short E5 passage embeddings have a high unrelated baseline; creation therefore uses a separate
-// calibrated gate above the observed negative range instead of reusing broad retrieval recall.
-export const THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY = 0.92;
+// Title against title is passage-to-passage, so creation has its own gate. BERTA value mapped from
+// the E5 0.92 by quantile of nearest-neighbour similarity over production records (2 October 2026).
+export const THREAD_CREATION_TITLE_MIN_SEMANTIC_SIMILARITY = 0.63;
 // Creation uses a conservative lexical gate: false positives stop a write and require clarification.
 export const THREAD_PURPOSE_MIN_TRIGRAM_SIMILARITY = 0.9;
 export const THREAD_CREATION_CANDIDATE_LIMIT = 3;
@@ -64,10 +63,21 @@ export const PROFILE_CONTEXT_MAX_SUBJECT_CHARACTERS = 4_000;
 export const PROFILE_SELECTION_DORMANCY_MILLISECONDS = 60 * 24 * 60 * 60 * 1_000;
 export const PROFILE_PROJECTION_NOTICE_LEASE_MILLISECONDS = 5 * 60 * 1_000;
 
-// Branch gates are calibrated by memory-retrieval-v1 and apply before reciprocal-rank fusion.
+// Branch gates apply before reciprocal-rank fusion. There is no reranker since 2 October 2026: the
+// semantic gate is the only relevance cut. Production on one CPU timed the mmarco reranker out in
+// 15 of 16 calls, so the block was E5 >= 0.78 unfiltered (E5 0.78 kept 37 of 40 candidates).
+// 0.20 keeps the block's text volume of that production (about 2 300 characters per turn) and
+// within it the most relevance: on judged production messages (`.tmp/memeval`, dev 180 / holdout
+// 119) strictly relevant records +0.38 / +0.45 per turn, irrelevant ones 3.3 instead of 5.1-5.4.
+// Below about 0.19 a match is strictly relevant in 7-8 % of pairs. Recheck against `memory-used`.
 export const MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK = 0.05;
 export const MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK = 0.05;
-export const MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY = 0.78;
+export const MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY = 0.2;
+// Broad search (`includeWeakMatches`) admits semantic matches down to this gate and labels the ones
+// below the strict gate weak.
+export const MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY = 0.12;
+// A message matches a thread title by the same query-to-passage gate as ordinary retrieval.
+export const THREAD_TITLE_MIN_SEMANTIC_SIMILARITY = MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY;
 export const MEMORY_RETRIEVAL_RRF_RANK_OFFSET = 60;
 export const MEMORY_RETRIEVAL_CONFIRMATION_BOOST = 0.001;
 // Retention (ACT-R / Ebbinghaus in closed form): R = exp(-age / S), S = S0 * (1 + ln(1 + n)).
@@ -86,21 +96,25 @@ export const MEMORY_AUTO_CONTEXT_MIN_RETENTION = 0.2;
 // keeps the loop short: shown → used → shown again cannot add a reinforcement per turn.
 export const MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS = 7;
 export const MEMORY_SEMANTIC_KINDS = ["profile", "preference", "fact", "family_shared"] as const;
-// Near-duplicate gate at write time; the prod embedder (multilingual-e5-small) keeps distinct facts
-// above 0.9 too, so the model decides and the gate only surfaces candidates.
-export const MEMORY_NEAR_DUPLICATE_SIMILARITY = 0.9;
+// Near-duplicate gate at write time; it only surfaces candidates and the model decides. BERTA value
+// mapped from the E5 0.9 by quantile of nearest-neighbour similarity (content as query against
+// stored passages) over production records; E5 kept distinct facts about one person at 0.87-0.91.
+export const MEMORY_NEAR_DUPLICATE_SIMILARITY = 0.58;
 export const MEMORY_NEAR_DUPLICATE_CANDIDATES = 2;
 
-export const MEMORY_EMBEDDING_DIMENSIONS = 384;
-export const MEMORY_EMBEDDING_MODEL = "intfloat/multilingual-e5-small";
-const MEMORY_EMBEDDING_MODEL_REVISION = "614241f622f53c4eeff9890bdc4f31cfecc418b3";
+// BERTA (FRIDA distilled, 768 dimensions, 512 tokens) replaced multilingual-e5-small and the mmarco
+// reranker on 2 October 2026: on 119 judged holdout messages nDCG@10 0.489 against 0.407, one
+// embedder of ~670 MB instead of two services of ~1.66 GB, no 1.6 s rerank call per turn.
+export const MEMORY_EMBEDDING_DIMENSIONS = 768;
+export const MEMORY_EMBEDDING_MODEL = "sergeyzh/BERTA";
+const MEMORY_EMBEDDING_MODEL_REVISION = "914c8c8aed14042ed890fc2c662d5e9e66b2faa7";
 export const MEMORY_EMBEDDING_MODEL_VERSION =
   `${MEMORY_EMBEDDING_MODEL}@${MEMORY_EMBEDDING_MODEL_REVISION}`;
 export const MEMORY_EMBEDDING_LEASE_MILLISECONDS = 120_000;
 export const MEMORY_EMBEDDING_JOB_BATCH_SIZE = 4;
 export const MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE = 8;
 
-// Character bounds guarantee E5's 512-token limit even for adversarial punctuation-heavy text.
+// Character bounds guarantee the embedder's 512-token limit even for adversarial punctuation-heavy text.
 export const MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS = 400;
 export const MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS = 280;
 export const MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS = 80;

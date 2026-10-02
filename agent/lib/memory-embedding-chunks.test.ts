@@ -2,7 +2,7 @@
  * Memory embedding chunker tests.
  *
  * Constructs covered:
- * - `chunkMemoryContent`: deterministic overlapping coverage within the E5 input budget.
+ * - `chunkMemoryContent`: deterministic overlapping coverage within the embedder input budget.
  */
 import { describe, expect, it } from "vitest";
 

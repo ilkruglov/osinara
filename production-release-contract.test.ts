@@ -215,8 +215,8 @@ describe("production container contract", () => {
     expect(compose).toContain("    cpus: 1.0\n");
     expect(compose).toContain('      OMP_NUM_THREADS: "1"\n');
     expect(compose).toContain('      - "1"\n      - --max-client-batch-size');
-    expect(compose).toContain("      - intfloat/multilingual-e5-small\n");
-    expect(compose).toContain("      - 614241f622f53c4eeff9890bdc4f31cfecc418b3\n");
+    expect(compose).toContain("      - sergeyzh/BERTA\n");
+    expect(compose).toContain("      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7\n");
   });
 });
 
@@ -416,6 +416,13 @@ describe("server deployment contract", () => {
     }];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
 
+    // The next release drops the unused reranker together with its volume; nothing else may go.
+    const withoutReranker = structuredClone(valid) as { services: Record<string, unknown> };
+    delete withoutReranker.services["memory-reranker"];
+    expect(() => executeComposeSecurityPredicate(withoutReranker)).not.toThrow();
+    const withoutEmbedder = structuredClone(withoutReranker) as { services: Record<string, unknown> };
+    delete withoutEmbedder.services["memory-embedding"];
+    expect(() => executeComposeSecurityPredicate(withoutEmbedder)).toThrow();
   });
 
   it("rejects environment image injection, downgrade, and incomplete installed state", () => {

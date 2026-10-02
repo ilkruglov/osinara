@@ -7,7 +7,7 @@
 
 1. Изменить версию в `package.json` и корне `package-lock.json`, добавить `docs/releases/vVERSION.txt`.
 2. Отправить изменения в `main`. При необходимости запустить `CI and release` через `workflow_dispatch` для `main`.
-3. CI выполняет полный Docker-набор тестов и отдельные проверки поиска с E5 и reranker.
+3. CI выполняет полный Docker-набор тестов и отдельные проверки поиска с BERTA.
 4. После тестов CI публикует шесть образов с digest и provenance, собирает standalone CLI и installation bundle.
 5. Релиз сначала создаётся как draft. Все файлы скачиваются обратно и сравниваются побайтно, затем релиз публикуется как immutable.
 

@@ -31,17 +31,20 @@ services:
     mem_limit: 1536m
     command:
       - --model-id
-      - intfloat/multilingual-e5-small
+      - sergeyzh/BERTA
       - --revision
-      - 614241f622f53c4eeff9890bdc4f31cfecc418b3
+      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7
       - --tokenization-workers
       - "1"
       - --max-client-batch-size
       - "8"
+      # TEI counts every text as a request: a full worker batch and a turn query arriving together
+      # must both fit, or the query gets 429 and the turn searches by words only.
       - --max-concurrent-requests
-      - "8"
+      - "32"
+      # BERTA ships no ONNX weights, so TEI runs candle, which batches at most 4 requests.
       - --max-batch-requests
-      - "8"
+      - "4"
       - --max-batch-tokens
       - "4096"
       - --auto-truncate=false
@@ -59,6 +62,8 @@ services:
     volumes:
       - memory-embedding-model-e5:/data
 
+  # Unused since 1.8.13: the agent no longer calls it, but the 1.8.12 deploy controller requires
+  # the service. The next release removes it.
   memory-reranker:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
     cpus: 1.0
@@ -117,7 +122,6 @@ services:
       INTEGRATION_TOKEN_ENCRYPTION_KEY: ${INTEGRATION_TOKEN_ENCRYPTION_KEY-}
       INVITATION_SIGNING_SECRET: ${INVITATION_SIGNING_SECRET:?INVITATION_SIGNING_SECRET is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
-      MEMORY_RERANKER_BASE_URL: http://memory-reranker:80
       MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY is required}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
