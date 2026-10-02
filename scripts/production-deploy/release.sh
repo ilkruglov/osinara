@@ -282,9 +282,6 @@ validate_resolved_compose_security() {
         {service: "sandbox-runner", type: "volume", source: "tool-environments", target: "/runner/tools"},
         {service: "sandbox-runner", type: "volume", source: "workspace-data", target: "/runner/workspaces"}
       ] | sort_by(.service, .target)) as $approved |
-    # Since 1.8.13 the agent no longer calls the reranker; until a release drops it, its volume is allowed.
-    ($approved + [{service: "memory-reranker", type: "volume", source: "memory-reranker-model-minilm", target: "/data"}]
-      | sort_by(.service, .target)) as $approved_with_reranker |
     all(.services[]; (.privileged // false) == false) and
     all(.services[]; (.network_mode // "") != "host") and
     all(.services[]; (.pid // "") != "host") and
@@ -298,7 +295,7 @@ validate_resolved_compose_security() {
     any(.services.agent.volumes[];
       .source == "/opt/osinara/agent-model-providers.json" and
       .target == "/app/config/agent-model-providers.json" and .read_only == true) and
-    ($mounts == $approved or $mounts == $approved_with_reranker) and
+    $mounts == $approved and
     ([.services | to_entries[] as $service | ($service.value.ports // [])[] |
       {service: $service.key, host_ip, published, target}] == [{
         service: "edge", host_ip: "127.0.0.1", published: "8082", target: 80
@@ -311,14 +308,11 @@ validate_resolved_compose() {
   local expected_images_file="${WORK_DIR}/expected-images.txt"
   local config_json="${WORK_DIR}/resolved-compose.json"
   compose_candidate config --images | LC_ALL=C sort > "$images_file"
-  # One TEI image for the embedder, a second one while a release still carries the reranker.
   {
     printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
       "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$POSTGRES_IMAGE" "$TEI_IMAGE"
   } | LC_ALL=C sort > "$expected_images_file"
-  { cat "$expected_images_file"; printf '%s\n' "$TEI_IMAGE"; } | LC_ALL=C sort > "${expected_images_file}.reranker"
   cmp --silent "$images_file" "$expected_images_file" ||
-    cmp --silent "$images_file" "${expected_images_file}.reranker" ||
     fail "DEPLOY_COMPOSE_IMAGE_SET_INVALID" "Resolved Compose image multiset is not approved"
 
   compose_candidate config --format json > "$config_json"
@@ -327,10 +321,8 @@ validate_resolved_compose() {
       "agent", "edge", "memory-embedding", "memory-embedding-worker", "migrate", "postgres",
       "sandbox-egress-proxy", "sandbox-runner", "sandbox-runtime-image", "telegram-ingress-worker"
     ] | sort) as $approved |
-    ((.services | keys) == $approved or (.services | keys) == ($approved + ["memory-reranker"] | sort)) and
-    .services.agent.depends_on.migrate.condition == "service_completed_successfully" and
-    ((.services | has("memory-reranker") | not) or
-      .services.agent.depends_on["memory-reranker"].condition == "service_healthy")
+    (.services | keys) == $approved and
+    .services.agent.depends_on.migrate.condition == "service_completed_successfully"
   ' "$config_json" >/dev/null ||
     fail "DEPLOY_COMPOSE_SERVICE_SET_INVALID" "Resolved Compose service set is not approved"
   validate_resolved_compose_security "$config_json" ||

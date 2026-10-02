@@ -167,7 +167,6 @@ describe("production container contract", () => {
     for (const volume of [
       "postgres-data",
       "memory-embedding-model-e5",
-      "memory-reranker-model-minilm",
       "google-workspace-credentials",
       "sandbox-data",
       "tool-environments",
@@ -189,7 +188,7 @@ describe("production container contract", () => {
     expect(compose).toContain("x-bounded-json-logs: &bounded-json-logs");
     expect(compose).toContain('max-size: "20m"');
     expect(compose).toContain('max-file: "5"');
-    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(11);
+    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(10);
   });
 
   it("limits Docker control to the runner and tunes pinned TEI for one CPU", () => {
@@ -411,18 +410,18 @@ describe("server deployment contract", () => {
     expect(() => executeComposeSecurityPredicate(inheritedRunnerVolumes)).toThrow();
 
     const unsafe = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
-    unsafe.services["memory-reranker"]!.volumes = [{
+    unsafe.services["memory-embedding-worker"]!.volumes = [{
       source: "/", target: "/host", type: "bind",
     }];
     expect(() => executeComposeSecurityPredicate(unsafe)).toThrow();
 
-    // The next release drops the unused reranker together with its volume; nothing else may go.
-    const withoutReranker = structuredClone(valid) as { services: Record<string, unknown> };
-    delete withoutReranker.services["memory-reranker"];
-    expect(() => executeComposeSecurityPredicate(withoutReranker)).not.toThrow();
-    const withoutEmbedder = structuredClone(withoutReranker) as { services: Record<string, unknown> };
-    delete withoutEmbedder.services["memory-embedding"];
-    expect(() => executeComposeSecurityPredicate(withoutEmbedder)).toThrow();
+    // The reranker left in 1.8.14; a release bringing its volume back is not approved.
+    const withReranker = structuredClone(valid) as { services: Record<string, { volumes?: unknown[] }> };
+    withReranker.services["memory-reranker"] = {
+      ...structuredClone(withReranker.services["memory-embedding-worker"]!),
+      volumes: [{ source: "memory-reranker-model-minilm", target: "/data", type: "volume" }],
+    };
+    expect(() => executeComposeSecurityPredicate(withReranker)).toThrow();
   });
 
   it("rejects environment image injection, downgrade, and incomplete installed state", () => {

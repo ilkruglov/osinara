@@ -42,7 +42,6 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
         volumes: [volume("memory-embedding-model-e5", "/data")],
       }),
       "memory-embedding-worker": service(),
-      "memory-reranker": service({ volumes: [volume("memory-reranker-model-minilm", "/data")] }),
       migrate: service(),
       postgres: service({ volumes: [volume("postgres-data", "/var/lib/postgresql/data")] }),
       "sandbox-egress-proxy": service(),
