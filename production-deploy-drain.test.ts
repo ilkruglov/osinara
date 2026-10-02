@@ -7,6 +7,8 @@
  * - The drain stops the Telegram ingress worker first, marks the services as stopped for the
  *   failure path, returns once nothing is active, and gives up at its ceiling.
  * - A missing Workflow database does not stop the deploy.
+ * - Every poll is bounded by the remaining drain budget, on the host (docker exec) and in
+ *   PostgreSQL (statement and lock timeouts).
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -50,6 +52,7 @@ function runDrain(counts: string[], timeoutSeconds: number) {
   const result = controller(`
     compose_current() { printf '%s\\n' "$*" >> "${dir}/compose"; }
     count_active_workflow_runs() {
+      printf '%s\n' "$1" >> "${dir}/budgets"
       local next; next="$(head -n 1 "${dir}/counts")"; sed -i 1d "${dir}/counts"
       [[ "$next" == "error" ]] && return 1
       printf '%s\\n' "\${next:-0}"
@@ -65,7 +68,13 @@ function runDrain(counts: string[], timeoutSeconds: number) {
       return "";
     }
   };
-  return { compose: read("compose"), log: read("log"), stdout: result.stdout, remaining: read("counts") };
+  return {
+    budgets: read("budgets").trim().split("\n"),
+    compose: read("compose"),
+    log: read("log"),
+    remaining: read("counts"),
+    stdout: result.stdout,
+  };
 }
 
 describe("deploy turn drain", () => {
@@ -82,6 +91,30 @@ describe("deploy turn drain", () => {
     expect(run.log).toContain("DEPLOY_TURN_DRAIN_TIMEOUT");
     expect(run.log).toContain("3");
     expect(run.stdout).toContain("stopped=1");
+  });
+
+  it("bounds every poll by what is left of the drain budget", () => {
+    expect(runDrain(["1", "0"], 300).budgets).toEqual(["20", "20"]);
+    const short = runDrain(["1", "0"], 7);
+    expect(Number(short.budgets[0])).toBeLessThanOrEqual(7);
+    expect(Number(short.budgets[0])).toBeGreaterThan(0);
+  });
+
+  it("runs the query under a host timeout and PostgreSQL statement and lock timeouts", () => {
+    const dir = mkdtempSync(join(tmpdir(), "drain-query-"));
+    controller(`
+      CURRENT_ENV=/srv/release.env CURRENT_COMPOSE=/srv/compose.yaml
+      timeout() { printf '%s\n' "$*" > "${dir}/argv"; cat > "${dir}/stdin"; echo 0; }
+      count_active_workflow_runs 20
+    `);
+    const argv = readFileSync(join(dir, "argv"), "utf8");
+    const stdin = readFileSync(join(dir, "stdin"), "utf8");
+    expect(argv).toMatch(/^--kill-after=5 20 docker compose --project-name osinara-production /u);
+    expect(argv).toContain("exec -T postgres psql");
+    expect(argv).toContain("--dbname osinara_workflow");
+    expect(stdin).toContain("SET statement_timeout = '20s';");
+    expect(stdin).toContain("SET lock_timeout = '2s';");
+    expect(stdin).toContain("FROM workflow.workflow_runs AS run");
   });
 
   it("continues without a readable Workflow database", () => {

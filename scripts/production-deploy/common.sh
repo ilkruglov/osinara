@@ -128,6 +128,14 @@ compose_current() {
     --env-file "$CURRENT_ENV" --file "$CURRENT_COMPOSE" "$@"
 }
 
+# The same call, killed after `seconds` (a hung docker exec must not outlive its caller's budget).
+compose_current_within() {
+  local seconds="$1"
+  shift
+  timeout --kill-after=5 "$seconds" docker compose --project-name osinara-production \
+    --env-file "$SERVER_ENV" --env-file "$CURRENT_ENV" --file "$CURRENT_COMPOSE" "$@"
+}
+
 compose_candidate() {
   docker compose --project-name osinara-production --env-file "$SERVER_ENV" \
     --env-file "$CANDIDATE_ENV" --file "$CANDIDATE_COMPOSE" "$@"

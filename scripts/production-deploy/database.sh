@@ -9,11 +9,6 @@ psql_current() {
     --username osinara --dbname osinara --no-align --tuples-only --quiet "$@"
 }
 
-psql_workflow() {
-  compose_current exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
-    --username osinara --dbname osinara_workflow --no-align --tuples-only --quiet "$@"
-}
-
 # Workflow runs doing work right now: a step in flight (its last event opens or carries a step,
 # younger than 10 minutes, so a stuck run does not hold a deploy), a message the session has yet to
 # take, or any event in the last 5 seconds (the pause between two steps). A session waiting for
@@ -37,8 +32,15 @@ SELECT count(*)
 SQL
 }
 
+# One poll within `seconds`: the host kills a hung docker exec, PostgreSQL ends a slow statement or
+# a lock wait. Codex review, 3 October 2026: the drain ceiling was checked only between polls.
 count_active_workflow_runs() {
-  active_workflow_runs_sql | psql_workflow
+  local seconds="$1"
+  {
+    printf "SET statement_timeout = '%ss';\nSET lock_timeout = '2s';\n" "$seconds"
+    active_workflow_runs_sql
+  } | compose_current_within "$seconds" exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
+    --username osinara --dbname osinara_workflow --no-align --tuples-only --quiet
 }
 
 reconcile_stale_deployments() {

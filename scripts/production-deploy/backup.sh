@@ -206,6 +206,7 @@ create_postgres_backup() {
 # may still start a turn meanwhile; the ceiling keeps the deploy moving.
 readonly TURN_DRAIN_TIMEOUT_SECONDS=300
 readonly TURN_DRAIN_POLL_SECONDS=3
+readonly TURN_DRAIN_QUERY_SECONDS=20
 
 drain_current_turns() {
   local timeout="${1:-$TURN_DRAIN_TIMEOUT_SECONDS}"
@@ -214,8 +215,12 @@ drain_current_turns() {
   # From here on a failure must bring the current release back, ingress included.
   CURRENT_SERVICES_STOPPED=1
   compose_current stop telegram-ingress-worker
+  local remaining budget
   while true; do
-    if ! active="$(count_active_workflow_runs)"; then
+    remaining=$((timeout - (SECONDS - started)))
+    budget=$((remaining < TURN_DRAIN_QUERY_SECONDS ? remaining : TURN_DRAIN_QUERY_SECONDS))
+    ((budget >= 1)) || budget=1
+    if ! active="$(count_active_workflow_runs "$budget")"; then
       log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read Workflow runs; stopping without waiting"
       return 0
     fi
