@@ -79,8 +79,6 @@ WITH global_owner AS (
             proposal.manifest->>'version', proposal.manifest->>'commitSha',
             proposal.manifest->>'composeSha256',
             proposal.manifest->'images'->>'app',
-            -- An empty field would shift the tab-separated read below; "-" marks an absent gateway.
-            coalesce(proposal.manifest->'images'->>'cliProxy', '-'),
             proposal.manifest->'images'->>'edge',
             proposal.manifest->'images'->>'sandboxEgressProxy',
             proposal.manifest->'images'->>'sandboxRunner',
@@ -97,7 +95,7 @@ SQL
 
   CLAIM_FOUND=1
   IFS=$'\t' read -r PROPOSAL_ID REQUESTED_VERSION OWNER_CHAT_ID \
-    STORED_VERSION STORED_COMMIT STORED_COMPOSE_SHA STORED_APP STORED_CLI_PROXY STORED_EDGE \
+    STORED_VERSION STORED_COMMIT STORED_COMPOSE_SHA STORED_APP STORED_EDGE \
     STORED_EGRESS STORED_RUNNER STORED_RUNTIME <<<"$claimed"
   if [[ ! "$PROPOSAL_ID" =~ ^[0-9a-f-]{36}$ || ! "$OWNER_CHAT_ID" =~ ^-?[0-9]+$ ]]; then
     fail "DEPLOY_PROPOSAL_INVALID" "Claimed proposal has invalid identity fields"

@@ -25,7 +25,6 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
     services: {
       agent: service({
         depends_on: {
-          "cli-proxy-api": { condition: "service_healthy", required: true },
           migrate: { condition: "service_completed_successfully", required: true },
         },
         volumes: [
@@ -33,11 +32,6 @@ export function resolvedComposeSecurityFixture(): Record<string, unknown> {
           volume("google-workspace-credentials", "/app/google-workspace-credentials"),
           volume("workspace-data", "/app/workspaces"),
           volume("/opt/osinara/agent-model-providers.json", "/app/config/agent-model-providers.json", "bind", true),
-        ],
-      }),
-      "cli-proxy-api": service({
-        volumes: [
-          volume("cli-proxy-auth", "/var/lib/cli-proxy-api/auth"),
         ],
       }),
       edge: service({

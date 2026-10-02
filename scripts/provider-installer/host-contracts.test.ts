@@ -21,7 +21,6 @@ function manifest(): Buffer {
     composeSha256: "2".repeat(64),
     images: {
       app: digest("osinara-app", "a"),
-      cliProxy: digest("osinara-cli-proxy", "b"),
       edge: digest("osinara-edge", "c"),
       sandboxEgressProxy: digest("osinara-sandbox-egress-proxy", "d"),
       sandboxRunner: digest("osinara-sandbox-runner", "e"),
@@ -41,12 +40,12 @@ describe("production host contracts", () => {
     expect(environment).not.toContain("OSINARA_CLI_PROXY_IMAGE");
   });
 
-  it("accepts a manifest without the retired gateway image", () => {
+  it("rejects a manifest that still names the retired gateway image", () => {
     const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
-    delete parsed.images.cliProxy;
+    parsed.images.cliProxy = digest("osinara-cli-proxy", "b");
 
-    expect(releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3").toString("utf8"))
-      .toContain(`OSINARA_APP_IMAGE=${digest("osinara-app", "a")}`);
+    expect(() => releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"))
+      .toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
   });
 
   it("rejects inherited upstream image references", () => {

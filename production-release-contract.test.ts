@@ -48,13 +48,12 @@ function service(compose: string, name: string, nextName: string): string {
 }
 
 describe("production container contract", () => {
-  it("publishes six container-only first-party targets with OCI provenance", () => {
+  it("publishes five container-only first-party targets with OCI provenance", () => {
     const dockerfile = readProjectFile("Dockerfile");
     const entrypoint = readProjectFile("scripts/docker-entrypoint.sh");
 
     for (const target of [
       "runtime",
-      "cli-proxy",
       "sandbox-runtime",
       "sandbox-runner",
       "sandbox-egress-proxy",
@@ -75,9 +74,8 @@ describe("production container contract", () => {
     expect(dockerfile).toContain(
       "FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
     );
-    expect(dockerfile).toContain(
-      "FROM eceasy/cli-proxy-api@sha256:591a09c19de769be09a2e56277365cd568b83fc7d98c94d2e7e7bef7069f7422 AS cli-proxy",
-    );
+    // The Codex subscription gateway image was retired in 1.8.11.
+    expect(dockerfile).not.toContain("cli-proxy");
 
     // Eve 0.40.0 serves built output but still bundles authored modules during `eve start`.
     const runtime = dockerfile.slice(dockerfile.indexOf(" AS runtime"));
@@ -243,7 +241,6 @@ describe("release workflow contract", () => {
     }
     for (const image of [
       "osinara-app",
-      "osinara-cli-proxy",
       "osinara-sandbox-runtime",
       "osinara-sandbox-runner",
       "osinara-sandbox-egress-proxy",
@@ -251,7 +248,7 @@ describe("release workflow contract", () => {
     ]) {
       expect(workflow).toContain(`ghcr.io/ilkruglov/${image}`);
     }
-    expect(workflow.match(/actions\/attest@/g)).toHaveLength(10);
+    expect(workflow.match(/actions\/attest@/g)).toHaveLength(9);
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("attestations: write");
     expect(workflow).toContain("id-token: write");
@@ -391,7 +388,6 @@ describe("server deployment contract", () => {
     expect(script).toContain("logging.driver");
     expect(script).toContain("/var/run/docker.sock");
     expect(script).toContain("/opt/osinara/agent-model-providers.json");
-    expect(script).toContain("osinara-production-cli-proxy-auth");
     expect(script).toContain(".read_only == true");
   });
 

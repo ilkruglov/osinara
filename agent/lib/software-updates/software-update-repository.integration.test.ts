@@ -27,7 +27,6 @@ const manifest = {
   composeSha256: "c".repeat(64),
   images: {
     app: `ghcr.io/ilkruglov/osinara-app@sha256:${"a".repeat(64)}`,
-    cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${"a".repeat(64)}`,
     edge: `ghcr.io/ilkruglov/osinara-edge@sha256:${"a".repeat(64)}`,
     sandboxEgressProxy:
       `ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${"a".repeat(64)}`,

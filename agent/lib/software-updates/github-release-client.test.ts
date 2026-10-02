@@ -18,7 +18,6 @@ function deploymentManifest(overrides: Record<string, unknown> = {}) {
     composeSha256: "c".repeat(64),
     images: {
       app: `ghcr.io/ilkruglov/osinara-app@sha256:${DIGEST}`,
-      cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${DIGEST}`,
       edge: `ghcr.io/ilkruglov/osinara-edge@sha256:${DIGEST}`,
       sandboxEgressProxy: `ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:${DIGEST}`,
       sandboxRunner: `ghcr.io/ilkruglov/osinara-sandbox-runner@sha256:${DIGEST}`,
@@ -81,17 +80,18 @@ describe("GitHub software release client", () => {
     }
   });
 
-  // 2 October 2026: the Codex subscription gateway was removed; the release after this one stops
-  // publishing its image, and this agent must still propose it.
-  it("accepts a manifest without the retired gateway image", async () => {
+  // The Codex subscription gateway image was retired in 1.8.11; a manifest naming it is foreign.
+  it("rejects a manifest that still names the retired gateway image", async () => {
     const manifest = deploymentManifest();
-    const { cliProxy: _retired, ...images } = manifest.images;
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(githubRelease()))
-      .mockResolvedValueOnce(jsonResponse({ ...manifest, images }));
+      .mockResolvedValueOnce(jsonResponse({
+        ...manifest,
+        images: { ...manifest.images, cliProxy: `ghcr.io/ilkruglov/osinara-cli-proxy@sha256:${DIGEST}` },
+      }));
     const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
 
-    await expect(client.latestNewerThan("0.1.0")).resolves.toMatchObject({ version: "0.2.0" });
+    await expect(client.latestNewerThan("0.1.0")).rejects.toThrowError(/AGENT_SOFTWARE_MANIFEST_INVALID/);
   });
 
   it("rejects an upstream release even when its version is newer", async () => {

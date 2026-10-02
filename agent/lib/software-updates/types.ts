@@ -12,8 +12,6 @@ export interface SoftwareUpdateManifest {
   composeSha256: string;
   images: {
     app: string;
-    /** Absent since the Codex subscription gateway was removed (2 October 2026). */
-    cliProxy?: string;
     edge: string;
     sandboxEgressProxy: string;
     sandboxRunner: string;

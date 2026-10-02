@@ -6,7 +6,6 @@ readonly BACKUP_RESERVE_BYTES=$((512 * 1024 * 1024))
 readonly RETAINED_DEPLOY_BACKUP_COUNT=2
 readonly DEPLOY_BACKUP_NAME_PATTERN='^[0-9]{8}T[0-9]{6}Z-to-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 readonly DURABLE_VOLUME_BINDINGS=(
-  "osinara-production-cli-proxy-auth|cli-proxy-auth"
   "osinara-production-google-workspace-credentials|google-workspace-credentials"
   "osinara-production-tool-environments|tool-environments"
   "osinara-production-workspace-data|workspace-data"
