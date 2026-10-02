@@ -9,6 +9,8 @@
  * - Anthropic Messages adaptive thinking is enforced at the transport boundary.
  * - Retryable physical provider responses are logged before AI SDK applies its bounded retry policy.
  * - OpenAI Chat Completions carries explicit provider-native thinking controls when configured.
+ * - A provider that does not start answering, or stops streaming, fails within minutes
+ *   (`model-response-deadline.ts`) instead of holding the step past Workflow's ownership lease.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -25,6 +27,11 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
 import { observeModelUsage } from "./model-usage-log.js";
+import {
+  MODEL_RESPONSE_START_TIMEOUT_MS,
+  MODEL_STREAM_IDLE_TIMEOUT_MS,
+  withResponseDeadlines,
+} from "./model-response-deadline.js";
 import { describeDeepSeekHttpError } from "./deepseek/deepseek-errors.js";
 import { normalizeDeepSeekResponsesRequest } from "./deepseek/deepseek-responses-request.js";
 import {
@@ -120,7 +127,11 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
       );
     }
     const request = normalizeDeepSeekResponsesTransportRequest(options, normalizeDeepSeekThinkingRequest(options, init));
-    let response = await (options.fetch ?? globalThis.fetch)(input, request);
+    const fetchWithDeadlines = withResponseDeadlines(options.fetch ?? globalThis.fetch, {
+      idleMs: MODEL_STREAM_IDLE_TIMEOUT_MS,
+      startMs: MODEL_RESPONSE_START_TIMEOUT_MS,
+    });
+    let response = await fetchWithDeadlines(input, request);
     // A preview alias such as deepseek-v4.1-flash-expires-on-0910 dies on a date. When DeepSeek
     // answers that the configured id is not a supported model name, the same request goes once
     // more with the stable fallback, and the log says the configured id is gone.
@@ -132,7 +143,7 @@ function createCredentialGuardedFetch(options: ConfiguredLanguageModelOptions): 
         modelId: options.modelId,
         url: modelRequestUrl(input),
       }));
-      response = await (options.fetch ?? globalThis.fetch)(input, withModelId(request, retired));
+      response = await fetchWithDeadlines(input, withModelId(request, retired));
     }
     // Documented DeepSeek statuses become stable application errors; retryable ones keep flowing to
     // the AI SDK retry policy below, terminal ones stop the call with a human-readable reason.

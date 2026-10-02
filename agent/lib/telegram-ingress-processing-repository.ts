@@ -79,7 +79,9 @@ export const telegramIngressProcessingRepository: ProcessingOperations = {
     }
     throw new AppError(
       "AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED",
-      "Передача сообщения в Eve была прервана. Автоматический повтор отключён для защиты от двойного действия",
+      // The person reads this: the interrupted dispatch may or may not have reached the agent, and a
+      // second dispatch could repeat an action, so they decide whether to send it again.
+      "Не уверена, что обработала это сообщение: обработку прервал сбой. Если ответа на него не было, отправьте его ещё раз",
     );
   },
 

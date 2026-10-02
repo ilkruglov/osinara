@@ -19,6 +19,7 @@ import { TELEGRAM_INGRESS_LEASE_MS, TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS, TELEGRAM
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
 import type { TelegramIngressClaim, TelegramIngressRepository } from "./telegram-ingress-contract.js";
+import { sendTelegramFailureNotice } from "./telegram-failure-notice.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
 import {
   classifyTelegramInboundMedia,
@@ -83,6 +84,11 @@ interface DurableIngressDependencies {
     query: Extract<TelegramUpdate, { kind: "callback_query" }>["callbackQuery"],
   ): Promise<boolean>;
   leaseMilliseconds: number;
+  /**
+   * Tells the person in a private chat that a message of theirs was not processed. Failure texts are
+   * written for people; without this they only reached the log.
+   */
+  notifyFailure?(update: TelegramUpdate, failure: { code: string; message: string }): Promise<void>;
   repository: TelegramIngressRepository;
   transcribeVoice(input: {
     fileId: string;
@@ -272,6 +278,22 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   // out the full lease. A redispatched update is deduplicated by the journal, so no turn repeats.
   let staleLeasesReleased = false;
 
+  // A lost lease means another drain owns the message; anything else is the person's to know.
+  async function notifyFailure(failed: TelegramIngressClaim, failure: { code: string; message: string }): Promise<void> {
+    if (!dependencies.notifyFailure || failure.code === "AGENT_TELEGRAM_LEASE_LOST") return;
+    const update = parseTelegramUpdate(failed.payload);
+    if (update?.kind !== "message" || update.message.chat.type !== "private") return;
+    try {
+      await dependencies.notifyFailure(update, failure);
+    } catch (error) {
+      console.error(JSON.stringify({
+        code: "AGENT_TELEGRAM_FAILURE_NOTICE_FAILED",
+        error: error instanceof Error ? error.message : String(error),
+        updateId: failed.updateId,
+      }));
+    }
+  }
+
   type LeasedUpdate = { claim: TelegramIngressClaim; update: TelegramUpdate };
 
   // A run of consecutive messages from the author of `head` is leased together so one turn can
@@ -363,7 +385,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         heartbeatControllers.delete(updateId);
       };
       startHeartbeat(claim);
-      // Every leased update that has not reached a terminal state yet; a failure marks them all.
+      // Every leased update that has not reached a terminal state yet, in queue order.
       const pending: TelegramIngressClaim[] = [claim];
 
       async function dispatchLeased(
@@ -511,9 +533,21 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             ...(pending.length > 1 ? { seriesUpdateIds: pending.map((item) => item.updateId) } : {}),
           }),
         );
-        for (const leased of pending) {
+        // Only the message being prepared or dispatched failed; the rest of its series never reached
+        // Eve and goes back to the queue (2 October 2026: two fresh messages failed with a head
+        // whose interrupted dispatch was refused as possibly double).
+        const [failed, ...untouched] = pending;
+        if (failed) {
+          stopHeartbeat(failed.updateId);
+          await dependencies.repository.fail(failed.updateId, failed.leaseToken, failure);
+          await notifyFailure(failed, failure);
+        }
+        for (const leased of untouched) {
           stopHeartbeat(leased.updateId);
-          await dependencies.repository.fail(leased.updateId, leased.leaseToken, failure);
+          await dependencies.repository.release(leased.updateId, leased.leaseToken, {
+            code: "AGENT_TELEGRAM_SERIES_RETURNED",
+            message: "Сообщение вернулось в очередь: предыдущее сообщение серии не обработано",
+          });
         }
         throw error;
       } finally {
@@ -583,6 +617,7 @@ export const handleTelegramDurableIngress = createTelegramDurableIngress({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
   handleSoftwareUpdateCallback,
   leaseMilliseconds: TELEGRAM_INGRESS_LEASE_MS,
+  notifyFailure: sendTelegramFailureNotice,
   repository: telegramIngressRepository,
   transcribeVoice: transcribeTelegramVoice,
 });

@@ -16,6 +16,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closeDatabase, database } from "./database.js";
 import { NO_PRIVATE_BURST } from "./telegram-ingress-contract.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
+import { claimStalledIngress } from "./telegram-ingress-stall.js";
 import {
   BOT_USERNAME,
   groupMessage,
@@ -70,6 +71,20 @@ describeWithDatabase("telegramIngressRepository", () => {
 
   afterAll(async () => {
     await closeDatabase();
+  });
+
+  // 2 October 2026: a dispatched private message stayed processing for 8.5 hours unnoticed.
+  it("claims a long-dispatched message for one stall alert", async () => {
+    await telegramIngressRepository.enqueue(updateInput("1101", "telegram:private:111", "ты тут?"));
+    const claim = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    await telegramIngressRepository.beginDispatch(claim!.updateId, claim!.leaseToken);
+    await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toEqual([]);
+
+    await database().query(
+      "UPDATE telegram_ingress_updates SET dispatch_started_at = now() - interval '31 minutes' WHERE update_id = 1101",
+    );
+    await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toMatchObject([{ chatType: "private", updateId: "1101" }]);
+    await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toEqual([]);
   });
 
   it("deduplicates an identical update and rejects a conflicting replay", async () => {

@@ -19,6 +19,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { patchEventLogCache } from "./eve-patches/event-log-cache.ts";
+import { patchQueueLoopbackTimeout } from "./eve-patches/queue-loopback-timeout.ts";
+import { patchStuckRunRecovery } from "./eve-patches/stuck-run-recovery.ts";
 import { patchStreamRecovery } from "./eve-patches/stream-recovery.ts";
 
 const EXPECTED_EVE_VERSION = "0.40.0";
@@ -127,6 +129,8 @@ if (evePackage.version !== EXPECTED_EVE_VERSION) {
 // in an out-of-memory crash. Reads become paged and demand-driven, delta persistence is paced.
 await patchStreamRecovery(replaceExact);
 await patchEventLogCache(replaceExact);
+await patchQueueLoopbackTimeout(replaceExact);
+await patchStuckRunRecovery(replaceExact);
 
 // A cold production start may prepare sandbox images before the child server becomes healthy.
 await replaceExact(
