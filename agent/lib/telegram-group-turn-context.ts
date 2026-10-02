@@ -38,6 +38,8 @@ interface PrepareTelegramGroupTurnContextInput {
   attachmentReferenceAccess: TelegramAttachmentReferenceAccess;
   currentEntryId: string;
   currentSenderDisplayName: string;
+  /** Member tag the group shows next to the sender of this message, if any. */
+  currentSenderTag?: string | null;
   currentSenderUsername: string | null;
   currentSequence: string;
   conversationId?: string;
@@ -129,6 +131,7 @@ function currentTelegramMessageEnvelope(
   input: Pick<
     PrepareTelegramGroupTurnContextInput,
     | "currentSenderDisplayName"
+    | "currentSenderTag"
     | "currentSenderUsername"
     | "currentSequence"
     | "messageText"
@@ -148,6 +151,7 @@ function currentTelegramMessageEnvelope(
   const currentMessage = escapeUntrustedContextJson({
     sourceSequence: input.currentSequence,
     senderDisplayName: input.currentSenderDisplayName,
+    ...(input.currentSenderTag ? { senderTag: input.currentSenderTag } : {}),
     senderUsername: input.currentSenderUsername,
     ...(input.replyTargetSnapshot
       ? { replyTargetSnapshot: input.replyTargetSnapshot }

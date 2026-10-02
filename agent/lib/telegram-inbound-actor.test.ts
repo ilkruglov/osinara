@@ -6,10 +6,11 @@
  * - Channel-authored supergroup posts use raw `sender_chat`, not Telegram's Channel_Bot identity.
  * - Another bot is a visible participant without identity, since Bot API 10.2 delivers its messages.
  * - Ambiguous, malformed, and anonymous-group senders fail closed.
+ * - The member tag a supergroup shows next to a sender is read per message and cleaned.
  */
 import { describe, expect, it } from "vitest";
 
-import { telegramInboundActor } from "./telegram-inbound-actor.js";
+import { telegramInboundActor, telegramSenderTag } from "./telegram-inbound-actor.js";
 import { groupMessage } from "./telegram-on-message.test-fixtures.js";
 
 describe("telegramInboundActor", () => {
@@ -116,5 +117,29 @@ describe("telegramInboundActor", () => {
     },
   ])("rejects $label", ({ message }) => {
     expect(telegramInboundActor(message)).toBeNull();
+  });
+});
+
+// 2 October 2026: supergroup members carry tags such as «Батя» or «Token Burner» in `sender_tag`,
+// and Mia did not see them, so «спроси у Бати» meant nothing to her.
+describe("telegramSenderTag", () => {
+  const withTag = (tag: unknown) => ({ ...groupMessage("Привет"), raw: { ...groupMessage("Привет").raw, sender_tag: tag } });
+
+  it("reads the member tag of the message", () => {
+    expect(telegramSenderTag(withTag("Батя"))).toBe("Батя");
+  });
+
+  it("flattens control characters and spaces", () => {
+    expect(telegramSenderTag(withTag("  ба-да-\nбумс!\u200B "))).toBe("ба-да- бумс!");
+  });
+
+  it("returns null without a usable tag", () => {
+    expect(telegramSenderTag(groupMessage("Привет"))).toBeNull();
+    expect(telegramSenderTag(withTag("   "))).toBeNull();
+    expect(telegramSenderTag(withTag(42))).toBeNull();
+  });
+
+  it("bounds a long tag", () => {
+    expect(telegramSenderTag(withTag("я".repeat(100)))?.length).toBeLessThanOrEqual(64);
   });
 });

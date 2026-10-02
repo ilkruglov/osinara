@@ -44,6 +44,7 @@ interface TimelineRow {
   reply_to_sequence_id: string | null;
   sender_display_name: string | null;
   sender_is_bot: boolean;
+  sender_tag: string | null;
   sender_username: string | null;
   sent_at: Date;
   sequence_id: string;
@@ -73,7 +74,7 @@ export interface RecordConversationAgentResponseInput {
 const TIMELINE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
   message.actor_id, message.telegram_message_id::text, message.message_thread_id::text,
   message.telegram_user_id, message.sender_username, message.sender_display_name,
-  message.sender_is_bot, message.message_kind, message.content_text,
+  message.sender_tag, message.sender_is_bot, message.message_kind, message.content_text,
   message.reply_to_message_id::text, message.reply_to_sequence_id::text, message.sent_at`;
 
 function project(row: TimelineRow): TelegramGroupJournalEntry {
@@ -88,6 +89,7 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
     replyToSequenceId: row.reply_to_sequence_id,
     senderDisplayName: row.sender_display_name,
     senderIsBot: row.sender_is_bot,
+    senderTag: row.sender_tag,
     senderUsername: row.sender_username,
     sentAt: row.sent_at.toISOString(),
     sequenceId: row.sequence_id,

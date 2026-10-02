@@ -119,6 +119,7 @@ export async function searchTelegramGroupHistory(
         replyToSequence: entry.replyToSequenceId,
         sentAt: entry.sentAt,
         sequence: entry.sequenceId,
+        ...(entry.senderTag ? { tag: entry.senderTag } : {}),
         username: entry.senderUsername,
       };
     }),

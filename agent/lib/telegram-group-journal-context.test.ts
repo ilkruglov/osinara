@@ -7,6 +7,7 @@
  * - Oldest messages are discarded first to satisfy the explicit character budget.
  * - Telegram identifiers that are not needed for conversation context stay private.
  * - Entries carry the time of day only, with one dated separator per calendar day.
+ * - A sender's member tag follows the name as untrusted data.
  */
 import { describe, expect, it } from "vitest";
 
@@ -209,5 +210,19 @@ describe("formatTelegramGroupJournalContext", () => {
     expect(context).toContain("00000000-0000-4000-8000-000000000099");
     expect(context).toContain("договор.pdf");
     expect(context).not.toContain("fileId");
+  });
+});
+
+describe("member tags", () => {
+  it("prints the tag next to the sender's name", () => {
+    const context = formatTelegramGroupJournalContext([{ ...entry("1", "привет"), senderTag: "Батя" }], 12_000) ?? "";
+
+    expect(context).toContain('"Анна" tag:"Батя" ');
+  });
+
+  it("prints nothing extra without a tag", () => {
+    const context = formatTelegramGroupJournalContext([entry("1", "привет")], 12_000) ?? "";
+
+    expect(context).not.toContain("tag:");
   });
 });

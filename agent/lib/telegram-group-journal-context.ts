@@ -28,6 +28,8 @@ export interface TelegramGroupJournalEntry {
   sequenceId: string;
   replyToMessageId?: string | null;
   senderDisplayName: string | null;
+  /** The member tag the group showed next to the sender at that message; not an identity. */
+  senderTag?: string | null;
   senderUsername: string | null;
   sentAt: string;
   senderIsBot?: boolean;
@@ -131,7 +133,8 @@ function renderEntry(entry: TelegramGroupJournalEntry, clock: TimelineClock): st
   const attachment = entry.attachment === undefined
     ? ""
     : ` attachment:${escapeUntrustedContextJson(entry.attachment)}`;
-  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${reply} ${stamp(entry, clock).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
+  const tag = entry.senderTag ? ` tag:${escapeUntrustedContextJson(entry.senderTag)}` : "";
+  return `#${entry.sequenceId} [${actor}] ${escapeUntrustedContextJson(name)}${tag}${reply} ${stamp(entry, clock).time} ${escapeUntrustedContextJson(entry.contentText)}${attachment}`;
 }
 
 /** Entries are chronological, so one dated line per calendar day carries the missing date. */

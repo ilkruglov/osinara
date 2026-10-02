@@ -7,6 +7,7 @@
  *   window of the latest entries so the last exchanges stay in front of the model.
  * - Timeline context is embedded in the durable user message rather than ephemeral Eve context.
  * - The addressed message text is recoverable from the durable envelope the preparer produced.
+ * - The current sender's member tag travels in the envelope next to the name.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -198,6 +199,12 @@ describe("Telegram group turn context", () => {
     expect(result.durableMessage).toContain("Тула");
     expect(result.durableMessage).toContain('"senderDisplayName":"Пух"');
     expect(result.durableMessage.match(/Что решили\?/gu)).toHaveLength(1);
+  });
+
+  it("names the current sender's member tag next to the name", async () => {
+    const result = await createTelegramGroupTurnContextPreparer(dependencies(null))({ ...input, currentSenderTag: "Батя" });
+
+    expect(result.durableMessage).toContain('"senderDisplayName":"Пух","senderTag":"Батя"');
   });
 
   it("embeds only unseen non-owned timeline entries for an existing session", async () => {

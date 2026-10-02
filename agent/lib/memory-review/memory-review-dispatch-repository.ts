@@ -38,6 +38,7 @@ interface SourceRow {
   message_thread_id: string | null;
   reply_to_sequence_id: string | null;
   sender_display_name: string | null;
+  sender_tag: string | null;
   sender_username: string | null;
   sent_at: Date;
   sequence_id: string;
@@ -54,6 +55,7 @@ function project(row: SourceRow): TelegramGroupJournalEntry {
     messageThreadId: row.message_thread_id,
     replyToSequenceId: row.reply_to_sequence_id,
     senderDisplayName: row.sender_display_name,
+    senderTag: row.sender_tag,
     senderUsername: row.sender_username,
     sentAt: row.sent_at.toISOString(),
     sequenceId: row.sequence_id,
@@ -166,7 +168,7 @@ async function precedingContext(client: PoolClient, input: {
   const result = await client.query<SourceRow>(
     `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
             message.message_thread_id::text, message.sender_username,
-            message.sender_display_name, message.message_kind, message.content_text,
+            message.sender_display_name, message.sender_tag, message.message_kind, message.content_text,
             message.reply_to_sequence_id::text, message.sent_at, message.telegram_user_id
        FROM telegram_group_messages AS message
       WHERE message.conversation_id = $1
@@ -292,7 +294,7 @@ export const memoryReviewDispatchRepository = {
         const sources = await client.query<SourceRow>(
           `SELECT message.id, message.sequence_id::text, message.actor_kind, message.actor_id,
                   message.message_thread_id::text, message.sender_username,
-                  message.sender_display_name, message.message_kind, message.content_text,
+                  message.sender_display_name, message.sender_tag, message.message_kind, message.content_text,
                   message.reply_to_sequence_id::text, message.sent_at, message.telegram_user_id
              FROM memory_review_batch_sources AS source
              JOIN telegram_group_messages AS message ON message.id = source.timeline_entry_id

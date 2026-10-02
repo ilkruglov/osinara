@@ -153,6 +153,7 @@ const POST_V0101_MIGRATIONS = [
   "119_turn_interjection_steps.sql",
   "120_drop_group_skill_allowlist.sql",
   "121_telegram_ingress_stall_alert.sql",
+  "122_telegram_group_message_sender_tag.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

@@ -28,9 +28,10 @@ import {
   telegramMessageKind,
   telegramMessageSentAt,
 } from "./telegram-group-message-storage.js";
-import type {
-  TelegramInboundActor,
-  TelegramTimelineActorKind,
+import {
+  telegramSenderTag,
+  type TelegramInboundActor,
+  type TelegramTimelineActorKind,
 } from "./telegram-inbound-actor.js";
 
 const HISTORY_MAX_LIMIT = 100;
@@ -106,6 +107,7 @@ interface TimelineRow {
   reply_to_sequence_id: string | null;
   sender_display_name: string | null;
   sender_is_bot: boolean;
+  sender_tag: string | null;
   sender_username: string | null;
   sent_at: Date;
   sequence_id: string;
@@ -120,7 +122,7 @@ interface TimelineRow {
 const TIMELINE_COLUMNS = `message.id, message.sequence_id::text, message.actor_kind,
   message.actor_id, message.telegram_message_id::text, message.message_thread_id::text,
   message.telegram_user_id, message.telegram_sender_chat_id,
-  message.sender_username, message.sender_display_name,
+  message.sender_username, message.sender_display_name, message.sender_tag,
   message.sender_is_bot, message.message_kind, message.content_text,
   message.reply_to_message_id::text, message.reply_to_sequence_id::text,
   message.sent_at, message.attachment_file_name, message.attachment_media_type,
@@ -151,6 +153,7 @@ function project(row: TimelineRow): TelegramGroupJournalEntry {
     replyToSequenceId: row.reply_to_sequence_id,
     senderDisplayName: row.sender_display_name,
     senderIsBot: row.sender_is_bot,
+    senderTag: row.sender_tag,
     senderUsername: row.sender_username,
     sentAt: row.sent_at.toISOString(),
     sequenceId: row.sequence_id,
@@ -337,8 +340,8 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
            (group_id, sequence_id, actor_kind, actor_id, telegram_message_id,
              message_thread_id, telegram_user_id, telegram_sender_chat_id, sender_username,
              sender_display_name, sender_is_bot, message_kind, content_text,
-             reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+             reply_to_message_id, reply_to_entry_id, reply_to_sequence_id, sent_at, sender_tag)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           RETURNING id`,
         [groupId, sequenceId, actor.timelineKind, actor.actorId, messageId,
           telegramForumTopicId(message),
@@ -347,7 +350,7 @@ export const telegramGroupJournalRepository: TelegramGroupJournalRepository = {
           actor.kind === "telegram_bot",
           telegramMessageKind(message), telegramMessageContent(message), replyId,
           replyTarget?.entry_id ?? null, replyTarget?.sequence_id ?? null,
-          telegramMessageSentAt(message)],
+          telegramMessageSentAt(message), telegramSenderTag(message)],
       );
       const entryId = inserted.rows[0]!.id;
       await client.query(

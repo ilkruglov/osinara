@@ -56,7 +56,7 @@ import {
   type TelegramMessageRepositories,
 } from "./telegram-on-message-repositories.js";
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
-import { telegramInboundActor } from "./telegram-inbound-actor.js";
+import { telegramInboundActor, telegramSenderTag } from "./telegram-inbound-actor.js";
 import { readTelegramSeriesMarker } from "./telegram-message-series.js";
 import { formatPendingMessagesContext, readTelegramPendingMarker } from "./telegram-pending-messages.js";
 import { readTelegramUpdateMarker } from "./telegram-update-marker.js";
@@ -400,6 +400,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+    const senderTag = telegramSenderTag(message);
     const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({
           applicationSessionId: appSession.id,
@@ -413,6 +414,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
               : "none",
           currentEntryId: inboundTimeline.entryId,
           currentSenderDisplayName: actor.displayName ?? telegramProfileName(message),
+          ...(senderTag === null ? {} : { currentSenderTag: senderTag }),
           currentSenderUsername: actor.username,
           currentSequence: inboundTimeline.sequenceId,
           ...(group ? {} : { conversationId: conversation.id }),

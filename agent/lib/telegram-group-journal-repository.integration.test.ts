@@ -63,6 +63,7 @@ async function createOwnedFamily(suffix: string): Promise<{ familyId: string; ow
 function message(input: {
   id: string;
   isTopicMessage?: boolean;
+  senderTag?: string;
   text?: string;
   threadId?: number;
   withPhoto?: boolean;
@@ -80,6 +81,7 @@ function message(input: {
         ? {}
         : { is_topic_message: input.isTopicMessage }),
       ...(input.withPhoto ? { photo: [{ file_id: "photo-file" }] } : {}),
+      ...(input.senderTag === undefined ? {} : { sender_tag: input.senderTag }),
     },
     text: input.text ?? "",
   };
@@ -246,6 +248,34 @@ describeWithDatabase("Telegram group journal repositories", () => {
     expect(entries.map((entry) => [entry.telegramMessageId, entry.contentText])).toEqual([
       ["9", "девять"],
       ["10", "десять"],
+    ]);
+  });
+
+  // 2 October 2026: members' tags («Батя», «Token Burner») never reached the timeline Mia reads.
+  it("keeps each message's member tag for the timeline", async () => {
+    const { familyId, ownerId } = await createOwnedFamily("member-tag");
+    const group = await telegramGroupAdministrationRepository.registerGroup({
+      familyId,
+      messageMode: "all",
+      requestedBy: ownerId,
+      telegramChatId: "-1001",
+      title: "Группа",
+      toolAllowlist: [],
+      type: "external",
+    });
+    await telegramGroupJournalRepository.record(group.groupId, message({ id: "1", senderTag: "Батя", text: "привет" }));
+    await telegramGroupJournalRepository.record(group.groupId, message({ id: "2", text: "без тега" }));
+
+    const entries = await telegramGroupJournalRepository.listRecent({
+      anchorEntryId: null,
+      beforeSequence: null,
+      groupId: group.groupId,
+      limit: 50,
+      messageThreadId: null,
+    });
+    expect(entries.map((entry) => [entry.contentText, entry.senderTag])).toEqual([
+      ["привет", "Батя"],
+      ["без тега", null],
     ]);
   });
 

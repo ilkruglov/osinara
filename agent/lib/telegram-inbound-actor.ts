@@ -5,12 +5,17 @@
  * - `TelegramInboundActor`: explicit user or channel identity derived before authorization.
  * - `TelegramTimelineActorKind`: persisted timeline actor discriminator.
  * - `telegramInboundActor`: fail-closed classifier for human, bot, and channel-authored messages.
+ * - `TELEGRAM_SENDER_TAG_MAX_CHARACTERS`, `telegramSenderTag`: the member tag shown next to the sender.
  *
  * Key constructs:
  * - Bot API 10.2 delivers other bots' group messages once Bot-to-Bot Communication Mode is on, so a
  *   bot sender is a real participant of the timeline. It never carries family identity or rights.
+ * - A supergroup member tag («Батя», «Token Burner») comes in each message's `sender_tag`. It is
+ *   chosen by the group, changes over time and is not unique, so it is kept per message and never
+ *   identifies anyone; it only lets Mia follow «спроси у Бати».
  */
 import type { TelegramMessage } from "eve/channels/telegram";
+import { clipText, flattenDisplayText } from "./display-text.js";
 import { asRecord as record, nonEmptyText } from "./json-value.js";
 
 export type TelegramTimelineActorKind =
@@ -95,4 +100,13 @@ export function telegramInboundActor(message: TelegramMessage): TelegramInboundA
     timelineKind: "telegram_channel",
     username: nonEmptyText(senderChat.username),
   };
+}
+
+export const TELEGRAM_SENDER_TAG_MAX_CHARACTERS = 64;
+
+export function telegramSenderTag(message: Pick<TelegramMessage, "raw">): string | null {
+  const tag = message.raw.sender_tag;
+  if (typeof tag !== "string") return null;
+  const flat = flattenDisplayText(tag);
+  return flat ? clipText(flat, TELEGRAM_SENDER_TAG_MAX_CHARACTERS) : null;
 }
