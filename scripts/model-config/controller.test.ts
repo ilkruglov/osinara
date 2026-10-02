@@ -57,8 +57,8 @@ describe("atomic model configuration controller", () => {
     files.files.set(paths.journalPath, transactionJournalBytes("prepared", candidateEnv));
 
     await expect(getCurrentModelSelection(dependencies)).resolves.toMatchObject({
-      primaryModelId: "openrouter/previous",
-      provider: "openrouter",
+      primaryModelId: "deepseek-v4-flash",
+      provider: "deepseek",
     });
 
     expect(files.files.get(paths.configPath)).toEqual(previousConfig);
@@ -76,7 +76,7 @@ describe("atomic model configuration controller", () => {
     files.files.set(paths.journalPath, transactionJournalBytes("prepared", candidateEnv));
 
     await expect(getModelConfigStatus(dependencies)).resolves.toMatchObject({
-      selection: { provider: "openrouter" },
+      selection: { primaryModelId: "deepseek-v4-flash" },
     });
 
     expect(files.files.get(paths.configPath)).toEqual(previousConfig);
@@ -94,7 +94,7 @@ describe("atomic model configuration controller", () => {
     files.files.set(paths.journalPath, transactionJournalBytes("activation_started", candidateEnv));
 
     await expect(getCurrentModelSelection(dependencies)).resolves.toMatchObject({
-      provider: "openrouter",
+      primaryModelId: "deepseek-v4-flash",
     });
 
     expect(files.files.get(paths.configPath)).toEqual(previousConfig);
@@ -264,8 +264,8 @@ describe("atomic model configuration controller", () => {
     const { dependencies } = createDependencies();
 
     await expect(getCurrentModelSelection(dependencies)).resolves.toEqual({
-      primaryModelId: "openrouter/previous",
-      provider: "openrouter",
+      primaryModelId: "deepseek-v4-flash",
+      provider: "deepseek",
       visionEnabled: false,
       voiceEnabled: false,
     });
@@ -273,8 +273,8 @@ describe("atomic model configuration controller", () => {
       groqApiKeyConfigured: false,
       modelApiKeyConfigured: true,
       selection: {
-        primaryModelId: "openrouter/previous",
-        provider: "openrouter",
+        primaryModelId: "deepseek-v4-flash",
+        provider: "deepseek",
         visionEnabled: false,
         voiceEnabled: false,
       },

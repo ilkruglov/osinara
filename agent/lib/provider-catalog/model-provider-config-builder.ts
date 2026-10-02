@@ -6,7 +6,7 @@
  *
  * Key constructs:
  * - Canonical structural reasoning comparison independent of object identity and key order.
- * - Provider-specific endpoint, protocol, authentication, compatibility, and reasoning mapping.
+ * - DeepSeek Chat Completions endpoint and reasoning mapping (the only provider since 2 October 2026).
  * - Fail-fast validation of model limits and required agent capabilities.
  */
 import {
@@ -94,23 +94,14 @@ function validateInstallerReadyModel(model: ProviderCatalogModel): void {
   for (const option of model.reasoningOptions) canonicalReasoning(option);
 }
 
-/** Fixed providers reject contradictory catalog protocol metadata; OpenCode Go is model-specific. */
-function requireProviderProtocol(
-  providerId: ProviderId,
-  modelProtocol: ProviderProtocol,
-): ProviderProtocol {
-  const expected = providerId === "minimax"
-    ? "anthropic-messages"
-    : providerId === "opencode-go"
-      ? modelProtocol
-      : "openai-chat-completions";
-  if (modelProtocol !== expected) {
+/** The installer builds DeepSeek over Chat Completions; contradictory catalog metadata is refused. */
+function requireProviderProtocol(providerId: ProviderId, modelProtocol: ProviderProtocol): void {
+  if (modelProtocol !== "openai-chat-completions") {
     throw new AppError(
       "AGENT_PROVIDER_CONFIG_PROTOCOL_INVALID",
       `Протокол модели не соответствует поставщику ${providerId}`,
     );
   }
-  return expected;
 }
 
 /** Null means the catalog exposes no control; the provider keeps its documented model behavior. */
@@ -138,28 +129,12 @@ function requireReasoningSelection(
   return selected;
 }
 
-/** Anthropic schema supports disabled or adaptive thinking, while OpenAI transports use effort. */
-function anthropicReasoning(
-  reasoning: ReasoningSelection | null,
-): Extract<AgentModelTransport, { protocol: "anthropic-messages" }>['reasoning'] {
-  if (reasoning === null) return null;
-  if (reasoning.type === "none") return { type: "none" };
-  if (reasoning.type === "enabled" && reasoning.mode === "adaptive") {
-    return { mode: "adaptive", type: "enabled" };
-  }
-  throw new AppError(
-    "AGENT_PROVIDER_CONFIG_REASONING_UNSUPPORTED",
-    "Выбранный вариант рассуждений не поддерживается протоколом Anthropic",
-  );
-}
-
 function openAiReasoning(
   reasoning: ReasoningSelection | null,
-  format: "deepseek" | "reasoning-effort" | "reasoning-object",
 ): Extract<AgentModelTransport, { protocol: "openai-chat-completions" }>['reasoning'] {
   if (reasoning === null) return null;
-  if (reasoning.type === "none") return { format, type: "none" };
-  if (reasoning.type === "effort") return { effort: reasoning.effort, format, type: "effort" };
+  if (reasoning.type === "none") return { format: "deepseek", type: "none" };
+  if (reasoning.type === "effort") return { effort: reasoning.effort, format: "deepseek", type: "effort" };
   throw new AppError(
     "AGENT_PROVIDER_CONFIG_REASONING_UNSUPPORTED",
     "Выбранный вариант рассуждений не поддерживается протоколом OpenAI",
@@ -167,62 +142,12 @@ function openAiReasoning(
 }
 
 /** Builds only transports accepted by the canonical schema v4 contract. */
-function buildTransport(
-  providerId: ProviderId,
-  protocol: ProviderProtocol,
-  reasoning: ReasoningSelection | null,
-): AgentModelTransport {
-  if (providerId === "minimax") {
-    return {
-      authentication: "bearer",
-      baseUrl: "https://api.minimax.io/anthropic/v1",
-      compatibility: "minimax-anthropic",
-      protocol: "anthropic-messages",
-      reasoning: anthropicReasoning(reasoning),
-    };
-  }
-  if (providerId === "opencode-go" && protocol === "anthropic-messages") {
-    return {
-      authentication: "bearer",
-      baseUrl: "https://opencode.ai/zen/go/v1",
-      protocol: "anthropic-messages",
-      reasoning: anthropicReasoning(reasoning),
-    };
-  }
-
-  const openAi = {
-    deepseek: {
-      baseUrl: "https://api.deepseek.com",
-      format: "deepseek",
-      providerName: "deepseek",
-    },
-    groq: {
-      baseUrl: "https://api.groq.com/openai/v1",
-      format: "reasoning-effort",
-      providerName: "groq",
-    },
-    neuraldeep: {
-      baseUrl: "https://api.neuraldeep.ru/v1",
-      format: "reasoning-effort",
-      providerName: "neuraldeep",
-    },
-    "opencode-go": {
-      baseUrl: "https://opencode.ai/zen/go/v1",
-      format: "reasoning-effort",
-      providerName: "opencode-go",
-    },
-    openrouter: {
-      baseUrl: "https://openrouter.ai/api/v1",
-      format: "reasoning-object",
-      providerName: "openrouter",
-    },
-  } as const;
-  const settings = openAi[providerId as keyof typeof openAi];
+function buildTransport(reasoning: ReasoningSelection | null): AgentModelTransport {
   return {
-    baseUrl: settings.baseUrl,
+    baseUrl: "https://api.deepseek.com",
     protocol: "openai-chat-completions",
-    providerName: settings.providerName,
-    reasoning: openAiReasoning(reasoning, settings.format),
+    providerName: "deepseek",
+    reasoning: openAiReasoning(reasoning),
   };
 }
 
@@ -234,7 +159,7 @@ export function buildModelProviderConfig(
   voiceEnabled: boolean,
 ): ModelProviderConfig {
   validateInstallerReadyModel(model);
-  const protocol = requireProviderProtocol(providerId, model.protocol);
+  requireProviderProtocol(providerId, model.protocol);
   const selectedReasoning = requireReasoningSelection(model, reasoning);
   const primary = {
     contextWindowTokens: model.contextWindowTokens as number,
@@ -255,7 +180,7 @@ export function buildModelProviderConfig(
             }
           : { supportsImageInput: false as const },
       },
-      transport: buildTransport(providerId, protocol, selectedReasoning),
+      transport: buildTransport(selectedReasoning),
     },
     provider: providerId,
     schemaVersion: 4 as const,

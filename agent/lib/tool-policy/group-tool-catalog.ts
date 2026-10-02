@@ -7,14 +7,14 @@
  * - Derived capability-name tuples used by validation and execution policy.
  * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: Eve built-ins overridden fail-closed externally.
  * - `ExternalGroupToolName`: validated persisted allowlist value.
- * - `isSubscriptionOnlyExternalGroupToolName`: marks capabilities tied to a specific provider.
+ * - `requiresImageGenerationToolName`: marks capabilities that need a configured image provider.
  * - `parseExternalGroupToolAllowlist`: validates the complete persisted policy atomically.
  */
 interface ExternalGroupCapability<Name extends string = string> {
   readonly name: Name;
   // Set when the capability only exists under one model provider, so the owner-facing grant surface
   // can drop it while persisted validation still recognizes a grant made under a previous provider.
-  readonly subscriptionOnly?: true;
+  readonly requiresImageGeneration?: true;
   readonly usage: string;
 }
 
@@ -30,7 +30,7 @@ function capabilityNames<const Catalog extends readonly ExternalGroupCapability[
 export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
   {
     name: "generate_image",
-    subscriptionOnly: true,
+    requiresImageGeneration: true,
     usage: "создавать изображения и редактировать доступные исходники через Cloudflare, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
   },
   {
@@ -108,14 +108,14 @@ export type ExternalGroupToolName = (typeof EXTERNAL_GROUP_TOOL_NAMES)[number];
 
 // Persisted validation stays provider-agnostic on purpose: a grant made while another provider was
 // active must keep the surrounding policy parseable instead of invalidating every other capability.
-const SUBSCRIPTION_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set(
+const IMAGE_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set(
   (EXTERNAL_GROUP_CAPABILITY_CATALOG as readonly ExternalGroupCapability[])
-    .filter(({ subscriptionOnly }) => subscriptionOnly === true)
+    .filter(({ requiresImageGeneration }) => requiresImageGeneration === true)
     .map(({ name }) => name),
 );
 
-export function isSubscriptionOnlyExternalGroupToolName(value: string): boolean {
-  return SUBSCRIPTION_ONLY_TOOL_NAMES.has(value);
+export function requiresImageGenerationToolName(value: string): boolean {
+  return IMAGE_GENERATION_TOOL_NAMES.has(value);
 }
 
 // Same-name wrappers preserve Eve's native contracts while adding live authorization and exact

@@ -4,10 +4,16 @@
  * Constructs covered:
  * - `validateModelProviderSmoke`: performs an exact two-step tool-call handshake.
  * - Injected fetch observes retry-free, bounded requests through the real transport factory.
+ * - DeepSeek without thinking forces the tool choice; with thinking it relies on automatic choice.
+ * - The same handshake runs over the DeepSeek Anthropic-compatible endpoint.
  * - Unexpected calls, final text, or step counts fail with stable application errors.
  */
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  parseModelProviderConfig,
+  type ModelProviderConfig,
+} from "../model-provider-config-schema.js";
 import { buildModelProviderConfig } from "./model-provider-config-builder.js";
 import { validateModelProviderSmoke } from "./model-provider-smoke-validator.js";
 import type { ProviderCatalogModel } from "./provider-catalog.js";
@@ -15,8 +21,8 @@ import type { ProviderCatalogModel } from "./provider-catalog.js";
 const model: ProviderCatalogModel = {
   contextWindowTokens: 64_000,
   defaultReasoningOption: null,
-  displayName: "OpenRouter model",
-  id: "provider/model",
+  displayName: "DeepSeek V4 Flash",
+  id: "deepseek-v4-flash",
   maxOutputTokens: 8_000,
   protocol: "openai-chat-completions",
   reasoningOptions: [{ type: "none" }],
@@ -55,7 +61,7 @@ function anthropicMessage(content: unknown[], stopReason: string): Response {
 }
 
 describe("validateModelProviderSmoke", () => {
-  it("requires the exact tool call and exact final text in two retry-free bounded steps", async () => {
+  it("forces the exact tool call and exact final text in two retry-free bounded steps without thinking", async () => {
     const requests: Array<{ body: Record<string, unknown>; signal: AbortSignal | null }> = [];
     const responses = [
       completion({
@@ -84,7 +90,7 @@ describe("validateModelProviderSmoke", () => {
       if (!response) throw new Error("Unexpected smoke request");
       return response;
     });
-    const config = buildModelProviderConfig("openrouter", model, { type: "none" }, false);
+    const config = buildModelProviderConfig("deepseek", model, { type: "none" }, false);
 
     await expect(validateModelProviderSmoke({
       apiKey: "provider-secret",
@@ -102,7 +108,7 @@ describe("validateModelProviderSmoke", () => {
     expect(requests.every(({ signal }) => signal?.aborted === false)).toBe(true);
   });
 
-  it("runs the same handshake through a direct Anthropic OpenCode Go gateway", async () => {
+  it("runs the same handshake through the DeepSeek Anthropic-compatible endpoint", async () => {
     const requests: Record<string, unknown>[] = [];
     const responses = [
       anthropicMessage([{
@@ -116,18 +122,20 @@ describe("validateModelProviderSmoke", () => {
         type: "text",
       }], "end_turn"),
     ];
-    const anthropicModel: ProviderCatalogModel = {
-      ...model,
-      id: "minimax-m3",
-      protocol: "anthropic-messages",
-      reasoningOptions: [{ type: "none" }],
-    };
-    const config = buildModelProviderConfig(
-      "opencode-go",
-      anthropicModel,
-      { type: "none" },
-      false,
-    );
+    const chat = buildModelProviderConfig("deepseek", model, { type: "none" }, false);
+    const config = {
+      ...chat,
+      agent: {
+        ...chat.agent,
+        transport: {
+          authentication: "api-key",
+          baseUrl: "https://api.deepseek.com/anthropic",
+          protocol: "anthropic-messages",
+          reasoning: { type: "none" },
+        },
+      },
+    } satisfies ModelProviderConfig;
+    expect(parseModelProviderConfig(config)).toEqual(config);
 
     await expect(validateModelProviderSmoke({
       apiKey: "provider-secret",
@@ -242,7 +250,7 @@ describe("validateModelProviderSmoke", () => {
       }, "tool_calls"),
       completion({ content: "Almost ready", role: "assistant" }, "stop"),
     ];
-    const config = buildModelProviderConfig("openrouter", model, { type: "none" }, false);
+    const config = buildModelProviderConfig("deepseek", model, { type: "none" }, false);
 
     await expect(validateModelProviderSmoke({
       apiKey: "provider-secret",
@@ -253,7 +261,7 @@ describe("validateModelProviderSmoke", () => {
   });
 
   it.each([0, 30_001, 1.5])("rejects an unbounded timeout value %s", async (timeoutMs) => {
-    const config = buildModelProviderConfig("openrouter", model, { type: "none" }, false);
+    const config = buildModelProviderConfig("deepseek", model, { type: "none" }, false);
 
     await expect(validateModelProviderSmoke({
       apiKey: "provider-secret",

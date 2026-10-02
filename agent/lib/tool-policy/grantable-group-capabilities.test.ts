@@ -21,7 +21,7 @@ import {
 } from "./grantable-group-capabilities.js";
 import {
   EXTERNAL_GROUP_TOOL_NAMES,
-  isSubscriptionOnlyExternalGroupToolName,
+  requiresImageGenerationToolName,
   parseExternalGroupToolAllowlist,
 } from "./group-tool-catalog.js";
 
@@ -34,7 +34,7 @@ describe("grantable external group capabilities without a Codex subscription", (
 
   it("keeps every other catalog capability grantable", () => {
     expect([...GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES]).toEqual(
-      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !isSubscriptionOnlyExternalGroupToolName(name)),
+      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !requiresImageGenerationToolName(name)),
     );
     expect(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES.length).toBeGreaterThan(0);
   });

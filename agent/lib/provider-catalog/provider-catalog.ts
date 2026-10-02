@@ -11,12 +11,8 @@
  * - Fail-fast dispatch to strict live and metadata response parsers.
  */
 import { AppError } from "../app-error.js";
-import { selectSupportedGroqModels } from "./groq-models.js";
 import { enrichModelsFromModelsDev } from "./models-dev-parser.js";
 import { parseOpenAiModelList } from "./openai-model-list-parser.js";
-import { parseOpenRouterModels } from "./openrouter-model-parser.js";
-import { getOpenCodeGoProtocol } from "./opencode-go-models.js";
-import { selectSupportedNeuralDeepModels } from "./neuraldeep-models.js";
 import { providerCatalogError } from "./provider-catalog-errors.js";
 import type {
   FetchProviderCatalogOptions,
@@ -40,7 +36,7 @@ const MODELS_DEV_URL = "https://models.dev/api.json";
 
 interface ProviderEndpoint {
   authentication: "optional" | "required";
-  protocol: ProviderProtocol | null;
+  protocol: ProviderProtocol;
   url: string;
 }
 
@@ -51,31 +47,6 @@ const PROVIDER_ENDPOINTS = {
     protocol: "openai-chat-completions",
     url: "https://api.deepseek.com/models",
   },
-  groq: {
-    authentication: "required",
-    protocol: "openai-chat-completions",
-    url: "https://api.groq.com/openai/v1/models",
-  },
-  minimax: {
-    authentication: "required",
-    protocol: "anthropic-messages",
-    url: "https://api.minimax.io/v1/models",
-  },
-  neuraldeep: {
-    authentication: "required",
-    protocol: "openai-chat-completions",
-    url: "https://api.neuraldeep.ru/v1/models",
-  },
-  "opencode-go": {
-    authentication: "optional",
-    protocol: null,
-    url: "https://opencode.ai/zen/go/v1/models",
-  },
-  openrouter: {
-    authentication: "optional",
-    protocol: "openai-chat-completions",
-    url: "https://openrouter.ai/api/v1/models",
-  },
 } as const satisfies Record<ProviderId, ProviderEndpoint>;
 
 interface LiveModelReference {
@@ -85,23 +56,11 @@ interface LiveModelReference {
 
 /** Delegates to provider-specific schemas after the transport has established a successful response. */
 function parseLiveProviderResponse(
-  providerId: Exclude<ProviderId, "openrouter">,
+  providerId: ProviderId,
   body: unknown,
 ): LiveModelReference[] {
-  const entries = parseOpenAiModelList(providerId, body);
-  if (providerId === "opencode-go") {
-    return entries.flatMap(({ id }) => {
-      const protocol = getOpenCodeGoProtocol(id);
-      return protocol ? [{ id, protocol }] : [];
-    });
-  }
-
   const protocol = PROVIDER_ENDPOINTS[providerId].protocol;
-  if (!protocol) {
-    throw providerCatalogError("response-invalid", providerId);
-  }
-
-  return entries.map(({ id }) => ({ id, protocol }));
+  return parseOpenAiModelList(providerId, body).map(({ id }) => ({ id, protocol }));
 }
 
 /** Races headers and body consumption against the same absolute catalog deadline. */
@@ -184,14 +143,8 @@ export async function fetchProviderCatalog(
       providerId,
       "live",
     );
-    if (providerId === "openrouter") {
-      return parseOpenRouterModels(liveBody);
-    }
-
     // Validate availability first, then spend only the remaining deadline on metadata enrichment.
     const liveModels = parseLiveProviderResponse(providerId, liveBody);
-    if (providerId === "groq") return selectSupportedGroqModels(liveModels);
-    if (providerId === "neuraldeep") return selectSupportedNeuralDeepModels(liveModels);
     const metadataBody = await fetchJsonWithinDeadline(
       fetch,
       MODELS_DEV_URL,

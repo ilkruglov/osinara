@@ -126,7 +126,6 @@ describe("production container contract", () => {
 
     const requiredImages = [
       "OSINARA_APP_IMAGE",
-      "OSINARA_CLI_PROXY_IMAGE",
       "SANDBOX_RUNTIME_IMAGE",
       "OSINARA_SANDBOX_RUNNER_IMAGE",
       "OSINARA_SANDBOX_EGRESS_PROXY_IMAGE",
@@ -136,6 +135,9 @@ describe("production container contract", () => {
       expect(compose).toContain(`image: \${${image}:?`);
     }
     expect(compose.match(/image: \$\{OSINARA_APP_IMAGE:\?/g)).toHaveLength(4);
+    // The subscription gateway left compose on 2 October 2026; its image stays in the manifest for
+    // one more release only because the installed controller still requires the key.
+    expect(compose).not.toContain("cli-proxy");
     expect(compose).toContain("SANDBOX_RUNTIME_IMAGE: ${SANDBOX_RUNTIME_IMAGE:?");
     expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(3);
     expect(compose).not.toContain("DATABASE_URL: postgresql://");
@@ -164,7 +166,6 @@ describe("production container contract", () => {
       "sandbox-data",
       "tool-environments",
       "workspace-data",
-      "cli-proxy-auth",
     ]) {
       const physicalName = `osinara-production-${volume}`;
       expect(compose).toMatch(new RegExp(`  ${volume}:\\n    name: ${physicalName}\\n`));
@@ -182,7 +183,7 @@ describe("production container contract", () => {
     expect(compose).toContain("x-bounded-json-logs: &bounded-json-logs");
     expect(compose).toContain('max-size: "20m"');
     expect(compose).toContain('max-file: "5"');
-    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(12);
+    expect(compose.match(/logging: \*bounded-json-logs/g)).toHaveLength(11);
   });
 
   it("limits Docker control to the runner and tunes pinned TEI for one CPU", () => {

@@ -2,12 +2,12 @@
  * Image generation availability tests.
  *
  * Constructs covered:
- * - `supportsSubscriptionImageGeneration`: enables the feature only for CLIProxy-backed Codex.
+ * - `supportsImageGeneration`: any one configured provider enables the tool.
  * - `resolveImageProviders`: PlusVibe → NeuralDeep → Cloudflare; unset keys drop out without gaps.
  */
 import { describe, expect, it } from "vitest";
 
-import { resolveImageProviders, supportsImageGeneration, supportsSubscriptionImageGeneration } from "./image-generation-availability.js";
+import { resolveImageProviders, supportsImageGeneration } from "./image-generation-availability.js";
 
 const FULL = {
   CLOUDFLARE_ACCOUNT_ID: "0".repeat(32),
@@ -16,21 +16,7 @@ const FULL = {
   PLUSVIBE_API_KEY: "pv",
 };
 
-describe("subscription image generation availability", () => {
-  it("requires the Codex subscription provider", () => {
-    expect(supportsSubscriptionImageGeneration("codex-subscription")).toBe(true);
-    for (const provider of [
-      "deepseek",
-      "groq",
-      "minimax",
-      "neuraldeep",
-      "opencode-go",
-      "openrouter",
-    ] as const) {
-      expect(supportsSubscriptionImageGeneration(provider)).toBe(false);
-    }
-  });
-
+describe("image generation availability", () => {
   it("keeps the free Cloudflare quota as the last resort", () => {
     expect(resolveImageProviders(FULL).map((client) => client.name)).toEqual(["plusvibe", "neuraldeep", "cloudflare"]);
   });
@@ -38,7 +24,7 @@ describe("subscription image generation availability", () => {
   it("keeps only configured providers and enables the tool from any one of them", () => {
     expect(resolveImageProviders({ PLUSVIBE_API_KEY: " pv " }).map((client) => client.name)).toEqual(["plusvibe"]);
     expect(resolveImageProviders({ CLOUDFLARE_ACCOUNT_ID: FULL.CLOUDFLARE_ACCOUNT_ID }).map((client) => client.name)).toEqual([]);
-    expect(supportsImageGeneration("deepseek", { PLUSVIBE_API_KEY: "pv" })).toBe(true);
-    expect(supportsImageGeneration("deepseek", {})).toBe(false);
+    expect(supportsImageGeneration({ PLUSVIBE_API_KEY: "pv" })).toBe(true);
+    expect(supportsImageGeneration({})).toBe(false);
   });
 });

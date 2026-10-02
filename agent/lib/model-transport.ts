@@ -7,12 +7,10 @@
  *
  * Key constructs:
  * - Anthropic Messages adaptive thinking is enforced at the transport boundary.
- * - Explicit MiniMax compatibility preserves provider web-search payloads across Anthropic parsing.
  * - Retryable physical provider responses are logged before AI SDK applies its bounded retry policy.
  * - OpenAI Chat Completions carries explicit provider-native thinking controls when configured.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
@@ -26,7 +24,6 @@ import { type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 
 import type { AgentModelTransport } from "./model-provider-config.js";
 import { AppError } from "./app-error.js";
-import { createMiniMaxAnthropicCompatibilityFetch } from "./minimax-anthropic-compatibility.js";
 import { observeModelUsage } from "./model-usage-log.js";
 import { describeDeepSeekHttpError } from "./deepseek/deepseek-errors.js";
 import { normalizeDeepSeekResponsesRequest } from "./deepseek/deepseek-responses-request.js";
@@ -208,25 +205,6 @@ function configuredProviderOptions(
   if (transport.protocol === "deepseek-responses") return {};
   if (transport.reasoning == null) return {};
   const reasoning = transport.reasoning;
-  if (reasoning.format === "reasoning-object") {
-    return {
-      [transport.providerName]: {
-        ...existing?.[transport.providerName],
-        reasoning: reasoning.type === "none" ? { effort: "none" } : { effort: reasoning.effort },
-      },
-    };
-  }
-  if (reasoning.format === "reasoning-effort") {
-    return {
-      [transport.providerName]: {
-        ...existing?.[transport.providerName],
-        ...(transport.providerName === "groq"
-          ? { parallelToolCalls: false, reasoningFormat: "parsed" }
-          : {}),
-        reasoningEffort: reasoning.type === "effort" ? reasoning.effort : "none",
-      },
-    };
-  }
   return {
     [transport.providerName]: {
       ...existing?.[transport.providerName],
@@ -375,15 +353,12 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
   const { transport } = options;
   const guardedFetch = createCredentialGuardedFetch(options);
   if (transport.protocol === "anthropic-messages") {
-    const fetch = transport.compatibility === "minimax-anthropic"
-      ? createMiniMaxAnthropicCompatibilityFetch(guardedFetch)
-      : guardedFetch;
     const provider = createAnthropic({
       baseURL: transport.baseUrl,
       ...(transport.authentication === "bearer"
         ? { authToken: options.apiKey }
         : { apiKey: options.apiKey }),
-      fetch,
+      fetch: guardedFetch,
     });
     return wrapLanguageModel({
       middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
@@ -400,18 +375,6 @@ export function createConfiguredLanguageModel(options: ConfiguredLanguageModelOp
     return wrapLanguageModel({
       middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
       model: provider.responses(options.modelId),
-    });
-  }
-
-  if (transport.providerName === "groq") {
-    const provider = createGroq({
-      apiKey: options.apiKey,
-      baseURL: transport.baseUrl,
-      fetch: guardedFetch,
-    });
-    return wrapLanguageModel({
-      middleware: createTransportDefaultsMiddleware(options.maxOutputTokens, transport),
-      model: provider(options.modelId),
     });
   }
 

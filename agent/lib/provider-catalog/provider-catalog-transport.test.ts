@@ -101,25 +101,22 @@ describe("provider catalog transport", () => {
   });
 
   it.each([
-    ["deepseek", { object: "list", data: [{ object: "model", owned_by: "deepseek" }] }],
-    ["groq", { object: "list", data: [{ id: "", object: "model", owned_by: "Qwen" }] }],
-    ["minimax", { object: "list", data: "MiniMax-M3" }],
-    ["opencode-go", { object: "list", data: [{ id: "", object: "model", owned_by: "opencode" }] }],
-    ["openrouter", { data: [{ id: "vendor/broken" }] }],
-  ] as const)("rejects a malformed %s response", async (providerId, body) => {
+    { object: "list", data: [{ object: "model", owned_by: "deepseek" }] },
+    { object: "list", data: [{ id: "", object: "model", owned_by: "deepseek" }] },
+    { object: "list", data: "deepseek-v4-flash" },
+    { data: [{ id: "deepseek/broken" }] },
+  ])("rejects a malformed DeepSeek response %#", async (body) => {
     const fetch = createFetch(jsonResponse(body));
 
     await expectAppError(
       fetchProviderCatalog({
-        apiKey: providerId === "deepseek" || providerId === "groq" || providerId === "minimax"
-          ? "secret"
-          : undefined,
+        apiKey: "secret",
         fetch,
-        providerId,
+        providerId: "deepseek",
         timeoutMs: REQUEST_TIMEOUT_MS,
       }),
       "AGENT_PROVIDER_CATALOG_RESPONSE_INVALID",
-      `Провайдер ${providerId} вернул каталог моделей в неподдерживаемом формате`,
+      "Провайдер deepseek вернул каталог моделей в неподдерживаемом формате",
     );
   });
 
@@ -142,8 +139,9 @@ describe("provider catalog transport", () => {
     vi.useFakeTimers();
     const fetch: ProviderCatalogFetch = vi.fn(() => new Promise<Response>(() => undefined));
     const outcome = fetchProviderCatalog({
+      apiKey: "secret",
       fetch,
-      providerId: "openrouter",
+      providerId: "deepseek",
       timeoutMs: REQUEST_TIMEOUT_MS,
     }).then((value) => ({ value }), (error: unknown) => ({ error }));
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
@@ -159,8 +157,9 @@ describe("provider catalog transport", () => {
     const stalledBody = new ReadableStream<Uint8Array>({ start: () => undefined });
     const fetch = createFetch(new Response(stalledBody, { status: 200 }));
     const outcome = fetchProviderCatalog({
+      apiKey: "secret",
       fetch,
-      providerId: "openrouter",
+      providerId: "deepseek",
       timeoutMs: REQUEST_TIMEOUT_MS,
     }).then((value) => ({ value }), (error: unknown) => ({ error }));
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
@@ -174,8 +173,9 @@ describe("provider catalog transport", () => {
   it.each([0, -1, 30_001, 1.5])("rejects an unsafe timeout value %s", async (timeoutMs) => {
     await expectAppError(
       fetchProviderCatalog({
+        apiKey: "secret",
         fetch: createFetch(jsonResponse({ data: [] })),
-        providerId: "openrouter",
+        providerId: "deepseek",
         timeoutMs,
       }),
       "AGENT_PROVIDER_CATALOG_TIMEOUT_INVALID",

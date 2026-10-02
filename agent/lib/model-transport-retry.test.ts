@@ -27,7 +27,7 @@ function successfulResponse(): Response {
   return new Response(JSON.stringify({
     content: [{ text: "Готово", type: "text" }],
     id: "msg_retry_001",
-    model: "MiniMax-M3",
+    model: "deepseek-v4-flash",
     role: "assistant",
     stop_reason: "end_turn",
     stop_sequence: null,
@@ -58,11 +58,11 @@ describe("model transport retry policy", () => {
       apiKey: "model-secret",
       fetch,
       maxOutputTokens: 128_000,
-      modelId: "MiniMax-M3",
+      modelId: "deepseek-v4-flash",
       transport: {
-        authentication: "bearer",
+        authentication: "api-key",
         // The mock accepts this deliberately malformed provider URL so the log must redact its query.
-        baseUrl: "https://api.minimax.io/anthropic/v1?api_key=provider-secret",
+        baseUrl: "https://api.deepseek.com/anthropic?api_key=provider-secret",
         protocol: "anthropic-messages",
         reasoning: { mode: "adaptive", type: "enabled" },
       },
@@ -74,9 +74,9 @@ describe("model transport retry policy", () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     const transientLog = JSON.stringify({
       code: "AGENT_MODEL_TRANSIENT_RESPONSE",
-      modelId: "MiniMax-M3",
+      modelId: "deepseek-v4-flash",
       statusCode: 529,
-      url: "https://api.minimax.io/anthropic/v1",
+      url: "https://api.deepseek.com/anthropic",
     });
     expect(log).toHaveBeenCalledTimes(2);
     expect(log).toHaveBeenNthCalledWith(1, transientLog);

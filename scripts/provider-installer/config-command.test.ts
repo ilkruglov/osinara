@@ -13,8 +13,8 @@ import { runInteractiveConfigCommand } from "./config-command.js";
 const model: NormalizedModel = {
   contextWindowTokens: 64_000,
   defaultReasoningOption: { type: "none" },
-  displayName: "Router Model",
-  id: "vendor/router-model",
+  displayName: "DeepSeek V4 Flash",
+  id: "deepseek-v4-flash",
   maxOutputTokens: 8_000,
   protocol: "openai-chat-completions",
   reasoningOptions: [{ type: "none" }, { effort: "high", type: "effort" }],
@@ -27,7 +27,7 @@ function prompts(): PromptAdapter {
     confirm: vi.fn().mockResolvedValue(false),
     secret: vi.fn().mockResolvedValue("model-key"),
     select: vi.fn()
-      .mockResolvedValueOnce("openrouter")
+      .mockResolvedValueOnce("deepseek")
       .mockResolvedValueOnce(model.id)
       .mockResolvedValueOnce("effort:high"),
     text: vi.fn(),
@@ -36,7 +36,7 @@ function prompts(): PromptAdapter {
 
 describe("runInteractiveConfigCommand", () => {
   it("smokes and applies the exact selected model configuration", async () => {
-    const apply = vi.fn().mockResolvedValue({ primaryModelId: model.id, provider: "openrouter" });
+    const apply = vi.fn().mockResolvedValue({ primaryModelId: model.id, provider: "deepseek" });
     const validateModel = vi.fn();
 
     await expect(runInteractiveConfigCommand({
@@ -45,17 +45,17 @@ describe("runInteractiveConfigCommand", () => {
       prompts: prompts(),
       validateGroq: vi.fn(),
       validateModel,
-    })).resolves.toEqual({ primaryModelId: model.id, provider: "openrouter" });
+    })).resolves.toEqual({ primaryModelId: model.id, provider: "deepseek" });
 
     expect(validateModel).toHaveBeenCalledWith(
-      "openrouter", "model-key", model, { effort: "high", type: "effort" },
+      "deepseek", "model-key", model, { effort: "high", type: "effort" },
     );
     expect(apply).toHaveBeenCalledWith(expect.objectContaining({
       groqApiKey: undefined,
       modelApiKey: "model-key",
     }));
     const config = JSON.parse(vi.mocked(apply).mock.calls[0]?.[0].configBytes.toString("utf8"));
-    expect(config).toMatchObject({ provider: "openrouter", schemaVersion: 4, voice: { enabled: false } });
+    expect(config).toMatchObject({ provider: "deepseek", schemaVersion: 4, voice: { enabled: false } });
   });
 
   it("never applies when the real model smoke fails", async () => {

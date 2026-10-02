@@ -2,19 +2,13 @@
  * Runtime availability gate for image generation and the ordered provider chains.
  *
  * Exports:
- * - `supportsSubscriptionImageGeneration`: pure provider capability check.
  * - `resolveImageProviders`: PlusVibe → NeuralDeep → Cloudflare for generation and editing alike
  *   (owner's decision, 28 September 2026): the free klein-4b quota is the last resort because it
  *   draws 512 px and bounds edited references to 512.
  * - `IMAGE_GENERATION_AVAILABLE`: availability for the active validated runtime config.
  */
-import { modelProviderConfig, type ModelProviderId } from "../model-provider-config.js";
 import { createCloudflareImageClient, createNeuralDeepImageClient, type FluxImageClient } from "./flux-image-clients.js";
 import { createPlusVibeImageClient } from "./plusvibe-image-client.js";
-
-export function supportsSubscriptionImageGeneration(provider: ModelProviderId): boolean {
-  return provider === "codex-subscription";
-}
 
 export type ImageGenerationEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -51,17 +45,10 @@ export function resolveImageProviders(environment: ImageGenerationEnvironment): 
   return [plusvibe, neuraldeep, cloudflare].filter((client): client is FluxImageClient => client !== null);
 }
 
-export function supportsImageGeneration(
-  provider: ModelProviderId,
-  environment: ImageGenerationEnvironment,
-): boolean {
-  return supportsSubscriptionImageGeneration(provider) ||
-    supportsPlusVibeImageGeneration(environment) ||
+export function supportsImageGeneration(environment: ImageGenerationEnvironment): boolean {
+  return supportsPlusVibeImageGeneration(environment) ||
     supportsCloudflareImageGeneration(environment) ||
     supportsNeuralDeepImageGeneration(environment);
 }
 
-export const IMAGE_GENERATION_AVAILABLE = supportsImageGeneration(
-  modelProviderConfig.provider,
-  process.env,
-);
+export const IMAGE_GENERATION_AVAILABLE = supportsImageGeneration(process.env);

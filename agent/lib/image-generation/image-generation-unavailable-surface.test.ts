@@ -2,7 +2,7 @@
  * Direct-provider image generation denial tests.
  *
  * Constructs covered:
- * - A persisted group grant cannot advertise or execute subscription generation without CLIProxy.
+ * - A persisted group grant cannot advertise or execute generation without an image provider.
  * - Trusted modes omit the tool rather than exposing a guaranteed configuration failure.
  * - The owner-facing grant contract drops the capability, so it cannot be enabled at all.
  * - Skill loading and tool execution fail closed before any durable or billable side effect.
@@ -77,7 +77,7 @@ function externalContext(): ToolContext {
   } as unknown as ToolContext;
 }
 
-describe("unavailable subscription image generation", () => {
+describe("unavailable image generation", () => {
   it("omits tool, skill loading, and prompt guidance", async () => {
     const external = buildModeToolSurface({
       capabilities: new Set(["generate_image"]),
@@ -102,7 +102,7 @@ describe("unavailable subscription image generation", () => {
   });
 
   it("refuses to grant the capability during registration and policy update", () => {
-    const rejected = /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*OpenAI Codex/su;
+    const rejected = /AGENT_TELEGRAM_GROUP_INPUT_INVALID.*сервис генерации картинок/su;
     const approval = manageTelegramGroup.approval;
     if (typeof approval !== "function") {
       throw new Error("AGENT_TEST_APPROVAL_CONTRACT_INVALID: manage_telegram_group approval is not callable");

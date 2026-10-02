@@ -72,7 +72,7 @@ function requireNotificationSettingsInput(input: unknown) {
   requireOnlyFields(payload, TOP_LEVEL_FIELDS, "notification_settings", INPUT_ERROR_CODE);
   const action = requireAction(payload, "notification_settings", TOOL_ACTIONS, INPUT_ERROR_CODE);
 
-  // MiniMax may materialize known set-only siblings for get. The read action ignores them and
+  // A model may materialize known set-only siblings for get. The read action ignores them and
   // cannot turn those values into a write; unpublished fields still fail in the global guard.
   if (action === "get") return { action } as const;
   return { action, values: requireSetInput(payload) } as const;

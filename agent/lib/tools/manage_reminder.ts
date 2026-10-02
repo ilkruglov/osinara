@@ -126,7 +126,7 @@ function requireUpdateInput(input: Record<string, unknown>) {
     "firstRunAt",
     "id",
     "recurrence",
-    // MiniMax materializes these known create-only siblings; update ignores them explicitly.
+    // A model may materialize these known create-only siblings; update ignores them explicitly.
     "scope",
     "timezone",
   ], "action=update", INPUT_ERROR_CODE);

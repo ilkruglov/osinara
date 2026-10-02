@@ -46,17 +46,16 @@ export const validConfig = Buffer.from(JSON.stringify({
 export const previousConfig = Buffer.from(JSON.stringify({
   agent: {
     models: {
-      primary: { contextWindowTokens: 128_000, id: "openrouter/previous", maxOutputTokens: 8_192 },
+      primary: { contextWindowTokens: 1_000_000, id: "deepseek-v4-flash", maxOutputTokens: 8_192 },
       vision: { supportsImageInput: false },
     },
     transport: {
-      baseUrl: "https://openrouter.ai/api/v1",
-      protocol: "openai-chat-completions",
-      providerName: "openrouter",
-      reasoning: null,
+      baseUrl: "https://api.deepseek.com",
+      protocol: "deepseek-responses",
+      reasoning: { effort: "high" },
     },
   },
-  provider: "openrouter",
+  provider: "deepseek",
   schemaVersion: 4,
   voice: { enabled: false },
 }));

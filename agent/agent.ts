@@ -2,8 +2,8 @@
  * Root Eve agent configuration.
  *
  * Constructs:
- * - Explicit primary model from the multi-provider registry.
- * - Fail-closed per-turn model step limit and NeuralDeep routing for upstream KV-cache reuse.
+ * - Explicit primary model from the model registry.
+ * - Fail-closed per-turn model step limit.
  * - Context compaction; Eve exposes its native fresh-context child only to root sessions.
  * - Official PostgreSQL Workflow world retained as an external runtime dependency.
  */
@@ -16,7 +16,6 @@ import {
 } from "./config.js";
 import { primaryModel } from "./lib/model-registry.js";
 import { modelProviderConfig } from "./lib/model-provider-config.js";
-import { resolveSessionModelSelection } from "./lib/neuraldeep-session-routing.js";
 import { resolveTurnModelStepLimitSelection } from "./lib/turn-model-step-limit.js";
 
 // Eve derives the compaction threshold from the runtime-selected model's window, so the same
@@ -41,7 +40,7 @@ export default defineAgent({
   },
   model: defineDynamic({
     events: {
-      "step.started": (event, ctx) => {
+      "step.started": (event) => {
         // Resolve the guard first: resolver exceptions would let Eve silently use its fallback.
         const blockedSelection = resolveTurnModelStepLimitSelection({
           event,
@@ -51,12 +50,7 @@ export default defineAgent({
         });
         if (blockedSelection !== null) return blockedSelection;
 
-        return resolveSessionModelSelection({
-          model: primaryModel,
-          modelContextWindowTokens: primaryModelContextWindowTokens,
-          providerId: modelProviderConfig.provider,
-          sessionId: ctx.session.id,
-        });
+        return { model: primaryModel, modelContextWindowTokens: primaryModelContextWindowTokens };
       },
     },
   }),

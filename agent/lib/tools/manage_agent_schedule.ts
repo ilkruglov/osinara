@@ -272,7 +272,7 @@ function requireCreateInput(input: Record<string, unknown>) {
 function requireUpdateInput(input: Record<string, unknown>) {
   requireOnlyFields(input, [
     "action",
-    // MiniMax may materialize these known create-only siblings from the shared root schema.
+    // A model may materialize these known create-only siblings from the shared root schema.
     "firstRunAt",
     "id",
     "nextRunAt",

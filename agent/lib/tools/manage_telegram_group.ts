@@ -29,7 +29,7 @@ import {
 } from "../tool-policy/grantable-group-capabilities.js";
 import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
-  isSubscriptionOnlyExternalGroupToolName,
+  requiresImageGenerationToolName,
 } from "../tool-policy/group-tool-catalog.js";
 import {
   requireAction,
@@ -122,12 +122,12 @@ function requireExternalToolAllowlist(raw: unknown, policyLabel: string): string
     // the owner learns the grant is impossible instead of reading it as a malformed payload.
     if (
       typeof name === "string" &&
-      isSubscriptionOnlyExternalGroupToolName(name) &&
+      requiresImageGenerationToolName(name) &&
       !isGrantableExternalGroupToolName(name)
     ) {
       toolInputError(
         INPUT_ERROR_CODE,
-        `Capability ${name} недоступна: текущая модель агента работает не через подписку OpenAI Codex. ` +
+        `Capability ${name} недоступна: не подключён ни один сервис генерации картинок. ` +
           "Выдать это право нельзя; передайте toolAllowlist без него",
       );
     }
@@ -198,7 +198,7 @@ function requireManageTelegramGroupInput(input: unknown) {
   requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_telegram_group", INPUT_ERROR_CODE);
   const action = requireAction(payload, "manage_telegram_group", TOOL_ACTIONS, INPUT_ERROR_CODE);
 
-  // MiniMax may materialize published siblings from another action. Each branch consumes only its
+  // A model may materialize published siblings from another action. Each branch consumes only its
   // complete contract, while the global guard rejects every unpublished field before HITL.
   if (action === "status") return { action } as const;
   if (action === "start_new_context") {

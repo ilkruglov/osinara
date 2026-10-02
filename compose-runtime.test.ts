@@ -36,7 +36,7 @@ const REMOVED_ANTIVIRUS_PATHS = [
 ] as const;
 
 describe("Docker Compose runtime wiring", () => {
-  it("wires the agent to a healthy persistent Codex subscription gateway", () => {
+  it("wires the agent to the model provider directly, without a subscription gateway", () => {
     const localCompose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
     const productionCompose = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
     for (const compose of [localCompose, productionCompose]) {
@@ -51,15 +51,11 @@ describe("Docker Compose runtime wiring", () => {
     }
     expect(localCompose).not.toContain("MODEL_UPSTREAM_API_KEY");
     expect(productionCompose).not.toContain("MODEL_UPSTREAM_API_KEY");
+    // 2 October 2026: the Codex subscription gateway was removed; DeepSeek is called directly.
     for (const compose of [localCompose, productionCompose]) {
-      expect(compose).toContain("cli-proxy-auth:/var/lib/cli-proxy-api/auth\n");
+      expect(compose).not.toContain("cli-proxy");
+      expect(compose).not.toContain("CLI_PROXY_API_KEY");
     }
-    const productionAgent = productionCompose.slice(
-      productionCompose.indexOf("\n  agent:\n"),
-      productionCompose.indexOf("\n  sandbox-runtime-image:\n"),
-    );
-    expect(productionAgent).toContain("cli-proxy-api:\n        condition: service_healthy");
-    expect(localCompose).toContain('    profiles: ["codex-subscription"]\n');
     expect(productionCompose).toContain(
       "- /opt/osinara/agent-model-providers.json:/app/config/agent-model-providers.json:ro",
     );

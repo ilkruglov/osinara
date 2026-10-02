@@ -13,15 +13,15 @@
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import {
   EXTERNAL_GROUP_CAPABILITY_CATALOG,
-  isSubscriptionOnlyExternalGroupToolName,
+  requiresImageGenerationToolName,
   type ExternalGroupToolName,
 } from "./group-tool-catalog.js";
 
 
-// Only subscription-backed image generation is provider-coupled today. Resolving the flag once at
-// module load matches the validated runtime config, which cannot change without a process restart.
+// Only image generation depends on configuration today. Resolving the flag once at module load
+// matches the environment, which cannot change without a process restart.
 function isGrantableCapability(name: ExternalGroupToolName): boolean {
-  return !isSubscriptionOnlyExternalGroupToolName(name) || IMAGE_GENERATION_AVAILABLE;
+  return !requiresImageGenerationToolName(name) || IMAGE_GENERATION_AVAILABLE;
 }
 
 /**

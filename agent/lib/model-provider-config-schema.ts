@@ -4,7 +4,8 @@
  * Exports:
  * - `AgentModelTransport`: supported protocol and reasoning transport union.
  * - `ModelProviderConfig`: validated provider, model, vision, and optional voice contract.
- * - `ModelProviderId`: supported direct and internal subscription providers.
+ * - `ModelProviderId`: the supported provider; only DeepSeek since 2 October 2026 (other chat
+ *   providers and the Codex subscription gateway were removed as unused).
  * - `parseModelProviderConfig`: validates decoded configuration without filesystem access.
  * - `validateModelProviderRuntimeEnvironment`: enforces config-dependent startup credentials.
  */
@@ -12,25 +13,15 @@ import { z } from "zod";
 
 import { AppError } from "./app-error.js";
 import { MODEL_PROVIDER_MAX_OUTPUT_TOKENS } from "./model-provider-limits.js";
-import { getOpenCodeGoProtocol } from "./provider-catalog/opencode-go-models.js";
 
 const modelIdSchema = z.string().trim().min(1).max(200);
-const CODEX_SUBSCRIPTION_BASE_URL = "http://cli-proxy-api:8317/v1";
-const modelProviderIdSchema = z.enum([
-  "codex-subscription",
-  "deepseek",
-  "groq",
-  "minimax",
-  "neuraldeep",
-  "opencode-go",
-  "openrouter",
-]);
+const modelProviderIdSchema = z.enum(["deepseek"]);
 const reasoningEffortSchema = z.enum(["max", "xhigh", "high", "medium", "low", "minimal"]);
 const maxOutputTokensSchema = z.number().int().positive().max(MODEL_PROVIDER_MAX_OUTPUT_TOKENS);
 const modelBaseUrlSchema = z.url().superRefine((value, context) => {
   const url = new URL(value);
-  if (url.protocol !== "https:" && value !== CODEX_SUBSCRIPTION_BASE_URL) {
-    context.addIssue({ code: "custom", message: "HTTPS or the fixed internal gateway is required" });
+  if (url.protocol !== "https:") {
+    context.addIssue({ code: "custom", message: "HTTPS is required" });
   }
   if (url.search || url.hash || url.pathname.endsWith("/messages")) {
     context.addIssue({ code: "custom", message: "base URL must not include request details" });
@@ -40,7 +31,6 @@ const modelBaseUrlSchema = z.url().superRefine((value, context) => {
 const anthropicMessagesTransportSchema = z.object({
   authentication: z.enum(["api-key", "bearer"]),
   baseUrl: modelBaseUrlSchema,
-  compatibility: z.literal("minimax-anthropic").optional(),
   protocol: z.literal("anthropic-messages"),
   reasoning: z.discriminatedUnion("type", [
     z.object({ type: z.literal("none") }).strict(),
@@ -65,12 +55,12 @@ const openAiChatCompletionsTransportSchema = z.object({
   providerName: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
   reasoning: z.discriminatedUnion("type", [
     z.object({
-      format: z.enum(["deepseek", "reasoning-effort", "reasoning-object"]),
+      format: z.literal("deepseek"),
       type: z.literal("none"),
     }).strict(),
     z.object({
       effort: reasoningEffortSchema,
-      format: z.enum(["deepseek", "reasoning-effort", "reasoning-object"]),
+      format: z.literal("deepseek"),
       type: z.literal("effort"),
     }).strict(),
   ]).nullable(),
@@ -112,17 +102,9 @@ const modelProviderConfigSchema = z.object({
   ]),
 }).strict().superRefine((config, context) => {
   const transport = config.agent.transport;
-  const expectedBaseUrl = {
-    "codex-subscription": CODEX_SUBSCRIPTION_BASE_URL,
-    deepseek: transport.protocol === "anthropic-messages"
-      ? "https://api.deepseek.com/anthropic"
-      : "https://api.deepseek.com",
-    groq: "https://api.groq.com/openai/v1",
-    minimax: "https://api.minimax.io/anthropic/v1",
-    neuraldeep: "https://api.neuraldeep.ru/v1",
-    "opencode-go": "https://opencode.ai/zen/go/v1",
-    openrouter: "https://openrouter.ai/api/v1",
-  }[config.provider];
+  const expectedBaseUrl = transport.protocol === "anthropic-messages"
+    ? "https://api.deepseek.com/anthropic"
+    : "https://api.deepseek.com";
   if (transport.baseUrl !== expectedBaseUrl) {
     context.addIssue({
       code: "custom",
@@ -131,76 +113,15 @@ const modelProviderConfigSchema = z.object({
     });
   }
 
-  // Fixed providers cannot borrow another provider's protocol or request format.
-  if (config.provider === "codex-subscription" && (
-    transport.protocol !== "openai-chat-completions" ||
-    transport.providerName !== "codex-subscription" ||
-    transport.reasoning === null ||
-    transport.reasoning.type !== "effort" ||
-    transport.reasoning.effort !== "medium" ||
-    transport.reasoning.format !== "reasoning-effort"
-  )) {
-    context.addIssue({
-      code: "custom",
-      message: "Codex subscription transport mismatch",
-      path: ["agent", "transport"],
-    });
+  // DeepSeek serves the same models over Responses, Chat Completions and an Anthropic-compatible
+  // endpoint; each must use DeepSeek's own request format.
+  const chatCompletions = transport.protocol === "openai-chat-completions" &&
+    transport.providerName === "deepseek";
+  const anthropicMessages = transport.protocol === "anthropic-messages";
+  const responses = transport.protocol === "deepseek-responses";
+  if (!chatCompletions && !anthropicMessages && !responses) {
+    context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
   }
-  if (config.provider === "deepseek") {
-    // DeepSeek serves the same models over Chat Completions and over an Anthropic-compatible
-    // endpoint; only the latter exposes the provider-managed web_search tool.
-    const chatCompletions = transport.protocol === "openai-chat-completions" &&
-      transport.providerName === "deepseek" &&
-      (transport.reasoning === null || transport.reasoning.format === "deepseek");
-    const anthropicMessages = transport.protocol === "anthropic-messages" &&
-      transport.compatibility === undefined &&
-      new URL(transport.baseUrl).hostname === "api.deepseek.com";
-    const responses = transport.protocol === "deepseek-responses";
-    if (!chatCompletions && !anthropicMessages && !responses) {
-      context.addIssue({ code: "custom", message: "DeepSeek transport mismatch", path: ["agent", "transport"] });
-    }
-  }
-  if (config.provider === "groq" && (
-    transport.protocol !== "openai-chat-completions" ||
-    transport.providerName !== "groq" ||
-    transport.reasoning === null ||
-    transport.reasoning.format !== "reasoning-effort"
-  )) context.addIssue({ code: "custom", message: "Groq transport mismatch", path: ["agent", "transport"] });
-  if (config.provider === "minimax" && (
-    transport.protocol !== "anthropic-messages" ||
-    transport.authentication !== "bearer" ||
-    transport.compatibility !== "minimax-anthropic"
-  )) {
-    context.addIssue({ code: "custom", message: "MiniMax transport mismatch", path: ["agent", "transport"] });
-  }
-  if (config.provider === "neuraldeep" && (
-    transport.protocol !== "openai-chat-completions" ||
-    transport.providerName !== "neuraldeep" ||
-    transport.reasoning !== null
-  )) context.addIssue({ code: "custom", message: "NeuralDeep transport mismatch", path: ["agent", "transport"] });
-  if (config.provider === "opencode-go") {
-    const expectedProtocol = getOpenCodeGoProtocol(config.agent.models.primary.id);
-    const anthropicMismatch = transport.protocol === "anthropic-messages" && (
-      transport.authentication !== "bearer" || transport.compatibility !== undefined
-    );
-    const openAiMismatch = transport.protocol === "openai-chat-completions" && (
-      transport.providerName !== "opencode-go" ||
-      transport.reasoning !== null && transport.reasoning.format !== "reasoning-effort"
-    );
-    if (!expectedProtocol || transport.protocol !== expectedProtocol
-      || anthropicMismatch || openAiMismatch) {
-      context.addIssue({
-        code: "custom",
-        message: "OpenCode Go transport mismatch",
-        path: ["agent", "transport"],
-      });
-    }
-  }
-  if (config.provider === "openrouter" && (
-    transport.protocol !== "openai-chat-completions" ||
-    transport.providerName !== "openrouter" ||
-    transport.reasoning !== null && transport.reasoning.format !== "reasoning-object"
-  )) context.addIssue({ code: "custom", message: "OpenRouter transport mismatch", path: ["agent", "transport"] });
 });
 
 export type AgentModelTransport = z.infer<typeof modelProviderConfigSchema>["agent"]["transport"];

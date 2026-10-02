@@ -25,7 +25,7 @@ export interface OpenAiModelListEntry {
 
 /** The list providers expose no reliable capability metadata beyond IDs and ownership. */
 export function parseOpenAiModelList(
-  providerId: Exclude<ProviderId, "openrouter">,
+  providerId: ProviderId,
   body: unknown,
 ): OpenAiModelListEntry[] {
   const result = openAiModelListSchema.safeParse(body);

@@ -62,7 +62,7 @@ function requireManageFamilyInvitationInput(input: unknown) {
   requireOnlyFields(payload, TOP_LEVEL_FIELDS, "manage_family_invitation", INPUT_ERROR_CODE);
   const action = requireAction(payload, "manage_family_invitation", TOOL_ACTIONS, INPUT_ERROR_CODE);
 
-  // MiniMax may materialize known approve-only siblings for create. Creation ignores them and
+  // A model may materialize known approve-only siblings for create. Creation ignores them and
   // cannot bind a candidate accidentally; unpublished fields still fail in the global guard.
   if (action === "create") return { action } as const;
   return { action, candidate: requireApproveInput(payload) } as const;

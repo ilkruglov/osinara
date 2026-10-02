@@ -72,7 +72,7 @@ export function detectImageMediaType(bytes: Uint8Array): ImageMediaType | null {
 }
 
 /**
- * Codex sizes map to small Flux dimensions: Workers AI bills per 512x512 tile, so a square is one
+ * Tool sizes map to small Flux dimensions: Workers AI bills per 512x512 tile, so a square is one
  * tile and the landscape/portrait variants are two. NeuralDeep only takes an aspect ratio.
  */
 function dimensions(size: ImageGenerationRequest["size"]): { aspectRatio: string; height: number; width: number } {

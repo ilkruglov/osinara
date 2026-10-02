@@ -1,11 +1,11 @@
 /**
- * Model-facing subscription image generation tool tests.
+ * Model-facing image generation tool tests.
  *
  * Constructs covered:
  * - One successful generation is persisted in the workspace and never sent by itself.
- * - Completed and filesystem-recoverable calls never charge the subscription twice.
+ * - Completed and filesystem-recoverable calls never charge the provider twice.
  * - Definitive and ambiguous provider outcomes become terminal durable operation states.
- * - The provider gate is asserted separately, so this suite runs the Codex-subscription runtime.
+ * - The provider gate is asserted separately, so this suite runs with image generation available.
  */
 import { createHash } from "node:crypto";
 

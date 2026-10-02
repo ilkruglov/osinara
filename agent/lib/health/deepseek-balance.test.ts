@@ -21,9 +21,9 @@ describe("readDeepSeekBalance", () => {
     expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe("https://api.deepseek.com/user/balance");
   });
 
-  it("asks nothing of another provider or host", async () => {
+  it("asks nothing of a non-DeepSeek provider or host", async () => {
     const fetch = fetchWith(200, good);
-    await expect(readDeepSeekBalance({ apiKey: "k", baseUrl: "https://api.deepseek.com", fetch, provider: "groq" })).resolves.toBeNull();
+    await expect(readDeepSeekBalance({ apiKey: "k", baseUrl: "https://api.deepseek.com", fetch, provider: "other" })).resolves.toBeNull();
     await expect(readDeepSeekBalance({ apiKey: "k", baseUrl: "https://proxy.example/v1", fetch, provider: "deepseek" })).resolves.toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });

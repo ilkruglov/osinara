@@ -6,13 +6,7 @@
  * - Executor input/output contracts separating setup validation from host mutation.
  */
 export type AddressMode = "sslip-io" | "custom-domain";
-export type ModelProvider =
-  | "deepseek"
-  | "groq"
-  | "minimax"
-  | "neuraldeep"
-  | "opencode-go"
-  | "openrouter";
+export type ModelProvider = "deepseek";
 export type ModelProtocol = "anthropic-messages" | "openai-chat-completions";
 export type ReasoningEffort =
   | "max"

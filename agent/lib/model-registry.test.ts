@@ -44,11 +44,11 @@ describe("model registry", () => {
     expect(visionTransport(transport, { ...vision, reasoningEffort: undefined })).toBe(transport);
     expect(visionTransport(transport, { supportsImageInput: false })).toBe(transport);
     const chat = {
-      baseUrl: "https://api.groq.com/openai/v1",
+      baseUrl: "https://api.deepseek.com",
       protocol: "openai-chat-completions" as const,
-      providerName: "groq" as const,
-      reasoning: { effort: "low" as const, format: "reasoning-effort" as const, type: "effort" as const },
+      providerName: "deepseek" as const,
+      reasoning: { effort: "low" as const, format: "deepseek" as const, type: "effort" as const },
     };
-    expect(visionTransport(chat as never, vision)).toBe(chat);
+    expect(visionTransport(chat, vision)).toBe(chat);
   });
 });

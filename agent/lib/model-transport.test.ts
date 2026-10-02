@@ -5,7 +5,7 @@
  * - `createConfiguredLanguageModel`: selects an AI SDK adapter by wire protocol.
  * - Anthropic Messages requests enable adaptive thinking and use configured authentication.
  * - Streaming thinking signatures survive the assistant/tool-result round trip unchanged.
- * - Codex subscription requests carry the selected reasoning effort through Chat Completions.
+ * - DeepSeek Chat Completions requests carry thinking and the selected reasoning effort.
  */
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
@@ -40,7 +40,7 @@ function messageStart(id: string) {
       message: {
         content: [],
         id,
-        model: "MiniMax-M3",
+        model: "deepseek-v4-flash",
         role: "assistant",
         stop_reason: null,
         stop_sequence: null,
@@ -87,10 +87,10 @@ describe("createConfiguredLanguageModel", () => {
       apiKey: "",
       fetch,
       maxOutputTokens: 128_000,
-      modelId: "MiniMax-M3",
+      modelId: "deepseek-v4-flash",
       transport: {
         authentication: "bearer",
-        baseUrl: "https://api.minimax.io/anthropic/v1",
+        baseUrl: "https://api.deepseek.com/anthropic",
         protocol: "anthropic-messages",
         reasoning: { mode: "adaptive", type: "enabled" },
       },
@@ -241,7 +241,7 @@ describe("createConfiguredLanguageModel", () => {
     } as LanguageModelV4CallOptions)).rejects.toMatchObject({ code: "AGENT_MODEL_BALANCE_EXHAUSTED" });
   });
 
-  it("selects a generic OpenAI-compatible model strictly by protocol", async () => {
+  it("sends DeepSeek thinking and reasoning effort over Chat Completions", async () => {
     let request: { body: Record<string, unknown>; headers: Headers; url: string } | undefined;
     const model = createConfiguredLanguageModel({
       apiKey: "model-secret",
@@ -255,18 +255,18 @@ describe("createConfiguredLanguageModel", () => {
           choices: [{ finish_reason: "stop", index: 0, message: { content: "Готово", role: "assistant" } }],
           created: 1,
           id: "completion-1",
-          model: "provider/model-name",
+          model: "deepseek-v4-flash",
           object: "chat.completion",
           usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2 },
         });
       },
       maxOutputTokens: 32_000,
-      modelId: "provider/model-name",
+      modelId: "deepseek-v4-flash",
       transport: {
-        baseUrl: "https://openrouter.ai/api/v1",
+        baseUrl: "https://api.deepseek.com",
         protocol: "openai-chat-completions",
-        providerName: "openrouter",
-        reasoning: { effort: "high", format: "reasoning-object", type: "effort" },
+        providerName: "deepseek",
+        reasoning: { effort: "high", format: "deepseek", type: "effort" },
       },
     });
 
@@ -275,61 +275,18 @@ describe("createConfiguredLanguageModel", () => {
     } as LanguageModelV4CallOptions)).resolves.toMatchObject({
       content: [{ text: "Готово", type: "text" }],
     });
-    expect(model.modelId).toBe("provider/model-name");
-    expect(model.provider).toBe("openrouter.chat");
+    expect(model.modelId).toBe("deepseek-v4-flash");
+    expect(model.provider).toBe("deepseek.chat");
     expect(request).toMatchObject({
       body: {
         max_tokens: 32_000,
-        model: "provider/model-name",
-        reasoning: { effort: "high" },
+        model: "deepseek-v4-flash",
+        reasoning_effort: "high",
+        thinking: { type: "enabled" },
       },
-      url: "https://openrouter.ai/api/v1/chat/completions",
+      url: "https://api.deepseek.com/chat/completions",
     });
     expect(request?.headers.get("authorization")).toBe("Bearer model-secret");
-  });
-
-  it("sends medium reasoning to the internal Codex subscription gateway", async () => {
-    let request: { body: Record<string, unknown>; headers: Headers; url: string } | undefined;
-    const model = createConfiguredLanguageModel({
-      apiKey: "internal-proxy-secret",
-      fetch: async (input, init) => {
-        request = {
-          body: JSON.parse(String(init?.body)) as Record<string, unknown>,
-          headers: new Headers(init?.headers),
-          url: String(input),
-        };
-        return jsonResponse({
-          choices: [{ finish_reason: "stop", index: 0, message: { content: "Готово", role: "assistant" } }],
-          created: 1,
-          id: "completion-codex-1",
-          model: "gpt-5.6-luna",
-          object: "chat.completion",
-          usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2 },
-        });
-      },
-      maxOutputTokens: 128_000,
-      modelId: "gpt-5.6-luna",
-      transport: {
-        baseUrl: "http://cli-proxy-api:8317/v1",
-        protocol: "openai-chat-completions",
-        providerName: "codex-subscription",
-        reasoning: { effort: "medium", format: "reasoning-effort", type: "effort" },
-      },
-    });
-
-    await model.doGenerate({
-      prompt: [{ content: [{ text: "Проверка", type: "text" }], role: "user" }],
-    } as LanguageModelV4CallOptions);
-
-    expect(request).toMatchObject({
-      body: {
-        max_tokens: 128_000,
-        model: "gpt-5.6-luna",
-        reasoning_effort: "medium",
-      },
-      url: "http://cli-proxy-api:8317/v1/chat/completions",
-    });
-    expect(request?.headers.get("authorization")).toBe("Bearer internal-proxy-secret");
   });
 
   it("uses x-api-key authentication when selected by Anthropic protocol config", async () => {
@@ -456,7 +413,7 @@ describe("createConfiguredLanguageModel", () => {
           },
         ],
         id: "msg_tool_001",
-        model: "MiniMax-M3",
+        model: "deepseek-v4-flash",
         role: "assistant",
         stop_reason: "tool_use",
         stop_sequence: null,
@@ -466,7 +423,7 @@ describe("createConfiguredLanguageModel", () => {
       jsonResponse({
         content: [{ text: "В Москве 18 градусов.", type: "text" }],
         id: "msg_text_001",
-        model: "MiniMax-M3",
+        model: "deepseek-v4-flash",
         role: "assistant",
         stop_reason: "end_turn",
         stop_sequence: null,
@@ -486,11 +443,11 @@ describe("createConfiguredLanguageModel", () => {
         if (!response) throw new Error("Unexpected model request");
         return response;
       },
-      modelId: "MiniMax-M3",
+      modelId: "deepseek-v4-flash",
       maxOutputTokens: 128_000,
       transport: {
         authentication: "bearer",
-        baseUrl: "https://api.minimax.io/anthropic/v1",
+        baseUrl: "https://api.deepseek.com/anthropic",
         protocol: "anthropic-messages",
         reasoning: { mode: "adaptive", type: "enabled" },
       },
@@ -513,7 +470,7 @@ describe("createConfiguredLanguageModel", () => {
     expect(result.text).toBe("В Москве 18 градусов.");
     expect(requests[0]).toMatchObject({
       body: { thinking: { type: "adaptive" } },
-      url: "https://api.minimax.io/anthropic/v1/messages",
+      url: "https://api.deepseek.com/anthropic/messages",
     });
     expect(requests[0]?.headers.get("authorization")).toBe("Bearer model-secret");
     expect(requests[1]?.body.messages).toEqual(expect.arrayContaining([
@@ -566,10 +523,10 @@ describe("createConfiguredLanguageModel", () => {
         { data: { type: "message_stop" }, event: "message_stop" },
       ]),
       maxOutputTokens: 128_000,
-      modelId: "MiniMax-M3",
+      modelId: "deepseek-v4-flash",
       transport: {
         authentication: "bearer",
-        baseUrl: "https://api.minimax.io/anthropic/v1",
+        baseUrl: "https://api.deepseek.com/anthropic",
         protocol: "anthropic-messages",
         reasoning: { mode: "adaptive", type: "enabled" },
       },

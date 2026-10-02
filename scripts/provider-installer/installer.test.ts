@@ -153,20 +153,20 @@ describe("provider installer orchestration", () => {
     const secondModel: NormalizedModel = {
       ...model,
       defaultReasoningOption: null,
-      displayName: "Router Model",
-      id: "vendor/router-model",
+      displayName: "DeepSeek V4 Flash",
+      id: "deepseek-v4-flash",
       reasoningOptions: [
-        { effort: "low", type: "effort" },
-        { mode: "adaptive", type: "enabled" },
+        { type: "none" },
+        { effort: "max", type: "effort" },
       ],
     };
     const multiPrompts = prompts({
       select: vi
         .fn()
         .mockResolvedValueOnce("sslip-io")
-        .mockResolvedValueOnce("openrouter")
+        .mockResolvedValueOnce("deepseek")
         .mockResolvedValueOnce(secondModel.id)
-        .mockResolvedValueOnce("enabled:adaptive"),
+        .mockResolvedValueOnce("effort:max"),
     });
     const deps = dependencies({
       listModels: vi.fn().mockResolvedValue([model, secondModel]),
@@ -176,24 +176,24 @@ describe("provider installer orchestration", () => {
     await runInteractiveInstaller(deps);
 
     expect(deps.validateModel).toHaveBeenCalledWith(
-      "openrouter",
+      "deepseek",
       "model-key",
       secondModel,
-      { mode: "adaptive", type: "enabled" },
+      { effort: "max", type: "effort" },
     );
     expect(deps.executeInstallation).toHaveBeenCalledWith(
       expect.objectContaining({
         model: secondModel,
-        reasoning: { mode: "adaptive", type: "enabled" },
+        reasoning: { effort: "max", type: "effort" },
         reasoningSelection: "explicit",
       }),
     );
     expect(multiPrompts.select).toHaveBeenNthCalledWith(
       4,
-      "Выберите reasoning для Router Model",
+      "Выберите reasoning для DeepSeek V4 Flash",
       [
-        { label: "Низкое усилие рассуждений", value: "effort:low" },
-        { label: "Адаптивные рассуждения", value: "enabled:adaptive" },
+        { label: "Без рассуждений", value: "none" },
+        { label: "Максимальное усилие рассуждений", value: "effort:max" },
       ],
     );
   });
@@ -207,7 +207,7 @@ describe("provider installer orchestration", () => {
     const select = vi
       .fn()
       .mockResolvedValueOnce("sslip-io")
-      .mockResolvedValueOnce("minimax")
+      .mockResolvedValueOnce("deepseek")
       .mockResolvedValueOnce(modelWithoutReasoning.id);
     const deps = dependencies({
       listModels: vi.fn().mockResolvedValue([modelWithoutReasoning]),
@@ -218,7 +218,7 @@ describe("provider installer orchestration", () => {
 
     expect(select).toHaveBeenCalledTimes(3);
     expect(deps.validateModel).toHaveBeenCalledWith(
-      "minimax",
+      "deepseek",
       "model-key",
       modelWithoutReasoning,
       null,

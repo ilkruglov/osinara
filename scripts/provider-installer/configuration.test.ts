@@ -2,7 +2,7 @@
  * Installer configuration tests.
  *
  * Constructs covered:
- * - Provider selection contract for all supported release variants.
+ * - Provider selection contract: DeepSeek is the only release variant.
  * - Internal secret generation and required credential validation.
  * - Owner bootstrap deep-link output with an explicit expiry contract.
  */
@@ -16,15 +16,8 @@ import {
 } from "./configuration.js";
 
 describe("provider installer configuration", () => {
-  it("offers exactly the supported immutable provider variants", () => {
-    expect(MODEL_PROVIDER_OPTIONS.map(({ value }) => value)).toEqual([
-      "deepseek",
-      "groq",
-      "minimax",
-      "neuraldeep",
-      "opencode-go",
-      "openrouter",
-    ]);
+  it("offers DeepSeek as the only provider variant", () => {
+    expect(MODEL_PROVIDER_OPTIONS.map(({ value }) => value)).toEqual(["deepseek"]);
   });
 
   it("generates each required internal secret independently", () => {
