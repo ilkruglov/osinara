@@ -15,116 +15,18 @@
  * row to complete (a person waiting for the answer); families run concurrently. The server runs
  * as its own process, like production; RSS and CPU time of that process are sampled every second.
  */
-import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import pg from "pg";
+
+import {
+  FIRST_UPDATE_ID, SECRET, databaseSizes, db, groupChatId, ownerTelegramId, percentile, prepareFamilies,
+  prewarmSandboxes, root, sample, type Sample, sleep, startServer, stopServer, waitHealthy, workflowDb,
+} from "./load-lib.ts";
 
 const families = Number(process.argv[2] ?? 10);
 const perFamily = Number(process.argv[3] ?? 3);
 const label = process.argv[4] ?? `f${families}-m${perFamily}`;
 const port = Number(process.env.LOAD_PORT ?? 3100);
-const root = resolve(import.meta.dirname);
-const databaseUrl = process.env.DATABASE_URL!;
-const workflowUrl = process.env.WORKFLOW_POSTGRES_URL!;
-if (!new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("LOAD_DATABASE_UNSAFE");
-const FIRST_UPDATE_ID = 800_000_000;
-const SECRET = "load-test-secret";
-
-const db = new pg.Pool({ connectionString: databaseUrl, max: 8 });
-const workflowDb = new pg.Pool({ connectionString: workflowUrl, max: 2 });
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
-
-async function databaseSizes() {
-  const app = await db.query<{ size: string }>("SELECT pg_database_size(current_database())::text AS size");
-  const workflow = await workflowDb.query<{ size: string }>("SELECT pg_database_size(current_database())::text AS size");
-  return { appMb: Number(app.rows[0]!.size) / 1048576, workflowMb: Number(workflow.rows[0]!.size) / 1048576 };
-}
-
-async function prepare() {
-  await db.query("TRUNCATE users, families CASCADE");
-  await db.query("DELETE FROM telegram_ingress_updates WHERE update_id >= $1", [FIRST_UPDATE_ID]);
-  await db.query(`CREATE TABLE IF NOT EXISTS telegram_conversation_test_deliveries (
-    id integer GENERATED ALWAYS AS IDENTITY (START WITH 10000), body jsonb NOT NULL)`);
-  await db.query("TRUNCATE telegram_conversation_test_deliveries");
-  for (let index = 0; index < families; index += 1) {
-    const family = (await db.query<{ id: string }>(
-      "INSERT INTO families(name) VALUES ($1) RETURNING id", [`Load family ${index}`],
-    )).rows[0]!;
-    const owner = (await db.query<{ id: string }>(
-      "INSERT INTO users(telegram_user_id, display_name) VALUES ($1, $2) RETURNING id",
-      [String(ownerTelegramId(index)), `Owner ${index}`],
-    )).rows[0]!;
-    await db.query("INSERT INTO family_memberships(family_id, user_id, role) VALUES ($1, $2, 'owner')", [family.id, owner.id]);
-    await db.query(
-      `INSERT INTO telegram_groups(family_id, telegram_chat_id, title, type, message_mode)
-       VALUES ($1, $2, $3, 'family_private', 'all')`,
-      [family.id, String(groupChatId(index)), `Load group ${index}`],
-    );
-  }
-}
-
-const ownerTelegramId = (index: number) => 1_000_000 + index;
-const groupChatId = (index: number) => -(900_200_000 + index);
-
-function startServer() {
-  // LOAD_CPUS pins the server like production's single core (taskset execs node: same pid).
-  const pin = process.env.LOAD_CPUS;
-  const server = spawn(pin ? "taskset" : process.execPath, pin
-    ? ["-c", pin, process.execPath, ".output/server/index.mjs"]
-    : [".output/server/index.mjs"], {
-    cwd: root,
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      EVE_MOCK_AUTHORED_MODELS: "0",
-      HOST: "127.0.0.1", NITRO_HOST: "127.0.0.1", PORT: String(port), NITRO_PORT: String(port),
-      TELEGRAM_BOT_TOKEN: "load-test-token",
-      TELEGRAM_BOT_USERNAME: "osinara_load_bot",
-      TELEGRAM_WEBHOOK_SECRET_TOKEN: SECRET,
-      MODEL_API_KEY: "unused-load-key",
-      INVITATION_SIGNING_SECRET: "load-test-signing-secret-of-32-chars!!",
-      MEMORY_EMBEDDING_BASE_URL: "http://memory-test",
-      // Production values; LOAD_WORKFLOW_CONCURRENCY raises both for a scaling run.
-      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: process.env.LOAD_WORKFLOW_CONCURRENCY ?? "10",
-      WORKFLOW_POSTGRES_MAX_POOL_SIZE: String(Number(process.env.LOAD_WORKFLOW_CONCURRENCY ?? 10) + 2),
-      WORKFLOW_POSTGRES_JOB_PREFIX: "osinara",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const log: string[] = [];
-  const keep = (chunk: Buffer) => {
-    for (const line of chunk.toString("utf8").split("\n")) if (line) log.push(line);
-  };
-  server.stdout.on("data", keep);
-  server.stderr.on("data", keep);
-  return { log, server };
-}
-
-async function waitHealthy(timeoutMs: number) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      if ((await fetch(`http://127.0.0.1:${port}/eve/v1/health`)).ok) return;
-    } catch { /* not listening yet */ }
-    await sleep(500);
-  }
-  throw new Error("LOAD_SERVER_NEVER_HEALTHY");
-}
-
-interface Sample { cpuSeconds: number; rssMb: number; t: number }
-
-async function sample(pid: number): Promise<Sample | null> {
-  try {
-    const status = await readFile(`/proc/${pid}/status`, "utf8");
-    const stat = (await readFile(`/proc/${pid}/stat`, "utf8")).split(") ")[1]!.split(" ");
-    const rssKb = Number(/VmRSS:\s+(\d+)/u.exec(status)?.[1]);
-    // utime and stime are fields 14 and 15 of /proc/pid/stat, in clock ticks of 100 Hz.
-    return { cpuSeconds: (Number(stat[11]) + Number(stat[12])) / 100, rssMb: rssKb / 1024, t: Date.now() };
-  } catch {
-    return null;
-  }
-}
 
 async function sendAndWait(updateId: number, chatId: number, fromId: number, text: string) {
   const sent = Date.now();
@@ -152,25 +54,11 @@ async function sendAndWait(updateId: number, chatId: number, fromId: number, tex
   }
 }
 
-const percentile = (values: number[], p: number) => {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
-};
-
-// Production's entrypoint prepares sandbox templates before the server starts; so does the run.
-async function prewarmSandboxes() {
-  const prewarm = resolve(root, "../../node_modules/eve/dist/src/execution/sandbox/prewarm.js");
-  const code = `const { prewarmBuiltAppSandboxes } = await import(${JSON.stringify(`file://${prewarm}`)});
-    await prewarmBuiltAppSandboxes({ appRoot: process.cwd(), log: (line) => console.log(line) });`;
-  const child = spawn(process.execPath, ["--input-type=module", "-e", code], { cwd: root, stdio: "inherit" });
-  const [exitCode] = await new Promise<[number | null]>((done) => child.on("exit", (codeValue) => done([codeValue])));
-  if (exitCode !== 0) throw new Error(`LOAD_PREWARM_FAILED: ${exitCode}`);
-}
-
-await prepare();
+await prepareFamilies(families);
 await prewarmSandboxes();
 const sizesBefore = await databaseSizes();
-const { log, server } = startServer();
+const replica = startServer(port, process.env.LOAD_CPUS);
+const { log, server } = replica;
 const samples: Sample[] = [];
 let sampling = true;
 const sampler = (async () => {
@@ -182,7 +70,7 @@ const sampler = (async () => {
 })();
 try {
   const bootStarted = Date.now();
-  await waitHealthy(600_000);
+  await waitHealthy(port, 600_000);
   const healthySeconds = (Date.now() - bootStarted) / 1_000;
   await sleep(5_000);
   const baseline = await sample(server.pid!);
@@ -250,9 +138,7 @@ try {
 } finally {
   sampling = false;
   await sampler;
-  server.kill("SIGTERM");
-  await sleep(2_000);
-  if (server.exitCode === null) server.kill("SIGKILL");
+  await stopServer(replica);
   await db.end();
   await workflowDb.end();
 }
