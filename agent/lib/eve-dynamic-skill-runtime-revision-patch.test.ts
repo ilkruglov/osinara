@@ -118,5 +118,7 @@ describe("Eve dynamic skill runtime revision patch", () => {
     await refresh!(input);
     expect(removePath).toHaveBeenCalledTimes(2);
     expect(writeBinaryFile).toHaveBeenCalledTimes(writesAfterRefresh);
-  });
+    // Importing Eve's context container pulls a large module graph: under a full parallel run it
+    // took longer than the default five seconds (4 October 2026), with nothing wrong.
+  }, 30_000);
 });

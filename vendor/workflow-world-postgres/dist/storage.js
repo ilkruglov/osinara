@@ -1345,13 +1345,14 @@ export function createEventsStorage(drizzle) {
       // Handle step_created event: create step entity
       if (data.eventType === "step_created") {
         const eventData = data.eventData;
+        // Osinara fork: the input stays in the step_created event only (see
+        // `attachStepPayloads`); the row carries the step's state.
         const [stepValue] = await drizzle
           .insert(Schema.steps)
           .values({
             runId: effectiveRunId,
             stepId: data.correlationId,
             stepName: eventData.stepName,
-            input: eventData.input,
             status: "pending",
             attempt: 0,
             // Propagate specVersion from the event to the step entity
@@ -1360,7 +1361,7 @@ export function createEventsStorage(drizzle) {
           .onConflictDoNothing()
           .returning();
         if (stepValue) {
-          step = deserializeStepError(compact(stepValue));
+          step = deserializeStepError(compact({ ...stepValue, input: eventData.input }));
         }
       }
       let value = runCreatedValue;
@@ -1383,7 +1384,7 @@ export function createEventsStorage(drizzle) {
                 runId: effectiveRunId,
                 stepId: data.correlationId,
                 stepName: lazyData.stepName,
-                input: lazyData.input,
+                // The input goes into the synthetic step_created event below.
                 status: "pending",
                 attempt: 0,
                 specVersion: effectiveSpecVersion,
@@ -1461,7 +1462,14 @@ export function createEventsStorage(drizzle) {
             )
             .returning();
           if (stepValue) {
-            step = deserializeStepError(compact(stepValue));
+            // The runtime runs a queued step from the entity reported here,
+            // so the input comes back with it: from the lazy start in hand,
+            // otherwise from the step_created event (the row no longer has it).
+            const input = stepValue.input ??
+              (lazyStepStart && !validatedStep
+                ? data.eventData.input
+                : await stepInputFromEvent(tx, effectiveRunId, data.correlationId));
+            step = deserializeStepError(compact({ ...stepValue, input }));
           } else {
             const [existing] = await tx
               .select({ status: Schema.steps.status })
@@ -1509,11 +1517,11 @@ export function createEventsStorage(drizzle) {
       // Uses conditional UPDATE to prevent completing an already-terminal step.
       if (data.eventType === "step_completed") {
         const eventData = data.eventData;
+        // Osinara fork: the result stays in the step_completed event only.
         const [stepValue] = await drizzle
           .update(Schema.steps)
           .set({
             status: "completed",
-            output: eventData.result,
             completedAt: now,
           })
           .where(
@@ -1525,7 +1533,8 @@ export function createEventsStorage(drizzle) {
           )
           .returning();
         if (stepValue) {
-          step = deserializeStepError(compact(stepValue));
+          // The entity reported back carries the result it was just given.
+          step = deserializeStepError(compact({ ...stepValue, output: eventData.result }));
         } else {
           // Step not updated - check if it exists and why
           const [existing] = await getStepForValidation.execute({
@@ -2345,6 +2354,63 @@ export function createHooksStorage(drizzle) {
     },
   };
 }
+/**
+ * Fills the input and output of step rows from their step_created and
+ * step_completed events.
+ *
+ * Osinara fork (3 October 2026). Upstream wrote every step's input and
+ * output twice: into the event and into the step row, so a load run's
+ * database was 1.6 GB of events plus 1.0 GB of steps holding the same bytes.
+ * Replay reads a result from its step_completed event and the runtime keeps
+ * the input it dispatched, so the row now carries the step's state only and
+ * the payload is read back here for the one API that returns whole steps.
+ * A row written before the change still has its columns and is left alone.
+ */
+async function stepInputFromEvent(db, runId, stepId) {
+  const { events } = Schema;
+  const [created] = await db
+    .select({ eventData: events.eventData })
+    .from(events)
+    .where(
+      and(
+        eq(events.runId, runId),
+        eq(events.correlationId, stepId),
+        eq(events.eventType, "step_created"),
+      ),
+    )
+    .limit(1);
+  return created?.eventData?.input;
+}
+async function attachStepPayloads(db, runId, rows) {
+  const missing = rows.filter((row) => row.input == null || row.output == null);
+  if (missing.length === 0) return;
+  const { events } = Schema;
+  const payloads = await db
+    .select({
+      correlationId: events.correlationId,
+      eventData: events.eventData,
+      eventType: events.eventType,
+    })
+    .from(events)
+    .where(
+      and(
+        eq(events.runId, runId),
+        inArray(events.correlationId, missing.map((row) => row.stepId)),
+        inArray(events.eventType, ["step_created", "step_completed"]),
+      ),
+    )
+    .orderBy(asc(events.eventId));
+  for (const row of missing) {
+    for (const event of payloads) {
+      if (event.correlationId !== row.stepId) continue;
+      if (event.eventType === "step_created" && row.input == null) {
+        row.input = event.eventData?.input;
+      } else if (event.eventType === "step_completed" && row.output == null) {
+        row.output = event.eventData?.result;
+      }
+    }
+  }
+}
 export function createStepsStorage(drizzle) {
   const { steps } = Schema;
   return {
@@ -2360,9 +2426,10 @@ export function createStepsStorage(drizzle) {
       value.output ||= value.outputJson;
       value.input ||= value.inputJson;
       value.error ||= parseErrorJson(value.errorJson);
+      const resolveData = params?.resolveData ?? "all";
+      if (resolveData !== "none") await attachStepPayloads(drizzle, runId, [value]);
       const deserialized = deserializeStepError(compact(value));
       const parsed = StepSchema.parse(deserialized);
-      const resolveData = params?.resolveData ?? "all";
       return filterStepData(parsed, resolveData);
     },
     list: async (params) => {
@@ -2382,6 +2449,7 @@ export function createStepsStorage(drizzle) {
       const values = all.slice(0, limit);
       const hasMore = all.length > limit;
       const resolveData = params?.resolveData ?? "all";
+      if (resolveData !== "none") await attachStepPayloads(drizzle, params.runId, values);
       return {
         data: values.map((v) => {
           v.output ||= v.outputJson;
