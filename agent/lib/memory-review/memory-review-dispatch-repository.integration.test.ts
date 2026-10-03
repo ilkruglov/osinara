@@ -3,6 +3,7 @@
  *
  * Constructs covered:
  * - Bounded pre-handoff recovery, owner alerts, stale markers, and exact Eve-root ownership.
+ * - A lane locked by a running turn is skipped, not waited for, and picked up on a later tick.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,6 +60,32 @@ describeWithDatabase("memory review dispatch repository", () => {
   });
 
   afterAll(closeDatabase);
+
+  // Load run, 3 October 2026: the minute dispatcher locked every lane and queried each one twice;
+  // at 20 000 chats a turn waited 30-100 s for its own lane and replicas queued behind each other.
+  it("skips a lane another transaction holds and takes it on the next tick", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    for (let sequence = 2; sequence <= 16; sequence += 1) {
+      const source = await insertUserMessage({ conversationId: fixture.conversationId, groupId: fixture.groupId, sequence });
+      await memoryReviewRepository.observePassiveMessage({ groupId: fixture.groupId, timelineEntryId: source.id });
+    }
+    const holder = await database().connect();
+    try {
+      await holder.query("BEGIN");
+      await holder.query("SELECT 1 FROM memory_review_lanes WHERE conversation_id = $1 FOR UPDATE", [fixture.conversationId]);
+      const claimed = await Promise.race([
+        memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() }),
+        new Promise<"blocked">((resolve) => setTimeout(() => resolve("blocked"), 3_000)),
+      ]);
+      expect(claimed).toEqual([]);
+    } finally {
+      await holder.query("ROLLBACK");
+      holder.release();
+    }
+    const later = await memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() });
+    expect(later).toHaveLength(1);
+    expect(later[0]!.sourceCount).toBe(16);
+  });
 
   it("retires a prepared background session when its Eve handoff is ambiguous", async () => {
     const { claim } = await claimBackgroundBatch();
