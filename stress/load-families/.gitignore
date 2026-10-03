@@ -1,0 +1,7 @@
+# Copied from the application before each build and removed after the run.
+/agent/instructions.md
+/agent/skills/*/
+/config/
+/.eve/
+/.output/
+/results/
