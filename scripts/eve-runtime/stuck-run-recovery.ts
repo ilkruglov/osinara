@@ -65,11 +65,18 @@ export async function findStuckRuns(
 
 /** Last events of a run that ends on another event: a parked session's hook, a sleep's timer. */
 const PARKED_LAST_EVENTS = ["hook_created", "wait_created"];
+/**
+ * A session that waits on a hook created turns ago ends its last turn on step_completed, like a
+ * run interrupted between steps. The two are told apart by age: a process restarts within
+ * minutes, so a completed step older than this has nothing in flight behind it (the deploy's
+ * own wait for turns uses the same window).
+ */
+export const INFLIGHT_COMPLETED_STEP_WITHIN_MS = 10 * 60 * 1000;
 
 /**
  * Active runs whose last event leaves the next action to this process: a run interrupted while a
- * step ran, between steps, or right after creation. Parked runs are not included, whatever their
- * age. Pages by run id so a large installation is read in bounded chunks.
+ * step ran, between steps moments ago, or right after creation. Parked runs are not included,
+ * whatever their age. Pages by run id so a large installation is read in bounded chunks.
  */
 export async function findInFlightRuns(pool: QueryablePool, pageSize = 500): Promise<StuckRun[]> {
   const found: StuckRun[] = [];
@@ -79,16 +86,18 @@ export async function findInFlightRuns(pool: QueryablePool, pageSize = 500): Pro
       `SELECT r.id AS run_id, r.name AS workflow_name, last.type AS last_event
          FROM workflow.workflow_runs r
          JOIN LATERAL (
-           SELECT e.type FROM workflow.workflow_events e
+           SELECT e.type, e.created_at FROM workflow.workflow_events e
             WHERE e.run_id = r.id
             ORDER BY e.created_at DESC, e.id DESC
             LIMIT 1
          ) last ON true
         WHERE r.status IN ('pending', 'running') AND r.id > $1
           AND last.type <> ALL($2::text[])
+          AND (last.type <> 'step_completed'
+               OR last.created_at > LOCALTIMESTAMP - make_interval(secs => $4::double precision))
         ORDER BY r.id
         LIMIT $3`,
-      [after, PARKED_LAST_EVENTS, pageSize],
+      [after, PARKED_LAST_EVENTS, pageSize, INFLIGHT_COMPLETED_STEP_WITHIN_MS / 1000],
     );
     for (const row of result.rows) {
       if (typeof row.run_id !== "string" || typeof row.workflow_name !== "string" || typeof row.last_event !== "string") continue;

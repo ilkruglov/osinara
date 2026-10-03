@@ -61,6 +61,9 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       created: { last: "run_created", minutesAgo: 1, status: "pending" },
       parked: { last: "hook_created", minutesAgo: 1, status: "running" },
       sleeping: { last: "wait_created", minutesAgo: 1, status: "running" },
+      // An active session waits on a hook created turns ago, so its last event is the completed
+      // turn step: production, 4 October 2026, nine such runs replayed on every start.
+      restingOnHook: { last: "step_completed", minutesAgo: 30, status: "running" },
       finished: { last: "step_completed", minutesAgo: 1, status: "completed" },
     } as const;
     try {
