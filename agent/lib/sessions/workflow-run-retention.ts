@@ -3,7 +3,8 @@
  *
  * Exports:
  * - `pruneTerminalWorkflowRuns`: deletes a bounded batch of old finished turn runs via a client.
- * - `pruneConfiguredTerminalWorkflowRuns`: the same over the configured Workflow database.
+ * - `pruneTerminalWorkflowRunsWithin`: full batches one after another within a time budget.
+ * - `pruneConfiguredTerminalWorkflowRuns`: one budgeted sweep over the configured Workflow database.
  *
  * Key constructs:
  * - Every Eve turn is its own run (`turnWorkflow`) and every turn arms a `sessionTimeoutWorkflow`
@@ -12,6 +13,12 @@
  *   runs (2.3 GB of events and steps out of 3.5 GB), and the disk check before a deploy failed.
  * - A finished run is kept for `WORKFLOW_TURN_RUN_RETENTION_DAYS` for diagnosis, then removed with
  *   the same per-run projections as a session run. A hook with an open retention window keeps it.
+ * - Two days, down from seven (3 October 2026): a turn run carries ~0.3 MB of events and steps
+ *   (load run, stress/load-families), so a week at 1 000 families of 100 messages a day would hold
+ *   ~200 GB; incidents so far were read the same day.
+ * - One batch of 50 a minute removes at most 72 000 runs a day, and every turn finishes two runs:
+ *   1 000 families of 100 messages a day make ~200 000. A sweep therefore takes batches until one
+ *   comes back short or 20 seconds pass, inside the same minute lock.
  * - Session runs (`workflowEntry`) stay with the application's own session retention.
  */
 import pg from "pg";
@@ -19,8 +26,9 @@ import pg from "pg";
 import { AppError } from "../app-error.js";
 
 const { Client } = pg;
-const WORKFLOW_TURN_RUN_RETENTION_DAYS = 7;
+const WORKFLOW_TURN_RUN_RETENTION_DAYS = 2;
 const WORKFLOW_TURN_RUN_PRUNE_BATCH = 50;
+const WORKFLOW_TURN_RUN_PRUNE_BUDGET_MILLISECONDS = 20_000;
 const PRUNABLE_RUN_NAMES = ["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"];
 
 interface WorkflowQueryClient {
@@ -85,6 +93,26 @@ export async function pruneTerminalWorkflowRuns(
   return deleted;
 }
 
+export async function pruneTerminalWorkflowRunsWithin(
+  client: WorkflowQueryClient,
+  options: { batch?: number; budgetMs?: number; clock?: () => number; retentionDays?: number } = {},
+): Promise<number> {
+  const batch = options.batch ?? WORKFLOW_TURN_RUN_PRUNE_BATCH;
+  const budgetMs = options.budgetMs ?? WORKFLOW_TURN_RUN_PRUNE_BUDGET_MILLISECONDS;
+  const clock = options.clock ?? Date.now;
+  const startedAt = clock();
+  let deleted = 0;
+  while (clock() - startedAt < budgetMs) {
+    const removed = await pruneTerminalWorkflowRuns(client, {
+      batch,
+      ...(options.retentionDays === undefined ? {} : { retentionDays: options.retentionDays }),
+    });
+    deleted += removed;
+    if (removed < batch) break;
+  }
+  return deleted;
+}
+
 export async function pruneConfiguredTerminalWorkflowRuns(): Promise<number> {
   const connectionString = process.env.WORKFLOW_POSTGRES_URL;
   if (!connectionString) {
@@ -93,7 +121,7 @@ export async function pruneConfiguredTerminalWorkflowRuns(): Promise<number> {
   const client = new Client({ connectionString });
   await client.connect();
   try {
-    return await pruneTerminalWorkflowRuns(client);
+    return await pruneTerminalWorkflowRunsWithin(client);
   } finally {
     await client.end();
   }

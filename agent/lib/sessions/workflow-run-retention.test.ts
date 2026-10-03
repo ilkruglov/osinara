@@ -5,10 +5,11 @@
  * - Only old finished turn and session-timeout runs without retained hooks are selected.
  * - Each run is deleted in its own transaction, projections before the run row.
  * - A run whose status changed under the lock is skipped, and a failure rolls back and rethrows.
+ * - One sweep keeps taking full batches until a batch comes back short or its time budget ends.
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { pruneTerminalWorkflowRuns } from "./workflow-run-retention.js";
+import { pruneTerminalWorkflowRuns, pruneTerminalWorkflowRunsWithin } from "./workflow-run-retention.js";
 
 function client(rows: Array<Record<string, unknown>[]>, failOn?: string) {
   // Only SELECTs consume scripted rows; BEGIN, DELETE and COMMIT answer with nothing.
@@ -47,5 +48,23 @@ describe("pruneTerminalWorkflowRuns", () => {
     const c = client([[{ id: "wrun_A" }], [{ status: "completed" }]], "workflow_steps");
     await expect(pruneTerminalWorkflowRuns(c)).rejects.toThrow("boom");
     expect(c.query).toHaveBeenLastCalledWith("ROLLBACK");
+  });
+});
+
+describe("pruneTerminalWorkflowRunsWithin", () => {
+  // One run selected per batch, then its locked status: a full batch of one.
+  const fullBatch = () => [[{ id: "wrun_X" }], [{ status: "completed" }]];
+
+  it("keeps sweeping while batches come back full", async () => {
+    const c = client([...fullBatch(), ...fullBatch(), []]);
+    expect(await pruneTerminalWorkflowRunsWithin(c, { batch: 1, budgetMs: 60_000 })).toBe(2);
+    expect(c.query.mock.calls.filter((call) => /^\s*SELECT r\.id/u.test(call[0])).length).toBe(3);
+  });
+
+  it("stops at its time budget even with more to delete", async () => {
+    const c = client([...fullBatch(), ...fullBatch(), ...fullBatch()]);
+    let now = 0;
+    const clock = () => (now += 10_000);
+    expect(await pruneTerminalWorkflowRunsWithin(c, { batch: 1, budgetMs: 15_000, clock })).toBe(1);
   });
 });
