@@ -61,6 +61,14 @@ import {
   writeEventLogCache,
 } from "./osinara-event-log-cache.js";
 import { compact } from "./util.js";
+import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import {
+  createPayloadBlobCache,
+  isSplitPayload,
+  joinPayload,
+  payloadBlobHashes,
+  splitPayload,
+} from "./osinara-payload-blobs.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Only for legacy (pre-slot) runs; see `allocateEventId`. */
 const legacyEventUlid = monotonicFactory();
@@ -189,7 +197,83 @@ async function allocateEventId(db, runId) {
  * the reserved first slot), where a conflict is the caller's answer rather
  * than something to retry.
  */
+/**
+ * Large strings of event payloads live once in `workflow_payload_blobs`
+ * (Osinara fork, 4 October 2026, see osinara-payload-blobs.js). An event
+ * stores markers; every read below restores the original bytes before the
+ * runtime sees them. A blob is written again at most every half hour per
+ * process, which is shorter than the hour an unreferenced blob survives.
+ */
+const payloadBlobCache = createPayloadBlobCache();
+const PAYLOAD_BLOB_REWRITE_MS = 30 * 60 * 1000;
+const payloadBlobWrittenAt = new Map();
+const payloadBlobRefsWritten = new Set();
+const PAYLOAD_BLOB_MEMO_MAX = 50_000;
+async function storePayloadBlobs(db, runId, blobs) {
+  const now = Date.now();
+  for (const [hash, bytes] of blobs) {
+    payloadBlobCache.set(hash, bytes);
+    const writtenAt = payloadBlobWrittenAt.get(hash);
+    if (writtenAt === undefined || now - writtenAt > PAYLOAD_BLOB_REWRITE_MS) {
+      await db.execute(
+        sql`INSERT INTO workflow.workflow_payload_blobs (hash, bytes, size)
+            VALUES (${hash}, ${Buffer.from(zstdCompressSync(bytes))}, ${bytes.length})
+            ON CONFLICT (hash) DO NOTHING`,
+      );
+      if (payloadBlobWrittenAt.size >= PAYLOAD_BLOB_MEMO_MAX) payloadBlobWrittenAt.clear();
+      payloadBlobWrittenAt.set(hash, now);
+    }
+    const ref = `${runId}\u0000${hash}`;
+    if (!payloadBlobRefsWritten.has(ref)) {
+      await db.execute(
+        sql`INSERT INTO workflow.workflow_payload_blob_refs (run_id, hash)
+            VALUES (${runId}, ${hash}) ON CONFLICT DO NOTHING`,
+      );
+      if (payloadBlobRefsWritten.size >= PAYLOAD_BLOB_MEMO_MAX) payloadBlobRefsWritten.clear();
+      payloadBlobRefsWritten.add(ref);
+    }
+  }
+}
+/** Event data with its serialized payload fields split into blobs where that pays. */
+async function dedupeEventData(db, runId, eventData) {
+  if (!eventData || typeof eventData !== "object") return eventData;
+  let out = eventData;
+  const blobs = new Map();
+  for (const [field, value] of Object.entries(eventData)) {
+    if (!(value instanceof Uint8Array)) continue;
+    const split = splitPayload(value);
+    if (!split) continue;
+    if (out === eventData) out = { ...eventData };
+    out[field] = split.stored;
+    for (const [hash, bytes] of split.blobs) blobs.set(hash, bytes);
+  }
+  if (blobs.size > 0) await storePayloadBlobs(db, runId, blobs);
+  return out;
+}
+async function ensurePayloadBlobs(db, hashes) {
+  const missing = hashes.filter((hash) => payloadBlobCache.get(hash) === undefined);
+  if (missing.length === 0) return;
+  const result = await db.execute(
+    sql`SELECT hash, bytes FROM workflow.workflow_payload_blobs WHERE hash = ANY(${missing}::text[])`,
+  );
+  for (const row of result.rows ?? result) {
+    payloadBlobCache.set(row.hash, new Uint8Array(zstdDecompressSync(row.bytes)));
+  }
+}
+/** Event data as the runtime expects it: blob markers replaced by the strings they stand for. */
+async function restoreEventData(db, eventData) {
+  if (!eventData || typeof eventData !== "object") return eventData;
+  let out = eventData;
+  for (const [field, value] of Object.entries(eventData)) {
+    if (!(value instanceof Uint8Array) || !isSplitPayload(value)) continue;
+    await ensurePayloadBlobs(db, payloadBlobHashes(value));
+    if (out === eventData) out = { ...eventData };
+    out[field] = joinPayload(value, (hash) => payloadBlobCache.get(hash));
+  }
+  return out;
+}
 async function insertEventRow(db, values) {
+  values = { ...values, eventData: await dedupeEventData(db, values.runId, values.eventData) };
   const runId = values.runId;
   const allocates = typeof values.eventId !== "string";
   for (let attempt = 0; ; attempt++) {
@@ -323,10 +407,12 @@ async function reportSkippedSlots(
       ),
     )
     .orderBy(Schema.events.eventId);
-  const events = rows.map((row) => {
+  const events = [];
+  for (const row of rows) {
     row.eventData ||= row.eventDataJson;
-    return stripEventDataRefs(EventSchema.parse(compact(row)), resolveData);
-  });
+    row.eventData = await restoreEventData(db, row.eventData);
+    events.push(stripEventDataRefs(EventSchema.parse(compact(row)), resolveData));
+  }
   return {
     events,
     hasMore: events.length < committedSlot - askedFor - 1,
@@ -2092,11 +2178,13 @@ export function createEventsStorage(drizzle) {
           .from(Schema.events)
           .where(eq(Schema.events.runId, effectiveRunId))
           .orderBy(Schema.events.eventId);
-        const data = eventRows.map((e) => {
+        const data = [];
+        for (const e of eventRows) {
           e.eventData ||= e.eventDataJson;
+          e.eventData = await restoreEventData(drizzle, e.eventData);
           const parsed = EventSchema.parse(compact(e));
-          return stripEventDataRefs(parsed, resolveData);
-        });
+          data.push(stripEventDataRefs(parsed, resolveData));
+        }
         eventPage = {
           data,
           cursor: data.at(-1)?.eventId ?? null,
@@ -2124,10 +2212,12 @@ export function createEventsStorage(drizzle) {
           .orderBy(Schema.events.eventId)
           .limit(limit + 1);
         const page = deltaRows.slice(0, limit);
-        const data = page.map((e) => {
+        const data = [];
+        for (const e of page) {
           e.eventData ||= e.eventDataJson;
-          return stripEventDataRefs(EventSchema.parse(compact(e)), resolveData);
-        });
+          e.eventData = await restoreEventData(drizzle, e.eventData);
+          data.push(stripEventDataRefs(EventSchema.parse(compact(e)), resolveData));
+        }
         eventPage = {
           data,
           cursor: data.at(-1)?.eventId ?? null,
@@ -2160,6 +2250,7 @@ export function createEventsStorage(drizzle) {
         throw new WorkflowWorldError(`Event not found: ${eventId}`);
       }
       value.eventData ||= value.eventDataJson;
+      value.eventData = await restoreEventData(drizzle, value.eventData);
       const parsed = EventSchema.parse(compact(value));
       const resolveData = params?.resolveData ?? "all";
       return stripEventDataRefs(parsed, resolveData);
@@ -2228,6 +2319,7 @@ export function createEventsStorage(drizzle) {
         const page = rows.slice(0, pageLimit);
         for (const row of page) {
           row.eventData ||= row.eventDataJson;
+          row.eventData = await restoreEventData(drizzle, row.eventData);
           const event = EventSchema.parse(compact(row));
           data.push(stripEventDataRefs(event, resolveData));
         }
@@ -2281,12 +2373,15 @@ export function createEventsStorage(drizzle) {
         .limit(limit + 1);
       const values = all.slice(0, limit);
       const resolveData = params?.resolveData ?? "all";
+      const data = [];
+      for (const v of values) {
+        v.eventData ||= v.eventDataJson;
+        v.eventData = await restoreEventData(drizzle, v.eventData);
+        const parsed = EventSchema.parse(compact(v));
+        data.push(stripEventDataRefs(parsed, resolveData));
+      }
       return {
-        data: values.map((v) => {
-          v.eventData ||= v.eventDataJson;
-          const parsed = EventSchema.parse(compact(v));
-          return stripEventDataRefs(parsed, resolveData);
-        }),
+        data,
         cursor: values.at(-1)?.eventId ?? null,
         hasMore: all.length > limit,
       };
@@ -2399,7 +2494,8 @@ async function stepInputFromEvent(db, runId, stepId) {
       ),
     )
     .limit(1);
-  return created?.eventData?.input;
+  const eventData = await restoreEventData(db, created?.eventData);
+  return eventData?.input;
 }
 async function attachStepPayloads(db, runId, rows) {
   const missing = rows.filter((row) => row.input == null || row.output == null);
@@ -2423,10 +2519,11 @@ async function attachStepPayloads(db, runId, rows) {
   for (const row of missing) {
     for (const event of payloads) {
       if (event.correlationId !== row.stepId) continue;
+      const eventData = await restoreEventData(db, event.eventData);
       if (event.eventType === "step_created" && row.input == null) {
-        row.input = event.eventData?.input;
+        row.input = eventData?.input;
       } else if (event.eventType === "step_completed" && row.output == null) {
-        row.output = event.eventData?.result;
+        row.output = eventData?.result;
       }
     }
   }

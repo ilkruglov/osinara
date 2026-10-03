@@ -22,6 +22,7 @@ export const EVE_RUNTIME_MODULES = [
   ["scripts/eve-runtime/ndjson-stream.ts", "vendor/eve/dist/src/execution/osinara-ndjson-stream.js"],
   ["scripts/eve-runtime/event-log-cache.ts", "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js"],
   ["scripts/eve-runtime/paged-stream.ts", "vendor/workflow-world-postgres/dist/osinara-paged-stream.js"],
+  ["scripts/eve-runtime/payload-blobs.ts", "vendor/workflow-world-postgres/dist/osinara-payload-blobs.js"],
   ["scripts/eve-runtime/stream-listener.ts", "vendor/workflow-world-postgres/dist/osinara-stream-listener.js"],
   ["scripts/eve-runtime/stuck-run-recovery.ts", "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js"],
   ["scripts/eve-runtime/workflow-pool-trace.ts", "vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js"],
