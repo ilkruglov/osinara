@@ -1,10 +1,9 @@
 import {
   getQueueTopicPrefix,
-  reenqueueActiveRuns,
   resolveQueueNamespace,
   SPEC_VERSION_CURRENT,
 } from "@workflow/world";
-import { startStuckRunRecovery } from "./osinara-stuck-run-recovery.js";
+import { requeueInFlightRuns, startStuckRunRecovery } from "./osinara-stuck-run-recovery.js";
 import { Pool } from "pg";
 import { createClient } from "./drizzle/index.js";
 import { traceWorkflowPool } from "./osinara-workflow-pool-trace.js";
@@ -75,12 +74,16 @@ export function createWorld(
     }),
     async start() {
       await queue.start();
-      await reenqueueActiveRuns(
-        storage.runs,
-        queue.queue,
-        "world-postgres",
-        config.namespace,
-      );
+      // Osinara fork: only runs interrupted mid-flight are re-enqueued; a parked session wakes
+      // on its hook and replaying every active run made each start grow with the chat count.
+      await requeueInFlightRuns({
+        enqueue: queue.queue,
+        pool,
+        queuePrefix: getQueueTopicPrefix(
+          "workflow",
+          resolveQueueNamespace(config.namespace),
+        ),
+      });
       // A run whose retry job was lost waits for this scan instead of the next restart.
       stopStuckRunRecovery ??= startStuckRunRecovery({
         enqueue: queue.queue,

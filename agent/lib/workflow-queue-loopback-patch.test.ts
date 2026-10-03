@@ -40,7 +40,10 @@ describe("workflow queue loopback patch", () => {
   it("re-enqueues runs whose retry job was lost without waiting for a restart", async () => {
     const index = await readFile(INDEX_PATH, "utf8");
 
-    expect(codeText(index)).toContain(codeText("import { startStuckRunRecovery } from \"./osinara-stuck-run-recovery.js\""));
+    expect(codeText(index)).toContain(codeText("import { requeueInFlightRuns, startStuckRunRecovery } from \"./osinara-stuck-run-recovery.js\""));
+    // Startup re-enqueues the interrupted runs only; parked sessions wake on their hook.
+    expect(codeText(index)).toContain(codeText("await requeueInFlightRuns({"));
+    expect(index).not.toContain("reenqueueActiveRuns");
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery ??= startStuckRunRecovery({"));
     expect(codeText(index)).toContain(codeText("queuePrefix: getQueueTopicPrefix( \"workflow\", resolveQueueNamespace(config.namespace"));
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery?."));
