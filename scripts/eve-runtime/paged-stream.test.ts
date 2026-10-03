@@ -33,7 +33,7 @@ describe("bounded durable stream consumption", () => {
     const reader = createPagedStream(f, 0).getReader();
     try {
       const pending = reader.read();
-      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect((await pending).value).toEqual(new Uint8Array([2]));
       expect(f.page).toHaveBeenCalledTimes(2);
     } finally { await reader.cancel(); reader.releaseLock(); vi.useRealTimers(); }

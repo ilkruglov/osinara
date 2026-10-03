@@ -529,7 +529,9 @@ export function createQueue(config, pool) {
       ...(config.applicationManagedShutdown === true && {
         noHandleSignals: true,
       }),
-      pollInterval: 500, // 500ms = 0.5s (graphile-worker uses LISTEN/NOTIFY when available)
+      // Osinara: jobs wake runners through LISTEN/NOTIFY; the poll is only a fallback, and at 0.5 s per
+      // replica it added load to a saturated database in the 10 000-family run (3 October 2026).
+      pollInterval: 2_000,
       taskList,
     });
   }

@@ -262,7 +262,8 @@ export function createStreamer(pool, drizzle) {
                   ),
                 )
                 .orderBy(asc(streams.chunkId))
-                .limit(16);
+                // Osinara: 32 chunks a page halves the page reads of a long turn stream.
+                .limit(32);
             },
             subscribe(wake) {
               const key = `strm:${name}`;
