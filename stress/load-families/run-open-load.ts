@@ -15,7 +15,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
-  FIRST_UPDATE_ID, SECRET, databaseSizes, db, groupChatId, ownerTelegramId, percentile, prepareFamilies,
+  FIRST_UPDATE_ID, SECRET, databaseSizes, db, dropLoadTables, groupChatId, ownerTelegramId, percentile, prepareFamilies,
   prewarmSandboxes, root, sample, type Sample, sleep, startServer, stopServer, waitHealthy, workflowDb,
 } from "./load-lib.ts";
 
@@ -173,6 +173,7 @@ try {
   sampling = false;
   await sampler;
   await Promise.all(servers.map(stopServer));
+  await dropLoadTables();
   await db.end();
   await workflowDb.end();
 }

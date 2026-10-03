@@ -6,7 +6,7 @@
  * - `prepareFamilies`: N families in one statement each (owner, membership, family group).
  * - `ownerTelegramId`, `groupChatId`, `FIRST_UPDATE_ID`, `SECRET`: identities the runs send as.
  * - `prewarmSandboxes`, `startServer`, `waitHealthy`: the built server like production's entrypoint.
- * - `sample`, `percentile`, `sleep`: measurement helpers.
+ * - `sample`, `percentile`, `sleep`: measurement helpers; `dropLoadTables` removes the harness table.
  */
 import { type ChildProcessByStdio, spawn } from "node:child_process";
 import type { Readable } from "node:stream";
@@ -139,6 +139,11 @@ export const percentile = (values: number[], p: number) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
 };
+
+/** The delivery table is this harness's; the end-to-end conversation test creates its own copy. */
+export async function dropLoadTables() {
+  await db.query("DROP TABLE IF EXISTS telegram_conversation_test_deliveries");
+}
 
 export async function stopServer({ server }: ServerProcess) {
   server.kill("SIGTERM");
