@@ -75,9 +75,12 @@ export interface ServerProcess {
   server: ChildProcessByStdio<null, Readable, Readable>;
 }
 
-/** `cpus` pins the replica (taskset execs node, so the pid is the server's). */
+/**
+ * `cpus` pins the replica (taskset execs node, so the pid is the server's). `LOAD_NODE_ARGS` adds
+ * node flags to the server alone, for those NODE_OPTIONS refuses (`--prof`).
+ */
 export function startServer(port: number, cpus?: string): ServerProcess {
-  const args = [".output/server/index.mjs"];
+  const args = [...(process.env.LOAD_NODE_ARGS?.split(" ").filter(Boolean) ?? []), ".output/server/index.mjs"];
   const server = spawn(cpus ? "taskset" : process.execPath, cpus ? ["-c", cpus, process.execPath, ...args] : args, {
     cwd: root,
     env: {
