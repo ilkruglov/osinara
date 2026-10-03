@@ -5,6 +5,7 @@ import { monotonicFactory } from "ulid";
 import * as z from "zod";
 import { Schema } from "./drizzle/index.js";
 import { createPagedStream } from "./osinara-paged-stream.js";
+import { createStreamListener } from "./osinara-stream-listener.js";
 const StreamPublishMessage = z.object({
   streamId: z.string(),
   chunkId: z.templateLiteral(["chnk_", z.string()]),
@@ -14,30 +15,14 @@ const StreamPublishMessage = z.object({
  * Subscribe to a PostgreSQL NOTIFY channel using a dedicated client created
  * from the pool's connection options. `channel` must be a trusted identifier.
  */
-export const listenChannel = async (pool, channel, onPayload) => {
-  const client = new Client(pool.options);
-  try {
-    await client.connect();
-    await client.query(`LISTEN ${channel}`);
-  } catch (err) {
-    await client.end().catch(() => {});
-    throw err;
-  }
-  const onNotification = (msg) => {
-    onPayload(msg.payload ?? "").catch(() => {});
-  };
-  client.on("notification", onNotification);
-  return {
-    close: async () => {
-      client.removeListener("notification", onNotification);
-      try {
-        await client.query(`UNLISTEN ${channel}`);
-      } finally {
-        await client.end();
-      }
-    },
-  };
-};
+export const listenChannel = async (pool, channel, onPayload) =>
+  // Osinara fork: the subscription reconnects after a dropped connection; the
+  // readers' idle poll is thirty seconds and would otherwise be the only wake-up.
+  createStreamListener({
+    channel,
+    connect: () => new Client(pool.options),
+    onPayload,
+  });
 export function createStreamer(pool, drizzle) {
   const ulid = monotonicFactory();
   const events = new EventEmitter();

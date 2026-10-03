@@ -6,8 +6,9 @@
                                           
  
 // NOTIFY wakes a reader; this poll only covers a lost notification. Load run, 3 October 2026: at one
-// second, 160 readers waiting for turn boundaries kept Postgres busy with idle page reads.
-const STREAM_IDLE_POLL_MS = 5_000;
+// second, 160 readers waiting for turn boundaries kept Postgres busy with idle page reads; at five
+// seconds (10 000 families, 8 replicas) 19 197 of 20 841 slow stream reads still returned nothing.
+const STREAM_IDLE_POLL_MS = 30_000;
 
 export function createPagedStream(source              , startIndex = 0)                             {
   if (!Number.isSafeInteger(startIndex)) throw new Error("AGENT_WORKFLOW_STREAM_INDEX_INVALID: Stream index must be a safe integer");
