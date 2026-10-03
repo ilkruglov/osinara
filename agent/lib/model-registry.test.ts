@@ -9,7 +9,9 @@
 import { describe, expect, it } from "vitest";
 
 import { modelProviderConfig } from "./model-provider-config.js";
-import { primaryModel, visionModel, visionTransport, voiceTranscriptionModel } from "./model-registry.js";
+import {
+  memoryReviewModel, memoryReviewTransport, primaryModel, visionModel, visionTransport, voiceTranscriptionModel,
+} from "./model-registry.js";
 
 describe("model registry", () => {
   it("selects the configured protocol-native text model", () => {
@@ -50,5 +52,34 @@ describe("model registry", () => {
       reasoning: { effort: "low" as const, format: "deepseek" as const, type: "effort" as const },
     };
     expect(visionTransport(chat, vision)).toBe(chat);
+  });
+
+  it("gives silent memory review its own reasoning effort where the transport has one", () => {
+    const responses = {
+      baseUrl: "https://api.deepseek.com",
+      protocol: "deepseek-responses" as const,
+      reasoning: { effort: "high" as const },
+    };
+    const primary = { contextWindowTokens: 1_000_000, id: "deepseek-flash", maxOutputTokens: 128_000 };
+    expect(memoryReviewTransport(responses, { ...primary, memoryReviewReasoningEffort: "low" }))
+      .toEqual({ ...responses, reasoning: { effort: "low" } });
+    expect(memoryReviewTransport(responses, primary)).toBe(responses);
+    const chat = {
+      baseUrl: "https://api.deepseek.com",
+      protocol: "openai-chat-completions" as const,
+      providerName: "deepseek" as const,
+      reasoning: { effort: "high" as const, format: "deepseek" as const, type: "effort" as const },
+    };
+    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "low" }))
+      .toEqual({ ...chat, reasoning: { ...chat.reasoning, effort: "low" } });
+    expect(memoryReviewTransport(chat, { ...primary, memoryReviewReasoningEffort: "none" }))
+      .toEqual({ ...chat, reasoning: { format: "deepseek", type: "none" } });
+    const anthropic = { baseUrl: "https://api.deepseek.com/anthropic", protocol: "anthropic-messages" as const };
+    expect(memoryReviewTransport(anthropic as never, { ...primary, memoryReviewReasoningEffort: "low" })).toBe(anthropic);
+  });
+
+  it("reviews with the primary model itself unless an effort is configured", () => {
+    expect(modelProviderConfig.agent.models.primary.memoryReviewReasoningEffort).toBeUndefined();
+    expect(memoryReviewModel).toBe(primaryModel);
   });
 });

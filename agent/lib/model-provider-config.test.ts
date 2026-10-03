@@ -50,6 +50,16 @@ describe("parseModelProviderConfig", () => {
     expect(parseModelProviderConfig(validConfig)).toEqual(validConfig);
   });
 
+  it("accepts a separate reasoning effort for silent memory review on the primary model", () => {
+    const primary = { ...validConfig.agent.models.primary, memoryReviewReasoningEffort: "low" };
+    const config = { ...validConfig, agent: { ...validConfig.agent, models: { ...validConfig.agent.models, primary } } };
+    expect(parseModelProviderConfig(config)).toEqual(config);
+    expect(() => parseModelProviderConfig({
+      ...config,
+      agent: { ...config.agent, models: { ...config.agent.models, primary: { ...primary, memoryReviewReasoningEffort: "medium" } } },
+    })).toThrow();
+  });
+
   it("accepts the native DeepSeek Responses transport only on the DeepSeek host", () => {
     const responses = {
       ...validConfig,

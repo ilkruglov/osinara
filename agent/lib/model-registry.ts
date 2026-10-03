@@ -6,6 +6,8 @@
  * - `visionModel`: independently selected model, or `null` when image input is unsupported.
  * - `browserWorkerModel`: the primary model at low reasoning effort for the browser worker, whose
  *   steps are one action each and whose latency is what a person waits through.
+ * - `memoryReviewModel`: the primary model at the configured silent-review effort, or the primary
+ *   model itself when none is configured.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
  */
 import { createGroq } from "@ai-sdk/groq";
@@ -51,13 +53,21 @@ export const voiceTranscriptionModel = modelProviderConfig.voice.enabled && groq
     )
   : null;
 
-/** The primary transport with reasoning lowered where the protocol has such a control. */
-function lowEffortTransport(
+type ReasoningEffort = "none" | "low" | "high" | "max";
+
+/** The primary transport at another reasoning effort where the protocol has such a control. */
+function withReasoningEffort(
   transport: ModelProviderConfig["agent"]["transport"],
+  effort: ReasoningEffort,
 ): ModelProviderConfig["agent"]["transport"] {
-  if (transport.protocol === "deepseek-responses") return { ...transport, reasoning: { effort: "low" } };
-  if (transport.protocol === "openai-chat-completions" && transport.reasoning?.type === "effort") {
-    return { ...transport, reasoning: { ...transport.reasoning, effort: "low" } };
+  if (transport.protocol === "deepseek-responses") return { ...transport, reasoning: { effort } };
+  if (transport.protocol === "openai-chat-completions" && transport.reasoning !== null) {
+    return {
+      ...transport,
+      reasoning: effort === "none"
+        ? { format: "deepseek", type: "none" }
+        : { effort, format: "deepseek", type: "effort" },
+    };
   }
   return transport;
 }
@@ -66,5 +76,24 @@ export const browserWorkerModel = createConfiguredLanguageModel({
   apiKey: agentModelApiKey,
   maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
   modelId: modelProviderConfig.agent.models.primary.id,
-  transport: lowEffortTransport(modelProviderConfig.agent.transport),
+  transport: withReasoningEffort(modelProviderConfig.agent.transport, "low"),
 });
+
+/** The shared transport with the configured silent-review effort, or the transport as is. */
+export function memoryReviewTransport(
+  transport: ModelProviderConfig["agent"]["transport"],
+  primary: ModelProviderConfig["agent"]["models"]["primary"],
+): ModelProviderConfig["agent"]["transport"] {
+  if (primary.memoryReviewReasoningEffort === undefined) return transport;
+  return withReasoningEffort(transport, primary.memoryReviewReasoningEffort);
+}
+
+const primaryConfig = modelProviderConfig.agent.models.primary;
+export const memoryReviewModel = primaryConfig.memoryReviewReasoningEffort === undefined
+  ? primaryModel
+  : createConfiguredLanguageModel({
+      apiKey: agentModelApiKey,
+      maxOutputTokens: primaryConfig.maxOutputTokens,
+      modelId: primaryConfig.id,
+      transport: memoryReviewTransport(modelProviderConfig.agent.transport, primaryConfig),
+    });

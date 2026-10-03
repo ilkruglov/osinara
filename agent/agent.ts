@@ -14,7 +14,8 @@ import {
   AGENT_COMPACTION_THRESHOLD,
   AGENT_MAX_MODEL_STEPS_PER_TURN,
 } from "./config.js";
-import { primaryModel } from "./lib/model-registry.js";
+import { isMemoryReviewSession } from "./lib/memory-review/memory-review-session.js";
+import { memoryReviewModel, primaryModel } from "./lib/model-registry.js";
 import { modelProviderConfig } from "./lib/model-provider-config.js";
 import { resolveTurnModelStepLimitSelection } from "./lib/turn-model-step-limit.js";
 
@@ -40,17 +41,19 @@ export default defineAgent({
   },
   model: defineDynamic({
     events: {
-      "step.started": (event) => {
+      "step.started": (event, ctx) => {
+        // Silent memory review runs the same model at its own reasoning effort.
+        const model = isMemoryReviewSession(ctx) ? memoryReviewModel : primaryModel;
         // Resolve the guard first: resolver exceptions would let Eve silently use its fallback.
         const blockedSelection = resolveTurnModelStepLimitSelection({
           event,
           maxModelSteps: AGENT_MAX_MODEL_STEPS_PER_TURN,
-          model: primaryModel,
+          model,
           modelContextWindowTokens: primaryModelContextWindowTokens,
         });
         if (blockedSelection !== null) return blockedSelection;
 
-        return { model: primaryModel, modelContextWindowTokens: primaryModelContextWindowTokens };
+        return { model, modelContextWindowTokens: primaryModelContextWindowTokens };
       },
     },
   }),

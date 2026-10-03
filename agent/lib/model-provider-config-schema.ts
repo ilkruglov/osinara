@@ -85,6 +85,10 @@ const modelProviderConfigSchema = z.object({
         contextWindowTokens: z.number().int().positive(),
         id: modelIdSchema,
         maxOutputTokens: maxOutputTokensSchema,
+        // Silent memory review is a quarter of the model calls at three quarters of the output
+        // tokens; on 31 real batches (3 October 2026) effort low kept the same good records as
+        // high with fewer unsupported ones at half the output. Unset keeps the transport's effort.
+        memoryReviewReasoningEffort: z.enum(["none", "low", "high", "max"]).optional(),
       }).strict(),
       vision: visionModelSchema,
     }).strict(),
