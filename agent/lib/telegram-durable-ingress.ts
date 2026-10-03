@@ -81,6 +81,8 @@ interface DurableIngressDependencies {
    * loops only stop one long turn from holding every other chat and every approval button.
    */
   maxConcurrentDrains?: number;
+  /** Pause before a message whose session hook is not there yet goes back to the queue. */
+  hookMissingRetryDelayMilliseconds?: number;
   handleSoftwareUpdateCallback(
     query: Extract<TelegramUpdate, { kind: "callback_query" }>["callbackQuery"],
   ): Promise<boolean>;
@@ -143,6 +145,15 @@ function voiceMetadata(raw: Record<string, unknown>) {
 }
 
 const DEFAULT_MAX_CONCURRENT_DRAINS = 3;
+// Load run, 3 October 2026: when the Workflow queue lagged, a chat's next message reached a session
+// whose hook did not exist yet and Eve refused it before delivery; ten tries two seconds apart cover
+// that lag, a session that never gets its hook still fails the message as before.
+const HOOK_MISSING_MAX_ATTEMPTS = 10;
+const DEFAULT_HOOK_MISSING_RETRY_DELAY_MILLISECONDS = 2_000;
+
+function isHookMissing(error: unknown): boolean {
+  return error instanceof Error && error.name === "HookNotFoundError";
+}
 
 async function waitForSessionBoundary(
   session: EveSessionResult,
@@ -538,7 +549,19 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         // Eve and goes back to the queue (2 October 2026: two fresh messages failed with a head
         // whose interrupted dispatch was refused as possibly double).
         const [failed, ...untouched] = pending;
-        if (failed) {
+        const retryUndelivered = failed !== undefined && isHookMissing(error) &&
+          failed.attemptCount < HOOK_MISSING_MAX_ATTEMPTS;
+        if (failed && retryUndelivered) {
+          stopHeartbeat(failed.updateId);
+          await new Promise((resolve) => setTimeout(
+            resolve,
+            dependencies.hookMissingRetryDelayMilliseconds ?? DEFAULT_HOOK_MISSING_RETRY_DELAY_MILLISECONDS,
+          ));
+          await dependencies.repository.releaseUndelivered(failed.updateId, failed.leaseToken, {
+            code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING",
+            message: "Сессия ещё не готова принять сообщение; оно вернулось в очередь",
+          });
+        } else if (failed) {
           stopHeartbeat(failed.updateId);
           await dependencies.repository.fail(failed.updateId, failed.leaseToken, failure);
           await notifyFailure(failed, failure);
@@ -550,7 +573,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             message: "Сообщение вернулось в очередь: предыдущее сообщение серии не обработано",
           });
         }
-        throw error;
+        if (!retryUndelivered) throw error;
       } finally {
         for (const controller of heartbeatControllers.values()) controller.abort();
         await Promise.all(heartbeats);

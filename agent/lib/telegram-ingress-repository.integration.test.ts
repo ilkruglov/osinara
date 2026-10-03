@@ -547,4 +547,21 @@ describeWithDatabase("telegramIngressRepository", () => {
       telegramIngressRepository.beginDispatch(reclaimed!.updateId, reclaimed!.leaseToken),
     ).rejects.toThrowError(/AGENT_TELEGRAM_DISPATCH_RECOVERY_REQUIRED/);
   });
+
+  it("dispatches again a message Eve refused before delivery for a missing session hook", async () => {
+    await telegramIngressRepository.enqueue(updateInput("6002", "telegram:private:101", "привет"));
+    const first = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+    await telegramIngressRepository.beginDispatch(first!.updateId, first!.leaseToken);
+    await telegramIngressRepository.releaseUndelivered(first!.updateId, first!.leaseToken, {
+      code: "AGENT_TELEGRAM_SESSION_HOOK_PENDING",
+      message: "Сессия ещё не готова",
+    });
+    const reclaimed = await telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST);
+
+    expect(reclaimed?.updateId).toBe("6002");
+    expect(reclaimed?.attemptCount).toBe(2);
+    await expect(
+      telegramIngressRepository.beginDispatch(reclaimed!.updateId, reclaimed!.leaseToken),
+    ).resolves.toBeUndefined();
+  });
 });
