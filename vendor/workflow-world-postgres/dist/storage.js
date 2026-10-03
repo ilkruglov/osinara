@@ -151,13 +151,30 @@ function nextSlotId(runId) {
  * moving to `evnt_`: a mid-life prefix change would sort every new event
  * before every old one, since `evnt_` < `wevt_`.
  */
+/**
+ * Runs this process has seen marked as slot-numbered (Osinara fork, 4 October
+ * 2026). The marker is never removed while a run lives, so once seen it holds;
+ * only a run without one is re-read, because the marker could still be inserted
+ * by a creation in flight. Before this every event cost one marker read, about
+ * ten a turn and the fifth most time of all Workflow statements in a load run.
+ * The set is bounded by a plain reset: a miss after it costs one read again.
+ */
+const SLOT_MARKED_RUNS_MAX = 50_000;
+const slotMarkedRuns = new Set();
+function rememberSlotMarker(runId) {
+  if (slotMarkedRuns.size >= SLOT_MARKED_RUNS_MAX) slotMarkedRuns.clear();
+  slotMarkedRuns.add(runId);
+}
 async function allocateEventId(db, runId) {
+  if (slotMarkedRuns.has(runId)) return nextSlotId(runId);
   const [row] = await db
     .select({ runId: Schema.eventSlots.runId })
     .from(Schema.eventSlots)
     .where(eq(Schema.eventSlots.runId, runId))
     .limit(1);
-  return row ? nextSlotId(runId) : `wevt_${legacyEventUlid()}`;
+  if (!row) return `wevt_${legacyEventUlid()}`;
+  rememberSlotMarker(runId);
+  return nextSlotId(runId);
 }
 /**
  * Inserts one event row, retrying while the position it computed is taken.
@@ -222,6 +239,9 @@ async function insertEventRow(db, values) {
  */
 async function openEventSlots(db, runId) {
   await db.insert(Schema.eventSlots).values({ runId }).onConflictDoNothing();
+  // Inside the creation transaction: should it roll back, the run row goes
+  // with it and a later creation of the same id opens the marker again.
+  rememberSlotMarker(runId);
   return slotToEventId(FIRST_EVENT_SLOT);
 }
 /**
