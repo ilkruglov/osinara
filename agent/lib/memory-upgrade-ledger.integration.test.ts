@@ -156,6 +156,7 @@ const POST_V0101_MIGRATIONS = [
   "122_telegram_group_message_sender_tag.sql",
   "123_berta_memory_embeddings.sql",
   "124_drop_embedding_jobs_of_hidden_records.sql",
+  "125_telegram_group_memory_review.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
