@@ -18,6 +18,7 @@ import { z } from "zod";
 import { TELEGRAM_INGRESS_LEASE_MS, TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS, TELEGRAM_PRIVATE_BURST_QUIET_MS } from "../config.js";
 import { AppError, isAppError } from "./app-error.js";
 import { transcribeTelegramVoice } from "./groq-voice-transcription.js";
+import { telegramIngressMaxConcurrentDrains } from "./telegram-ingress-concurrency.js";
 import type { TelegramIngressClaim, TelegramIngressRepository } from "./telegram-ingress-contract.js";
 import { sendTelegramFailureNotice } from "./telegram-failure-notice.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
@@ -617,6 +618,7 @@ export const handleTelegramDurableIngress = createTelegramDurableIngress({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
   handleSoftwareUpdateCallback,
   leaseMilliseconds: TELEGRAM_INGRESS_LEASE_MS,
+  maxConcurrentDrains: telegramIngressMaxConcurrentDrains(),
   notifyFailure: sendTelegramFailureNotice,
   repository: telegramIngressRepository,
   transcribeVoice: transcribeTelegramVoice,
