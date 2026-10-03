@@ -225,6 +225,43 @@ async function openEventSlots(db, runId) {
   return slotToEventId(FIRST_EVENT_SLOT);
 }
 /**
+ * Inserts a run, its slot marker and its run_created event in one
+ * transaction; `undefined` when the run already exists.
+ *
+ * Osinara fork (3 October 2026). Upstream wrote the three rows as separate
+ * statements, so a run_started from the queue could read the committed run in
+ * the gap before its slot marker, take it for a pre-slot run and mint a
+ * `wevt_` ULID; every replay of that run then failed with "Event id is not
+ * slot-numbered" (59 runs stuck at run_created in a 10 000-family load run).
+ * Inside the transaction nobody sees the run before its first event: a
+ * concurrent resilient start waits on the run's primary key and then finds
+ * run_created in slot 1.
+ */
+async function insertRunWithCreatedEvent(drizzle, runValues, eventValues) {
+  return drizzle.transaction(async (tx) => {
+    const [runValue] = await tx
+      .insert(Schema.runs)
+      .values(runValues)
+      .onConflictDoNothing()
+      .returning();
+    if (!runValue) {
+      return undefined;
+    }
+    const event = await insertEventRow(tx, {
+      ...eventValues,
+      runId: runValues.runId,
+      eventId: await openEventSlots(tx, runValues.runId),
+      eventType: "run_created",
+    });
+    if (!event) {
+      throw new EntityConflictError(
+        `run_created for run "${runValues.runId}" could not be created`,
+      );
+    }
+    return { event, runValue };
+  }, SLOT_INSERT_TRANSACTION);
+}
+/**
  * The report half of bump-and-report: the events sitting on the slots between
  * the one the writer asked for and the one its write actually landed on.
  *
@@ -769,9 +806,9 @@ export function createEventsStorage(drizzle) {
             // Create run + run_created event atomically. The
             // transaction ensures we never have an orphaned run
             // without its run_created event.
-            const [inserted] = await drizzle
-              .insert(Schema.runs)
-              .values({
+            const created = await insertRunWithCreatedEvent(
+              drizzle,
+              {
                 runId: effectiveRunId,
                 deploymentId: runInputData.deploymentId,
                 workflowName: runInputData.workflowName,
@@ -784,20 +821,8 @@ export function createEventsStorage(drizzle) {
                 // would otherwise be lost for the rest of the run's life.
                 encryptionPublicKey: runInputData.encryptionPublicKey,
                 status: "pending",
-              })
-              .onConflictDoNothing()
-              .returning();
-            if (inserted) {
-              // This synthetic run_created is the run's first event, so it
-              // opens the slot counter the rest of the run allocates from.
-              const runCreatedEventId = await openEventSlots(
-                drizzle,
-                effectiveRunId,
-              );
-              await drizzle.insert(events).values({
-                runId: effectiveRunId,
-                eventId: runCreatedEventId,
-                eventType: "run_created",
+              },
+              {
                 eventData: {
                   deploymentId: runInputData.deploymentId,
                   workflowName: runInputData.workflowName,
@@ -808,9 +833,9 @@ export function createEventsStorage(drizzle) {
                   encryptionPublicKey: runInputData.encryptionPublicKey,
                 },
                 specVersion: effectiveSpecVersion,
-              });
-            }
-            const createdRun = inserted;
+              },
+            );
+            const createdRun = created?.runValue;
             if (createdRun) {
               currentRun = {
                 status: "pending",
@@ -1014,7 +1039,10 @@ export function createEventsStorage(drizzle) {
       // ============================================================
       // Entity creation/updates based on event type
       // ============================================================
-      // Handle run_created event: create the run entity atomically
+      // Handle run_created event: create the run entity atomically. Its event
+      // is written here too, inside the same transaction, so the generic
+      // insert below is skipped for it.
+      let runCreatedValue;
       if (data.eventType === "run_created") {
         const eventData = data.eventData;
         validateAttributeChanges(
@@ -1026,9 +1054,9 @@ export function createEventsStorage(drizzle) {
             allowReservedAttributes: eventData.allowReservedAttributes === true,
           },
         );
-        const [runValue] = await drizzle
-          .insert(Schema.runs)
-          .values({
+        const created = await insertRunWithCreatedEvent(
+          drizzle,
+          {
             runId: effectiveRunId,
             deploymentId: eventData.deploymentId,
             workflowName: eventData.workflowName,
@@ -1039,24 +1067,26 @@ export function createEventsStorage(drizzle) {
             attributes: eventData.attributes,
             encryptionPublicKey: eventData.encryptionPublicKey,
             status: "pending",
-          })
-          .onConflictDoNothing()
-          .returning();
+          },
+          {
+            correlationId: data.correlationId,
+            eventData,
+            specVersion: effectiveSpecVersion,
+          },
+        );
         // No row back means the run already exists: the resilient start path
         // (run_started on a non-existent run) won a TOCTOU race and created
         // it. Surface the conflict rather than returning `{ run: undefined }`
         // — start() already treats EntityConflictError as benign, and falling
         // through would append a duplicate run_created event to the log.
-        if (!runValue) {
+        if (!created) {
           throw new EntityConflictError(
             `Workflow run "${effectiveRunId}" already exists`,
           );
         }
-        // Open the run's slot counter. Doing it here, rather than lazily on
-        // first allocation, is what makes "no row" mean "created before slots
-        // existed" for the rest of the run's life.
-        eventId = await openEventSlots(drizzle, effectiveRunId);
-        run = deserializeRunError(compact(runValue));
+        eventId = created.event.eventId;
+        runCreatedValue = { createdAt: created.event.createdAt };
+        run = deserializeRunError(compact(created.runValue));
       }
       // Handle run_started event: update run status
       if (data.eventType === "run_started") {
@@ -1333,7 +1363,7 @@ export function createEventsStorage(drizzle) {
           step = deserializeStepError(compact(stepValue));
         }
       }
-      let value;
+      let value = runCreatedValue;
       // Handle step_started event: increment attempt and set the step to
       // running, then write the matching event log entry in the same
       // transaction. The guarded UPDATE takes the step row lock; keeping the
