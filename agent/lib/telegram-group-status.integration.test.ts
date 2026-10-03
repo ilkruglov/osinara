@@ -57,6 +57,7 @@ describeWithDatabase("Telegram group status repository", () => {
       requestedBy: current.ownerId,
     })).resolves.toEqual([
       {
+        memoryReview: true,
         messageMode: "owner_only",
         telegramChatId: "-1002",
         title: "Внешняя",
@@ -64,6 +65,7 @@ describeWithDatabase("Telegram group status repository", () => {
         type: "external",
       },
       {
+        memoryReview: true,
         messageMode: "all",
         telegramChatId: "-1001",
         title: "Семья",

@@ -312,4 +312,92 @@ describeWithDatabase("idle memory review", () => {
     expect(claims[0]!.prompt).toContain("Анна работает логистом");
     expect(claims[0]!.prompt).toContain("работа");
   });
+
+  // Production, 3 October 2026: two external groups gave 97 % of all review batches, almost every
+  // one of exactly ten sources; a chat with no family member in it does not need a call that often.
+  it("lets an external group gather thirty fresh sources before its background batch", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const external = await externalGroup(fixture.familyId, true);
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      await insertUserMessage({
+        conversationId: external.conversationId, groupId: external.groupId,
+        sentAt: "2026-09-03T10:09:30.000Z", sequence,
+      });
+    }
+    const early = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+    expect(early).toHaveLength(0);
+
+    for (let sequence = 11; sequence <= 30; sequence += 1) {
+      await insertUserMessage({
+        conversationId: external.conversationId, groupId: external.groupId,
+        sentAt: "2026-09-03T10:09:30.000Z", sequence,
+      });
+    }
+    const full = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:10:00.000Z"),
+    });
+    expect(full).toHaveLength(1);
+    expect(full[0]!.sourceCount).toBe(30);
+  });
+
+  it("flushes ten sources of an external group after thirty idle minutes, not ten", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const external = await externalGroup(fixture.familyId, true);
+    for (let sequence = 1; sequence <= 10; sequence += 1) {
+      await insertUserMessage({
+        conversationId: external.conversationId, groupId: external.groupId,
+        sentAt: "2026-09-03T10:00:00.000Z", sequence,
+      });
+    }
+    const tenMinutes = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:11:00.000Z"),
+    });
+    expect(tenMinutes).toHaveLength(0);
+    const thirtyMinutes = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T10:31:00.000Z"),
+    });
+    expect(thirtyMinutes).toHaveLength(1);
+    expect(thirtyMinutes[0]!.sourceCount).toBe(10);
+  });
+
+  it("never reviews a group whose owner switched silent review off", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const external = await externalGroup(fixture.familyId, false);
+    const entries = [];
+    for (let sequence = 1; sequence <= 50; sequence += 1) {
+      entries.push(await insertUserMessage({
+        conversationId: external.conversationId, groupId: external.groupId,
+        sentAt: "2026-09-03T09:00:00.000Z", sequence,
+      }));
+    }
+    // The inline fiftieth-message observer, the idle dispatcher and the long-idle flush all stay quiet.
+    await expect(memoryReviewRepository.observePassiveMessage({
+      groupId: external.groupId, timelineEntryId: entries[49]!.id,
+    })).resolves.toBeNull();
+    const claims = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 10, now: new Date("2026-09-03T16:00:00.000Z"),
+    });
+    expect(claims).toHaveLength(0);
+    await expect(memoryReviewRepository.prepareInteractiveTurn({
+      applicationSessionId: "00000000-0000-4000-8000-000000000001",
+      groupId: external.groupId, timelineEntryId: entries[49]!.id,
+    })).resolves.toBeNull();
+  });
 });
+
+async function externalGroup(familyId: string, memoryReview: boolean) {
+  const group = await database().query<{ id: string }>(
+    `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode, memory_review_enabled)
+     VALUES ($1, '-100-external-review', 'Внешняя', 'external', 'all', $2) RETURNING id`,
+    [familyId, memoryReview],
+  );
+  const conversation = await database().query<{ id: string }>(
+    "SELECT id FROM application_conversations WHERE telegram_group_id = $1", [group.rows[0]!.id],
+  );
+  await memoryReviewRepository.initializeLane({
+    conversationId: conversation.rows[0]!.id, messageThreadId: null, processedThroughSequence: "0",
+  });
+  return { conversationId: conversation.rows[0]!.id, groupId: group.rows[0]!.id };
+}

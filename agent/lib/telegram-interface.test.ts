@@ -319,6 +319,31 @@ describe("Telegram interface localization", () => {
     expect(request.prompt).toContain("Режим сообщений: owner_only");
     expect(request.prompt).toContain("Полный список разрешённых инструментов: remember, list_group_history");
     expect(request.prompt).toContain("Группа и бот останутся подключены");
+    expect(request.prompt).not.toContain("Тихая проверка памяти");
+  });
+
+  it("shows the silent memory review switch when the policy changes it", () => {
+    const request = localizeTelegramInputRequest({
+      action: {
+        callId: "call-policy-review",
+        input: {
+          action: "update_policy",
+          memoryReview: "disabled",
+          messageMode: "all",
+          telegramChatId: "-1001",
+          toolAllowlist: [],
+        },
+        kind: "tool-call" as const,
+        toolName: "manage_telegram_group",
+      },
+      display: "confirmation" as const,
+      kind: "tool-approval" as const,
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-policy-review",
+    });
+
+    expect(request.prompt).toContain("Тихая проверка памяти: выключена");
   });
 
   it("shows an explicitly empty tool policy during external registration", () => {

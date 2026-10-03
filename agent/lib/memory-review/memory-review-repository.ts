@@ -130,6 +130,15 @@ async function coveredThrough(client: PoolClient, lane: LaneRow): Promise<string
   return result.rows[0]?.through_sequence ?? lane.processed_through_sequence;
 }
 
+/** Whether the family owner keeps silent review on for this group (migration 125). */
+async function groupReviewEnabled(client: PoolClient, groupId: string): Promise<boolean> {
+  const result = await client.query<{ enabled: boolean }>(
+    "SELECT memory_review_enabled AS enabled FROM telegram_groups WHERE id = $1",
+    [groupId],
+  );
+  return result.rows[0]?.enabled === true;
+}
+
 async function laneBlocked(client: PoolClient, lane: LaneRow): Promise<boolean> {
   const result = await client.query<{ blocked: boolean }>(
     `SELECT EXISTS (
@@ -256,6 +265,10 @@ export const memoryReviewRepository = {
         await client.query("COMMIT");
         return null;
       }
+      if (!await groupReviewEnabled(client, input.groupId)) {
+        await client.query("COMMIT");
+        return null;
+      }
       await lockApplicationConversation(client, source.conversation_id);
       const lane = await laneForUpdate(
         client,
@@ -319,6 +332,10 @@ export const memoryReviewRepository = {
         "AGENT_MEMORY_REVIEW_SOURCE_INVALID",
         "Текущее сообщение не подходит для проверки памяти",
       );
+      if (!await groupReviewEnabled(client, input.groupId)) {
+        await client.query("COMMIT");
+        return null;
+      }
       await lockApplicationConversation(client, current.conversation_id);
       const lane = await laneForUpdate(client, current.conversation_id, current.message_thread_id, "0");
       if (await laneBlocked(client, lane)) {

@@ -43,6 +43,8 @@ export type TelegramGroupRegistration = TelegramGroupRegistrationBase & (
 
 export interface TelegramGroupPolicyUpdate {
   familyId: string;
+  /** Silent memory review of the group; absent leaves the switch as it is. */
+  memoryReview?: boolean;
   messageMode: TelegramGroupMessageMode;
   requestedBy: string;
   telegramChatId: string;
@@ -50,6 +52,7 @@ export interface TelegramGroupPolicyUpdate {
 }
 
 export interface TelegramGroupStatus {
+  memoryReview: boolean;
   messageMode: TelegramGroupMessageMode;
   telegramChatId: string;
   title: string;
@@ -93,13 +96,14 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       // Return the exact persisted configuration; effective external base tools are added by the
       // model-facing tool from the same static catalog used by execution policy.
       const result = await client.query<{
+        memory_review_enabled: boolean;
         message_mode: TelegramGroupMessageMode;
         telegram_chat_id: string;
         title: string;
         tool_allowlist: string[];
         type: RegisteredGroupType;
       }>(
-        `SELECT telegram_chat_id, title, type, message_mode, tool_allowlist
+        `SELECT telegram_chat_id, title, type, message_mode, tool_allowlist, memory_review_enabled
            FROM telegram_groups
           WHERE family_id = $1
           ORDER BY lower(title), telegram_chat_id`,
@@ -107,6 +111,7 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
       );
       await client.query("COMMIT");
       return result.rows.map((row) => ({
+        memoryReview: row.memory_review_enabled,
         messageMode: row.message_mode,
         telegramChatId: row.telegram_chat_id,
         title: row.title,
@@ -330,13 +335,15 @@ export const telegramGroupAdministrationRepository: TelegramGroupAdministrationR
         );
       }
 
-      // One statement replaces both policy fields atomically without firing deletion cascades.
+      // One statement replaces the policy fields atomically without firing deletion cascades; the
+      // review switch changes only when the update names it.
       const result = await client.query<{ id: string }>(
         `UPDATE telegram_groups
-         SET message_mode = $1, tool_allowlist = $2
+         SET message_mode = $1, tool_allowlist = $2,
+             memory_review_enabled = COALESCE($4, memory_review_enabled)
          WHERE id = $3
          RETURNING id`,
-        [input.messageMode, input.toolAllowlist, group.id],
+        [input.messageMode, input.toolAllowlist, group.id, input.memoryReview ?? null],
       );
       const row = result.rows[0];
       if (!row) {

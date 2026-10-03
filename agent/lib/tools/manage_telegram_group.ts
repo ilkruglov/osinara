@@ -33,6 +33,7 @@ import {
 } from "../tool-policy/group-tool-catalog.js";
 import {
   requireAction,
+  optionalEnum,
   requiredEnum,
   requiredString,
   requireInputRecord,
@@ -52,8 +53,10 @@ const TOOL_ACTIONS = [
 const GROUP_TYPES = ["family_private", "external"] as const;
 const STANDARD_MESSAGE_MODES = ["addressed_only", "all"] as const;
 const EXTERNAL_MESSAGE_MODES = [...STANDARD_MESSAGE_MODES, "owner_only"] as const;
+const MEMORY_REVIEW_MODES = ["enabled", "disabled"] as const;
 const TOP_LEVEL_FIELDS = [
   "action",
+  "memoryReview",
   "messageMode",
   "registration",
   "telegramChatId",
@@ -72,6 +75,9 @@ const registrationSchema = z.object({
 const manageTelegramGroupSchema = z.object({
   action: z.enum(TOOL_ACTIONS).describe(
     "Сначала выберите ровно один action: register, remove, start_new_context, status или update_policy.",
+  ),
+  memoryReview: z.enum(MEMORY_REVIEW_MODES).optional().describe(
+    "Только при action=update_policy внешней группы: enabled или disabled включает или выключает тихую проверку памяти по сообщениям этой группы. Без поля текущее значение не меняется.",
   ),
   messageMode: z.enum(EXTERNAL_MESSAGE_MODES).optional().describe(
     "Передавайте только при action=update_policy. Для register используйте registration.messageMode; для остальных actions поле не передавайте.",
@@ -214,6 +220,7 @@ function requireManageTelegramGroupInput(input: unknown) {
     return {
       action,
       policy: {
+        memoryReview: optionalEnum(payload, "memoryReview", MEMORY_REVIEW_MODES, INPUT_ERROR_CODE),
         messageMode: requiredEnum(payload, "messageMode", EXTERNAL_MESSAGE_MODES, INPUT_ERROR_CODE),
         telegramChatId: requireTelegramGroupId(payload.telegramChatId, "telegramChatId"),
         toolAllowlist: requireExternalToolAllowlist(payload.toolAllowlist, "action=update_policy"),
@@ -227,7 +234,7 @@ const TOOL_DESCRIPTION = [
   "Управлять Telegram-группами семьи из личного чата владельца: status, register, update_policy, start_new_context, remove.",
   "Выбери один action и передавай только его payload; лишние поля других actions не заполняй, telegramChatId бери из status, не угадывай. Status не требует подтверждения: {\"action\":\"status\"}.",
   "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для смены прав используй update_policy: он сохраняет ID, название, тип и все данные. Remove не выводит бота из чата. Start_new_context не удаляет timeline, память, файлы и pending tasks: следующая реплика в main-чате и каждой теме начнёт новую canonical generation.",
-  "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют.",
+  "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют. memoryReview=disabled в update_policy выключает тихую проверку памяти по сообщениям внешней группы (сообщения всё равно пишутся в журнал), enabled включает обратно; без поля не меняется.",
   "Enums: action=register | remove | start_new_context | status | update_policy; type=family_private | external; messageMode=addressed_only | all | owner_only.",
   "Register: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}; для external добавь в registration \"toolAllowlist\":[\"search_memories\"].",
   "Update_policy: {\"action\":\"update_policy\",\"telegramChatId\":\"-1001234567890\",\"messageMode\":\"all\",\"toolAllowlist\":[\"search_memories\"]} без type и title. Start_new_context: {\"action\":\"start_new_context\",\"telegramChatId\":\"-1001234567890\"}. Remove: {\"action\":\"remove\",\"telegramChatId\":\"-1001234567890\"}.",
@@ -282,6 +289,7 @@ export default defineTool({
             ...visibleGroup,
             builtInWorkspaceTools,
             effectiveConfiguredTools: [...builtInWorkspaceTools, ...effective],
+            memoryReview: group.memoryReview ? "enabled" as const : "disabled" as const,
             policySummary: unavailable.length === 0
               ? "Базовые workspace tools плюс полный настроенный allowlist внешней группы."
               : "Базовые workspace tools плюс действующий allowlist внешней группы; " +
@@ -316,9 +324,10 @@ export default defineTool({
       };
     }
     if (parsed.action === "update_policy") {
-      const { messageMode, telegramChatId, toolAllowlist } = parsed.policy;
+      const { memoryReview, messageMode, telegramChatId, toolAllowlist } = parsed.policy;
       const result = await telegramGroupAdministrationRepository.updatePolicy({
         familyId: owner.familyId,
+        ...(memoryReview === undefined ? {} : { memoryReview: memoryReview === "enabled" }),
         messageMode,
         requestedBy: owner.userId,
         telegramChatId,
@@ -327,6 +336,7 @@ export default defineTool({
       return {
         botMembership: "unchanged",
         groupId: result.groupId,
+        ...(memoryReview === undefined ? {} : { memoryReview }),
         messageMode,
         policyUpdated: true,
         telegramChatId,

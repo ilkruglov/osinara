@@ -20,6 +20,12 @@ export const MEMORY_REVIEW_DISPATCH_BATCH_SIZE = 10;
 export const MEMORY_REVIEW_IDLE_MILLISECONDS = 10 * 60 * 1_000;
 export const MEMORY_REVIEW_IDLE_MIN_SOURCES = 10;
 export const MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES = 5;
+// External groups: no family member is in the chat, and on production (3 October 2026) two of them
+// produced 97 % of all review batches, almost every one of exactly ten sources. Three times fewer
+// calls for the same records; a record from such a chat reaches memory later.
+export const MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS = 30 * 60 * 1_000;
+export const MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES = 30;
+export const MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES = 10;
 export const MEMORY_REVIEW_LONG_IDLE_MILLISECONDS = 6 * 60 * 60 * 1_000;
 // A group tail shorter than this stays for idle review instead of riding the addressed turn.
 export const MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES = 8;

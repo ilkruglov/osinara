@@ -58,6 +58,7 @@ describe("manage_telegram_group.status", () => {
     listStatuses.mockReset();
     listStatuses.mockResolvedValue([
       {
+        memoryReview: false,
         messageMode: "owner_only",
         telegramChatId: "-1002",
         title: "Внешняя",
@@ -65,6 +66,7 @@ describe("manage_telegram_group.status", () => {
         type: "external",
       },
       {
+        memoryReview: true,
         messageMode: "all",
         telegramChatId: "-1001",
         title: "Семья",
@@ -80,6 +82,7 @@ describe("manage_telegram_group.status", () => {
         expect.objectContaining({
           builtInWorkspaceTools: ["glob", "grep", "read_file", "write_file"],
           effectiveConfiguredTools: ["glob", "grep", "read_file", "write_file", "search_memories"],
+          memoryReview: "disabled",
           policySummary: "Базовые workspace tools плюс полный настроенный allowlist внешней группы.",
           toolAccessMode: "external_allowlist",
           toolAllowlist: ["search_memories"],

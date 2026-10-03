@@ -163,12 +163,16 @@ function approvalParameterLines(toolName: string, input: Record<string, unknown>
         const allowlist = Array.isArray(input.toolAllowlist)
           ? input.toolAllowlist.filter((item): item is string => typeof item === "string").join(", ")
           : null;
+        const memoryReview = input.memoryReview === "enabled"
+          ? "включена"
+          : input.memoryReview === "disabled" ? "выключена" : null;
         return [
           ...line("Telegram chat ID", "telegramChatId"),
           ...line("Режим сообщений", "messageMode"),
           ...(allowlist !== null
             ? [`Полный список разрешённых инструментов: ${allowlist || "пуст"}`]
             : []),
+          ...(memoryReview === null ? [] : [`Тихая проверка памяти: ${memoryReview}`]),
         ];
       }
       const registration = input.registration;

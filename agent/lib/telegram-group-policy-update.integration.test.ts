@@ -87,6 +87,7 @@ describeWithDatabase("Telegram group policy update repository", () => {
 
     await expect(telegramGroupAdministrationRepository.updatePolicy({
       familyId: fixture.familyId,
+      memoryReview: false,
       messageMode: "owner_only",
       requestedBy: fixture.ownerId,
       telegramChatId: "-100-policy",
@@ -94,18 +95,31 @@ describeWithDatabase("Telegram group policy update repository", () => {
     })).resolves.toEqual({ groupId });
 
     const persistedGroup = await database().query(
-      `SELECT id, title, type::text, message_mode::text, tool_allowlist, created_at
+      `SELECT id, title, type::text, message_mode::text, tool_allowlist, memory_review_enabled, created_at
        FROM telegram_groups WHERE id = $1`,
       [groupId],
     );
     expect(persistedGroup.rows[0]).toEqual({
       created_at: group.rows[0]!.created_at,
       id: groupId,
+      memory_review_enabled: false,
       message_mode: "owner_only",
       title: "Неизменное название",
       tool_allowlist: ["list_group_history", "search_memories"],
       type: "external",
     });
+
+    // An update that does not mention silent review leaves the switch where it is.
+    await telegramGroupAdministrationRepository.updatePolicy({
+      familyId: fixture.familyId,
+      messageMode: "all",
+      requestedBy: fixture.ownerId,
+      telegramChatId: "-100-policy",
+      toolAllowlist: [],
+    });
+    await expect(database().query(
+      "SELECT memory_review_enabled FROM telegram_groups WHERE id = $1", [groupId],
+    )).resolves.toMatchObject({ rows: [{ memory_review_enabled: false }] });
 
     // Stable primary keys prove that no scoped row was deleted and recreated behind the update.
     for (const [table, id] of [

@@ -11,6 +11,9 @@ import type { TelegramGroupJournalEntry } from "../telegram-group-journal-contex
 import {
   MEMORY_REVIEW_BATCH_SIZE,
   MEMORY_REVIEW_CONTEXT_LIMIT,
+  MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS,
+  MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES,
+  MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
   MEMORY_REVIEW_IDLE_MILLISECONDS,
   MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES,
   MEMORY_REVIEW_IDLE_MIN_SOURCES,
@@ -64,9 +67,26 @@ function project(row: SourceRow): TelegramGroupJournalEntry {
 
 interface LaneRow {
   conversation_id: string;
+  /** `external` or `family_private` for a group lane, null for a personal conversation. */
+  group_type: string | null;
   id: string;
   message_thread_id: string | null;
   processed_through_sequence: string;
+}
+
+/** The batch thresholds of a lane: external groups wait for more and longer. */
+function laneThresholds(lane: Pick<LaneRow, "group_type">) {
+  return lane.group_type === "external"
+    ? {
+        idleMilliseconds: MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS,
+        idleMinBatchSources: MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES,
+        idleMinSources: MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
+      }
+    : {
+        idleMilliseconds: MEMORY_REVIEW_IDLE_MILLISECONDS,
+        idleMinBatchSources: MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES,
+        idleMinSources: MEMORY_REVIEW_IDLE_MIN_SOURCES,
+      };
 }
 
 interface PendingSourceRow {
@@ -129,9 +149,10 @@ async function laneHasBatchAtCursor(client: PoolClient, lane: LaneRow): Promise<
 async function lockedDueLanes(client: PoolClient, now: Date, groupOnly: boolean): Promise<LaneRow[]> {
   const result = await client.query<LaneRow>(
     `WITH due AS (
-       SELECT lane.id
+       SELECT lane.id, telegram_group.type::text AS group_type
          FROM memory_review_lanes AS lane
          JOIN application_conversations AS conversation ON conversation.id = lane.conversation_id
+         LEFT JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
          CROSS JOIN LATERAL (
            -- "Newest" is the last pending message by sequence, as the batch rules read it.
            SELECT count(*)::int AS pending,
@@ -144,24 +165,29 @@ async function lockedDueLanes(client: PoolClient, now: Date, groupOnly: boolean)
                     ORDER BY message.sequence_id LIMIT $2) AS waiting
          ) AS stats
         WHERE ($1::boolean = false OR conversation.telegram_group_id IS NOT NULL)
+          AND COALESCE(telegram_group.memory_review_enabled, true)
           AND stats.pending > 0
           AND NOT EXISTS (
             SELECT 1 FROM memory_review_batches AS batch
              WHERE batch.lane_id = lane.id AND batch.predecessor_sequence = lane.processed_through_sequence
           )
-          AND (stats.pending >= $3
-            OR (stats.pending >= $4 AND stats.newest_at <= $6::timestamptz - make_interval(secs => $5 / 1000.0))
+          AND (stats.pending >= CASE WHEN telegram_group.type = 'external' THEN $8::int ELSE $3::int END
+            OR (stats.pending >= CASE WHEN telegram_group.type = 'external' THEN $9::int ELSE $4::int END
+                AND stats.newest_at <= $6::timestamptz - make_interval(
+                  secs => CASE WHEN telegram_group.type = 'external' THEN $10::int ELSE $5::int END / 1000.0))
             OR stats.newest_at <= $6::timestamptz - make_interval(secs => $7 / 1000.0))
      )
      SELECT lane.id, lane.conversation_id, lane.message_thread_id::text,
-            lane.processed_through_sequence::text
+            lane.processed_through_sequence::text, due.group_type
        FROM memory_review_lanes AS lane
-      WHERE lane.id IN (SELECT id FROM due)
+       JOIN due ON due.id = lane.id
       ORDER BY lane.created_at, lane.id FOR UPDATE OF lane SKIP LOCKED`,
     [groupOnly, MEMORY_REVIEW_BATCH_SIZE,
       groupOnly ? MEMORY_REVIEW_BATCH_SIZE : MEMORY_REVIEW_IDLE_MIN_SOURCES,
       MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES, MEMORY_REVIEW_IDLE_MILLISECONDS, now,
-      MEMORY_REVIEW_LONG_IDLE_MILLISECONDS],
+      MEMORY_REVIEW_LONG_IDLE_MILLISECONDS,
+      groupOnly ? MEMORY_REVIEW_BATCH_SIZE : MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
+      MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES, MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS],
   );
   return result.rows;
 }
@@ -241,9 +267,10 @@ async function materializeIdleBatches(client: PoolClient, now: Date): Promise<vo
     const newest = sources.at(-1);
     if (!newest) continue;
     const silence = now.getTime() - newest.sent_at.getTime();
-    const full = sources.length >= MEMORY_REVIEW_IDLE_MIN_SOURCES;
-    const idle = silence >= MEMORY_REVIEW_IDLE_MILLISECONDS &&
-      sources.length >= MEMORY_REVIEW_IDLE_MIN_BATCH_SOURCES;
+    const thresholds = laneThresholds(lane);
+    const full = sources.length >= thresholds.idleMinSources;
+    const idle = silence >= thresholds.idleMilliseconds &&
+      sources.length >= thresholds.idleMinBatchSources;
     // A lone remark after a long silence still deserves one look; it just does not get its own call early.
     const longIdle = silence >= MEMORY_REVIEW_LONG_IDLE_MILLISECONDS;
     if (!full && !idle && !longIdle) continue;

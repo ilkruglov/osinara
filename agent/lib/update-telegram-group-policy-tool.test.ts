@@ -81,6 +81,15 @@ describe("manage_telegram_group.update_policy", () => {
     });
   });
 
+  it("passes the silent memory review switch through and reports it back", async () => {
+    await expect(manageTelegramGroup.execute(
+      { ...input, memoryReview: "disabled" }, context("private"),
+    )).resolves.toMatchObject({ memoryReview: "disabled", policyUpdated: true });
+    expect(updatePolicy).toHaveBeenCalledWith(expect.objectContaining({ memoryReview: false }));
+    // Without the field the switch is not part of the replacement.
+    expect(updatePolicy).not.toHaveBeenCalledWith(expect.objectContaining({ memoryReview: undefined }));
+  });
+
   it("describes a complete in-place replacement without type or title", () => {
     expect(manageTelegramGroup.description).toContain(
       '{"action":"update_policy","telegramChatId":"-1001234567890","messageMode":"all","toolAllowlist":["search_memories"]}',
