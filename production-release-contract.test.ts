@@ -91,11 +91,13 @@ describe("production container contract", () => {
     // held half of the agent's memory. Sandboxes are prepared by a one-shot step, then the built
     // server is the container's process.
     expect(entrypoint).toContain("node .runtime/scripts/prewarm-sandboxes.js");
-    expect(entrypoint).toContain("exec node .output/server/index.mjs");
+    expect(entrypoint).toContain("exec node --max-old-space-size=512 .output/server/index.mjs");
     expect(entrypoint).not.toContain("npm run start");
-    expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(entrypoint.indexOf("exec node .output/server/index.mjs"));
+    expect(entrypoint.indexOf("prewarm-sandboxes.js")).toBeLessThan(entrypoint.indexOf("exec node --max-old-space-size=512"));
     // Without `eve start` nothing else ends a server that never becomes healthy (Codex review).
-    expect(entrypoint).toContain("node .runtime/scripts/startup-watchdog.js &\n  exec node .output/server/index.mjs");
+    expect(entrypoint).toMatch(/node \.runtime\/scripts\/startup-watchdog\.js &\n(?:  #[^\n]*\n)*  exec node /u);
+    // A bounded heap: without it V8 kept ~1 GB of garbage under the load run (3 October 2026).
+    expect(entrypoint).toContain("--max-old-space-size=512");
     expect(readProjectFile("package.json")).toContain("scripts/startup-watchdog.ts");
     expect(readProjectFile("package.json")).toContain("scripts/prewarm-sandboxes.ts");
   });

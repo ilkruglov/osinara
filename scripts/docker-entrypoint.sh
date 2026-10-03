@@ -28,7 +28,9 @@ start_server() {
   node .runtime/scripts/prewarm-sandboxes.js
   export HOST=0.0.0.0 NITRO_HOST=0.0.0.0 PORT=3000 NITRO_PORT=3000
   node .runtime/scripts/startup-watchdog.js &
-  exec node .output/server/index.mjs
+  # Bounded heap: by default V8 may grow to ~2.2 GB on this host and kept ~1 GB of garbage under
+  # load; at 512 MB the load run held 200 families at the same speed (AGENT_PROCESS_MEMORY).
+  exec node --max-old-space-size=512 .output/server/index.mjs
 }
 
 # A compose run command is an explicit operator action and must terminate normally.

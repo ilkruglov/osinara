@@ -20,6 +20,7 @@ import type {
 
 import type { StoredTelegramAttachment } from "./attachments/telegram-workspace-attachments.js";
 import { AppError, isAppError } from "./app-error.js";
+import { logProcessMemory } from "./process-memory.js";
 import { bindTelegramConversationTimeline } from "./telegram-conversation-timeline.js";
 import { evaluateConversationAccess } from "./family-access.js";
 import { parseInvitationStartCommand } from "./invitation-code.js";
@@ -535,6 +536,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     logTurnTiming("inbound_prepared", Date.now() - turnStartedAt.getTime(), {
       sinceTelegramMs: typeof telegramDate === "number" ? Date.now() - telegramDate * 1000 : null,
     });
+    logProcessMemory();
     if (!group) return turnResult;
     if (!turnResult?.auth) {
       throw new Error(
