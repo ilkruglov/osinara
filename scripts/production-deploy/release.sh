@@ -171,8 +171,8 @@ validate_manifest() {
   EGRESS_IMAGE="$(jq -er '.images.sandboxEgressProxy' "$manifest")"
   RUNNER_IMAGE="$(jq -er '.images.sandboxRunner' "$manifest")"
   RUNTIME_IMAGE="$(jq -er '.images.sandboxRuntime' "$manifest")"
-  # The embedder image (BERTA exported to ONNX) arrives with the release after 1.8.20: this
-  # controller accepts a manifest with or without it, so the next one can start naming it.
+  # The embedder image (BERTA exported to ONNX) is named by manifests from 1.8.21; a manifest
+  # without it (1.8.20 and earlier) still installs, and compose then refuses the missing image.
   MEMORY_EMBEDDING_IMAGE="$(jq -r '.images.memoryEmbedding // ""' "$manifest")"
   require_image_ref "$APP_IMAGE" "$APP_IMAGE_PREFIX"
   require_image_ref "$EDGE_IMAGE" "$EDGE_IMAGE_PREFIX"

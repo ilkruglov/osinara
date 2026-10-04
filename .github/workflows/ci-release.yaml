@@ -189,9 +189,8 @@ jobs:
             ${{ env.EDGE_IMAGE }}:sha-${{ github.sha }}
           target: edge
 
-      # BERTA exported to ONNX on top of the TEI router. Published and attested from 1.8.20 on;
-      # the manifest names it from the next release, once every installed controller accepts
-      # the field (the 1.8.19 controller rejects a manifest with an unknown image).
+      # BERTA exported to ONNX on top of the TEI router. Published from 1.8.20, named by the
+      # manifest from 1.8.21, once every installed controller accepted the field.
       - name: Build and push memory embedding image
         id: memory-embedding
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
@@ -254,6 +253,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           RUNNER_DIGEST: ${{ steps.sandbox-runner.outputs.digest }}
           RUNTIME_DIGEST: ${{ steps.sandbox-runtime.outputs.digest }}
+          MEMORY_EMBEDDING_DIGEST: ${{ steps.memory-embedding.outputs.digest }}
         shell: bash
         run: |
           set -euo pipefail
@@ -262,7 +262,7 @@ jobs:
             printf '%s\n' "RELEASE_COMPOSE_DIGEST_INVALID: compose.production.yaml hash is malformed" >&2
             exit 1
           fi
-          for digest in "$APP_DIGEST" "$EDGE_DIGEST" "$EGRESS_DIGEST" "$RUNNER_DIGEST" "$RUNTIME_DIGEST"; do
+          for digest in "$APP_DIGEST" "$EDGE_DIGEST" "$EGRESS_DIGEST" "$RUNNER_DIGEST" "$RUNTIME_DIGEST" "$MEMORY_EMBEDDING_DIGEST"; do
             if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               printf '%s\n' "RELEASE_IMAGE_DIGEST_INVALID: Buildx returned a malformed digest" >&2
               exit 1
@@ -277,7 +277,8 @@ jobs:
             --arg sandboxEgressProxy "${EGRESS_IMAGE}@${EGRESS_DIGEST}" \
             --arg sandboxRunner "${RUNNER_IMAGE}@${RUNNER_DIGEST}" \
             --arg sandboxRuntime "${RUNTIME_IMAGE}@${RUNTIME_DIGEST}" \
-            '{schemaVersion: 1, version: $version, commitSha: $commitSha, composeSha256: $composeSha256, images: {app: $app, edge: $edge, sandboxEgressProxy: $sandboxEgressProxy, sandboxRunner: $sandboxRunner, sandboxRuntime: $sandboxRuntime}}' \
+            --arg memoryEmbedding "${MEMORY_EMBEDDING_IMAGE}@${MEMORY_EMBEDDING_DIGEST}" \
+            '{schemaVersion: 1, version: $version, commitSha: $commitSha, composeSha256: $composeSha256, images: {app: $app, edge: $edge, sandboxEgressProxy: $sandboxEgressProxy, sandboxRunner: $sandboxRunner, sandboxRuntime: $sandboxRuntime, memoryEmbedding: $memoryEmbedding}}' \
              > osinara-deployment.json
 
       - name: Build immutable installation bundle
