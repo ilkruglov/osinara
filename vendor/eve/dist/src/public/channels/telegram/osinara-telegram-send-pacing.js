@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `createTelegramSendPacer`: a pacer with its own clock, for tests.
+ * - `telegramSendPacerSettings`: the three limits from the environment, bounded by Telegram's.
  * - `telegramSendPacer`: the process-wide pacer every Bot API call goes through.
  * - `telegramRetryAfterSeconds`: the wait a 429 answer asks for, when it names one.
  *
@@ -13,6 +14,10 @@
  *   and reminders all count), so every message-sending method waits for a slot in a global
  *   window and in its chat's window before the request, and a 429 pauses every call for the
  *   time Telegram names (5 October 2026).
+ * - The private-chat gap is a quarter of a second by default: Telegram tolerates short bursts,
+ *   an answer of up to five parts is one, and a whole second between parts was a visible
+ *   delay for one family. The three limits are environment settings; an installation serving
+ *   a thousand families sets the gap to the full second.
  */
 const PACED_METHODS = new Set([
   "copyMessage",
@@ -36,13 +41,45 @@ const GROUP_WINDOW_MS = 60_000;
 const RETRY_AFTER_MAX_SECONDS = 60;
 const ACQUIRE_ROUNDS_MAX = 1_000;
 
+const SETTING_BOUNDS = {
+  TELEGRAM_SEND_GLOBAL_PER_SECOND: { absent: 25, max: 30, min: 1 },
+  TELEGRAM_SEND_GROUP_PER_MINUTE: { absent: 20, max: 20, min: 1 },
+  TELEGRAM_SEND_PRIVATE_GAP_MS: { absent: 250, max: 5_000, min: 0 },
+}         ;
+
+function integerSetting(
+  name                             ,
+  env                                              ,
+)         {
+  const bounds = SETTING_BOUNDS[name];
+  const raw = env[name];
+  if (raw === undefined) return bounds.absent;
+  const value = Number(raw);
+  if (!/^\d+$/u.test(raw) || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
+    throw new Error(`AGENT_RUNTIME_TUNING_INVALID: ${name} должно быть целым от ${bounds.min} до ${bounds.max}`);
+  }
+  return value;
+}
+
+/** The pacer limits an installation configured, with Telegram's own as the ceiling. */
+export function telegramSendPacerSettings(
+  env                                               = process.env,
+)                                                                                                  {
+  return {
+    globalPerSecond: integerSetting("TELEGRAM_SEND_GLOBAL_PER_SECOND", env),
+    groupPerMinute: integerSetting("TELEGRAM_SEND_GROUP_PER_MINUTE", env),
+    privateGapMs: integerSetting("TELEGRAM_SEND_PRIVATE_GAP_MS", env),
+  };
+}
+
                                            
                                                                                    
                            
                                                                                
                           
                      
-                                                                                             
+                                                                                            
+                               
                         
                                         
  
@@ -69,7 +106,7 @@ export function createTelegramSendPacer(options                           = {}) 
   const sleep = options.sleep ?? ((ms        ) => new Promise      ((resolve) => setTimeout(resolve, ms)));
   const globalPerSecond = options.globalPerSecond ?? 25;
   const groupPerMinute = options.groupPerMinute ?? 20;
-  const privateGapMs = options.privateGapMs ?? 1_000;
+  const privateGapMs = options.privateGapMs ?? 250;
   const globalSends           = [];
   const groupSends = new Map                  ();
   const privateLastSend = new Map                ();
@@ -131,4 +168,4 @@ export function telegramRetryAfterSeconds(body         )                {
   return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
-export const telegramSendPacer                    = createTelegramSendPacer();
+export const telegramSendPacer                    = createTelegramSendPacer(telegramSendPacerSettings());

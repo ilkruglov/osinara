@@ -96,9 +96,10 @@ services:
       # kept a steady queue only at 20 drains and 30 steps (answer p50 7.3 s over a 5 s model).
       # Tuning (set in the installation's .env; the defaults are the single-family profile):
       #   one family on one core        drains 20, steps 30, pool 32, review 2, heap 512,
-      #                                 quiet 2000, sandbox idle 6 h, containers 1000 (runner)
+      #                                 quiet 2000, send gap 250, sandbox idle 6 h,
+      #                                 containers 1000 (runner)
       #   a thousand families, 4+ cores drains 40–60, steps 60, pool 64, review 10, heap 1024,
-      #                                 sandbox idle 10 min, containers ~400 on 8 GB.
+      #                                 send gap 1000, sandbox idle 10 min, containers ~400 on 8 GB.
       #   A drain holds its chat for the whole turn, so drains × 60 / turn seconds is the bot's
       #   turns a minute (4 October 2026: 20 drains over 13.5 s turns = 89).
       TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: ${TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS-20}
@@ -108,6 +109,11 @@ services:
       AGENT_HEAP_MB: ${AGENT_HEAP_MB-512}
       TELEGRAM_PRIVATE_BURST_QUIET_MS: ${TELEGRAM_PRIVATE_BURST_QUIET_MS-2000}
       TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS: ${TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS-20000}
+      # Outbound Telegram pacing (Telegram's own limits are the ceilings): the private-chat gap
+      # is a quarter second for one family and the full second for a thousand.
+      TELEGRAM_SEND_GLOBAL_PER_SECOND: ${TELEGRAM_SEND_GLOBAL_PER_SECOND-25}
+      TELEGRAM_SEND_GROUP_PER_MINUTE: ${TELEGRAM_SEND_GROUP_PER_MINUTE-20}
+      TELEGRAM_SEND_PRIVATE_GAP_MS: ${TELEGRAM_SEND_PRIVATE_GAP_MS-250}
       WORKFLOW_QUEUE_NAMESPACE: eve6f73696e6172612d66616d696c792d6167656e74
       # Large repeated payload blocks of the Workflow event log are stored once (1.8.19 reads
       # them, 1.8.20 writes them): about half the bytes per turn on the load stand.
