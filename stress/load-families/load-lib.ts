@@ -93,7 +93,9 @@ export function startServer(port: number, cpus?: string): ServerProcess {
       TELEGRAM_WEBHOOK_SECRET_TOKEN: SECRET,
       MODEL_API_KEY: "unused-load-key",
       INVITATION_SIGNING_SECRET: "load-test-signing-secret-of-32-chars!!",
-      MEMORY_EMBEDDING_BASE_URL: "http://memory-test",
+      // A real embedder (TEI with BERTA) when LOAD_EMBEDDING_URL is set; otherwise an address that
+      // fails fast and leaves retrieval lexical.
+      MEMORY_EMBEDDING_BASE_URL: process.env.LOAD_EMBEDDING_URL ?? "http://memory-test",
       // Production values; LOAD_WORKFLOW_CONCURRENCY raises both for a scaling run.
       WORKFLOW_POSTGRES_WORKER_CONCURRENCY: process.env.LOAD_WORKFLOW_CONCURRENCY ?? "10",
       WORKFLOW_POSTGRES_MAX_POOL_SIZE: String(Number(process.env.LOAD_WORKFLOW_CONCURRENCY ?? 10) + 2),

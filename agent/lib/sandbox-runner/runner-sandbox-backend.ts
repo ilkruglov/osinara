@@ -4,6 +4,7 @@
  * Exports:
  * - `scopedWorkspaceRunner`: real-Bash backend with trusted scoped tools persistence.
  * - `deleteRunnerToolEnvironment`: removes persistent tools when their workspace is deleted.
+ * - `resetTemplateCacheForTest`: drops the process-wide parsed sandbox templates.
  */
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
@@ -77,20 +78,39 @@ function encodeTemplate(seedFiles: ReadonlyArray<SandboxSeedFile>): StoredTempla
   };
 }
 
+// A template is a multi-megabyte JSON (every skill and schema file in base64) and every session
+// keeps its seed bundle for its whole life. Parsed per session, 200 sessions held 244 MB of the
+// same strings (4 October 2026); the file is immutable (its key carries the content hash, and it
+// is written with `wx`), so one process-wide copy serves every session.
+const loadedTemplates = new Map<string, Promise<StoredTemplate>>();
+
+async function readTemplate(path: string): Promise<StoredTemplate> {
+  const template = JSON.parse(await readFile(path, "utf8")) as StoredTemplate;
+  if (template.version !== TEMPLATE_SCHEMA_VERSION || !Array.isArray(template.files)) {
+    throw new Error("AGENT_SANDBOX_RUNNER_TEMPLATE_INVALID: Template schema mismatch");
+  }
+  return template;
+}
+
 async function loadTemplate(
   appRoot: string,
   templateKey: string,
   profile: BackendProfile,
 ): Promise<StoredTemplate> {
   const path = templatePath(appRoot, profile.cacheDirectory, templateKey);
+  const loaded = loadedTemplates.get(path);
+  if (loaded) return loaded;
   if (!await exists(path)) {
     throw new SandboxTemplateNotProvisionedError({ backendName: profile.name, templateKey });
   }
-  const template = JSON.parse(await readFile(path, "utf8")) as StoredTemplate;
-  if (template.version !== TEMPLATE_SCHEMA_VERSION || !Array.isArray(template.files)) {
-    throw new Error("AGENT_SANDBOX_RUNNER_TEMPLATE_INVALID: Template schema mismatch");
-  }
-  return template;
+  const loading = readTemplate(path);
+  loadedTemplates.set(path, loading);
+  loading.catch(() => loadedTemplates.delete(path));
+  return loading;
+}
+
+export function resetTemplateCacheForTest(): void {
+  loadedTemplates.clear();
 }
 
 function resolveSandboxPath(path: string): string {

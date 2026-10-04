@@ -11,8 +11,16 @@ import { mockModel } from "eve/evals";
 
 const latencyMs = Number(process.env.LOAD_MODEL_LATENCY_MS ?? 5_000);
 
-const model = mockModel(async ({ lastUserMessage }) => {
+// LOAD_TOOL_CALL=bash: the first step of every turn runs one bash command before answering, so the
+// sandbox container of each family is created and measured (the runner creates it lazily, on the
+// first command; a model that only answers never touches it).
+const toolCall = process.env.LOAD_TOOL_CALL ?? "";
+
+const model = mockModel(async ({ lastUserMessage, toolResults, tools }) => {
   await new Promise((resolve) => setTimeout(resolve, latencyMs));
+  if (toolCall === "bash" && toolResults.length === 0 && tools.some((tool) => tool.name === "bash")) {
+    return { toolCalls: [{ name: "bash", input: { command: "echo load-probe" } }] };
+  }
   const marker = [...(lastUserMessage ?? "").matchAll(/load-probe-[\d-]+/gu)].at(-1)?.[0];
   return marker ? `reply-${marker}` : "ok";
 });
