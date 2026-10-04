@@ -113,6 +113,7 @@ services:
       SANDBOX_RUNTIME_IMAGE: osinara-sandbox-runtime:local
       BROWSERLESS_API_KEY: ${BROWSERLESS_API_KEY-}
       SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}
+      SANDBOX_MAX_RUNNING_CONTAINERS: ${SANDBOX_MAX_RUNNING_CONTAINERS-1000}
     networks:
       - sandbox-control
     read_only: true

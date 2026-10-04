@@ -4,6 +4,7 @@
  * Exports:
  * - `SandboxReconciliationResult`: stopped/removed counts for operational logging.
  * - `reconcileSandboxContainers`: stops idle compute and removes expired or excess warm entries.
+ * - `makeRoomForContainer`: keeps running compute under the configured cap before a new start.
  * - Warm retention constants: explicit resource bounds independent of environment variables.
  */
 import type Docker from "dockerode";
@@ -37,6 +38,40 @@ function requireFinishedAt(value: string | undefined, id: string): number {
     );
   }
   return timestamp;
+}
+
+/**
+ * Makes room for one more running container under `limit`: below it nothing happens; at it the
+ * least recently used container that has been idle for `minIdleMs` is stopped (its session
+ * resumes with a warm start on the next command); with every container in use there is no room.
+ */
+export async function makeRoomForContainer(input: {
+  activity: SandboxActivityRegistry;
+  docker: Docker;
+  limit: number;
+  minIdleMs: number;
+  nowMs: number;
+  project: string;
+}): Promise<{ room: boolean; running: number }> {
+  const running = (await input.docker.listContainers({
+    filters: {
+      label: [SANDBOX_SESSION_LABEL, `${SANDBOX_PROJECT_LABEL}=${input.project}`],
+      status: ["running"],
+    },
+  })).map((item) => ({ id: item.Id, sessionId: item.Labels[SANDBOX_SESSION_LABEL] }))
+    .filter((item): item is { id: string; sessionId: string } => typeof item.sessionId === "string");
+  if (running.length < input.limit) return { room: true, running: running.length };
+  // A session this process has never seen is the coldest of all.
+  const byLastUse = running
+    .map((item) => ({ ...item, lastUsedAt: input.activity.lastActivityAt(item.sessionId) ?? Number.NEGATIVE_INFINITY }))
+    .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+  for (const item of byLastUse) {
+    const stopped = await input.activity.removeIfIdle(item.sessionId, input.nowMs - input.minIdleMs, async () => {
+      await input.docker.getContainer(item.id).stop({ t: SANDBOX_STOP_TIMEOUT_SECONDS });
+    });
+    if (stopped) return { room: true, running: running.length - 1 };
+  }
+  return { room: false, running: running.length };
 }
 
 export async function reconcileSandboxContainers(input: {

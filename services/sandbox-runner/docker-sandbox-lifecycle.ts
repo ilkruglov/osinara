@@ -25,6 +25,15 @@ export const SANDBOX_IDLE_TIMEOUT_MS = integerSetting(
   "SANDBOX_IDLE_TIMEOUT_MS",
   { absent: 30 * 60 * 1_000, min: 60 * 1_000, max: 24 * 60 * 60 * 1_000 },
 );
+// The idle window alone lets as many containers run as chats were active inside it; on one
+// machine for many families the cap below bounds them: a new container at the cap first stops
+// the least recently used one that has been quiet for a minute, and when every container is
+// in use the command is refused rather than the host overcommitted (5 October 2026).
+export const SANDBOX_MAX_RUNNING_CONTAINERS = integerSetting(
+  "SANDBOX_MAX_RUNNING_CONTAINERS",
+  { absent: 1_000, min: 1, max: 100_000 },
+);
+export const SANDBOX_CAPACITY_MIN_IDLE_MS = 60 * 1_000;
 
 const CONTAINER_PREFIX = "osinara-sandbox-";
 
@@ -39,6 +48,8 @@ export interface SandboxActivityRegistry {
   clear(): void;
   forget(sessionId: string): void;
   isIdle(sessionId: string, cutoffMs: number): boolean;
+  /** When the session last started an operation in this process; undefined before the first. */
+  lastActivityAt(sessionId: string): number | undefined;
   removeIfIdle(sessionId: string, cutoffMs: number, operation: () => Promise<void>): Promise<boolean>;
   runActive<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
   runExclusive<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
@@ -98,6 +109,9 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
     },
     isIdle(sessionId, cutoffMs) {
       return isIdle(sessionId, cutoffMs);
+    },
+    lastActivityAt(sessionId) {
+      return lastActivity.get(sessionId);
     },
     async runActive<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
       // Register activity synchronously once no removal owns the ID, closing check/remove races.

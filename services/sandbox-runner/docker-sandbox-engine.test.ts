@@ -234,6 +234,7 @@ describe("buildSandboxContainerOptions", () => {
       start: vi.fn(async () => undefined),
     };
     const docker = {
+      listContainers: vi.fn(async () => []),
       createContainer: vi.fn(async () => replacement),
       getContainer: vi.fn(() => stale),
     } as unknown as Docker;
@@ -319,6 +320,7 @@ describe("buildSandboxContainerOptions", () => {
       start,
     };
     const docker = {
+      listContainers: vi.fn(async () => []),
       createContainer: vi.fn(),
       getContainer: vi.fn(() => existing),
     } as unknown as Docker;
@@ -488,5 +490,69 @@ describe("buildSandboxContainerOptions", () => {
     });
 
     await expect(engine.stopSession(SANDBOX_SESSION_ID)).resolves.toBeUndefined();
+  });
+});
+
+describe("running-container cap", () => {
+  const BUSY_SESSION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const missing = Object.assign(new Error("no such container"), { statusCode: 404 });
+  const request = {
+    access: "restricted" as const,
+    eveSessionId: EVE_SESSION_ID,
+    mounts: [{ mountPoint: "group" as const, workspaceId: GROUP_WORKSPACE_ID }],
+    sandboxSessionId: SANDBOX_SESSION_ID,
+    seedDigest: "a".repeat(64),
+    seedFiles: [{ contentBase64: Buffer.from("skill").toString("base64"), path: "/workspace/skill.md" }],
+  };
+  const busyListing = [{
+    Id: "running-busy",
+    Labels: { "dev.osinara.sandbox.session-id": BUSY_SESSION_ID },
+    State: "running",
+  }];
+
+  it("stops the coldest container at the cap to make room for a new one", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
+    temporaryRoots.push(root);
+    const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
+    const created = { putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
+    const docker = {
+      createContainer: vi.fn(async () => created),
+      // The new session has no container yet; the busy one is addressed by id when stopped.
+      getContainer: vi.fn((id: string) => id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) }),
+      listContainers: vi.fn(async () => busyListing),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      limits: { maxRunningContainers: 1 },
+      roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
+      runtime,
+    });
+
+    await expect(engine.createSession(request)).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
+    expect(busy.stop).toHaveBeenCalledOnce();
+    expect(docker.createContainer).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a new container when every one at the cap was used within the minute", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
+    temporaryRoots.push(root);
+    const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
+    const docker = {
+      createContainer: vi.fn(),
+      getContainer: vi.fn((id: string) => id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) }),
+      listContainers: vi.fn(async () => busyListing),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      limits: { maxRunningContainers: 1 },
+      roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
+      runtime,
+    });
+    // A read a moment ago marks the busy session as used in this process.
+    await engine.readFile(BUSY_SESSION_ID, "/workspace/anything").catch(() => undefined);
+
+    await expect(engine.createSession(request)).rejects.toThrow("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    expect(busy.stop).not.toHaveBeenCalled();
+    expect(docker.createContainer).not.toHaveBeenCalled();
   });
 });

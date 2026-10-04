@@ -99,6 +99,7 @@ describe("Docker Compose runtime wiring", () => {
       }
       const runner = compose.slice(compose.indexOf("\n  sandbox-runner:\n"), compose.indexOf("\n  sandbox-egress-proxy:\n"));
       expect(runner, file).toContain("      SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}\n");
+      expect(runner, file).toContain("      SANDBOX_MAX_RUNNING_CONTAINERS: ${SANDBOX_MAX_RUNNING_CONTAINERS-1000}\n");
     }
   });
 

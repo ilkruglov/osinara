@@ -96,11 +96,11 @@ services:
       # kept a steady queue only at 20 drains and 30 steps (answer p50 7.3 s over a 5 s model).
       # Tuning (set in the installation's .env; the defaults are the single-family profile):
       #   one family on one core        drains 20, steps 30, pool 32, review 2, heap 512,
-      #                                 quiet 2000, sandbox idle 6 h (runner below)
+      #                                 quiet 2000, sandbox idle 6 h, containers 1000 (runner)
       #   a thousand families, 4+ cores drains 40–60, steps 60, pool 64, review 10, heap 1024,
-      #                                 sandbox idle 10 min. A drain holds its chat for the whole
-      #                                 turn, so drains × 60 / turn seconds is the bot's turns a
-      #                                 minute (4 October 2026: 20 drains over 13.5 s turns = 89).
+      #                                 sandbox idle 10 min, containers ~400 on 8 GB.
+      #   A drain holds its chat for the whole turn, so drains × 60 / turn seconds is the bot's
+      #   turns a minute (4 October 2026: 20 drains over 13.5 s turns = 89).
       TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: ${TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS-20}
       WORKFLOW_POSTGRES_WORKER_CONCURRENCY: ${WORKFLOW_POSTGRES_WORKER_CONCURRENCY-30}
       MEMORY_REVIEW_MAX_IN_FLIGHT: ${MEMORY_REVIEW_MAX_IN_FLIGHT-2}
@@ -210,6 +210,9 @@ services:
       # Idle window before a family's container is stopped: 6 h keeps one family's container warm
       # (an idle one holds under a megabyte resident); a thousand families want 10 min (600000).
       SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}
+      # Running containers at most; at the cap the least recently used idle one is stopped
+      # first, and with every one in use a new command is refused.
+      SANDBOX_MAX_RUNNING_CONTAINERS: ${SANDBOX_MAX_RUNNING_CONTAINERS-1000}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s

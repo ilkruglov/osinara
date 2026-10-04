@@ -53,13 +53,15 @@ import {
 } from "./sandbox-repeat-guard.js";
 import {
   createSandboxActivityRegistry,
+  SANDBOX_CAPACITY_MIN_IDLE_MS,
   SANDBOX_IDLE_TIMEOUT_MS,
+  SANDBOX_MAX_RUNNING_CONTAINERS,
   sandboxContainerName,
   sandboxContainerNeedsReplacement,
   sandboxRequestHash,
 } from "./docker-sandbox-lifecycle.js";
 
-import { reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
+import { makeRoomForContainer, reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
 import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
   buildSandboxContainerOptions,
@@ -139,6 +141,8 @@ async function ensureToolDirectories(
 
 export function createDockerSandboxEngine(input: {
   docker: Docker;
+  /** Running-container cap; the configured value unless a test narrows it. */
+  limits?: { maxRunningContainers: number };
   roots: RuntimeRoots;
   runtime: SandboxDockerRuntime;
 }): SandboxEngine {
@@ -196,6 +200,19 @@ export function createDockerSandboxEngine(input: {
           return { created: false, seedRequired: true, sessionId };
         }
 
+        const capacity = await makeRoomForContainer({
+          activity,
+          docker: input.docker,
+          limit: input.limits?.maxRunningContainers ?? SANDBOX_MAX_RUNNING_CONTAINERS,
+          minIdleMs: SANDBOX_CAPACITY_MIN_IDLE_MS,
+          nowMs: Date.now(),
+          project: input.runtime.project,
+        });
+        if (!capacity.room) {
+          throw new Error(
+            `AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED: All ${capacity.running} sandbox containers are in use`,
+          );
+        }
         const options = buildSandboxContainerOptions(input.runtime, request);
         options.name = sandboxContainerName(sessionId);
         options.Labels = {

@@ -126,3 +126,18 @@ describe("Docker sandbox lifecycle", () => {
     expect(events).toEqual(["remove-start", "remove-end", "work"]);
   });
 });
+
+describe("activity registry last use", () => {
+  it("reports when a session last started an operation", async () => {
+    let clock = 1_000;
+    const activity = createSandboxActivityRegistry(() => clock);
+    expect(activity.lastActivityAt("session-a")).toBeUndefined();
+    await activity.runActive("session-a", async () => undefined);
+    clock = 5_000;
+    await activity.runActive("session-b", async () => undefined);
+    expect(activity.lastActivityAt("session-a")).toBe(1_000);
+    expect(activity.lastActivityAt("session-b")).toBe(5_000);
+    activity.forget("session-a");
+    expect(activity.lastActivityAt("session-a")).toBeUndefined();
+  });
+});

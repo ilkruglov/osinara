@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createSandboxActivityRegistry } from "./docker-sandbox-lifecycle.js";
 import {
+  makeRoomForContainer,
   reconcileSandboxContainers,
   SANDBOX_STOPPED_CACHE_MAX,
 } from "./docker-sandbox-reconciliation.js";
@@ -52,5 +53,69 @@ describe("sandbox warm-cache reconciliation", () => {
     expect(removals[0]).toHaveBeenCalledOnce();
     expect(removals[1]).toHaveBeenCalledOnce();
     expect(removals.slice(2).every((remove) => remove.mock.calls.length === 0)).toBe(true);
+  });
+});
+
+describe("sandbox running-container cap", () => {
+  const NOW_MS = Date.parse("2026-10-05T00:00:00.000Z");
+  const running = (count: number) => Array.from({ length: count }, (_, index) => ({
+    Id: `running-${index}`,
+    Labels: { "dev.osinara.sandbox.session-id": `session-${index}` },
+    State: "running",
+  }));
+  const dockerWith = (listed: unknown[], stops: Map<string, ReturnType<typeof vi.fn>>) => ({
+    getContainer: vi.fn((id: string) => ({ stop: stops.get(id) ?? vi.fn(async () => undefined) })),
+    listContainers: vi.fn(async () => listed),
+  }) as unknown as Docker;
+
+  it("leaves room below the cap without touching anything", async () => {
+    const stops = new Map([["running-0", vi.fn(async () => undefined)]]);
+    await expect(makeRoomForContainer({
+      activity: createSandboxActivityRegistry(() => NOW_MS),
+      docker: dockerWith(running(2), stops),
+      limit: 3,
+      minIdleMs: 60_000,
+      nowMs: NOW_MS,
+      project: "osinara",
+    })).resolves.toEqual({ room: true, running: 2 });
+    expect(stops.get("running-0")).not.toHaveBeenCalled();
+  });
+
+  it("stops the least recently used idle container at the cap", async () => {
+    let clock = NOW_MS - 10 * 60_000;
+    const activity = createSandboxActivityRegistry(() => clock);
+    // session-1 was used ten minutes ago, session-2 just now, session-0 never in this process.
+    await activity.runActive("session-1", async () => undefined);
+    clock = NOW_MS;
+    await activity.runActive("session-2", async () => undefined);
+    const stops = new Map(["running-0", "running-1", "running-2"].map((id) => [id, vi.fn(async () => undefined)]));
+
+    await expect(makeRoomForContainer({
+      activity,
+      docker: dockerWith(running(3), stops),
+      limit: 3,
+      minIdleMs: 60_000,
+      nowMs: NOW_MS,
+      project: "osinara",
+    })).resolves.toEqual({ room: true, running: 2 });
+    expect(stops.get("running-0")).toHaveBeenCalledOnce();
+    expect(stops.get("running-1")).not.toHaveBeenCalled();
+    expect(stops.get("running-2")).not.toHaveBeenCalled();
+  });
+
+  it("finds no room when every container at the cap was used within the minute", async () => {
+    const activity = createSandboxActivityRegistry(() => NOW_MS);
+    for (const session of ["session-0", "session-1"]) await activity.runActive(session, async () => undefined);
+    const stops = new Map(["running-0", "running-1"].map((id) => [id, vi.fn(async () => undefined)]));
+
+    await expect(makeRoomForContainer({
+      activity,
+      docker: dockerWith(running(2), stops),
+      limit: 2,
+      minIdleMs: 60_000,
+      nowMs: NOW_MS,
+      project: "osinara",
+    })).resolves.toEqual({ room: false, running: 2 });
+    expect([...stops.values()].every((stop) => stop.mock.calls.length === 0)).toBe(true);
   });
 });
