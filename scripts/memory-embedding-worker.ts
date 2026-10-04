@@ -10,9 +10,10 @@
  */
 import { isAppError } from "../agent/lib/app-error.js";
 import { closeDatabase } from "../agent/lib/database.js";
-import { chunkMemoryContent } from "../agent/lib/memory-embedding-chunks.js";
+import { chunkMemoryContent, type MemoryEmbeddingChunkText } from "../agent/lib/memory-embedding-chunks.js";
 import { embedMemoryPassages } from "../agent/lib/memory-embedding-client.js";
 import {
+  MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS,
   MEMORY_EMBEDDING_JOB_BATCH_SIZE,
   MEMORY_EMBEDDING_LEASE_MILLISECONDS,
   MEMORY_EMBEDDING_MODEL_VERSION,
@@ -32,6 +33,34 @@ function errorCode(error: unknown): string {
   return isAppError(error) ? error.code : "AGENT_MEMORY_EMBEDDING_UNEXPECTED";
 }
 
+async function embedChunks(chunks: readonly MemoryEmbeddingChunkText[]): Promise<number[][]> {
+  const embeddings: number[][] = [];
+  for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
+    embeddings.push(...await embedMemoryPassages(
+      chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE).map((chunk) => chunk.content),
+    ));
+  }
+  return embeddings;
+}
+
+/**
+ * Chunks and embeds one record. The cap is in characters while the embedder counts tokens: a
+ * record the embedder refuses (text that is punctuation or emoji throughout) is re-chunked
+ * with the narrow cap, which fits any text, before it can fail.
+ */
+export async function embedRecord(
+  content: string,
+): Promise<{ chunks: MemoryEmbeddingChunkText[]; embeddings: number[][] }> {
+  const chunks = chunkMemoryContent(content);
+  try {
+    return { chunks, embeddings: await embedChunks(chunks) };
+  } catch (error) {
+    if (!isAppError(error) || error.code !== "AGENT_MEMORY_EMBEDDING_INPUT_TOO_LONG") throw error;
+    const narrow = chunkMemoryContent(content, { maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS });
+    return { chunks: narrow, embeddings: await embedChunks(narrow) };
+  }
+}
+
 async function processBatch(): Promise<number> {
   const jobs = await memoryIndexRepository.claim(
     MEMORY_EMBEDDING_JOB_BATCH_SIZE,
@@ -42,13 +71,7 @@ async function processBatch(): Promise<number> {
   // Each parent is all-or-nothing: provider batches are bounded, then every chunk commits together.
   for (const job of jobs) {
     try {
-      const chunks = chunkMemoryContent(job.content);
-      const embeddings: number[][] = [];
-      for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
-        embeddings.push(...await embedMemoryPassages(
-          chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE).map((chunk) => chunk.content),
-        ));
-      }
+      const { chunks, embeddings } = await embedRecord(job.content);
       const completed = await memoryIndexRepository.complete(
         job.memoryItemId,
         job.leaseToken,

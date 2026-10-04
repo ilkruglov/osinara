@@ -27,6 +27,12 @@ import {
   type MemoryRetrievalEvalQuery,
 } from "./memory-retrieval-eval-fixture.v1.js";
 import {
+  MEMORY_RETRIEVAL_EVAL_QUERIES_V3,
+  MEMORY_RETRIEVAL_EVAL_RECORDS_V3,
+  MEMORY_RETRIEVAL_V3_GATES,
+} from "./memory-retrieval-eval-fixture.v3.js";
+import { chunkMemoryContent } from "./memory-embedding-chunks.js";
+import {
   MEMORY_RETRIEVAL_EVAL_QUERIES_V2,
   MEMORY_RETRIEVAL_EVAL_RECORDS_V2,
   MEMORY_RETRIEVAL_V2_GATES,
@@ -136,6 +142,76 @@ describeEval("memory retrieval eval v1", () => {
   });
 
   afterAll(async () => closeDatabase());
+
+  it("finds a thesis buried in a long summary and prints the measured result", async () => {
+    // Long summaries go through the real chunker: this block measures chunk boundaries as well.
+    const chunkCounts: Record<string, number> = {};
+    for (const record of MEMORY_RETRIEVAL_EVAL_RECORDS_V3) {
+      contentToKey.set(record.content, record.key);
+      const chunks = chunkMemoryContent(record.content);
+      chunkCounts[record.key] = chunks.length;
+      const embeddings: number[][] = [];
+      for (let offset = 0; offset < chunks.length; offset += MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE) {
+        embeddings.push(...await embedMemoryPassages(
+          chunks.slice(offset, offset + MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE).map((chunk) => chunk.content),
+        ));
+      }
+      const inserted = await database().query<{ id: string }>(
+        `INSERT INTO memory_items
+           (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind, attribute,
+            content, source, confirmation, sensitivity, operation_key, embedding_status, updated_at)
+         VALUES ($1, $2, $2, $3, 'personal', 'episode', 'итог обсуждения', $4, 'eval:retrieval-v3',
+                 'user_confirmed', 'normal', $5, 'indexed', $6)
+         RETURNING id`,
+        [auth.familyId, auth.userId, auth.telegramUserId, record.content, record.key, record.updatedAt],
+      );
+      for (const [index, chunk] of chunks.entries()) {
+        await database().query(
+          `INSERT INTO memory_embedding_chunks
+             (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
+           VALUES ($1, $2, $3, $4, $5, $6::vector, $7)`,
+          [inserted.rows[0]!.id, chunk.chunkIndex, chunk.content, chunk.startOffset, chunk.endOffset,
+            `[${embeddings[index]!.join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+        );
+      }
+    }
+
+    const evaluated: EvaluatedQuery[] = [];
+    for (const query of MEMORY_RETRIEVAL_EVAL_QUERIES_V3) {
+      const { results } = await memoryRetrievalRepository.searchWithConflictClosure(
+        auth, query.text, await embedMemoryQuery(query.text), EVAL_RESULT_LIMIT,
+      );
+      const resultKeys = results.map((result) => requireFixtureKey(contentToKey, result.memory.content));
+      evaluated.push({
+        duplicateCount: 0,
+        hit: query.expectedKeys.length === 0
+          ? results.length === 0
+          : query.expectedKeys.some((key) => resultKeys.includes(key)),
+        query,
+        resultAttributions: results.map((result, index) => ({
+          branches: [
+            result.evidence.simpleLexicalRank === null ? null : "simple",
+            result.evidence.russianMorphologyRank === null ? null : "russian",
+            result.evidence.semanticSimilarity === null ? null : "semantic",
+          ].filter((branch): branch is string => branch !== null),
+          key: resultKeys[index]!,
+        })),
+        resultKeys,
+      });
+    }
+    const buried = evaluated.filter((entry) => entry.query.category !== "negative");
+    const negatives = evaluated.filter((entry) => entry.query.category === "negative");
+    const metrics = {
+      buriedThesisRecallAt5: buried.filter((entry) => entry.hit).length / buried.length,
+      chunkCounts,
+      negativeEmptyRate: negatives.filter((entry) => entry.hit).length / negatives.length,
+      topHitRate: buried.filter((entry) => entry.resultKeys[0] === entry.query.expectedKeys[0]).length / buried.length,
+    };
+    console.info("MEMORY_RETRIEVAL_EVAL_V3_LONG", JSON.stringify({ evaluated, metrics }));
+
+    expect(metrics.buriedThesisRecallAt5).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.buriedThesisRecallAt5Minimum);
+    expect(metrics.negativeEmptyRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.negativeEmptyRateMinimum);
+  }, 180_000);
 
   it("preserves strict-search R1 recall gates and prints the measured result", async () => {
     const evaluated: EvaluatedQuery[] = [];

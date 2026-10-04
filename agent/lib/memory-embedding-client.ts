@@ -93,6 +93,15 @@ async function embedMemoryTexts(
     });
   }
   if (!response.ok) {
+    // TEI answers 422 «`inputs` must have less than 512 tokens» to a chunk over its window; the
+    // indexing worker re-chunks that record narrowly instead of failing it.
+    const detail = response.status === 422 ? await response.text().catch(() => "") : "";
+    if (/tokens/u.test(detail)) {
+      throw new AppError(
+        "AGENT_MEMORY_EMBEDDING_INPUT_TOO_LONG",
+        "Фрагмент текста длиннее окна локального сервиса памяти",
+      );
+    }
     throw new AppError(
       "AGENT_MEMORY_EMBEDDING_PROVIDER_FAILED",
       "Локальный сервис памяти не смог обработать текст. Повторите попытку позже",

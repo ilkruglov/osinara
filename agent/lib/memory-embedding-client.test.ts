@@ -122,6 +122,19 @@ describe("memory embedding client", () => {
     ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_RESPONSE_INVALID/);
   });
 
+  it("names a chunk over the embedder window so the worker can re-chunk it narrowly", async () => {
+    process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
+    await expect(
+      embedMemoryPassages(
+        ["текст"],
+        vi.fn().mockResolvedValue(new Response(
+          JSON.stringify({ error: "Input validation error: `inputs` must have less than 512 tokens. Given: 697", error_type: "Validation" }),
+          { status: 422 },
+        )),
+      ),
+    ).rejects.toThrowError(/AGENT_MEMORY_EMBEDDING_INPUT_TOO_LONG/);
+  });
+
   it("rejects a provider serving another model in the same dimensions", async () => {
     process.env.MEMORY_EMBEDDING_BASE_URL = "http://embedding-worker:80";
     await expect(

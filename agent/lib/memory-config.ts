@@ -119,10 +119,18 @@ export const MEMORY_EMBEDDING_LEASE_MILLISECONDS = 120_000;
 export const MEMORY_EMBEDDING_JOB_BATCH_SIZE = 4;
 export const MEMORY_EMBEDDING_PROVIDER_BATCH_SIZE = 8;
 
-// Character bounds guarantee the embedder's 512-token limit even for adversarial punctuation-heavy text.
-export const MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS = 400;
-export const MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS = 280;
-export const MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS = 80;
+// A chunk is whole paragraphs or whole sentences up to this many characters: a thousand is
+// about 270 BERTA tokens of Russian prose, under the embedder's 512 with room for text that is
+// mostly punctuation; the worker retries a record the embedder still refuses with the narrow
+// cap, which fits even text that is emoji throughout (5 October 2026).
+export const MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS = 1_000;
+export const MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS = 400;
+export const MEMORY_EMBEDDING_CHUNK_MIN_BOUNDARY_CHARACTERS = 500;
+// A paragraph shorter than this (a heading, a date line) joins the next paragraph's chunk.
+export const MEMORY_EMBEDDING_CHUNK_MIN_PARAGRAPH_CHARACTERS = 120;
+export const MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS = 120;
+// A query is embedded as it is; only an absurdly long one is split, and narrowly.
+export const MEMORY_EMBEDDING_QUERY_CHUNK_MAX_CHARACTERS = 400;
 
 // A record shown to the model in the last N turns of the same session stays out of the automatic
 // context; the model can still search for it. Production showed the same three facts 50 times a day.
