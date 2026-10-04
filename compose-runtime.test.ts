@@ -82,8 +82,10 @@ describe("Docker Compose runtime wiring", () => {
   it("lets the agent run twenty chats and thirty Workflow steps at once unless the installation says otherwise", () => {
     const tunables: Record<string, string> = {
       AGENT_HEAP_MB: "512",
+      MEMORY_REVIEW_MATERIALIZE_LANE_LIMIT: "200",
       MEMORY_REVIEW_MAX_IN_FLIGHT: "2",
       TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "20",
+      TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS: "20000",
       TELEGRAM_PRIVATE_BURST_QUIET_MS: "2000",
       WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32",
       WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30",

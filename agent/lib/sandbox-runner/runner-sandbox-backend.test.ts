@@ -11,12 +11,18 @@
  * - Shell and binary file delegation with workspace mutation indexing.
  * - Authored stop and server shutdown independently stop reattachable compute.
  */
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Counts template reads: the backend must read a template file once per process.
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...original, readFile: vi.fn(original.readFile) };
+});
 
 import type { SandboxEngine } from "../../../services/sandbox-runner/sandbox-engine.js";
 import { createSandboxRunnerServer } from "../../../services/sandbox-runner/server.js";
@@ -288,5 +294,41 @@ describe("scopedWorkspaceRunner", () => {
         path: "/tools/personal/home/.agents/skills/example/SKILL.md",
       }],
     }));
+  });
+
+  it("shares one template read between sessions created at the same time", async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), "osinara-runner-backend-"));
+    roots.push(appRoot);
+    const engine = fakeEngine();
+    const backend = scopedWorkspaceRunner({ baseUrl: await runnerUrl(engine) });
+    const templateKey = "template-concurrent";
+    await backend.prewarm({
+      runtimeContext: { appRoot },
+      seedFiles: [{ content: "skill", path: "$HOME/.agents/skills/example/SKILL.md" }],
+      templateKey,
+    });
+    const path = join(appRoot, ".eve", "sandbox-cache", "osinara-scoped-runner", "templates", `${templateKey}.json`);
+    vi.mocked(readFile).mockClear();
+    const handles = await Promise.all(Array.from({ length: 20 }, (_, index) => backend.create({
+      runtimeContext: { appRoot },
+      sessionKey: `${BACKEND_SESSION_ID}-${index}`,
+      templateKey,
+      tags: { sessionId: SESSION_ID },
+    })));
+    // Twenty creates after a start used to read the file twenty times and keep twenty copies.
+    expect(vi.mocked(readFile).mock.calls.filter(([file]) => file === path)).toHaveLength(1);
+    await Promise.all(handles.map(async (handle, index) => {
+      await handle.useSessionFn({
+        mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
+        sandboxSessionId: `cccccccc-cccc-4ccc-8ccc-${String(index).padStart(12, "0")}`,
+      });
+      await handle.session.run({ command: "printf shared" });
+    }));
+    const seeds = vi.mocked(engine.createSession).mock.calls
+      .map(([request]) => request.seedFiles).filter((files) => files !== undefined);
+    expect(seeds).toHaveLength(20);
+    expect(new Set(seeds.map((files) => files?.[0]?.contentBase64))).toEqual(
+      new Set([Buffer.from("skill").toString("base64")]),
+    );
   });
 });

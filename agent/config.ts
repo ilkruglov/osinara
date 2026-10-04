@@ -11,6 +11,7 @@
  */
 import { z } from "zod";
 
+import { AppError } from "./lib/app-error.js";
 import { integerSetting } from "./lib/runtime-tuning.js";
 
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
@@ -98,6 +99,14 @@ export const TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS = integerSetting(
   "TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS",
   { absent: 20_000, min: 0, max: 300_000 },
 );
+// The ingress repository rejects a cap below the quiet window on every claim, which would stop
+// every chat after a start that passed; the pair is refused here instead.
+if (TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS < TELEGRAM_PRIVATE_BURST_QUIET_MS) {
+  throw new AppError(
+    "AGENT_RUNTIME_TUNING_INVALID",
+    "TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS не может быть меньше TELEGRAM_PRIVATE_BURST_QUIET_MS",
+  );
+}
 export const TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const TELEGRAM_MAX_ATTACHMENTS_PER_MESSAGE = 1;
 export const TELEGRAM_MAX_OUTBOUND_DOCUMENT_BYTES = 50 * 1024 * 1024;

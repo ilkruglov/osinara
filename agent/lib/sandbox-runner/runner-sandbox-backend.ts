@@ -84,7 +84,14 @@ function encodeTemplate(seedFiles: ReadonlyArray<SandboxSeedFile>): StoredTempla
 // is written with `wx`), so one process-wide copy serves every session.
 const loadedTemplates = new Map<string, Promise<StoredTemplate>>();
 
-async function readTemplate(path: string): Promise<StoredTemplate> {
+async function readTemplate(
+  path: string,
+  templateKey: string,
+  profile: BackendProfile,
+): Promise<StoredTemplate> {
+  if (!await exists(path)) {
+    throw new SandboxTemplateNotProvisionedError({ backendName: profile.name, templateKey });
+  }
   const template = JSON.parse(await readFile(path, "utf8")) as StoredTemplate;
   if (template.version !== TEMPLATE_SCHEMA_VERSION || !Array.isArray(template.files)) {
     throw new Error("AGENT_SANDBOX_RUNNER_TEMPLATE_INVALID: Template schema mismatch");
@@ -92,7 +99,7 @@ async function readTemplate(path: string): Promise<StoredTemplate> {
   return template;
 }
 
-async function loadTemplate(
+function loadTemplate(
   appRoot: string,
   templateKey: string,
   profile: BackendProfile,
@@ -100,12 +107,14 @@ async function loadTemplate(
   const path = templatePath(appRoot, profile.cacheDirectory, templateKey);
   const loaded = loadedTemplates.get(path);
   if (loaded) return loaded;
-  if (!await exists(path)) {
-    throw new SandboxTemplateNotProvisionedError({ backendName: profile.name, templateKey });
-  }
-  const loading = readTemplate(path);
+  // The whole read, existence check included, is registered before the first await: sessions
+  // created together after a start (Codex review, 4 October 2026: twenty at once gave twenty
+  // copies) must share the one in flight. A failed read frees the slot for the next attempt.
+  const loading = readTemplate(path, templateKey, profile);
   loadedTemplates.set(path, loading);
-  loading.catch(() => loadedTemplates.delete(path));
+  loading.catch(() => {
+    if (loadedTemplates.get(path) === loading) loadedTemplates.delete(path);
+  });
   return loading;
 }
 

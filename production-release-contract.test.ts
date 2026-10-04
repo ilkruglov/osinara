@@ -98,7 +98,8 @@ describe("production container contract", () => {
     expect(entrypoint).toMatch(/node \.runtime\/scripts\/startup-watchdog\.js &\n(?:  #[^\n]*\n)*  heap_mb=/u);
     // A bounded heap: without it V8 kept ~1 GB of garbage under the load run (3 October 2026).
     // AGENT_HEAP_MB raises it for a bigger installation; 512 stays the default.
-    expect(entrypoint).toContain('heap_mb="${AGENT_HEAP_MB:-512}"');
+    expect(entrypoint).toContain('heap_mb="${AGENT_HEAP_MB-512}"');
+    expect(entrypoint).toContain('[ "$heap_mb" -ge 128 ] && [ "$heap_mb" -le 16384 ]');
     expect(readProjectFile("package.json")).toContain("scripts/startup-watchdog.ts");
     expect(readProjectFile("package.json")).toContain("scripts/prewarm-sandboxes.ts");
   });

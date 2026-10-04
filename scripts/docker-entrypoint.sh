@@ -30,11 +30,18 @@ start_server() {
   node .runtime/scripts/startup-watchdog.js &
   # Bounded heap: by default V8 may grow to ~2.2 GB on this host and kept ~1 GB of garbage under
   # load; at 512 MB the load run held 200 families at the same speed (AGENT_PROCESS_MEMORY).
-  # AGENT_HEAP_MB raises it for an installation with many families on a bigger machine.
-  heap_mb="${AGENT_HEAP_MB:-512}"
+  # AGENT_HEAP_MB raises it for an installation with many families on a bigger machine. Zero
+  # would mean "no limit" to V8 (a 4.3 GB heap on this host), so the range is enforced, and an
+  # empty value is an error rather than the default, as for the other tuning settings.
+  heap_mb="${AGENT_HEAP_MB-512}"
   case "$heap_mb" in
-    ''|*[!0-9]*) printf '%s\n' "AGENT_RUNTIME_TUNING_INVALID: AGENT_HEAP_MB должно быть целым числом мегабайт" >&2; exit 1 ;;
+    ''|*[!0-9]*) heap_ok=no ;;
+    *) if [ "$heap_mb" -ge 128 ] && [ "$heap_mb" -le 16384 ]; then heap_ok=yes; else heap_ok=no; fi ;;
   esac
+  if [ "$heap_ok" != yes ]; then
+    printf '%s\n' "AGENT_RUNTIME_TUNING_INVALID: AGENT_HEAP_MB должно быть целым от 128 до 16384" >&2
+    exit 1
+  fi
   exec node --max-old-space-size="$heap_mb" .output/server/index.mjs
 }
 

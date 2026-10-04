@@ -57,3 +57,28 @@ describe("Telegram timeline limits", () => {
     expect(TELEGRAM_GROUP_JOURNAL_CONTEXT_MESSAGES).toBe(100);
   });
 });
+
+describe("private burst tuning", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("refuses a cap below the quiet window at load", async () => {
+    vi.resetModules();
+    vi.stubEnv("TELEGRAM_PRIVATE_BURST_QUIET_MS", "30000");
+    vi.stubEnv("TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS", "20000");
+
+    await expect(import("./config.js")).rejects.toThrow(expect.objectContaining({ code: "AGENT_RUNTIME_TUNING_INVALID" }));
+  });
+
+  it("takes a consistent pair from the environment", async () => {
+    vi.resetModules();
+    vi.stubEnv("TELEGRAM_PRIVATE_BURST_QUIET_MS", "700");
+    vi.stubEnv("TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS", "20000");
+
+    const config = await import("./config.js");
+    expect(config.TELEGRAM_PRIVATE_BURST_QUIET_MS).toBe(700);
+    expect(config.TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS).toBe(20_000);
+  });
+});

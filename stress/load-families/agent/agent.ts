@@ -16,9 +16,14 @@ const latencyMs = Number(process.env.LOAD_MODEL_LATENCY_MS ?? 5_000);
 // first command; a model that only answers never touches it).
 const toolCall = process.env.LOAD_TOOL_CALL ?? "";
 
-const model = mockModel(async ({ lastUserMessage, toolResults, tools }) => {
+const model = mockModel(async ({ lastUserMessage, messages, tools }) => {
   await new Promise((resolve) => setTimeout(resolve, latencyMs));
-  if (toolCall === "bash" && toolResults.length === 0 && tools.some((tool) => tool.name === "bash")) {
+  // `toolResults` spans the whole prompt, earlier turns included; the command of this turn is
+  // the tool message after the latest user message (Codex review, 4 October 2026).
+  let lastUser = -1;
+  messages.forEach((message, index) => { if (message.role === "user") lastUser = index; });
+  const ranThisTurn = messages.slice(lastUser + 1).some((message) => message.role === "tool");
+  if (toolCall === "bash" && !ranThisTurn && tools.some((tool) => tool.name === "bash")) {
     return { toolCalls: [{ name: "bash", input: { command: "echo load-probe" } }] };
   }
   const marker = [...(lastUserMessage ?? "").matchAll(/load-probe-[\d-]+/gu)].at(-1)?.[0];
