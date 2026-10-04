@@ -147,6 +147,7 @@ describe("production container contract", () => {
       "OSINARA_SANDBOX_RUNNER_IMAGE",
       "OSINARA_SANDBOX_EGRESS_PROXY_IMAGE",
       "OSINARA_EDGE_IMAGE",
+      "OSINARA_MEMORY_EMBEDDING_IMAGE",
     ];
     for (const image of requiredImages) {
       expect(compose).toContain(`image: \${${image}:?`);
@@ -219,14 +220,15 @@ describe("production container contract", () => {
     expect(compose).toContain(
       "pgvector/pgvector:pg17@sha256:d2ef61f42ef767baa5a1475393303cc235bcd92febd9d7014eddb48b41f3bad0",
     );
-    expect(compose).toContain(
-      "ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07",
+    // The embedder is our image since 1.8.21: the pinned TEI router is its base in the Dockerfile.
+    expect(readProjectFile("Dockerfile")).toContain(
+      "FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07 AS memory-embedding",
     );
+    expect(compose).toContain("    image: ${OSINARA_MEMORY_EMBEDDING_IMAGE:?");
     expect(compose).toContain("    cpus: 1.0\n");
     expect(compose).toContain('      OMP_NUM_THREADS: "1"\n');
     expect(compose).toContain('      - "1"\n      - --max-client-batch-size');
-    expect(compose).toContain("      - sergeyzh/BERTA\n");
-    expect(compose).toContain("      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7\n");
+    expect(compose).not.toContain("--model-id");
   });
 });
 
@@ -447,6 +449,7 @@ describe("server deployment contract", () => {
       "OSINARA_SANDBOX_RUNNER_IMAGE",
       "OSINARA_SANDBOX_EGRESS_PROXY_IMAGE",
       "OSINARA_EDGE_IMAGE",
+      "OSINARA_MEMORY_EMBEDDING_IMAGE",
     ]) {
       expect(example).not.toContain(`${variable}=`);
       expect(script).toContain(variable);

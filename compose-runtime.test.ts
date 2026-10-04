@@ -135,14 +135,24 @@ describe("Docker Compose runtime wiring", () => {
     expect(compose).toContain(`      WORKFLOW_QUEUE_NAMESPACE: ${expectedNamespace}\n`);
   });
 
-  it("pins the BERTA model and bounds its CPU and memory", () => {
-    const compose = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
+  // 4 October 2026: the embedder is our image with BERTA exported to ONNX (Dockerfile pins the
+  // model revision); the router takes the model and pooling from the image, not the command.
+  it("runs the embedder image with BERTA in ONNX and bounds its CPU and memory", () => {
+    const local = readFileSync(new URL("compose.yaml", projectRoot), "utf8");
+    const production = readFileSync(new URL("compose.production.yaml", projectRoot), "utf8");
+    const dockerfile = readFileSync(new URL("Dockerfile", projectRoot), "utf8");
 
-    expect(compose).toContain("      - sergeyzh/BERTA\n");
-    expect(compose).toContain("      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7\n");
-    expect(compose).toContain("    mem_limit: 1536m\n");
-    expect(compose).toContain("    cpus: 1.5\n");
-    expect(compose).toContain("      - --auto-truncate=false\n");
+    expect(dockerfile).toContain("hf download sergeyzh/BERTA --revision 914c8c8aed14042ed890fc2c662d5e9e66b2faa7");
+    expect(local).toContain("      target: memory-embedding\n");
+    expect(production).toContain("    image: ${OSINARA_MEMORY_EMBEDDING_IMAGE:?");
+    for (const [file, compose] of [["compose.yaml", local], ["compose.production.yaml", production]] as const) {
+      expect(compose, file).not.toContain("--model-id");
+      expect(compose, file).not.toContain("sergeyzh/BERTA");
+      expect(compose, file).toContain("      - --max-batch-requests\n      - \"8\"\n");
+      expect(compose, file).toContain("    mem_limit: 1536m\n");
+      expect(compose, file).toContain("      - --auto-truncate=false\n");
+    }
+    expect(local).toContain("    cpus: 1.5\n");
   });
 
   it("keeps antivirus and the separate document parser out of the runtime", () => {
