@@ -41,8 +41,10 @@ describe("slot conflicts", () => {
     const long = [{ id: "x", memory_ref: ref(99), content: "д".repeat(300) }, ...rows.slice(0, 25)];
     const { correction } = correctionOf(() => requireSlotUpdate(long, undefined));
     expect(correction).toContain(`${ref(99)}: "${"д".repeat(200)}…"`);
-    expect(correction).toContain("ещё 6 — прочитай через list_memories");
-    expect(correction).not.toContain(ref(24));
+    expect(correction).toContain(`ещё 6: ${ref(19)}, ${ref(20)}, ${ref(21)}, ${ref(22)}, ${ref(23)}, ${ref(24)}`);
+    // The cut record and the unquoted ones are named for a full read before any replace.
+    expect(correction).toContain(`Перед replace прочитай полный текст через list_memories: ${ref(99)}, ${ref(19)}`);
+    expect(correction).not.toContain(`${ref(24)}: `);
   });
   it("accepts a write that names the whole slot", () => {
     expect(requireSlotUpdate(slot, { action: "add", previousMemoryRefs: [ref(1), ref(0)] })).toEqual([]);

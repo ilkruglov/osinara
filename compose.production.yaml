@@ -26,12 +26,14 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   memory-embedding:
-    image: ${OSINARA_MEMORY_EMBEDDING_IMAGE:?OSINARA_MEMORY_EMBEDDING_IMAGE must be an exact digest reference}
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07
     cpus: 1.0
     mem_limit: 1536m
-    # The image carries BERTA exported to ONNX and names the model and pooling itself
-    # (Dockerfile, `memory-embedding`); the router runs its ONNX backend.
     command:
+      - --model-id
+      - sergeyzh/BERTA
+      - --revision
+      - 914c8c8aed14042ed890fc2c662d5e9e66b2faa7
       - --tokenization-workers
       - "1"
       - --max-client-batch-size
@@ -40,9 +42,9 @@ services:
       # must both fit, or the query gets 429 and the turn searches by words only.
       - --max-concurrent-requests
       - "32"
-      # The ONNX backend batches at most 8 requests.
+      # BERTA ships no ONNX weights, so TEI runs candle, which batches at most 4 requests.
       - --max-batch-requests
-      - "8"
+      - "4"
       - --max-batch-tokens
       - "4096"
       - --auto-truncate=false

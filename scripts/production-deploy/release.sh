@@ -161,7 +161,8 @@ validate_manifest() {
     (.composeSha256 | test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and
       (keys == ["app", "edge", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"] or
-       keys == ["app", "edge", "memoryEmbedding", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"]))
+       (keys == ["app", "edge", "memoryEmbedding", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"] and
+        (.memoryEmbedding | type == "string"))))
   ' "$manifest" >/dev/null || fail "DEPLOY_MANIFEST_INVALID" "Deployment manifest schema is invalid"
 
   MANIFEST_COMMIT="$(jq -er '.commitSha' "$manifest")"
@@ -173,14 +174,16 @@ validate_manifest() {
   RUNTIME_IMAGE="$(jq -er '.images.sandboxRuntime' "$manifest")"
   # The embedder image (BERTA exported to ONNX) is named by manifests from 1.8.21; a manifest
   # without it (1.8.20 and earlier) still installs, and compose then refuses the missing image.
-  MEMORY_EMBEDDING_IMAGE="$(jq -r '.images.memoryEmbedding // ""' "$manifest")"
+  MEMORY_EMBEDDING_IMAGE=""
+  if [[ "$(jq -r '.images | has("memoryEmbedding")' "$manifest")" == "true" ]]; then
+    MEMORY_EMBEDDING_IMAGE="$(jq -er '.images.memoryEmbedding' "$manifest")"
+    require_image_ref "$MEMORY_EMBEDDING_IMAGE" "$MEMORY_EMBEDDING_IMAGE_PREFIX"
+  fi
   require_image_ref "$APP_IMAGE" "$APP_IMAGE_PREFIX"
   require_image_ref "$EDGE_IMAGE" "$EDGE_IMAGE_PREFIX"
   require_image_ref "$EGRESS_IMAGE" "$EGRESS_IMAGE_PREFIX"
   require_image_ref "$RUNNER_IMAGE" "$RUNNER_IMAGE_PREFIX"
   require_image_ref "$RUNTIME_IMAGE" "$RUNTIME_IMAGE_PREFIX"
-  [[ -z "$MEMORY_EMBEDDING_IMAGE" ]] ||
-    require_image_ref "$MEMORY_EMBEDDING_IMAGE" "$MEMORY_EMBEDDING_IMAGE_PREFIX"
 
   if {
     [[ "$STORED_VERSION" != "$version" || "$STORED_COMMIT" != "$MANIFEST_COMMIT" ||
@@ -318,11 +321,20 @@ validate_resolved_compose() {
   local expected_images_file="${WORK_DIR}/expected-images.txt"
   local config_json="${WORK_DIR}/resolved-compose.json"
   compose_candidate config --images | LC_ALL=C sort > "$images_file"
-  {
-    printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
-      "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$POSTGRES_IMAGE" "$TEI_IMAGE"
-  } | LC_ALL=C sort > "$expected_images_file"
-  cmp --silent "$images_file" "$expected_images_file" ||
+  # The embedder runs from the public TEI image until a release's compose switches to the
+  # embedder image its manifest names (BERTA exported to ONNX); this controller approves either,
+  # so the switch can land one release after the manifest field did.
+  local embedder_images=("$TEI_IMAGE")
+  [[ -z "$MEMORY_EMBEDDING_IMAGE" ]] || embedder_images+=("$MEMORY_EMBEDDING_IMAGE")
+  local embedder_image approved=0
+  for embedder_image in "${embedder_images[@]}"; do
+    {
+      printf '%s\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" \
+        "$RUNTIME_IMAGE" "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$POSTGRES_IMAGE" "$embedder_image"
+    } | LC_ALL=C sort > "$expected_images_file"
+    if cmp --silent "$images_file" "$expected_images_file"; then approved=1; break; fi
+  done
+  [[ "$approved" == 1 ]] ||
     fail "DEPLOY_COMPOSE_IMAGE_SET_INVALID" "Resolved Compose image multiset is not approved"
 
   compose_candidate config --format json > "$config_json"

@@ -144,12 +144,20 @@ CMD ["node", ".runtime/services/sandbox-egress-proxy/main.js"]
 # BERTA ships safetensors only, so TEI ran it through candle. The same weights exported to ONNX
 # fp32 answer a query a quarter faster on one core (80 → 61 ms on the load stand, 4 October 2026,
 # vectors equal to 1e-4) and the embedder stops reaching the Hugging Face hub at start. Model
-# revision, exporter and runtime are pinned so the exported bytes are reproducible.
+# revision and the whole export environment are pinned so a rebuild exports the same bytes.
 FROM python:3.12-slim@sha256:dddfd7e07f9d15aeeca61529320492139d21cac7f0070c00609243e51e4e0016 AS berta-onnx-export
 ENV PIP_NO_CACHE_DIR=1 HF_HOME=/hf HF_HUB_DISABLE_TELEMETRY=1
-RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+# Every package of the export environment is pinned, transitive ones included, so a rebuild
+# after a cache reset resolves the same set.
+RUN pip install --no-deps --extra-index-url https://download.pytorch.org/whl/cpu \
       torch==2.14.1+cpu onnx==1.23.1 onnxruntime==1.30.0 optimum==2.1.0 optimum-onnx==0.1.0 \
-      transformers==4.57.6
+      transformers==4.57.6 huggingface_hub==0.36.2 tokenizers==0.22.2 safetensors==0.8.0 \
+      numpy==2.5.3 certifi==2026.7.22 charset-normalizer==3.5.2 filelock==4.0.10 \
+      flatbuffers==25.12.19 fsspec==2026.9.0 hf-xet==1.6.0 idna==3.20 Jinja2==3.1.6 \
+      MarkupSafe==3.0.4 ml_dtypes==0.6.0 mpmath==1.3.0 networkx==3.7 packaging==26.3 \
+      protobuf==7.36.2 PyYAML==6.0.3 regex==2026.9.29 requests==2.34.2 setuptools==84.0.0 \
+      sympy==1.14.0 tqdm==4.70.1 typing_extensions==4.16.0 urllib3==2.8.0 \
+    && pip check
 RUN hf download sergeyzh/BERTA --revision 914c8c8aed14042ed890fc2c662d5e9e66b2faa7 \
       --local-dir /models/berta-source \
     && HF_HUB_OFFLINE=1 optimum-cli export onnx --model /models/berta-source \
@@ -167,7 +175,10 @@ LABEL org.opencontainers.image.source="${OCI_SOURCE}" \
       org.opencontainers.image.revision="${OCI_REVISION}"
 COPY --from=berta-onnx-export /models/berta-onnx /models/berta-onnx
 # The router takes the model and pooling from these; `onnx/model.onnx` selects its ONNX backend.
-ENV MODEL_ID=/models/berta-onnx POOLING=mean HF_HUB_OFFLINE=1
+# The agent compares the `model` of every embedding answer with MEMORY_EMBEDDING_MODEL
+# (agent/lib/memory-config.ts) and treats another name as a foreign embedder, so the served
+# name stays the hub id (the load stand lost memory on every turn without it, 4 October 2026).
+ENV MODEL_ID=/models/berta-onnx SERVED_MODEL_NAME=sergeyzh/BERTA POOLING=mean HF_HUB_OFFLINE=1
 
 FROM first-party-node AS runtime
 RUN apt-get update \

@@ -66,14 +66,23 @@ const SLOT_RECORD_PREVIEW_CHARACTERS = 200;
 const SLOT_RECORD_PREVIEW_COUNT = 20;
 
 function formatSlotRecords(rows: readonly SlotClaimRow[]): string {
+  const cut: string[] = [];
   const shown = rows.slice(0, SLOT_RECORD_PREVIEW_COUNT).map((row) => {
-    const content = row.content.length > SLOT_RECORD_PREVIEW_CHARACTERS
-      ? `${row.content.slice(0, SLOT_RECORD_PREVIEW_CHARACTERS)}…`
-      : row.content;
-    return `${row.memory_ref}: ${JSON.stringify(content)}`;
+    if (row.content.length <= SLOT_RECORD_PREVIEW_CHARACTERS) {
+      return `${row.memory_ref}: ${JSON.stringify(row.content)}`;
+    }
+    cut.push(row.memory_ref);
+    return `${row.memory_ref}: ${JSON.stringify(`${row.content.slice(0, SLOT_RECORD_PREVIEW_CHARACTERS)}…`)}`;
   });
-  const rest = rows.length - shown.length;
-  return shown.join("; ") + (rest > 0 ? `; ещё ${rest} — прочитай через list_memories` : "");
+  const rest = rows.slice(shown.length).map((row) => row.memory_ref);
+  // A replace built from a cut record would drop what the cut hid: those records are read in
+  // full first (Codex review, 4 October 2026).
+  const unread = [...cut, ...rest];
+  return shown.join("; ") +
+    (rest.length > 0 ? `; ещё ${rest.length}: ${rest.join(", ")}` : "") +
+    (unread.length > 0
+      ? `. Перед replace прочитай полный текст через list_memories: ${unread.join(", ")}`
+      : "");
 }
 
 export function requireSlotUpdate(

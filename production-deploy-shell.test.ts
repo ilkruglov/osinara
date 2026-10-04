@@ -123,6 +123,8 @@ describe("production deploy shell policies", () => {
 
     const exact = validate(images);
     const withEmbedder = validate({ ...images, memoryEmbedding: digest("memory-embedding") }, digest("memory-embedding"));
+    const nullEmbedder = validate({ ...images, memoryEmbedding: null as unknown as string });
+    const emptyEmbedder = validate({ ...images, memoryEmbedding: "" });
     const embedderNotApproved = validate({ ...images, memoryEmbedding: digest("memory-embedding") });
     const foreignEmbedder = validate({ ...images, memoryEmbedding: digest("app") }, digest("app"));
     const withGateway = validate({ ...images, cliProxy: digest("cli-proxy") });
@@ -134,12 +136,54 @@ describe("production deploy shell policies", () => {
     expect(withEmbedder.stdout).toContain(`embedding=${digest("memory-embedding")}\n`);
     expect(embedderNotApproved.status).toBe(1);
     expect(embedderNotApproved.stderr).toContain("DEPLOY_APPROVED_MANIFEST_MISMATCH");
+    // A present key is a digest reference or nothing: null and "" are not "absent".
+    expect(nullEmbedder.status).toBe(1);
+    expect(nullEmbedder.stderr).toContain("DEPLOY_MANIFEST_INVALID");
+    expect(emptyEmbedder.status).toBe(1);
+    expect(emptyEmbedder.stderr).toContain("DEPLOY_IMAGE_REFERENCE_INVALID");
     expect(foreignEmbedder.status).toBe(1);
     expect(foreignEmbedder.stderr).toContain("DEPLOY_IMAGE_REFERENCE_INVALID");
     expect(withGateway.status).toBe(1);
     expect(withGateway.stderr).toContain("DEPLOY_MANIFEST_INVALID");
     expect(unknown.status).toBe(1);
     expect(unknown.stderr).toContain("DEPLOY_MANIFEST_INVALID");
+  });
+
+  // The embedder switches from the public TEI image to the release's own image one release
+  // after the manifest started naming it; the installed controller must approve both composes.
+  it("approves the embedder from the public TEI image or from the image the manifest names", () => {
+    const digest = (name: string) => `ghcr.io/ilkruglov/osinara-${name}@sha256:${"a".repeat(64)}`;
+    const resolve = (embedder: string, manifestEmbedder: string) => runShell(`
+      source scripts/production-deploy/common.sh
+      source scripts/production-deploy/release.sh
+      log_event() { printf '%s\\n' "$1" >&2; }
+      WORK_DIR="$(mktemp -d)"
+      APP_IMAGE='${digest("app")}' EDGE_IMAGE='${digest("edge")}' EGRESS_IMAGE='${digest("sandbox-egress-proxy")}'
+      RUNNER_IMAGE='${digest("sandbox-runner")}' RUNTIME_IMAGE='${digest("sandbox-runtime")}'
+      MEMORY_EMBEDDING_IMAGE='${manifestEmbedder}'
+      compose_candidate() {
+        if [[ "$2" == "--images" ]]; then
+          printf '%s\\n' "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$APP_IMAGE" "$RUNTIME_IMAGE" \\
+            "$RUNNER_IMAGE" "$EGRESS_IMAGE" "$EDGE_IMAGE" "$POSTGRES_IMAGE" '${embedder}'
+        else
+          printf '%s' '{"services":{"agent":{"depends_on":{"migrate":{"condition":"service_completed_successfully"}}},"edge":{},"memory-embedding":{},"memory-embedding-worker":{},"migrate":{},"postgres":{},"sandbox-egress-proxy":{},"sandbox-runner":{},"sandbox-runtime-image":{},"telegram-ingress-worker":{}}}'
+        fi
+      }
+      validate_resolved_compose_security() { return 0; }
+      validate_resolved_compose
+      rm -rf "$WORK_DIR"
+    `);
+
+    const tei = "ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07";
+    expect(resolve(tei, "").status, "TEI without a manifest image").toBe(0);
+    expect(resolve(tei, digest("memory-embedding")).status, "TEI while the manifest names the image").toBe(0);
+    expect(resolve(digest("memory-embedding"), digest("memory-embedding")).status, "the named image").toBe(0);
+    const unnamed = resolve(digest("memory-embedding"), "");
+    expect(unnamed.status).toBe(1);
+    expect(unnamed.stderr).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
+    const other = resolve(digest("app"), digest("memory-embedding"));
+    expect(other.status).toBe(1);
+    expect(other.stderr).toContain("DEPLOY_COMPOSE_IMAGE_SET_INVALID");
   });
 
   it("suppresses PostgreSQL command tags for no-row state transitions", () => {
