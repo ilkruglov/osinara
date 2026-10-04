@@ -141,6 +141,34 @@ COPY --from=build /app/.runtime/services/sandbox-egress-proxy/main.js ./.runtime
 USER node
 CMD ["node", ".runtime/services/sandbox-egress-proxy/main.js"]
 
+# BERTA ships safetensors only, so TEI ran it through candle. The same weights exported to ONNX
+# fp32 answer a query a quarter faster on one core (80 → 61 ms on the load stand, 4 October 2026,
+# vectors equal to 1e-4) and the embedder stops reaching the Hugging Face hub at start. Model
+# revision, exporter and runtime are pinned so the exported bytes are reproducible.
+FROM python:3.12-slim@sha256:dddfd7e07f9d15aeeca61529320492139d21cac7f0070c00609243e51e4e0016 AS berta-onnx-export
+ENV PIP_NO_CACHE_DIR=1 HF_HOME=/hf HF_HUB_DISABLE_TELEMETRY=1
+RUN pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+      torch==2.14.1+cpu onnx==1.23.1 onnxruntime==1.30.0 optimum==2.1.0 optimum-onnx==0.1.0 \
+      transformers==4.57.6
+RUN hf download sergeyzh/BERTA --revision 914c8c8aed14042ed890fc2c662d5e9e66b2faa7 \
+      --local-dir /models/berta-source \
+    && HF_HUB_OFFLINE=1 optimum-cli export onnx --model /models/berta-source \
+      --task feature-extraction /models/berta-onnx \
+    && mkdir /models/berta-onnx/onnx \
+    && mv /models/berta-onnx/model.onnx /models/berta-onnx/onnx/model.onnx \
+    && rm -rf /models/berta-source /hf
+
+FROM ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07 AS memory-embedding
+ARG OCI_SOURCE
+ARG OCI_VERSION
+ARG OCI_REVISION
+LABEL org.opencontainers.image.source="${OCI_SOURCE}" \
+      org.opencontainers.image.version="${OCI_VERSION}" \
+      org.opencontainers.image.revision="${OCI_REVISION}"
+COPY --from=berta-onnx-export /models/berta-onnx /models/berta-onnx
+# The router takes the model and pooling from these; `onnx/model.onnx` selects its ONNX backend.
+ENV MODEL_ID=/models/berta-onnx POOLING=mean HF_HUB_OFFLINE=1
+
 FROM first-party-node AS runtime
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes ca-certificates \

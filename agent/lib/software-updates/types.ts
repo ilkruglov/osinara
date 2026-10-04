@@ -16,6 +16,7 @@ export interface SoftwareUpdateManifest {
     sandboxEgressProxy: string;
     sandboxRunner: string;
     sandboxRuntime: string;
+    memoryEmbedding?: string;
   };
   schemaVersion: 1;
   version: string;

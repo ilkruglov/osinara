@@ -86,7 +86,9 @@ describe("production deploy shell policies", () => {
   });
 
   // The Codex subscription gateway image was retired in 1.8.11 (1.8.10 accepted it either way).
-  it("accepts exactly the five released images", () => {
+  // The embedder image (BERTA exported to ONNX) arrives after 1.8.20 the same way: this
+  // controller accepts a manifest with or without it and passes it on when present.
+  it("accepts the five released images, with or without the embedder image", () => {
     const directory = mkdtempSync(join(tmpdir(), "osinara-manifest-"));
     temporaryDirectories.push(directory);
     const digest = (name: string) => `ghcr.io/ilkruglov/osinara-${name}@sha256:${"a".repeat(64)}`;
@@ -97,7 +99,7 @@ describe("production deploy shell policies", () => {
       sandboxRunner: digest("sandbox-runner"),
       sandboxRuntime: digest("sandbox-runtime"),
     };
-    const validate = (manifestImages: Record<string, string>) => {
+    const validate = (manifestImages: Record<string, string>, storedMemoryEmbedding = "") => {
       const path = join(directory, `manifest-${Object.keys(manifestImages).join("-")}.json`);
       writeFileSync(path, JSON.stringify({
         commitSha: "b".repeat(40),
@@ -113,16 +115,27 @@ describe("production deploy shell policies", () => {
         STORED_VERSION=1.8.10 STORED_COMMIT=${"b".repeat(40)} STORED_COMPOSE_SHA=${"c".repeat(64)}
         STORED_APP='${images.app}' STORED_EDGE='${images.edge}'
         STORED_EGRESS='${images.sandboxEgressProxy}' STORED_RUNNER='${images.sandboxRunner}'
-        STORED_RUNTIME='${images.sandboxRuntime}'
+        STORED_RUNTIME='${images.sandboxRuntime}' STORED_MEMORY_EMBEDDING='${storedMemoryEmbedding}'
         validate_manifest '${path}' 1.8.10
+        printf 'embedding=%s\\n' "$MEMORY_EMBEDDING_IMAGE"
       `);
     };
 
     const exact = validate(images);
+    const withEmbedder = validate({ ...images, memoryEmbedding: digest("memory-embedding") }, digest("memory-embedding"));
+    const embedderNotApproved = validate({ ...images, memoryEmbedding: digest("memory-embedding") });
+    const foreignEmbedder = validate({ ...images, memoryEmbedding: digest("app") }, digest("app"));
     const withGateway = validate({ ...images, cliProxy: digest("cli-proxy") });
     const unknown = validate({ ...images, extra: digest("app") });
 
     expect(exact.status, exact.stderr).toBe(0);
+    expect(exact.stdout).toContain("embedding=\n");
+    expect(withEmbedder.status, withEmbedder.stderr).toBe(0);
+    expect(withEmbedder.stdout).toContain(`embedding=${digest("memory-embedding")}\n`);
+    expect(embedderNotApproved.status).toBe(1);
+    expect(embedderNotApproved.stderr).toContain("DEPLOY_APPROVED_MANIFEST_MISMATCH");
+    expect(foreignEmbedder.status).toBe(1);
+    expect(foreignEmbedder.stderr).toContain("DEPLOY_IMAGE_REFERENCE_INVALID");
     expect(withGateway.status).toBe(1);
     expect(withGateway.stderr).toContain("DEPLOY_MANIFEST_INVALID");
     expect(unknown.status).toBe(1);

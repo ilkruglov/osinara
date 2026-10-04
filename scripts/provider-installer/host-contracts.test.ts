@@ -40,6 +40,19 @@ describe("production host contracts", () => {
     expect(environment).not.toContain("OSINARA_CLI_PROXY_IMAGE");
   });
 
+  it("passes the embedder image on once a release names it", () => {
+    const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
+    parsed.images.memoryEmbedding = digest("osinara-memory-embedding", "9");
+
+    const environment = releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3").toString("utf8");
+    expect(environment).toContain(`OSINARA_MEMORY_EMBEDDING_IMAGE=${digest("osinara-memory-embedding", "9")}\n`);
+    expect(releaseEnvironmentFromManifest(manifest(), "0.15.3").toString("utf8")).not.toContain("OSINARA_MEMORY_EMBEDDING_IMAGE");
+
+    parsed.images.memoryEmbedding = digest("osinara-app", "9");
+    expect(() => releaseEnvironmentFromManifest(Buffer.from(JSON.stringify(parsed)), "0.15.3"))
+      .toThrow("OSINARA_INSTALL_MANIFEST_INVALID");
+  });
+
   it("rejects a manifest that still names the retired gateway image", () => {
     const parsed = JSON.parse(manifest().toString("utf8")) as { images: Record<string, string> };
     parsed.images.cliProxy = digest("osinara-cli-proxy", "b");

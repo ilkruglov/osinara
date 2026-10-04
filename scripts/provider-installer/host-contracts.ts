@@ -2,7 +2,8 @@
  * Strict production host process and deployment-manifest contracts.
  *
  * Exports:
- * - `releaseEnvironmentFromManifest`: validates schema v1 and emits five fresh-install image refs.
+ * - `releaseEnvironmentFromManifest`: validates schema v1 and emits the fresh-install image refs
+ *   (five, plus the embedder image once a release names it).
  * - `parseBootstrapProcessOutput`: validates one machine-readable bootstrap process result.
  * - `composeArgs`: `docker compose` arguments for one compose file and its env files.
  */
@@ -27,6 +28,11 @@ const manifestSchema = z.object({
     sandboxRuntime: z.string().regex(
       new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`, "u"),
     ),
+    // The embedder image (BERTA exported to ONNX) joins the manifest with the release after
+    // 1.8.20; until then the public embedder image serves, so the reference is optional.
+    memoryEmbedding: z.string().regex(
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`, "u"),
+    ).optional(),
   }).strict(),
   schemaVersion: z.literal(1),
   version: z.string().regex(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u),
@@ -54,6 +60,9 @@ export function releaseEnvironmentFromManifest(
       `OSINARA_SANDBOX_EGRESS_PROXY_IMAGE=${manifest.images.sandboxEgressProxy}`,
       `OSINARA_SANDBOX_RUNNER_IMAGE=${manifest.images.sandboxRunner}`,
       `SANDBOX_RUNTIME_IMAGE=${manifest.images.sandboxRuntime}`,
+      ...(manifest.images.memoryEmbedding === undefined
+        ? []
+        : [`OSINARA_MEMORY_EMBEDDING_IMAGE=${manifest.images.memoryEmbedding}`]),
       "",
     ].join("\n"), "utf8");
   } catch (error) {

@@ -48,7 +48,7 @@ function service(compose: string, name: string, nextName: string): string {
 }
 
 describe("production container contract", () => {
-  it("publishes five container-only first-party targets with OCI provenance", () => {
+  it("publishes six container-only first-party targets with OCI provenance", () => {
     const dockerfile = readProjectFile("Dockerfile");
     const entrypoint = readProjectFile("scripts/docker-entrypoint.sh");
 
@@ -58,6 +58,7 @@ describe("production container contract", () => {
       "sandbox-runner",
       "sandbox-egress-proxy",
       "edge",
+      "memory-embedding",
     ]) {
       expect(dockerfile).toContain(` AS ${target}`);
     }
@@ -262,10 +263,11 @@ describe("release workflow contract", () => {
       "osinara-sandbox-runner",
       "osinara-sandbox-egress-proxy",
       "osinara-edge",
+      "osinara-memory-embedding",
     ]) {
       expect(workflow).toContain(`ghcr.io/ilkruglov/${image}`);
     }
-    expect(workflow.match(/actions\/attest@/g)).toHaveLength(9);
+    expect(workflow.match(/actions\/attest@/g)).toHaveLength(10);
     expect(workflow).toContain("packages: write");
     expect(workflow).toContain("attestations: write");
     expect(workflow).toContain("id-token: write");

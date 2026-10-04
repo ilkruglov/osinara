@@ -81,6 +81,19 @@ describe("GitHub software release client", () => {
   });
 
   // The Codex subscription gateway image was retired in 1.8.11; a manifest naming it is foreign.
+  it("accepts the embedder image once a release names it", async () => {
+    const images = deploymentManifest().images;
+    const memoryEmbedding = `ghcr.io/ilkruglov/osinara-memory-embedding@sha256:${DIGEST}`;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(githubRelease()))
+      .mockResolvedValueOnce(jsonResponse(deploymentManifest({ images: { ...images, memoryEmbedding } })));
+    const client = createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000 });
+
+    await expect(client.latestNewerThan("0.1.0")).resolves.toMatchObject({
+      manifest: { images: { memoryEmbedding } },
+    });
+  });
+
   it("rejects a manifest that still names the retired gateway image", async () => {
     const manifest = deploymentManifest();
     const fetchMock = vi.fn()

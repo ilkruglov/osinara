@@ -45,6 +45,7 @@ jobs:
       EGRESS_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-egress-proxy
       RUNNER_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-runner
       RUNTIME_IMAGE: ghcr.io/ilkruglov/osinara-sandbox-runtime
+      MEMORY_EMBEDDING_IMAGE: ghcr.io/ilkruglov/osinara-memory-embedding
     steps:
       - name: Check out canonical source and tags
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -188,6 +189,26 @@ jobs:
             ${{ env.EDGE_IMAGE }}:sha-${{ github.sha }}
           target: edge
 
+      # BERTA exported to ONNX on top of the TEI router. Published and attested from 1.8.20 on;
+      # the manifest names it from the next release, once every installed controller accepts
+      # the field (the 1.8.19 controller rejects a manifest with an unknown image).
+      - name: Build and push memory embedding image
+        id: memory-embedding
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          build-args: |
+            OCI_SOURCE=https://github.com/${{ github.repository }}
+            OCI_VERSION=${{ steps.release.outputs.version }}
+            OCI_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=memory-embedding
+          cache-to: type=gha,mode=max,scope=memory-embedding
+          context: .
+          push: true
+          tags: |
+            ${{ env.MEMORY_EMBEDDING_IMAGE }}:v${{ steps.release.outputs.version }}
+            ${{ env.MEMORY_EMBEDDING_IMAGE }}:sha-${{ github.sha }}
+          target: memory-embedding
+
       - name: Attest app image
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
@@ -217,6 +238,12 @@ jobs:
         with:
           subject-name: ${{ env.EDGE_IMAGE }}
           subject-digest: ${{ steps.edge.outputs.digest }}
+          push-to-registry: true
+      - name: Attest memory embedding image
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
+        with:
+          subject-name: ${{ env.MEMORY_EMBEDDING_IMAGE }}
+          subject-digest: ${{ steps.memory-embedding.outputs.digest }}
           push-to-registry: true
 
       - name: Generate strict deployment manifest
@@ -321,7 +348,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for image in "$APP_IMAGE" "$EDGE_IMAGE" "$EGRESS_IMAGE" "$RUNNER_IMAGE" "$RUNTIME_IMAGE"; do
+          for image in "$APP_IMAGE" "$EDGE_IMAGE" "$EGRESS_IMAGE" "$RUNNER_IMAGE" "$RUNTIME_IMAGE" "$MEMORY_EMBEDDING_IMAGE"; do
             package="${image#ghcr.io/}"
             if ! token_json="$(curl --fail --silent --show-error --max-time 30 --get \
               --data-urlencode 'service=ghcr.io' --data-urlencode "scope=repository:${package}:pull" https://ghcr.io/token)"; then

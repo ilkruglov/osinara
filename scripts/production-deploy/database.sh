@@ -116,7 +116,8 @@ WITH global_owner AS (
             proposal.manifest->'images'->>'edge',
             proposal.manifest->'images'->>'sandboxEgressProxy',
             proposal.manifest->'images'->>'sandboxRunner',
-            proposal.manifest->'images'->>'sandboxRuntime'
+            proposal.manifest->'images'->>'sandboxRuntime',
+            COALESCE(proposal.manifest->'images'->>'memoryEmbedding', '')
 )
 SELECT * FROM claimed;
 SQL
@@ -130,7 +131,7 @@ SQL
   CLAIM_FOUND=1
   IFS=$'\t' read -r PROPOSAL_ID REQUESTED_VERSION OWNER_CHAT_ID \
     STORED_VERSION STORED_COMMIT STORED_COMPOSE_SHA STORED_APP STORED_EDGE \
-    STORED_EGRESS STORED_RUNNER STORED_RUNTIME <<<"$claimed"
+    STORED_EGRESS STORED_RUNNER STORED_RUNTIME STORED_MEMORY_EMBEDDING <<<"$claimed"
   if [[ ! "$PROPOSAL_ID" =~ ^[0-9a-f-]{36}$ || ! "$OWNER_CHAT_ID" =~ ^-?[0-9]+$ ]]; then
     fail "DEPLOY_PROPOSAL_INVALID" "Claimed proposal has invalid identity fields"
   fi

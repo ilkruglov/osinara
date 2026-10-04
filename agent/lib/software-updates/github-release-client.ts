@@ -52,6 +52,10 @@ const manifestSchema = z.object({
     sandboxRuntime: z.string().regex(
       new RegExp(`^ghcr\\.io/ilkruglov/osinara-sandbox-runtime@sha256:${IMAGE_DIGEST}$`),
     ),
+    // Named by releases after 1.8.20 (BERTA exported to ONNX); a release without it still installs.
+    memoryEmbedding: z.string().regex(
+      new RegExp(`^ghcr\\.io/ilkruglov/osinara-memory-embedding@sha256:${IMAGE_DIGEST}$`),
+    ).optional(),
   }).strict(),
   schemaVersion: z.literal(1),
   version: z.string(),

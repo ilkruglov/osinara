@@ -10,6 +10,7 @@ readonly EDGE_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-edge@sha256:"
 readonly EGRESS_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:"
 readonly RUNNER_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-runner@sha256:"
 readonly RUNTIME_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-runtime@sha256:"
+readonly MEMORY_EMBEDDING_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-memory-embedding@sha256:"
 readonly POSTGRES_IMAGE="pgvector/pgvector:pg17@sha256:d2ef61f42ef767baa5a1475393303cc235bcd92febd9d7014eddb48b41f3bad0"
 readonly TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256:ad950d30878eceb72aaf32024d26fa2b1d04a75304fa0b4776b49aa1941fea07"
 readonly RETAINED_LOCAL_RELEASE_IMAGE_COUNT=2
@@ -159,7 +160,8 @@ validate_manifest() {
     (.commitSha | test("^[0-9a-f]{40}$")) and
     (.composeSha256 | test("^[0-9a-f]{64}$")) and
     (.images | type == "object" and
-      keys == ["app", "edge", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"])
+      (keys == ["app", "edge", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"] or
+       keys == ["app", "edge", "memoryEmbedding", "sandboxEgressProxy", "sandboxRunner", "sandboxRuntime"]))
   ' "$manifest" >/dev/null || fail "DEPLOY_MANIFEST_INVALID" "Deployment manifest schema is invalid"
 
   MANIFEST_COMMIT="$(jq -er '.commitSha' "$manifest")"
@@ -169,18 +171,24 @@ validate_manifest() {
   EGRESS_IMAGE="$(jq -er '.images.sandboxEgressProxy' "$manifest")"
   RUNNER_IMAGE="$(jq -er '.images.sandboxRunner' "$manifest")"
   RUNTIME_IMAGE="$(jq -er '.images.sandboxRuntime' "$manifest")"
+  # The embedder image (BERTA exported to ONNX) arrives with the release after 1.8.20: this
+  # controller accepts a manifest with or without it, so the next one can start naming it.
+  MEMORY_EMBEDDING_IMAGE="$(jq -r '.images.memoryEmbedding // ""' "$manifest")"
   require_image_ref "$APP_IMAGE" "$APP_IMAGE_PREFIX"
   require_image_ref "$EDGE_IMAGE" "$EDGE_IMAGE_PREFIX"
   require_image_ref "$EGRESS_IMAGE" "$EGRESS_IMAGE_PREFIX"
   require_image_ref "$RUNNER_IMAGE" "$RUNNER_IMAGE_PREFIX"
   require_image_ref "$RUNTIME_IMAGE" "$RUNTIME_IMAGE_PREFIX"
+  [[ -z "$MEMORY_EMBEDDING_IMAGE" ]] ||
+    require_image_ref "$MEMORY_EMBEDDING_IMAGE" "$MEMORY_EMBEDDING_IMAGE_PREFIX"
 
   if {
     [[ "$STORED_VERSION" != "$version" || "$STORED_COMMIT" != "$MANIFEST_COMMIT" ||
        "$STORED_COMPOSE_SHA" != "$MANIFEST_COMPOSE_SHA" || "$STORED_APP" != "$APP_IMAGE" ||
        "$STORED_EDGE" != "$EDGE_IMAGE" ||
        "$STORED_EGRESS" != "$EGRESS_IMAGE" ||
-       "$STORED_RUNNER" != "$RUNNER_IMAGE" || "$STORED_RUNTIME" != "$RUNTIME_IMAGE" ]];
+       "$STORED_RUNNER" != "$RUNNER_IMAGE" || "$STORED_RUNTIME" != "$RUNTIME_IMAGE" ||
+       "${STORED_MEMORY_EMBEDDING:-}" != "$MEMORY_EMBEDDING_IMAGE" ]];
   }; then
     fail "DEPLOY_APPROVED_MANIFEST_MISMATCH" "Public manifest differs from approved bytes"
   fi
@@ -258,6 +266,8 @@ prepare_candidate_release() {
     printf 'OSINARA_SANDBOX_RUNNER_IMAGE=%s\n' "$RUNNER_IMAGE"
     printf 'OSINARA_SANDBOX_EGRESS_PROXY_IMAGE=%s\n' "$EGRESS_IMAGE"
     printf 'OSINARA_EDGE_IMAGE=%s\n' "$EDGE_IMAGE"
+    [[ -z "$MEMORY_EMBEDDING_IMAGE" ]] ||
+      printf 'OSINARA_MEMORY_EMBEDDING_IMAGE=%s\n' "$MEMORY_EMBEDDING_IMAGE"
   } > "$CANDIDATE_ENV"
   chmod 0600 "$CANDIDATE_ENV"
   docker compose --env-file "$SERVER_ENV" --env-file "$CANDIDATE_ENV" \
