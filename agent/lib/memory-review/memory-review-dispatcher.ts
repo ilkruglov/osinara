@@ -140,7 +140,9 @@ export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatche
       limit: MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
       now,
     });
-    for (const batch of batches) {
+    // Each handoff is its own session preparation and Eve enqueue; the claimed batches are
+    // independent, so they go out together rather than one after another.
+    await Promise.all(batches.map(async (batch) => {
       try {
         await dispatchOne(dependencies, batch, now);
       } catch (error) {
@@ -150,7 +152,7 @@ export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatche
           errorName: error instanceof Error ? error.name : "UnknownError",
         }));
       }
-    }
+    }));
     return batches.length;
   };
 }

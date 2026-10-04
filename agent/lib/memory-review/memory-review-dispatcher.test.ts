@@ -141,6 +141,28 @@ describe("memory review dispatcher", () => {
     expect(auth.attributes).not.toHaveProperty("toolAllowlist");
   });
 
+  it("dispatches the claimed batches concurrently, each failure on its own", async () => {
+    const batches = [1, 2, 3].map((n) => ({ ...batch, batchId: `batch-${n}` }));
+    let started = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const { dependencies: deps } = dependencies({
+      claimPending: vi.fn().mockResolvedValue(batches),
+      prepareSession: vi.fn(async (claimed: { batchId: string }) => {
+        started += 1;
+        if (claimed.batchId === "batch-2") throw new Error("preparation failed");
+        await gate;
+        return { id: `session-${claimed.batchId}`, sandboxSessionId: "sandbox-1" };
+      }),
+    });
+    const run = createMemoryReviewDispatcher(deps)(new Date("2026-09-03T10:00:00.000Z"));
+    await vi.waitFor(() => expect(started).toBe(3));
+    release();
+    await expect(run).resolves.toBe(3);
+    expect(deps.failClaim).toHaveBeenCalledTimes(1);
+    expect(deps.markRunning).toHaveBeenCalledTimes(2);
+  });
+
   it("marks a rejected handoff ambiguous because Eve may already have started", async () => {
     const fixture = dependencies({
       to: vi.fn().mockReturnValue({ send: vi.fn().mockRejectedValue(new Error("connection lost")) }),

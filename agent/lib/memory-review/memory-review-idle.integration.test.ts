@@ -362,6 +362,54 @@ describeWithDatabase("idle memory review", () => {
     expect(thirtyMinutes[0]!.sourceCount).toBe(10);
   });
 
+  // 1000 groups: the review shares the Workflow workers with the turns, so the number of reviews
+  // in flight is capped; a claim takes only what the cap leaves (scaling notes, 4 October 2026).
+  it("claims no more background batches than the in-flight cap leaves", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const groups = await Promise.all([1, 2, 3].map((n) => externalGroup(fixture.familyId, true, `-100-cap-${n}`)));
+    for (const group of groups) {
+      for (let sequence = 1; sequence <= 30; sequence += 1) {
+        await insertUserMessage({ conversationId: group.conversationId, groupId: group.groupId, sentAt: "2026-09-03T10:00:00.000Z", sequence });
+      }
+    }
+    const first = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 600_000, limit: 10, maxInFlight: 2, now: new Date("2026-09-03T10:01:00.000Z"),
+    });
+    expect(first).toHaveLength(2);
+    // Both dispatched and still running: the cap is full, the third lane waits.
+    for (const [index, claimed] of first.entries()) {
+      await database().query("UPDATE memory_review_batches SET status = 'running', eve_session_id = $2, eve_turn_id = 'turn_0' WHERE id = $1", [claimed.batchId, `wrun_cap_${index}`]);
+    }
+    const full = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 600_000, limit: 10, maxInFlight: 2, now: new Date("2026-09-03T10:02:00.000Z"),
+    });
+    expect(full).toHaveLength(0);
+    // One review finished: one slot, one claim.
+    await database().query("UPDATE memory_review_batches SET status = 'completed', completed_at = now() WHERE id = $1", [first[0]!.batchId]);
+    const freed = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 600_000, limit: 10, maxInFlight: 2, now: new Date("2026-09-03T10:03:00.000Z"),
+    });
+    expect(freed).toHaveLength(1);
+  });
+
+  it("materializes at most the configured number of lanes per pass and the rest next time", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    const groups = await Promise.all([1, 2, 3].map((n) => externalGroup(fixture.familyId, true, `-100-lanes-${n}`)));
+    for (const group of groups) {
+      for (let sequence = 1; sequence <= 30; sequence += 1) {
+        await insertUserMessage({ conversationId: group.conversationId, groupId: group.groupId, sentAt: "2026-09-03T10:00:00.000Z", sequence });
+      }
+    }
+    const first = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 600_000, limit: 10, materializeLaneLimit: 2, now: new Date("2026-09-03T10:01:00.000Z"),
+    });
+    expect(first).toHaveLength(2);
+    const second = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 600_000, limit: 10, materializeLaneLimit: 2, now: new Date("2026-09-03T10:02:00.000Z"),
+    });
+    expect(second).toHaveLength(1);
+  });
+
   it("never reviews a group whose owner switched silent review off", async () => {
     const fixture = await createMainAgentMemoryFixture();
     const external = await externalGroup(fixture.familyId, false);
@@ -387,11 +435,11 @@ describeWithDatabase("idle memory review", () => {
   });
 });
 
-async function externalGroup(familyId: string, memoryReview: boolean) {
+async function externalGroup(familyId: string, memoryReview: boolean, chatId = "-100-external-review") {
   const group = await database().query<{ id: string }>(
     `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode, memory_review_enabled)
-     VALUES ($1, '-100-external-review', 'Внешняя', 'external', 'all', $2) RETURNING id`,
-    [familyId, memoryReview],
+     VALUES ($1, $3, 'Внешняя', 'external', 'all', $2) RETURNING id`,
+    [familyId, memoryReview, chatId],
   );
   const conversation = await database().query<{ id: string }>(
     "SELECT id FROM application_conversations WHERE telegram_group_id = $1", [group.rows[0]!.id],
