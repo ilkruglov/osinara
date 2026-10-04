@@ -100,6 +100,14 @@ describe("Docker Compose runtime wiring", () => {
     }
   });
 
+  // 1.8.19 learned to read payload blobs of the Workflow event log; 1.8.20 writes them.
+  it("stores large repeated Workflow payload blocks once", () => {
+    for (const file of ["compose.yaml", "compose.production.yaml"]) {
+      const compose = readFileSync(new URL(file, projectRoot), "utf8");
+      expect(compose, file).toContain('      OSINARA_WORKFLOW_PAYLOAD_BLOBS: "1"\n');
+    }
+  });
+
   it("gives the agent no reranker to call", () => {
     for (const file of ["compose.yaml", "compose.test.yaml", "compose.production.yaml"]) {
       expect(readFileSync(new URL(file, projectRoot), "utf8"), file).not.toContain("MEMORY_RERANKER_BASE_URL");
