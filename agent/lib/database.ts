@@ -20,7 +20,15 @@ export function database(): Pool {
       "AGENT_DATABASE_CONFIG_MISSING: Не задано подключение к базе данных",
     );
   }
-  pool ??= traceSlowQueries(new Pool({ connectionString, max: 10 }), {
+  // pgvector's iterative HNSW scan keeps walking the index until a query's LIMIT is met after its
+  // WHERE filters (an authorized family's chunks among everyone's); without it an index scan
+  // stops at `hnsw.ef_search` candidates and a filtered query comes back short. Sent as a startup
+  // option so every pooled connection has it before its first query (5 October 2026).
+  pool ??= traceSlowQueries(new Pool({
+    connectionString,
+    max: 10,
+    options: "-c hnsw.iterative_scan=relaxed_order",
+  }), {
     code: "AGENT_DATABASE_SLOW_QUERY",
     thresholdMs: DATABASE_SLOW_QUERY_MS,
   });

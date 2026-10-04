@@ -26,6 +26,11 @@ export const MEMORY_TURN_RETRIEVAL_LIMIT = 8;
 // Candidates fetched for the automatic block before retention and exposure filters remove some.
 export const MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT = MEMORY_TURN_RETRIEVAL_LIMIT * 3;
 export const MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 40;
+// The semantic branch asks the HNSW index for this many nearest chunks of the authorized records
+// and keeps the best chunk of each record. Production (5 October 2026, 4 754 chunks of one
+// family): the previous distance over every chunk took 253 ms, the index walk 46 ms, with the
+// same forty records; two hundred chunks leave room for records of several chunks each.
+export const MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES = 200;
 
 export const CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES = 50;
 

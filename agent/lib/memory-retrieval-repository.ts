@@ -14,6 +14,7 @@ import {
   MEMORY_RETRIEVAL_LIMIT,
   MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
   MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
+  MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES,
   MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY,
   MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
   MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
@@ -231,12 +232,22 @@ export const memoryRetrievalRepository = {
                 row_number() OVER (ORDER BY relevance DESC, updated_at DESC, id DESC) AS ordinal
          FROM russian_evidence
        ),
+       -- The index walk (ORDER BY distance LIMIT) is the only shape the HNSW index serves; the
+       -- authorization filter inside it relies on the pool's iterative scan to keep walking
+       -- until enough of this family's chunks are found. The distance of a record is that of its
+       -- best chunk, as before.
+       nearest_chunks AS (
+         SELECT chunk.memory_item_id, chunk.embedding <=> $9::vector AS distance
+         FROM memory_embedding_chunks AS chunk
+         WHERE $9::vector IS NOT NULL AND chunk.embedding_model = $10
+           AND chunk.memory_item_id IN (SELECT id FROM authorized WHERE embedding_status = 'indexed')
+         ORDER BY chunk.embedding <=> $9::vector
+         LIMIT $21
+       ),
        semantic_distances AS (
-         SELECT authorized.id, MIN(chunk.embedding <=> $9::vector) AS distance,
-                 authorized.updated_at
-         FROM authorized
-         JOIN memory_embedding_chunks AS chunk ON chunk.memory_item_id = authorized.id
-         WHERE $9::vector IS NOT NULL AND authorized.embedding_status = 'indexed' AND chunk.embedding_model = $10
+         SELECT authorized.id, MIN(nearest.distance) AS distance, authorized.updated_at
+         FROM nearest_chunks AS nearest
+         JOIN authorized ON authorized.id = nearest.memory_item_id
          GROUP BY authorized.id, authorized.updated_at
         ),
        semantic_evidence AS (
@@ -330,6 +341,7 @@ export const memoryRetrievalRepository = {
         MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
         window.occurredAfter ?? null,
         window.occurredBefore ?? null,
+        MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES,
       ],
     );
     // Duplicate collapse is read-only and happens after global rank, preserving its representative.
