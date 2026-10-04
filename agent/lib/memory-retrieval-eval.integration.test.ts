@@ -210,6 +210,7 @@ describeEval("memory retrieval eval v1", () => {
     console.info("MEMORY_RETRIEVAL_EVAL_V3_LONG", JSON.stringify({ evaluated, metrics }));
 
     expect(metrics.buriedThesisRecallAt5).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.buriedThesisRecallAt5Minimum);
+    expect(metrics.topHitRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.buriedThesisTopHitRateMinimum);
     expect(metrics.negativeEmptyRate).toBeGreaterThanOrEqual(MEMORY_RETRIEVAL_V3_GATES.negativeEmptyRateMinimum);
   }, 180_000);
 

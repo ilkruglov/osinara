@@ -201,6 +201,14 @@ export function createSandboxRunnerServer(dependencies: ServerDependencies) {
         path: request.url,
       });
       if (response.destroyed) return;
+      if (error instanceof Error && error.message.startsWith("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED")) {
+        // Not a fault of the runner: every container is in use, the caller tells the person.
+        sendJson(response, 503, {
+          code: "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED",
+          message: "Every sandbox container is in use; try again in a minute",
+        });
+        return;
+      }
       sendJson(response, invalidRequest ? 400 : 500, {
         code: invalidRequest
           ? "AGENT_SANDBOX_RUNNER_REQUEST_INVALID"

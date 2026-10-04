@@ -5,7 +5,8 @@
  * - Methods that send nothing pass at once; sending methods wait for the global window.
  * - One private chat gets a quarter-second gap by default, one group twenty a minute, while
  *   other chats are not held back by them; the limits come from the environment.
- * - A 429 with `retry_after` pauses every call for that long, capped.
+ * - A 429 with `retry_after` pauses every call for that long; a pause over a minute is refused,
+ *   and a pause extended meanwhile is waited out in full. Waiters go in arrival order.
  */
 import { describe, expect, it } from "vitest";
 
@@ -71,16 +72,43 @@ describe("telegram send pacer", () => {
     expect(clock.sleeps).toEqual([60_000 - 20 * 100]);
   });
 
-  it("pauses every call after a 429 for the time Telegram names, capped at a minute", async () => {
+  it("pauses every call after a 429 for the time Telegram names and refuses a pause over a minute", async () => {
     const clock = fakeClock();
     const pacer = createTelegramSendPacer({ ...clock });
     expect(telegramRetryAfterSeconds({ ok: false, parameters: { retry_after: 7 } })).toBe(7);
     expect(telegramRetryAfterSeconds({ ok: false })).toBeNull();
-    pacer.retryAfter(7);
+    expect(pacer.retryAfter(7)).toBe(true);
     await pacer.waitForPause();
     expect(clock.sleeps).toEqual([7_000]);
-    pacer.retryAfter(600);
+    expect(pacer.retryAfter(600)).toBe(false);
     await pacer.acquire("sendMessage", { chat_id: 1 });
-    expect(clock.sleeps).toEqual([7_000, 60_000]);
+    expect(clock.sleeps).toEqual([7_000]);
+  });
+
+  it("waits out a pause that another 429 extended meanwhile", async () => {
+    const clock = fakeClock();
+    const pacer = createTelegramSendPacer({
+      now: clock.now,
+      sleep: async (ms) => {
+        await clock.sleep(ms);
+        // A second answer arrives while the first pause is slept out.
+        if (clock.sleeps.length === 1) pacer.retryAfter(5);
+      },
+    });
+    pacer.retryAfter(3);
+    await pacer.waitForPause();
+    expect(clock.sleeps).toEqual([3_000, 5_000]);
+  });
+
+  it("serves waiters in arrival order so a stream to one chat cannot starve another", async () => {
+    const clock = fakeClock();
+    const pacer = createTelegramSendPacer({ ...clock, globalPerSecond: 1 });
+    const order: string[] = [];
+    await pacer.acquire("sendMessage", { chat_id: 1 });
+    const first = pacer.acquire("sendMessage", { chat_id: 2 }).then(() => order.push("second-chat"));
+    const second = pacer.acquire("sendMessage", { chat_id: 1 }).then(() => order.push("first-chat-again"));
+    await Promise.all([first, second]);
+    expect(order).toEqual(["second-chat", "first-chat-again"]);
+    expect(clock.sleeps).toEqual([1_000, 1_000]);
   });
 });

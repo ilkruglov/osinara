@@ -4,7 +4,7 @@
  * Export:
  * - `deliverWorkspaceFile`: sends exact bytes as an explicit photo or document.
  */
-import { resolveTelegramBotToken } from "eve/channels/telegram";
+import { resolveTelegramBotToken, telegramSendPacer } from "eve/channels/telegram";
 
 import {
   TELEGRAM_API_REQUEST_TIMEOUT_MS,
@@ -88,6 +88,8 @@ export async function deliverWorkspaceFile(
   }
   form.set(field, new Blob([Buffer.from(input.bytes)], { type: input.mediaType }), input.fileName);
 
+  // A file goes out under the same Telegram limits as every message of the channel.
+  await telegramSendPacer.acquire(method, { chat_id: input.chatId });
   let response: Response;
   try {
     response = await fetchImplementation(`https://api.telegram.org/bot${token}/${method}`, {

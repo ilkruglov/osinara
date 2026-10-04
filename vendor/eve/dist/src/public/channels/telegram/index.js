@@ -2,6 +2,7 @@ import {
   formatTelegramContextBlock,
   parseTelegramUpdate,
 } from "#public/channels/telegram/inbound.js";
+import { telegramRetryAfterSeconds, telegramSendPacer } from "./osinara-telegram-send-pacing.js";
 import {
   TELEGRAM_MESSAGE_TEXT_MAX_LENGTH,
   answerTelegramCallbackQuery,
@@ -40,6 +41,8 @@ import {
   verifyTelegramRequest,
 } from "#public/channels/telegram/verify.js";
 export {
+  telegramRetryAfterSeconds,
+  telegramSendPacer,
   TELEGRAM_CALLBACK_RESPONSE_PREFIX,
   TELEGRAM_FILE_URL_PROTOCOL,
   TELEGRAM_HITL_CALLBACK_PREFIX,

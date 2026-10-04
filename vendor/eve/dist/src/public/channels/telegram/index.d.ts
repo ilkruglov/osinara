@@ -17,3 +17,4 @@ export { TELEGRAM_CALLBACK_RESPONSE_PREFIX, TELEGRAM_HITL_CALLBACK_PREFIX, TELEG
 export { TELEGRAM_FILE_URL_PROTOCOL, buildTelegramTurnMessage, collectTelegramFileParts, createTelegramFetchFile, createTelegramFileUrl, } from "#public/channels/telegram/attachments.js";
 export { defaultTelegramAuth } from "#public/channels/telegram/defaults.js";
 export { resolveTelegramWebhookSecretToken, verifyTelegramRequest, type TelegramVerifyOptions, type TelegramWebhookSecretToken, type TelegramWebhookVerifier, } from "#public/channels/telegram/verify.js";
+export { telegramRetryAfterSeconds, telegramSendPacer, type TelegramSendPacer } from "./osinara-telegram-send-pacing.js";

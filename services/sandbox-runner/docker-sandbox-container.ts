@@ -75,12 +75,14 @@ export async function requireRunningContainer(
   docker: Docker,
   sessionId: string,
   activeOperations: number,
+  /** Runs a start of the stopped container; the engine passes its capacity gate. */
+  gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
 ): Promise<{ container: Docker.Container; generation: string | null }> {
   const existing = await inspectContainer(docker, sessionId);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
   if (!inspection.State.Running) {
-    await existing.container.start();
+    await gateStart(() => existing.container.start());
     inspection = await existing.container.inspect();
   } else if (activeOperations <= 1) {
     // A restart kills every process of the session: only the caller may be running in it.

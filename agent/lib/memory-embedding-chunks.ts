@@ -103,8 +103,14 @@ function splitLongParagraph(content: string, paragraph: Span, maxCharacters: num
     // The next chunk begins a little before this one ended, at the last sentence or clause
     // boundary inside the overlap, else at a word start, so a thought that crosses the cut is
     // whole in one of them; progress is strict.
-    let wordStart = Math.max(start + 1, end - overlap);
-    while (wordStart > start + 1 && !WHITESPACE_PATTERN.test(content[wordStart - 1]!)) wordStart -= 1;
+    // The word start is looked for inside the overlap only: text without whitespace (a key,
+    // a hash, a run of emoji) otherwise walked back to the chunk start one character at a time
+    // and a four-thousand-character record became three thousand chunks (Codex review).
+    const overlapFrom = Math.max(start + 1, end - overlap);
+    let wordStart = overlapFrom;
+    const wordSearchFloor = Math.max(start + 1, end - 2 * overlap);
+    while (wordStart > wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!)) wordStart -= 1;
+    if (wordStart === wordSearchFloor && !WHITESPACE_PATTERN.test(content[wordStart - 1]!)) wordStart = overlapFrom;
     const boundary = lastBoundary(content, wordStart, end - 1);
     start = wholeCharacterStart(content, boundary === -1 ? wordStart : boundary);
   }

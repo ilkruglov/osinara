@@ -4,7 +4,7 @@
  * Export:
  * - `deliverMemoryExportFiles`: atomically sends JSON and Markdown as one media group.
  */
-import { resolveTelegramBotToken } from "eve/channels/telegram";
+import { resolveTelegramBotToken, telegramSendPacer } from "eve/channels/telegram";
 
 import { AppError } from "./app-error.js";
 
@@ -35,6 +35,7 @@ export async function deliverMemoryExportFiles(
     new Blob([input.markdown], { type: "text/markdown;charset=utf-8" }),
     "osinara-memory.md",
   );
+  await telegramSendPacer.acquire("sendMediaGroup", { chat_id: input.chatId });
   let response: Response;
   try {
     response = await fetchImplementation(

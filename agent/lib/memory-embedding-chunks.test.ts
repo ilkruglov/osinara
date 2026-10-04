@@ -103,6 +103,18 @@ describe("chunkMemoryContent", () => {
     }
   });
 
+  it("makes bounded progress on text without whitespace", () => {
+    // A key or hash of four thousand characters: progress is the cap minus the overlap, so a
+    // handful of chunks, never thousands (Codex review, 5 October 2026).
+    const content = "a".repeat(3_999);
+    const chunks = chunkMemoryContent(content);
+    expectCoverage(content, chunks, MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS);
+    expect(chunks.length).toBeLessThanOrEqual(Math.ceil(content.length / (MEMORY_EMBEDDING_CHUNK_MAX_CHARACTERS - 2 * MEMORY_EMBEDDING_CHUNK_OVERLAP_CHARACTERS)) + 1);
+    const narrow = chunkMemoryContent(content, { maxCharacters: MEMORY_EMBEDDING_CHUNK_NARROW_MAX_CHARACTERS });
+    expect(narrow.length).toBeLessThanOrEqual(20);
+    expect(chunkMemoryQuery(content.slice(0, 2_000)).length).toBeLessThanOrEqual(10);
+  });
+
   it("rejects empty text", () => {
     expect(() => chunkMemoryContent("   ")).toThrow("AGENT_MEMORY_EMBEDDING_INPUT_INVALID");
   });

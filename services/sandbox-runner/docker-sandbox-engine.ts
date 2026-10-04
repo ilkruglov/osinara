@@ -149,6 +149,31 @@ export function createDockerSandboxEngine(input: {
   const activity = createSandboxActivityRegistry(Date.now);
   const repeatGuard = createSandboxRepeatGuard(Date.now);
   const writeMemo = createSandboxWriteMemo();
+  // Every container start, a new one or a stopped one resuming, passes through one gate: the
+  // room check and the start are one step, so two sessions cannot both take the last slot
+  // (Codex review, 5 October 2026).
+  let capacityGate: Promise<unknown> = Promise.resolve();
+  const withCapacity = async <T>(sessionId: string, start: () => Promise<T>): Promise<T> => {
+    const turn = capacityGate.then(async () => {
+      const capacity = await makeRoomForContainer({
+        activity,
+        docker: input.docker,
+        exceptSessionId: sessionId,
+        limit: input.limits?.maxRunningContainers ?? SANDBOX_MAX_RUNNING_CONTAINERS,
+        minIdleMs: SANDBOX_CAPACITY_MIN_IDLE_MS,
+        nowMs: Date.now(),
+        project: input.runtime.project,
+      });
+      if (!capacity.room) {
+        throw new Error(
+          `AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED: All ${capacity.running} sandbox containers are in use`,
+        );
+      }
+      return await start();
+    });
+    capacityGate = turn.catch(() => undefined);
+    return await turn;
+  };
 
   return {
     async health() {
@@ -193,41 +218,34 @@ export function createDockerSandboxEngine(input: {
           existing = null;
         }
         if (existing) {
-          if (!existing.inspection.State.Running) await existing.container.start();
+          const stopped = existing;
+          if (!stopped.inspection.State.Running) {
+            await withCapacity(sessionId, () => stopped.container.start());
+          }
           return { created: false, seedRequired: false, sessionId };
         }
         if (request.seedFiles === undefined) {
           return { created: false, seedRequired: true, sessionId };
         }
 
-        const capacity = await makeRoomForContainer({
-          activity,
-          docker: input.docker,
-          limit: input.limits?.maxRunningContainers ?? SANDBOX_MAX_RUNNING_CONTAINERS,
-          minIdleMs: SANDBOX_CAPACITY_MIN_IDLE_MS,
-          nowMs: Date.now(),
-          project: input.runtime.project,
-        });
-        if (!capacity.room) {
-          throw new Error(
-            `AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED: All ${capacity.running} sandbox containers are in use`,
-          );
-        }
+        const seedFiles = request.seedFiles;
         const options = buildSandboxContainerOptions(input.runtime, request);
         options.name = sandboxContainerName(sessionId);
         options.Labels = {
           ...options.Labels,
           [SANDBOX_REQUEST_HASH_LABEL]: sandboxRequestHash(request),
         };
-        const container = await input.docker.createContainer(options);
-        try {
-          await container.start();
-          await ensureToolDirectories(input.docker, container, request);
-          await writeSandboxSeedArchive(container, request.seedFiles);
-        } catch (error) {
-          await container.remove({ force: true, v: true }).catch(() => undefined);
-          throw error;
-        }
+        await withCapacity(sessionId, async () => {
+          const container = await input.docker.createContainer(options);
+          try {
+            await container.start();
+            await ensureToolDirectories(input.docker, container, request);
+            await writeSandboxSeedArchive(container, seedFiles);
+          } catch (error) {
+            await container.remove({ force: true, v: true }).catch(() => undefined);
+            throw error;
+          }
+        });
         return { created: true, seedRequired: false, sessionId };
       }));
     },
@@ -252,7 +270,7 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
         const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
@@ -268,7 +286,7 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
         const resolved = resolvePath(path);
         const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
         // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
@@ -398,7 +416,7 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");

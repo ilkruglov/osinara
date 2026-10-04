@@ -13,7 +13,8 @@
  *   family never comes near these, a thousand do (answers, progress notices, split long texts
  *   and reminders all count), so every message-sending method waits for a slot in a global
  *   window and in its chat's window before the request, and a 429 pauses every call for the
- *   time Telegram names (5 October 2026).
+ *   time Telegram names (5 October 2026); a pause longer than a minute is not waited out, the
+ *   429 goes back to the caller.
  * - The private-chat gap is a quarter of a second by default: Telegram tolerates short bursts,
  *   an answer of up to five parts is one, and a whole second between parts was a visible
  *   delay for one family. The three limits are environment settings; an installation serving
@@ -21,6 +22,8 @@
  */
 const PACED_METHODS = new Set([
   "copyMessage",
+  "sendRichMessage",
+  "sendRichMessageDraft",
   "editMessageCaption",
   "editMessageMedia",
   "editMessageReplyMarkup",
@@ -39,7 +42,7 @@ const PACED_METHODS = new Set([
 const GLOBAL_WINDOW_MS = 1_000;
 const GROUP_WINDOW_MS = 60_000;
 const RETRY_AFTER_MAX_SECONDS = 60;
-const ACQUIRE_ROUNDS_MAX = 1_000;
+const PRUNE_EVERY_ACQUIRES = 1_000;
 
 const SETTING_BOUNDS = {
   TELEGRAM_SEND_GLOBAL_PER_SECOND: { absent: 25, max: 30, min: 1 },
@@ -85,10 +88,14 @@ export function telegramSendPacerSettings(
  
 
                                     
-                                                                                       
+                                                                                                         
                                                         
-                                                                           
-                                    
+     
+                                                                                              
+                                                                                             
+     
+                                       
+                                                                              
                                 
  
 
@@ -111,18 +118,34 @@ export function createTelegramSendPacer(options                           = {}) 
   const groupSends = new Map                  ();
   const privateLastSend = new Map                ();
   let pauseUntil = 0;
+  // Callers take slots in arrival order: one waiter at a time computes its wait and sleeps,
+  // the next one starts after it, so a steady stream to one chat cannot starve another call
+  // (Codex review, 5 October 2026).
+  let queue                = Promise.resolve();
+  let acquires = 0;
 
-  function prune(sends          , windowMs        , at        )       {
+  /** Drops chats that have been quiet for their whole window, so the maps stay bounded. */
+  function prune(at        )       {
+    for (const [id, last] of privateLastSend) {
+      if (last + privateGapMs <= at) privateLastSend.delete(id);
+    }
+    for (const [id, sends] of groupSends) {
+      pruneSends(sends, GROUP_WINDOW_MS, at);
+      if (sends.length === 0) groupSends.delete(id);
+    }
+  }
+
+  function pruneSends(sends          , windowMs        , at        )       {
     while (sends.length > 0 && sends[0]  <= at - windowMs) sends.shift();
   }
 
   function waitNeeded(at        , chat                                       )         {
     let wait = Math.max(0, pauseUntil - at);
-    prune(globalSends, GLOBAL_WINDOW_MS, at);
+    pruneSends(globalSends, GLOBAL_WINDOW_MS, at);
     if (globalSends.length >= globalPerSecond) wait = Math.max(wait, globalSends[0]  + GLOBAL_WINDOW_MS - at);
     if (chat?.group) {
       const sends = groupSends.get(chat.id) ?? [];
-      prune(sends, GROUP_WINDOW_MS, at);
+      pruneSends(sends, GROUP_WINDOW_MS, at);
       if (sends.length >= groupPerMinute) wait = Math.max(wait, sends[0]  + GROUP_WINDOW_MS - at);
     } else if (chat) {
       const last = privateLastSend.get(chat.id);
@@ -131,31 +154,44 @@ export function createTelegramSendPacer(options                           = {}) 
     return wait;
   }
 
+  async function takeSlot(chat                                       )                {
+    // Only this waiter takes slots while it holds the queue, so the wait converges.
+    for (;;) {
+      const wait = waitNeeded(now(), chat);
+      if (wait <= 0) break;
+      await sleep(wait);
+    }
+    const at = now();
+    globalSends.push(at);
+    if (chat?.group) {
+      const sends = groupSends.get(chat.id) ?? [];
+      sends.push(at);
+      groupSends.set(chat.id, sends);
+    } else if (chat) {
+      privateLastSend.set(chat.id, at);
+    }
+    acquires += 1;
+    if (acquires % PRUNE_EVERY_ACQUIRES === 0) prune(at);
+  }
+
   return {
-    async acquire(method, body) {
-      if (!PACED_METHODS.has(method)) return;
-      const chat = chatKey(body);
-      for (let round = 0; round < ACQUIRE_ROUNDS_MAX; round += 1) {
-        const wait = waitNeeded(now(), chat);
-        if (wait <= 0) break;
-        await sleep(wait);
-      }
-      const at = now();
-      globalSends.push(at);
-      if (chat?.group) {
-        const sends = groupSends.get(chat.id) ?? [];
-        sends.push(at);
-        groupSends.set(chat.id, sends);
-      } else if (chat) {
-        privateLastSend.set(chat.id, at);
-      }
+    acquire(method, body) {
+      if (!PACED_METHODS.has(method)) return Promise.resolve();
+      const turn = queue.then(() => takeSlot(chatKey(body)));
+      queue = turn.catch(() => undefined);
+      return turn;
     },
     retryAfter(seconds) {
-      pauseUntil = Math.max(pauseUntil, now() + Math.min(seconds, RETRY_AFTER_MAX_SECONDS) * 1_000);
+      if (seconds > RETRY_AFTER_MAX_SECONDS) return false;
+      pauseUntil = Math.max(pauseUntil, now() + seconds * 1_000);
+      return true;
     },
     async waitForPause() {
-      const wait = pauseUntil - now();
-      if (wait > 0) await sleep(wait);
+      for (;;) {
+        const wait = pauseUntil - now();
+        if (wait <= 0) return;
+        await sleep(wait);
+      }
     },
   };
 }

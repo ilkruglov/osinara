@@ -66,6 +66,13 @@ export const MEMORY_RETRIEVAL_EVAL_RECORDS_V3: readonly MemoryRetrievalEvalRecor
     key: "school-summary",
     updatedAt: "2026-09-02T20:00:00.000Z",
   },
+  // One paragraph of about three thousand characters, production's longest shape: the splitter
+  // must cut it after sentences, and the theses near the cuts must still be found.
+  {
+    content: "Итог обсуждения 26.09.2026 про переезд в новую квартиру. Ключи от квартиры на Беговой получают 3 октября в двенадцать, встреча с застройщиком в офисе на втором этаже, с собой паспорта обоих и договор. Приёмку делают с экспертом Константином из «Приёмки Про», он берёт восемь тысяч за двушку и пишет акт с дефектами, застройщик обязан устранить их за сорок пять дней; Марина уже видела его отчёты у знакомых и доверяет. Перевозку заказывают у «Грузовичкофф» на 11 октября, суббота, с девяти утра, две машины и четыре грузчика, ориентировочно двадцать две тысячи; упаковку коробок начинают за неделю, коробки берут бесплатно в «Ленте» у Димы. Старую квартиру сдают хозяйке 15 октября, залог сорок тысяч вернёт после осмотра, нужно отмыть духовку и закрасить дырки от полок, иначе удержит; Сергей закрасит сам, краска осталась в кладовке. Интернет в новой квартире: там только «Ростелеком» и «Дом.ру», выбрали «Дом.ру» за гигабит за семьсот рублей, заявку подали, монтаж обещают 6 октября с десяти до четырнадцати, нужен кто-то дома — будет Марина. Детскую решили красить в светло-зелёный, Лиза сама выбрала оттенок «фисташка» из каталога Tikkurila, краску покупают в «Леруа» на Калужской, двух банок хватит. Мебель из «Икеи» заказали со склада в Химках: кровать Мальм и два шкафа Пакс, доставка 12 октября, сборку заказали там же за шесть тысяч, Сергей сказал, что сам собирать Пакс больше не будет после прошлого раза. Кота перевозят последним, в переноске, за день до переезда отвезут к бабушке, чтобы не испугался грузчиков. Прописку оформляют через МФЦ на Хорошёвке после получения выписки из Росреестра, обычно это неделя-две после подписания акта. Школу Лиза не меняет, от Беговой до школы двадцать минут на троллейбусе 35, Марина проверила маршрут.",
+    key: "move-summary",
+    updatedAt: "2026-09-26T20:00:00.000Z",
+  },
 ] as const;
 
 export const MEMORY_RETRIEVAL_EVAL_QUERIES_V3: readonly MemoryRetrievalEvalQuery[] = [
@@ -142,6 +149,30 @@ export const MEMORY_RETRIEVAL_EVAL_QUERIES_V3: readonly MemoryRetrievalEvalQuery
     text: "Что решили с телефоном Лизы?",
   },
   {
+    category: "semantic_paraphrase",
+    expectedKeys: ["move-summary"],
+    key: "buried-move-internet",
+    text: "Какого провайдера выбрали в новой квартире и когда подключат?",
+  },
+  {
+    category: "semantic_paraphrase",
+    expectedKeys: ["move-summary"],
+    key: "buried-move-deposit",
+    text: "Что надо сделать в старой квартире, чтобы вернули залог?",
+  },
+  {
+    category: "semantic_paraphrase",
+    expectedKeys: ["move-summary"],
+    key: "buried-move-cat",
+    text: "Как перевозим кота при переезде?",
+  },
+  {
+    category: "semantic_paraphrase",
+    expectedKeys: ["move-summary"],
+    key: "buried-move-registration",
+    text: "Где и когда оформлять прописку?",
+  },
+  {
     category: "negative",
     expectedKeys: [],
     key: "negative-dentist",
@@ -163,5 +194,6 @@ export const MEMORY_RETRIEVAL_EVAL_QUERIES_V3: readonly MemoryRetrievalEvalQuery
  */
 export const MEMORY_RETRIEVAL_V3_GATES = {
   buriedThesisRecallAt5Minimum: 1,
+  buriedThesisTopHitRateMinimum: 1,
   negativeEmptyRateMinimum: 0,
 } as const;

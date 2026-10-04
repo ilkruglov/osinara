@@ -48,6 +48,8 @@ function requireFinishedAt(value: string | undefined, id: string): number {
 export async function makeRoomForContainer(input: {
   activity: SandboxActivityRegistry;
   docker: Docker;
+  /** The session about to start: its own container, if listed, is neither counted nor stopped. */
+  exceptSessionId?: string;
   limit: number;
   minIdleMs: number;
   nowMs: number;
@@ -59,7 +61,8 @@ export async function makeRoomForContainer(input: {
       status: ["running"],
     },
   })).map((item) => ({ id: item.Id, sessionId: item.Labels[SANDBOX_SESSION_LABEL] }))
-    .filter((item): item is { id: string; sessionId: string } => typeof item.sessionId === "string");
+    .filter((item): item is { id: string; sessionId: string } =>
+      typeof item.sessionId === "string" && item.sessionId !== input.exceptSessionId);
   if (running.length < input.limit) return { room: true, running: running.length };
   // A session this process has never seen is the coldest of all.
   const byLastUse = running
@@ -67,11 +70,23 @@ export async function makeRoomForContainer(input: {
     .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
   for (const item of byLastUse) {
     const stopped = await input.activity.removeIfIdle(item.sessionId, input.nowMs - input.minIdleMs, async () => {
-      await input.docker.getContainer(item.id).stop({ t: SANDBOX_STOP_TIMEOUT_SECONDS });
+      await stopContainer(input.docker.getContainer(item.id));
     });
     if (stopped) return { room: true, running: running.length - 1 };
   }
   return { room: false, running: running.length };
+}
+
+/** Stops a container; one already stopped (304) or gone (404) by the idle sweep counts as stopped. */
+async function stopContainer(container: Docker.Container): Promise<void> {
+  try {
+    await container.stop({ t: SANDBOX_STOP_TIMEOUT_SECONDS });
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "statusCode" in error
+      ? Number(error.statusCode)
+      : undefined;
+    if (status !== 304 && status !== 404) throw error;
+  }
 }
 
 export async function reconcileSandboxContainers(input: {
@@ -115,7 +130,7 @@ export async function reconcileSandboxContainers(input: {
     const sessionId = item.Labels[SANDBOX_SESSION_LABEL];
     if (typeof sessionId !== "string") return false;
     return await input.activity.removeIfIdle(sessionId, input.idleCutoffMs, async () => {
-      await input.docker.getContainer(item.Id).stop({ t: SANDBOX_STOP_TIMEOUT_SECONDS });
+      await stopContainer(input.docker.getContainer(item.Id));
     });
   }));
 

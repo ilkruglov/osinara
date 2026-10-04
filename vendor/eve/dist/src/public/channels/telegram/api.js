@@ -29,9 +29,11 @@ async function callTelegramApi(e) {
     s = await parseResponseBody(a);
   if (a.status === 429) {
     let t = telegramRetryAfterSeconds(s);
-    if (t !== null) {
-      telegramSendPacer.retryAfter(t);
+    // The retry takes a slot like any call, after the whole pause; Telegram got nothing from
+    // the refused request, so sending it once more creates no duplicate.
+    if (t !== null && telegramSendPacer.retryAfter(t)) {
       await telegramSendPacer.waitForPause();
+      await telegramSendPacer.acquire(e.method, e.body);
       a = await n(u, i);
       s = await parseResponseBody(a);
     }

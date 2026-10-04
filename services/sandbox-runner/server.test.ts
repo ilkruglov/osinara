@@ -141,6 +141,28 @@ describe("sandbox runner HTTP server", () => {
     expect(engine.createSession).not.toHaveBeenCalled();
   });
 
+  it("answers 503 with its code when every sandbox container is in use", async () => {
+    const engine = fakeEngine();
+    vi.mocked(engine.createSession).mockRejectedValueOnce(
+      new Error("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED: All 400 sandbox containers are in use"),
+    );
+    const baseUrl = await start(engine);
+
+    const response = await fetch(`${baseUrl}/v1/sessions`, {
+      body: JSON.stringify({
+        access: "trusted",
+        eveSessionId: SESSION_ID,
+        mounts: [{ mountPoint: "personal", workspaceId: WORKSPACE_ID }],
+        sandboxSessionId: SANDBOX_SESSION_ID,
+        seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED" });
+  });
+
   it("checks Docker health and delegates disposable compute and tool deletion", async () => {
     const engine = fakeEngine();
     const baseUrl = await start(engine);

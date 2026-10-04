@@ -410,6 +410,7 @@ describe("buildSandboxContainerOptions", () => {
     };
     const docker = {
       getContainer: vi.fn(() => container),
+      listContainers: vi.fn(async () => []),
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
       docker,
@@ -531,6 +532,41 @@ describe("running-container cap", () => {
     await expect(engine.createSession(request)).resolves.toEqual({ created: true, seedRequired: false, sessionId: SANDBOX_SESSION_ID });
     expect(busy.stop).toHaveBeenCalledOnce();
     expect(docker.createContainer).toHaveBeenCalledOnce();
+  });
+
+  it("lets two sessions start at once take only the slots there are", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
+    temporaryRoots.push(root);
+    const started: string[] = [];
+    const containerOf = (name: string) => ({
+      putArchive: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+      start: vi.fn(async () => { started.push(name); }),
+    });
+    const docker = {
+      createContainer: vi.fn(async (options: { name: string }) => containerOf(options.name)),
+      getContainer: vi.fn(() => ({ inspect: vi.fn(async () => Promise.reject(missing)) })),
+      // The listing reflects what has started so far, as Docker would.
+      listContainers: vi.fn(async () => started.map((name, index) => ({
+        Id: name,
+        Labels: { "dev.osinara.sandbox.session-id": index === 0 ? SANDBOX_SESSION_ID : BUSY_SESSION_ID },
+        State: "running",
+      }))),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      limits: { maxRunningContainers: 1 },
+      roots: { toolsRoot: `${root}/tools`, workspaceRoot: `${root}/workspaces` },
+      runtime,
+    });
+
+    const outcomes = await Promise.allSettled([
+      engine.createSession(request),
+      engine.createSession({ ...request, sandboxSessionId: BUSY_SESSION_ID }),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(["fulfilled", "rejected"]);
+    expect(String((outcomes[1] as PromiseRejectedResult).reason)).toContain("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    expect(started).toHaveLength(1);
   });
 
   it("refuses a new container when every one at the cap was used within the minute", async () => {

@@ -103,6 +103,21 @@ describe("sandbox running-container cap", () => {
     expect(stops.get("running-2")).not.toHaveBeenCalled();
   });
 
+  it("counts a container the idle sweep stopped meanwhile as stopped", async () => {
+    const activity = createSandboxActivityRegistry(() => NOW_MS);
+    const alreadyStopped = Object.assign(new Error("container already stopped"), { statusCode: 304 });
+    const stops = new Map([["running-0", vi.fn(async () => Promise.reject(alreadyStopped))]]);
+
+    await expect(makeRoomForContainer({
+      activity,
+      docker: dockerWith(running(1), stops),
+      limit: 1,
+      minIdleMs: 60_000,
+      nowMs: NOW_MS,
+      project: "osinara",
+    })).resolves.toEqual({ room: true, running: 0 });
+  });
+
   it("finds no room when every container at the cap was used within the minute", async () => {
     const activity = createSandboxActivityRegistry(() => NOW_MS);
     for (const session of ["session-0", "session-1"]) await activity.runActive(session, async () => undefined);
