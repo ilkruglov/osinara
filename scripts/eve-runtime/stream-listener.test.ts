@@ -65,6 +65,38 @@ describe("workflow stream listener", () => {
     expect(clients).toHaveLength(3);
   });
 
+  it("survives a second error of a lost client and a close during a reconnect", async () => {
+    const clients: FakeClient[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const listener = await createStreamListener({
+      channel: "workflow_event_chunk",
+      connect: () => {
+        const client = new FakeClient();
+        // The replacement's connect is held open so close() can arrive while it is under way.
+        if (clients.length === 1) client.connect = () => held;
+        clients.push(client);
+        return client;
+      },
+      log: () => {},
+      onPayload: async () => {},
+      retryDelayMs: 1,
+      sleep: async () => {},
+    });
+    // Postgres going down: a FATAL error, then the socket ends; neither may escape as unhandled.
+    clients[0]!.emit("error", new Error("terminating connection due to administrator command"));
+    clients[0]!.emit("error", new Error("Connection terminated unexpectedly"));
+    clients[0]!.emit("end");
+    expect(clients[0]!.ended).toBe(true);
+    await vi.waitFor(() => expect(clients).toHaveLength(2));
+    await listener.close();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    // The replacement finished connecting after close and was ended at once; no third client follows.
+    expect(clients).toHaveLength(2);
+    expect(clients[1]!.ended).toBe(true);
+  });
+
   it("fails the first connection instead of retrying it in the background", async () => {
     await expect(createStreamListener({
       channel: "workflow_event_chunk",

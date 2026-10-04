@@ -7,6 +7,8 @@
  *   and returns the payload with markers in their place; `null` when there is nothing to lift.
  * - `joinPayload`: the inverse, given the blobs.
  * - `isSplitPayload`, `payloadBlobHashes`: whether stored bytes carry markers, and which blobs they need.
+ * - `escapePayload`, `isEscapedPayload`, `unescapePayload`: opaque bytes that happen to start like a
+ *   stored envelope get an `oblr` prefix on the way in and lose it on the way out.
  * - `createPayloadBlobCache`: bounded in-process cache of blob bytes.
  *
  * Key constructs:
@@ -32,6 +34,8 @@ const ZSTD = "zstd";
 const DEVL = "devl";
 const STORED_COMPRESSED = "oblz";
 const STORED_PLAIN = "oblb";
+const ESCAPED = "oblr";
+const RESERVED_PREFIXES = new Set([STORED_COMPRESSED, STORED_PLAIN, ESCAPED]);
 
 const prefixOf = (bytes            ) => bytes.length >= 4 ? Buffer.from(bytes.buffer, bytes.byteOffset, 4).toString("latin1") : "";
 const rest = (bytes            ) => Buffer.from(bytes.buffer, bytes.byteOffset + 4, bytes.length - 4);
@@ -77,6 +81,19 @@ export function isSplitPayload(bytes            )          {
   return prefix === STORED_PLAIN || prefix === STORED_COMPRESSED;
 }
 
+/** Bytes that start like one of the stored envelopes are wrapped so a read cannot mistake them. */
+export function escapePayload(bytes            )             {
+  return RESERVED_PREFIXES.has(prefixOf(bytes)) ? concat(ESCAPED, Buffer.from(bytes)) : bytes;
+}
+
+export function isEscapedPayload(bytes            )          {
+  return prefixOf(bytes) === ESCAPED;
+}
+
+export function unescapePayload(bytes            )             {
+  return isEscapedPayload(bytes) ? new Uint8Array(rest(bytes)) : bytes;
+}
+
 function parseStored(bytes            )                                                  {
   const prefix = prefixOf(bytes);
   if (prefix !== STORED_PLAIN && prefix !== STORED_COMPRESSED) return null;
@@ -111,16 +128,25 @@ export function joinPayload(bytes            , lookup                           
 }
 
                                    
+                
                                             
                                              
                         
  
 
-/** Keeps the most recently set blobs within `maxBytes`; distinct blobs are few (193 in the sample). */
+/**
+ * Keeps the most recently set blobs within `maxBytes`; distinct blobs are few (193 in the sample).
+ * A blob larger than the whole budget is not kept at all. Readers never depend on an entry
+ * surviving: a restore collects the blobs it needs for itself first.
+ */
 export function createPayloadBlobCache(maxBytes = 64 * 1024 * 1024)                   {
   const entries = new Map                    ();
   let bytes = 0;
   return {
+    clear() {
+      entries.clear();
+      bytes = 0;
+    },
     get(hash) {
       const value = entries.get(hash);
       if (value === undefined) return undefined;
@@ -129,10 +155,10 @@ export function createPayloadBlobCache(maxBytes = 64 * 1024 * 1024)             
       return value;
     },
     set(hash, value) {
-      if (entries.has(hash)) return;
+      if (entries.has(hash) || value.length > maxBytes) return;
       entries.set(hash, value);
       bytes += value.length;
-      while (bytes > maxBytes && entries.size > 1) {
+      while (bytes > maxBytes) {
         const [oldest, oldestValue] = entries.entries().next().value                        ;
         entries.delete(oldest);
         bytes -= oldestValue.length;

@@ -15,8 +15,8 @@ import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 import {
-  createPayloadBlobCache, isSplitPayload, joinPayload, PAYLOAD_BLOB_MARKER_KEY, payloadBlobHash, payloadBlobHashes,
-  splitPayload,
+  createPayloadBlobCache, escapePayload, isEscapedPayload, isSplitPayload, joinPayload, PAYLOAD_BLOB_MARKER_KEY,
+  payloadBlobHash, payloadBlobHashes, splitPayload, unescapePayload,
 } from "./payload-blobs.ts";
 
 // About 7.8 KB of poorly compressible text, so sizes mean something.
@@ -77,6 +77,21 @@ describe("payload blobs", () => {
     expect(() => joinPayload(split.stored, () => undefined)).toThrow("AGENT_WORKFLOW_PAYLOAD_BLOB_MISSING");
   });
 
+  it("escapes opaque bytes that start like a stored envelope and nothing else", () => {
+    for (const prefix of ["oblb", "oblz", "oblr"]) {
+      const opaque = new Uint8Array(Buffer.from(`${prefix}raw bytes`));
+      const escaped = escapePayload(opaque);
+      expect(Buffer.from(escaped).subarray(0, 4).toString()).toBe("oblr");
+      expect(isEscapedPayload(escaped)).toBe(true);
+      expect(isSplitPayload(escaped)).toBe(false);
+      expect(splitPayload(escaped)).toBeNull();
+      expect(Buffer.from(unescapePayload(escaped)).equals(Buffer.from(opaque))).toBe(true);
+    }
+    const plain = new Uint8Array(devalue([{ a: 1 }, "x"]));
+    expect(escapePayload(plain)).toBe(plain);
+    expect(unescapePayload(plain)).toBe(plain);
+  });
+
   it("caches the newest blobs within the budget", () => {
     const cache = createPayloadBlobCache(25);
     cache.set("a", new Uint8Array(10));
@@ -87,5 +102,12 @@ describe("payload blobs", () => {
     expect(cache.get("a")).toBeDefined();
     expect(cache.get("c")).toBeDefined();
     expect(cache.size).toBe(20);
+    // An entry above the whole budget is not kept and evicts nothing.
+    cache.set("huge", new Uint8Array(30));
+    expect(cache.get("huge")).toBeUndefined();
+    expect(cache.size).toBe(20);
+    cache.clear();
+    expect(cache.size).toBe(0);
+    expect(cache.get("a")).toBeUndefined();
   });
 });

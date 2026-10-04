@@ -21,6 +21,12 @@
 
 export const STUCK_RETRY_AFTER_MS = 10 * 60 * 1000;
 export const STUCK_STEP_STARTED_AFTER_MS = 25 * 60 * 1000;
+/**
+ * A run whose last event is step_completed is either a session resting on a hook created turns
+ * ago or a run whose next step's queue job was lost. The hook row is the evidence: a resting
+ * session holds one, an abandoned continuation does not.
+ */
+export const STUCK_STEP_COMPLETED_AFTER_MS = 25 * 60 * 1000;
 export const STUCK_RUN_SCAN_INTERVAL_MS = 5 * 60 * 1000;
 
                          
@@ -52,10 +58,12 @@ export async function findStuckRuns(
        ) last ON true
       WHERE r.status IN ('pending', 'running')
         AND ((last.type = 'step_retrying' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $1::double precision))
-          OR (last.type = 'step_started' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $2::double precision)))
+          OR (last.type = 'step_started' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $2::double precision))
+          OR (last.type = 'step_completed' AND last.created_at < LOCALTIMESTAMP - make_interval(secs => $3::double precision)
+              AND NOT EXISTS (SELECT 1 FROM workflow.workflow_hooks h WHERE h.run_id = r.id)))
       ORDER BY last.created_at
       LIMIT 50`,
-    [limits.retryAfterMs / 1000, limits.stepStartedAfterMs / 1000],
+    [limits.retryAfterMs / 1000, limits.stepStartedAfterMs / 1000, STUCK_STEP_COMPLETED_AFTER_MS / 1000],
   );
   return result.rows.flatMap((row) =>
     typeof row.run_id === "string" && typeof row.workflow_name === "string" && typeof row.last_event === "string"
@@ -75,8 +83,9 @@ export const INFLIGHT_COMPLETED_STEP_WITHIN_MS = 10 * 60 * 1000;
 
 /**
  * Active runs whose last event leaves the next action to this process: a run interrupted while a
- * step ran, between steps moments ago, or right after creation. Parked runs are not included,
- * whatever their age. Pages by run id so a large installation is read in bounded chunks.
+ * step ran, right after creation, or between steps, where "between steps" is a completed step
+ * younger than the window or one with no hook to wake the run (a session resting on its hook is
+ * left alone). Pages by run id so a large installation is read in bounded chunks.
  */
 export async function findInFlightRuns(pool               , pageSize = 500)                      {
   const found             = [];
@@ -94,7 +103,8 @@ export async function findInFlightRuns(pool               , pageSize = 500)     
         WHERE r.status IN ('pending', 'running') AND r.id > $1
           AND last.type <> ALL($2::text[])
           AND (last.type <> 'step_completed'
-               OR last.created_at > LOCALTIMESTAMP - make_interval(secs => $4::double precision))
+               OR last.created_at > LOCALTIMESTAMP - make_interval(secs => $4::double precision)
+               OR NOT EXISTS (SELECT 1 FROM workflow.workflow_hooks h WHERE h.run_id = r.id))
         ORDER BY r.id
         LIMIT $3`,
       [after, PARKED_LAST_EVENTS, pageSize, INFLIGHT_COMPLETED_STEP_WITHIN_MS / 1000],

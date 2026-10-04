@@ -51,6 +51,10 @@ export async function createStreamListener(input: {
 
   async function open(): Promise<void> {
     const next = input.connect();
+    // A lost connection reports more than once (a FATAL error, then the socket's end); the
+    // first report retires the client and the rest must land somewhere, or they would be
+    // unhandled errors on the process. This handler stays for the client's whole life.
+    next.on("error", () => {});
     try {
       await next.connect();
       await next.query(`LISTEN ${input.channel}`);
@@ -58,8 +62,14 @@ export async function createStreamListener(input: {
       await next.end().catch(() => {});
       throw error;
     }
+    if (closed) {
+      // Closed while this replacement was connecting: it must not outlive the listener.
+      await next.end().catch(() => {});
+      return;
+    }
     const onLost = (reason: unknown) => {
       if (detach) detach();
+      next.end().catch(() => {});
       void reconnect(reason);
     };
     next.on("notification", onNotification);

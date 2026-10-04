@@ -64,10 +64,13 @@ import { compact } from "./util.js";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import {
   createPayloadBlobCache,
+  escapePayload,
+  isEscapedPayload,
   isSplitPayload,
   joinPayload,
   payloadBlobHashes,
   splitPayload,
+  unescapePayload,
 } from "./osinara-payload-blobs.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Only for legacy (pre-slot) runs; see `allocateEventId`. */
@@ -205,34 +208,42 @@ async function allocateEventId(db, runId) {
  * process, which is shorter than the hour an unreferenced blob survives.
  */
 const payloadBlobCache = createPayloadBlobCache();
-const PAYLOAD_BLOB_REWRITE_MS = 30 * 60 * 1000;
-const payloadBlobWrittenAt = new Map();
-const payloadBlobRefsWritten = new Set();
-const PAYLOAD_BLOB_MEMO_MAX = 50_000;
+/**
+ * Writes run in the caller's transaction and nothing is remembered across it:
+ * a rollback leaves no trace and the next attempt writes again. The blob row
+ * is touched under its own row lock before the reference is added, so a sweep
+ * deleting unreferenced blobs either waits for this commit and then sees the
+ * fresh touch, or deleted the row first and the insert recreates it.
+ */
 async function storePayloadBlobs(db, runId, blobs) {
-  const now = Date.now();
   for (const [hash, bytes] of blobs) {
     payloadBlobCache.set(hash, bytes);
-    const writtenAt = payloadBlobWrittenAt.get(hash);
-    if (writtenAt === undefined || now - writtenAt > PAYLOAD_BLOB_REWRITE_MS) {
+    const touched = await db.execute(
+      sql`UPDATE workflow.workflow_payload_blobs SET touched_at = now() WHERE hash = ${hash}`,
+    );
+    if ((touched.rowCount ?? 0) === 0) {
       await db.execute(
         sql`INSERT INTO workflow.workflow_payload_blobs (hash, bytes, size)
             VALUES (${hash}, ${Buffer.from(zstdCompressSync(bytes))}, ${bytes.length})
-            ON CONFLICT (hash) DO NOTHING`,
+            ON CONFLICT (hash) DO UPDATE SET touched_at = now()`,
       );
-      if (payloadBlobWrittenAt.size >= PAYLOAD_BLOB_MEMO_MAX) payloadBlobWrittenAt.clear();
-      payloadBlobWrittenAt.set(hash, now);
     }
-    const ref = `${runId}\u0000${hash}`;
-    if (!payloadBlobRefsWritten.has(ref)) {
-      await db.execute(
-        sql`INSERT INTO workflow.workflow_payload_blob_refs (run_id, hash)
-            VALUES (${runId}, ${hash}) ON CONFLICT DO NOTHING`,
-      );
-      if (payloadBlobRefsWritten.size >= PAYLOAD_BLOB_MEMO_MAX) payloadBlobRefsWritten.clear();
-      payloadBlobRefsWritten.add(ref);
-    }
+    await db.execute(
+      sql`INSERT INTO workflow.workflow_payload_blob_refs (run_id, hash)
+          VALUES (${runId}, ${hash}) ON CONFLICT DO NOTHING`,
+    );
   }
+}
+/**
+ * Blob payload writes stay off until every reader in the fleet restores them:
+ * this release reads both forms, the next one sets the flag (two releases, as
+ * for every contract change). Read per call so a test can switch it.
+ */
+const payloadBlobWritesEnabled = () =>
+  process.env.OSINARA_WORKFLOW_PAYLOAD_BLOBS === "1";
+/** Test hook: forget every cached blob, as a fresh process would. */
+export function resetPayloadBlobCacheForTest() {
+  payloadBlobCache.clear();
 }
 /** Event data with its serialized payload fields split into blobs where that pays. */
 async function dedupeEventData(db, runId, eventData) {
@@ -241,6 +252,15 @@ async function dedupeEventData(db, runId, eventData) {
   const blobs = new Map();
   for (const [field, value] of Object.entries(eventData)) {
     if (!(value instanceof Uint8Array)) continue;
+    // Opaque bytes that happen to start like a stored envelope are escaped so
+    // a read never mistakes them for one.
+    const escaped = escapePayload(value);
+    if (escaped !== value) {
+      if (out === eventData) out = { ...eventData };
+      out[field] = escaped;
+      continue;
+    }
+    if (!payloadBlobWritesEnabled()) continue;
     const split = splitPayload(value);
     if (!split) continue;
     if (out === eventData) out = { ...eventData };
@@ -250,25 +270,43 @@ async function dedupeEventData(db, runId, eventData) {
   if (blobs.size > 0) await storePayloadBlobs(db, runId, blobs);
   return out;
 }
-async function ensurePayloadBlobs(db, hashes) {
-  const missing = hashes.filter((hash) => payloadBlobCache.get(hash) === undefined);
-  if (missing.length === 0) return;
-  const result = await db.execute(
-    sql`SELECT hash, bytes FROM workflow.workflow_payload_blobs WHERE hash = ANY(${missing}::text[])`,
-  );
-  for (const row of result.rows ?? result) {
-    payloadBlobCache.set(row.hash, new Uint8Array(zstdDecompressSync(row.bytes)));
+/** The blobs a payload needs, for this call alone: the shared cache may evict them meanwhile. */
+async function loadPayloadBlobs(db, hashes) {
+  const found = new Map();
+  const missing = [];
+  for (const hash of hashes) {
+    const cached = payloadBlobCache.get(hash);
+    if (cached === undefined) missing.push(hash);
+    else found.set(hash, cached);
   }
+  if (missing.length > 0) {
+    // A Postgres array literal: the hashes are hex, so no quoting is needed.
+    const result = await db.execute(
+      sql`SELECT hash, bytes FROM workflow.workflow_payload_blobs WHERE hash = ANY(${`{${missing.join(",")}}`}::text[])`,
+    );
+    for (const row of result.rows ?? result) {
+      const bytes = new Uint8Array(zstdDecompressSync(row.bytes));
+      found.set(row.hash, bytes);
+      payloadBlobCache.set(row.hash, bytes);
+    }
+  }
+  return found;
 }
 /** Event data as the runtime expects it: blob markers replaced by the strings they stand for. */
 async function restoreEventData(db, eventData) {
   if (!eventData || typeof eventData !== "object") return eventData;
   let out = eventData;
   for (const [field, value] of Object.entries(eventData)) {
-    if (!(value instanceof Uint8Array) || !isSplitPayload(value)) continue;
-    await ensurePayloadBlobs(db, payloadBlobHashes(value));
+    if (!(value instanceof Uint8Array)) continue;
+    if (isEscapedPayload(value)) {
+      if (out === eventData) out = { ...eventData };
+      out[field] = unescapePayload(value);
+      continue;
+    }
+    if (!isSplitPayload(value)) continue;
+    const blobs = await loadPayloadBlobs(db, payloadBlobHashes(value));
     if (out === eventData) out = { ...eventData };
-    out[field] = joinPayload(value, (hash) => payloadBlobCache.get(hash));
+    out[field] = joinPayload(value, (hash) => blobs.get(hash));
   }
   return out;
 }
@@ -1623,41 +1661,63 @@ export function createEventsStorage(drizzle) {
       // Uses conditional UPDATE to prevent completing an already-terminal step.
       if (data.eventType === "step_completed") {
         const eventData = data.eventData;
-        // Osinara fork: the result stays in the step_completed event only.
-        const [stepValue] = await drizzle
-          .update(Schema.steps)
-          .set({
-            status: "completed",
-            completedAt: now,
-          })
-          .where(
-            and(
-              eq(Schema.steps.runId, effectiveRunId),
-              eq(Schema.steps.stepId, data.correlationId),
-              notInArray(Schema.steps.status, terminalStepStatuses),
-            ),
-          )
-          .returning();
-        if (stepValue) {
+        // Osinara fork: the result stays in the step_completed event only, so
+        // the terminal UPDATE and the event commit together. Upstream wrote
+        // them separately; with the result no longer on the row, a failure
+        // between the two would have left a completed step without its result.
+        value = await drizzle.transaction(async (tx) => {
+          const [stepValue] = await tx
+            .update(Schema.steps)
+            .set({
+              status: "completed",
+              completedAt: now,
+            })
+            .where(
+              and(
+                eq(Schema.steps.runId, effectiveRunId),
+                eq(Schema.steps.stepId, data.correlationId),
+                notInArray(Schema.steps.status, terminalStepStatuses),
+              ),
+            )
+            .returning();
+          if (!stepValue) {
+            // Step not updated - check if it exists and why
+            const [existing] = await getStepForValidation.execute({
+              runId: effectiveRunId,
+              stepId: data.correlationId,
+            });
+            if (!existing) {
+              throw new WorkflowWorldError(
+                `Step "${data.correlationId}" not found`,
+              );
+            }
+            if (isTerminalStepStatus(existing.status)) {
+              throw new EntityConflictError(
+                `Cannot modify step in terminal state "${existing.status}"`,
+              );
+            }
+            throw new EntityConflictError(
+              `Step "${data.correlationId}" could not be completed`,
+            );
+          }
           // The entity reported back carries the result it was just given.
           step = deserializeStepError(compact({ ...stepValue, output: eventData.result }));
-        } else {
-          // Step not updated - check if it exists and why
-          const [existing] = await getStepForValidation.execute({
+          const eventValue = await insertEventRow(tx, {
             runId: effectiveRunId,
-            stepId: data.correlationId,
+            eventId: await getEventId(tx),
+            correlationId: data.correlationId,
+            eventType: data.eventType,
+            eventData: storedEventData,
+            specVersion: effectiveSpecVersion,
           });
-          if (!existing) {
-            throw new WorkflowWorldError(
-              `Step "${data.correlationId}" not found`,
-            );
-          }
-          if (isTerminalStepStatus(existing.status)) {
+          if (!eventValue) {
             throw new EntityConflictError(
-              `Cannot modify step in terminal state "${existing.status}"`,
+              `step_completed for step "${data.correlationId}" could not be created`,
             );
           }
-        }
+          eventId = eventValue.eventId;
+          return { createdAt: eventValue.createdAt };
+        }, SLOT_INSERT_TRANSACTION);
       }
       // Handle step_failed event: terminal state with error
       // Uses conditional UPDATE to prevent failing an already-terminal step.
