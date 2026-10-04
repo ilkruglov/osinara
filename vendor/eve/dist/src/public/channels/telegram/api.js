@@ -1,6 +1,7 @@
 import { isObject } from "#shared/guards.js";
 import { parseJsonObject } from "#shared/json.js";
 import { parseTelegramChatType } from "#public/channels/telegram/inbound.js";
+import { telegramRetryAfterSeconds, telegramSendPacer } from "./osinara-telegram-send-pacing.js";
 const TELEGRAM_MESSAGE_TEXT_MAX_LENGTH = 4096;
 function telegramContinuationToken(e) {
   let t = e.messageThreadId === void 0 ? `` : String(e.messageThreadId),
@@ -20,11 +21,22 @@ async function callTelegramApi(e) {
       method: `POST`,
     };
   e.body !== void 0 && (i.body = JSON.stringify(parseJsonObject(e.body)));
-  let a = await n(
-    `${e.apiBaseUrl ?? `https://api.telegram.org`}/bot${r}/${encodeURIComponent(e.method)}`,
-    i,
-  );
-  return { body: await parseResponseBody(a), ok: a.ok, status: a.status };
+  let u = `${e.apiBaseUrl ?? `https://api.telegram.org`}/bot${r}/${encodeURIComponent(e.method)}`;
+  // Osinara: every sending method waits for its slot under Telegram's limits, and a 429 pauses
+  // all calls for the time Telegram names before this one is tried once more.
+  await telegramSendPacer.acquire(e.method, e.body);
+  let a = await n(u, i),
+    s = await parseResponseBody(a);
+  if (a.status === 429) {
+    let t = telegramRetryAfterSeconds(s);
+    if (t !== null) {
+      telegramSendPacer.retryAfter(t);
+      await telegramSendPacer.waitForPause();
+      a = await n(u, i);
+      s = await parseResponseBody(a);
+    }
+  }
+  return { body: s, ok: a.ok, status: a.status };
 }
 async function sendTelegramMessage(e) {
   let t = await callTelegramApi({
