@@ -1,7 +1,9 @@
 /**
  * Slot-based claim versioning.
  *
- * Export:
+ * Exports:
+ * - `lockSlotClaims`: locks the slot and returns its active records with their text.
+ * - `requireSlotUpdate`: refuses a write that ignores the slot, quoting its records in the error.
  * - `supersedeSlotClaims`: retires older active claims of the same subject and attribute slot.
  */
 import type { PoolClient } from "pg";
@@ -22,7 +24,7 @@ export interface SlotSupersedeInput {
 export async function lockSlotClaims(
   client: PoolClient, auth: MemoryAuthorization,
   input: { attribute: string; kind: MemoryKind; scope: MemoryScope; scopePartitionKey: string; subjectLabel: string | null; subjectParticipantId: string | null; subjectUserId: string | null; memoryProjectId: string | null },
-): Promise<Array<{ id: string; memory_ref: string }>> {
+): Promise<SlotClaimRow[]> {
   // Lock the identity before inserting, including an empty slot. Row locks alone miss first-write races.
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [JSON.stringify([
     "memory-slot", auth.familyId, input.scope, input.scopePartitionKey, input.attribute,
@@ -33,8 +35,8 @@ export async function lockSlotClaims(
   // Semantic kinds share a slot (a "fact" and a "family_shared" about the same thing are one
   // version chain); an episode slot only ever holds episodes.
   const slotKinds = input.kind === "episode" ? ["episode"] : [...MEMORY_SEMANTIC_KINDS];
-  const previous = await client.query<{ id: string; memory_ref: string }>(
-    `SELECT item.id, ref.memory_ref FROM memory_items AS item
+  const previous = await client.query<SlotClaimRow>(
+    `SELECT item.id, ref.memory_ref, item.content FROM memory_items AS item
       JOIN memory_item_refs AS ref ON ref.memory_item_id = item.id
       WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
         AND item.claim_status = 'active' AND item.memory_project_id IS NOT DISTINCT FROM $4::uuid
@@ -50,8 +52,32 @@ export async function lockSlotClaims(
   return previous.rows;
 }
 
+export interface SlotClaimRow {
+  id: string;
+  memory_ref: string;
+  content: string;
+}
+
+// A slot conflict used to answer with references only and send the model to list_memories: on
+// production (4 October 2026) 27 of 71 `remember` calls of the silent review hit one, because the
+// review sees forty recent records of a group that holds three thousand, and each cost two more
+// model steps. The records themselves travel with the error, so the retry is one step.
+const SLOT_RECORD_PREVIEW_CHARACTERS = 200;
+const SLOT_RECORD_PREVIEW_COUNT = 20;
+
+function formatSlotRecords(rows: readonly SlotClaimRow[]): string {
+  const shown = rows.slice(0, SLOT_RECORD_PREVIEW_COUNT).map((row) => {
+    const content = row.content.length > SLOT_RECORD_PREVIEW_CHARACTERS
+      ? `${row.content.slice(0, SLOT_RECORD_PREVIEW_CHARACTERS)}…`
+      : row.content;
+    return `${row.memory_ref}: ${JSON.stringify(content)}`;
+  });
+  const rest = rows.length - shown.length;
+  return shown.join("; ") + (rest > 0 ? `; ещё ${rest} — прочитай через list_memories` : "");
+}
+
 export function requireSlotUpdate(
-  rows: readonly { id: string; memory_ref: string }[],
+  rows: readonly SlotClaimRow[],
   update: CreateMemoryInput["slotUpdate"],
 ): string[] {
   const actual = rows.map((row) => row.memory_ref).sort();
@@ -61,7 +87,7 @@ export function requireSlotUpdate(
     throw new ModelFacingError({
       category: "conflict", code, field: "slotUpdate", retryable: false, sideEffectStatus: "not_started",
       reason: update ? "Состав слота изменился после чтения" : "В слоте уже есть активные записи",
-      correction: "Прочитай полный текст актуальных записей через list_memories/search_memories. Затем передай slotUpdate с их previousMemoryRefs: add для дополнения, replace для полной новой версии. Текущие ссылки: " + actual.join(", "),
+      correction: "Передай slotUpdate с previousMemoryRefs — всеми текущими ссылками слота ниже: add, если новая запись дополняет их; replace с полной новой версией, если заменяет. Текущие записи слота: " + formatSlotRecords(rows),
     });
   }
   if (update?.action === "add" && actual.length >= MEMORY_LIST_MAX_LIMIT) {
