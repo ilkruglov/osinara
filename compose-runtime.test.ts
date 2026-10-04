@@ -76,12 +76,25 @@ describe("Docker Compose runtime wiring", () => {
 
   // Load runs on one core (3 October 2026): 3 drains capped at ~30 turns a minute, Workflow 10 at
   // ~95, and ~104 a minute held steady at 20 and 30; the pool needs a connection per worker plus two.
-  it("lets the agent run twenty chats and thirty Workflow steps at once", () => {
+  // 4 October 2026: one installation serves one family on one core, another a thousand on a
+  // bigger machine; the numbers that differ come from the installation's .env with the
+  // single-family values as defaults.
+  it("lets the agent run twenty chats and thirty Workflow steps at once unless the installation says otherwise", () => {
+    const tunables: Record<string, string> = {
+      AGENT_HEAP_MB: "512",
+      MEMORY_REVIEW_MAX_IN_FLIGHT: "2",
+      TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "20",
+      TELEGRAM_PRIVATE_BURST_QUIET_MS: "2000",
+      WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32",
+      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30",
+    };
     for (const file of ["compose.yaml", "compose.production.yaml"]) {
       const compose = readFileSync(new URL(file, projectRoot), "utf8");
-      expect(compose, file).toContain('      TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "20"\n');
-      expect(compose, file).toContain('      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30"\n');
-      expect(compose, file).toContain('      WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32"\n');
+      for (const [name, value] of Object.entries(tunables)) {
+        expect(compose, file).toContain(`      ${name}: \${${name}-${value}}\n`);
+      }
+      const runner = compose.slice(compose.indexOf("\n  sandbox-runner:\n"), compose.indexOf("\n  sandbox-egress-proxy:\n"));
+      expect(runner, file).toContain("      SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}\n");
     }
   });
 

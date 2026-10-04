@@ -11,6 +11,8 @@
  */
 import { z } from "zod";
 
+import { integerSetting } from "./lib/runtime-tuning.js";
+
 export const AGENT_COMPACTION_THRESHOLD = 0.75;
 // Eve compacts at threshold × context window. A million-token window would let a session grow to
 // 750k tokens that every turn re-sends at cache-miss price, so the working window is capped: with
@@ -85,9 +87,17 @@ export const TELEGRAM_GROUP_TRUST_LOCK_HASH_SEED = 1;
 export const TELEGRAM_INGRESS_LEASE_MS = 15 * 60 * 1_000;
 // A person often sends several messages in a row (26 September 2026: five private messages in a
 // minute gave five turns). A private chat's head is claimed only after the chat has been quiet this
-// long, so the series behind it is complete; a steady stream waits at most the cap.
-export const TELEGRAM_PRIVATE_BURST_QUIET_MS = 2_000;
-export const TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS = 20_000;
+// long, so the series behind it is complete; a steady stream waits at most the cap. Both are
+// tunable: the quiet window is paid on every private message, so a single-family installation
+// that values the answer's speed over series completeness can shorten it.
+export const TELEGRAM_PRIVATE_BURST_QUIET_MS = integerSetting(
+  "TELEGRAM_PRIVATE_BURST_QUIET_MS",
+  { absent: 2_000, min: 0, max: 60_000 },
+);
+export const TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS = integerSetting(
+  "TELEGRAM_PRIVATE_BURST_MAX_WAIT_MS",
+  { absent: 20_000, min: 0, max: 300_000 },
+);
 export const TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 export const TELEGRAM_MAX_ATTACHMENTS_PER_MESSAGE = 1;
 export const TELEGRAM_MAX_OUTBOUND_DOCUMENT_BYTES = 50 * 1024 * 1024;

@@ -12,11 +12,19 @@
  */
 import { createHash } from "node:crypto";
 
+import { integerSetting } from "../../agent/lib/runtime-tuning.js";
 import type { SandboxRunnerCreateRequest } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import { SANDBOX_CONTAINER_POLICY_VERSION } from "./docker-sandbox-options.js";
 
 export const SANDBOX_IDLE_SWEEP_INTERVAL_MS = 60 * 1_000;
-export const SANDBOX_IDLE_TIMEOUT_MS = 30 * 60 * 1_000;
+// An idle container costs under a megabyte of resident memory but its file cache and a cold
+// start of about three seconds on the next command (load stand, 4 October 2026), so the window
+// is tunable: one family keeps its container warm for hours, a thousand families on one machine
+// want minutes so that only the chats of the last few minutes hold a container.
+export const SANDBOX_IDLE_TIMEOUT_MS = integerSetting(
+  "SANDBOX_IDLE_TIMEOUT_MS",
+  { absent: 30 * 60 * 1_000, min: 60 * 1_000, max: 24 * 60 * 60 * 1_000 },
+);
 
 const CONTAINER_PREFIX = "osinara-sandbox-";
 

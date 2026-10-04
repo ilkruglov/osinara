@@ -4,6 +4,8 @@
  * Exports:
  * - Batch size, dispatch/alert leases, bounded recovery, stale/abandoned bounds, claim bounds.
  */
+import { integerSetting } from "../runtime-tuning.js";
+
 /**
  * A running batch waits only for its own turn to report back. This bound is the last resort for a
  * turn that never does, so it must stay far above any real turn, including one that survives a
@@ -14,11 +16,19 @@ export const MEMORY_REVIEW_ABANDONED_TURN_TIMEOUT_MILLISECONDS = 60 * 60 * 1_000
 export const MEMORY_REVIEW_BATCH_SIZE = 50;
 export const MEMORY_REVIEW_DISPATCH_BATCH_SIZE = 10;
 // Reviews share the Workflow workers (30 on production) with the turns people wait for: at most
-// this many background reviews run at once, and a claim takes only what the cap leaves.
-export const MEMORY_REVIEW_MAX_IN_FLIGHT = 10;
+// this many background reviews run at once, and a claim takes only what the cap leaves. On one
+// core a review in flight also takes the core from a live turn, so the cap is tunable: a
+// single-family installation wants one or two, a thousand families the default.
+export const MEMORY_REVIEW_MAX_IN_FLIGHT = integerSetting(
+  "MEMORY_REVIEW_MAX_IN_FLIGHT",
+  { absent: 10, min: 1, max: 100 },
+);
 // Lanes materialized per minute pass, so one transaction never spans every lane of a large
 // installation; lanes left over qualify again on the next pass.
-export const MEMORY_REVIEW_MATERIALIZE_LANE_LIMIT = 200;
+export const MEMORY_REVIEW_MATERIALIZE_LANE_LIMIT = integerSetting(
+  "MEMORY_REVIEW_MATERIALIZE_LANE_LIMIT",
+  { absent: 200, min: 1, max: 10_000 },
+);
 // Idle review: a lane is reviewed once ten sources accumulate, after ten minutes of silence with
 // at least five sources, or after six hours of silence with anything at all. One or two messages
 // on their own gave the model nothing to judge: production reviewed 607 messages in 108 batches

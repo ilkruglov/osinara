@@ -30,7 +30,12 @@ start_server() {
   node .runtime/scripts/startup-watchdog.js &
   # Bounded heap: by default V8 may grow to ~2.2 GB on this host and kept ~1 GB of garbage under
   # load; at 512 MB the load run held 200 families at the same speed (AGENT_PROCESS_MEMORY).
-  exec node --max-old-space-size=512 .output/server/index.mjs
+  # AGENT_HEAP_MB raises it for an installation with many families on a bigger machine.
+  heap_mb="${AGENT_HEAP_MB:-512}"
+  case "$heap_mb" in
+    ''|*[!0-9]*) printf '%s\n' "AGENT_RUNTIME_TUNING_INVALID: AGENT_HEAP_MB должно быть целым числом мегабайт" >&2; exit 1 ;;
+  esac
+  exec node --max-old-space-size="$heap_mb" .output/server/index.mjs
 }
 
 # A compose run command is an explicit operator action and must terminate normally.

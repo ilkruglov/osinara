@@ -91,13 +91,23 @@ services:
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
       TELEGRAM_WEBHOOK_SECRET_TOKEN: ${TELEGRAM_WEBHOOK_SECRET_TOKEN:?TELEGRAM_WEBHOOK_SECRET_TOKEN is required}
       WORKFLOW_POSTGRES_JOB_PREFIX: osinara
-      WORKFLOW_POSTGRES_MAX_POOL_SIZE: "32"
+      WORKFLOW_POSTGRES_MAX_POOL_SIZE: ${WORKFLOW_POSTGRES_MAX_POOL_SIZE-32}
       WORKFLOW_POSTGRES_URL: ${WORKFLOW_POSTGRES_URL:?WORKFLOW_POSTGRES_URL is required}
       # Load runs, 3 October 2026 (stress/load-families): 3 drains capped the bot at ~30 turns a
       # minute, Workflow concurrency 10 at ~95; 1 000 families of 100 messages a day (~104 a minute)
       # kept a steady queue only at 20 drains and 30 steps (answer p50 7.3 s over a 5 s model).
-      TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: "20"
-      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "30"
+      # Tuning (set in the installation's .env; the defaults are the single-family profile):
+      #   one family on one core        drains 20, steps 30, pool 32, review 2, heap 512,
+      #                                 quiet 2000, sandbox idle 6 h (runner below)
+      #   a thousand families, 4+ cores drains 40–60, steps 60, pool 64, review 10, heap 1024,
+      #                                 sandbox idle 10 min. A drain holds its chat for the whole
+      #                                 turn, so drains × 60 / turn seconds is the bot's turns a
+      #                                 minute (4 October 2026: 20 drains over 13.5 s turns = 89).
+      TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS: ${TELEGRAM_INGRESS_MAX_CONCURRENT_DRAINS-20}
+      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: ${WORKFLOW_POSTGRES_WORKER_CONCURRENCY-30}
+      MEMORY_REVIEW_MAX_IN_FLIGHT: ${MEMORY_REVIEW_MAX_IN_FLIGHT-2}
+      AGENT_HEAP_MB: ${AGENT_HEAP_MB-512}
+      TELEGRAM_PRIVATE_BURST_QUIET_MS: ${TELEGRAM_PRIVATE_BURST_QUIET_MS-2000}
       WORKFLOW_QUEUE_NAMESPACE: eve6f73696e6172612d66616d696c792d6167656e74
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/eve/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -194,6 +204,9 @@ services:
     environment:
       SANDBOX_RUNTIME_IMAGE: ${SANDBOX_RUNTIME_IMAGE:?SANDBOX_RUNTIME_IMAGE must be an exact digest reference}
       BROWSERLESS_API_KEY: ${BROWSERLESS_API_KEY-}
+      # Idle window before a family's container is stopped: 6 h keeps one family's container warm
+      # (an idle one holds under a megabyte resident); a thousand families want 10 min (600000).
+      SANDBOX_IDLE_TIMEOUT_MS: ${SANDBOX_IDLE_TIMEOUT_MS-21600000}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s
