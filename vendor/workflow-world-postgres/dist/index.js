@@ -3,7 +3,7 @@ import {
   resolveQueueNamespace,
   SPEC_VERSION_CURRENT,
 } from "@workflow/world";
-import { requeueInFlightRuns, startStuckRunRecovery } from "./osinara-stuck-run-recovery.js";
+import { releaseDeadWorkerLocks, requeueInFlightRuns, startStuckRunRecovery } from "./osinara-stuck-run-recovery.js";
 import { Pool } from "pg";
 import { createClient } from "./drizzle/index.js";
 import { traceWorkflowPool } from "./osinara-workflow-pool-trace.js";
@@ -73,7 +73,11 @@ export function createWorld(
       streamFlushIntervalMs: config.streamFlushIntervalMs,
     }),
     async start() {
+      const startedAt = new Date();
       await queue.start();
+      // Osinara fork: jobs locked by a process that died wait four hours for graphile's own
+      // expiry; one agent process runs, so every lock older than this start is a dead one's.
+      await releaseDeadWorkerLocks(pool, startedAt);
       // Osinara fork: only runs interrupted mid-flight are re-enqueued; a parked session wakes
       // on its hook and replaying every active run made each start grow with the chat count.
       await requeueInFlightRuns({

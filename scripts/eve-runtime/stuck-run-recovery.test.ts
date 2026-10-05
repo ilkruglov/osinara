@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { startStuckRunRecovery } from "./stuck-run-recovery.ts";
+import { releaseDeadWorkerLocks, startStuckRunRecovery } from "./stuck-run-recovery.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -39,5 +39,20 @@ describe("stuck run recovery scheduling", () => {
 
     expect(pool.query).toHaveBeenCalledTimes(2);
     expect(error.mock.calls[0]?.[0]).toContain("AGENT_WORKFLOW_STUCK_RUN_SCAN_FAILED");
+  });
+});
+
+describe("releaseDeadWorkerLocks", () => {
+  it("frees the locks older than this process's start and reports how many workers held them", async () => {
+    const queries: Array<{ text: string; values?: unknown[] }> = [];
+    const pool = { query: async (text: string, values?: unknown[]) => {
+      queries.push({ text, values });
+      return { rows: [{ workers: "2" }] };
+    } };
+    const startedAt = new Date("2026-10-05T14:31:57Z");
+    await expect(releaseDeadWorkerLocks(pool, startedAt)).resolves.toBe(2);
+    expect(queries[0]!.values).toEqual([startedAt]);
+    expect(queries[0]!.text).toContain("graphile_worker.force_unlock_workers");
+    expect(queries[0]!.text).toContain("_private_job_queues");
   });
 });

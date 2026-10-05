@@ -9,6 +9,7 @@
  *   own startup recovery did; returns a stop function.
  * - `findInFlightRuns`, `requeueInFlightRuns`: startup recovery of the runs interrupted mid-flight
  *   only; parked sessions and sleeps are left to the events that wake them.
+ * - `releaseDeadWorkerLocks`: startup release of queue jobs still locked by processes that died.
  *
  * Key construct:
  * - On 1 October 2026 a turn step recorded `step_retrying`, but the follow-up job that should have
@@ -136,6 +137,37 @@ export async function requeueInFlightRuns(input
     console.info(JSON.stringify({ code: "AGENT_WORKFLOW_INFLIGHT_RUNS_REQUEUED", count: runs.length }));
   }
   return runs.length;
+}
+
+/**
+ * Releases the queue jobs and job queues locked by workers that started before this process.
+ *
+ * A worker locks a job while running it; graphile-worker frees a lock only after four hours, so a
+ * process killed mid-step (a restart, a crash, an OOM, a deploy that stopped waiting) left its turn
+ * and every later message of that chat waiting: Ft86 was silent from 14:31 on 5 October 2026 until
+ * the lock was freed by hand. The installation runs one agent process, so every lock older than
+ * this process belongs to a dead one. With several replicas this would steal live jobs; it must
+ * then become a heartbeat check.
+ */
+export async function releaseDeadWorkerLocks(pool               , startedAt      )                  {
+  const result = await pool.query(
+    `WITH dead AS (
+       SELECT DISTINCT locked_by FROM graphile_worker._private_jobs
+        WHERE locked_by IS NOT NULL AND locked_at < $1
+       UNION
+       SELECT DISTINCT locked_by FROM graphile_worker._private_job_queues
+        WHERE locked_by IS NOT NULL AND locked_at < $1
+     ), released AS (
+       SELECT graphile_worker.force_unlock_workers(ARRAY(SELECT locked_by FROM dead))
+     )
+     SELECT (SELECT count(*) FROM dead) AS workers FROM released`,
+    [startedAt],
+  );
+  const workers = Number(result.rows[0]?.workers ?? 0);
+  if (workers > 0) {
+    console.warn(JSON.stringify({ code: "AGENT_WORKFLOW_DEAD_WORKER_LOCKS_RELEASED", workers }));
+  }
+  return workers;
 }
 
 export function startStuckRunRecovery(input   

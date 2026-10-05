@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 
-import { findInFlightRuns, findStuckRuns, requeueInFlightRuns } from "./stuck-run-recovery.ts";
+import { findInFlightRuns, findStuckRuns, releaseDeadWorkerLocks, requeueInFlightRuns } from "./stuck-run-recovery.ts";
 
 const LIMITS = { retryAfterMs: 10 * 60 * 1000, stepStartedAfterMs: 25 * 60 * 1000 };
 
@@ -119,4 +119,29 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       await pool.end();
     }
   }, 15_000);
+
+  it("frees jobs locked by a worker that died before this process started, and only those", async () => {
+    if (!process.env.WORKFLOW_POSTGRES_URL) throw new Error("TEST_WORKFLOW_DATABASE_MISSING");
+    const pool = new Pool({ connectionString: process.env.WORKFLOW_POSTGRES_URL, max: 2 });
+    const marker = `osinara-test-${randomUUID()}`;
+    try {
+      const dead = await pool.query<{ id: string }>("SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id", [marker]);
+      const live = await pool.query<{ id: string }>("SELECT (graphile_worker.add_job($1, '{}'::json)).id::text AS id", [marker]);
+      await pool.query("UPDATE graphile_worker._private_jobs SET locked_by = 'worker-dead', locked_at = now() - interval '10 minutes' WHERE id = $1::bigint", [dead.rows[0]!.id]);
+      await pool.query("UPDATE graphile_worker._private_jobs SET locked_by = 'worker-live', locked_at = now() WHERE id = $1::bigint", [live.rows[0]!.id]);
+
+      await releaseDeadWorkerLocks(pool, new Date(Date.now() - 60_000));
+      const rows = await pool.query<{ id: string; locked_by: string | null }>(
+        "SELECT id::text, locked_by FROM graphile_worker._private_jobs WHERE id = ANY($1::bigint[]) ORDER BY id",
+        [[dead.rows[0]!.id, live.rows[0]!.id]],
+      );
+      expect(rows.rows).toEqual([
+        { id: dead.rows[0]!.id, locked_by: null },
+        { id: live.rows[0]!.id, locked_by: "worker-live" },
+      ]);
+    } finally {
+      await pool.query("DELETE FROM graphile_worker._private_jobs WHERE task_id IN (SELECT id FROM graphile_worker._private_tasks WHERE identifier = $1)", [marker]);
+      await pool.end();
+    }
+  });
 });
