@@ -16,10 +16,14 @@ function truncateByDirection(e, t) {
     a = [],
     o = 0,
     s = i ? 0 : n.length - 1,
-    c = i ? 1 : -1;
+    c = i ? 1 : -1,
+    // Osinara: a line cut to its length limit is a cut output too (Codex review, 5 October
+    // 2026: web_fetch reported a 5 MB one-line page as complete).
+    l = !1;
   for (let e = s; e >= 0 && e < n.length && a.length < 2e3; e += c) {
     let t = capLineLength(n[e] ?? ``),
       r = Buffer.byteLength(t, `utf8`) + 1;
+    t !== (n[e] ?? ``) && (l = !0);
     if (o + r > 51200 && a.length > 0) break;
     (a.push(t), (o += r));
   }
@@ -30,7 +34,7 @@ function truncateByDirection(e, t) {
 `),
       outputLines: a.length,
       totalLines: r,
-      truncated: a.length < r,
+      truncated: a.length < r || l,
     }
   );
 }

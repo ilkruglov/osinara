@@ -5,12 +5,15 @@
  * - Every adversarial page found by the three Codex reviews of 5 October 2026 converts in bounded
  *   time without throwing: quadratic block output, whitespace runs in <pre> and in attributes,
  *   deep nesting behind stray closers, `<div/>` and CDATA, tags behind a lone `<`, deep lists with
- *   many line breaks, unclosed table cells, misnested blocks. Text after such markup survives.
- * - A page past the output budget is reported as truncated.
+ *   many line breaks, unclosed table cells, misnested blocks, empty links after a run of line
+ *   breaks in <pre>. Text after such markup survives, uncut.
+ * - A page past the output budget is reported as truncated, and so is an output whose only line
+ *   the tool cuts to its line limit.
  * - Ordinary markup converts to readable Markdown.
  */
 import { describe, expect, it } from "vitest";
 
+import { truncateHead } from "../../vendor/eve/dist/src/execution/sandbox/truncate-output.js";
 // @ts-expect-error -- vendored Eve module without declarations.
 import { convertHtmlToMarkdown, convertHtmlToMarkdownBounded } from "../../vendor/eve/dist/src/execution/web-fetch/html.js";
 
@@ -43,6 +46,7 @@ describe("web_fetch Markdown conversion", () => {
     ["deep lists with many breaks", "<ul><li>".repeat(125) + "x<br>".repeat(10_000) + "</li></ul>".repeat(125) + "<p>TAIL</p>"],
     ["unclosed table cells", "<table><tr>" + "<td><p>cell".repeat(300) + "</table><p>TAIL</p>"],
     ["misnested blocks", "<span><div></span>".repeat(4_000) + "TAIL"],
+    ["empty links after line breaks in pre", "<pre>" + "\n".repeat(40_000) + "<a></a>".repeat(20_000) + "TAIL</pre>"],
   ])("converts %s in bounded time", (_name, html) => {
     const started = performance.now();
     const result = convertBounded(html);
@@ -50,11 +54,16 @@ describe("web_fetch Markdown conversion", () => {
     // slow machine.
     expect(performance.now() - started).toBeLessThan(1_000);
     expect(typeof result.markdown).toBe("string");
-    if (html.includes("TAIL") && !result.truncated) expect(result.markdown.endsWith("TAIL")).toBe(true);
+    if (html.includes("TAIL")) {
+      expect(result.truncated).toBe(false);
+      expect(result.markdown.replace(/\n```$/u, "").endsWith("TAIL")).toBe(true);
+    }
   });
 
   it("reports a page past the output budget as truncated", () => {
     expect(convertBounded(`<p>${PARAGRAPH}</p>`.repeat(10_000)).truncated).toBe(true);
     expect(convertBounded(`<p>${PARAGRAPH}</p>`.repeat(100)).truncated).toBe(false);
+    expect(truncateHead("x".repeat(5_000)).truncated).toBe(true);
+    expect(truncateHead("x".repeat(2_000)).truncated).toBe(false);
   });
 });

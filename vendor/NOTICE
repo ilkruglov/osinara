@@ -8,4 +8,4 @@ Their original LICENSE and NOTICE files are kept in each package directory.
 The Osinara project changed files in both packages. The changes were first applied as install-time
 patches (scripts/apply-eve-patches.ts, removed when these copies were vendored on 3 October 2026)
 and are maintained here since then; the repository history shows every change. Files named
-osinara-*.js are added by the Osinara project and built from scripts/eve-runtime/.
+osinara-*.js are added by the Osinara project and built from scripts/eve-runtime/ and agent/lib/.

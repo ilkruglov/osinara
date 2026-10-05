@@ -1,4 +1,5 @@
-import { htmlToMarkdown, htmlToText } from "./osinara-html-text.js";
+import { htmlToMarkdown } from "./osinara-html-markdown.js";
+import { htmlToText } from "./osinara-html-text.js";
 function convertHtmlToMarkdown(t) {
   return convertHtmlToMarkdownBounded(t).markdown;
 }

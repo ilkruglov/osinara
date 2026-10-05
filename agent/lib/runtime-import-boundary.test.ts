@@ -12,9 +12,9 @@
  *   `?raw` or not) are resolved like Eve's asset plugin does. A missing file fails the bundle; a
  *   dynamic import or require of a computed specifier is refused, since nothing can check it; a
  *   package must be a production dependency, since the image installs without dev ones, and the
- *   exact specifier must resolve in it (a subpath a package does not have fails at start); any
- *   `createRequire` is refused, since what it loads is invisible to the bundle (Codex reviews,
- *   5 October 2026).
+ *   exact specifier must resolve in it the way Node's ESM loader will (a missing subpath, or one
+ *   without its extension, fails at start); `createRequire` from node:module is refused, since
+ *   what it loads is invisible to the bundle (Codex reviews, 5 October 2026).
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
@@ -86,7 +86,11 @@ function packagePlugin(problems: string[], root: string): Plugin {
           pluginData: { boundaryInner: true },
           resolveDir: args.resolveDir,
         });
-        if (resolved.errors.length > 0) problems.push(`${relative(root, args.importer)} imports ${args.path}, which does not resolve`);
+        if (resolved.errors.length > 0) {
+          problems.push(`${relative(root, args.importer)} imports ${args.path}, which does not resolve`);
+        } else if (args.kind !== "require-call" && !nodeEsmResolves(args.path, resolved.path)) {
+          problems.push(`${relative(root, args.importer)} imports ${args.path}, which Node does not resolve as ESM`);
+        }
         return { external: true, path: args.path };
       });
     },
@@ -97,6 +101,25 @@ function packageName(specifier: string): string {
   const parts = specifier.split("/");
   return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0]!;
 }
+
+/**
+ * esbuild completes a package subpath the CommonJS way (`dockerode/lib/container` finds
+ * `container.js`); Node's ESM loader does not, and fails at start. Without an `exports` map
+ * (which both apply literally) a subpath must name the file exactly.
+ */
+function nodeEsmResolves(specifier: string, resolvedPath: string): boolean {
+  const name = packageName(specifier);
+  const subpath = specifier.slice(name.length + 1);
+  if (subpath === "") return true;
+  const marker = `/node_modules/${name}/`;
+  const at = resolvedPath.lastIndexOf(marker);
+  if (at === -1) return true;
+  const packageDirectory = resolvedPath.slice(0, at + marker.length - 1);
+  const manifest = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8")) as { exports?: unknown };
+  return manifest.exports !== undefined || resolvedPath === join(packageDirectory, subpath);
+}
+
+const MODULE_LOADER = new Set(["module", "node:module"]);
 
 /** Files outside the image the bundle of `entries` takes, computed imports, and bundle errors. */
 async function boundaryProblems(
@@ -149,19 +172,29 @@ async function boundaryProblems(
       if (entry.d > -1 && entry.n === undefined) {
         problems.push(`${where} imports a computed specifier: ${output.text.slice(entry.ss, entry.se)}`);
       }
+      // `createRequire` loads whatever its argument names, unseen by the bundle; any reach for
+      // it through node:module (named, namespace, default or dynamic import) is refused. Text that
+      // merely mentions it (a string, a comment) is no import and passes.
+      if (entry.n !== undefined && MODULE_LOADER.has(entry.n)) {
+        const statement = output.text.slice(entry.ss, entry.se);
+        if (entry.d > -1 || statement.includes("createRequire") || !statement.includes("{")) {
+          problems.push(`${where} uses createRequire: ${statement.slice(0, 80)}`);
+        }
+      }
     }
     // esbuild leaves a require it cannot bundle as `__require(…)`; only a lone string literal
     // closed by `)` is checkable, anything else (an expression, a call) is refused.
     for (const match of output.text.matchAll(/\b__require\(/gu)) {
       const rest = output.text.slice(match.index + match[0].length, match.index + match[0].length + 200);
       // The helper's own definition mentions `__require()` with no argument.
-      if (!/^\s*\)/u.test(rest) && !/^\s*("[^"\\\n]*"|'[^'\\\n]*')\s*\)/u.test(rest)) {
+      const literal = /^\s*(?:"([^"\\\n]*)"|'([^'\\\n]*)')\s*\)/u.exec(rest);
+      if (!/^\s*\)/u.test(rest) && !literal) {
         problems.push(`${where} requires a computed specifier: ${rest.split("\n", 1)[0]!.slice(0, 80)}`);
+      } else if (literal && MODULE_LOADER.has(literal[1] ?? literal[2]!)) {
+        problems.push(`${where} uses createRequire: require of node:module`);
       }
     }
     // A require made by createRequire loads whatever its argument names, unseen by the bundle.
-    const createRequireAt = output.text.search(/\bcreateRequire\b/u);
-    if (createRequireAt !== -1) problems.push(`${where} uses createRequire`);
   }
   return problems;
 }
@@ -213,13 +246,16 @@ describe("agent runtime import boundary", () => {
       write("scripts/notes.md", "text");
       write("agent/notes.md", "text");
       write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md#part\"; export { inside, outside };");
-      write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\";");
+      write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\"; import \"pg/lib/client\"; import \"pg/lib/client.js\";");
+      write("agent/mentions.ts", "import { builtinModules } from \"node:module\"; export const info = \"createRequire is disabled\"; export const count = builtinModules.length;");
       write("agent/create-require.ts", "import { createRequire } from \"node:module\"; export const load = createRequire(import.meta.url)(\"../scripts/side.js\");");
       for (const name of ["pg", "vitest"]) {
         mkdirSync(join(root, "node_modules", name), { recursive: true });
         write(`node_modules/${name}/package.json`, JSON.stringify({ main: "index.js", name }));
         write(`node_modules/${name}/index.js`, "module.exports = {};");
       }
+      mkdirSync(join(root, "node_modules", "pg", "lib"));
+      write("node_modules/pg/lib/client.js", "module.exports = {};");
       const problems = await boundaryProblems(
         root, readdirSync(join(root, "agent")).filter((file) => file.endsWith(".ts")).map((file) => `agent/${file}`),
         ["agent"], new Set(["pg"]),
@@ -240,8 +276,11 @@ describe("agent runtime import boundary", () => {
       ]);
       expect(problems.filter((problem) => problem.includes("does not resolve"))).toEqual([
         "agent/packages.ts imports pg/not-real.js, which does not resolve",
+        "agent/packages.ts imports pg/lib/client, which Node does not resolve as ESM",
       ]);
-      expect(problems.filter((problem) => problem.includes("createRequire"))).toHaveLength(1);
+      expect(problems.filter((problem) => problem.includes("createRequire"))).toEqual([
+        expect.stringMatching(/create-require\.js uses createRequire/u),
+      ]);
 
       write("agent/missing.ts", "import \"./nowhere.js\";");
       const missing = await boundaryProblems(root, ["agent/missing.ts"], ["agent"], new Set());
