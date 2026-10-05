@@ -62,7 +62,7 @@ export default defineEval({
         };
         const response = await t.target.fetch("/eve/v1/telegram", {
           method: "POST",
-          headers: { "x-telegram-bot-api-secret-token": "conversation-test-secret" },
+          headers: { "x-telegram-bot-api-secret-token": "conversation-test-secret-0123456789" },
           body: JSON.stringify({ update_id: FIRST_UPDATE_ID + ordinal, message }),
         });
         assert.equal(response.status, 200);

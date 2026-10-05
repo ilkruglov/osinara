@@ -3,13 +3,15 @@
  *
  * Export:
  * - Default minute schedule for reminders, expired-session retention, workspace cleanup,
- *   cancellation of Telegram approvals nobody confirmed in time, and physical cleanup of memory
- *   whose soft-delete recovery window has elapsed.
+ *   cancellation of Telegram approvals nobody confirmed in time, physical cleanup of memory
+ *   whose soft-delete recovery window has elapsed, and of completed Telegram updates past their
+ *   retention window.
  */
 import { defineSchedule } from "eve/schedules";
 
 import { dispatchDueReminders } from "../lib/reminders/reminder-dispatcher.js";
 import { purgeSoftDeletedMemory } from "../lib/memory-retention.js";
+import { purgeCompletedTelegramUpdates } from "../lib/telegram-ingress-retention.js";
 import { deleteExpiredSessions } from "../lib/sessions/session-retention.js";
 import { sweepTimedOutApprovals } from "../lib/telegram-hitl/approval-timeout-sweep.js";
 import { deleteOrphanedWorkspaces } from "../lib/workspaces/workspace-deletion.js";
@@ -23,6 +25,7 @@ export default defineSchedule({
       deleteOrphanedWorkspaces(),
       sweepTimedOutApprovals(),
       purgeSoftDeletedMemory(new Date()),
+      purgeCompletedTelegramUpdates(new Date()),
     ]));
   },
 });

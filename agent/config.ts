@@ -61,6 +61,11 @@ export const SOFTWARE_UPDATE_MANIFEST_MAX_BYTES = 64 * 1024;
 // связанными чанками и заявлениями по каскадам базовой таблицы.
 export const MEMORY_SOFT_DELETE_RETENTION_DAYS = 30;
 export const MEMORY_SOFT_DELETE_PURGE_BATCH_SIZE = 200;
+// Completed Telegram updates keep the whole raw payload, messages of strangers included; Telegram
+// redelivers an update for 24 hours at most, so after a month the row only holds data. Failed
+// ones stay for diagnosis (security review, 5 October 2026).
+export const TELEGRAM_INGRESS_RETENTION_DAYS = 30;
+export const TELEGRAM_INGRESS_PURGE_BATCH_SIZE = 500;
 export const TELEGRAM_API_REQUEST_TIMEOUT_MS = 15_000;
 // An unanswered approval parks the Eve turn indefinitely: Eve keeps `session.waiting` for as long
 // as it takes. The confirmation window bounds that wait so one ignored prompt cannot freeze a chat.
@@ -127,7 +132,10 @@ const runtimeEnvironmentSchema = z
     MODEL_API_KEY: z.string().regex(/^\S+$/u),
     TELEGRAM_BOT_TOKEN: z.string().min(1),
     TELEGRAM_BOT_USERNAME: z.string().min(1),
-    TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(1),
+    // One secret guards the webhook, the drain route and the approval sweep: as long as the
+    // invitation signing secret, within what Telegram accepts for secret_token (1-256 characters
+    // of A-Z, a-z, 0-9, `_` and `-`).
+    TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/u),
   });
 
 export function requireRuntimeEnvironment() {

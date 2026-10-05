@@ -219,7 +219,8 @@ services:
     depends_on:
       - agent
     ports:
-      - "8080:80"
+      # Local only: the development edge has no TLS and must not listen on every interface.
+      - "127.0.0.1:8080:80"
     restart: unless-stopped
     volumes:
       - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro

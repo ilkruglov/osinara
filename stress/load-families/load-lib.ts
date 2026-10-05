@@ -20,7 +20,7 @@ const workflowUrl = process.env.WORKFLOW_POSTGRES_URL!;
 if (!new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("LOAD_DATABASE_UNSAFE");
 
 export const FIRST_UPDATE_ID = 800_000_000;
-export const SECRET = "load-test-secret";
+export const SECRET = "load-test-secret-0123456789abcdef";
 export const db = new pg.Pool({ connectionString: databaseUrl, max: 8 });
 export const workflowDb = new pg.Pool({ connectionString: workflowUrl, max: 2 });
 export const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));

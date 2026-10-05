@@ -27,7 +27,7 @@ describeWithDatabase("Telegram conversation end-to-end", () => {
       EVE_MOCK_AUTHORED_MODELS: "0",
       TELEGRAM_BOT_TOKEN: "conversation-test-token",
       TELEGRAM_BOT_USERNAME: "osinara_test_bot",
-      TELEGRAM_WEBHOOK_SECRET_TOKEN: "conversation-test-secret",
+      TELEGRAM_WEBHOOK_SECRET_TOKEN: "conversation-test-secret-0123456789",
       MODEL_API_KEY: "unused-test-key",
       MEMORY_EMBEDDING_BASE_URL: "http://memory-test",
       WORKFLOW_STRESS_RESET_ALLOWED: "true",

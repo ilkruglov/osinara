@@ -17,6 +17,17 @@ if [ "${#INVITATION_SIGNING_SECRET}" -lt "$INVITATION_SIGNING_SECRET_MIN_LENGTH"
   exit 1
 fi
 
+# One secret guards the webhook, the drain route and the approval sweep: as long as the invitation
+# secret, within what Telegram accepts for secret_token (1-256 of A-Z, a-z, 0-9, `_`, `-`).
+case "$TELEGRAM_WEBHOOK_SECRET_TOKEN" in
+  *[!A-Za-z0-9_-]*) webhook_secret_ok=no ;;
+  *) if [ "${#TELEGRAM_WEBHOOK_SECRET_TOKEN}" -ge 32 ] && [ "${#TELEGRAM_WEBHOOK_SECRET_TOKEN}" -le 256 ]; then webhook_secret_ok=yes; else webhook_secret_ok=no; fi ;;
+esac
+if [ "$webhook_secret_ok" != yes ]; then
+  printf '%s\n' "AGENT_TELEGRAM_WEBHOOK_SECRET_WEAK: TELEGRAM_WEBHOOK_SECRET_TOKEN должен содержать от 32 до 256 символов A-Z, a-z, 0-9, _ или -" >&2
+  exit 1
+fi
+
 # Validate model IDs and context metadata before Eve opens a listener or accepts durable work.
 node .runtime/scripts/validate-model-provider-config.js
 
