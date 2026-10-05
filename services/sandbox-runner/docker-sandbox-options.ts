@@ -295,7 +295,9 @@ export function buildSandboxContainerOptions(
     OpenStdin: false,
     StdinOnce: false,
     Tty: false,
-    WorkingDir: "/workspace",
+    // The main writable workspace: /workspace itself lies on the read-only root, so commands
+    // that create files in the current directory (git clone, a report) would fail there.
+    WorkingDir: `/workspace/${trusted ? resolveTrustedToolMount(request.mounts).mountPoint : request.mounts[0]?.mountPoint ?? "group"}`,
   };
 }
 

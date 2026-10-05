@@ -13,7 +13,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 
 import type Docker from "dockerode";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -125,6 +125,8 @@ describe("buildSandboxContainerOptions", () => {
       expect.stringContaining("/tools/family"),
     ]));
     // The logged-in browser session and its restore state belong to the browser companion only.
+    // /workspace is on the read-only root: commands start in the main writable workspace.
+    expect(options.WorkingDir).toBe("/workspace/personal");
     // The logged-in browser session, its restore state and Chrome's arguments (which Lightpanda,
     // the only browser left in Bash, refuses) belong to the browser companion only.
     expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE|ARGS)/u.test(entry))).toBe(false);
@@ -227,7 +229,7 @@ describe("buildSandboxContainerOptions", () => {
       remove: vi.fn(async () => undefined),
     };
     const replacement = {
-      exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })),
+      exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })),
       putArchive: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
       start: vi.fn(async () => undefined),
@@ -258,7 +260,12 @@ describe("buildSandboxContainerOptions", () => {
     expect(stale.remove).toHaveBeenCalledWith({ force: true, v: true });
     expect(docker.createContainer).toHaveBeenCalledOnce();
     expect(replacement.start).toHaveBeenCalledOnce();
-    expect(replacement.putArchive).toHaveBeenCalledOnce();
+    // The seed reaches the new container on a process's stdin, not through the archive API.
+    expect(replacement.putArchive).not.toHaveBeenCalled();
+    expect(replacement.exec).toHaveBeenCalledWith(expect.objectContaining({
+      AttachStdin: true,
+      Cmd: expect.arrayContaining(["tar", "-xpf", "-", "-C", "/"]),
+    }));
   });
 
   it.each([
@@ -515,7 +522,7 @@ describe("running-container cap", () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
     temporaryRoots.push(root);
     const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
-    const created = { exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })), putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
+    const created = { exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })), putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
     const docker = {
       createContainer: vi.fn(async () => created),
       // The new session has no container yet; the busy one is addressed by id when stopped.
@@ -544,7 +551,7 @@ describe("running-container cap", () => {
     const started: Array<{ name: string; sessionId: string }> = [];
     const docker = {
       createContainer: vi.fn(async (options: { Labels: Record<string, string>; name: string }) => ({
-        exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })),
+        exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])) })),
         putArchive: vi.fn(async () => undefined),
         remove: vi.fn(async () => undefined),
         start: vi.fn(async () => {

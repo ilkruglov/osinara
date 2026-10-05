@@ -45,11 +45,9 @@ describe("createSandboxWriteMemo", () => {
   it("forgets everything a restarted or replaced container lost", () => {
     const memo = createSandboxWriteMemo();
     memo.rememberSkillFile("container-1:2026-09-10T10:00:00Z", SKILL_PATH, CONTENT);
-    memo.rememberStagingDirectory("container-1:2026-09-10T10:00:00Z");
 
     expect(memo.hasSkillFile("container-1:2026-09-10T11:30:00Z", SKILL_PATH, CONTENT)).toBe(false);
     expect(memo.hasSkillFile("container-2:2026-09-10T10:00:00Z", SKILL_PATH, CONTENT)).toBe(false);
-    expect(memo.hasStagingDirectory("container-1:2026-09-10T11:30:00Z")).toBe(false);
   });
 
   it("misses on changed bytes, an unknown generation and a workspace path", () => {
@@ -61,15 +59,5 @@ describe("createSandboxWriteMemo", () => {
     expect(memo.hasSkillFile(generation, SKILL_PATH, new TextEncoder().encode("other"))).toBe(false);
     expect(memo.hasSkillFile(null, SKILL_PATH, CONTENT)).toBe(false);
     expect(memo.hasSkillFile(generation, "/workspace/group/report.md", CONTENT)).toBe(false);
-  });
-
-  it("remembers the staging directory only for the generation that got it", () => {
-    const memo = createSandboxWriteMemo();
-
-    expect(memo.hasStagingDirectory("container-1:2026-09-10T10:00:00Z")).toBe(false);
-    memo.rememberStagingDirectory("container-1:2026-09-10T10:00:00Z");
-
-    expect(memo.hasStagingDirectory("container-1:2026-09-10T10:00:00Z")).toBe(true);
-    expect(memo.hasStagingDirectory(null)).toBe(false);
   });
 });

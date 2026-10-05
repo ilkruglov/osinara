@@ -2,24 +2,21 @@
  * Docker sandbox filesystem bridge tests.
  *
  * Constructs covered:
- * - Reads stage files outside tmpfs before using Docker's archive API.
- * - Writes stage archives outside tmpfs before moving files in-container.
+ * - Reads come through the stdout of a process in the container and writes go in on its stdin,
+ *   renamed into place there: Docker's archive API is never used (it reaches neither the
+ *   read-only root nor a tmpfs HOME) and nothing is staged where the model could swap it.
+ * - A missing file reads as null; a directory destination fails with the commit code.
  * - A skill package identical to the one already in this container run costs no Docker work.
  * - A restarted container and every workspace file are written again regardless.
- * - Failed file commits retain the original error and observe cleanup failures.
  */
-import { PassThrough } from "node:stream";
+import { Duplex } from "node:stream";
 
 import type Docker from "dockerode";
-import tar from "tar-stream";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
 
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-
-type ExecOptions = { Cmd: string[] };
-
 const runtime = {
   egressNetwork: "osinara_sandbox-egress",
   image: "osinara-sandbox-runtime:local",
@@ -28,184 +25,105 @@ const runtime = {
   workspaceVolume: "osinara_workspace-data",
 };
 
-function successfulExec(source = new PassThrough()) {
-  return {
-    inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
-    start: vi.fn(async () => source),
-  };
-}
+interface ExecCall { cmd: string[]; stdin: Buffer }
+type Reply = { exitCode: number; stdout?: Buffer };
 
-function createEngine(docker: Docker) {
-  return createDockerSandboxEngine({
-    docker,
-    roots: {
-      toolsRoot: "/tools",
-      workspaceRoot: "/workspaces",
-    },
-    runtime,
-  });
-}
-
-function runningContainer(id: string, startedAt: string) {
-  return {
-    exec: vi.fn(async (_options: ExecOptions) => successfulExec()),
+/** A running container whose processes answer `reply(cmd)` and record their stdin. */
+function containerAnswering(reply: (cmd: string[]) => Reply, startedAt = "2026-09-10T10:00:00Z") {
+  const calls: ExecCall[] = [];
+  const container = {
+    exec: vi.fn(async (options: { Cmd: string[] }) => {
+      const call: ExecCall = { cmd: options.Cmd, stdin: Buffer.alloc(0) };
+      calls.push(call);
+      const answer = reply(options.Cmd);
+      const chunks: Buffer[] = [];
+      const stream = new Duplex({
+        read() {},
+        write(chunk: Buffer, _encoding, done) {
+          chunks.push(chunk);
+          done();
+        },
+        final(done) {
+          call.stdin = Buffer.concat(chunks);
+          done();
+        },
+      });
+      return {
+        inspect: vi.fn(async () => ({ ExitCode: answer.exitCode, Running: false })),
+        start: vi.fn(async (startOptions: { stdin?: boolean }) => {
+          // Without stdin the process answers at once; with it, once the input is closed.
+          const respond = () => {
+            if (answer.stdout) stream.push(answer.stdout);
+            stream.push(null);
+          };
+          if (startOptions.stdin) stream.once("finish", respond);
+          else setImmediate(respond);
+          return stream;
+        }),
+      };
+    }),
+    getArchive: vi.fn(),
     inspect: vi.fn(async () => ({
       Config: { Labels: {} },
       HostConfig: { Mounts: [{ Target: "/tools/personal" }] },
-      Id: id,
+      Id: "container-1",
       State: { Running: true, StartedAt: startedAt },
     })),
+    putArchive: vi.fn(),
     top: vi.fn(async () => ({ Processes: [] })),
-    putArchive: vi.fn(async () => undefined),
   };
+  return { calls, container };
 }
 
-function dockerFor(container: unknown): Docker {
-  return {
+function engineFor(container: unknown) {
+  const docker = {
     getContainer: vi.fn(() => container),
-    modem: {
-      demuxStream: vi.fn((_stream: unknown, stdout: { end: () => void }, stderr: { end: () => void }) => {
-        stdout.end();
-        stderr.end();
-      }),
-    },
+    listContainers: vi.fn(async () => []),
+    modem: { demuxStream: vi.fn((stream: Duplex, stdout: NodeJS.WritableStream) => stream.on("data", (chunk) => stdout.write(chunk))) },
   } as unknown as Docker;
-}
-
-function archiveFile(name: string, content: string): NodeJS.ReadableStream {
-  const pack = tar.pack();
-  pack.entry({ name, type: "file" }, content);
-  pack.finalize();
-  return pack;
+  return createDockerSandboxEngine({ docker, roots: { toolsRoot: "/tools", workspaceRoot: "/workspaces" }, runtime });
 }
 
 describe("Docker sandbox filesystem bridge", () => {
-  it("stages a hidden-home read outside tmpfs before using the archive API", async () => {
-    const container = {
-      exec: vi.fn(async (_options: ExecOptions) => successfulExec()),
-      getArchive: vi.fn(async () => archiveFile("staged", "skill instructions")),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
-      top: vi.fn(async () => ({ Processes: [] })),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
+  it("reads a file through the stdout of a process in the container", async () => {
+    const { calls, container } = containerAnswering(() => ({ exitCode: 0, stdout: Buffer.from("hello") }));
+    const engine = engineFor(container);
 
-    const content = await createEngine(docker).readFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/pohuy/SKILL.md",
-    );
-
-    expect(content).not.toBeNull();
-    expect(new TextDecoder().decode(content!)).toBe("skill instructions");
-    expect(container.getArchive).toHaveBeenCalledWith({
-      path: expect.stringMatching(/^\/tools\/personal\/\.osinara-staging\//u),
-    });
-    const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
-    expect(commands).toEqual([
-      expect.stringMatching(/^mkdir -p -- .* && .*cp -T -- .*SKILL\.md/u),
-      expect.stringMatching(/^rm -f -- /u),
-    ]);
-  });
-
-  it("returns absence without invoking the archive API for a missing file", async () => {
-    const missingExec = successfulExec();
-    missingExec.inspect.mockResolvedValue({ ExitCode: 44, Running: false });
-    const container = {
-      exec: vi.fn(async () => missingExec),
-      getArchive: vi.fn(),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
-      top: vi.fn(async () => ({ Processes: [] })),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
-
-    await expect(createEngine(docker).readFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/missing/SKILL.md",
-    )).resolves.toBeNull();
+    await expect(engine.readFile(SANDBOX_SESSION_ID, "/tmp/home/report.md")).resolves.toEqual(new Uint8Array(Buffer.from("hello")));
+    expect(calls[0]!.cmd.slice(-2)).toEqual(["osinara-read", "/tmp/home/report.md"]);
     expect(container.getArchive).not.toHaveBeenCalled();
   });
 
-  it("stages a hidden-home write outside tmpfs before moving it in-container", async () => {
-    const source = new PassThrough();
-    const exec = successfulExec(source);
-    const container = {
-      exec: vi.fn(async (_options: ExecOptions) => exec),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
-      top: vi.fn(async () => ({ Processes: [] })),
-      putArchive: vi.fn(async () => undefined),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
-
-    await createEngine(docker).writeFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/pohuy/LICENSE.txt",
-      new TextEncoder().encode("MIT"),
-    );
-
-    expect(container.putArchive).toHaveBeenCalledWith(
-      expect.anything(),
-      { path: "/tools/personal/.osinara-staging" },
-    );
-    const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
-    expect(commands).toEqual([
-      expect.stringMatching(/^mkdir -p -- .*\.osinara-staging/u),
-      expect.stringMatching(
-        /^mkdir -p -- '.*skills\/pohuy' && mv -T -- .* '.*\/tmp\/home\/\.agents\/skills\/pohuy\/LICENSE\.txt'$/u,
-      ),
-    ]);
+  it("reads a missing file as null", async () => {
+    const { container } = containerAnswering(() => ({ exitCode: 44 }));
+    await expect(engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/none")).resolves.toBeNull();
   });
 
-  // Eve rewrites every dynamic skill package on every turn; in an external group that was eleven
-  // files and 2-5 seconds before the model saw the message (10 сентября 2026).
-  it("writes an unchanged skill package once per container run", async () => {
-    const container = runningContainer("container-1", "2026-09-10T10:00:00Z");
-    const docker = dockerFor(container);
-    const engine = createEngine(docker);
-    const path = "/tmp/home/.agents/skills/auto-analyst/SKILL.md";
-    const content = new TextEncoder().encode("---\nname: auto-analyst\n---\n");
+  it("writes a file on the stdin of a process that renames it into place", async () => {
+    const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
+    await engineFor(container).writeFile(SANDBOX_SESSION_ID, "/tmp/home/.agents/skills/a/SKILL.md", Buffer.from("skill"));
 
-    await engine.writeFile(SANDBOX_SESSION_ID, path, content);
-    const execAfterFirst = container.exec.mock.calls.length;
-    await engine.writeFile(SANDBOX_SESSION_ID, path, content);
-
-    expect(container.putArchive).toHaveBeenCalledTimes(1);
-    expect(container.exec.mock.calls.length).toBe(execAfterFirst);
-    // Changed bytes are a different package and always reach the container.
-    await engine.writeFile(SANDBOX_SESSION_ID, path, new TextEncoder().encode("v2"));
-    expect(container.putArchive).toHaveBeenCalledTimes(2);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.cmd.slice(-2)).toEqual(["osinara-write", "/tmp/home/.agents/skills/a/SKILL.md"]);
+    expect(calls[0]!.cmd.join(" ")).toContain("mv -T");
+    expect(calls[0]!.stdin.toString()).toBe("skill");
+    expect(container.putArchive).not.toHaveBeenCalled();
   });
 
-  it("re-materializes the skill package after the container restarted", async () => {
-    const container = runningContainer("container-1", "2026-09-10T10:00:00Z");
-    const docker = dockerFor(container);
-    const engine = createEngine(docker);
-    const path = "/tmp/home/.agents/skills/auto-analyst/SKILL.md";
-    const content = new TextEncoder().encode("skill");
+  it("fails a write onto a directory with the commit code", async () => {
+    const { container } = containerAnswering(() => ({ exitCode: 1 }));
+    await expect(engineFor(container).writeFile(SANDBOX_SESSION_ID, "/workspace/personal/dir", Buffer.from("x")))
+      .rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED");
+  });
 
-    await engine.writeFile(SANDBOX_SESSION_ID, path, content);
+  it("writes an unchanged skill package once per container run, again after a restart", async () => {
+    const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
+    const engine = engineFor(container);
+    const path = "/tmp/home/.agents/skills/a/SKILL.md";
+    await engine.writeFile(SANDBOX_SESSION_ID, path, Buffer.from("same"));
+    await engine.writeFile(SANDBOX_SESSION_ID, path, Buffer.from("same"));
+    expect(calls).toHaveLength(1);
+
     // Restricted HOME is a tmpfs, so a restart leaves the container without any skill package.
     container.inspect.mockResolvedValue({
       Config: { Labels: {} },
@@ -213,63 +131,15 @@ describe("Docker sandbox filesystem bridge", () => {
       Id: "container-1",
       State: { Running: true, StartedAt: "2026-09-10T11:30:00Z" },
     });
-    await engine.writeFile(SANDBOX_SESSION_ID, path, content);
-
-    expect(container.putArchive).toHaveBeenCalledTimes(2);
+    await engine.writeFile(SANDBOX_SESSION_ID, path, Buffer.from("same"));
+    expect(calls).toHaveLength(2);
   });
 
   it("writes an identical workspace file again, because nothing else restores it", async () => {
-    const container = runningContainer("container-1", "2026-09-10T10:00:00Z");
-    const docker = dockerFor(container);
-    const engine = createEngine(docker);
-    const content = new TextEncoder().encode("report");
-
-    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/group/report.md", content);
-    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/group/report.md", content);
-
-    expect(container.putArchive).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects a directory destination and observes failed staging cleanup", async () => {
-    const exitCodes = [0, 1, 1];
-    const container = {
-      exec: vi.fn(async (_options: ExecOptions) => {
-        const source = new PassThrough();
-        const exitCode = exitCodes.shift();
-        return {
-          inspect: vi.fn(async () => ({ ExitCode: exitCode, Running: false })),
-          start: vi.fn(async () => source),
-        };
-      }),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
-      top: vi.fn(async () => ({ Processes: [] })),
-      putArchive: vi.fn(async () => undefined),
-    };
-    const docker = {
-      getContainer: vi.fn(() => container),
-      modem: {
-        demuxStream: vi.fn((_stream, stdout, stderr) => {
-          stdout.end();
-          stderr.end();
-        }),
-      },
-    } as unknown as Docker;
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    await expect(createEngine(docker).writeFile(
-      SANDBOX_SESSION_ID,
-      "/tmp/home/.agents/skills/pohuy",
-      new TextEncoder().encode("must-not-land-inside-directory"),
-    )).rejects.toThrowError(
-      /AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: Не удалось записать файл/u,
-    );
-    const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
-    expect(commands[1]).toMatch(/^mkdir -p -- .* && mv -T -- /u);
-    expect(commands[2]).toMatch(/^rm -f -- /u);
-    expect(consoleError).toHaveBeenCalledWith(
-      "Sandbox staged file cleanup failed",
-      expect.objectContaining({ exitCode: 1 }),
-    );
-    consoleError.mockRestore();
+    const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
+    const engine = engineFor(container);
+    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/personal/report.md", Buffer.from("same"));
+    await engine.writeFile(SANDBOX_SESSION_ID, "/workspace/personal/report.md", Buffer.from("same"));
+    expect(calls).toHaveLength(2);
   });
 });

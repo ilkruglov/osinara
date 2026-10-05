@@ -167,6 +167,18 @@ describe("disk budget in the engine", () => {
     expect(exec).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(exec.mock.calls[0])).toContain("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
 
+    // A skill package in HOME passes a refusal while small; one inside a workspace never does.
+    exec.mockClear();
+    const quotaSkill = "/tools/personal/home/.agents/skills/x/SKILL.md";
+    await expect(engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024))).rejects.not.toThrow("QUOTA");
+    await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/SKILL.md", Buffer.alloc(10)))
+      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
+    // And only up to 2 MiB per container run.
+    for (let index = 0; index < 20; index += 1) {
+      await engine.writeFile("session", `/tools/personal/home/.agents/skills/x/f${index}.md`, Buffer.alloc(200 * 1024)).catch(() => undefined);
+    }
+    await expect(engine.writeFile("session", "/tools/personal/home/.agents/skills/x/last.md", Buffer.alloc(200 * 1024)))
+      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // A skill package path does not exempt a large file.
     await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/payload.bin", Buffer.alloc(300 * 1024)))
       .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");

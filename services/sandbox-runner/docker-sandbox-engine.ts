@@ -26,18 +26,10 @@ import type { SandboxEngine } from "./sandbox-engine.js";
 import { createSandboxWriteMemo, isSkillPackagePath } from "./sandbox-write-memo.js";
 import {
   collectLimitedStream,
-  readSingleFileArchive,
-  writeSingleFileArchive,
 } from "./docker-sandbox-files.js";
 import {
   assertShellSafePath,
-  commitStagedFileCommand,
-  FILE_MISSING_EXIT_CODE,
-  FILE_TOO_LARGE_EXIT_CODE,
   initializeToolEnvironmentCommand,
-  prepareStagingDirectoryCommand,
-  removeStagedFileCommand,
-  stageFileForReadCommand,
 } from "./docker-sandbox-commands.js";
 import {
   dockerStatus,
@@ -62,7 +54,7 @@ import {
 } from "./docker-sandbox-lifecycle.js";
 
 import { makeRoomForContainer, reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
-import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
+import { readContainerFile, writeContainerFile, writeSeedFiles } from "./docker-sandbox-transfer.js";
 import {
   browserStateSubpath,
   buildSandboxContainerOptions,
@@ -83,22 +75,11 @@ export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
 /** The largest skill package file that may be written past a refusal; real ones are a few KiB. */
 const SKILL_PACKAGE_FILE_EXEMPT_BYTES = 256 * 1024;
+/** All skill package bytes one container run may write past a refusal. */
+const SKILL_PACKAGE_RUN_EXEMPT_BYTES = 2 * 1024 * 1024;
+/** Where Eve materializes skill packages: the skills folder of HOME, nowhere in a workspace. */
+const HOME_SKILLS_PATH = /^(?:\/tools\/[^/]+\/home|\/tmp\/home)\/\.agents\/skills\//u;
 
-/** Below the container's own volume: the root filesystem is read-only, and Docker's archive API
- * writes and reads neither there nor on tmpfs, only on volumes. */
-const STAGING_DIRECTORY_NAME = ".osinara-staging";
-
-/** The staging directory of a container: in its tool environment, else in its first workspace. */
-export function sandboxStagingDirectory(mountTargets: readonly string[]): string {
-  const target = mountTargets.find((path) => path.startsWith("/tools/")) ??
-    mountTargets.find((path) => path.startsWith("/workspace/"));
-  if (!target) throw new Error("AGENT_SANDBOX_RUNNER_STAGING_UNAVAILABLE: Sandbox has no writable volume");
-  return `${target}/${STAGING_DIRECTORY_NAME}`;
-}
-
-function stagingOf(inspection: Docker.ContainerInspectInfo): string {
-  return sandboxStagingDirectory((inspection.HostConfig.Mounts ?? []).map((mount) => mount.Target));
-}
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const SANDBOX_NETWORK_LABEL = "sandbox-egress";
@@ -220,6 +201,19 @@ export function createDockerSandboxEngine(input: {
     return await turn;
   };
 
+  // Skill package writes skip the disk budget only within these bounds: the path alone does not
+  // prove the framework wrote it, and a model writing there may not grow without limit.
+  const skillExemptBytes = new Map<string, number>();
+  const skillWriteExempt = (generation: string | null, path: string, bytes: number): boolean => {
+    if (generation === null || !isSkillPackagePath(path) || !HOME_SKILLS_PATH.test(path)) return false;
+    if (bytes > SKILL_PACKAGE_FILE_EXEMPT_BYTES) return false;
+    const spent = (skillExemptBytes.get(generation) ?? 0) + bytes;
+    if (spent > SKILL_PACKAGE_RUN_EXEMPT_BYTES) return false;
+    if (skillExemptBytes.size > 1_000) skillExemptBytes.clear();
+    skillExemptBytes.set(generation, spent);
+    return true;
+  };
+
   return {
     async health() {
       await input.docker.ping();
@@ -294,9 +288,7 @@ export function createDockerSandboxEngine(input: {
           try {
             await container.start();
             await ensureToolDirectories(input.docker, container, request);
-            await writeSandboxSeedArchive(input.docker, container, seedFiles, sandboxStagingDirectory(
-              options.HostConfig?.Mounts?.map((mount) => mount.Target) ?? [],
-            ));
+            await writeSeedFiles(input.docker, container, seedFiles);
           } catch (error) {
             await container.remove({ force: true, v: true }).catch(() => undefined);
             throw error;
@@ -370,68 +362,10 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
-        const resolved = resolvePath(path);
-        const stagingDirectory = stagingOf(inspection);
-        const stagingPath = `${stagingDirectory}/${randomUUID()}`;
-        // Docker's archive API cannot read files from restricted HOME on tmpfs, nor from the
-        // read-only root: the file is copied to the staging directory on a volume and read there.
-        // The size check runs before the copy, and the copy sits inside the cleanup scope: a
-        // partial staging file after ENOSPC must not outlive the request.
-        let readFailed = false;
-        // A refused copy leaves nothing behind, so cleanup is owed only once the copy may have run.
-        let staged = true;
-        try {
-          const copyResult = await executeSandboxProcess(input.docker, container, {
-            command: stageFileForReadCommand({
-              maxBytes: WORKSPACE_MAX_FILE_BYTES,
-              resolvedPath: resolved,
-              stagingDirectory,
-              stagingPath,
-            }),
-          });
-          if (copyResult.exitCode === FILE_MISSING_EXIT_CODE) {
-            staged = false;
-            return null;
-          }
-          if (copyResult.exitCode === FILE_TOO_LARGE_EXIT_CODE) {
-            staged = false;
-            throw new Error(
-              "AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: " +
-              `Файл sandbox больше допустимых ${WORKSPACE_MAX_FILE_BYTES} байт`,
-            );
-          }
-          if (copyResult.exitCode !== 0) {
-            throw new Error(
-              "AGENT_SANDBOX_RUNNER_FILE_STAGE_FAILED: " +
-              `Не удалось подготовить файл sandbox для чтения. ${copyResult.stderr}`,
-            );
-          }
-          return await readSingleFileArchive(await container.getArchive({ path: stagingPath }));
-        } catch (error) {
-          readFailed = true;
-          throw error;
-        } finally {
-          const cleanupResult = staged
-            ? await executeSandboxProcess(input.docker, container, {
-              command: removeStagedFileCommand(stagingPath),
-            })
-            : null;
-          if (cleanupResult !== null && cleanupResult.exitCode !== 0) {
-            console.error("Sandbox staged file cleanup failed", {
-              exitCode: cleanupResult.exitCode,
-              stagingPath,
-              stderr: cleanupResult.stderr,
-            });
-            if (!readFailed) {
-              // oxlint-disable-next-line eslint/no-unsafe-finally -- only thrown when the read itself succeeded
-              throw new Error(
-                "AGENT_SANDBOX_RUNNER_FILE_CLEANUP_FAILED: " +
-                "Не удалось удалить временную копию прочитанного файла sandbox",
-              );
-            }
-          }
-        }
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        // Through the stdout of a process in the container: the archive API reads neither the
+        // read-only root nor a tmpfs HOME, and nothing is staged where the model could swap it.
+        return await readContainerFile(input.docker, container, resolvePath(path), WORKSPACE_MAX_FILE_BYTES);
       });
     },
     async writeFile(sessionId, path, content) {
@@ -446,67 +380,17 @@ export function createDockerSandboxEngine(input: {
         // rewritten every turn, and refusing them would stop every turn of the workspace, cleanup
         // included; but the path alone proves nothing (a model can write there too), so only a
         // small file passes on its name (Codex review, 5 October 2026).
-        if (!isSkillPackagePath(resolved) || content.byteLength > SKILL_PACKAGE_FILE_EXEMPT_BYTES) {
+        if (!skillWriteExempt(generation, resolved, content.byteLength)) {
           const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
           if (refusal) throw new Error(refusal);
         }
         // Eve rewrites every dynamic skill package on every turn without diffing it; identical
         // bytes already inside this container run are that same materialization, not a new one.
         if (writeMemo.hasSkillFile(generation, resolved, content)) return;
-        const stagingDirectory = stagingOf(inspection);
-        const stagingPath = `${stagingDirectory}/${randomUUID()}`;
-        if (!writeMemo.hasStagingDirectory(generation)) {
-          const directoryResult = await executeSandboxProcess(input.docker, container, {
-            command: prepareStagingDirectoryCommand(stagingDirectory),
-          });
-          if (directoryResult.exitCode !== 0) {
-            throw new Error(
-              "AGENT_SANDBOX_RUNNER_DIRECTORY_CREATE_FAILED: " +
-              `Не удалось создать каталог для файла. ${directoryResult.stderr}`,
-            );
-          }
-          writeMemo.rememberStagingDirectory(generation);
-        }
-
-        // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME` or the read-only
-        // root. Upload to the staging directory on a volume, then let an in-container process
-        // cross the mount boundary.
-        let committed = false;
-        try {
-          await writeSingleFileArchive(container, stagingPath, content);
-          const moveResult = await executeSandboxProcess(input.docker, container, {
-            command: commitStagedFileCommand({
-              resolvedPath: resolved,
-              stagingPath,
-              targetDirectory: posix.dirname(resolved),
-            }),
-          });
-          if (moveResult.exitCode !== 0) {
-            throw new Error(
-              "AGENT_SANDBOX_RUNNER_FILE_COMMIT_FAILED: " +
-              `Не удалось записать файл в sandbox. ${moveResult.stderr}`,
-            );
-          }
-          committed = true;
-          writeMemo.rememberSkillFile(generation, resolved, content);
-        } finally {
-          if (!committed) {
-            try {
-              const cleanupResult = await executeSandboxProcess(input.docker, container, {
-                command: removeStagedFileCommand(stagingPath),
-              });
-              if (cleanupResult.exitCode !== 0) {
-                console.error("Sandbox staged file cleanup failed", {
-                  exitCode: cleanupResult.exitCode,
-                  stagingPath,
-                  stderr: cleanupResult.stderr,
-                });
-              }
-            } catch (cleanupError) {
-              console.error("Sandbox staged file cleanup failed", { cleanupError, stagingPath });
-            }
-          }
-        }
+        // Through the stdin of a process in the container, renamed into place there: nothing is
+        // staged where the model's Bash could replace it between upload and move.
+        await writeContainerFile(input.docker, container, resolved, content);
+        writeMemo.rememberSkillFile(generation, resolved, content);
       });
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {

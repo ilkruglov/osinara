@@ -4,10 +4,7 @@
  * Exports:
  * - `shellQuote`: POSIX single-quote quoting; the shell expands nothing inside it.
  * - `assertShellSafePath`: control characters never reach a command or a log line.
- * - `stageFileForReadCommand`, `commitStagedFileCommand`, `prepareStagingDirectoryCommand`,
- *   `removeStagedFileCommand`, `initializeToolEnvironmentCommand`: the exact command strings.
- * - `FILE_MISSING_EXIT_CODE`, `FILE_TOO_LARGE_EXIT_CODE`: the existence and size checks run in
- *   the container before any copy, so a large file is never staged and never doubles disk use.
+ * - `initializeToolEnvironmentCommand`: the exact command string.
  *
  * Key construct:
  * - Every path reaches `bash -c` inside single quotes. `JSON.stringify` used to be the quoting,
@@ -16,9 +13,6 @@
  */
 import { shellQuote } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 
-export const FILE_MISSING_EXIT_CODE = 44;
-export const FILE_TOO_LARGE_EXIT_CODE = 45;
-
 // oxlint-disable-next-line eslint/no-control-regex -- control characters are exactly what is rejected
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
 
@@ -26,45 +20,6 @@ export function assertShellSafePath(path: string): void {
   if (CONTROL_CHARACTERS.test(path)) {
     throw new Error("AGENT_SANDBOX_RUNNER_PATH_INVALID: Path contains control characters");
   }
-}
-
-export function stageFileForReadCommand(input: {
-  maxBytes: number;
-  resolvedPath: string;
-  stagingDirectory: string;
-  stagingPath: string;
-}): string {
-  const source = shellQuote(input.resolvedPath);
-  return [
-    `mkdir -p -- ${shellQuote(input.stagingDirectory)}`,
-    `if [ ! -f ${source} ]; then exit ${FILE_MISSING_EXIT_CODE}; fi`,
-    `if [ "$(stat -c %s -- ${source})" -gt ${Math.floor(input.maxBytes)} ]; then exit ${FILE_TOO_LARGE_EXIT_CODE}; fi`,
-    `cp -T -- ${source} ${shellQuote(input.stagingPath)}`,
-  ].join(" && ");
-}
-
-export function removeStagedFileCommand(stagingPath: string): string {
-  return `rm -f -- ${shellQuote(stagingPath)}`;
-}
-
-/** The staging directory outlives one write, so a container run creates it once. */
-export function prepareStagingDirectoryCommand(stagingDirectory: string): string {
-  return `mkdir -p -- ${shellQuote(stagingDirectory)}`;
-}
-
-/**
- * The destination directory is created by the same process that moves the file: one `docker exec`
- * costs about 200 ms, and skill materialization pays it once per file rather than twice.
- */
-export function commitStagedFileCommand(input: {
-  resolvedPath: string;
-  stagingPath: string;
-  targetDirectory: string;
-}): string {
-  return [
-    `mkdir -p -- ${shellQuote(input.targetDirectory)}`,
-    `mv -T -- ${shellQuote(input.stagingPath)} ${shellQuote(input.resolvedPath)}`,
-  ].join(" && ");
 }
 
 export function initializeToolEnvironmentCommand(input: {

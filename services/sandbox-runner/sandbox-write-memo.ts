@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `isSkillPackagePath`: the derived, framework-owned files this memo is allowed to skip.
- * - `createSandboxWriteMemo`: staging-directory and skill-file state bound to one container run.
+ * - `createSandboxWriteMemo`: skill-file state bound to one container run.
  *
  * Key construct:
  * - Eve rewrites every dynamic skill package on every turn (`dispatchDynamicSkillEvent` has no
@@ -24,10 +24,7 @@ const MAX_REMEMBERED_FILES = 512;
 export interface SandboxWriteMemo {
   /** True when this exact content already reached this exact container run. */
   readonly hasSkillFile: (generation: string | null, path: string, content: Uint8Array) => boolean;
-  /** True when the staging directory was already created in this container run. */
-  readonly hasStagingDirectory: (generation: string | null) => boolean;
   readonly rememberSkillFile: (generation: string | null, path: string, content: Uint8Array) => void;
-  readonly rememberStagingDirectory: (generation: string | null) => void;
 }
 
 /** Framework-owned skill package files, the only writes the runner may skip. */
@@ -41,15 +38,11 @@ function digest(content: Uint8Array): string {
 
 export function createSandboxWriteMemo(): SandboxWriteMemo {
   const skillFiles = new Map<string, string>();
-  const stagingDirectories = new Set<string>();
 
   return {
     hasSkillFile(generation, path, content) {
       if (generation === null || !isSkillPackagePath(path)) return false;
       return skillFiles.get(`${generation}\u0000${path}`) === digest(content);
-    },
-    hasStagingDirectory(generation) {
-      return generation !== null && stagingDirectories.has(generation);
     },
     rememberSkillFile(generation, path, content) {
       if (generation === null || !isSkillPackagePath(path)) return;
@@ -61,11 +54,6 @@ export function createSandboxWriteMemo(): SandboxWriteMemo {
         if (skillFiles.size <= MAX_REMEMBERED_FILES) break;
         skillFiles.delete(stale);
       }
-    },
-    rememberStagingDirectory(generation) {
-      if (generation === null) return;
-      if (stagingDirectories.size > MAX_REMEMBERED_FILES) stagingDirectories.clear();
-      stagingDirectories.add(generation);
     },
   };
 }

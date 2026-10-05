@@ -77,7 +77,9 @@ export async function executeSandboxProcess(
       ? Object.entries(request.environment).map(([name, value]) => `${name}=${value}`)
       : undefined,
     Tty: false,
-    WorkingDir: request.workingDirectory ?? "/workspace",
+    // Without one, the container's own working directory: its main writable workspace, since
+    // /workspace itself is on the read-only root.
+    ...(request.workingDirectory === undefined ? {} : { WorkingDir: request.workingDirectory }),
   });
   const startedAt = Date.now();
 
