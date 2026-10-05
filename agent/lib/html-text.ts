@@ -86,6 +86,9 @@ function elementEnd(html: string, name: string, from: number): { contentEnd: num
 
 export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
   const closeAfter = forwardFinder(html, ">");
+  // Both comment ends are searched forward once: a page of `--!>` comments without any `-->`
+  // made every comment search for `-->` to the end anew (Codex security scan of 1.8.27).
+  const plainCommentEnd = forwardFinder(html, "-->");
   const bangCommentEnd = forwardFinder(html, "--!>");
   // Text runs from `textStart`: a `<` that starts no markup stays inside the run, so a page of
   // lone `<` is one text token, not one per character.
@@ -112,7 +115,7 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
         // hides the rest of the page, as in a browser.
         let after = html.startsWith("<!-->", open) ? open + 5 : html.startsWith("<!--->", open) ? open + 6 : -1;
         if (after === -1) {
-          const plain = html.indexOf("-->", open + 4);
+          const plain = plainCommentEnd(open + 4);
           const bang = bangCommentEnd(open + 4);
           if (plain === -1 && bang === -1) return;
           after = bang !== -1 && (plain === -1 || bang < plain) ? bang + 4 : plain + 3;

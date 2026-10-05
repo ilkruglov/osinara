@@ -90,6 +90,8 @@ describe("htmlToText", () => {
     ["tags with unclosed quotes", "<a x=\"".repeat(200_000)],
     ["tags with many quoted values", "<a" + " x=\">\"".repeat(150_000) + ">"],
     ["comments without an end", "<!-- a ".repeat(150_000)],
+    // Codex security scan of 1.8.27: each comment searched for `-->` to the end of the page anew.
+    ["comments closed only by --!>", "<!--x--!>".repeat(116_508)],
     ["empty comments", "<!---->".repeat(150_000)],
     ["unclosed textareas", "<textarea>".repeat(100_000)],
   ])("handles a megabyte of %s in linear time", (_name, html) => {
