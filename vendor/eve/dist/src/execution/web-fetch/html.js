@@ -15,7 +15,15 @@ function convertHtmlToMarkdownBounded(t) {
     headingStyle: `atx`,
     hr: `---`,
   });
-  return (n.remove([`script`, `style`, `meta`, `link`]), { markdown: n.turndown(b), truncated: c });
+  n.remove([`script`, `style`, `meta`, `link`]);
+  try {
+    return { markdown: n.turndown(b), truncated: c };
+  } catch (e) {
+    // Markup the budgets did not foresee can still overflow the converter's recursion: the page
+    // goes out as plain text, marked incomplete, instead of failing the tool call.
+    if (!(e instanceof RangeError)) throw e;
+    return { markdown: htmlToText(b), truncated: !0 };
+  }
 }
 // Osinara: one linear pass instead of tag-stripping regular expressions that restart at every
 // `<` (a page of `<` without `>` blocked the event loop; security review, 5 October 2026).

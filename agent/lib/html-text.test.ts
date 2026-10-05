@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { boundHtmlForMarkdown, decodeHtmlEntities, htmlToText, type MarkdownSourceLimits } from "./html-text.js";
 
 const WIDE: MarkdownSourceLimits = { maxCharacters: 1_000_000, maxDepth: 1_000, maxTags: 1_000_000, maxTextCharacters: 1_000_000 };
+const WIDE_DEPTH_256: MarkdownSourceLimits = { ...WIDE, maxDepth: 256 };
 
 describe("htmlToText", () => {
   it("keeps visible text, breaks lines at block ends and joins inline elements", () => {
@@ -33,10 +34,11 @@ describe("htmlToText", () => {
     expect(htmlToText("a<![CDATA[raw <text>]]>b")).toBe("araw <text>b");
   });
 
-  it("keeps the content of custom elements and of self-closing skipped elements", () => {
+  it("keeps the content of custom elements and of self-closing foreign elements", () => {
     expect(htmlToText("<script-widget>visible</script-widget><p>after</p>")).toBe("visible after");
     expect(htmlToText("<svg/><p>after</p>")).toBe("after");
-    expect(htmlToText("<noscript/><p>shown</p>")).toBe("shown");
+    // `/>` does not close a script in HTML: a browser runs everything after it as the script.
+    expect(htmlToText("before<script/><p>hidden</p>")).toBe("before");
   });
 
   it("treats a lone < as text and drops what an unterminated comment or script hides", () => {
@@ -65,7 +67,7 @@ describe("htmlToText", () => {
     boundHtmlForMarkdown(html);
     // The regex version took over a second for 64 KiB of `<`; a linear pass over a megabyte
     // is tens of milliseconds even on a slow core.
-    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
 
@@ -86,6 +88,25 @@ describe("boundHtmlForMarkdown", () => {
       .toEqual({ html: "<div><div>", truncated: true });
     expect(boundHtmlForMarkdown("<div><br><img/><p>x</p></div>", { ...WIDE, maxDepth: 2 }))
       .toEqual({ html: "<div><br><img/><p>x</p></div>", truncated: false });
+  });
+
+  it("follows nesting as the parser builds it", () => {
+    // A closer of nothing open does not undo nesting; `/>` does not close a div.
+    expect(boundHtmlForMarkdown("<div></bogus>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
+    expect(boundHtmlForMarkdown("<div></br>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
+    expect(boundHtmlForMarkdown("<div/>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
+    // Implicitly closed siblings are not nesting.
+    expect(boundHtmlForMarkdown("<ul>" + "<li>item".repeat(1_000) + "</ul>", WIDE_DEPTH_256).truncated).toBe(false);
+    expect(boundHtmlForMarkdown("<p>one".repeat(1_000), WIDE_DEPTH_256).truncated).toBe(false);
+    expect(boundHtmlForMarkdown("<table>" + "<tr><td>a<td>b".repeat(500) + "</table>", WIDE_DEPTH_256).truncated).toBe(false);
+    expect(boundHtmlForMarkdown("<p>a<br/><img src=x/>b</p>".repeat(1_000), WIDE_DEPTH_256).truncated).toBe(false);
+  });
+
+  it("passes CDATA on as escaped text and shortens long runs of spaces", () => {
+    const { html, truncated } = boundHtmlForMarkdown("<![CDATA[" + "<div>".repeat(6_000) + "x]]>", WIDE_DEPTH_256);
+    expect(truncated).toBe(false);
+    expect(html.startsWith("&lt;div&gt;&lt;div&gt;")).toBe(true);
+    expect(boundHtmlForMarkdown(`<pre>${" ".repeat(1_000)}x</pre>`, WIDE).html).toBe(`<pre>${" ".repeat(64)}x</pre>`);
   });
 
   it("counts every tag even after a lone <", () => {

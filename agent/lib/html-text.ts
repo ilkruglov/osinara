@@ -41,6 +41,29 @@ export const MARKDOWN_SOURCE_MAX_TAGS = 15_000;
 export const MARKDOWN_SOURCE_MAX_CHARACTERS = 2 * 1024 * 1024;
 export const MARKDOWN_SOURCE_MAX_TEXT_CHARACTERS = 200_000;
 export const MARKDOWN_SOURCE_MAX_DEPTH = 256;
+// Runs of spaces longer than this are shortened: the converter strips trailing whitespace with a
+// regular expression that restarts at every space of a run, so 200 000 spaces inside <pre> took
+// 13 s (Codex review, 5 October 2026); runs of 64 keep any real indentation.
+const MARKDOWN_SOURCE_MAX_SPACE_RUN = 64;
+// `/>` closes an element only in SVG and MathML; `<div/>` or `<script/>` open one, as in a browser.
+const FOREIGN_ELEMENTS = new Set(["math", "svg"]);
+// Elements a browser closes implicitly when a sibling or a block starts: depth must follow the
+// tree the converter builds, or `<li>` lists without closers would count as deep nesting.
+const CLOSED_BY_BLOCK = new Set(["p"]);
+const BLOCK_STARTS = new Set([
+  "address", "article", "aside", "blockquote", "details", "div", "dl", "fieldset", "figcaption",
+  "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "main", "menu",
+  "nav", "ol", "p", "pre", "section", "table", "ul",
+]);
+const CLOSED_BY_SIBLING: Readonly<Record<string, readonly string[]>> = {
+  dd: ["dd", "dt"],
+  dt: ["dd", "dt"],
+  li: ["li"],
+  option: ["option"],
+  td: ["td", "th"],
+  th: ["td", "th"],
+  tr: ["td", "th", "tr"],
+};
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   amp: "&",
   apos: "'",
@@ -62,7 +85,7 @@ function isNameCharacter(code: number): boolean {
 }
 
 type Token =
-  | { kind: "text"; text: string }
+  | { kind: "text"; text: string; cdata?: true }
   | { kind: "tag"; closing: boolean; name: string; raw: string; selfClosing: boolean }
   | { kind: "skip" };
 
@@ -72,7 +95,6 @@ type Token =
  * Every search starts past the previous one, so a page of any shape is scanned once.
  */
 function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
-  let position = 0;
   // The first `>` at or after a position, cached: positions only move forward, and a new search
   // starts only past the previous find, so all searches together read the page once.
   let cacheFrom = -1;
@@ -83,45 +105,48 @@ function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
     cacheAt = html.indexOf(">", from);
     return cacheAt;
   };
-  while (position < html.length) {
-    const open = html.indexOf("<", position);
-    if (open === -1) {
-      yield { kind: "text", text: html.slice(position) };
-      return;
-    }
-    if (open > position) yield { kind: "text", text: html.slice(position, open) };
+  // Text runs from `textStart`: a `<` that starts no markup stays inside the run, so a page of
+  // lone `<` is one text token, not one per character.
+  let textStart = 0;
+  let search = 0;
+  const flushText = function* (end: number): Generator<Token> {
+    if (end > textStart) yield { kind: "text", text: html.slice(textStart, end) };
+  };
+  while (search < html.length) {
+    const open = html.indexOf("<", search);
+    if (open === -1) break;
     const next = html.charCodeAt(open + 1);
+    const closing = next === 0x2f /* / */;
+    const nameStart = open + (closing ? 2 : 1);
+    if (next !== 0x21 && next !== 0x3f && !isNameStart(html.charCodeAt(nameStart))) {
+      // `<` not followed by a tag name, `!` or `?` is text in HTML.
+      search = open + 1;
+      continue;
+    }
+    yield* flushText(open);
     if (next === 0x21 /* ! */) {
       if (html.startsWith("<!--", open)) {
         // An unterminated comment hides the rest of the page, as in a browser.
         const end = html.indexOf("-->", open + 4);
         if (end === -1) return;
-        position = end + 3;
+        search = textStart = end + 3;
         yield { kind: "skip" };
         continue;
       }
       if (html.startsWith("<![CDATA[", open)) {
         const end = html.indexOf("]]>", open + 9);
-        yield { kind: "text", text: html.slice(open + 9, end === -1 ? html.length : end) };
+        yield { cdata: true, kind: "text", text: html.slice(open + 9, end === -1 ? html.length : end) };
         if (end === -1) return;
-        position = end + 3;
+        search = textStart = end + 3;
         continue;
       }
     }
-    if (next === 0x21 || next === 0x3f /* ? */) {
+    if (next === 0x21 || next === 0x3f) {
       // A declaration (`<!DOCTYPE …>`) or a processing instruction: no text for the model.
       const end = closeAfter(open + 2);
       if (end === -1) return;
-      position = end + 1;
+      search = textStart = end + 1;
       yield { kind: "skip" };
-      continue;
-    }
-    const closing = next === 0x2f /* / */;
-    const nameStart = open + (closing ? 2 : 1);
-    if (!isNameStart(html.charCodeAt(nameStart))) {
-      // `<` not followed by a tag name is text in HTML; scanning resumes right after it.
-      yield { kind: "text", text: "<" };
-      position = open + 1;
       continue;
     }
     let nameEnd = nameStart;
@@ -129,24 +154,25 @@ function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
     const end = closeAfter(nameEnd);
     if (end === -1) {
       // No tag can end anywhere after this point: the rest is text.
-      yield { kind: "text", text: html.slice(open) };
-      return;
+      textStart = open;
+      break;
     }
     const name = html.slice(nameStart, nameEnd).toLowerCase();
     const selfClosing = html.charCodeAt(end - 1) === 0x2f;
-    position = end + 1;
-    if (!closing && !selfClosing && skipped.has(name)) {
+    search = textStart = end + 1;
+    if (!closing && skipped.has(name) && !(selfClosing && FOREIGN_ELEMENTS.has(name))) {
       // The element's content is skipped up to its own end tag; a missing end tag skips the rest.
       const endTag = new RegExp(`</${name}\\s*>`, "giu");
-      endTag.lastIndex = position;
+      endTag.lastIndex = search;
       const found = endTag.exec(html);
       if (!found) return;
-      position = found.index + found[0].length;
+      search = textStart = found.index + found[0].length;
       yield { kind: "skip" };
       continue;
     }
     yield { closing, kind: "tag", name, raw: html.slice(open, end + 1), selfClosing };
   }
+  yield* flushText(html.length);
 }
 
 export function decodeHtmlEntities(value: string): string {
@@ -188,6 +214,39 @@ export interface MarkdownSourceLimits {
  * before the first piece over any budget. `truncated` says that something was cut, so the
  * caller can tell the model the page is incomplete.
  */
+function escapeText(text: string): string {
+  return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
+}
+
+/**
+ * Open elements as the converter's parser will nest them: a closer pops back to its element
+ * (a closer of nothing open, `</br>` or `</bogus>`, changes nothing), `/>` closes only void and
+ * foreign elements, and the implicit closes browsers apply to `p`, `li`, table cells and the like
+ * are applied, so unclosed list items do not count as nesting.
+ */
+class OpenElements {
+  private readonly stack: string[] = [];
+
+  get depth(): number {
+    return this.stack.length;
+  }
+
+  open(name: string, selfClosing: boolean): void {
+    if (VOID_ELEMENTS.has(name) || (selfClosing && FOREIGN_ELEMENTS.has(name))) return;
+    const siblings = CLOSED_BY_SIBLING[name];
+    if (siblings) {
+      while (this.stack.length > 0 && siblings.includes(this.stack.at(-1)!)) this.stack.pop();
+    }
+    if (BLOCK_STARTS.has(name) && CLOSED_BY_BLOCK.has(this.stack.at(-1) ?? "")) this.stack.pop();
+    this.stack.push(name);
+  }
+
+  close(name: string): void {
+    const index = this.stack.lastIndexOf(name);
+    if (index !== -1) this.stack.length = index;
+  }
+}
+
 export function boundHtmlForMarkdown(
   html: string,
   limits: MarkdownSourceLimits = {
@@ -201,24 +260,28 @@ export function boundHtmlForMarkdown(
   let kept = 0;
   let text = 0;
   let tags = 0;
-  let depth = 0;
+  const elements = new OpenElements();
+  const spaceRun = new RegExp(` {${MARKDOWN_SOURCE_MAX_SPACE_RUN + 1},}`, "gu");
+  const shortRun = " ".repeat(MARKDOWN_SOURCE_MAX_SPACE_RUN);
   for (const token of tokens(html, MARKDOWN_SKIPPED_ELEMENTS)) {
     if (token.kind === "skip") continue;
     if (token.kind === "text") {
+      // CDATA content is text to the reader; as markup it would open elements past the budgets.
+      const piece = (token.cdata ? escapeText(token.text) : token.text).replace(spaceRun, shortRun);
       const room = Math.min(limits.maxTextCharacters - text, limits.maxCharacters - kept);
-      if (token.text.length > room) {
-        parts.push(token.text.slice(0, Math.max(0, room)));
+      if (piece.length > room) {
+        parts.push(piece.slice(0, Math.max(0, room)));
         return { html: parts.join(""), truncated: true };
       }
-      parts.push(token.text);
-      kept += token.text.length;
-      text += token.text.length;
+      parts.push(piece);
+      kept += piece.length;
+      text += piece.length;
       continue;
     }
     tags += 1;
-    if (token.closing) depth = Math.max(0, depth - 1);
-    else if (!token.selfClosing && !VOID_ELEMENTS.has(token.name)) depth += 1;
-    if (tags > limits.maxTags || depth > limits.maxDepth || kept + token.raw.length > limits.maxCharacters) {
+    if (token.closing) elements.close(token.name);
+    else elements.open(token.name, token.selfClosing);
+    if (tags > limits.maxTags || elements.depth > limits.maxDepth || kept + token.raw.length > limits.maxCharacters) {
       return { html: parts.join(""), truncated: true };
     }
     parts.push(token.raw);
