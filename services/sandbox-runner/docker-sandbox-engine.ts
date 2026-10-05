@@ -380,13 +380,12 @@ export function createDockerSandboxEngine(input: {
         // rewritten every turn, and refusing them would stop every turn of the workspace, cleanup
         // included; but the path alone proves nothing (a model can write there too), so only a
         // small file passes on its name (Codex review, 5 October 2026).
-        if (!skillWriteExempt(generation, resolved, content.byteLength)) {
-          const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
-          if (refusal) throw new Error(refusal);
-        }
         // Eve rewrites every dynamic skill package on every turn without diffing it; identical
-        // bytes already inside this container run are that same materialization, not a new one.
+        // bytes already inside this container run are that same materialization, not a new one,
+        // and spend nothing of the disk budget or of its skill allowance.
         if (writeMemo.hasSkillFile(generation, resolved, content)) return;
+        const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
+        if (refusal && !skillWriteExempt(generation, resolved, content.byteLength)) throw new Error(refusal);
         // Through the stdin of a process in the container, renamed into place there: nothing is
         // staged where the model's Bash could replace it between upload and move.
         await writeContainerFile(input.docker, container, resolved, content);

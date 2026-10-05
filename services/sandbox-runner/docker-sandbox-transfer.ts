@@ -12,21 +12,26 @@
  *   neither the root nor a tmpfs such as a restricted HOME (checked live, 5 October 2026). The
  *   runner used a staging directory, first on the root, then on the container's volume, where
  *   the model's Bash (and another topic of the same group) could replace files between the
- *   upload and the move (Codex review, 5 October 2026). Here the bytes never rest anywhere the
- *   model can reach before they are in place: they travel on the process's stdin and stdout, and
- *   the process writes wherever the container itself may.
+ *   upload and the move (Codex review, 5 October 2026). Here the bytes travel on the process's
+ *   stdin and stdout; a write rests only in a temporary file beside its target, a place the
+ *   model could write anyway, and the process writes wherever the container itself may.
+ * - Every transfer is bounded on the Node side too: the shared creation gate waits for seeds, so
+ *   a stream that closes without `end` or never answers must not hold it forever.
  */
 import { PassThrough, type Duplex } from "node:stream";
 
 import type Docker from "dockerode";
 import tar from "tar-stream";
 
+import { WORKSPACE_MAX_FILE_BYTES } from "../../agent/config.js";
 import type { SandboxRunnerSeedFile } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import { collectLimitedStream } from "./docker-sandbox-files.js";
 
 export const FILE_MISSING_EXIT_CODE = 44;
 export const FILE_TOO_LARGE_EXIT_CODE = 45;
 const TRANSFER_TIMEOUT_SECONDS = 120;
+/** Past the in-container timeout and its kill grace: the Node side gives up on the stream. */
+const TRANSFER_DEADLINE_MS = (TRANSFER_TIMEOUT_SECONDS + 15) * 1_000;
 const STDERR_MAX_BYTES = 64 * 1024;
 const FILE_MODE = 0o600;
 
@@ -37,43 +42,60 @@ async function runWithInput(
   argv: readonly string[],
   options: { maxStdoutBytes: number; stdin?: Buffer },
 ): Promise<{ exitCode: number; stderr: string; stdout: Buffer }> {
-  const exec = await container.exec({
+  const deadline = Date.now() + TRANSFER_DEADLINE_MS;
+  const within = <T>(promise: Promise<T>): Promise<T> => {
+    let timer: NodeJS.Timeout | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("AGENT_SANDBOX_RUNNER_TRANSFER_TIMED_OUT: File transfer did not finish")),
+        Math.max(0, deadline - Date.now()),
+      );
+    });
+    return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
+  };
+  const exec = await within(container.exec({
     AttachStderr: true,
     AttachStdin: options.stdin !== undefined,
     AttachStdout: true,
-    Cmd: ["timeout", "--signal=KILL", String(TRANSFER_TIMEOUT_SECONDS), ...argv],
+    // TERM first, so the write script's trap removes its temporary file.
+    Cmd: ["timeout", "--signal=TERM", "--kill-after=5s", String(TRANSFER_TIMEOUT_SECONDS), ...argv],
     Tty: false,
     WorkingDir: "/",
-  });
-  const stream = (await exec.start({ hijack: true, stdin: options.stdin !== undefined, Tty: false })) as Duplex;
+  }));
+  const stream = (await within(exec.start({ hijack: true, stdin: options.stdin !== undefined, Tty: false }))) as Duplex;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   stdout.on("error", () => undefined);
   stderr.on("error", () => undefined);
-  docker.modem.demuxStream(stream, stdout, stderr);
-  stream.once("end", () => {
+  const finish = () => {
     stdout.end();
     stderr.end();
-  });
+  };
+  // A stream may close without `end` (a destroyed socket); either way the collectors finish.
+  stream.once("end", finish);
+  stream.once("close", finish);
   stream.once("error", (error) => {
     stdout.destroy(error);
     stderr.destroy(error);
   });
-  // The whole input at once, then the write side closed so the process sees end of file.
-  if (options.stdin !== undefined) stream.end(options.stdin);
-  let out: Buffer;
-  let err: Buffer;
   try {
-    [out, err] = await Promise.all([
+    docker.modem.demuxStream(stream, stdout, stderr);
+    // The whole input at once, then the write side closed so the process sees end of file.
+    if (options.stdin !== undefined) stream.end(options.stdin);
+    const [out, err] = await within(Promise.all([
       collectLimitedStream(stdout, options.maxStdoutBytes),
       collectLimitedStream(stderr, STDERR_MAX_BYTES).catch(() => Buffer.alloc(0)),
-    ]);
-  } catch (error) {
+    ]));
+    const inspection = await within(exec.inspect());
+    if (inspection.Running || inspection.ExitCode === null) {
+      throw new Error("AGENT_SANDBOX_RUNNER_TRANSFER_UNFINISHED: The transfer process did not exit");
+    }
+    return { exitCode: inspection.ExitCode, stderr: err.toString("utf8"), stdout: out };
+  } finally {
     stream.destroy();
-    throw error;
+    stdout.destroy();
+    stderr.destroy();
   }
-  const inspection = await exec.inspect();
-  return { exitCode: inspection.ExitCode ?? -1, stderr: err.toString("utf8"), stdout: out };
 }
 
 // The target's own directory holds the temporary file, so the final rename is atomic; a target
@@ -97,6 +119,9 @@ export async function writeContainerFile(
   path: string,
   content: Uint8Array,
 ): Promise<void> {
+  if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) {
+    throw new Error(`AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE: File exceeds the ${WORKSPACE_MAX_FILE_BYTES} byte limit`);
+  }
   const result = await runWithInput(docker, container, ["bash", "-c", WRITE_SCRIPT, "osinara-write", path], {
     maxStdoutBytes: STDERR_MAX_BYTES,
     stdin: Buffer.from(content),

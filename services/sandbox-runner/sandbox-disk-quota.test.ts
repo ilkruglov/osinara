@@ -19,7 +19,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 
 import type Docker from "dockerode";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -123,7 +123,7 @@ describe("disk budget in the engine", () => {
   };
   const exec = vi.fn(async () => ({
     inspect: vi.fn(async () => ({ ExitCode: 0 })),
-    start: vi.fn(async () => Readable.from([])),
+    start: vi.fn(async (options?: { stdin?: boolean }) => options?.stdin ? new PassThrough() : Readable.from([])),
   }));
   const docker = {
     getContainer: vi.fn(() => ({
@@ -170,7 +170,9 @@ describe("disk budget in the engine", () => {
     // A skill package in HOME passes a refusal while small; one inside a workspace never does.
     exec.mockClear();
     const quotaSkill = "/tools/personal/home/.agents/skills/x/SKILL.md";
-    await expect(engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024))).rejects.not.toThrow("QUOTA");
+    await expect(engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024))).resolves.toBeUndefined();
+    // The same bytes again are the same materialization: no write and nothing spent.
+    for (let index = 0; index < 30; index += 1) await engine.writeFile("session", quotaSkill, Buffer.alloc(100 * 1024));
     await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/SKILL.md", Buffer.alloc(10)))
       .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // And only up to 2 MiB per container run.

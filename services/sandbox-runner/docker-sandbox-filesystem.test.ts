@@ -5,7 +5,9 @@
  * - Reads come through the stdout of a process in the container and writes go in on its stdin,
  *   renamed into place there: Docker's archive API is never used (it reaches neither the
  *   read-only root nor a tmpfs HOME) and nothing is staged where the model could swap it.
- * - A missing file reads as null; a directory destination fails with the commit code.
+ * - A missing file reads as null; a directory destination fails with the commit code; a file
+ *   above the workspace limit is refused before any process starts; a stream that closes without
+ *   ending does not hang the transfer.
  * - A skill package identical to the one already in this container run costs no Docker work.
  * - A restarted container and every workspace file are written again regardless.
  */
@@ -133,6 +135,28 @@ describe("Docker sandbox filesystem bridge", () => {
     });
     await engine.writeFile(SANDBOX_SESSION_ID, path, Buffer.from("same"));
     expect(calls).toHaveLength(2);
+  });
+
+  it("refuses a file above the workspace limit before starting a process", async () => {
+    const { calls, container } = containerAnswering(() => ({ exitCode: 0 }));
+    await expect(engineFor(container).writeFile(SANDBOX_SESSION_ID, "/workspace/personal/big.bin", Buffer.alloc(50 * 1024 * 1024 + 1)))
+      .rejects.toThrow("AGENT_SANDBOX_RUNNER_FILE_TOO_LARGE");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("finishes a read whose stream closes without ending", async () => {
+    const { container } = containerAnswering(() => ({ exitCode: 0 }));
+    container.exec.mockImplementationOnce(async () => {
+      const stream = new Duplex({ read() {}, write(_chunk, _encoding, done) { done(); } });
+      return {
+        inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })),
+        start: vi.fn(async () => {
+          setImmediate(() => stream.destroy());
+          return stream;
+        }),
+      };
+    });
+    await expect(engineFor(container).readFile(SANDBOX_SESSION_ID, "/workspace/personal/a.txt")).resolves.toEqual(new Uint8Array());
   });
 
   it("writes an identical workspace file again, because nothing else restores it", async () => {
