@@ -7,6 +7,19 @@
  * - `buildSandboxContainerOptions`: creates fail-closed scoped container options.
  * - `buildGoogleWorkspaceContainerOptions`: creates a one-shot credential boundary.
  * - `resolveTrustedToolMount`: selects the only persistent HOME mount for a trusted session.
+ * - `buildBrowserContainerOptions`: the companion container of a trusted session that runs the
+ *   authenticated browser, apart from the model's Bash.
+ * - `BROWSER_CONTAINER_ROLE`, `SANDBOX_ROLE_LABEL`, `browserStateSubpath`: how that container is
+ *   told apart and where its state lives.
+ *
+ * Key construct:
+ * - The browser with the family's cookies used to run in the same container as the model's Bash.
+ *   Chromium listens for DevTools on 127.0.0.1 (`--remote-debugging-port=0`) and the agent-browser
+ *   daemon on a socket in HOME, so any process there could drive the logged-in browser past the
+ *   confirmation gate; the Bash command filter only matched spellings (security review and Codex
+ *   security scan, 5 October 2026). The browser now lives in its own container: its own network
+ *   namespace and filesystem, state in a tools-volume directory the Bash container never mounts.
+ *   It mounts the same workspaces at the same paths, so screenshots land where the tools read them.
  */
 import type Docker from "dockerode";
 
@@ -25,7 +38,13 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "15";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "16";
+export const SANDBOX_ROLE_LABEL = "dev.osinara.sandbox.role";
+export const BROWSER_CONTAINER_ROLE = "browser";
+/** The browser state of one tool workspace, beside (never inside) the directory Bash mounts. */
+export function browserStateSubpath(workspaceId: string): string {
+  return `browser/${workspaceId}`;
+}
 
 const AGENT_BROWSER_SESSION_NAME = "osinara";
 const AGENT_BROWSER_RESTORE_SAVE_POLICY = "auto";
@@ -101,13 +120,12 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessAp
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
     ...(browserlessApiKey ? [`BROWSERLESS_API_KEY=${browserlessApiKey}`] : []),
+    // The reader in Bash (Lightpanda, no logins) keeps the browser defaults; the logged-in
+    // session `osinara` and its restore state live only in the browser container.
     `AGENT_BROWSER_ARGS=${AGENT_BROWSER_CHROME_ARGS}`,
     `AGENT_BROWSER_USER_AGENT=${AGENT_BROWSER_USER_AGENT_VALUE}`,
     `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
     `AGENT_BROWSER_PROXY=${PROXY_URL}`,
-    `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
-    `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
-    `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,
     // Lightpanda reports usage to its vendor by default; a family sandbox reports nothing.
     "LIGHTPANDA_DISABLE_TELEMETRY=true",
     `HOME=${root}/home`,
@@ -126,6 +144,92 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessAp
     "NO_PROXY=localhost,127.0.0.1,sandbox-egress-proxy",
     "LANG=C.UTF-8",
   ];
+}
+
+function browserEnvironment(): string[] {
+  return [
+    `AGENT_BROWSER_ARGS=${AGENT_BROWSER_CHROME_ARGS}`,
+    `AGENT_BROWSER_USER_AGENT=${AGENT_BROWSER_USER_AGENT_VALUE}`,
+    `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
+    `AGENT_BROWSER_PROXY=${PROXY_URL}`,
+    `AGENT_BROWSER_RESTORE=${AGENT_BROWSER_SESSION_NAME}`,
+    `AGENT_BROWSER_RESTORE_SAVE=${AGENT_BROWSER_RESTORE_SAVE_POLICY}`,
+    `AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION_NAME}`,
+    "LIGHTPANDA_DISABLE_TELEMETRY=true",
+    `HOME=${BROWSER_STATE_TARGET}/home`,
+    `PATH=${BASE_PATH}`,
+    `NODE_EXTRA_CA_CERTS=${RUSSIAN_TRUSTED_ROOT_CA_PATH}`,
+    "NODE_USE_ENV_PROXY=1",
+    `XDG_CACHE_HOME=${BROWSER_STATE_TARGET}/cache`,
+    `HTTP_PROXY=${PROXY_URL}`,
+    `HTTPS_PROXY=${PROXY_URL}`,
+    `http_proxy=${PROXY_URL}`,
+    `https_proxy=${PROXY_URL}`,
+    "NO_PROXY=localhost,127.0.0.1,sandbox-egress-proxy",
+    "LANG=C.UTF-8",
+  ];
+}
+
+const BROWSER_STATE_TARGET = "/browser";
+
+/**
+ * The browser companion of a trusted session: the session's workspace mounts at the same paths,
+ * its browser state instead of the tool environment, no Browserless key and nothing of Bash's
+ * tools. Limits, capabilities and network are those of the session's own container.
+ */
+export function buildBrowserContainerOptions(
+  runtime: SandboxDockerRuntime,
+  input: {
+    eveSessionId: string;
+    sandboxSessionId: string;
+    toolsWorkspaceId: string;
+    workspaceMounts: readonly { mountPoint: string; workspaceId: string }[];
+  },
+): Docker.ContainerCreateOptions {
+  const mounts = input.workspaceMounts.map((mount) =>
+    volumeMount(runtime.workspaceVolume, `/workspace/${mount.mountPoint}`, mount.workspaceId)
+  );
+  mounts.push(volumeMount(runtime.toolsVolume, BROWSER_STATE_TARGET, browserStateSubpath(input.toolsWorkspaceId)));
+  return {
+    AttachStderr: false,
+    AttachStdin: false,
+    AttachStdout: false,
+    Cmd: ["sleep", "infinity"],
+    Env: browserEnvironment(),
+    HostConfig: {
+      AutoRemove: false,
+      CapDrop: ["ALL"],
+      Init: true,
+      Memory: SANDBOX_MEMORY_BYTES,
+      Mounts: mounts,
+      NanoCpus: SANDBOX_CPU_NANOSECONDS,
+      NetworkMode: runtime.egressNetwork,
+      PidsLimit: SANDBOX_PIDS_LIMIT,
+      Privileged: false,
+      ReadonlyRootfs: false,
+      SecurityOpt: ["no-new-privileges:true"],
+      ShmSize: SANDBOX_SHM_BYTES,
+      Tmpfs: {
+        "/opt/osinara": "ro,noexec,nosuid,size=64k,mode=0555",
+        "/tmp": "rw,noexec,nosuid,size=512m,mode=1777",
+      },
+    },
+    Image: runtime.image,
+    Labels: {
+      "dev.osinara.sandbox.access": "trusted",
+      "dev.osinara.sandbox.eve-session-id": input.eveSessionId,
+      "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
+      "dev.osinara.sandbox.project": runtime.project,
+      [SANDBOX_ROLE_LABEL]: BROWSER_CONTAINER_ROLE,
+      // The session label makes the capacity cap, idle stop and cleanup count this container
+      // with its session; lookups of the session's own container go by name.
+      "dev.osinara.sandbox.session-id": input.sandboxSessionId,
+    },
+    OpenStdin: false,
+    StdinOnce: false,
+    Tty: false,
+    WorkingDir: "/workspace",
+  };
 }
 
 function isolatedEnvironment(): string[] {

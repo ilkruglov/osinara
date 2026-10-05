@@ -25,8 +25,10 @@ export function dockerStatus(error: unknown): number | undefined {
 export async function inspectContainer(
   docker: Docker,
   sessionId: string,
+  /** Another container of the session (the browser companion) instead of its own. */
+  containerName: string = sandboxContainerName(sessionId),
 ): Promise<{ container: Docker.Container; inspection: Docker.ContainerInspectInfo } | null> {
-  const container = docker.getContainer(sandboxContainerName(sessionId));
+  const container = docker.getContainer(containerName);
   try {
     return { container, inspection: await container.inspect() };
   } catch (error) {
@@ -77,8 +79,9 @@ export async function requireRunningContainer(
   activeOperations: number,
   /** Runs a start of the stopped container; the engine passes its capacity gate. */
   gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
+  containerName: string = sandboxContainerName(sessionId),
 ): Promise<{ container: Docker.Container; generation: string | null }> {
-  const existing = await inspectContainer(docker, sessionId);
+  const existing = await inspectContainer(docker, sessionId, containerName);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
   if (!inspection.State.Running) {

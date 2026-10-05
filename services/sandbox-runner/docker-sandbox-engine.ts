@@ -64,10 +64,12 @@ import {
 import { makeRoomForContainer, reconcileSandboxContainers } from "./docker-sandbox-reconciliation.js";
 import { writeSandboxSeedArchive } from "./docker-sandbox-seed.js";
 import {
+  browserStateSubpath,
   buildSandboxContainerOptions,
   resolveTrustedToolMount,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
+import { removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
@@ -175,6 +177,23 @@ export function createDockerSandboxEngine(input: {
     return await turn;
   };
 
+  // Two browser commands of one session must not both create its companion.
+  const browserCreations = new Map<string, Promise<Docker.Container>>();
+  const withBrowserCreation = async (
+    sessionId: string,
+    create: () => Promise<Docker.Container>,
+  ): Promise<Docker.Container> => {
+    const pending = browserCreations.get(sessionId);
+    if (pending) await pending.catch(() => undefined);
+    const current = create();
+    browserCreations.set(sessionId, current);
+    try {
+      return await current;
+    } finally {
+      if (browserCreations.get(sessionId) === current) browserCreations.delete(sessionId);
+    }
+  };
+
   return {
     async health() {
       await input.docker.ping();
@@ -213,8 +232,10 @@ export function createDockerSandboxEngine(input: {
           if (request.seedFiles === undefined) {
             return { created: false, seedRequired: true, sessionId };
           }
-          // Workspace and tools are named-volume subpaths, so stale compute is disposable.
+          // Workspace and tools are named-volume subpaths, so stale compute is disposable. The
+          // browser companion copied this container's mounts, so it goes too.
           await existing.container.remove({ force: true, v: true });
+          await removeBrowserContainer(input.docker, sessionId);
           existing = null;
         }
         if (existing) {
@@ -229,6 +250,8 @@ export function createDockerSandboxEngine(input: {
         }
 
         const seedFiles = request.seedFiles;
+        // A companion left from an earlier container of this session took its mounts from it.
+        await removeBrowserContainer(input.docker, sessionId);
         const options = buildSandboxContainerOptions(input.runtime, request);
         options.name = sandboxContainerName(sessionId);
         options.Labels = {
@@ -250,6 +273,22 @@ export function createDockerSandboxEngine(input: {
       }));
     },
     async runProcess(sessionId, request, signal) {
+      if (request.target === "browser") {
+        // Browser tools only: bounded commands of the application, not the model's Bash, so the
+        // repeat guard (a model retrying a timed-out command) does not apply.
+        return await activity.runActive(sessionId, async () => {
+          const container = await withBrowserCreation(sessionId, () => requireBrowserContainer({
+            activeOperations: activity.activeCount(sessionId),
+            docker: input.docker,
+            gateStart: (start) => withCapacity(sessionId, start),
+            runtime: input.runtime,
+            sessionId,
+            toolsRoot: input.roots.toolsRoot,
+          }));
+          const { target: _target, ...processRequest } = request;
+          return await executeSandboxProcess(input.docker, container, processRequest, signal);
+        });
+      }
       return await activity.runActive(sessionId, async () => {
         const processRequest = request.workingDirectory
           ? { ...request, workingDirectory: resolvePath(request.workingDirectory) }
@@ -441,6 +480,7 @@ export function createDockerSandboxEngine(input: {
           if (dockerStatus(error) !== 404) throw error;
         });
       }
+      await removeBrowserContainer(input.docker, sessionId);
       activity.forget(sessionId);
       repeatGuard.forget(sessionId);
     },
@@ -474,6 +514,7 @@ export function createDockerSandboxEngine(input: {
     },
     async deleteToolEnvironment(workspaceId) {
       await rm(`${input.roots.toolsRoot}/${workspaceId}`, { force: true, recursive: true });
+      await rm(`${input.roots.toolsRoot}/${browserStateSubpath(workspaceId)}`, { force: true, recursive: true });
     },
   };
 }

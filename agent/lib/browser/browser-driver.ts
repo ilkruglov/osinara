@@ -6,8 +6,9 @@
  * - `createSandboxBrowserDriver`: production driver over the sandbox runner.
  *
  * Key constructs:
- * - Every call is one bounded `agent-browser` process in the sandbox session; the CLI keeps one
- *   Chromium per session (`osinara`), so cookies and logins outlive a task.
+ * - Every call is one bounded `agent-browser` process in the session's browser companion container
+ *   (runner target `browser`), apart from the model's Bash; the CLI keeps one Chromium per session
+ *   (`osinara`), so cookies and logins outlive a task.
  * - No element refs: the page is marked and acted on through `som-script.ts`, so the driver only
  *   evaluates scripts and never has to know which number is which.
  * - `settle()` waits for a navigation to land before the next look, bounded so a page that never
@@ -53,7 +54,13 @@ export function createSandboxBrowserDriver(input: {
   };
 
   async function exec(command: string, name: string): Promise<string> {
-    const result = await input.runner.run(input.sandboxSessionId, { command, timeoutMs: COMMAND_TIMEOUT_MS }, input.signal);
+    // The browser companion of the session, never the container of the model's Bash: there the
+    // logged-in browser could be driven past the confirmation gate (security review, 5 October 2026).
+    const result = await input.runner.run(
+      input.sandboxSessionId,
+      { command, target: "browser", timeoutMs: COMMAND_TIMEOUT_MS },
+      input.signal,
+    );
     if (result.exitCode === 0) return result.stdout;
     // Query strings carry tokens and booking ids; the model needs the error, not the URL.
     const detail = `${result.stderr}\n${result.stdout}`.replace(/\?[^\s'"]*/gu, "").replace(/\s+/gu, " ").trim()

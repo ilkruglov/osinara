@@ -105,7 +105,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "15",
+      "dev.osinara.sandbox.policy-version": "16",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
@@ -116,9 +116,6 @@ describe("buildSandboxContainerOptions", () => {
       "AGENT_BROWSER_USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
       "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
       "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
-      "AGENT_BROWSER_RESTORE=osinara",
-      "AGENT_BROWSER_RESTORE_SAVE=auto",
-      "AGENT_BROWSER_SESSION=osinara",
       "LIGHTPANDA_DISABLE_TELEMETRY=true",
       "HOME=/tools/personal/home",
       "HTTPS_PROXY=http://sandbox-egress-proxy:3128",
@@ -130,6 +127,8 @@ describe("buildSandboxContainerOptions", () => {
       expect.stringContaining("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"),
       expect.stringContaining("/tools/family"),
     ]));
+    // The logged-in browser session and its restore state belong to the browser companion only.
+    expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE)/u.test(entry))).toBe(false);
   });
 
   it("creates one-shot GWS compute with exact argv and only one workspace", () => {
