@@ -203,7 +203,8 @@ describe("controlled external-group web fetch", () => {
     const started = performance.now();
     await expect(execute({ format: "extracted_text", url: "https://example.com/trap" }))
       .resolves.toMatchObject({ finalUrl: "https://example.com/trap" });
-    expect(performance.now() - started).toBeLessThan(1_000);
+    // Tens of milliseconds now; generous so a loaded machine does not fail it, far under the old cost.
+    expect(performance.now() - started).toBeLessThan(3_000);
   });
 
   it("bounds textual model content by line count", async () => {

@@ -172,9 +172,12 @@ describe("workspace storage", () => {
       }
     };
     const succeeded = { delete: 0, list: 0, read: 0, write: 0 };
+    // The race runs until enough interleavings were observed, at least three seconds and at most
+    // twenty, so a slow machine extends the run instead of failing the counts.
+    const enough = () => Atomics.load(swaps, 0) > 100 && succeeded.read > 10 && succeeded.write > 5 && succeeded.list > 5;
     try {
-      const deadline = Date.now() + 3_000;
-      while (Date.now() < deadline) {
+      const started = Date.now();
+      while (Date.now() - started < 20_000 && (Date.now() - started < 3_000 || !enough())) {
         for (const path of ["file.txt", "docs/file.txt"]) {
           const read = await settle(readWorkspaceFile(root, WORKSPACE_ID, path));
           expect(read?.toString()).not.toBe("OUTSIDE_WORKSPACE_SENTINEL");
@@ -203,5 +206,5 @@ describe("workspace storage", () => {
     // Nothing was written into or deleted from the outside directory.
     expect(existsSync(join(outside, "written.txt"))).toBe(false);
     await expect(readFile(join(outside, "secret.txt"), "utf8")).resolves.toBe("OUTSIDE_WORKSPACE_SENTINEL");
-  }, 30_000);
+  }, 60_000);
 });

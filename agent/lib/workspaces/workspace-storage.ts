@@ -106,7 +106,10 @@ async function openDirectory(
     for (const segment of segments) {
       if (create) {
         await mkdir(at(current, segment)).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "EEXIST") throw error;
+          if (error.code === "EEXIST") return;
+          // The directory held by `current` was removed meanwhile (by the sandbox).
+          if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
+          throw error;
         });
       }
       let next: FileHandle;

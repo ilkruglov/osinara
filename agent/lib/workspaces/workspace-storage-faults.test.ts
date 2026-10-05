@@ -5,7 +5,8 @@
  * - Every descriptor opened is closed when a later step fails: a failing stat of the opened
  *   file, a failing close of a parent directory on the walk (Codex review, 5 October 2026).
  * - A write that fails after the temporary file exists (ENOSPC) leaves no temporary file.
- * - A delete whose target became a directory after the check is refused with the workspace code.
+ * - A delete whose target became a directory after the check, and a nested write whose directory
+ *   was removed on the way, fail with the workspace codes.
  */
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,11 +16,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 interface Faults {
   closeDirectoryFails: boolean;
+  mkdirCode: string | null;
   statFails: boolean;
   unlinkCode: string | null;
   writeFails: boolean;
 }
-const faults: Faults = { closeDirectoryFails: false, statFails: false, unlinkCode: null, writeFails: false };
+const faults: Faults = { closeDirectoryFails: false, mkdirCode: null, statFails: false, unlinkCode: null, writeFails: false };
 let opened = 0;
 let closed = 0;
 
@@ -49,6 +51,13 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       }) as typeof handle.writeFile;
       return handle;
     },
+    async mkdir(...args: Parameters<typeof actual.mkdir>) {
+      // Only the walk's own directory creation fails, as when the sandbox removes the parent.
+      if (faults.mkdirCode && String(args[0]).startsWith("/proc/self/fd/")) {
+        throw Object.assign(new Error(faults.mkdirCode), { code: faults.mkdirCode });
+      }
+      return await actual.mkdir(...args);
+    },
     async unlink(path: Parameters<typeof actual.unlink>[0]) {
       if (faults.unlinkCode) throw Object.assign(new Error(faults.unlinkCode), { code: faults.unlinkCode });
       return await actual.unlink(path);
@@ -71,7 +80,7 @@ async function workspace(): Promise<{ directory: string; root: string }> {
 }
 
 afterEach(async () => {
-  Object.assign(faults, { closeDirectoryFails: false, statFails: false, unlinkCode: null, writeFails: false });
+  Object.assign(faults, { closeDirectoryFails: false, mkdirCode: null, statFails: false, unlinkCode: null, writeFails: false });
   opened = 0;
   closed = 0;
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
@@ -97,6 +106,14 @@ describe("workspace storage under failures", () => {
     faults.writeFails = true;
     await expect(writeWorkspaceFile(root, WORKSPACE_ID, "docs/new.txt", Buffer.from("x"))).rejects.toThrow("ENOSPC");
     expect(await readdir(join(directory, "docs"))).toEqual(["file.txt"]);
+    expect(closed).toBe(opened);
+  });
+
+  it("reports a directory removed during a nested write with the workspace code", async () => {
+    const { root } = await workspace();
+    faults.mkdirCode = "ENOENT";
+    await expect(writeWorkspaceFile(root, WORKSPACE_ID, "docs/a/b/new.txt", Buffer.from("x")))
+      .rejects.toThrow("AGENT_WORKSPACE_FILE_NOT_FOUND");
     expect(closed).toBe(opened);
   });
 
