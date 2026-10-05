@@ -537,19 +537,23 @@ describe("running-container cap", () => {
   it("lets two sessions start at once take only the slots there are", async () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
     temporaryRoots.push(root);
-    const started: string[] = [];
-    const containerOf = (name: string) => ({
-      putArchive: vi.fn(async () => undefined),
-      remove: vi.fn(async () => undefined),
-      start: vi.fn(async () => { started.push(name); }),
-    });
+    // Each started container keeps the session label it was created with: which session reaches
+    // the gate first depends on file-system timing, and labelling by position made the loser
+    // see the winner's container as its own (CI flake of 5 October 2026).
+    const started: Array<{ name: string; sessionId: string }> = [];
     const docker = {
-      createContainer: vi.fn(async (options: { name: string }) => containerOf(options.name)),
+      createContainer: vi.fn(async (options: { Labels: Record<string, string>; name: string }) => ({
+        putArchive: vi.fn(async () => undefined),
+        remove: vi.fn(async () => undefined),
+        start: vi.fn(async () => {
+          started.push({ name: options.name, sessionId: options.Labels["dev.osinara.sandbox.session-id"]! });
+        }),
+      })),
       getContainer: vi.fn(() => ({ inspect: vi.fn(async () => Promise.reject(missing)) })),
       // The listing reflects what has started so far, as Docker would.
-      listContainers: vi.fn(async () => started.map((name, index) => ({
-        Id: name,
-        Labels: { "dev.osinara.sandbox.session-id": index === 0 ? SANDBOX_SESSION_ID : BUSY_SESSION_ID },
+      listContainers: vi.fn(async () => started.map((item) => ({
+        Id: item.name,
+        Labels: { "dev.osinara.sandbox.session-id": item.sessionId },
         State: "running",
       }))),
     } as unknown as Docker;
@@ -564,8 +568,9 @@ describe("running-container cap", () => {
       engine.createSession(request),
       engine.createSession({ ...request, sandboxSessionId: BUSY_SESSION_ID }),
     ]);
-    expect(outcomes.map((outcome) => outcome.status)).toEqual(["fulfilled", "rejected"]);
-    expect(String((outcomes[1] as PromiseRejectedResult).reason)).toContain("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual(["fulfilled", "rejected"]);
+    const refused = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === "rejected");
+    expect(String(refused?.reason)).toContain("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
     expect(started).toHaveLength(1);
   });
 
