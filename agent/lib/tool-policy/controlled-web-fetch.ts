@@ -23,7 +23,7 @@ import { AppError, isAppError } from "../app-error.js";
 import { readBoundedBody } from "../bounded-body.js";
 import { deadlineSignal } from "../request-signal.js";
 // One linear pass shared with the trusted web_fetch of the vendored Eve (security review, 5 October 2026).
-import { htmlToText } from "../../../scripts/eve-runtime/html-text.js";
+import { htmlToText } from "../html-text.js";
 
 export const CONTROLLED_WEB_FETCH_PROXY_URL = "http://sandbox-egress-proxy:3128";
 const CONTROLLED_WEB_FETCH_MAX_REDIRECTS = 5;

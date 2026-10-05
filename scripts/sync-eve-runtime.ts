@@ -19,7 +19,7 @@ const root = new URL("../", import.meta.url);
 
 export const EVE_RUNTIME_MODULES = [
   ["scripts/eve-runtime/delta-pacing.ts", "vendor/eve/dist/src/harness/osinara-delta-pacing.js"],
-  ["scripts/eve-runtime/html-text.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-text.js"],
+  ["agent/lib/html-text.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-text.js"],
   ["scripts/eve-runtime/ndjson-stream.ts", "vendor/eve/dist/src/execution/osinara-ndjson-stream.js"],
   ["scripts/eve-runtime/telegram-send-pacing.ts", "vendor/eve/dist/src/public/channels/telegram/osinara-telegram-send-pacing.js"],
   ["scripts/eve-runtime/event-log-cache.ts", "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js"],
