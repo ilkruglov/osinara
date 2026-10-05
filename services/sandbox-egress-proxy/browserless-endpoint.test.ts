@@ -18,6 +18,7 @@ import { EventEmitter } from "node:events";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createSessionClaims } from "./browserless-endpoint.js";
 import { createSandboxEgressProxy, type ResolvedTarget } from "./server.js";
 
 // No test here reaches the provider; each TLS attempt is counted and goes nowhere.
@@ -164,5 +165,18 @@ describe("Browserless endpoint", () => {
     const answer = await firstAnswer(next, 400);
     expect(answer).not.toBe("HTTP/1.1 409 Conflict");
     next.destroy();
+  });
+
+  it("forgets only expired session ids and refuses new ones rather than a live id when full", () => {
+    let now = 0;
+    const claim = createSessionClaims(() => now, 3);
+    expect(claim("a")).toBe(true);
+    expect(claim("b")).toBe(true);
+    expect(claim("c")).toBe(true);
+    expect(claim("d")).toBe(false);
+    expect(claim("a")).toBe(false);
+    now = 240_000;
+    expect(claim("a")).toBe(true);
+    expect(claim("a")).toBe(false);
   });
 });

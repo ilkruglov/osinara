@@ -112,9 +112,9 @@ export function createStartBarrier(apply: (container: Docker.Container) => Promi
   // Least recently used first. A failed run keeps its rejection: the run is over once stopped,
   // and only a new start (a new generation) applies again; an operation arriving while the stop
   // is under way must not lay a second set and slip in (Codex review, 5 October 2026). Past the
-  // cap the least recently used run is forgotten; seen again, its rules are laid again, which
-  // the script does closed (DROP policies) on a running container.
-  const runs = new Map<string, { generation: string; ready: Promise<void> }>();
+  // cap the least recently used settled run is forgotten, never one still being laid; seen
+  // again, its rules are laid again, which the script does closed (DROP policies).
+  const runs = new Map<string, { generation: string; ready: Promise<void>; settled: boolean }>();
   return async (container: Docker.Container, inspection?: Docker.ContainerInspectInfo): Promise<void> => {
     const info = inspection ?? await container.inspect();
     const generation = containerGeneration(info);
@@ -124,16 +124,22 @@ export function createStartBarrier(apply: (container: Docker.Container) => Promi
       runs.set(info.Id, known);
       return await known.ready;
     }
-    const ready = apply(container).catch(async (error: unknown) => {
+    const run = { generation: generation ?? "", ready: Promise.resolve(), settled: false };
+    run.ready = apply(container).catch(async (error: unknown) => {
       await container.stop({ t: 0 }).catch(() => undefined);
       throw error;
+    }).finally(() => {
+      run.settled = true;
     });
     if (generation !== null) {
       runs.delete(info.Id);
-      runs.set(info.Id, { generation, ready });
-      while (runs.size > MAX_TRACKED_RUNS) runs.delete(runs.keys().next().value!);
+      runs.set(info.Id, run);
+      for (const [id, tracked] of runs) {
+        if (runs.size <= MAX_TRACKED_RUNS) break;
+        if (tracked.settled) runs.delete(id);
+      }
     }
-    return await ready;
+    return await run.ready;
   };
 }
 

@@ -1,7 +1,8 @@
 /**
  * The proxy's Browserless endpoint: the only way a sandbox reaches the cloud browser.
  *
- * Export:
+ * Exports:
+ * - `createSessionClaims`: the one-time session ids, bounded.
  * - `handleBrowserlessUpgrade`: a WebSocket upgrade to `/browserless/chromium/stealth`, relayed to
  *   the provider over TLS with the API key added here.
  *
@@ -32,6 +33,28 @@ const HANDSHAKE_TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_HEAD_BYTES = 16 * 1024;
 
 const SESSION_ID = /^[0-9a-f]{32}$/u;
+
+const MAX_USED_SESSIONS = 10_000;
+
+/**
+ * One-time session ids, each remembered for twice the longest session. Only expired ids are
+ * forgotten; a full set refuses new sessions rather than forget a live id, whose reconnect would
+ * then pass (Codex review, 5 October 2026).
+ */
+export function createSessionClaims(now: () => number = Date.now, max = MAX_USED_SESSIONS): (id: string) => boolean {
+  const used = new Map<string, number>();
+  return (id) => {
+    const at = now();
+    // Insertion order is claim order, so the expired ids are at the front.
+    for (const [old, claimedAt] of used) {
+      if (at - claimedAt < 2 * MAX_SESSION_MS) break;
+      used.delete(old);
+    }
+    if (used.has(id) || used.size >= max) return false;
+    used.set(id, at);
+    return true;
+  };
+}
 
 /** Answers and closes; the socket is destroyed once the answer is out, half-open or not. */
 function refuse(socket: Duplex, status: number, reason: string): void {

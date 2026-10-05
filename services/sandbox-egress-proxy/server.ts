@@ -15,14 +15,12 @@ import { createServer, request as httpRequest, type IncomingHttpHeaders } from "
 import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
-import { handleBrowserlessUpgrade } from "./browserless-endpoint.js";
+import { createSessionClaims, handleBrowserlessUpgrade } from "./browserless-endpoint.js";
 import { createEgressLedger, type EgressLedger, type EgressMeter, type EgressTarget } from "./egress-ledger.js";
 import { resolvePublicInternetAddress } from "./public-dns-resolver.js";
 
 const ALLOWED_PORTS = new Set([80, 443]);
 const CONNECT_TIMEOUT_MS = 15_000;
-const BROWSERLESS_SESSION_MS = 120_000;
-const MAX_USED_SESSIONS = 10_000;
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -197,19 +195,9 @@ export function createSandboxEgressProxy(options: {
   // The Browserless endpoint: agent-browser in the sandbox connects here without a key, the proxy adds it.
   // One cloud browser per sandbox at a time, and each helper session id opens one only once: a
   // reconnect must not quietly start another billable browser (the sandbox's one-shot bridge
-  // used to refuse it; the bridge is gone). Used ids are kept for twice the longest session.
+  // used to refuse it; the bridge is gone).
   const browserlessClients = new Set<string>();
-  const usedSessions = new Map<string, number>();
-  const claimSession = (id: string): boolean => {
-    const now = Date.now();
-    for (const [used, at] of usedSessions) {
-      if (now - at < 2 * BROWSERLESS_SESSION_MS && usedSessions.size <= MAX_USED_SESSIONS) break;
-      usedSessions.delete(used);
-    }
-    if (usedSessions.has(id)) return false;
-    usedSessions.set(id, now);
-    return true;
-  };
+  const claimSession = createSessionClaims();
   server.on("upgrade", (request, clientSocket, head) => {
     const client = clientAddress(clientSocket);
     // The server keeps sockets half-open: a sandbox that hung up would otherwise hold its slot.

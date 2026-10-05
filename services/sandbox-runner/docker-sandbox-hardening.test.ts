@@ -129,6 +129,22 @@ describe("createStartBarrier", () => {
     expect(apply).toHaveBeenCalledTimes(2);
   });
 
+  it("never forgets a run whose rules are still being laid", async () => {
+    let finish!: () => void;
+    const apply = vi.fn(async (_container: Docker.Container): Promise<void> => undefined)
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const ready = createStartBarrier(apply);
+    const pending = { inspect: vi.fn(async () => ({ Id: "pending-id", State: { Running: true, StartedAt: "2026-10-05T10:00:00Z" } })) } as unknown as Docker.Container;
+    const first = ready(pending);
+    for (let index = 0; index < 2_100; index += 1) {
+      await ready({ inspect: async () => ({ Id: `other-${index}`, State: { Running: true, StartedAt: "2026-10-05T10:00:00Z" } }) } as unknown as Docker.Container);
+    }
+    const again = ready(pending);
+    finish();
+    await Promise.all([first, again]);
+    expect(apply.mock.calls.filter(([container]) => container === pending)).toHaveLength(1);
+  });
+
   it("lays the rules closed: the default policies drop before the chains are refilled", async () => {
     const helper = { logs: vi.fn(), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined), wait: vi.fn(async () => ({ StatusCode: 0 })) };
     const docker = { createContainer: vi.fn(async () => helper) } as unknown as Docker;
