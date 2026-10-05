@@ -51,7 +51,7 @@ import {
 } from "./telegram-reply-routing.js";
 import { authorizeTelegramReply } from "./telegram-reply-authorization.js";
 import { telegramReplyAttachmentTarget } from "./telegram-reply-attachment.js";
-import { telegramReplyTargetSnapshot } from "./telegram-reply-target-snapshot.js";
+import { telegramReplyTargetProjection } from "./telegram-reply-target-snapshot.js";
 import {
   productionTelegramMessageRepositories,
   type TelegramMessageRepositories,
@@ -379,9 +379,13 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         now: turnStartedAt,
       })
       : null;
+    // One verification of the reply target serves both projections: its full text is needed only
+    // when the timeline cannot resolve the target, the selected fragment whenever there is one.
+    const replyTarget = telegramReplyTargetProjection(message);
     const replyTargetSnapshot = inboundTimeline?.replyTargetUnavailable
-      ? telegramReplyTargetSnapshot(message)
+      ? replyTarget.snapshot
       : null;
+    const replyQuotedText = replyTarget.quotedText;
     // Only this author's own journaled messages can be named; a foreign id resolves to nothing.
     const seriesSequenceIds = series?.role === "current" && series.telegramMessageIds.length > 0
       ? await repositories.journal.findSeriesSequences({
@@ -422,6 +426,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
           groupId: group?.groupId ?? null,
           messageText: dispatchText,
           messageThreadId: forumTopicId,
+          ...(replyQuotedText === null ? {} : { replyQuotedText }),
           ...(replyTargetSnapshot === null ? {} : { replyTargetSnapshot }),
           replyTargetUnavailable: inboundTimeline.replyTargetUnavailable,
           replyToSequenceId: inboundTimeline.replyToSequenceId,
@@ -525,6 +530,7 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
       profileSignals,
       profileReplyTimelineSequence: inboundTimeline.replyToSequenceId,
       replyHandling,
+      replyQuotedText,
       storedAttachments,
       timelineEntryId: inboundTimeline.entryId,
       timezone,

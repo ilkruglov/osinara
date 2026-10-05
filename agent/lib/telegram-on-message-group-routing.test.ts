@@ -395,9 +395,9 @@ describe("createTelegramMessageHandler group routing", () => {
     await handler(telegramContext().context, message);
 
     expect(repository.groupContext.prepare).toHaveBeenCalledWith(expect.objectContaining({
+      replyQuotedText: "streisand",
       replyTargetSnapshot: {
         contentText: "У меня настроен vless, ссылочку кинул в streisand",
-        quotedText: "streisand",
         senderDisplayName: "nlp_daily",
         senderUsername: "nlp_daily",
       },

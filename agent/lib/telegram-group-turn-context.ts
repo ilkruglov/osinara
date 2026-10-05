@@ -46,6 +46,8 @@ interface PrepareTelegramGroupTurnContextInput {
   groupId: string | null;
   messageText: string;
   messageThreadId: string | null;
+  /** Untrusted fragment the author selected in the reply target, already bounded at ingress. */
+  replyQuotedText?: string | null;
   replyTargetSnapshot?: TelegramReplyTargetSnapshot | null;
   replyTargetUnavailable: boolean;
   replyToSequenceId: string | null;
@@ -135,6 +137,7 @@ function currentTelegramMessageEnvelope(
     | "currentSenderUsername"
     | "currentSequence"
     | "messageText"
+    | "replyQuotedText"
     | "replyTargetSnapshot"
     | "replyTargetUnavailable"
     | "replyToSequenceId"
@@ -159,6 +162,9 @@ function currentTelegramMessageEnvelope(
         ? { replyTargetUnavailable: true }
         : {}),
     ...(input.replyToSequenceId === null ? {} : { replyToSequenceId: input.replyToSequenceId }),
+    // Kept apart from the snapshot: the selection matters whether or not the target is in the
+    // timeline, and one field means one copy of it in front of the model.
+    ...(input.replyQuotedText ? { replyQuotedText: input.replyQuotedText } : {}),
     ...(input.seriesSequenceIds && input.seriesSequenceIds.length > 0
       ? { earlierMessagesInSeries: [...input.seriesSequenceIds] }
       : {}),
