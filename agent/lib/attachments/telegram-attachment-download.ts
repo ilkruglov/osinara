@@ -59,6 +59,8 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
       throwDownloadFailure(error);
     }
     if (!response.ok) {
+      // Every early refusal releases the body, or the pooled connection stays busy with it.
+      await response.body?.cancel().catch(() => undefined);
       console.error(JSON.stringify({
         code: "AGENT_ATTACHMENT_DOWNLOAD_FAILED",
         providerStatus: response.status,
@@ -72,12 +74,16 @@ export function createTelegramAttachmentDownloader(adapter: TelegramAttachmentDo
     if (declaredLength !== null) {
       const length = Number(declaredLength);
       if (!Number.isSafeInteger(length) || length < 0) {
+        await response.body?.cancel().catch(() => undefined);
         throw new AppError(
           "AGENT_ATTACHMENT_DOWNLOAD_RESPONSE_INVALID",
           "Telegram вернул некорректные данные файла. Отправьте его ещё раз",
         );
       }
-      assertDownloadSize(length);
+      if (length > TELEGRAM_MAX_INBOUND_ATTACHMENT_BYTES) {
+        await response.body?.cancel().catch(() => undefined);
+        throw downloadTooLarge();
+      }
     }
     // Counted while streaming: a missing or wrong Content-Length must not let the whole body be
     // buffered before the limit applies (security review, 5 October 2026).

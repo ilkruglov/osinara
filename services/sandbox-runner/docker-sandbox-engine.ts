@@ -23,7 +23,7 @@ import {
   type SandboxRunnerSessionResponse,
 } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import type { SandboxEngine } from "./sandbox-engine.js";
-import { createSandboxWriteMemo } from "./sandbox-write-memo.js";
+import { createSandboxWriteMemo, isSkillPackagePath } from "./sandbox-write-memo.js";
 import {
   collectLimitedStream,
   readSingleFileArchive,
@@ -69,9 +69,10 @@ import {
   resolveTrustedToolMount,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
-import { removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
+import { migrateBrowserState, removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
 import {
   isCleanupCommand,
+  SANDBOX_CLEANUP_PATH,
   SANDBOX_QUOTA_REFUSED_EXIT_CODE,
   type SandboxDiskQuota,
   type WorkspaceDirectories,
@@ -148,22 +149,20 @@ async function ensureToolDirectories(
 }
 
 /**
- * The directories one session's writes land in, per workspace: its files, and for the workspace
- * that owns the tool environment also the tools and the browser state.
+ * The workspaces one session writes to, each with every directory that belongs to it: its files,
+ * its tool environment and its browser state. The set does not depend on which session asks, so
+ * a family workspace measured from a private chat is the same number as from the family group.
  */
 function sessionWorkspaces(inspection: Docker.ContainerInspectInfo, roots: RuntimeRoots): WorkspaceDirectories[] {
-  const byKey = new Map<string, string[]>();
+  const ids = new Set<string>();
   for (const mount of (inspection.HostConfig.Mounts ?? []) as Array<Docker.MountSettings & { VolumeOptions?: { Subpath?: string } }>) {
     const id = mount.VolumeOptions?.Subpath;
-    if (!id) continue;
-    const directories = byKey.get(id) ?? [];
-    if (mount.Target.startsWith("/workspace/")) directories.push(`${roots.workspaceRoot}/${id}`);
-    else if (mount.Target.startsWith("/tools/")) {
-      directories.push(`${roots.toolsRoot}/${id}`, `${roots.toolsRoot}/${browserStateSubpath(id)}`);
-    }
-    byKey.set(id, directories);
+    if (id && (mount.Target.startsWith("/workspace/") || mount.Target.startsWith("/tools/"))) ids.add(id);
   }
-  return [...byKey].map(([key, directories]) => ({ directories, key }));
+  return [...ids].map((id) => ({
+    directories: [`${roots.workspaceRoot}/${id}`, `${roots.toolsRoot}/${id}`, `${roots.toolsRoot}/${browserStateSubpath(id)}`],
+    key: id,
+  }));
 }
 
 export function createDockerSandboxEngine(input: {
@@ -202,23 +201,6 @@ export function createDockerSandboxEngine(input: {
     });
     capacityGate = turn.catch(() => undefined);
     return await turn;
-  };
-
-  // Two browser commands of one session must not both create its companion.
-  const browserCreations = new Map<string, Promise<Docker.Container>>();
-  const withBrowserCreation = async (
-    sessionId: string,
-    create: () => Promise<Docker.Container>,
-  ): Promise<Docker.Container> => {
-    const pending = browserCreations.get(sessionId);
-    if (pending) await pending.catch(() => undefined);
-    const current = create();
-    browserCreations.set(sessionId, current);
-    try {
-      return await current;
-    } finally {
-      if (browserCreations.get(sessionId) === current) browserCreations.delete(sessionId);
-    }
   };
 
   return {
@@ -277,8 +259,13 @@ export function createDockerSandboxEngine(input: {
         }
 
         const seedFiles = request.seedFiles;
-        // A companion left from an earlier container of this session took its mounts from it.
+        // A companion left from an earlier container of this session belongs to that one.
         await removeBrowserContainer(input.docker, sessionId);
+        if (request.access === "trusted") {
+          // No container of the session runs now, so Bash cannot read the logged-in state while
+          // it leaves the tool environment.
+          await migrateBrowserState(input.roots.toolsRoot, resolveTrustedToolMount(request.mounts).workspaceId);
+        }
         const options = buildSandboxContainerOptions(input.runtime, request);
         options.name = sandboxContainerName(sessionId);
         options.Labels = {
@@ -304,7 +291,9 @@ export function createDockerSandboxEngine(input: {
         // Browser tools only: bounded commands of the application, not the model's Bash, so the
         // repeat guard (a model retrying a timed-out command) does not apply.
         return await activity.runActive(sessionId, async () => {
-          const container = await withBrowserCreation(sessionId, () => requireBrowserContainer({
+          // The session's creation lock: creating the companion cannot interleave with the
+          // session's container being created, replaced or stopped.
+          const container = await activity.runExclusive(sessionId, () => requireBrowserContainer({
             activeOperations: activity.activeCount(sessionId),
             docker: input.docker,
             gateStart: (start) => withCapacity(sessionId, start),
@@ -337,14 +326,17 @@ export function createDockerSandboxEngine(input: {
           };
         }
         const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
-        const refusal = isCleanupCommand(processRequest.command)
-          ? null
-          : await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
+        const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
+        let allowed = processRequest;
         if (refusal) {
-          console.error(JSON.stringify({ code: refusal.slice(0, refusal.indexOf(":")), sessionId }));
-          return { exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE, processId: randomUUID(), stderr: refusal, stdout: "" };
+          if (!isCleanupCommand(processRequest.command)) {
+            console.error(JSON.stringify({ code: refusal.slice(0, refusal.indexOf(":")), sessionId }));
+            return { exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE, processId: randomUUID(), stderr: refusal, stdout: "" };
+          }
+          // Past a refusal only the system's own rm/ls/du/df/find run, not ones planted in PATH.
+          allowed = { ...processRequest, environment: { ...processRequest.environment, PATH: SANDBOX_CLEANUP_PATH } };
         }
-        const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
+        const result = await executeSandboxProcess(input.docker, container, allowed, signal);
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
       });
@@ -430,9 +422,9 @@ export function createDockerSandboxEngine(input: {
           activity.activeCount(sessionId),
         );
         const resolved = resolvePath(path);
-        // Only the model's files: skill packages in HOME are rewritten every turn, and refusing
-        // them would stop every turn of a workspace past its budget, cleanup included.
-        if (resolved.startsWith("/workspace/")) {
+        // Every file the model writes, wherever: skill packages are the framework's, rewritten
+        // every turn, and refusing them would stop every turn of the workspace, cleanup included.
+        if (!isSkillPackagePath(resolved)) {
           const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
           if (refusal) throw new Error(refusal);
         }
@@ -514,13 +506,16 @@ export function createDockerSandboxEngine(input: {
       });
     },
     async stopSession(sessionId) {
-      const existing = await inspectContainer(input.docker, sessionId);
-      if (existing) {
-        await existing.container.remove({ force: true, v: true }).catch((error) => {
-          if (dockerStatus(error) !== 404) throw error;
-        });
-      }
-      await removeBrowserContainer(input.docker, sessionId);
+      // In the creation lock, so a companion being created cannot start after this returns.
+      await activity.runExclusive(sessionId, async () => {
+        const existing = await inspectContainer(input.docker, sessionId);
+        if (existing) {
+          await existing.container.remove({ force: true, v: true }).catch((error) => {
+            if (dockerStatus(error) !== 404) throw error;
+          });
+        }
+        await removeBrowserContainer(input.docker, sessionId);
+      });
       activity.forget(sessionId);
       repeatGuard.forget(sessionId);
     },

@@ -3,20 +3,23 @@
  *
  * Exports:
  * - `sandboxBrowserContainerName`: the companion's deterministic name.
- * - `migrateBrowserState`: moves the logged-in session's restore state out of the tool
- *   environment Bash mounts, once.
- * - `requireBrowserContainer`: the running companion, created from the session's own container.
+ * - `migrateBrowserState`: once per tool workspace, moves the logged-in session's restore state
+ *   out of the tool environment Bash mounts and deletes what is left of it there.
+ * - `requireBrowserContainer`: the running companion of the session's current container.
  * - `removeBrowserContainer`: removes it with its session.
  *
  * Key construct:
  * - Browser tools run `agent-browser` here, never in the container of the model's Bash: there the
  *   DevTools port on 127.0.0.1 and the daemon socket let any process drive the logged-in browser
  *   past the confirmation gate (security review and Codex security scan, 5 October 2026). The
- *   companion takes the workspace mounts of the session's container, so a screenshot written to
- *   /workspace/<scope>/shots is the same file the tools read; its state directory sits beside the
- *   tool environment, which is all Bash sees of the tools volume.
+ *   companion mounts only its state directory, which sits beside the tool environment (all Bash
+ *   sees of the tools volume), and has no workspace: screenshots go through the application.
+ * - The restore state leaves the tool environment before any Bash of the new layout runs: the
+ *   engine migrates while creating the session's container, when no container of the session is
+ *   running, and only once per workspace (a marker), so files Bash writes later under those names
+ *   are never imported into the logged-in browser.
  */
-import { mkdir, readdir, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 
 import type Docker from "dockerode";
 
@@ -26,46 +29,84 @@ import {
   browserStateSubpath,
   buildBrowserContainerOptions,
   SANDBOX_CONTAINER_POLICY_VERSION,
+  SANDBOX_PARENT_LABEL,
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
 
 const POLICY_LABEL = "dev.osinara.sandbox.policy-version";
 const EVE_SESSION_LABEL = "dev.osinara.sandbox.eve-session-id";
-/** Restore files of the logged-in session `osinara` (agent-browser names them `<session>-<restore>`). */
+/** Files of the logged-in session `osinara`: `<session>-<restore>.json` and its autosave candidates. */
 const LOGGED_IN_STATE_PREFIX = "osinara-osinara";
+const RESTORE_FILE = `${LOGGED_IN_STATE_PREFIX}.json`;
+const MIGRATED_MARKER = ".state-moved-from-tools";
 
 export function sandboxBrowserContainerName(sessionId: string): string {
   return `${sandboxContainerName(sessionId)}-browser`;
 }
 
-/**
- * Moves the restore state of the logged-in session from the tool environment (mounted into Bash)
- * to the browser state directory, unless the browser already has its own. Logins survive the move
- * and stop being readable from Bash.
- */
-export async function migrateBrowserState(toolsRoot: string, workspaceId: string): Promise<number> {
-  const from = `${toolsRoot}/${workspaceId}/home/.agent-browser/sessions`;
-  const to = `${toolsRoot}/${browserStateSubpath(workspaceId)}/home/.agent-browser/sessions`;
-  await mkdir(to, { recursive: true });
-  const existing = await readdir(to);
-  let names: string[];
+async function isRegularFile(path: string): Promise<boolean> {
   try {
-    names = await readdir(from);
+    return (await lstat(path)).isFile();
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
-  const moving = names.filter((name) => name.startsWith(LOGGED_IN_STATE_PREFIX));
-  if (moving.length === 0) return 0;
-  // The browser's own state wins; an older copy left in the tool environment is removed anyway,
-  // so Bash never keeps a readable login.
-  const keep = existing.some((name) => name.startsWith(LOGGED_IN_STATE_PREFIX));
-  for (const name of moving) {
-    if (keep) await rm(`${from}/${name}`, { force: true });
-    else await rename(`${from}/${name}`, `${to}/${name}`);
+}
+
+/** Regular files of `directory` named with the logged-in prefix; none when it is missing. */
+async function stateFiles(directory: string): Promise<string[]> {
+  let names: string[];
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
   }
-  console.info(JSON.stringify({ code: "AGENT_SANDBOX_RUNNER_BROWSER_STATE_MOVED", files: moving.length, kept: keep }));
-  return moving.length;
+  const files: string[] = [];
+  for (const name of names) {
+    if (name.startsWith(LOGGED_IN_STATE_PREFIX) && await isRegularFile(`${directory}/${name}`)) files.push(name);
+  }
+  return files;
+}
+
+/**
+ * Moves the restore file of the logged-in session to the browser state directory unless the
+ * browser already has one, then deletes every logged-in file left in the tool environment
+ * (autosave candidates under `.tmp` included). Runs only while no container of the session is
+ * running; a path through a link planted by Bash is not followed, the files there are deleted only.
+ */
+export async function migrateBrowserState(toolsRoot: string, workspaceId: string): Promise<void> {
+  const destination = `${toolsRoot}/${browserStateSubpath(workspaceId)}/home/.agent-browser/sessions`;
+  const marker = `${toolsRoot}/${browserStateSubpath(workspaceId)}/${MIGRATED_MARKER}`;
+  await mkdir(destination, { recursive: true });
+  if (await isRegularFile(marker)) return;
+  const source = `${toolsRoot}/${workspaceId}/home/.agent-browser/sessions`;
+  let sourceIsReal = false;
+  try {
+    sourceIsReal = await realpath(source) === source;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  let moved = 0;
+  let removed = 0;
+  if (sourceIsReal) {
+    const keepOwn = await isRegularFile(`${destination}/${RESTORE_FILE}`);
+    for (const name of await stateFiles(source)) {
+      if (!keepOwn && name === RESTORE_FILE) {
+        await rename(`${source}/${name}`, `${destination}/${name}`);
+        moved += 1;
+      } else {
+        await rm(`${source}/${name}`, { force: true });
+        removed += 1;
+      }
+    }
+    for (const name of await stateFiles(`${source}/.tmp`)) {
+      await rm(`${source}/.tmp/${name}`, { force: true });
+      removed += 1;
+    }
+  }
+  await writeFile(marker, `${new Date().toISOString()}\n`);
+  console.info(JSON.stringify({ code: "AGENT_SANDBOX_RUNNER_BROWSER_STATE_MOVED", moved, removed, sourceIsReal }));
 }
 
 export async function removeBrowserContainer(docker: Docker, sessionId: string): Promise<void> {
@@ -77,9 +118,10 @@ export async function removeBrowserContainer(docker: Docker, sessionId: string):
 }
 
 /**
- * The session's running browser companion. It is created from the session's own container (its
- * workspace mounts and tool workspace), which must exist and be trusted; one from an older policy
- * is replaced. Starting goes through the engine's capacity gate.
+ * The session's running browser companion, for the session's current trusted container. A
+ * companion of an earlier container of the session or of an older policy is replaced. The caller
+ * holds the session's creation lock, so creating it cannot interleave with the session's
+ * container being replaced or stopped; starting goes through the engine's capacity gate.
  */
 export async function requireBrowserContainer(input: {
   activeOperations: number;
@@ -94,14 +136,15 @@ export async function requireBrowserContainer(input: {
   const sessionMounts = (session.inspection.HostConfig.Mounts ?? []) as Array<Docker.MountSettings & {
     VolumeOptions?: { Subpath?: string };
   }>;
-  const toolsMount = sessionMounts.find((mount) => mount.Target.startsWith("/tools/"));
-  const toolsWorkspaceId = toolsMount?.VolumeOptions?.Subpath;
+  const toolsWorkspaceId = sessionMounts.find((mount) => mount.Target.startsWith("/tools/"))?.VolumeOptions?.Subpath;
   if (!toolsWorkspaceId) {
     throw new Error("AGENT_SANDBOX_RUNNER_BROWSER_UNAVAILABLE: The browser runs only beside a trusted sandbox");
   }
   const name = sandboxBrowserContainerName(input.sessionId);
   const existing = await inspectContainer(input.docker, input.sessionId, name);
-  if (existing && existing.inspection.Config.Labels?.[POLICY_LABEL] !== SANDBOX_CONTAINER_POLICY_VERSION) {
+  const labels = existing?.inspection.Config.Labels;
+  if (existing && (labels?.[POLICY_LABEL] !== SANDBOX_CONTAINER_POLICY_VERSION ||
+    labels?.[SANDBOX_PARENT_LABEL] !== session.inspection.Id)) {
     await existing.container.remove({ force: true, v: true });
   } else if (existing) {
     const { container } = await requireRunningContainer(
@@ -113,15 +156,12 @@ export async function requireBrowserContainer(input: {
     );
     return container;
   }
-  await migrateBrowserState(input.toolsRoot, toolsWorkspaceId);
   await mkdir(`${input.toolsRoot}/${browserStateSubpath(toolsWorkspaceId)}/home`, { recursive: true });
   const options = buildBrowserContainerOptions(input.runtime, {
     eveSessionId: session.inspection.Config.Labels?.[EVE_SESSION_LABEL] ?? "",
+    parentContainerId: session.inspection.Id,
     sandboxSessionId: input.sessionId,
     toolsWorkspaceId,
-    workspaceMounts: sessionMounts
-      .filter((mount) => mount.Target.startsWith("/workspace/") && mount.VolumeOptions?.Subpath)
-      .map((mount) => ({ mountPoint: mount.Target.slice("/workspace/".length), workspaceId: mount.VolumeOptions!.Subpath! })),
   });
   options.name = name;
   const container = await input.docker.createContainer(options);

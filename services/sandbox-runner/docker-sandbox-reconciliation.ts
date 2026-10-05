@@ -48,7 +48,7 @@ function requireFinishedAt(value: string | undefined, id: string): number {
 export async function makeRoomForContainer(input: {
   activity: SandboxActivityRegistry;
   docker: Docker;
-  /** The session about to start: its own container, if listed, is neither counted nor stopped. */
+  /** The session about to start: its running containers count, but none of them is stopped. */
   exceptSessionId?: string;
   limit: number;
   minIdleMs: number;
@@ -61,11 +61,12 @@ export async function makeRoomForContainer(input: {
       status: ["running"],
     },
   })).map((item) => ({ id: item.Id, sessionId: item.Labels[SANDBOX_SESSION_LABEL] }))
-    .filter((item): item is { id: string; sessionId: string } =>
-      typeof item.sessionId === "string" && item.sessionId !== input.exceptSessionId);
+    .filter((item): item is { id: string; sessionId: string } => typeof item.sessionId === "string");
+  // Every running container takes memory, the starting session's own (its Bash container when
+  // its browser starts) included (Codex review, 5 October 2026).
   if (running.length < input.limit) return { room: true, running: running.length };
   // A session this process has never seen is the coldest of all.
-  const byLastUse = running
+  const byLastUse = running.filter((item) => item.sessionId !== input.exceptSessionId)
     .map((item) => ({ ...item, lastUsedAt: input.activity.lastActivityAt(item.sessionId) ?? Number.NEGATIVE_INFINITY }))
     .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
   for (const item of byLastUse) {

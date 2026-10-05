@@ -19,7 +19,7 @@
  *   command can still overshoot; the hard ceiling belongs to the filesystem, not to this check.
  */
 import { execFile } from "node:child_process";
-import { statfs } from "node:fs/promises";
+import { stat, statfs } from "node:fs/promises";
 import { promisify } from "node:util";
 
 export const SANDBOX_WORKSPACE_QUOTA_BYTES = 2 * 1024 ** 3;
@@ -28,13 +28,22 @@ export const SANDBOX_QUOTA_REFUSED_EXIT_CODE = 125;
 const MEASURE_TTL_MS = 60_000;
 const MAX_CACHED_WORKSPACES = 2_000;
 
+/** `find` actions that write a file or run a program. */
+const FIND_WRITING_ACTIONS = /(?:^|[ \t])-(?:fprint0?|fprintf|fls|exec|execdir|ok|okdir)(?=[ \t]|$)/u;
+
 /**
- * `rm`, `rmdir`, `ls`, `du`, `df` or `find` alone, with no chaining, redirection or substitution:
- * enough to see what takes space and delete it, nothing that writes.
+ * `rm`, `rmdir`, `ls`, `du`, `df` or `find` alone on one line, with no chaining, redirection,
+ * substitution or `find` action that writes or runs: enough to see what takes space and delete
+ * it. The engine runs it with the system PATH, so a binary planted in the tool environment under
+ * one of these names is not what runs.
  */
 export function isCleanupCommand(command: string): boolean {
-  return /^\s*(?:rm|rmdir|ls|du|df|find)(?:\s[^;&|`$<>(){}\n]*)?$/u.test(command);
+  if (!/^[ \t]*(?:rm|rmdir|ls|du|df|find)(?:[ \t][^;&|`$<>(){}\r\n\\]*)?$/u.test(command)) return false;
+  return !/^[ \t]*find[ \t]/u.test(command) || !FIND_WRITING_ACTIONS.test(command);
 }
+
+/** The PATH a cleanup command runs with past a refusal: system binaries only. */
+export const SANDBOX_CLEANUP_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 export interface DiskProbe {
   /** Bytes allocated under the directories that exist; missing ones count zero. */
@@ -66,6 +75,7 @@ export function createSandboxDiskQuota(input: {
   const measured = new Map<string, { at: number; bytes: number }>();
   const pending = new Map<string, Promise<number>>();
 
+  /** Measured bytes; a failed measurement is not cached and refuses the write (fail closed). */
   const usage = async (workspace: WorkspaceDirectories): Promise<number> => {
     const cached = measured.get(workspace.key);
     if (cached && input.now() - cached.at < MEASURE_TTL_MS) return cached.bytes;
@@ -90,7 +100,18 @@ export function createSandboxDiskQuota(input: {
           "и скажите человеку, что место на сервере на исходе.";
       }
       for (const workspace of workspaces) {
-        const used = await usage(workspace);
+        let used: number;
+        try {
+          used = await usage(workspace);
+        } catch (error) {
+          console.error(JSON.stringify({
+            code: "AGENT_SANDBOX_DISK_UNMEASURED",
+            error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+            workspace: workspace.key,
+          }));
+          return "AGENT_SANDBOX_DISK_UNMEASURED: Не удалось измерить, сколько места занимает рабочая папка, " +
+            "запись остановлена. Удалите ненужные файлы командой rm или повторите позже.";
+        }
         if (used > limit) {
           return "AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED: Рабочая папка занимает " +
             `${gib(used)} ГБ при лимите ${gib(limit)} ГБ, запись остановлена. Посмотрите, что занимает место ` +
@@ -112,16 +133,26 @@ export function createHostDiskProbe(volumeRoot: string): DiskProbe {
       return Number(stats.bavail) * Number(stats.bsize);
     },
     async usedBytes(directories) {
-      if (directories.length === 0) return 0;
-      // A missing directory makes du exit 1 with the others still summed in its output.
-      const { stdout } = await execFileAsync("du", ["-s", "-B1", "--", ...directories], {
+      // Only a missing directory counts zero; any other failure of du (a timeout on a huge
+      // tree, an unreadable entry, no du) is an error, never a partial or zero sum.
+      const existing: string[] = [];
+      for (const directory of directories) {
+        try {
+          if ((await stat(directory)).isDirectory()) existing.push(directory);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
+      if (existing.length === 0) return 0;
+      const { stdout } = await execFileAsync("du", ["-s", "-B1", "--", ...existing], {
         maxBuffer: 1024 * 1024,
         timeout: 60_000,
-      }).catch((error: { stdout?: string }) => ({ stdout: error.stdout ?? "" }));
-      return stdout.split("\n").reduce((total, line) => {
-        const bytes = Number(line.split("\t", 1)[0]);
-        return Number.isFinite(bytes) ? total + bytes : total;
-      }, 0);
+      });
+      const sizes = stdout.trim().split("\n").map((line) => Number(line.split("\t", 1)[0]));
+      if (sizes.length !== existing.length || sizes.some((size) => !Number.isSafeInteger(size) || size < 0)) {
+        throw new Error(`AGENT_SANDBOX_DISK_UNMEASURED: du printed ${sizes.length} sizes for ${existing.length} directories`);
+      }
+      return sizes.reduce((total, size) => total + size, 0);
     },
   };
 }

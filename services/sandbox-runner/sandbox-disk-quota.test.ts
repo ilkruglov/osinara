@@ -6,7 +6,9 @@
  *   with a code and a way out; under both it passes.
  * - Usage is measured at most once a minute per workspace, and concurrent checks share one
  *   measurement.
- * - Only plain inspection and deletion commands pass a refusal.
+ * - Only plain one-line inspection and deletion commands pass a refusal (no newline, no find
+ *   action that writes or runs), and they run with the system PATH.
+ * - A failed measurement refuses and is not cached; the probe errors instead of summing partly.
  * - The host probe sums `du` over the directories that exist.
  * - The engine refuses the model's Bash with exit 125 and the reason, still runs a cleanup
  *   command, refuses a file write into /workspace, and measures the session's workspace, tool
@@ -53,6 +55,16 @@ describe("createSandboxDiskQuota", () => {
     await expect(fresh.refusal([workspace])).resolves.toMatch(/^AGENT_SANDBOX_DISK_LOW: /u);
   });
 
+  it("refuses when the measurement fails and measures again next time", async () => {
+    const probe = {
+      freeBytes: vi.fn(async () => 10 * GIB),
+      usedBytes: vi.fn().mockRejectedValueOnce(new Error("du timed out")).mockResolvedValue(GIB),
+    };
+    const quota = createSandboxDiskQuota({ now: () => 0, probe });
+    await expect(quota.refusal([workspace])).resolves.toMatch(/^AGENT_SANDBOX_DISK_UNMEASURED: /u);
+    await expect(quota.refusal([workspace])).resolves.toBeNull();
+  });
+
   it("measures a workspace at most once a minute and shares a running measurement", async () => {
     let now = 0;
     const probe = { freeBytes: vi.fn(async () => 10 * GIB), usedBytes: vi.fn(async () => GIB) };
@@ -74,7 +86,11 @@ describe("isCleanupCommand", () => {
     (command) => expect(isCleanupCommand(command)).toBe(true),
   );
 
-  it.each(["rm x; dd if=/dev/zero of=y", "ls > list.txt", "rm $(cat list)", "rmx", "python3 clean.py", "find / -exec sh {} \\;"])(
+  it.each([
+    "rm x; dd if=/dev/zero of=y", "ls > list.txt", "rm $(cat list)", "rmx", "python3 clean.py",
+    "find / -exec sh {} \\;", "rm\nprintf CLEANUP_BYPASS", "find /workspace -fprint /workspace/big",
+    "find /workspace -fprintf /workspace/x %p", "find . -execdir sh {} +", "rm a\\\nb",
+  ])(
     "refuses %s",
     (command) => expect(isCleanupCommand(command)).toBe(false),
   );
@@ -147,6 +163,11 @@ describe("disk budget in the engine", () => {
 
     await expect(engine.runProcess("session", { command: "rm -rf /workspace/personal/big" })).resolves.toMatchObject({ exitCode: 0 });
     expect(exec).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(exec.mock.calls[0])).toContain("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+
+    // Every file the model writes counts, not only /workspace.
+    await expect(engine.writeFile("session", "/tools/personal/big.bin", Buffer.from("x")))
+      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
 
     await expect(engine.writeFile("session", "/workspace/personal/new.txt", Buffer.from("x")))
       .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");

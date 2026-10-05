@@ -16,7 +16,7 @@
  * - A command that ran out of time is `AGENT_BROWSER_TIMEOUT`, whether the CLI bound (exit 124) or
  *   the runner reported it; `open` tolerates it because the page is usually there anyway.
  */
-import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { ModelFacingError } from "../model-facing-error.js";
 import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
@@ -44,7 +44,7 @@ const TIMEOUT_EXIT_CODE = 124;
 const RUNNER_TIMED_OUT = /AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT|time(d )?out/iu;
 
 export function createSandboxBrowserDriver(input: {
-  runner: Pick<SandboxRunnerClient, "run">;
+  runner: Pick<SandboxRunnerClient, "run" | "writeFile">;
   sandboxSessionId: string;
   signal?: AbortSignal;
 }): BrowserDriver {
@@ -102,9 +102,30 @@ export function createSandboxBrowserDriver(input: {
       }
     },
     press: async (key) => { await ab("press", key); },
-    // The shots directory does not exist in a fresh workspace: 26 September 2026 every look of a
-    // login attempt lost its screenshot to "No such file or directory".
-    screenshot: async (path) => { await exec(`mkdir -p ${shellQuote(dirname(path))} && ${browserCommand(["screenshot", path])}`, "screenshot"); },
+    // The companion has no workspace: it shoots into its own /tmp and prints the image, and the
+    // bytes reach the workspace through the session's own container (which creates the shots
+    // folder). A link planted in that folder by Bash then leads nowhere but Bash's own files;
+    // with the workspace mounted in the companion it led into the browser's private state
+    // (Codex review, 5 October 2026).
+    screenshot: async (path) => {
+      const staging = shellQuote(`/tmp/osinara-shot-${randomUUID()}.png`);
+      const encoded = await exec(
+        `${browserCommand(["screenshot", staging.slice(1, -1)])} >&2 && base64 -w0 ${staging}; status=$?; rm -f ${staging}; exit $status`,
+        "screenshot",
+      );
+      const bytes = Buffer.from(encoded.trim(), "base64");
+      if (bytes.length === 0) {
+        throw new ModelFacingError({
+          category: "operation",
+          code: "AGENT_BROWSER_FAILED",
+          correction: "Не повторяйте команду автоматически. Посмотрите на страницу заново или сообщите человеку.",
+          reason: "Браузер не вернул снимок экрана",
+          retryable: false,
+          sideEffectStatus: "unknown",
+        });
+      }
+      await input.runner.writeFile(input.sandboxSessionId, path, bytes, input.signal);
+    },
     scroll: async (direction) => { await ab("scroll", direction); },
     settle: async () => {
       try { await ab("wait", "--load", "domcontentloaded"); } catch { /* bounded by the CLI timeout */ }

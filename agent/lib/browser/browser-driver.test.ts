@@ -6,14 +6,20 @@
  * - `eval` returns the value the page produced, unquoted.
  * - A failed command becomes a model-facing error without the query string; a slow `open` and a
  *   never-settling page do not fail the step, whether the CLI bound or the runner reports the time.
- * - The screenshot directory is created with the screenshot.
+ * - Every command runs in the browser companion (runner target `browser`).
+ * - A screenshot is taken inside the companion and its bytes are written to the workspace through
+ *   the session's own container: the companion has no workspace, so a link planted in the shots
+ *   folder cannot redirect its writes (Codex review, 5 October 2026).
  */
 import { describe, expect, it, vi } from "vitest";
 
 import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { createSandboxBrowserDriver } from "./browser-driver.js";
 
-type Runner = Pick<SandboxRunnerClient, "run"> & { run: ReturnType<typeof vi.fn> };
+type Runner = Pick<SandboxRunnerClient, "run" | "writeFile"> & {
+  run: ReturnType<typeof vi.fn>;
+  writeFile: ReturnType<typeof vi.fn>;
+};
 
 function runner(responses: Record<string, string | { fail: string }>): Runner {
   const run = vi.fn(async (_sessionId: string, request: { command: string }) => {
@@ -24,7 +30,7 @@ function runner(responses: Record<string, string | { fail: string }>): Runner {
     if (typeof response === "object") return { exitCode: 1, stderr: response.fail, stdout: "" };
     return { exitCode: 0, stderr: "", stdout: response };
   });
-  return { run } as unknown as Runner;
+  return { run, writeFile: vi.fn(async () => undefined) } as unknown as Runner;
 }
 
 describe("createSandboxBrowserDriver", () => {
@@ -38,6 +44,7 @@ describe("createSandboxBrowserDriver", () => {
     const [sessionId, request] = r.run.mock.calls[0]!;
     expect(sessionId).toBe("sbx-1");
     expect(request.command).toMatch(/^timeout --signal=TERM --kill-after=3s 40s agent-browser eval '/u);
+    expect(request.target).toBe("browser");
     expect(request.command).toContain(`'\\''s`);
   });
 
@@ -70,10 +77,22 @@ describe("createSandboxBrowserDriver", () => {
     await expect(createSandboxBrowserDriver({ runner: { run: byExit } as unknown as Runner, sandboxSessionId: "s" }).url()).rejects.toMatchObject({ code: "AGENT_BROWSER_TIMEOUT" });
   });
 
-  it("creates the screenshot directory in the same command", async () => {
-    const r = runner({ screenshot: "✓ Screenshot saved" });
+  it("takes the screenshot in the companion and writes its bytes through the session container", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const r = runner({ screenshot: png.toString("base64") });
     await createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).screenshot("/workspace/personal/shots/look-1.png");
-    expect(r.run.mock.calls[0]![1].command).toMatch(/^mkdir -p '\/workspace\/personal\/shots' && timeout .* agent-browser screenshot '\/workspace\/personal\/shots\/look-1.png'$/u);
+    const request = r.run.mock.calls[0]![1];
+    expect(request.target).toBe("browser");
+    expect(request.command).toMatch(/agent-browser screenshot '\/tmp\/osinara-shot-[0-9a-f-]+\.png'/u);
+    expect(request.command).not.toContain("/workspace");
+    expect(r.writeFile).toHaveBeenCalledWith("s", "/workspace/personal/shots/look-1.png", png, undefined);
+  });
+
+  it("reports a screenshot that produced no image", async () => {
+    const r = runner({ screenshot: "" });
+    await expect(createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).screenshot("/workspace/personal/shots/x.png"))
+      .rejects.toMatchObject({ code: "AGENT_BROWSER_FAILED" });
+    expect(r.writeFile).not.toHaveBeenCalled();
   });
 
   it("reports an open that failed before navigating", async () => {

@@ -78,6 +78,21 @@ describe("createTelegramAttachmentDownloader", () => {
     expect(pulled).toBeLessThanOrEqual(22);
   });
 
+  it("releases the body of a response refused by its declared length", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
+    const download = createTelegramAttachmentDownloader({
+      downloadFile: vi.fn().mockResolvedValue(new Response(body, {
+        headers: { "content-length": String(21 * 1024 * 1024) },
+        status: 200,
+      })),
+      getFile: vi.fn().mockResolvedValue({ filePath: "documents/file.bin" }),
+    });
+
+    await expect(download(attachment(7))).rejects.toThrowError(/AGENT_ATTACHMENT_DOWNLOAD_TOO_LARGE/);
+    expect(cancelled).toBe(true);
+  });
+
   it("normalizes a response-body stream failure", async () => {
     const response = new Response(new ReadableStream<Uint8Array>({
       pull(controller) {

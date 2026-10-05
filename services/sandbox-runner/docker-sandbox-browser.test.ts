@@ -2,16 +2,18 @@
  * The browser companion container of a trusted sandbox session.
  *
  * Constructs covered:
- * - Browser commands run in a companion created from the session's container: the same workspace
- *   mounts at the same paths, browser state from `browser/<workspace>` of the tools volume instead
- *   of the tool environment, the logged-in session in its environment, no Browserless key, the
- *   session label for capacity and idle stop, and a role label.
- * - The logged-in restore state moves out of the tool environment Bash mounts, once; the
- *   browser's own state wins over an older copy, which is removed.
- * - A restricted session has no browser; a companion from an older policy is replaced; stopping
- *   the session removes it; the repeat guard of the model's Bash does not apply.
+ * - Browser commands run in a companion of the session's trusted container: only browser state
+ *   from `browser/<workspace>` of the tools volume (no workspace, no tool environment), the
+ *   logged-in session in its environment, no Browserless key, the session label for capacity and
+ *   idle stop, role and parent labels.
+ * - The logged-in restore state leaves the tool environment once (marker): moved unless the
+ *   browser has its own, every other logged-in file and autosave candidate deleted, a linked
+ *   source not followed; the session's container creation runs it before the container exists.
+ * - A restricted session has no browser; a companion of an older policy or of an earlier
+ *   container of the session is replaced; stopping the session removes it; the capacity cap
+ *   counts the session's own running container.
  */
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -26,7 +28,6 @@ import { buildBrowserContainerOptions, SANDBOX_CONTAINER_POLICY_VERSION } from "
 
 const SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PERSONAL = "11111111-1111-4111-8111-111111111111";
-const FAMILY = "22222222-2222-4222-8222-222222222222";
 const runtime = {
   browserlessApiKey: "browserless-secret",
   egressNetwork: "osinara_sandbox-egress",
@@ -109,16 +110,14 @@ function dockerWith(sessionMounts: unknown[], companion?: { labels: Record<strin
 }
 
 describe("buildBrowserContainerOptions", () => {
-  it("mounts the session's workspaces and the browser state, with the logged-in session and no Bash tools", () => {
+  it("mounts only the browser state, with the logged-in session and no Bash tools", () => {
     const options = buildBrowserContainerOptions(runtime, {
       eveSessionId: "wrun_1",
+      parentContainerId: "session",
       sandboxSessionId: SESSION_ID,
       toolsWorkspaceId: PERSONAL,
-      workspaceMounts: [{ mountPoint: "personal", workspaceId: PERSONAL }, { mountPoint: "family", workspaceId: FAMILY }],
     });
     expect(options.HostConfig?.Mounts).toEqual([
-      expect.objectContaining(volume("/workspace/personal", runtime.workspaceVolume, PERSONAL)),
-      expect.objectContaining(volume("/workspace/family", runtime.workspaceVolume, FAMILY)),
       expect.objectContaining(volume("/browser", runtime.toolsVolume, `browser/${PERSONAL}`)),
     ]);
     expect(options.Env).toEqual(expect.arrayContaining([
@@ -131,6 +130,7 @@ describe("buildBrowserContainerOptions", () => {
     expect(options.HostConfig).toMatchObject({ CapDrop: ["ALL"], NetworkMode: runtime.egressNetwork, Privileged: false });
     expect(options.Labels).toMatchObject({
       "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
+      "dev.osinara.sandbox.parent-id": "session",
       "dev.osinara.sandbox.role": "browser",
       "dev.osinara.sandbox.session-id": SESSION_ID,
     });
@@ -138,31 +138,53 @@ describe("buildBrowserContainerOptions", () => {
 });
 
 describe("migrateBrowserState", () => {
-  it("moves the logged-in restore state out of the tool environment once and leaves the reader's", async () => {
+  const sessionsOf = (root: string) => join(root, PERSONAL, "home/.agent-browser/sessions");
+  const browserOf = (root: string) => join(root, "browser", PERSONAL, "home/.agent-browser/sessions");
+
+  it("moves the restore file, deletes the other logged-in files and candidates, keeps the reader's, once", async () => {
     const root = await toolsRoot();
-    const sessions = join(root, PERSONAL, "home/.agent-browser/sessions");
-    await mkdir(sessions, { recursive: true });
+    const sessions = sessionsOf(root);
+    await mkdir(join(sessions, ".tmp"), { recursive: true });
     await writeFile(join(sessions, "osinara-osinara.json"), "{\"cookies\":[]}");
+    await writeFile(join(sessions, "osinara-osinara.json.previous"), "old");
+    await writeFile(join(sessions, ".tmp", "osinara-osinara-candidate-1.json"), "autosave");
     await writeFile(join(sessions, "osinara-reader.json"), "{}");
 
-    await expect(migrateBrowserState(root, PERSONAL)).resolves.toBe(1);
-    expect(await readdir(sessions)).toEqual(["osinara-reader.json"]);
-    expect(await readdir(join(root, "browser", PERSONAL, "home/.agent-browser/sessions"))).toEqual(["osinara-osinara.json"]);
-    await expect(migrateBrowserState(root, PERSONAL)).resolves.toBe(0);
+    await migrateBrowserState(root, PERSONAL);
+    expect(await readdir(sessions)).toEqual([".tmp", "osinara-reader.json"]);
+    expect(await readdir(join(sessions, ".tmp"))).toEqual([]);
+    expect(await readdir(browserOf(root))).toEqual(["osinara-osinara.json"]);
+
+    // Files Bash writes later under these names are never imported.
+    await writeFile(join(sessions, "osinara-osinara.json"), "planted");
+    await rm(join(browserOf(root), "osinara-osinara.json"));
+    await migrateBrowserState(root, PERSONAL);
+    expect(await readdir(browserOf(root))).toEqual([]);
   });
 
-  it("keeps the browser's own state and removes an older copy left for Bash", async () => {
+  it("keeps the browser's own state and deletes the copy left for Bash", async () => {
     const root = await toolsRoot();
-    const sessions = join(root, PERSONAL, "home/.agent-browser/sessions");
-    const browser = join(root, "browser", PERSONAL, "home/.agent-browser/sessions");
-    await mkdir(sessions, { recursive: true });
-    await mkdir(browser, { recursive: true });
-    await writeFile(join(sessions, "osinara-osinara.json"), "old");
-    await writeFile(join(browser, "osinara-osinara.json"), "current");
+    await mkdir(sessionsOf(root), { recursive: true });
+    await mkdir(browserOf(root), { recursive: true });
+    await writeFile(join(sessionsOf(root), "osinara-osinara.json"), "old");
+    await writeFile(join(browserOf(root), "osinara-osinara.json"), "current");
 
     await migrateBrowserState(root, PERSONAL);
-    expect(await readdir(sessions)).toEqual([]);
-    expect(await readdir(browser)).toEqual(["osinara-osinara.json"]);
+    expect(await readdir(sessionsOf(root))).toEqual([]);
+    expect(await readFile(join(browserOf(root), "osinara-osinara.json"), "utf8")).toBe("current");
+  });
+
+  it("does not follow a source replaced by a link", async () => {
+    const root = await toolsRoot();
+    const elsewhere = join(root, "elsewhere");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(join(elsewhere, "osinara-osinara.json"), "not ours");
+    await mkdir(join(root, PERSONAL, "home/.agent-browser"), { recursive: true });
+    await symlink(elsewhere, sessionsOf(root));
+
+    await migrateBrowserState(root, PERSONAL);
+    expect(await readdir(elsewhere)).toEqual(["osinara-osinara.json"]);
+    expect(await readdir(browserOf(root))).toEqual([]);
   });
 });
 
@@ -184,9 +206,9 @@ describe("browser target of the engine", () => {
     expect(created[0]!.options.name).toBe(sandboxBrowserContainerName(SESSION_ID));
     expect(created[0]!.started).toBe(true);
     expect(created[0]!.options.HostConfig?.Mounts).toEqual([
-      expect.objectContaining(volume("/workspace/personal", runtime.workspaceVolume, PERSONAL)),
       expect.objectContaining(volume("/browser", runtime.toolsVolume, `browser/${PERSONAL}`)),
     ]);
+    expect(created[0]!.options.Labels).toMatchObject({ "dev.osinara.sandbox.parent-id": "session" });
     expect(exec).toHaveBeenCalledTimes(2);
     expect(await readdir(join(root, "browser", PERSONAL))).toContain("home");
   });
@@ -201,9 +223,12 @@ describe("browser target of the engine", () => {
     expect(created).toHaveLength(0);
   });
 
-  it("replaces a companion from an older policy and removes it with the session", async () => {
+  it.each([
+    ["an older policy", { "dev.osinara.sandbox.parent-id": "session", "dev.osinara.sandbox.policy-version": "15" }],
+    ["an earlier container of the session", { "dev.osinara.sandbox.parent-id": "replaced", "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION }],
+  ])("replaces a companion of %s and removes it with the session", async (_label, labels) => {
     const root = await toolsRoot();
-    const { created, docker, removed } = dockerWith(trustedMounts, { labels: { "dev.osinara.sandbox.policy-version": "15" } });
+    const { created, docker, removed } = dockerWith(trustedMounts, { labels });
     const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
 
     await engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" });
@@ -212,5 +237,59 @@ describe("browser target of the engine", () => {
 
     await engine.stopSession(SESSION_ID);
     expect(removed).toEqual(["old-browser", "session", sandboxBrowserContainerName(SESSION_ID)]);
+  });
+});
+
+describe("capacity with a companion", () => {
+  it("counts the session's own running container when its browser starts", async () => {
+    const root = await toolsRoot();
+    const { created, docker } = dockerWith([
+      volume("/workspace/personal", runtime.workspaceVolume, PERSONAL),
+      volume("/tools/personal", runtime.toolsVolume, PERSONAL),
+    ]);
+    (docker as unknown as { listContainers: () => Promise<unknown[]> }).listContainers = async () => [
+      { Id: "session", Labels: { "dev.osinara.sandbox.session-id": SESSION_ID }, State: "running" },
+    ];
+    const engine = createDockerSandboxEngine({
+      docker,
+      limits: { maxRunningContainers: 1 },
+      roots: { toolsRoot: root, workspaceRoot: root },
+      runtime,
+    });
+
+    await expect(engine.runProcess(SESSION_ID, { command: "agent-browser get url", target: "browser" }))
+      .rejects.toThrow("AGENT_SANDBOX_RUNNER_CAPACITY_EXHAUSTED");
+    expect(created[0]?.started).toBe(false);
+  });
+});
+
+describe("session creation and the logged-in state", () => {
+  it("moves the state out of the tool environment before the session's container exists", async () => {
+    const root = await toolsRoot();
+    const sessions = join(root, PERSONAL, "home/.agent-browser/sessions");
+    await mkdir(sessions, { recursive: true });
+    await mkdir(join(root, PERSONAL), { recursive: true });
+    await writeFile(join(sessions, "osinara-osinara.json"), "{}");
+    let leftForBash: string[] | null = null;
+    const docker = {
+      createContainer: vi.fn(async () => {
+        leftForBash = await readdir(sessions);
+        throw new Error("stop here");
+      }),
+      getContainer: vi.fn(() => ({ inspect: vi.fn(async () => Promise.reject(missing)) })),
+      listContainers: vi.fn(async () => []),
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({ docker, roots: { toolsRoot: root, workspaceRoot: root }, runtime });
+
+    await expect(engine.createSession({
+      access: "trusted",
+      eveSessionId: "wrun_1",
+      mounts: [{ mountPoint: "personal", workspaceId: PERSONAL }],
+      sandboxSessionId: SESSION_ID,
+      seedDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      seedFiles: [],
+    })).rejects.toThrow("stop here");
+    expect(leftForBash).toEqual([]);
+    expect(await readdir(join(root, "browser", PERSONAL, "home/.agent-browser/sessions"))).toEqual(["osinara-osinara.json"]);
   });
 });

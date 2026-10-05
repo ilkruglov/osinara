@@ -18,8 +18,9 @@
  *   daemon on a socket in HOME, so any process there could drive the logged-in browser past the
  *   confirmation gate; the Bash command filter only matched spellings (security review and Codex
  *   security scan, 5 October 2026). The browser now lives in its own container: its own network
- *   namespace and filesystem, state in a tools-volume directory the Bash container never mounts.
- *   It mounts the same workspaces at the same paths, so screenshots land where the tools read them.
+ *   namespace and filesystem, state in a tools-volume directory the Bash container never mounts,
+ *   and no workspace at all: screenshots travel through the application (Codex review: a link
+ *   planted in a shared shots folder led the companion's writes into its own state).
  */
 import type Docker from "dockerode";
 
@@ -172,24 +173,23 @@ function browserEnvironment(): string[] {
 
 const BROWSER_STATE_TARGET = "/browser";
 
+export const SANDBOX_PARENT_LABEL = "dev.osinara.sandbox.parent-id";
+
 /**
- * The browser companion of a trusted session: the session's workspace mounts at the same paths,
- * its browser state instead of the tool environment, no Browserless key and nothing of Bash's
- * tools. Limits, capabilities and network are those of the session's own container.
+ * The browser companion of a trusted session: only its browser state (no workspace, no tool
+ * environment), no Browserless key. Limits, capabilities and network are those of the session's
+ * own container; the parent label ties it to that container's run.
  */
 export function buildBrowserContainerOptions(
   runtime: SandboxDockerRuntime,
   input: {
     eveSessionId: string;
+    parentContainerId: string;
     sandboxSessionId: string;
     toolsWorkspaceId: string;
-    workspaceMounts: readonly { mountPoint: string; workspaceId: string }[];
   },
 ): Docker.ContainerCreateOptions {
-  const mounts = input.workspaceMounts.map((mount) =>
-    volumeMount(runtime.workspaceVolume, `/workspace/${mount.mountPoint}`, mount.workspaceId)
-  );
-  mounts.push(volumeMount(runtime.toolsVolume, BROWSER_STATE_TARGET, browserStateSubpath(input.toolsWorkspaceId)));
+  const mounts = [volumeMount(runtime.toolsVolume, BROWSER_STATE_TARGET, browserStateSubpath(input.toolsWorkspaceId))];
   return {
     AttachStderr: false,
     AttachStdin: false,
@@ -220,6 +220,7 @@ export function buildBrowserContainerOptions(
       "dev.osinara.sandbox.eve-session-id": input.eveSessionId,
       "dev.osinara.sandbox.policy-version": SANDBOX_CONTAINER_POLICY_VERSION,
       "dev.osinara.sandbox.project": runtime.project,
+      [SANDBOX_PARENT_LABEL]: input.parentContainerId,
       [SANDBOX_ROLE_LABEL]: BROWSER_CONTAINER_ROLE,
       // The session label makes the capacity cap, idle stop and cleanup count this container
       // with its session; lookups of the session's own container go by name.
@@ -228,7 +229,7 @@ export function buildBrowserContainerOptions(
     OpenStdin: false,
     StdinOnce: false,
     Tty: false,
-    WorkingDir: "/workspace",
+    WorkingDir: BROWSER_STATE_TARGET,
   };
 }
 
