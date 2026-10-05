@@ -3,17 +3,23 @@
  *
  * Constructs:
  * - Applies ordered SQL files once inside a PostgreSQL transaction.
+ * - With APP_DATABASE_URL, then provisions the least-privilege role the application runs as.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import pg from "pg";
 
+import { provisionAppDatabaseRole, requireAppDatabaseConfig } from "./app-database-role.ts";
+
 const { Client } = pg;
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("AGENT_DATABASE_CONFIG_MISSING: Не задано подключение к базе данных");
 }
+// Production sets it; a development database keeps running as the owner.
+const appDatabaseUrl = process.env.APP_DATABASE_URL;
+const appDatabase = appDatabaseUrl ? requireAppDatabaseConfig(databaseUrl, appDatabaseUrl) : null;
 
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
@@ -52,6 +58,8 @@ try {
       throw error;
     }
   }
+
+  if (appDatabase) await provisionAppDatabaseRole(client, appDatabase);
 } finally {
   await client.end();
 }

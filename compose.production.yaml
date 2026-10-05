@@ -72,7 +72,7 @@ services:
       sandbox-runner:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID-}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET-}
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID-}
@@ -88,6 +88,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
       TELEGRAM_WEBHOOK_SECRET_TOKEN: ${TELEGRAM_WEBHOOK_SECRET_TOKEN:?TELEGRAM_WEBHOOK_SECRET_TOKEN is required}
+      AGENT_INTERNAL_TOKEN: ${AGENT_INTERNAL_TOKEN:?AGENT_INTERNAL_TOKEN is required}
       WORKFLOW_POSTGRES_JOB_PREFIX: osinara
       WORKFLOW_POSTGRES_MAX_POOL_SIZE: ${WORKFLOW_POSTGRES_MAX_POOL_SIZE-32}
       WORKFLOW_POSTGRES_URL: ${WORKFLOW_POSTGRES_URL:?WORKFLOW_POSTGRES_URL is required}
@@ -142,6 +143,7 @@ services:
     entrypoint: ["npm", "run", "migrate:runtime"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      APP_DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required}
       WORKFLOW_POSTGRES_URL: ${WORKFLOW_POSTGRES_URL:?WORKFLOW_POSTGRES_URL is required}
     networks:
       - app-network
@@ -157,7 +159,7 @@ services:
         condition: service_completed_successfully
     entrypoint: ["node", ".runtime/scripts/memory-embedding-worker.js"]
     environment:
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${APP_DATABASE_URL:?APP_DATABASE_URL is required}
       MEMORY_EMBEDDING_BASE_URL: http://memory-embedding:80
     networks:
       - app-network
@@ -172,7 +174,7 @@ services:
     entrypoint: ["node", ".runtime/scripts/telegram-ingress-worker.js"]
     environment:
       AGENT_INTERNAL_BASE_URL: http://agent:3000
-      TELEGRAM_WEBHOOK_SECRET_TOKEN: ${TELEGRAM_WEBHOOK_SECRET_TOKEN:?TELEGRAM_WEBHOOK_SECRET_TOKEN is required}
+      AGENT_INTERNAL_TOKEN: ${AGENT_INTERNAL_TOKEN:?AGENT_INTERNAL_TOKEN is required}
     networks:
       - app-network
     restart: unless-stopped

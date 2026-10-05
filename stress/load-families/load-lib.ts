@@ -91,6 +91,7 @@ export function startServer(port: number, cpus?: string): ServerProcess {
       TELEGRAM_BOT_TOKEN: "load-test-token",
       TELEGRAM_BOT_USERNAME: "osinara_load_bot",
       TELEGRAM_WEBHOOK_SECRET_TOKEN: SECRET,
+      AGENT_INTERNAL_TOKEN: "load-test-internal-token-0123456789abcdef",
       MODEL_API_KEY: "unused-load-key",
       INVITATION_SIGNING_SECRET: "load-test-signing-secret-of-32-chars!!",
       // A real embedder (TEI with BERTA) when LOAD_EMBEDDING_URL is set; otherwise an address that

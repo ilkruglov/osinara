@@ -71,12 +71,14 @@ import { memoryReviewDispatchRepository } from "../lib/memory-review/memory-revi
 import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
 import { UUID_PATTERN } from "../lib/tool-input-validation.js";
+import { requireInternalToken } from "../lib/telegram-hitl/approval-timeout-sweep.js";
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
   credentials: {
     webhookSecretToken: process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN as string,
   },
+  drainCredentials: { webhookSecretToken: requireInternalToken },
   drainRoute: "/eve/v1/telegram-drain",
   // Durable ingress is FIFO; a later update must never cancel a paid or side-effecting active turn.
   turnPolicy: "queue",

@@ -121,6 +121,8 @@ export interface TelegramChannelConfig {
     readonly onCallbackQuery?: (ctx: TelegramContext, query: TelegramCallbackQuery) => void | Promise<void>;
     /** Optional internal endpoint that resumes persisted ingress after process restarts. */
     readonly drainRoute?: string;
+    /** Osinara: verifies the drain route with its own token instead of the webhook secret Telegram holds. */
+    readonly drainCredentials?: Pick<TelegramChannelCredentials, "webhookSecretToken">;
     /** Drains persisted updates through the native verified dispatcher. */
     readonly onDrain?: (context: TelegramDrainContext) => Response | Promise<Response>;
     /** Resolves a versioned token when no authenticated HITL callback hook is configured. */

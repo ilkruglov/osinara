@@ -331,7 +331,7 @@ describe("Eve Telegram verified ingress patch", () => {
     }]);
   });
 
-  it("exposes an authenticated private drain route on the same adapter", async () => {
+  it("exposes a private drain route on the same adapter, opened by the internal token only", async () => {
     const source = createChannelSource({ id: "session-drain" });
     const update = parseTelegramUpdate({
       message: {
@@ -350,15 +350,16 @@ describe("Eve Telegram verified ingress patch", () => {
     });
     const channel = telegramChannel({
       credentials: { webhookSecretToken: "webhook-secret" },
+      drainCredentials: { webhookSecretToken: "internal-token" },
       drainRoute: "/eve/v1/telegram-drain",
       onDrain,
     });
     const route = channel.routes[1] as unknown as HttpRoute;
     let backgroundTask: Promise<unknown> | undefined;
-    const response = await route.handler(
+    const drain = (token: string) => route.handler(
       new Request("http://agent:3000/eve/v1/telegram-drain", {
         body: "{}",
-        headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+        headers: { "x-telegram-bot-api-secret-token": token },
         method: "POST",
       }),
       {
@@ -370,6 +371,12 @@ describe("Eve Telegram verified ingress patch", () => {
         },
       },
     );
+
+    // Telegram holds the webhook secret; it does not open the internal drain route.
+    expect((await drain("webhook-secret")).status).toBe(401);
+    expect(onDrain).not.toHaveBeenCalled();
+
+    const response = await drain("internal-token");
     await backgroundTask;
 
     expect(response.status).toBe(200);

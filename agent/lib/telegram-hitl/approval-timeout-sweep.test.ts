@@ -6,6 +6,7 @@
  * - A failed cycle is reported and swallowed so the minute schedule keeps running.
  * - Missing required config is not swallowed: it surfaces instead of disabling the sweep.
  * - `isInternalTokenAuthorized`: rejects a missing, short, long, or wrong token.
+ * - `requireInternalToken`: reads AGENT_INTERNAL_TOKEN, never the webhook secret Telegram holds.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ import {
   APPROVAL_TIMEOUT_TOKEN_HEADER,
   createApprovalTimeoutSweep,
   isInternalTokenAuthorized,
+  requireInternalToken,
 } from "./approval-timeout-sweep.js";
 
 afterEach(() => {
@@ -72,5 +74,20 @@ describe("isInternalTokenAuthorized", () => {
     expect(isInternalTokenAuthorized("secret", "secret-token")).toBe(false);
     expect(isInternalTokenAuthorized("secret-token-extra", "secret-token")).toBe(false);
     expect(isInternalTokenAuthorized("", "secret-token")).toBe(false);
+  });
+});
+
+describe("requireInternalToken", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads the internal token and never falls back to the webhook secret", () => {
+    vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "webhook-secret-0123456789abcdefghij");
+    vi.stubEnv("AGENT_INTERNAL_TOKEN", "");
+    expect(() => requireInternalToken()).toThrowError(/AGENT_INTERNAL_TOKEN_MISSING/);
+
+    vi.stubEnv("AGENT_INTERNAL_TOKEN", "internal-token-0123456789abcdefghij");
+    expect(requireInternalToken()).toBe("internal-token-0123456789abcdefghij");
   });
 });

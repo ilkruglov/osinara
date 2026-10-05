@@ -89,6 +89,8 @@ export interface ReleaseAssets {
 }
 
 export interface InternalSecrets {
+  agentInternalToken: string;
+  appDatabasePassword: string;
   invitationSigningSecret: string;
   postgresPassword: string;
   telegramWebhookSecretToken: string;

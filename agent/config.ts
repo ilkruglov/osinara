@@ -121,8 +121,11 @@ export const WORKSPACE_DELETION_LEASE_MS = 15 * 60 * 1_000;
 export const WORKSPACE_TOOL_MAX_TEXT_BYTES = 1024 * 1024;
 export const VISION_MAX_FILE_BYTES = 10_000_000;
 
+const secretTokenSchema = z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/u);
+
 const runtimeEnvironmentSchema = z
   .object({
+    AGENT_INTERNAL_TOKEN: secretTokenSchema,
     DATABASE_URL: z.string().min(1),
     GROQ_API_KEY: z.preprocess(
       (value) => value === "" ? undefined : value,
@@ -132,10 +135,14 @@ const runtimeEnvironmentSchema = z
     MODEL_API_KEY: z.string().regex(/^\S+$/u),
     TELEGRAM_BOT_TOKEN: z.string().min(1),
     TELEGRAM_BOT_USERNAME: z.string().min(1),
-    // One secret guards the webhook, the drain route and the approval sweep: as long as the
-    // invitation signing secret, within what Telegram accepts for secret_token (1-256 characters
-    // of A-Z, a-z, 0-9, `_` and `-`).
-    TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/u),
+    // As long as the invitation signing secret, within what Telegram accepts for secret_token
+    // (1-256 characters of A-Z, a-z, 0-9, `_` and `-`). Telegram holds it, so it guards only the
+    // webhook; the drain route and the approval sweep take AGENT_INTERNAL_TOKEN.
+    TELEGRAM_WEBHOOK_SECRET_TOKEN: secretTokenSchema,
+  })
+  .refine((environment) => environment.AGENT_INTERNAL_TOKEN !== environment.TELEGRAM_WEBHOOK_SECRET_TOKEN, {
+    message: "The internal token must differ from the webhook secret",
+    path: ["AGENT_INTERNAL_TOKEN"],
   });
 
 export function requireRuntimeEnvironment() {

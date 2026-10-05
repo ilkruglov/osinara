@@ -109,7 +109,7 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
            (family_id, owner_user_id, author_user_id, group_id, scope, title, user_request, scenario_prompt,
             timezone, recurrence_kind, recurrence_interval, recurrence_anchor_local, next_run_at,
             telegram_chat_id, telegram_chat_type)
-         VALUES ($1, $2, COALESCE($2, $3), $4, $5, $6, 'Запрос', 'Сценарий', 'UTC', 'daily', 1,
+         VALUES ($1, $2::uuid, COALESCE($2::uuid, $3::uuid), $4, $5, $6, 'Запрос', 'Сценарий', 'UTC', 'daily', 1,
                  timestamp '2026-01-01 00:00:00', timestamptz '2026-01-01 00:00:00+00', $7, $8)
          RETURNING id`,
         [familyId, ownerUserId, family.owner.userId, groupId, scope, title,

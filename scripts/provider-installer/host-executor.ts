@@ -75,6 +75,8 @@ function requireEnvironmentValue(value: string, name: string): string {
 /** Produces a closed environment file with only secrets and genuine environment-specific values. */
 function buildEnvironment(input: InstallationExecutionInput): Buffer {
   const values: Array<readonly [string, string]> = [
+    ["AGENT_INTERNAL_TOKEN", input.internalSecrets.agentInternalToken],
+    ["APP_DATABASE_URL", `postgresql://osinara_app:${input.internalSecrets.appDatabasePassword}@postgres:5432/osinara`],
     ["DATABASE_URL", `postgresql://osinara:${input.internalSecrets.postgresPassword}@postgres:5432/osinara`],
     ["INVITATION_SIGNING_SECRET", input.internalSecrets.invitationSigningSecret],
     ["MODEL_API_KEY", input.modelApiKey],

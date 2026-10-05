@@ -9,7 +9,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, "**/.tmp/**"],
+    exclude: [...configDefaults.exclude, "**/.tmp/**", "**/.claude/**"],
     fileParallelism: process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true",
   },
 });

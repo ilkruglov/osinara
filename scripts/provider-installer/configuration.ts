@@ -44,6 +44,8 @@ export function generateInternalSecrets(
   generate: (purpose: string) => string,
 ): InternalSecrets {
   const secrets: InternalSecrets = {
+    agentInternalToken: generate("agent-internal-token"),
+    appDatabasePassword: generate("app-database-password"),
     invitationSigningSecret: generate("invitation-signing-secret"),
     postgresPassword: generate("postgres-password"),
     telegramWebhookSecretToken: generate("telegram-webhook-secret-token"),

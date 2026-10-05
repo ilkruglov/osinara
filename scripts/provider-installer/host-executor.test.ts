@@ -40,6 +40,8 @@ function input(overrides: Partial<InstallationExecutionInput> = {}): Installatio
     groqApiKey: null,
     hostname: "8-8-8-8.sslip.io",
     internalSecrets: {
+      agentInternalToken: "internal_token_abcdefghijklmnopqrstuvwxyz",
+      appDatabasePassword: "app_database_secret_abcdefghijklmnopqrstuvwxyz",
       invitationSigningSecret: "invitation_secret_abcdefghijklmnopqrstuvwxyz",
       postgresPassword: "postgres_secret_abcdefghijklmnopqrstuvwxyz",
       telegramWebhookSecretToken: "webhook_secret_abcdefghijklmnopqrstuvwxyz",
@@ -111,6 +113,11 @@ describe("createHostInstallationExecutor", () => {
     expect(environment).toContain(
       "WORKFLOW_POSTGRES_URL='postgresql://osinara_workflow:workflow_postgres_secret_abcdefghijklmnopqrstuvwxyz@postgres:5432/osinara_workflow'\n",
     );
+    // The agent runs as the app role and opens internal routes with its own token.
+    expect(environment).toContain(
+      "APP_DATABASE_URL='postgresql://osinara_app:app_database_secret_abcdefghijklmnopqrstuvwxyz@postgres:5432/osinara'\n",
+    );
+    expect(environment).toContain("AGENT_INTERNAL_TOKEN='internal_token_abcdefghijklmnopqrstuvwxyz'\n");
     expect(environment).not.toContain("CLI_PROXY_API_KEY");
     expect(environment).not.toContain("MODEL_UPSTREAM_API_KEY");
     expect(JSON.parse(staged!.modelConfigBytes.toString("utf8"))).toMatchObject({

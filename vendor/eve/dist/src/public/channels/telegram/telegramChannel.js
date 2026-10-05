@@ -106,7 +106,8 @@ function telegramChannel(e = {}) {
               POST(
                 e.drainRoute ?? `/eve/v1/telegram-drain`,
                 async (r, { from: a, waitUntil: o }) => {
-                  if ((await verifyInbound(r, e.credentials)) === null)
+                  // Osinara: the drain route is internal; its token is not the one Telegram holds.
+                  if ((await verifyInbound(r, e.drainCredentials ?? e.credentials)) === null)
                     return new Response(`unauthorized`, { status: 401 });
                   let d = (l) =>
                     l.kind === `message`
