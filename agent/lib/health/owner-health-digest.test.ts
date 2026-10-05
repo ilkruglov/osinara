@@ -14,6 +14,7 @@ import {
   formatOwnerHealthDigest,
 } from "./owner-health-digest.js";
 import type { OwnerHealthReport } from "./owner-health-digest-repository.js";
+import { NO_SCHEDULE_RUN_FAILURES } from "./schedule-run-failures.js";
 
 const quiet: OwnerHealthReport = {
   alertDeliveryFailures: 0,
@@ -22,6 +23,7 @@ const quiet: OwnerHealthReport = {
   memoryWritten: [{ count: 3, kind: "episode", scope: "group" }, { count: 1, kind: "profile", scope: "personal" }],
   reviewBatches: { ambiguous: 0, failed: 0 },
   rotations: { count: 0, latestAt: null },
+  scheduleFailures: NO_SCHEDULE_RUN_FAILURES,
   windowStart: new Date("2026-09-08T06:00:00.000Z"),
 };
 
@@ -53,6 +55,17 @@ describe("formatOwnerHealthDigest", () => {
       memoryWritten: [],
       reviewBatches: { ambiguous: 1, failed: 2 },
       rotations: { count: 1, latestAt: new Date("2026-09-08T18:41:00.000Z") },
+      scheduleFailures: {
+        count: 1,
+        hiddenPersonal: 0,
+        otherSchedules: { count: 0, schedules: 0 },
+        schedules: [{
+          codes: [{ code: "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", count: 1 }],
+          count: 1,
+          otherCodes: 0,
+          title: "Утренние новости",
+        }],
+      },
     });
     expect(text).toBe([
       "Сводка за сутки.",
@@ -62,6 +75,7 @@ describe("formatOwnerHealthDigest", () => {
       "Проверка памяти «BotBattle» отстаёт: 80 сообщений с 8 сентября в 23:15.",
       "Пакеты проверки: failed 2, ambiguous 1.",
       "Не доставлено предупреждений владельцу: 1.",
+      "Сценарии по расписанию: 1 сбоев: «Утренние новости» ×1 (AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING ×1).",
       "Память: новых записей нет.",
     ].join("\n"));
   });

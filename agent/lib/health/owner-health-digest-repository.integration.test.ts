@@ -4,6 +4,8 @@
  * Constructs covered:
  * - The family owner with a Telegram id is a recipient.
  * - The report counts a rotation, written memory and a stuck review lane of that family only.
+ * - Failed and ambiguous scheduled runs of the window are named by schedule, except another
+ *   member's personal schedule, which is only counted; older runs and other families are left out.
  * - The daily claim is taken once; a released claim can be taken again; a completed one cannot.
  * - A completed digest records the balance the next one reads back; the balance alert claim
  *   follows the same day rule, and an abandoned one is never taken again that day.
@@ -83,6 +85,76 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
     await ownerHealthDigestRepository.complete(family.familyId, digestDate, now, 42);
     await ownerHealthDigestRepository.release(family.familyId, digestDate);
     await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(false);
+  });
+
+  it("reports the family's failed scheduled runs in the window, naming only schedules the owner may see", async () => {
+    const suffix = `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const family = await createMemoryFamilyFixture(suffix);
+    const other = await createMemoryFamilyFixture(`${suffix}-other`);
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - 60 * 60 * 1_000);
+    const group = await database().query<{ id: string }>(
+      "SELECT id FROM telegram_groups WHERE family_id = $1",
+      [family.familyId],
+    );
+    async function schedule(
+      familyId: string,
+      scope: "family" | "personal",
+      title: string,
+      ownerUserId: string | null,
+      groupId: string | null,
+    ): Promise<string> {
+      const result = await database().query<{ id: string }>(
+        `INSERT INTO agent_schedules
+           (family_id, owner_user_id, author_user_id, group_id, scope, title, user_request, scenario_prompt,
+            timezone, recurrence_kind, recurrence_interval, recurrence_anchor_local, next_run_at,
+            telegram_chat_id, telegram_chat_type)
+         VALUES ($1, $2, COALESCE($2, $3), $4, $5, $6, 'Запрос', 'Сценарий', 'UTC', 'daily', 1,
+                 timestamp '2026-01-01 00:00:00', timestamptz '2026-01-01 00:00:00+00', $7, $8)
+         RETURNING id`,
+        [familyId, ownerUserId, family.owner.userId, groupId, scope, title,
+          `chat-${title}-${suffix}`, scope === "personal" ? "private" : "supergroup"],
+      );
+      return result.rows[0]!.id;
+    }
+    let occurrence = 0;
+    async function run(scheduleId: string, familyId: string, status: string, code: string | null, updatedAt: Date) {
+      occurrence += 1;
+      await database().query(
+        `INSERT INTO agent_schedule_runs (schedule_id, family_id, scheduled_for, status, lease_token, error_code, updated_at)
+         VALUES ($1, $2, timestamptz '2026-01-01 00:00:00+00' + $6 * interval '1 minute', $3, gen_random_uuid(), $4, $5)`,
+        [scheduleId, familyId, status, code, updatedAt, occurrence],
+      );
+    }
+    const ownerOwn = await schedule(family.familyId, "personal", "Мои новости", family.owner.userId, null);
+    const memberOwn = await schedule(family.familyId, "personal", "Тайна участника", family.member.userId, null);
+    const familyWide = await schedule(family.familyId, "family", "Семейный план", null, group.rows[0]!.id);
+    const foreign = await schedule(other.familyId, "personal", "Чужая семья", other.owner.userId, null);
+    await run(ownerOwn, family.familyId, "failed", "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", now);
+    await run(ownerOwn, family.familyId, "failed", "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", now);
+    await run(ownerOwn, family.familyId, "completed", null, now);
+    await run(ownerOwn, family.familyId, "failed", "OLD_FAILURE", new Date(windowStart.getTime() - 60_000));
+    await run(familyWide, family.familyId, "ambiguous", "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", now);
+    await run(memberOwn, family.familyId, "failed", "AGENT_SCHEDULE_DESTINATION_REVOKED", now);
+    await run(foreign, other.familyId, "failed", "FOREIGN_FAILURE", now);
+
+    const report = await ownerHealthDigestRepository.report(family.familyId, windowStart, now);
+
+    expect(report.scheduleFailures).toEqual({
+      count: 4,
+      hiddenPersonal: 1,
+      otherSchedules: { count: 0, schedules: 0 },
+      schedules: [
+        {
+          codes: [{ code: "AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING", count: 2 }],
+          count: 2,
+          otherCodes: 0,
+          title: "Мои новости",
+        },
+        { codes: [{ code: "AGENT_SCHEDULE_DELIVERY_AMBIGUOUS", count: 1 }], count: 1, otherCodes: 0, title: "Семейный план" },
+      ],
+    });
+    expect(JSON.stringify(report)).not.toContain("Тайна участника");
   });
 
   it("records the balance of a sent digest, claims the balance alert once a day and sizes the databases", async () => {

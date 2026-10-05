@@ -16,6 +16,8 @@
  * - The DeepSeek balance and the disk headroom (26 сентября 2026, after homka): a spent balance or
  *   a disk too full for an update is a failure line at the top; a healthy balance with the day's
  *   spend (the difference to yesterday's digest) is information next to the memory counts.
+ * - Failed scheduled scenarios (5 октября 2026, after upstream #307): a failed run sends nothing
+ *   to anyone, so the digest is the only place the owner learns a scenario did not arrive.
  */
 import { DEEPSEEK_BALANCE_ALERT_USD } from "../../config.js";
 import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
@@ -26,6 +28,7 @@ import {
   type OwnerHealthReport,
   ownerHealthDigestRepository,
 } from "./owner-health-digest-repository.js";
+import { formatScheduleRunFailures } from "./schedule-run-failures.js";
 
 const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
 const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
@@ -73,6 +76,8 @@ export function formatOwnerHealthDigest(report: OwnerHealthReport, extras: Owner
   if (report.alertDeliveryFailures > 0) {
     lines.push(`Не доставлено предупреждений владельцу: ${report.alertDeliveryFailures}.`);
   }
+  const schedules = formatScheduleRunFailures(report.scheduleFailures);
+  if (schedules !== null) lines.push(schedules);
   // Disk space is not a failure of the day but the condition under which the next update passes.
   const storage = extras.storage === null ? null : formatStorageHeadroom(extras.storage);
   if (storage !== null) lines.push(storage);
@@ -130,6 +135,7 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
           familyId: recipient.familyId,
           ingressFailures: report.ingressFailures.count,
           rotations: report.rotations.count,
+          scheduleFailures: report.scheduleFailures.count,
         }));
         sent += 1;
       } catch (error) {

@@ -7,12 +7,16 @@
  *
  * Key constructs:
  * - Every signal is read from tables that outlive a process: session rotations, failed ingress
- *   updates, review lanes and their heads, review batches, undelivered owner alerts, written memory.
+ *   updates, review lanes and their heads, review batches, undelivered owner alerts, written memory,
+ *   failed and ambiguous scheduled scenario runs.
  *   Log-only events (sandbox reaps, repeat refusals, directive-only answers) are not here.
  * - The send claim is a row inserted before the Telegram call: a crash between claim and
  *   completion leaves a row without `sent_at`, which the next tick releases and retries.
+ * - Scheduled runs: the title of another member's personal schedule never leaves SQL; only the
+ *   family owner's own personal schedules and the shared ones are named (`schedule-run-failures.ts`).
  */
 import { database } from "../database.js";
+import { type ScheduleRunFailures, summarizeScheduleRunFailures } from "./schedule-run-failures.js";
 
 export interface OwnerHealthReport {
   alertDeliveryFailures: number;
@@ -24,6 +28,7 @@ export interface OwnerHealthReport {
   memoryWritten: { count: number; kind: string; scope: string }[];
   reviewBatches: { ambiguous: number; failed: number };
   rotations: { count: number; latestAt: Date | null };
+  scheduleFailures: ScheduleRunFailures;
   windowStart: Date;
 }
 
@@ -115,6 +120,19 @@ export const ownerHealthDigestRepository = {
         GROUP BY scope, kind ORDER BY scope, kind`,
       [familyId, windowStart],
     );
+    // A run is terminal once failed or ambiguous and is not touched again, so `updated_at` is when it ended.
+    const scheduleRuns = await client.query<{ code: string | null; count: string; schedule_id: string; title: string | null }>(
+      `SELECT schedule.id AS schedule_id,
+              CASE WHEN schedule.scope <> 'personal' OR schedule.owner_user_id = owner.user_id
+                   THEN schedule.title END AS title,
+              run.error_code AS code, count(*)::text AS count
+         FROM agent_schedule_runs AS run
+         JOIN agent_schedules AS schedule ON schedule.id = run.schedule_id
+         LEFT JOIN family_memberships AS owner ON owner.family_id = schedule.family_id AND owner.role = 'owner'
+        WHERE run.family_id = $1 AND run.status IN ('failed', 'ambiguous') AND run.updated_at >= $2
+        GROUP BY schedule.id, owner.user_id, run.error_code`,
+      [familyId, windowStart],
+    );
     const blocked: OwnerHealthReport["lanes"]["blocked"] = [];
     const lagging: OwnerHealthReport["lanes"]["lagging"] = [];
     for (const lane of lanes.rows) {
@@ -139,6 +157,9 @@ export const ownerHealthDigestRepository = {
       memoryWritten: written.rows.map((row) => ({ count: Number(row.count), kind: row.kind, scope: row.scope })),
       reviewBatches: { ambiguous: status("ambiguous"), failed: status("failed") },
       rotations: { count: Number(rotations.rows[0]?.count ?? 0), latestAt: rotations.rows[0]?.latest_at ?? null },
+      scheduleFailures: summarizeScheduleRunFailures(scheduleRuns.rows.map((row) => ({
+        code: row.code, count: Number(row.count), scheduleId: row.schedule_id, title: row.title,
+      }))),
       windowStart,
     };
   },
