@@ -52,6 +52,15 @@ async function removeAfterPrimaryFailure(
   }
 }
 
+/**
+ * System binaries only, all under the read-only root. Docker resolves an exec's command with the
+ * container's PATH, which starts with directories the model writes, so a `timeout` planted there
+ * ran in place of the runner's own and took the time limit off every command (5 October 2026).
+ * The runner's own processes run with this PATH or an absolute path; the model's command still
+ * gets its PATH inside `bash`.
+ */
+export const SANDBOX_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
 export async function executeSandboxProcess(
   docker: Docker,
   container: Docker.Container,
@@ -65,11 +74,11 @@ export async function executeSandboxProcess(
     AttachStdout: true,
     // TERM lets cooperative children clean up; KILL guarantees the process group cannot outlive grace.
     Cmd: [
-      "timeout",
+      "/usr/bin/timeout",
       "--signal=TERM",
       `--kill-after=${PROCESS_KILL_GRACE_SECONDS}s`,
       String(timeoutSeconds),
-      "bash",
+      "/bin/bash",
       "-c",
       request.command,
     ],

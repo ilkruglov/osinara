@@ -17,6 +17,8 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { connect as connectTls } from "node:tls";
 
+import type { EgressMeter } from "./egress-ledger.js";
+
 const PROVIDER_HOST = "production-sfo.browserless.io";
 const PATH = "/browserless/chromium/stealth";
 const MAX_SESSION_MS = 120_000;
@@ -31,13 +33,21 @@ export function handleBrowserlessUpgrade(input: {
   apiKey: string | undefined;
   clientSocket: Duplex;
   head: Buffer;
-  onClosed: (bytesUp: number, bytesDown: number, ms: number) => void;
+  meter: EgressMeter;
   request: IncomingMessage;
   resolve: (hostname: string, port: number) => Promise<{ address: string }>;
 }): void {
-  const { clientSocket, request } = input;
+  const { clientSocket, meter, request } = input;
   clientSocket.on("error", () => clientSocket.destroy());
-  const url = new URL(request.url ?? "/", "http://sandbox-egress-proxy");
+  // A target the URL parser rejects ("http://[") threw out of the server's upgrade callback and
+  // took the shared proxy down with it (Codex review, 5 October 2026).
+  let url: URL;
+  try {
+    url = new URL(request.url ?? "/", "http://sandbox-egress-proxy");
+  } catch {
+    refuse(clientSocket, 400, "Bad Request");
+    return;
+  }
   const key = request.headers["sec-websocket-key"];
   const timeout = Number(url.searchParams.get("timeout") ?? MAX_SESSION_MS);
   const allowedParameters = [...url.searchParams.keys()].every((name) => name === "solveCaptchas" || name === "timeout");
@@ -55,7 +65,6 @@ export function handleBrowserlessUpgrade(input: {
     timeout: String(timeout),
     token: input.apiKey,
   });
-  const startedAt = Date.now();
   void (async () => {
     const target = await input.resolve(PROVIDER_HOST, 443);
     const upstream = connectTls({ host: target.address, port: 443, rejectUnauthorized: true, servername: PROVIDER_HOST });
@@ -95,16 +104,26 @@ export function handleBrowserlessUpgrade(input: {
       clientSocket.write(`HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
       const rest = head.subarray(end + 4);
       if (rest.length > 0) clientSocket.write(rest);
-      if (input.head.length > 0) upstream.write(input.head);
-      upstream.pipe(clientSocket);
-      clientSocket.pipe(upstream);
       const closeAll = () => {
         clientSocket.destroy();
         upstream.destroy();
       };
+      // Counted as it flows, into the same daily budget as the sandbox's other connections.
+      const count = (direction: "down" | "up") => (chunk: Buffer) => {
+        if (!meter.add(direction, chunk.byteLength)) closeAll();
+      };
+      if (rest.length > 0) count("down")(rest);
+      if (input.head.length > 0) {
+        count("up")(input.head);
+        upstream.write(input.head);
+      }
+      upstream.on("data", count("down"));
+      clientSocket.on("data", count("up"));
+      upstream.pipe(clientSocket);
+      clientSocket.pipe(upstream);
       upstream.once("close", closeAll);
       clientSocket.once("close", closeAll);
-      upstream.once("close", () => input.onClosed(upstream.bytesWritten, upstream.bytesRead, Date.now() - startedAt));
+      upstream.once("close", () => meter.close({ host: "browserless", kind: "browserless", port: 443 }));
     };
     upstream.on("data", onData);
   })().catch(() => {

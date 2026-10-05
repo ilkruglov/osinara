@@ -73,7 +73,8 @@ describe("Docker sandbox process lifecycle", () => {
         stderr: expect.stringContaining("AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT"),
       });
     expect(harness.container.exec).toHaveBeenCalledWith(expect.objectContaining({
-      Cmd: ["timeout", "--signal=TERM", "--kill-after=5s", "120", "bash", "-c", "sleep infinity"],
+      // By absolute path: the head of the container's PATH is the model's to write.
+      Cmd: ["/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "120", "/bin/bash", "-c", "sleep infinity"],
     }));
   });
 

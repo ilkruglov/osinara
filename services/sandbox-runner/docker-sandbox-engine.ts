@@ -36,7 +36,8 @@ import {
   inspectContainer,
   requireRunningContainer,
 } from "./docker-sandbox-container.js";
-import { executeSandboxProcess, processTimedOut } from "./docker-sandbox-process.js";
+import { createStartBarrier } from "./docker-sandbox-hardening.js";
+import { executeSandboxProcess, processTimedOut, SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
 import {
   createSandboxRepeatGuard,
   SANDBOX_REPEAT_REFUSED_EXIT_CODE,
@@ -64,7 +65,6 @@ import {
 import { migrateBrowserState, removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
 import {
   isCleanupCommand,
-  SANDBOX_CLEANUP_PATH,
   SANDBOX_QUOTA_REFUSED_EXIT_CODE,
   type SandboxDiskQuota,
   type WorkspaceDirectories,
@@ -181,7 +181,10 @@ export function createDockerSandboxEngine(input: {
   runtime: SandboxDockerRuntime;
 }): SandboxEngine {
   const activity = createSandboxActivityRegistry(Date.now);
-  const afterStart = (container: Docker.Container) => input.hardening?.afterStart(container) ?? Promise.resolve();
+  const hardening = input.hardening;
+  const afterStart: (container: Docker.Container, inspection?: Docker.ContainerInspectInfo) => Promise<void> = hardening
+    ? createStartBarrier((container) => hardening.afterStart(container))
+    : async () => undefined;
   const repeatGuard = createSandboxRepeatGuard(Date.now);
   const writeMemo = createSandboxWriteMemo();
   // Every container start, a new one or a stopped one resuming, passes through one gate: the
@@ -271,8 +274,8 @@ export function createDockerSandboxEngine(input: {
           const stopped = existing;
           if (!stopped.inspection.State.Running) {
             await withCapacity(sessionId, () => stopped.container.start());
-            await afterStart(stopped.container);
           }
+          await afterStart(stopped.container);
           return { created: false, seedRequired: false, sessionId };
         }
         if (request.seedFiles === undefined) {
@@ -357,13 +360,13 @@ export function createDockerSandboxEngine(input: {
             return { exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE, processId: randomUUID(), stderr: refusal, stdout: "" };
           }
           // Past a refusal only the system's own rm/ls/du/df/find run, not ones planted in PATH.
-          allowed = { ...processRequest, environment: { ...processRequest.environment, PATH: SANDBOX_CLEANUP_PATH } };
+          allowed = { ...processRequest, environment: { ...processRequest.environment, PATH: SANDBOX_SYSTEM_PATH } };
         }
         const result = await executeSandboxProcess(input.docker, container, allowed, signal);
         // Nothing a command started may outlive it; with another operation of the session still
-        // running, its processes are not this command's to end.
-        if (input.hardening && activity.activeCount(sessionId) <= 1) {
-          await input.hardening.afterCommand(container, sessionId).catch((error: unknown) => console.error(JSON.stringify({
+        // running, its processes are not this command's to end, and none starts until it is done.
+        if (hardening) {
+          await activity.runAlone(sessionId, () => hardening.afterCommand(container, sessionId)).catch((error: unknown) => console.error(JSON.stringify({
             code: "AGENT_SANDBOX_RUNNER_CLEANUP_FAILED",
             error: error instanceof Error ? error.message.slice(0, 200) : String(error),
             sessionId,
@@ -427,6 +430,7 @@ export function createDockerSandboxEngine(input: {
           AttachStderr: true,
           AttachStdout: true,
           Cmd: args,
+          Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
           Tty: false,
         });
         await collectLimitedStream(await exec.start({ Tty: false }), SANDBOX_RUNNER_MAX_OUTPUT_BYTES);

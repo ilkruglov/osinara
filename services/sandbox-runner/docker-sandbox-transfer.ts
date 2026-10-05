@@ -26,6 +26,7 @@ import tar from "tar-stream";
 import { WORKSPACE_MAX_FILE_BYTES } from "../../agent/config.js";
 import type { SandboxRunnerSeedFile } from "../../agent/lib/sandbox-runner/sandbox-runner-contract.js";
 import { collectLimitedStream } from "./docker-sandbox-files.js";
+import { SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
 
 export const FILE_MISSING_EXIT_CODE = 44;
 export const FILE_TOO_LARGE_EXIT_CODE = 45;
@@ -58,7 +59,8 @@ async function runWithInput(
     AttachStdin: options.stdin !== undefined,
     AttachStdout: true,
     // TERM first, so the write script's trap removes its temporary file.
-    Cmd: ["timeout", "--signal=TERM", "--kill-after=5s", String(TRANSFER_TIMEOUT_SECONDS), ...argv],
+    Cmd: ["/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", String(TRANSFER_TIMEOUT_SECONDS), ...argv],
+    Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
     Tty: false,
     WorkingDir: "/",
   }));

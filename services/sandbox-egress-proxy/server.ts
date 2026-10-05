@@ -16,7 +16,7 @@ import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
 import { handleBrowserlessUpgrade } from "./browserless-endpoint.js";
-import { createEgressLedger, type EgressLedger } from "./egress-ledger.js";
+import { createEgressLedger, type EgressLedger, type EgressMeter, type EgressTarget } from "./egress-ledger.js";
 import { resolvePublicInternetAddress } from "./public-dns-resolver.js";
 
 const ALLOWED_PORTS = new Set([80, 443]);
@@ -32,7 +32,7 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade",
 ]);
 
-interface ResolvedTarget {
+export interface ResolvedTarget {
   address: string;
   family: 4;
   hostname: string;
@@ -117,6 +117,13 @@ function guardClientSocket(socket: Duplex, phase: () => ConnectPhase): () => boo
   return () => unavailable;
 }
 
+/** Counts each chunk as it passes; past the day's budget every stream of the connection closes. */
+function meterChunks(meter: EgressMeter, direction: "down" | "up", streams: readonly { destroy(): unknown }[]) {
+  return (chunk: Buffer) => {
+    if (!meter.add(direction, chunk.byteLength)) for (const stream of streams) stream.destroy();
+  };
+}
+
 /** The sandbox's address on the egress network (the Duplex of CONNECT and upgrade is a socket). */
 function clientAddress(socket: Duplex | Socket): string {
   return ((socket as Socket).remoteAddress ?? "unknown").replace(/^::ffff:/u, "");
@@ -125,23 +132,21 @@ function clientAddress(socket: Duplex | Socket): string {
 export function createSandboxEgressProxy(options: {
   browserlessApiKey?: string;
   ledger?: EgressLedger;
+  /** The public-only resolver; a test points it at a local server. */
+  resolveTarget?: (hostname: string, port: number) => Promise<ResolvedTarget>;
 } = {}) {
   const ledger = options.ledger ?? createEgressLedger();
+  const resolveTarget = options.resolveTarget ?? resolvePublicTarget;
   const server = createServer((incoming, outgoing) => {
-    const client = clientAddress(incoming.socket);
-    const startedAt = Date.now();
-    if (!ledger.admit(client)) {
+    const meter = ledger.open(clientAddress(incoming.socket));
+    if (!meter) {
       outgoing.writeHead(429);
       outgoing.end("AGENT_SANDBOX_EGRESS_DAILY_LIMIT: Daily egress volume reached\n");
       return;
     }
-    let bytesUp = 0;
-    let bytesDown = 0;
-    let host = "";
-    let targetPort = 0;
-    incoming.on("data", (chunk: Buffer) => { bytesUp += chunk.byteLength; });
+    let logged: EgressTarget | null = null;
     outgoing.once("close", () => {
-      if (host) ledger.record({ bytesDown, bytesUp, client, host, kind: "http", ms: Date.now() - startedAt, port: targetPort });
+      if (logged) meter.close(logged);
     });
     void (async () => {
       const targetUrl = new URL(incoming.url ?? "");
@@ -149,9 +154,8 @@ export function createSandboxEgressProxy(options: {
         throw new Error("AGENT_SANDBOX_EGRESS_URL_FORBIDDEN: Only credential-free HTTP URLs are allowed");
       }
       const port = parsePort(targetUrl.port || "80");
-      const target = await resolvePublicTarget(targetUrl.hostname, port);
-      host = target.hostname;
-      targetPort = port;
+      const target = await resolveTarget(targetUrl.hostname, port);
+      logged = { host: target.hostname, kind: "http", port };
       const upstream = httpRequest({
         family: target.family,
         headers: { ...filteredHeaders(incoming.headers), host: targetUrl.host },
@@ -165,7 +169,7 @@ export function createSandboxEgressProxy(options: {
           upstreamResponse.statusCode ?? 502,
           filteredHeaders(upstreamResponse.headers),
         );
-        upstreamResponse.on("data", (chunk: Buffer) => { bytesDown += chunk.byteLength; });
+        upstreamResponse.on("data", meterChunks(meter, "down", [upstream, outgoing]));
         upstreamResponse.pipe(outgoing);
       });
       upstream.on("timeout", () => upstream.destroy(
@@ -176,6 +180,9 @@ export function createSandboxEgressProxy(options: {
         if (!outgoing.headersSent) outgoing.writeHead(502);
         outgoing.end("AGENT_SANDBOX_EGRESS_FAILED: Public destination request failed\n");
       });
+      // Counted where it is forwarded: a listener attached before the DNS lookup drained the body
+      // before the pipe existed, and the upstream got none of it (Codex review, 5 October 2026).
+      incoming.on("data", meterChunks(meter, "up", [upstream, outgoing]));
       incoming.pipe(upstream);
     })().catch((error: unknown) => {
       console.error("Sandbox HTTP egress rejected", { error, url: incoming.url });
@@ -184,30 +191,39 @@ export function createSandboxEgressProxy(options: {
     });
   });
 
-  // The Browserless endpoint: the sandbox's bridge connects here without a key, the proxy adds it.
+  // The Browserless endpoint: agent-browser in the sandbox connects here without a key, the proxy adds it.
+  // One cloud browser per sandbox at a time: a reconnect must not quietly start another billable
+  // one (the sandbox's one-shot bridge used to refuse it; the bridge is gone).
+  const browserlessClients = new Set<string>();
   server.on("upgrade", (request, clientSocket, head) => {
     const client = clientAddress(clientSocket);
-    if (!ledger.admit(client)) {
+    if (browserlessClients.has(client)) {
+      rejectSocket(clientSocket, 409, "Conflict");
+      return;
+    }
+    const meter = ledger.open(client);
+    if (!meter) {
       rejectSocket(clientSocket, 429, "Too Many Requests");
       return;
     }
+    browserlessClients.add(client);
+    clientSocket.once("close", () => browserlessClients.delete(client));
+    // The server keeps sockets half-open: a sandbox that hung up would otherwise hold its slot.
+    clientSocket.once("end", () => clientSocket.destroy());
     handleBrowserlessUpgrade({
       apiKey: options.browserlessApiKey,
       clientSocket,
       head,
-      onClosed: (bytesUp, bytesDown, ms) => ledger.record({
-        bytesDown, bytesUp, client, host: "browserless", kind: "browserless", ms, port: 443,
-      }),
+      meter,
       request,
-      resolve: resolvePublicTarget,
+      resolve: resolveTarget,
     });
   });
 
   server.on("connect", (request, clientSocket, initialData) => {
     let phase: ConnectPhase = "request";
-    const client = clientAddress(clientSocket);
-    const startedAt = Date.now();
-    if (!ledger.admit(client)) {
+    const meter = ledger.open(clientAddress(clientSocket));
+    if (!meter) {
       rejectSocket(clientSocket, 429, "Too Many Requests");
       return;
     }
@@ -217,32 +233,31 @@ export function createSandboxEgressProxy(options: {
       if (!match) throw new Error("AGENT_SANDBOX_EGRESS_CONNECT_INVALID: Invalid CONNECT target");
       const port = parsePort(match[2]!);
       phase = "resolution";
-      const target = await resolvePublicTarget(match[1]!, port);
+      const target = await resolveTarget(match[1]!, port);
       if (clientUnavailable()) return;
       phase = "connect";
       const upstream = connectWithDeadline(() => connect({
         family: target.family,
         host: target.address,
-        port,
+        port: target.port,
       }), CONNECT_TIMEOUT_MS);
       bindTunnelLifecycle(clientSocket, upstream);
       if (clientUnavailable()) {
         upstream.destroy();
         return;
       }
-      upstream.once("close", () => ledger.record({
-        bytesDown: upstream.bytesRead,
-        bytesUp: upstream.bytesWritten,
-        client,
-        host: target.hostname,
-        kind: "connect",
-        ms: Date.now() - startedAt,
-        port,
-      }));
+      upstream.once("close", () => meter.close({ host: target.hostname, kind: "connect", port }));
       upstream.once("connect", () => {
         phase = "tunnel";
         clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        if (initialData.byteLength > 0) upstream.write(initialData);
+        // Counted as it flows, so one long tunnel cannot outlast the day's budget.
+        const meterUp = meterChunks(meter, "up", [upstream, clientSocket]);
+        upstream.on("data", meterChunks(meter, "down", [upstream, clientSocket]));
+        clientSocket.on("data", meterUp);
+        if (initialData.byteLength > 0) {
+          meterUp(initialData);
+          upstream.write(initialData);
+        }
         upstream.pipe(clientSocket);
         clientSocket.pipe(upstream);
       });

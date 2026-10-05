@@ -157,7 +157,12 @@ describe("production container contract", () => {
     // one more release only because the installed controller still requires the key.
     expect(compose).not.toContain("cli-proxy");
     expect(compose).toContain("SANDBOX_RUNTIME_IMAGE: ${SANDBOX_RUNTIME_IMAGE:?");
-    expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(3);
+    // Only migrate holds the owner connection; the agent and the embedding worker run as the
+    // DML-only application role.
+    expect(compose.match(/DATABASE_URL: \$\{DATABASE_URL:\?/g)).toHaveLength(1);
+    expect(service(compose, "migrate", "memory-embedding-worker")).toContain("DATABASE_URL: ${DATABASE_URL:?");
+    expect(compose.match(/ DATABASE_URL: \$\{APP_DATABASE_URL:\?/g)).toHaveLength(2);
+    expect(compose.match(/APP_DATABASE_URL: \$\{APP_DATABASE_URL:\?/g)).toHaveLength(1);
     expect(compose).not.toContain("DATABASE_URL: postgresql://");
   });
 

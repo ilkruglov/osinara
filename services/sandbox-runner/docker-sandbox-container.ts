@@ -67,7 +67,8 @@ async function reapCrowdedContainer(container: Docker.Container, sessionId: stri
  * The identity of one container run. Restricted `$HOME` is a tmpfs, so a restart empties it: the
  * start time belongs to the identity, and anything remembered about the previous run is void.
  */
-function containerGeneration(inspection: Docker.ContainerInspectInfo): string | null {
+/** One run of a container: its ID and the time it last started. */
+export function containerGeneration(inspection: Docker.ContainerInspectInfo): string | null {
   const startedAt: unknown = inspection.State.StartedAt;
   if (!inspection.Id || typeof startedAt !== "string" || startedAt.length === 0) return null;
   return `${inspection.Id} ${startedAt}`;
@@ -80,22 +81,24 @@ export async function requireRunningContainer(
   /** Runs a start of the stopped container; the engine passes its capacity gate. */
   gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
   containerName: string = sandboxContainerName(sessionId),
-  /** Runs after the container (re)started, e.g. to lay its network rules again. */
-  afterStart: (container: Docker.Container) => Promise<void> = async () => undefined,
+  /** Awaited for the run it returns, started now or already running, e.g. its network rules. */
+  ensureReady: (container: Docker.Container, inspection: Docker.ContainerInspectInfo) => Promise<void> = async () => undefined,
 ): Promise<{ container: Docker.Container; generation: string | null; inspection: Docker.ContainerInspectInfo }> {
   const existing = await inspectContainer(docker, sessionId, containerName);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
   if (!inspection.State.Running) {
-    await gateStart(() => existing.container.start());
-    await afterStart(existing.container);
+    // Two operations may find the container stopped at once; the second start finds it running.
+    await gateStart(() => existing.container.start().catch((error: unknown) => {
+      if (dockerStatus(error) !== 304) throw error;
+    }));
     inspection = await existing.container.inspect();
   } else if (activeOperations <= 1) {
     // A restart kills every process of the session: only the caller may be running in it.
     if (await reapCrowdedContainer(existing.container, sessionId)) {
-      await afterStart(existing.container);
       inspection = await existing.container.inspect();
     }
   }
+  await ensureReady(existing.container, inspection);
   return { container: existing.container, generation: containerGeneration(inspection), inspection };
 }

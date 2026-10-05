@@ -6,6 +6,7 @@
  *   without a configured key the endpoint is unavailable.
  * - The key is added by the proxy and never comes back to the sandbox: a provider answer other
  *   than a switch to WebSocket becomes a bare 502.
+ * - One cloud browser per sandbox at a time: a second connection while one is open gets 409.
  */
 import { once } from "node:events";
 import { request } from "node:http";
@@ -14,6 +15,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createSandboxEgressProxy } from "./server.js";
+import { connect } from "node:net";
 
 const servers: Array<{ close: () => void }> = [];
 afterEach(() => {
@@ -66,5 +68,36 @@ describe("Browserless endpoint", () => {
     expect(answer.status).toBe(502);
     expect(answer.body).not.toContain("secret-key");
   });
-});
 
+  it("keeps one cloud browser per sandbox at a time", async () => {
+    // The provider never answers here, so the first session stays open while the second asks.
+    const server = createSandboxEgressProxy({ browserlessApiKey: "secret-key", resolveTarget: () => new Promise(() => undefined) });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    servers.push(server);
+    const port = (server.address() as AddressInfo).port;
+    const handshake = "GET /browserless/chromium/stealth?solveCaptchas=true&timeout=120000 HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+    const first = connect(port, "127.0.0.1");
+    first.write(handshake);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const second = connect(port, "127.0.0.1");
+    second.write(handshake);
+    const [answer] = await once(second, "data") as [Buffer];
+    expect(answer.toString("latin1")).toMatch(/^HTTP\/1\.1 409 /u);
+    second.destroy();
+
+    first.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const third = connect(port, "127.0.0.1");
+    third.write(handshake);
+    third.on("error", () => undefined);
+    const outcome = await Promise.race([
+      once(third, "data").then(([data]) => (data as Buffer).toString("latin1")),
+      new Promise<string>((resolve) => setTimeout(() => resolve("pending"), 200)),
+    ]);
+    // Admitted: it waits for the provider like the first one did.
+    expect(outcome).toBe("pending");
+    third.destroy();
+  });
+});

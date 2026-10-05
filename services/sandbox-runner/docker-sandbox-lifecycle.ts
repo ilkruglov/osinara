@@ -51,6 +51,11 @@ export interface SandboxActivityRegistry {
   /** When the session last started an operation in this process; undefined before the first. */
   lastActivityAt(sessionId: string): number | undefined;
   removeIfIdle(sessionId: string, cutoffMs: number, operation: () => Promise<void>): Promise<boolean>;
+  /**
+   * From inside `runActive`: runs the operation only while the caller's is the session's sole
+   * operation, and new ones wait until it ends; false when another was running.
+   */
+  runAlone(sessionId: string, operation: () => Promise<void>): Promise<boolean>;
   runActive<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
   runExclusive<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
   touch(sessionId: string): void;
@@ -88,6 +93,9 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
   const creationLocks = new Map<string, Promise<void>>();
   const lastActivity = new Map<string, number>();
   const removalGates = new Map<string, Promise<void>>();
+  // Held while a command's leftovers are killed: an operation entering then would start
+  // processes the cleanup takes for strays (Codex review, 5 October 2026).
+  const aloneGates = new Map<string, Promise<void>>();
   const isIdle = (sessionId: string, cutoffMs: number): boolean => {
     if ((activeCounts.get(sessionId) ?? 0) > 0) return false;
     const lastUsedAt = lastActivity.get(sessionId);
@@ -116,7 +124,7 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
     async runActive<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
       // Register activity synchronously once no removal owns the ID, closing check/remove races.
       while (true) {
-        const removal = removalGates.get(sessionId);
+        const removal = removalGates.get(sessionId) ?? aloneGates.get(sessionId);
         if (removal) {
           await removal;
           continue;
@@ -132,6 +140,21 @@ export function createSandboxActivityRegistry(now: () => number): SandboxActivit
         if (remaining === 0) activeCounts.delete(sessionId);
         else activeCounts.set(sessionId, remaining);
         lastActivity.set(sessionId, now());
+      }
+    },
+    async runAlone(sessionId, operation) {
+      // Checked and gated in one synchronous step, so no operation slips in between.
+      if ((activeCounts.get(sessionId) ?? 0) > 1 || aloneGates.has(sessionId)) return false;
+      let release!: () => void;
+      aloneGates.set(sessionId, new Promise<void>((resolve) => {
+        release = resolve;
+      }));
+      try {
+        await operation();
+        return true;
+      } finally {
+        aloneGates.delete(sessionId);
+        release();
       }
     },
     async removeIfIdle(sessionId, cutoffMs, operation) {

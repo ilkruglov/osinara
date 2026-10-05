@@ -104,6 +104,47 @@ describe("Docker sandbox lifecycle", () => {
     expect(events).toEqual(["first-start", "first-end", "second"]);
   });
 
+  it("runs a cleanup only for the sole operation and holds new work until it ends", async () => {
+    // Codex review, 5 October 2026: an operation entering during the stray sweep had its fresh
+    // processes killed as strays.
+    const registry = createSandboxActivityRegistry(() => 0);
+    const events: string[] = [];
+    let releaseCleanup!: () => void;
+    let cleanup!: Promise<boolean>;
+    let entered!: Promise<void>;
+    await registry.runActive(SANDBOX_SESSION_ID, async () => {
+      cleanup = registry.runAlone(SANDBOX_SESSION_ID, async () => {
+        events.push("cleanup-start");
+        await new Promise<void>((resolve) => {
+          releaseCleanup = resolve;
+        });
+        events.push("cleanup-end");
+      });
+      entered = registry.runActive(SANDBOX_SESSION_ID, async () => {
+        events.push("next");
+      });
+      await Promise.resolve();
+      expect(events).toEqual(["cleanup-start"]);
+      releaseCleanup();
+      await cleanup;
+    });
+    await entered;
+    expect(await cleanup).toBe(true);
+    expect(events).toEqual(["cleanup-start", "cleanup-end", "next"]);
+
+    let releaseOther!: () => void;
+    const other = registry.runActive(SANDBOX_SESSION_ID, () => new Promise<void>((resolve) => {
+      releaseOther = resolve;
+    }));
+    const skipped = await registry.runActive(SANDBOX_SESSION_ID, () => registry.runAlone(SANDBOX_SESSION_ID, async () => {
+      events.push("not-alone");
+    }));
+    expect(skipped).toBe(false);
+    releaseOther();
+    await other;
+    expect(events).not.toContain("not-alone");
+  });
+
   it("blocks new work until a reserved idle removal completes", async () => {
     const registry = createSandboxActivityRegistry(() => 10_000);
     const events: string[] = [];

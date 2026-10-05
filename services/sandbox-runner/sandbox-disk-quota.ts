@@ -39,8 +39,6 @@ export function isCleanupCommand(command: string): boolean {
   return /^[ \t]*(?:rm|rmdir|ls|du|df)(?:[ \t][^;&|`$<>(){}'"\r\n\\]*)?$/u.test(command);
 }
 
-/** The PATH a cleanup command runs with past a refusal: system binaries only. */
-export const SANDBOX_CLEANUP_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 export interface DiskProbe {
   /** Bytes allocated under the directories that exist; missing ones count zero. */

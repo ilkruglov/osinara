@@ -5,6 +5,8 @@
  * - `applyEgressFirewall`: in the container's network namespace, outgoing traffic only to the
  *   egress proxy port (and loopback, Docker's DNS), incoming only replies; set by a short-lived
  *   helper with NET_ADMIN, which the sandbox itself never has.
+ * - `createStartBarrier`: applies such rules once per container run and makes every operation on
+ *   the run wait for them; a failure stops the container.
  * - `killStrayProcesses`: after a command, every process left in the container except its own
  *   placeholder and the reader's daemons.
  *
@@ -21,6 +23,9 @@
  *   model cannot replace now that the root filesystem is read-only.
  */
 import type Docker from "dockerode";
+
+import { containerGeneration } from "./docker-sandbox-container.js";
+import { SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
 
 const FIREWALL_TIMEOUT_MS = 30_000;
 export const EGRESS_PROXY_PORT = 3128;
@@ -91,6 +96,36 @@ export async function applyEgressFirewall(
   }));
 }
 
+const MAX_TRACKED_RUNS = 2_000;
+
+/**
+ * The container is `Running` the moment it starts, before its rules are laid: an operation of
+ * the session arriving then, or after a failed attempt on a resumed container, ran without them
+ * (Codex review, 5 October 2026). Every operation passes here with the run it found; one run is
+ * one application, shared by everyone who arrives while it is laid, and a failed one stops the
+ * container, so the next call starts it again and tries again.
+ */
+export function createStartBarrier(apply: (container: Docker.Container) => Promise<void>) {
+  const runs = new Map<string, { generation: string; ready: Promise<void> }>();
+  return async (container: Docker.Container, inspection?: Docker.ContainerInspectInfo): Promise<void> => {
+    const info = inspection ?? await container.inspect();
+    const generation = containerGeneration(info);
+    const known = runs.get(info.Id);
+    if (generation !== null && known?.generation === generation) return await known.ready;
+    const ready = apply(container).catch(async (error: unknown) => {
+      if (runs.get(info.Id)?.ready === ready) runs.delete(info.Id);
+      await container.stop({ t: 0 }).catch(() => undefined);
+      throw error;
+    });
+    if (generation !== null) {
+      runs.delete(info.Id);
+      runs.set(info.Id, { generation, ready });
+      while (runs.size > MAX_TRACKED_RUNS) runs.delete(runs.keys().next().value!);
+    }
+    return await ready;
+  };
+}
+
 // Executables that may outlive a command: the container's placeholder (`sleep infinity`) and
 // the Lightpanda reader's daemons. Paths under the read-only root, so not the model's to replace.
 const KEPT_EXECUTABLES = [
@@ -125,12 +160,18 @@ for name in os.listdir("/proc"):
 print(killed)
 `;
 
-/** Kills what a finished command left behind; the count of killed processes. */
+/**
+ * Kills what a finished command left behind; the count of killed processes. The container's
+ * PATH starts with directories the model writes, so the tools are named by absolute path under
+ * the read-only root, with the system PATH and Python isolated from the environment and user
+ * site; a planted `timeout` or `python3` used to run instead (Codex review, 5 October 2026).
+ */
 export async function killStrayProcesses(container: Docker.Container): Promise<number> {
   const exec = await container.exec({
     AttachStderr: false,
     AttachStdout: true,
-    Cmd: ["timeout", "--signal=KILL", "20", "python3", "-c", KILL_SCRIPT],
+    Cmd: ["/usr/bin/timeout", "--signal=KILL", "20", "/usr/bin/python3", "-I", "-c", KILL_SCRIPT],
+    Env: [`PATH=${SANDBOX_SYSTEM_PATH}`],
     Tty: false,
     WorkingDir: "/",
   });
@@ -142,6 +183,10 @@ export async function killStrayProcesses(container: Docker.Container): Promise<n
     stream.once("close", () => resolve());
     stream.once("error", () => resolve());
   });
+  const { ExitCode } = await exec.inspect();
+  if (ExitCode !== 0) {
+    throw new Error(`AGENT_SANDBOX_RUNNER_CLEANUP_FAILED: The stray process sweep exited with ${ExitCode}`);
+  }
   // Docker frames stdout with an 8-byte header; the count is the digits in it.
   const digits = Buffer.concat(chunks).toString("latin1").match(/\d+/gu);
   return digits ? Number(digits.at(-1)) : 0;
