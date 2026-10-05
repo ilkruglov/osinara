@@ -192,6 +192,20 @@ describe("controlled external-group web fetch", () => {
       });
   });
 
+  // Security review, 5 October 2026: 64 KiB of `<` blocked the event loop for over a second
+  // in the regex extraction, and no timeout could interrupt it.
+  it("extracts text from a page of adversarial markup without blocking", async () => {
+    const fetch = vi.fn(async () => response("<".repeat(CONTROLLED_WEB_FETCH_MAX_BODY_BYTES - 1), {
+      headers: { "content-type": "text/html" },
+    }));
+    const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
+
+    const started = performance.now();
+    await expect(execute({ format: "extracted_text", url: "https://example.com/trap" }))
+      .resolves.toMatchObject({ finalUrl: "https://example.com/trap" });
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it("bounds textual model content by line count", async () => {
     const fetch = vi.fn(async () => response(
       "line\n".repeat(CONTROLLED_WEB_FETCH_MAX_MODEL_LINES + 20),

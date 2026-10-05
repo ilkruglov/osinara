@@ -22,6 +22,8 @@ import { z } from "zod";
 import { AppError, isAppError } from "../app-error.js";
 import { readBoundedBody } from "../bounded-body.js";
 import { deadlineSignal } from "../request-signal.js";
+// One linear pass shared with the trusted web_fetch of the vendored Eve (security review, 5 October 2026).
+import { htmlToText } from "../../../scripts/eve-runtime/html-text.js";
 
 export const CONTROLLED_WEB_FETCH_PROXY_URL = "http://sandbox-egress-proxy:3128";
 const CONTROLLED_WEB_FETCH_MAX_REDIRECTS = 5;
@@ -124,38 +126,6 @@ async function readPageBody(response: Response): Promise<Uint8Array> {
     "AGENT_WEB_FETCH_BODY_TOO_LARGE",
     "Страница слишком большая для безопасной загрузки. Выберите более компактный источник",
   ));
-}
-
-function decodeHtmlEntities(value: string): string {
-  const namedEntities: Readonly<Record<string, string>> = {
-    amp: "&",
-    apos: "'",
-    gt: ">",
-    lt: "<",
-    nbsp: " ",
-    quot: '"',
-  };
-  return value.replace(/&(?:#(\d+)|#x([\da-f]+)|([a-z]+));/giu, (entity, decimal, hex, named) => {
-    if (decimal) return String.fromCodePoint(Number(decimal));
-    if (hex) return String.fromCodePoint(Number.parseInt(hex, 16));
-    return namedEntities[String(named).toLowerCase()] ?? entity;
-  });
-}
-
-function htmlToText(html: string): string {
-  // Remove non-content blocks before tags; no DOM dependency is needed for bounded model-safe text.
-  return decodeHtmlEntities(
-    html
-      .replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1\s*>/giu, " ")
-      .replace(/<!--([\s\S]*?)-->/gu, " ")
-      .replace(/<\s*br\s*\/?>/giu, "\n")
-      .replace(/<\/\s*(?:p|div|article|section|li|h[1-6])\s*>/giu, "\n")
-      .replace(/<[^>]*>/gu, " "),
-  )
-    .replace(/[\t ]+/gu, " ")
-    .replace(/ *\n */gu, "\n")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trim();
 }
 
 function truncateUtf8(value: string, maxBytes: number): string {

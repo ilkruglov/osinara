@@ -1,4 +1,5 @@
 import TurndownService from "#compiled/turndown/index.js";
+import { boundHtmlForMarkdown, htmlToText } from "./osinara-html-text.js";
 function convertHtmlToMarkdown(t) {
   let n = new TurndownService({
     bulletListMarker: `-`,
@@ -7,56 +8,13 @@ function convertHtmlToMarkdown(t) {
     headingStyle: `atx`,
     hr: `---`,
   });
-  return (n.remove([`script`, `style`, `meta`, `link`]), n.turndown(t));
+  // Osinara: the converter builds a DOM of every element; the page reaches it without scripts,
+  // styles and SVG and cut to a tag budget, so adversarial markup cannot block the event loop.
+  return (n.remove([`script`, `style`, `meta`, `link`]), n.turndown(boundHtmlForMarkdown(t)));
 }
+// Osinara: one linear pass instead of tag-stripping regular expressions that restart at every
+// `<` (a page of `<` without `>` blocked the event loop; security review, 5 October 2026).
 function extractTextFromHtml(e) {
-  let t = e;
-  return (
-    (t = t.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, ``)),
-    (t = t.replace(
-      /<\/(p|div|br|h[1-6]|li|tr|blockquote|pre|section|article|header|footer|nav|aside|main|figure|figcaption|details|summary)>/gi,
-      `
-`,
-    )),
-    (t = t.replace(
-      /<br\s*\/?>/gi,
-      `
-`,
-    )),
-    (t = t.replace(/<[^>]+>/g, ``)),
-    (t = decodeHtmlEntities(t)),
-    (t = t
-      .split(
-        `
-`,
-      )
-      .map((e) => e.replace(/[ \t]+/g, ` `).trim())
-      .join(
-        `
-`,
-      )
-      .replace(
-        /\n{3,}/g,
-        `
-
-`,
-      )
-      .trim()),
-    t
-  );
-}
-const ENTITY_MAP = {
-    "&amp;": `&`,
-    "&gt;": `>`,
-    "&lt;": `<`,
-    "&nbsp;": ` `,
-    "&quot;": `"`,
-    "&#39;": `'`,
-    "&#x27;": `'`,
-    "&#x2F;": `/`,
-  },
-  ENTITY_PATTERN = new RegExp(Object.keys(ENTITY_MAP).join(`|`), `gi`);
-function decodeHtmlEntities(e) {
-  return e.replace(ENTITY_PATTERN, (e) => ENTITY_MAP[e.toLowerCase()] ?? e);
+  return htmlToText(e);
 }
 export { convertHtmlToMarkdown, extractTextFromHtml };
