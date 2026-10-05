@@ -81,7 +81,24 @@ import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
 
-const FILE_UPLOAD_STAGING_DIRECTORY = "/.osinara-sandbox-uploads";
+/** The largest skill package file that may be written past a refusal; real ones are a few KiB. */
+const SKILL_PACKAGE_FILE_EXEMPT_BYTES = 256 * 1024;
+
+/** Below the container's own volume: the root filesystem is read-only, and Docker's archive API
+ * writes and reads neither there nor on tmpfs, only on volumes. */
+const STAGING_DIRECTORY_NAME = ".osinara-staging";
+
+/** The staging directory of a container: in its tool environment, else in its first workspace. */
+export function sandboxStagingDirectory(mountTargets: readonly string[]): string {
+  const target = mountTargets.find((path) => path.startsWith("/tools/")) ??
+    mountTargets.find((path) => path.startsWith("/workspace/"));
+  if (!target) throw new Error("AGENT_SANDBOX_RUNNER_STAGING_UNAVAILABLE: Sandbox has no writable volume");
+  return `${target}/${STAGING_DIRECTORY_NAME}`;
+}
+
+function stagingOf(inspection: Docker.ContainerInspectInfo): string {
+  return sandboxStagingDirectory((inspection.HostConfig.Mounts ?? []).map((mount) => mount.Target));
+}
 const MOUNT_TOOLS_DESTINATION = "/runner/tools";
 const MOUNT_WORKSPACES_DESTINATION = "/runner/workspaces";
 const SANDBOX_NETWORK_LABEL = "sandbox-egress";
@@ -277,7 +294,9 @@ export function createDockerSandboxEngine(input: {
           try {
             await container.start();
             await ensureToolDirectories(input.docker, container, request);
-            await writeSandboxSeedArchive(container, seedFiles);
+            await writeSandboxSeedArchive(input.docker, container, seedFiles, sandboxStagingDirectory(
+              options.HostConfig?.Mounts?.map((mount) => mount.Target) ?? [],
+            ));
           } catch (error) {
             await container.remove({ force: true, v: true }).catch(() => undefined);
             throw error;
@@ -351,11 +370,12 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
         const resolved = resolvePath(path);
-        const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
-        // Docker's archive API cannot read files from restricted HOME on tmpfs. Copying to rootfs
-        // preserves binary archive reads while keeping the sandbox mount private and ephemeral.
+        const stagingDirectory = stagingOf(inspection);
+        const stagingPath = `${stagingDirectory}/${randomUUID()}`;
+        // Docker's archive API cannot read files from restricted HOME on tmpfs, nor from the
+        // read-only root: the file is copied to the staging directory on a volume and read there.
         // The size check runs before the copy, and the copy sits inside the cleanup scope: a
         // partial staging file after ENOSPC must not outlive the request.
         let readFailed = false;
@@ -366,7 +386,7 @@ export function createDockerSandboxEngine(input: {
             command: stageFileForReadCommand({
               maxBytes: WORKSPACE_MAX_FILE_BYTES,
               resolvedPath: resolved,
-              stagingDirectory: FILE_UPLOAD_STAGING_DIRECTORY,
+              stagingDirectory,
               stagingPath,
             }),
           });
@@ -422,19 +442,22 @@ export function createDockerSandboxEngine(input: {
           activity.activeCount(sessionId),
         );
         const resolved = resolvePath(path);
-        // Every file the model writes, wherever: skill packages are the framework's, rewritten
-        // every turn, and refusing them would stop every turn of the workspace, cleanup included.
-        if (!isSkillPackagePath(resolved)) {
+        // Every file the model writes, wherever. Skill package files are the framework's, small and
+        // rewritten every turn, and refusing them would stop every turn of the workspace, cleanup
+        // included; but the path alone proves nothing (a model can write there too), so only a
+        // small file passes on its name (Codex review, 5 October 2026).
+        if (!isSkillPackagePath(resolved) || content.byteLength > SKILL_PACKAGE_FILE_EXEMPT_BYTES) {
           const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
           if (refusal) throw new Error(refusal);
         }
         // Eve rewrites every dynamic skill package on every turn without diffing it; identical
         // bytes already inside this container run are that same materialization, not a new one.
         if (writeMemo.hasSkillFile(generation, resolved, content)) return;
-        const stagingPath = `${FILE_UPLOAD_STAGING_DIRECTORY}/${randomUUID()}`;
+        const stagingDirectory = stagingOf(inspection);
+        const stagingPath = `${stagingDirectory}/${randomUUID()}`;
         if (!writeMemo.hasStagingDirectory(generation)) {
           const directoryResult = await executeSandboxProcess(input.docker, container, {
-            command: prepareStagingDirectoryCommand(FILE_UPLOAD_STAGING_DIRECTORY),
+            command: prepareStagingDirectoryCommand(stagingDirectory),
           });
           if (directoryResult.exitCode !== 0) {
             throw new Error(
@@ -445,8 +468,9 @@ export function createDockerSandboxEngine(input: {
           writeMemo.rememberStagingDirectory(generation);
         }
 
-        // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME`. Upload to
-        // writable container rootfs first, then let an in-container process cross the mount boundary.
+        // Docker's archive API cannot target tmpfs mounts such as restricted `$HOME` or the read-only
+        // root. Upload to the staging directory on a volume, then let an in-container process
+        // cross the mount boundary.
         let committed = false;
         try {
           await writeSingleFileArchive(container, stagingPath, content);

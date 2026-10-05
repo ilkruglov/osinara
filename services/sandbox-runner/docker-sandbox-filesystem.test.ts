@@ -51,6 +51,7 @@ function runningContainer(id: string, startedAt: string) {
     exec: vi.fn(async (_options: ExecOptions) => successfulExec()),
     inspect: vi.fn(async () => ({
       Config: { Labels: {} },
+      HostConfig: { Mounts: [{ Target: "/tools/personal" }] },
       Id: id,
       State: { Running: true, StartedAt: startedAt },
     })),
@@ -83,7 +84,7 @@ describe("Docker sandbox filesystem bridge", () => {
     const container = {
       exec: vi.fn(async (_options: ExecOptions) => successfulExec()),
       getArchive: vi.fn(async () => archiveFile("staged", "skill instructions")),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
       top: vi.fn(async () => ({ Processes: [] })),
     };
     const docker = {
@@ -104,7 +105,7 @@ describe("Docker sandbox filesystem bridge", () => {
     expect(content).not.toBeNull();
     expect(new TextDecoder().decode(content!)).toBe("skill instructions");
     expect(container.getArchive).toHaveBeenCalledWith({
-      path: expect.stringMatching(/^\/\.osinara-sandbox-uploads\//u),
+      path: expect.stringMatching(/^\/tools\/personal\/\.osinara-staging\//u),
     });
     const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
     expect(commands).toEqual([
@@ -119,7 +120,7 @@ describe("Docker sandbox filesystem bridge", () => {
     const container = {
       exec: vi.fn(async () => missingExec),
       getArchive: vi.fn(),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
       top: vi.fn(async () => ({ Processes: [] })),
     };
     const docker = {
@@ -144,7 +145,7 @@ describe("Docker sandbox filesystem bridge", () => {
     const exec = successfulExec(source);
     const container = {
       exec: vi.fn(async (_options: ExecOptions) => exec),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
       top: vi.fn(async () => ({ Processes: [] })),
       putArchive: vi.fn(async () => undefined),
     };
@@ -166,11 +167,11 @@ describe("Docker sandbox filesystem bridge", () => {
 
     expect(container.putArchive).toHaveBeenCalledWith(
       expect.anything(),
-      { path: "/.osinara-sandbox-uploads" },
+      { path: "/tools/personal/.osinara-staging" },
     );
     const commands = container.exec.mock.calls.map(([options]) => options.Cmd.at(-1));
     expect(commands).toEqual([
-      expect.stringMatching(/^mkdir -p -- .*\.osinara-sandbox-uploads/u),
+      expect.stringMatching(/^mkdir -p -- .*\.osinara-staging/u),
       expect.stringMatching(
         /^mkdir -p -- '.*skills\/pohuy' && mv -T -- .* '.*\/tmp\/home\/\.agents\/skills\/pohuy\/LICENSE\.txt'$/u,
       ),
@@ -208,6 +209,7 @@ describe("Docker sandbox filesystem bridge", () => {
     // Restricted HOME is a tmpfs, so a restart leaves the container without any skill package.
     container.inspect.mockResolvedValue({
       Config: { Labels: {} },
+      HostConfig: { Mounts: [{ Target: "/tools/personal" }] },
       Id: "container-1",
       State: { Running: true, StartedAt: "2026-09-10T11:30:00Z" },
     });
@@ -239,7 +241,7 @@ describe("Docker sandbox filesystem bridge", () => {
           start: vi.fn(async () => source),
         };
       }),
-      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, HostConfig: { Mounts: [{ Target: "/tools/personal" }] }, State: { Running: true } })),
       top: vi.fn(async () => ({ Processes: [] })),
       putArchive: vi.fn(async () => undefined),
     };

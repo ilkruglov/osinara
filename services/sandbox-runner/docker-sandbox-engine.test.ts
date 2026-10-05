@@ -98,21 +98,18 @@ describe("buildSandboxContainerOptions", () => {
       NetworkMode: runtime.egressNetwork,
       PidsLimit: 1024,
       Privileged: false,
-      ReadonlyRootfs: false,
+      ReadonlyRootfs: true,
       SecurityOpt: ["no-new-privileges:true"],
       Tmpfs: expect.objectContaining({
         "/opt/osinara": expect.stringContaining("noexec"),
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "16",
+      "dev.osinara.sandbox.policy-version": "17",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });
     expect(options.Env).toEqual(expect.arrayContaining([
-      // lavka.yandex.ru answered 403 to headless Chrome that announced itself (navigator.webdriver,
-      // HeadlessChrome in the UA) while the same page from curl on the same egress was 200.
-      "AGENT_BROWSER_ARGS=--disable-blink-features=AutomationControlled",
       "AGENT_BROWSER_USER_AGENT=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
       "AGENT_BROWSER_IDLE_TIMEOUT_MS=600000",
       "AGENT_BROWSER_PROXY=http://sandbox-egress-proxy:3128",
@@ -128,7 +125,9 @@ describe("buildSandboxContainerOptions", () => {
       expect.stringContaining("/tools/family"),
     ]));
     // The logged-in browser session and its restore state belong to the browser companion only.
-    expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE)/u.test(entry))).toBe(false);
+    // The logged-in browser session, its restore state and Chrome's arguments (which Lightpanda,
+    // the only browser left in Bash, refuses) belong to the browser companion only.
+    expect(options.Env?.some((entry) => /^AGENT_BROWSER_(SESSION|RESTORE|ARGS)/u.test(entry))).toBe(false);
   });
 
   it("creates one-shot GWS compute with exact argv and only one workspace", () => {
@@ -228,6 +227,7 @@ describe("buildSandboxContainerOptions", () => {
       remove: vi.fn(async () => undefined),
     };
     const replacement = {
+      exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })),
       putArchive: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
       start: vi.fn(async () => undefined),
@@ -236,6 +236,7 @@ describe("buildSandboxContainerOptions", () => {
       listContainers: vi.fn(async () => []),
       createContainer: vi.fn(async () => replacement),
       getContainer: vi.fn(() => stale),
+      modem: { demuxStream: vi.fn((stream: Readable) => stream.resume()) },
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
       docker,
@@ -514,12 +515,13 @@ describe("running-container cap", () => {
     const root = await mkdtemp(join(tmpdir(), "osinara-sandbox-engine-"));
     temporaryRoots.push(root);
     const busy = { inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })), stop: vi.fn(async () => undefined) };
-    const created = { putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
+    const created = { exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })), putArchive: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined) };
     const docker = {
       createContainer: vi.fn(async () => created),
       // The new session has no container yet; the busy one is addressed by id when stopped.
       getContainer: vi.fn((id: string) => id === "running-busy" ? busy : { inspect: vi.fn(async () => Promise.reject(missing)) }),
       listContainers: vi.fn(async () => busyListing),
+      modem: { demuxStream: vi.fn((stream: Readable) => stream.resume()) },
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
       docker,
@@ -542,6 +544,7 @@ describe("running-container cap", () => {
     const started: Array<{ name: string; sessionId: string }> = [];
     const docker = {
       createContainer: vi.fn(async (options: { Labels: Record<string, string>; name: string }) => ({
+        exec: vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0 })), start: vi.fn(async () => Readable.from([])) })),
         putArchive: vi.fn(async () => undefined),
         remove: vi.fn(async () => undefined),
         start: vi.fn(async () => {
@@ -555,6 +558,7 @@ describe("running-container cap", () => {
         Labels: { "dev.osinara.sandbox.session-id": item.sessionId },
         State: "running",
       }))),
+      modem: { demuxStream: vi.fn((stream: Readable) => stream.resume()) },
     } as unknown as Docker;
     const engine = createDockerSandboxEngine({
       docker,

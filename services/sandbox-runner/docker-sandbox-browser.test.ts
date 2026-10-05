@@ -121,6 +121,9 @@ describe("buildBrowserContainerOptions", () => {
       expect.objectContaining(volume("/browser", runtime.toolsVolume, `browser/${PERSONAL}`)),
     ]);
     expect(options.Env).toEqual(expect.arrayContaining([
+      // lavka.yandex.ru answered 403 to headless Chrome that announced itself (navigator.webdriver,
+      // HeadlessChrome in the UA) while the same page from curl on the same egress was 200.
+      "AGENT_BROWSER_ARGS=--disable-blink-features=AutomationControlled",
       "AGENT_BROWSER_SESSION=osinara",
       "AGENT_BROWSER_RESTORE=osinara",
       "HOME=/browser/home",

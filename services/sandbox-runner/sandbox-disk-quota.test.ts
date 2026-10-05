@@ -6,8 +6,9 @@
  *   with a code and a way out; under both it passes.
  * - Usage is measured at most once a minute per workspace, and concurrent checks share one
  *   measurement.
- * - Only plain one-line inspection and deletion commands pass a refusal (no newline, no find
- *   action that writes or runs), and they run with the system PATH.
+ * - Only plain one-line rm, rmdir, ls, du and df pass a refusal (no newline, no quotes, no find
+ *   at all), and they run with the system PATH; a large write under a skill package path is
+ *   refused like any other.
  * - A failed measurement refuses and is not cached; the probe errors instead of summing partly.
  * - The host probe sums `du` over the directories that exist.
  * - The engine refuses the model's Bash with exit 125 and the reason, still runs a cleanup
@@ -81,7 +82,7 @@ describe("createSandboxDiskQuota", () => {
 });
 
 describe("isCleanupCommand", () => {
-  it.each(["rm -rf /workspace/personal/big", "ls -la /workspace", "du -sh /workspace/* /tools/*", "find /workspace -name '*.tmp' -delete", "df -h"])(
+  it.each(["rm -rf /workspace/personal/big", "ls -la /workspace", "du -sh /workspace/* /tools/*", "df -h"])(
     "lets %s pass a refusal",
     (command) => expect(isCleanupCommand(command)).toBe(true),
   );
@@ -90,6 +91,7 @@ describe("isCleanupCommand", () => {
     "rm x; dd if=/dev/zero of=y", "ls > list.txt", "rm $(cat list)", "rmx", "python3 clean.py",
     "find / -exec sh {} \\;", "rm\nprintf CLEANUP_BYPASS", "find /workspace -fprint /workspace/big",
     "find /workspace -fprintf /workspace/x %p", "find . -execdir sh {} +", "rm a\\\nb",
+    "find /workspace -name '*.tmp' -delete", "find /workspace '-fprint' /workspace/list", "rm 'a b'",
   ])(
     "refuses %s",
     (command) => expect(isCleanupCommand(command)).toBe(false),
@@ -165,6 +167,9 @@ describe("disk budget in the engine", () => {
     expect(exec).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(exec.mock.calls[0])).toContain("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
 
+    // A skill package path does not exempt a large file.
+    await expect(engine.writeFile("session", "/workspace/personal/.agents/skills/x/payload.bin", Buffer.alloc(300 * 1024)))
+      .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");
     // Every file the model writes counts, not only /workspace.
     await expect(engine.writeFile("session", "/tools/personal/big.bin", Buffer.from("x")))
       .rejects.toThrow("AGENT_SANDBOX_WORKSPACE_QUOTA_EXCEEDED");

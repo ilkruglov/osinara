@@ -39,7 +39,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "16";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "17";
 export const SANDBOX_ROLE_LABEL = "dev.osinara.sandbox.role";
 export const BROWSER_CONTAINER_ROLE = "browser";
 /** The browser state of one tool workspace, beside (never inside) the directory Bash mounts. */
@@ -121,9 +121,10 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessAp
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
     ...(browserlessApiKey ? [`BROWSERLESS_API_KEY=${browserlessApiKey}`] : []),
-    // The reader in Bash (Lightpanda, no logins) keeps the browser defaults; the logged-in
-    // session `osinara` and its restore state live only in the browser container.
-    `AGENT_BROWSER_ARGS=${AGENT_BROWSER_CHROME_ARGS}`,
+    // Bash keeps only the reader (Lightpanda, no logins). Chrome's arguments belong to the
+    // browser container: Lightpanda refuses to start with them ("Custom Chrome arguments are not
+    // supported", seen live 5 October 2026), so with them in this environment the reader the
+    // skill prescribes could not run at all.
     `AGENT_BROWSER_USER_AGENT=${AGENT_BROWSER_USER_AGENT_VALUE}`,
     `AGENT_BROWSER_IDLE_TIMEOUT_MS=${AGENT_BROWSER_IDLE_TIMEOUT_MS}`,
     `AGENT_BROWSER_PROXY=${PROXY_URL}`,
@@ -206,12 +207,15 @@ export function buildBrowserContainerOptions(
       NetworkMode: runtime.egressNetwork,
       PidsLimit: SANDBOX_PIDS_LIMIT,
       Privileged: false,
-      ReadonlyRootfs: false,
+      // Writable only through volumes and tmpfs: a write into the root would land in the
+      // container layer on the host disk, past every workspace limit (security review).
+      ReadonlyRootfs: true,
       SecurityOpt: ["no-new-privileges:true"],
       ShmSize: SANDBOX_SHM_BYTES,
       Tmpfs: {
         "/opt/osinara": "ro,noexec,nosuid,size=64k,mode=0555",
         "/tmp": "rw,noexec,nosuid,size=512m,mode=1777",
+        "/var/tmp": "rw,noexec,nosuid,size=64m,mode=1777",
       },
     },
     Image: runtime.image,
@@ -268,13 +272,16 @@ export function buildSandboxContainerOptions(
       NetworkMode: trusted ? runtime.egressNetwork : "none",
       PidsLimit: SANDBOX_PIDS_LIMIT,
       Privileged: false,
-      ReadonlyRootfs: false,
+      // Writable only through volumes and tmpfs: a write into the root would land in the
+      // container layer on the host disk, past every workspace limit (security review).
+      ReadonlyRootfs: true,
       SecurityOpt: ["no-new-privileges:true"],
       ShmSize: SANDBOX_SHM_BYTES,
       // The shared image contains gws, but durable model-controlled Bash must never see it.
       Tmpfs: {
         "/opt/osinara": "ro,noexec,nosuid,size=64k,mode=0555",
         "/tmp": "rw,noexec,nosuid,size=512m,mode=1777",
+        "/var/tmp": "rw,noexec,nosuid,size=64m,mode=1777",
       },
     },
     Image: runtime.image,

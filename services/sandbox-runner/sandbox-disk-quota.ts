@@ -28,18 +28,15 @@ export const SANDBOX_QUOTA_REFUSED_EXIT_CODE = 125;
 const MEASURE_TTL_MS = 60_000;
 const MAX_CACHED_WORKSPACES = 2_000;
 
-/** `find` actions that write a file or run a program. */
-const FIND_WRITING_ACTIONS = /(?:^|[ \t])-(?:fprint0?|fprintf|fls|exec|execdir|ok|okdir)(?=[ \t]|$)/u;
-
 /**
- * `rm`, `rmdir`, `ls`, `du`, `df` or `find` alone on one line, with no chaining, redirection,
- * substitution or `find` action that writes or runs: enough to see what takes space and delete
- * it. The engine runs it with the system PATH, so a binary planted in the tool environment under
- * one of these names is not what runs.
+ * `rm`, `rmdir`, `ls`, `du` or `df` alone on one line, with no quoting, chaining, redirection or
+ * substitution: enough to see what takes space and delete it, and none of them writes. `find` is
+ * not among them: its actions write files (`-fprint`), and quoting hides them from any pattern
+ * (Codex review, 5 October 2026). The engine runs these with the system PATH, so a binary planted
+ * in the tool environment under one of the names is not what runs.
  */
 export function isCleanupCommand(command: string): boolean {
-  if (!/^[ \t]*(?:rm|rmdir|ls|du|df|find)(?:[ \t][^;&|`$<>(){}\r\n\\]*)?$/u.test(command)) return false;
-  return !/^[ \t]*find[ \t]/u.test(command) || !FIND_WRITING_ACTIONS.test(command);
+  return /^[ \t]*(?:rm|rmdir|ls|du|df)(?:[ \t][^;&|`$<>(){}'"\r\n\\]*)?$/u.test(command);
 }
 
 /** The PATH a cleanup command runs with past a refusal: system binaries only. */
