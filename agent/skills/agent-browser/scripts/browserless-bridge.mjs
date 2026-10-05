@@ -1,55 +1,40 @@
 // A loopback CDP bridge: agent-browser 0.36 does not proxy its WebSocket transport.
-// Only the fixed Browserless host leaves the sandbox, through its public-only egress proxy.
+// Only the egress proxy's fixed Browserless endpoint is reached; the proxy adds the key.
 import { createServer, request } from "node:http";
-import { connect as connectTls } from "node:tls";
+import { connect as connectTcp } from "node:net";
 import { once } from "node:events";
 
 export const BRIDGE_PORT = 17373;
-const HOST = "production-sfo.browserless.io";
 const LIFETIME_MS = 120_000;
 
-export async function connectThroughProxy(proxyUrl) {
+// The API key never enters the sandbox: the egress proxy adds it on its own Browserless endpoint
+// (security review, 5 October 2026: any process in the sandbox could read and send the key).
+export async function connectToProxy(proxyUrl) {
   const proxy = new URL(proxyUrl);
   if (proxy.protocol !== "http:" || proxy.username || proxy.password) {
     throw new Error("AGENT_BROWSERLESS_PROXY_INVALID");
   }
   return await new Promise((resolve, reject) => {
-    const req = request({
-      hostname: proxy.hostname, port: proxy.port || 80, method: "CONNECT",
-      path: `${HOST}:443`, headers: { Host: `${HOST}:443` },
+    const socket = connectTcp({ host: proxy.hostname, port: Number(proxy.port || 80) });
+    const deadline = setTimeout(() => socket.destroy(new Error("AGENT_BROWSERLESS_PROXY_TIMEOUT")), 10_000);
+    socket.once("connect", () => {
+      clearTimeout(deadline);
+      resolve(socket);
     });
-    const deadline = setTimeout(() => req.destroy(new Error("AGENT_BROWSERLESS_PROXY_TIMEOUT")), 10_000);
-    req.on("error", () => {
+    socket.once("error", () => {
       clearTimeout(deadline);
       reject(new Error("AGENT_BROWSERLESS_PROXY_FAILED"));
     });
-    req.on("connect", (res, socket, head) => {
-      clearTimeout(deadline);
-      if (res.statusCode !== 200) {
-        socket.destroy();
-        reject(new Error("AGENT_BROWSERLESS_PROXY_REJECTED"));
-        return;
-      }
-      if (head.length) socket.unshift(head);
-      const secure = connectTls({ socket, servername: HOST, rejectUnauthorized: true });
-      secure.setTimeout(10_000, () => secure.destroy(new Error("TLS timeout")));
-      secure.once("secureConnect", () => {
-        secure.setTimeout(0);
-        resolve(secure);
-      });
-      secure.on("error", () => reject(new Error("AGENT_BROWSERLESS_TLS_FAILED")));
-    });
-    req.end();
   });
 }
 
 export async function startBridge({
-  apiKey,
+  available,
   port = BRIDGE_PORT,
   lifetimeMs = LIFETIME_MS,
-  connectUpstream = () => connectThroughProxy(process.env.HTTPS_PROXY),
+  connectUpstream = () => connectToProxy(process.env.HTTPS_PROXY),
 }) {
-  if (!apiKey?.trim()) throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED");
+  if (!available) throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED");
   const sockets = new Set();
   let connected = false;
   let used = false;
@@ -95,12 +80,12 @@ export async function startBridge({
       if (closed || client.destroyed) { socket.destroy(); return; }
       track(socket);
       client.once("close", () => socket.destroy());
-      const query = new URLSearchParams({ token: apiKey, solveCaptchas: "true", timeout: String(LIFETIME_MS) });
+      const query = new URLSearchParams({ solveCaptchas: "true", timeout: String(LIFETIME_MS) });
       const upstream = request({
-        hostname: HOST, port: 443, path: `/chromium/stealth?${query}`,
+        path: `/browserless/chromium/stealth?${query}`,
         createConnection: () => socket,
         headers: {
-          Host: HOST, Connection: "Upgrade", Upgrade: "websocket",
+          Host: "sandbox-egress-proxy", Connection: "Upgrade", Upgrade: "websocket",
           "Sec-WebSocket-Version": "13",
           "Sec-WebSocket-Key": incoming.headers["sec-websocket-key"] ?? "",
         },

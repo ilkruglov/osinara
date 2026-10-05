@@ -125,6 +125,8 @@ export async function removeBrowserContainer(docker: Docker, sessionId: string):
  */
 export async function requireBrowserContainer(input: {
   activeOperations: number;
+  /** Lays the companion's network rules after any start. */
+  afterStart: (container: Docker.Container) => Promise<void>;
   docker: Docker;
   gateStart: (start: () => Promise<void>) => Promise<void>;
   runtime: SandboxDockerRuntime;
@@ -153,6 +155,7 @@ export async function requireBrowserContainer(input: {
       input.activeOperations,
       input.gateStart,
       name,
+      input.afterStart,
     );
     return container;
   }
@@ -167,6 +170,7 @@ export async function requireBrowserContainer(input: {
   const container = await input.docker.createContainer(options);
   try {
     await input.gateStart(() => container.start());
+    await input.afterStart(container);
   } catch (error) {
     await container.remove({ force: true, v: true }).catch(() => undefined);
     throw error;

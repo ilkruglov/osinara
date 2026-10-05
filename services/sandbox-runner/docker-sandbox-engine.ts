@@ -163,9 +163,17 @@ function sessionWorkspaces(inspection: Docker.ContainerInspectInfo, roots: Runti
   }));
 }
 
+/** What the runner does to a sandbox after it starts and after each command (production only). */
+export interface SandboxHardening {
+  afterCommand(container: Docker.Container, sessionId: string): Promise<void>;
+  afterStart(container: Docker.Container): Promise<void>;
+}
+
 export function createDockerSandboxEngine(input: {
   /** Workspace budget and host free-space floor; absent in tests that do not exercise it. */
   diskQuota?: SandboxDiskQuota;
+  /** Network rules and stray-process cleanup; absent in tests that do not exercise them. */
+  hardening?: SandboxHardening;
   docker: Docker;
   /** Running-container cap; the configured value unless a test narrows it. */
   limits?: { maxRunningContainers: number };
@@ -173,6 +181,7 @@ export function createDockerSandboxEngine(input: {
   runtime: SandboxDockerRuntime;
 }): SandboxEngine {
   const activity = createSandboxActivityRegistry(Date.now);
+  const afterStart = (container: Docker.Container) => input.hardening?.afterStart(container) ?? Promise.resolve();
   const repeatGuard = createSandboxRepeatGuard(Date.now);
   const writeMemo = createSandboxWriteMemo();
   // Every container start, a new one or a stopped one resuming, passes through one gate: the
@@ -240,10 +249,10 @@ export function createDockerSandboxEngine(input: {
         let existing = await inspectContainer(input.docker, sessionId);
         const labels = existing?.inspection.Config.Labels;
         const expectedBrowserlessKey = request.access === "trusted" && input.runtime.browserlessApiKey
-          ? `BROWSERLESS_API_KEY=${input.runtime.browserlessApiKey}`
+          ? "BROWSERLESS_AVAILABLE=true"
           : undefined;
         const existingBrowserlessKey = existing?.inspection.Config.Env?.find((entry) =>
-          entry.startsWith("BROWSERLESS_API_KEY=")
+          entry.startsWith("BROWSERLESS_AVAILABLE=") || entry.startsWith("BROWSERLESS_API_KEY=")
         );
         if (existing && (existingBrowserlessKey !== expectedBrowserlessKey || sandboxContainerNeedsReplacement({
           requestHash: labels?.[SANDBOX_REQUEST_HASH_LABEL],
@@ -262,6 +271,7 @@ export function createDockerSandboxEngine(input: {
           const stopped = existing;
           if (!stopped.inspection.State.Running) {
             await withCapacity(sessionId, () => stopped.container.start());
+            await afterStart(stopped.container);
           }
           return { created: false, seedRequired: false, sessionId };
         }
@@ -287,6 +297,7 @@ export function createDockerSandboxEngine(input: {
           const container = await input.docker.createContainer(options);
           try {
             await container.start();
+            await afterStart(container);
             await ensureToolDirectories(input.docker, container, request);
             await writeSeedFiles(input.docker, container, seedFiles);
           } catch (error) {
@@ -306,6 +317,7 @@ export function createDockerSandboxEngine(input: {
           // session's container being created, replaced or stopped.
           const container = await activity.runExclusive(sessionId, () => requireBrowserContainer({
             activeOperations: activity.activeCount(sessionId),
+            afterStart,
             docker: input.docker,
             gateStart: (start) => withCapacity(sessionId, start),
             runtime: input.runtime,
@@ -336,7 +348,7 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start), undefined, afterStart);
         const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
         let allowed = processRequest;
         if (refusal) {
@@ -348,6 +360,15 @@ export function createDockerSandboxEngine(input: {
           allowed = { ...processRequest, environment: { ...processRequest.environment, PATH: SANDBOX_CLEANUP_PATH } };
         }
         const result = await executeSandboxProcess(input.docker, container, allowed, signal);
+        // Nothing a command started may outlive it; with another operation of the session still
+        // running, its processes are not this command's to end.
+        if (input.hardening && activity.activeCount(sessionId) <= 1) {
+          await input.hardening.afterCommand(container, sessionId).catch((error: unknown) => console.error(JSON.stringify({
+            code: "AGENT_SANDBOX_RUNNER_CLEANUP_FAILED",
+            error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+            sessionId,
+          })));
+        }
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
       });
@@ -362,7 +383,7 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start), undefined, afterStart);
         // Through the stdout of a process in the container: the archive API reads neither the
         // read-only root nor a tmpfs HOME, and nothing is staged where the model could swap it.
         return await readContainerFile(input.docker, container, resolvePath(path), WORKSPACE_MAX_FILE_BYTES);
@@ -374,6 +395,9 @@ export function createDockerSandboxEngine(input: {
           input.docker,
           sessionId,
           activity.activeCount(sessionId),
+          (start) => withCapacity(sessionId, start),
+          undefined,
+          afterStart,
         );
         const resolved = resolvePath(path);
         // Every file the model writes, wherever. Skill package files are the framework's, small and
@@ -394,7 +418,7 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start), undefined, afterStart);
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");

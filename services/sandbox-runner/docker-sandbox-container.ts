@@ -80,16 +80,20 @@ export async function requireRunningContainer(
   /** Runs a start of the stopped container; the engine passes its capacity gate. */
   gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
   containerName: string = sandboxContainerName(sessionId),
+  /** Runs after the container (re)started, e.g. to lay its network rules again. */
+  afterStart: (container: Docker.Container) => Promise<void> = async () => undefined,
 ): Promise<{ container: Docker.Container; generation: string | null; inspection: Docker.ContainerInspectInfo }> {
   const existing = await inspectContainer(docker, sessionId, containerName);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
   if (!inspection.State.Running) {
     await gateStart(() => existing.container.start());
+    await afterStart(existing.container);
     inspection = await existing.container.inspect();
   } else if (activeOperations <= 1) {
     // A restart kills every process of the session: only the caller may be running in it.
     if (await reapCrowdedContainer(existing.container, sessionId)) {
+      await afterStart(existing.container);
       inspection = await existing.container.inspect();
     }
   }

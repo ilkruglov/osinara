@@ -46,13 +46,13 @@ export async function main(argv) {
   const [command, ...args] = argv;
   if (command === "serve") {
     try {
-      await startBridge({ apiKey: process.env.BROWSERLESS_API_KEY });
+      await startBridge({ available: process.env.BROWSERLESS_AVAILABLE === "true" });
       process.send?.({ ready: true });
     } catch { process.send?.({ ready: false }); process.exitCode = 1; }
     return;
   }
   if (command === "status") {
-    console.log(JSON.stringify({ configured: Boolean(process.env.BROWSERLESS_API_KEY?.trim()), session: await status() }));
+    console.log(JSON.stringify({ configured: process.env.BROWSERLESS_AVAILABLE === "true", session: await status() }));
     return;
   }
   if (command === "close") {
@@ -63,8 +63,8 @@ export async function main(argv) {
   if (!COMMANDS.has(command) || args.some((arg) => /^--(?:session|profile|state|restore|provider|cdp|config)(?:=|$)/u.test(arg) || arg === "-p")) {
     throw new Error("AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Облачный браузер только читает: open, read, snapshot, screenshot, scroll, get. Действия на странице делает browser_act");
   }
-  if (!process.env.BROWSERLESS_API_KEY?.trim()) {
-    throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED: Не задан BROWSERLESS_API_KEY");
+  if (process.env.BROWSERLESS_AVAILABLE !== "true") {
+    throw new Error("AGENT_BROWSERLESS_NOT_CONFIGURED: Облачный браузер не подключён");
   }
   if (!(await status())) {
     if (command !== "open") throw new Error("AGENT_BROWSERLESS_SESSION_EXPIRED: Сессия завершена; начните новую через open");

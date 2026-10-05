@@ -12,6 +12,7 @@ import {
   resolveSandboxDockerRuntime,
 } from "./docker-sandbox-engine.js";
 import { SANDBOX_IDLE_SWEEP_INTERVAL_MS } from "./docker-sandbox-lifecycle.js";
+import { applyEgressFirewall, killStrayProcesses } from "./docker-sandbox-hardening.js";
 import { createHostDiskProbe, createSandboxDiskQuota } from "./sandbox-disk-quota.js";
 import { createSandboxRunnerServer } from "./server.js";
 
@@ -23,6 +24,13 @@ const resources = await resolveSandboxDockerRuntime(docker);
 const engine = createDockerSandboxEngine({
   diskQuota: createSandboxDiskQuota({ now: Date.now, probe: createHostDiskProbe(resources.roots.workspaceRoot) }),
   docker,
+  hardening: {
+    async afterCommand(container, sessionId) {
+      const killed = await killStrayProcesses(container);
+      if (killed > 0) console.info(JSON.stringify({ code: "AGENT_SANDBOX_RUNNER_STRAY_PROCESSES_KILLED", killed, sessionId }));
+    },
+    afterStart: (container) => applyEgressFirewall(docker, resources.runtime.image, container, resources.runtime.project),
+  },
   ...resources,
 });
 await engine.stopAllSessions();

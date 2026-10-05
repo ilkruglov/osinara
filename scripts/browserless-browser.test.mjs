@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { connectThroughProxy, startBridge } from "../agent/skills/agent-browser/scripts/browserless-bridge.mjs";
+import { connectToProxy, startBridge } from "../agent/skills/agent-browser/scripts/browserless-bridge.mjs";
 import { browserEnvironment } from "../agent/skills/agent-browser/scripts/browserless.mjs";
 
 const cleanup = [];
@@ -28,9 +28,9 @@ function upgrade(port) {
 }
 
 describe("Browserless fallback", () => {
-  it("reports an absent key without starting a cloud session", async () => {
+  it("reports an unavailable cloud browser without starting a session", async () => {
     const env = { ...process.env };
-    delete env.BROWSERLESS_API_KEY;
+    delete env.BROWSERLESS_AVAILABLE;
     await expect(promisify(execFile)(process.execPath, [
       "agent/skills/agent-browser/scripts/browserless.mjs", "open", "https://example.com",
     ], { env })).rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("AGENT_BROWSERLESS_NOT_CONFIGURED") });
@@ -48,16 +48,9 @@ describe("Browserless fallback", () => {
     }
   });
 
-  it("uses CONNECT to the fixed provider host and fails closed on proxy rejection", async () => {
-    const proxy = createServer();
-    let target;
-    proxy.on("connect", (req, socket) => {
-      target = req.url;
-      socket.end("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
-    });
-    const port = await listen(proxy);
-    await expect(connectThroughProxy(`http://127.0.0.1:${port}`)).rejects.toThrow("AGENT_BROWSERLESS_PROXY_REJECTED");
-    expect(target).toBe("production-sfo.browserless.io:443");
+  it("reaches only the egress proxy, never the provider, and refuses a proxy URL with credentials", async () => {
+    await expect(connectToProxy("http://user:pass@127.0.0.1:1")).rejects.toThrow("AGENT_BROWSERLESS_PROXY_INVALID");
+    await expect(connectToProxy("http://127.0.0.1:1")).rejects.toThrow("AGENT_BROWSERLESS_PROXY_FAILED");
   });
 
   it("isolates cloud state from local restore, profiles, proxy and credentials", () => {
@@ -74,7 +67,9 @@ describe("Browserless fallback", () => {
     }
   });
 
-  it("adds autosolve and a free-plan deadline upstream while relaying bytes locally", async () => {
+  // The key stays in the egress proxy (security review, 5 October 2026); the bridge asks the
+  // proxy's endpoint for autosolve and the free-plan deadline and sends no token.
+  it("asks the proxy endpoint for autosolve and a free-plan deadline without a key while relaying bytes", async () => {
     const upstream = createServer();
     const upstreamPort = await listen(upstream);
     let requested;
@@ -85,7 +80,7 @@ describe("Browserless fallback", () => {
       if (head.length) socket.write(head);
       cleanup.push(() => socket.destroy());
     });
-    const bridge = await startBridge({ apiKey: "test&secret", port: 0, connectUpstream: async () => connect(upstreamPort, "127.0.0.1") });
+    const bridge = await startBridge({ available: true, port: 0, connectUpstream: async () => connect(upstreamPort, "127.0.0.1") });
     cleanup.push(() => bridge.close());
     const req = upgrade(bridge.port);
     req.end();
@@ -94,8 +89,8 @@ describe("Browserless fallback", () => {
     const received = once(socket, "data");
     socket.write("cdp-payload");
     expect(String((await received)[0])).toBe("cdp-payload");
-    expect(requested.pathname).toBe("/chromium/stealth");
-    expect(requested.searchParams.get("token")).toBe("test&secret");
+    expect(requested.pathname).toBe("/browserless/chromium/stealth");
+    expect(requested.searchParams.has("token")).toBe(false);
     expect(requested.searchParams.get("solveCaptchas")).toBe("true");
     expect(requested.searchParams.get("timeout")).toBe("120000");
     expect(requested.searchParams.has("proxy")).toBe(false);
@@ -105,7 +100,7 @@ describe("Browserless fallback", () => {
     const upstream = createServer((_req, res) => res.writeHead(401).end("token=secret"));
     const upstreamPort = await listen(upstream);
     let connects = 0;
-    const bridge = await startBridge({ apiKey: "secret", port: 0, connectUpstream: async () => {
+    const bridge = await startBridge({ available: true, port: 0, connectUpstream: async () => {
       connects++;
       return connect(upstreamPort, "127.0.0.1");
     } });
@@ -122,7 +117,7 @@ describe("Browserless fallback", () => {
   });
 
   it("closes an idle bridge when its fixed lifetime expires", async () => {
-    const bridge = await startBridge({ apiKey: "secret", port: 0, lifetimeMs: 30 });
+    const bridge = await startBridge({ available: true, port: 0, lifetimeMs: 30 });
     cleanup.push(() => bridge.close());
     await once(bridge.server, "close");
     expect(bridge.server.listening).toBe(false);

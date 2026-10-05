@@ -64,6 +64,7 @@ RUN apt-get update \
       findutils \
       grep \
       git \
+      iptables \
       jq \
       libasound2 \
       libatk-bridge2.0-0 \

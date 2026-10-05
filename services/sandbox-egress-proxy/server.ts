@@ -15,6 +15,8 @@ import { createServer, request as httpRequest, type IncomingHttpHeaders } from "
 import { connect, type Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
+import { handleBrowserlessUpgrade } from "./browserless-endpoint.js";
+import { createEgressLedger, type EgressLedger } from "./egress-ledger.js";
 import { resolvePublicInternetAddress } from "./public-dns-resolver.js";
 
 const ALLOWED_PORTS = new Set([80, 443]);
@@ -115,8 +117,32 @@ function guardClientSocket(socket: Duplex, phase: () => ConnectPhase): () => boo
   return () => unavailable;
 }
 
-export function createSandboxEgressProxy() {
+/** The sandbox's address on the egress network (the Duplex of CONNECT and upgrade is a socket). */
+function clientAddress(socket: Duplex | Socket): string {
+  return ((socket as Socket).remoteAddress ?? "unknown").replace(/^::ffff:/u, "");
+}
+
+export function createSandboxEgressProxy(options: {
+  browserlessApiKey?: string;
+  ledger?: EgressLedger;
+} = {}) {
+  const ledger = options.ledger ?? createEgressLedger();
   const server = createServer((incoming, outgoing) => {
+    const client = clientAddress(incoming.socket);
+    const startedAt = Date.now();
+    if (!ledger.admit(client)) {
+      outgoing.writeHead(429);
+      outgoing.end("AGENT_SANDBOX_EGRESS_DAILY_LIMIT: Daily egress volume reached\n");
+      return;
+    }
+    let bytesUp = 0;
+    let bytesDown = 0;
+    let host = "";
+    let targetPort = 0;
+    incoming.on("data", (chunk: Buffer) => { bytesUp += chunk.byteLength; });
+    outgoing.once("close", () => {
+      if (host) ledger.record({ bytesDown, bytesUp, client, host, kind: "http", ms: Date.now() - startedAt, port: targetPort });
+    });
     void (async () => {
       const targetUrl = new URL(incoming.url ?? "");
       if (targetUrl.protocol !== "http:" || targetUrl.username || targetUrl.password) {
@@ -124,6 +150,8 @@ export function createSandboxEgressProxy() {
       }
       const port = parsePort(targetUrl.port || "80");
       const target = await resolvePublicTarget(targetUrl.hostname, port);
+      host = target.hostname;
+      targetPort = port;
       const upstream = httpRequest({
         family: target.family,
         headers: { ...filteredHeaders(incoming.headers), host: targetUrl.host },
@@ -137,6 +165,7 @@ export function createSandboxEgressProxy() {
           upstreamResponse.statusCode ?? 502,
           filteredHeaders(upstreamResponse.headers),
         );
+        upstreamResponse.on("data", (chunk: Buffer) => { bytesDown += chunk.byteLength; });
         upstreamResponse.pipe(outgoing);
       });
       upstream.on("timeout", () => upstream.destroy(
@@ -155,8 +184,33 @@ export function createSandboxEgressProxy() {
     });
   });
 
+  // The Browserless endpoint: the sandbox's bridge connects here without a key, the proxy adds it.
+  server.on("upgrade", (request, clientSocket, head) => {
+    const client = clientAddress(clientSocket);
+    if (!ledger.admit(client)) {
+      rejectSocket(clientSocket, 429, "Too Many Requests");
+      return;
+    }
+    handleBrowserlessUpgrade({
+      apiKey: options.browserlessApiKey,
+      clientSocket,
+      head,
+      onClosed: (bytesUp, bytesDown, ms) => ledger.record({
+        bytesDown, bytesUp, client, host: "browserless", kind: "browserless", ms, port: 443,
+      }),
+      request,
+      resolve: resolvePublicTarget,
+    });
+  });
+
   server.on("connect", (request, clientSocket, initialData) => {
     let phase: ConnectPhase = "request";
+    const client = clientAddress(clientSocket);
+    const startedAt = Date.now();
+    if (!ledger.admit(client)) {
+      rejectSocket(clientSocket, 429, "Too Many Requests");
+      return;
+    }
     const clientUnavailable = guardClientSocket(clientSocket, () => phase);
     void (async () => {
       const match = /^\[?([^\]]+)\]?:([0-9]+)$/u.exec(request.url ?? "");
@@ -176,6 +230,15 @@ export function createSandboxEgressProxy() {
         upstream.destroy();
         return;
       }
+      upstream.once("close", () => ledger.record({
+        bytesDown: upstream.bytesRead,
+        bytesUp: upstream.bytesWritten,
+        client,
+        host: target.hostname,
+        kind: "connect",
+        ms: Date.now() - startedAt,
+        port,
+      }));
       upstream.once("connect", () => {
         phase = "tunnel";
         clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");

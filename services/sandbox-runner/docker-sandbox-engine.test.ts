@@ -49,7 +49,7 @@ afterEach(async () => {
 
 describe("buildSandboxContainerOptions", () => {
   it.each(["personal", "family", "group"] as const)(
-    "exposes the optional Browserless credential only to trusted %s compute",
+    "tells only trusted %s compute that the cloud browser exists, never its key",
     (scope) => {
       const options = buildSandboxContainerOptions({ ...runtime, browserlessApiKey: "browserless-secret" }, {
         access: scope === "group" ? "restricted" : "trusted",
@@ -58,7 +58,9 @@ describe("buildSandboxContainerOptions", () => {
         sandboxSessionId: SANDBOX_SESSION_ID,
         seedDigest: EMPTY_SEED_DIGEST,
       });
-      expect(options.Env?.includes("BROWSERLESS_API_KEY=browserless-secret")).toBe(scope !== "group");
+      expect(options.Env?.includes("BROWSERLESS_AVAILABLE=true")).toBe(scope !== "group");
+      // The key stays in the egress proxy (security review, 5 October 2026).
+      expect(options.Env?.some((entry) => entry.includes("browserless-secret"))).toBe(false);
       expect(options.Env?.some((entry) => entry.startsWith("AGENT_BROWSER_PROVIDER="))).toBe(false);
     },
   );
@@ -105,7 +107,7 @@ describe("buildSandboxContainerOptions", () => {
       }),
     });
     expect(options.Labels).toMatchObject({
-      "dev.osinara.sandbox.policy-version": "17",
+      "dev.osinara.sandbox.policy-version": "18",
       "dev.osinara.sandbox.project": "osinara",
       "dev.osinara.sandbox.session-id": SANDBOX_SESSION_ID,
     });

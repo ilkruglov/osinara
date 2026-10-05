@@ -39,7 +39,7 @@ export interface SandboxDockerRuntime {
   workspaceVolume: string;
 }
 
-export const SANDBOX_CONTAINER_POLICY_VERSION = "17";
+export const SANDBOX_CONTAINER_POLICY_VERSION = "18";
 export const SANDBOX_ROLE_LABEL = "dev.osinara.sandbox.role";
 export const BROWSER_CONTAINER_ROLE = "browser";
 /** The browser state of one tool workspace, beside (never inside) the directory Bash mounts. */
@@ -120,7 +120,9 @@ function trustedEnvironment(mounts: readonly SandboxRunnerMount[], browserlessAp
   const root = `/tools/${primary.mountPoint}`;
   const executablePaths = [`${root}/npm/bin`, `${root}/python/bin`, `${root}/bin`];
   return [
-    ...(browserlessApiKey ? [`BROWSERLESS_API_KEY=${browserlessApiKey}`] : []),
+    // Only whether the cloud browser exists: the key stays in the egress proxy, which adds it on
+    // its Browserless endpoint (security review, 5 October 2026).
+    ...(browserlessApiKey ? ["BROWSERLESS_AVAILABLE=true"] : []),
     // Bash keeps only the reader (Lightpanda, no logins). Chrome's arguments belong to the
     // browser container: Lightpanda refuses to start with them ("Custom Chrome arguments are not
     // supported", seen live 5 October 2026), so with them in this environment the reader the
