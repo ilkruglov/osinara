@@ -35,11 +35,14 @@ function isNameStart(code: number): boolean {
   return (code >= 0x61 && code <= 0x7a) || (code >= 0x41 && code <= 0x5a);
 }
 
-// Custom elements carry `-` (`<script-widget>` is not a script); `_`, `:` and `.` occur too.
-function isNameCharacter(code: number): boolean {
-  return isNameStart(code) || (code >= 0x30 && code <= 0x39) || code === 0x2d || code === 0x5f ||
-    code === 0x3a || code === 0x2e;
+// A tag name ends at whitespace, `/` or `>`; anything else belongs to it (`<script-widget>` and
+// `<script@x>` are not scripts).
+function isNameDelimiter(code: number): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d ||
+    code === 0x2f || code === 0x3e;
 }
+
+const TEXT_ONLY_ELEMENTS = new Set(["textarea", "title"]);
 
 export type Token =
   | { kind: "text"; text: string; cdata?: true }
@@ -51,17 +54,39 @@ export type Token =
  * (comments, declarations, processing instructions, skipped elements with their content).
  * Every search starts past the previous one, so a page of any shape is scanned once.
  */
-export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
-  // The first `>` at or after a position, cached: positions only move forward, and a new search
-  // starts only past the previous find, so all searches together read the page once.
+/**
+ * The first occurrence of `pattern` at or after a position, cached: positions only move forward,
+ * and a new search starts only past the previous find, so all searches together read the page
+ * once even when the pattern never occurs.
+ */
+function forwardFinder(html: string, pattern: string): (from: number) => number {
   let cacheFrom = -1;
   let cacheAt = -1;
-  const closeAfter = (from: number): number => {
+  return (from) => {
     if (cacheFrom !== -1 && from >= cacheFrom && (cacheAt === -1 || cacheAt >= from)) return cacheAt;
     cacheFrom = from;
-    cacheAt = html.indexOf(">", from);
+    cacheAt = html.indexOf(pattern, from);
     return cacheAt;
   };
+}
+
+/**
+ * Where the end tag of `name` starts and the position after it, searching from `from`; null when
+ * the page ends first. An end tag may carry spaces, `/` or attributes (`</script foo>`), as in a
+ * browser.
+ */
+function elementEnd(html: string, name: string, from: number): { contentEnd: number; after: number } | null {
+  const endTag = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, "giu");
+  endTag.lastIndex = from;
+  const found = endTag.exec(html);
+  if (!found) return null;
+  const close = tagEnd(html, found.index + found[0].length);
+  return close === -1 ? null : { after: close + 1, contentEnd: found.index };
+}
+
+export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<Token> {
+  const closeAfter = forwardFinder(html, ">");
+  const bangCommentEnd = forwardFinder(html, "--!>");
   // Text runs from `textStart`: a `<` that starts no markup stays inside the run, so a page of
   // lone `<` is one text token, not one per character.
   let textStart = 0;
@@ -83,10 +108,16 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
     yield* flushText(open);
     if (next === 0x21 /* ! */) {
       if (html.startsWith("<!--", open)) {
-        // An unterminated comment hides the rest of the page, as in a browser.
-        const end = html.indexOf("-->", open + 4);
-        if (end === -1) return;
-        search = textStart = end + 3;
+        // `<!-->` and `<!--->` are empty comments, `--!>` ends one too; an unterminated comment
+        // hides the rest of the page, as in a browser.
+        let after = html.startsWith("<!-->", open) ? open + 5 : html.startsWith("<!--->", open) ? open + 6 : -1;
+        if (after === -1) {
+          const plain = html.indexOf("-->", open + 4);
+          const bang = bangCommentEnd(open + 4);
+          if (plain === -1 && bang === -1) return;
+          after = bang !== -1 && (plain === -1 || bang < plain) ? bang + 4 : plain + 3;
+        }
+        search = textStart = after;
         yield { kind: "skip" };
         continue;
       }
@@ -106,8 +137,9 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
       yield { kind: "skip" };
       continue;
     }
+    // A tag name runs to whitespace, `/` or `>` (`<script@x>` is no script).
     let nameEnd = nameStart;
-    while (nameEnd < html.length && isNameCharacter(html.charCodeAt(nameEnd))) nameEnd += 1;
+    while (nameEnd < html.length && !isNameDelimiter(html.charCodeAt(nameEnd))) nameEnd += 1;
     const end = tagEnd(html, nameEnd);
     // A tag still open at the end of the page hides the rest, as in a browser.
     if (end === -1) return;
@@ -116,15 +148,21 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
     search = textStart = end + 1;
     if (!closing && skipped.has(name) && !(selfClosing && FOREIGN_ELEMENTS.has(name))) {
       // The element's content is skipped up to its own end tag; a missing end tag skips the rest.
-      const endTag = new RegExp(`</${name}\\s*>`, "giu");
-      endTag.lastIndex = search;
-      const found = endTag.exec(html);
+      const found = elementEnd(html, name, search);
       if (!found) return;
-      search = textStart = found.index + found[0].length;
+      search = textStart = found.after;
       yield { kind: "skip" };
       continue;
     }
     yield { closing, kind: "tag", name, raw: html.slice(open, end + 1), selfClosing };
+    if (!closing && TEXT_ONLY_ELEMENTS.has(name)) {
+      // <textarea> and <title> hold text, not markup, up to their own end tag.
+      const found = elementEnd(html, name, search);
+      yield { kind: "text", text: html.slice(search, found?.contentEnd ?? html.length) };
+      if (!found) return;
+      yield { closing: true, kind: "tag", name, raw: html.slice(found.contentEnd, found.after), selfClosing: false };
+      search = textStart = found.after;
+    }
   }
   yield* flushText(html.length);
 }
@@ -135,24 +173,35 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
  * tag once and the next token starts after it, so the page is read once in all.
  */
 function tagEnd(html: string, from: number): number {
-  // Between attributes, after `=` waiting for a value, or inside an unquoted value: a quote opens
-  // a value only right after `=` (`href=/x?a='` has a quote inside its value, not a quoted one).
-  let state: "between" | "value" | "unquoted" = "between";
+  // The attribute states of the HTML tokenizer: a quote opens a value only right after `=`
+  // (`href=/x?a='` holds a quote inside its value), and `=` before any name starts a name
+  // (`<a ='>` is an attribute named `='`).
+  let state: "beforeName" | "name" | "afterName" | "beforeValue" | "unquoted" = "beforeName";
   let index = from;
   while (index < html.length) {
     const code = html.charCodeAt(index);
     if (code === 0x3e /* > */) return index;
     const space = code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d;
-    if (state === "value" && (code === 0x22 || code === 0x27)) {
+    if (state === "beforeValue" && (code === 0x22 || code === 0x27)) {
       const close = html.indexOf(code === 0x22 ? "\"" : "'", index + 1);
       if (close === -1) return -1;
       index = close + 1;
-      state = "between";
+      state = "beforeName";
       continue;
     }
-    if (state === "between" && code === 0x3d /* = */) state = "value";
-    else if (state === "value" && !space) state = "unquoted";
-    else if (state === "unquoted" && space) state = "between";
+    if (state === "beforeName") {
+      if (!space && code !== 0x2f) state = "name";
+    } else if (state === "name") {
+      if (space) state = "afterName";
+      else if (code === 0x2f) state = "beforeName";
+      else if (code === 0x3d) state = "beforeValue";
+    } else if (state === "afterName") {
+      if (code === 0x2f) state = "beforeName";
+      else if (code === 0x3d) state = "beforeValue";
+      else if (!space) state = "name";
+    } else if (state === "beforeValue") {
+      if (!space) state = "unquoted";
+    } else if (space) state = "beforeName";
     index += 1;
   }
   return -1;

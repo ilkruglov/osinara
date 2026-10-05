@@ -44,10 +44,23 @@ describe("htmlToText", () => {
   it("ends a tag only outside quoted attribute values", () => {
     expect(htmlToText("<a title=\"a > b\" href=\"/r\">link</a> after")).toBe("link after");
     expect(htmlToText("x<p data-x='>'>y</p>")).toBe("x y");
+    // `=` before any attribute name starts a name, and its quote is part of that name.
+    expect(htmlToText("before<a ='>VISIBLE</a><p>TAIL</p>")).toBe("beforeVISIBLE TAIL");
     // A quote inside an unquoted value is part of it and opens nothing.
     expect(htmlToText("<p>before</p><a href=/x?foo='>LINK</a><p>after</p>")).toBe("before\nLINK after");
     // A tag open at the end of the page (here an unclosed quote) hides the rest, as in a browser.
     expect(htmlToText("before<a title=\"never closed>after")).toBe("before");
+  });
+
+  it("ends comments, skipped elements and tag names the way a browser does", () => {
+    expect(htmlToText("before<!-->VISIBLE<p>TAIL</p>")).toBe("before VISIBLE TAIL");
+    expect(htmlToText("before<!--->VISIBLE<p>TAIL</p>")).toBe("before VISIBLE TAIL");
+    expect(htmlToText("before<!-- x --!>VISIBLE<p>TAIL</p>")).toBe("before VISIBLE TAIL");
+    expect(htmlToText("before<script>x</script foo><p>TAIL</p>")).toBe("before TAIL");
+    expect(htmlToText("before<script>x</script/><p>TAIL</p>")).toBe("before TAIL");
+    expect(htmlToText("before<script@x>VISIBLE<p>TAIL</p>")).toBe("before VISIBLE TAIL");
+    // Text-only elements hold no markup: a <script> inside a textarea is its text.
+    expect(htmlToText("before<textarea><script>VISIBLE</textarea><p>TAIL</p>")).toBe("before <script>VISIBLE TAIL");
   });
 
   it("treats a lone < as text and drops what an unterminated comment or script hides", () => {
@@ -76,6 +89,9 @@ describe("htmlToText", () => {
     ["long entity-like names", ("&" + "a".repeat(40)).repeat(25_000)],
     ["tags with unclosed quotes", "<a x=\"".repeat(200_000)],
     ["tags with many quoted values", "<a" + " x=\">\"".repeat(150_000) + ">"],
+    ["comments without an end", "<!-- a ".repeat(150_000)],
+    ["empty comments", "<!---->".repeat(150_000)],
+    ["unclosed textareas", "<textarea>".repeat(100_000)],
   ])("handles a megabyte of %s in linear time", (_name, html) => {
     const started = performance.now();
     htmlToText(html);

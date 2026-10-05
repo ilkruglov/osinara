@@ -17,7 +17,7 @@
  *   what it loads is invisible to the bundle (Codex reviews, 5 October 2026).
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { builtinModules } from "node:module";
+import { builtinModules, isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,7 +79,11 @@ function packagePlugin(problems: string[], root: string): Plugin {
     setup(pluginBuild) {
       pluginBuild.onResolve({ filter: /^[^./]/ }, async (args) => {
         if ((args.pluginData as { boundaryInner?: boolean } | undefined)?.boundaryInner) return undefined;
-        if (args.path.startsWith("node:") || BUILTINS.has(args.path)) return { external: true, path: args.path };
+        if (args.path.startsWith("node:") || BUILTINS.has(args.path)) {
+          // `node:does-not-exist` fails at start like any missing module.
+          if (!isBuiltin(args.path)) problems.push(`${relative(root, args.importer)} imports ${args.path}, which is no Node built-in`);
+          return { external: true, path: args.path };
+        }
         const resolved = await pluginBuild.resolve(args.path, {
           importer: args.importer,
           kind: args.kind,
@@ -124,7 +128,7 @@ const MODULE_LOADER = new Set(["module", "node:module"]);
 /**
  * Whether an import or re-export statement of node:module can reach createRequire: a default or
  * namespace binding (`import m`, `import * as m`, `export *`) can, and so can a named binding
- * whose imported name is `createRequire` or `default`, whatever its local alias.
+ * whose imported name is `createRequire`, `Module` or `default`, whatever its local alias.
  */
 function reachesCreateRequire(statement: string): boolean {
   const clause = /^(?:import|export)\s*([^"']*?)\s*from\s*["']/u.exec(statement)?.[1];
@@ -133,7 +137,8 @@ function reachesCreateRequire(statement: string): boolean {
   if (clause.replace(/\{[^}]*\}/u, "").replace(/,/gu, "").trim() !== "") return true;
   return (named?.[1] ?? "").split(",").some((binding) => {
     const imported = binding.trim().split(/\s+as\s+/u)[0]!.trim();
-    return imported === "createRequire" || imported === "default";
+    // `Module.createRequire` is the same function as `createRequire`.
+    return imported === "createRequire" || imported === "default" || imported === "Module";
   });
 }
 
@@ -200,8 +205,17 @@ async function boundaryProblems(
     }
     // esbuild leaves a require it cannot bundle as `__require(…)`; only a lone string literal
     // closed by `)` is checkable, anything else (an expression, a call) is refused.
-    for (const match of output.text.matchAll(/\b__require\(/gu)) {
-      const rest = output.text.slice(match.index + match[0].length, match.index + match[0].length + 200);
+    for (const match of output.text.matchAll(/\b__require\b/gu)) {
+      const after = output.text.slice(match.index + match[0].length, match.index + match[0].length + 201);
+      // The helper's own definition (`var __require = …`).
+      if (/^\s*=(?!=)/u.test(after)) continue;
+      // An alias or a call through an expression (`const load = require`, `(0, require)(…)`)
+      // loads whatever it is later given.
+      if (!after.startsWith("(")) {
+        problems.push(`${where} passes require around: ${output.text.slice(match.index, match.index + 60).split("\n", 1)[0]}`);
+        continue;
+      }
+      const rest = after.slice(1);
       // The helper's own definition mentions `__require()` with no argument.
       const literal = /^\s*(?:"([^"\\\n]*)"|'([^'\\\n]*)')\s*\)/u.exec(rest);
       if (!/^\s*\)/u.test(rest) && !literal) {
@@ -257,6 +271,8 @@ describe("agent runtime import boundary", () => {
         "export const c = (name: string) => import(\"file:\" + name);",
         "export const d = (name: string) => require(name);",
         "export const e = (name: string) => require((0, String)(name));",
+        "const load = require;",
+        "export const f = load(\"node:module\");",
         "export const harmless = \"use import(name) to load\";",
       ].join("\n"));
       write("scripts/notes.md", "text");
@@ -264,6 +280,8 @@ describe("agent runtime import boundary", () => {
       write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md#part\"; export { inside, outside };");
       write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\"; import \"pg/lib/client\"; import \"pg/lib/client.js\";");
       write("agent/mentions.ts", "import { builtinModules as createRequireNames } from \"node:module\"; export const info = \"createRequire is disabled\"; export const count = createRequireNames.length;");
+      write("agent/module-class.ts", "import { Module as M } from \"node:module\"; export const load = M.createRequire(import.meta.url);");
+      write("agent/missing-builtin.ts", "import \"node:does-not-exist\";");
       write("agent/default-loader.ts", "import mod, { builtinModules } from \"node:module\"; export const count = builtinModules.length; export const load = mod.createRequire(import.meta.url);");
       write("agent/create-require.ts", "import { createRequire } from \"node:module\"; export const load = createRequire(import.meta.url)(\"../scripts/side.js\");");
       for (const name of ["pg", "vitest"]) {
@@ -298,7 +316,10 @@ describe("agent runtime import boundary", () => {
       expect(problems.filter((problem) => problem.includes("uses createRequire")).sort()).toEqual([
         expect.stringMatching(/create-require\.js uses createRequire/u),
         expect.stringMatching(/default-loader\.js uses createRequire/u),
+        expect.stringMatching(/module-class\.js uses createRequire/u),
       ]);
+      expect(problems.some((problem) => /computed\.js passes require around/u.test(problem))).toBe(true);
+      expect(problems).toContain("agent/missing-builtin.ts imports node:does-not-exist, which is no Node built-in");
 
       write("agent/missing.ts", "import \"./nowhere.js\";");
       const missing = await boundaryProblems(root, ["agent/missing.ts"], ["agent"], new Set());
