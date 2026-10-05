@@ -189,7 +189,7 @@ export function createControlledWebFetch(dependencies: ControlledWebFetchDepende
           await response.body?.cancel();
           throw new AppError(
             "AGENT_WEB_FETCH_RESPONSE_FAILED",
-            "Сайт не отдал доступную страницу. Проверьте адрес или попробуйте позже",
+            `Сайт ответил HTTP ${response.status} и не отдал страницу. Проверьте адрес или попробуйте позже`,
           );
         }
 

@@ -158,6 +158,7 @@ const POST_V0101_MIGRATIONS = [
   "124_drop_embedding_jobs_of_hidden_records.sql",
   "125_telegram_group_memory_review.sql",
   "126_rechunk_memory_embeddings.sql",
+  "127_claim_evidence_attach_time_checks.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

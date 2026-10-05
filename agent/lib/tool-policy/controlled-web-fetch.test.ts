@@ -127,6 +127,17 @@ describe("controlled external-group web fetch", () => {
     );
   });
 
+  it.each([404, 403, 503])("names HTTP status %i of a refused page", async (status) => {
+    // 404 means a wrong address, 403 a site that refuses robots, 5xx a site that is down: the
+    // model chooses differently and could not tell them apart (upstream v0.34.1).
+    const fetch = vi.fn(async () => response(null, { status }));
+    const execute = createControlledWebFetch({ dispatcher: {} as never, fetch });
+
+    await expect(execute({ url: "https://example.com/page" })).rejects.toThrowError(
+      new RegExp(`AGENT_WEB_FETCH_RESPONSE_FAILED.*HTTP ${status}`, "u"),
+    );
+  });
+
   it.each([
     ["binary content", { "content-type": "application/octet-stream" }],
     ["missing content type", {}],
