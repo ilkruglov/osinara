@@ -1,7 +1,7 @@
 import { truncateHead } from "#execution/sandbox/truncate-output.js";
 import { EVE_PACKAGE_NAME } from "#internal/package-name.js";
 import {
-  convertHtmlToMarkdown,
+  convertHtmlToMarkdownBounded,
   extractTextFromHtml,
 } from "#execution/web-fetch/html.js";
 import { requestPublicUrl } from "#execution/web-fetch/request.js";
@@ -30,14 +30,15 @@ async function executeWebFetchTool(n, r) {
     m = f.headers.get(`content-type`) ?? ``,
     h = m.includes(`text/html`),
     g = new TextDecoder().decode(p),
-    _;
-  _ =
-    a === `markdown` && h
-      ? convertHtmlToMarkdown(g)
-      : a === `text` && h
-        ? extractTextFromHtml(g)
-        : g;
+    _,
+    w = !1;
+  if (a === `markdown` && h) {
+    // Osinara: a page cut before conversion is reported as truncated like a long output.
+    let x = convertHtmlToMarkdownBounded(g);
+    ((_ = x.markdown), (w = x.truncated));
+  } else _ = a === `text` && h ? extractTextFromHtml(g) : g;
   let { output: v, truncated: y } = truncateHead(_);
+  y = y || w;
   return { content: v, contentType: m, truncated: y, url: i };
 }
 function buildHeaders(e) {
