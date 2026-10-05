@@ -25,7 +25,7 @@ export const MARKDOWN_MAX_OUTPUT_CHARACTERS = 500_000;
 const MARKDOWN_MAX_URL = 2_000;
 const MARKDOWN_MAX_ALT = 300;
 // Nesting is capped: indentation and quote prefixes repeat on every line, and the list stack
-// must not grow with a page of a million `<ul>`.
+// must not grow with a page of a million `<ul>`. Indentation stops at 8 levels of 3 columns.
 const MAX_LIST_INDENT = 8;
 const MAX_QUOTE_PREFIX = 4;
 const MAX_TRACKED_LISTS = 32;
@@ -181,15 +181,20 @@ class MarkdownWriter {
     if (this.trailingNewlines < count) this.write("\n".repeat(count - this.trailingNewlines));
   }
 
-  /** Starts a span whose content `take` returns, to be written again wrapped. */
+  /**
+   * Starts a span whose content `take` returns, to be written again wrapped. The handle is the
+   * span's place in the stack of open spans, so spans opened at the same output position still
+   * know which one is inside the other.
+   */
   open()         {
     this.marks.push(this.parts.length);
-    return this.parts.length;
+    return this.marks.length - 1;
   }
 
-  /** Everything written since `mark`, taken out of the output; marks opened after it end too. */
-  take(mark        )         {
-    while (this.marks.length > 0 && this.marks.at(-1)  >= mark) this.marks.pop();
+  /** Everything written since the span opened, taken out of the output; spans inside it end too. */
+  take(handle        )         {
+    const mark = this.marks[handle] ?? this.parts.length;
+    this.marks.length = Math.min(this.marks.length, handle);
     const taken = this.parts.splice(mark).join("");
     this.newlinesAfter.splice(mark);
     this.length -= taken.length;
@@ -201,18 +206,22 @@ class MarkdownWriter {
   }
 }
 
-                               
-                                                
+                                 
+                                                                
+                                                                       
 
 export function htmlToMarkdown(
   html        ,
   maxOutputCharacters         = MARKDOWN_MAX_OUTPUT_CHARACTERS,
 )                                           {
   const out = new MarkdownWriter(maxOutputCharacters);
-  const lists                                             = [];
+  // Each open list knows the column its items' content starts at (marker column plus marker
+  // width: `- ` is 2, `10. ` is 4), so continuation lines stay inside the item.
+  const lists             = [];
   let untrackedLists = 0;
   let quoteDepth = 0;
   let preDepth = 0;
+  let preFresh = false;
   let pre              = null;
   let link                  = null;
   let code              = null;
@@ -222,9 +231,9 @@ export function htmlToMarkdown(
   // the marker's line (`<li><p>A</p>` is `- A`).
   let freshItem = false;
 
-  const listDepth = () => lists.length + untrackedLists;
   const quotePrefix = () => "> ".repeat(Math.min(quoteDepth, MAX_QUOTE_PREFIX));
-  const continuation = () => quotePrefix() + "  ".repeat(Math.min(listDepth(), MAX_LIST_INDENT + 1));
+  const contentColumn = () => lists.at(-1)?.content ?? 0;
+  const continuation = () => quotePrefix() + " ".repeat(contentColumn());
   const space = () => {
     if (!out.atLineStart && !out.endsWithSpace) out.write(" ");
   };
@@ -233,18 +242,23 @@ export function htmlToMarkdown(
     if (inCell) space();
     else out.breakLines(preDepth > 0 ? 1 : 2);
   };
-  const writeText = (text        ) => {
+  // The container prefix (quote, list indentation) goes before anything at a line start, and
+  // outside a span about to open, so taking the span back never takes the prefix with it.
+  const startLine = () => {
     if (out.atLineStart && preDepth === 0) out.write(continuation());
+  };
+  const writeText = (text        ) => {
+    startLine();
     out.write(text);
     freshItem = false;
   };
-  // A `)` or `]` in the text would end the link early; text with line breaks (a link around
-  // blocks) keeps its blocks and gets the address after it.
+  // Text with line breaks (a link around blocks) keeps its blocks and gets the address after it;
+  // a link inside <pre> keeps the code's text as it is.
   const closeLink = (span          ) => {
-    if (code !== null && code.mark >= span.mark) code = null;
-    const taken = out.take(span.mark);
+    if (code !== null && code.handle > span.handle) code = null;
+    const taken = out.take(span.handle);
     const text = taken.trim();
-    if (span.href === "" || text === "") {
+    if (span.href === "" || text === "" || span.inPre) {
       out.write(taken);
       return;
     }
@@ -253,8 +267,8 @@ export function htmlToMarkdown(
     if (taken.endsWith(" ")) out.write(" ");
   };
   const closeCode = (span      ) => {
-    if (link !== null && link.mark >= span.mark) link = null;
-    const taken = out.take(span.mark);
+    if (link !== null && link.handle > span.handle) link = null;
+    const taken = out.take(span.handle);
     const text = taken.trim();
     if (text === "") {
       out.write(taken);
@@ -266,19 +280,34 @@ export function htmlToMarkdown(
     out.write(`${fence}${pad}${text}${pad}${fence}`);
     if (taken.endsWith(" ")) out.write(" ");
   };
+  // A fenced block inside a list item or quote carries the container prefix on every line; in a
+  // table cell it becomes inline code, so the row stays one line.
   const closePre = (span      ) => {
-    if (link !== null && link.mark >= span.mark) link = null;
-    let content = out.take(span.mark);
-    // A line break right after <pre> is not content, as in a browser.
-    if (content.startsWith("\n")) content = content.slice(1);
+    if (link !== null && link.handle > span.handle) link = null;
+    const content = out.take(span.handle);
     out.preserve = false;
+    if (inCell) {
+      const text = collapseWhitespace(content).trim();
+      if (text !== "") {
+        const fence = backtickFence(text, 1);
+        space();
+        out.write(`${fence} ${text} ${fence}`);
+      }
+      return;
+    }
     const fence = backtickFence(content, 3);
-    out.write(`${fence}\n${content}${content.endsWith("\n") || content === "" ? "" : "\n"}${fence}`);
+    const prefix = continuation();
+    const lines = `${fence}\n${content}${content.endsWith("\n") || content === "" ? "" : "\n"}${fence}`.split("\n");
+    out.write(lines.map((line, index) => (index === 0 && !out.atLineStart ? "" : line === "" ? prefix.trimEnd() : prefix) + line).join("\n"));
+    freshItem = false;
     out.breakLines(2);
   };
 
   for (const token of tokens(html, MARKDOWN_SKIPPED_ELEMENTS)) {
     if (out.truncated) break;
+    // Only a line break right after <pre> is not content, as in a browser.
+    const atPreStart = preFresh;
+    preFresh = false;
     if (token.kind === "skip") {
       // A dropped script or comment still separates the words around it.
       if (preDepth === 0) space();
@@ -287,11 +316,14 @@ export function htmlToMarkdown(
     if (token.kind === "text") {
       const decoded = token.cdata ? token.text : decodeHtmlEntities(token.text);
       if (preDepth > 0) {
-        out.write(decoded);
+        out.write(atPreStart ? decoded.replace(/^\r?\n/u, "") : decoded);
         continue;
       }
       let text = collapseWhitespace(decoded);
       if (out.atLineStart || out.endsWithSpace) text = text.trimStart();
+      // Brackets of the page's own text would end the link label early; generated markup inside
+      // the label (an image, a code span) is not text and stays as it is.
+      if (link !== null && code === null) text = text.replace(/[[\]]/gu, "\\$&");
       if (text !== "") writeText(text);
       continue;
     }
@@ -312,11 +344,13 @@ export function htmlToMarkdown(
       if (closing) {
         if (untrackedLists > 0) untrackedLists -= 1;
         else lists.pop();
-      } else if (lists.length < MAX_TRACKED_LISTS) lists.push({ count: 0, ordered: name === "ol" });
-      else untrackedLists += 1;
+      } else if (lists.length < MAX_TRACKED_LISTS) {
+        const column = contentColumn();
+        lists.push({ content: column, count: 0, ordered: name === "ol" });
+      } else untrackedLists += 1;
       freshItem = false;
       if (inCell) space();
-      else if (listDepth() === 0) out.breakLines(2);
+      else if (lists.length === 0) out.breakLines(2);
       else out.breakLines(1);
     } else if (name === "li" && !closing) {
       if (inCell) {
@@ -324,9 +358,12 @@ export function htmlToMarkdown(
         continue;
       }
       out.breakLines(1);
-      const list = untrackedLists > 0 ? undefined : lists.at(-1);
-      const marker = list?.ordered ? `${(list.count += 1)}. ` : "- ";
-      out.write(`${quotePrefix()}${"  ".repeat(Math.min(Math.max(0, listDepth() - 1), MAX_LIST_INDENT))}${marker}`);
+      const list = lists.at(-1);
+      // The items of a list sit at the content column of the item around the list.
+      const column = Math.min(lists.at(-2)?.content ?? 0, MAX_LIST_INDENT * 3);
+      const marker = list?.ordered && untrackedLists === 0 ? `${(list.count += 1)}. ` : "- ";
+      out.write(`${quotePrefix()}${" ".repeat(column)}${marker}`);
+      if (list !== undefined && untrackedLists === 0) list.content = column + marker.length;
       freshItem = true;
     } else if (name === "br") {
       if (preDepth > 0) out.write("\n");
@@ -343,9 +380,10 @@ export function htmlToMarkdown(
       if (!closing) {
         if (preDepth === 0) {
           block();
-          freshItem = false;
-          pre = { mark: out.open() };
+          startLine();
+          pre = { handle: out.open() };
           out.preserve = true;
+          preFresh = true;
         }
         preDepth += 1;
       } else if (preDepth > 0) {
@@ -356,8 +394,10 @@ export function htmlToMarkdown(
         }
       }
     } else if (name === "code" && preDepth === 0) {
-      if (!closing && code === null) code = { mark: out.open() };
-      else if (closing && code !== null) {
+      if (!closing && code === null) {
+        startLine();
+        code = { handle: out.open() };
+      } else if (closing && code !== null) {
         closeCode(code);
         code = null;
       }
@@ -371,11 +411,15 @@ export function htmlToMarkdown(
         closeLink(link);
         link = null;
       }
-      if (!closing) link = { href: markdownUrl(attribute(token.raw, "href")), mark: out.open() };
+      if (!closing) {
+        startLine();
+        link = { handle: out.open(), href: markdownUrl(attribute(token.raw, "href")), inPre: preDepth > 0 };
+      }
     } else if (name === "img" && !closing) {
       const src = markdownUrl(attribute(token.raw, "src"));
       const alt = collapseWhitespace(decodeHtmlEntities(attribute(token.raw, "alt") ?? "")).trim().slice(0, MARKDOWN_MAX_ALT);
-      if (src !== "") writeText(`![${alt}](${src})`);
+      if (preDepth > 0) out.write(alt);
+      else if (src !== "") writeText(`![${alt}](${src})`);
       else if (alt !== "") writeText(alt);
     } else if (name === "tr") {
       inCell = false;
@@ -392,12 +436,12 @@ export function htmlToMarkdown(
       space();
     }
   }
-  // Spans still open at the end of the page (or of the budget) close from the innermost out.
+  // Spans still open at the end of the page (or of the budget) close from the innermost out;
+  // closing one can end a span opened inside it, so each closer checks its span is still open.
   const open                            = [];
-  // Closing one span can end a span opened inside it, so each closer checks its span is still open.
   if (code !== null) open.push([code, () => code !== null && closeCode(code)]);
   if (link !== null) open.push([link, () => link !== null && closeLink(link)]);
   if (pre !== null) open.push([pre, () => pre !== null && closePre(pre)]);
-  for (const [, close] of open.sort(([a], [b]) => b.mark - a.mark)) close();
+  for (const [, close] of open.sort(([a], [b]) => b.handle - a.handle)) close();
   return { markdown: out.result(), truncated: out.truncated };
 }

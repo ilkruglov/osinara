@@ -121,6 +121,22 @@ function nodeEsmResolves(specifier: string, resolvedPath: string): boolean {
 
 const MODULE_LOADER = new Set(["module", "node:module"]);
 
+/**
+ * Whether an import or re-export statement of node:module can reach createRequire: a default or
+ * namespace binding (`import m`, `import * as m`, `export *`) can, and so can a named binding
+ * whose imported name is `createRequire` or `default`, whatever its local alias.
+ */
+function reachesCreateRequire(statement: string): boolean {
+  const clause = /^(?:import|export)\s*([^"']*?)\s*from\s*["']/u.exec(statement)?.[1];
+  if (clause === undefined) return false;
+  const named = /\{([^}]*)\}/u.exec(clause);
+  if (clause.replace(/\{[^}]*\}/u, "").replace(/,/gu, "").trim() !== "") return true;
+  return (named?.[1] ?? "").split(",").some((binding) => {
+    const imported = binding.trim().split(/\s+as\s+/u)[0]!.trim();
+    return imported === "createRequire" || imported === "default";
+  });
+}
+
 /** Files outside the image the bundle of `entries` takes, computed imports, and bundle errors. */
 async function boundaryProblems(
   root: string,
@@ -177,7 +193,7 @@ async function boundaryProblems(
       // merely mentions it (a string, a comment) is no import and passes.
       if (entry.n !== undefined && MODULE_LOADER.has(entry.n)) {
         const statement = output.text.slice(entry.ss, entry.se);
-        if (entry.d > -1 || statement.includes("createRequire") || !statement.includes("{")) {
+        if (entry.d > -1 || reachesCreateRequire(statement)) {
           problems.push(`${where} uses createRequire: ${statement.slice(0, 80)}`);
         }
       }
@@ -247,7 +263,8 @@ describe("agent runtime import boundary", () => {
       write("agent/notes.md", "text");
       write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md#part\"; export { inside, outside };");
       write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\"; import \"pg/lib/client\"; import \"pg/lib/client.js\";");
-      write("agent/mentions.ts", "import { builtinModules } from \"node:module\"; export const info = \"createRequire is disabled\"; export const count = builtinModules.length;");
+      write("agent/mentions.ts", "import { builtinModules as createRequireNames } from \"node:module\"; export const info = \"createRequire is disabled\"; export const count = createRequireNames.length;");
+      write("agent/default-loader.ts", "import mod, { builtinModules } from \"node:module\"; export const count = builtinModules.length; export const load = mod.createRequire(import.meta.url);");
       write("agent/create-require.ts", "import { createRequire } from \"node:module\"; export const load = createRequire(import.meta.url)(\"../scripts/side.js\");");
       for (const name of ["pg", "vitest"]) {
         mkdirSync(join(root, "node_modules", name), { recursive: true });
@@ -278,8 +295,9 @@ describe("agent runtime import boundary", () => {
         "agent/packages.ts imports pg/not-real.js, which does not resolve",
         "agent/packages.ts imports pg/lib/client, which Node does not resolve as ESM",
       ]);
-      expect(problems.filter((problem) => problem.includes("createRequire"))).toEqual([
+      expect(problems.filter((problem) => problem.includes("uses createRequire")).sort()).toEqual([
         expect.stringMatching(/create-require\.js uses createRequire/u),
+        expect.stringMatching(/default-loader\.js uses createRequire/u),
       ]);
 
       write("agent/missing.ts", "import \"./nowhere.js\";");

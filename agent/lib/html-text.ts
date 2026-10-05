@@ -135,20 +135,24 @@ export function* tokens(html: string, skipped: ReadonlySet<string>): Generator<T
  * tag once and the next token starts after it, so the page is read once in all.
  */
 function tagEnd(html: string, from: number): number {
+  // Between attributes, after `=` waiting for a value, or inside an unquoted value: a quote opens
+  // a value only right after `=` (`href=/x?a='` has a quote inside its value, not a quoted one).
+  let state: "between" | "value" | "unquoted" = "between";
   let index = from;
-  let afterEquals = false;
   while (index < html.length) {
     const code = html.charCodeAt(index);
     if (code === 0x3e /* > */) return index;
-    if (afterEquals && (code === 0x22 || code === 0x27)) {
+    const space = code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d;
+    if (state === "value" && (code === 0x22 || code === 0x27)) {
       const close = html.indexOf(code === 0x22 ? "\"" : "'", index + 1);
       if (close === -1) return -1;
       index = close + 1;
-      afterEquals = false;
+      state = "between";
       continue;
     }
-    if (code === 0x3d /* = */) afterEquals = true;
-    else if (code !== 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0c && code !== 0x0d) afterEquals = false;
+    if (state === "between" && code === 0x3d /* = */) state = "value";
+    else if (state === "value" && !space) state = "unquoted";
+    else if (state === "unquoted" && space) state = "between";
     index += 1;
   }
   return -1;

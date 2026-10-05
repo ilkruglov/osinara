@@ -44,6 +44,8 @@ describe("htmlToText", () => {
   it("ends a tag only outside quoted attribute values", () => {
     expect(htmlToText("<a title=\"a > b\" href=\"/r\">link</a> after")).toBe("link after");
     expect(htmlToText("x<p data-x='>'>y</p>")).toBe("x y");
+    // A quote inside an unquoted value is part of it and opens nothing.
+    expect(htmlToText("<p>before</p><a href=/x?foo='>LINK</a><p>after</p>")).toBe("before\nLINK after");
     // A tag open at the end of the page (here an unclosed quote) hides the rest, as in a browser.
     expect(htmlToText("before<a title=\"never closed>after")).toBe("before");
   });
