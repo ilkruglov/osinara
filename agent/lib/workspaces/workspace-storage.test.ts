@@ -120,11 +120,14 @@ describe("workspace storage", () => {
     await writeFile(join(directory, "docs", "file.txt"), "inside");
 
     // The sandbox's side: the file itself and its parent directory flip between a regular
-    // entry and a symlink to the outside, as fast as it can.
+    // entry and a symlink to the outside, as fast as it can. Completed flips are counted in
+    // shared memory and a failure of the flipping itself is reported, so the test cannot pass
+    // on a sandbox that stopped swapping.
+    const swaps = new Int32Array(new SharedArrayBuffer(4));
     const worker = new Worker(`
       const { parentPort, workerData } = require("node:worker_threads");
       const fs = require("node:fs");
-      const { directory, outside } = workerData;
+      const { directory, outside, swaps } = workerData;
       parentPort.postMessage("ready");
       for (;;) {
         try {
@@ -136,28 +139,67 @@ describe("workspace storage", () => {
           fs.symlinkSync(outside, directory + "/docs");
           fs.unlinkSync(directory + "/docs");
           fs.renameSync(directory + "/docs.real", directory + "/docs");
-        } catch {}
+          Atomics.add(swaps, 0, 1);
+        } catch (error) {
+          // The agent's own writes recreate "docs" while it is moved away; put the real one back
+          // and go on. Anything else is a broken test, reported.
+          if (!["EEXIST", "ENOENT", "ENOTEMPTY"].includes(error.code)) {
+            parentPort.postMessage(String(error));
+            break;
+          }
+          try {
+            for (const leftover of ["/file.link", "/file.regular"]) fs.rmSync(directory + leftover, { force: true });
+            if (fs.existsSync(directory + "/docs.real")) {
+              fs.rmSync(directory + "/docs", { force: true, recursive: true });
+              fs.renameSync(directory + "/docs.real", directory + "/docs");
+            }
+          } catch {}
+        }
       }
-    `, { eval: true, workerData: { directory, outside } });
+    `, { eval: true, workerData: { directory, outside, swaps } });
+    const workerFailures: string[] = [];
     await new Promise((resolve) => worker.once("message", resolve));
+    worker.on("message", (message: string) => workerFailures.push(message));
+    // Any other failure than these means the storage broke, not that it refused a swap.
+    const expected = /AGENT_WORKSPACE_(SYMLINK_FORBIDDEN|FILE_NOT_FOUND|PATH_INVALID)/u;
+    const unexpected: string[] = [];
+    const settle = async <T>(operation: Promise<T>): Promise<T | null> => {
+      try {
+        return await operation;
+      } catch (error) {
+        if (!expected.test(String(error))) unexpected.push(String(error));
+        return null;
+      }
+    };
+    const succeeded = { delete: 0, list: 0, read: 0, write: 0 };
     try {
       const deadline = Date.now() + 3_000;
-      let attempts = 0;
       while (Date.now() < deadline) {
-        attempts += 1;
         for (const path of ["file.txt", "docs/file.txt"]) {
-          const read = await readWorkspaceFile(root, WORKSPACE_ID, path).catch(() => null);
+          const read = await settle(readWorkspaceFile(root, WORKSPACE_ID, path));
           expect(read?.toString()).not.toBe("OUTSIDE_WORKSPACE_SENTINEL");
+          if (read?.toString() === "inside") succeeded.read += 1;
         }
-        await writeWorkspaceFile(root, WORKSPACE_ID, "docs/written.txt", Buffer.from("x")).catch(() => undefined);
-        await deleteWorkspaceFile(root, WORKSPACE_ID, "docs/secret.txt").catch(() => undefined);
-        const listed = await listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "docs").catch(() => []);
-        expect(listed.map((file) => file.path)).not.toContain("docs/secret.txt");
+        if (await settle(writeWorkspaceFile(root, WORKSPACE_ID, "docs/written.txt", Buffer.from("x"))) !== null) {
+          succeeded.write += 1;
+        }
+        if (await settle(deleteWorkspaceFile(root, WORKSPACE_ID, "docs/secret.txt")) !== null) succeeded.delete += 1;
+        const listed = await settle(listWorkspaceStoredFilesUnder(root, WORKSPACE_ID, "docs"));
+        if (listed) {
+          succeeded.list += 1;
+          expect(listed.map((file) => file.path)).not.toContain("docs/secret.txt");
+        }
       }
-      expect(attempts).toBeGreaterThan(50);
     } finally {
       await worker.terminate();
     }
+    expect(workerFailures).toEqual([]);
+    expect(unexpected).toEqual([]);
+    expect(Atomics.load(swaps, 0)).toBeGreaterThan(100);
+    // The race was real (operations interleaved with swaps) and the storage still worked.
+    expect(succeeded.read).toBeGreaterThan(10);
+    expect(succeeded.write).toBeGreaterThan(5);
+    expect(succeeded.list).toBeGreaterThan(5);
     // Nothing was written into or deleted from the outside directory.
     expect(existsSync(join(outside, "written.txt"))).toBe(false);
     await expect(readFile(join(outside, "secret.txt"), "utf8")).resolves.toBe("OUTSIDE_WORKSPACE_SENTINEL");

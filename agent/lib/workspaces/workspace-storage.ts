@@ -49,6 +49,11 @@ function at(directory: FileHandle, name: string): string {
   return `/proc/self/fd/${directory.fd}/${name}`;
 }
 
+/** Closes a handle whose own close failure must not hide the outcome being reported. */
+async function closeQuietly(handle: FileHandle): Promise<void> {
+  await handle.close().catch(() => undefined);
+}
+
 function notFound(): AppError {
   return new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Файл не найден в выбранном workspace");
 }
@@ -110,12 +115,15 @@ async function openDirectory(
       } catch (error) {
         throw await openError(error, current, segment, true);
       }
-      await current.close();
+      // Ownership moves to the next handle before the previous one is closed, so a failing
+      // close leaks neither (Codex review, 5 October 2026).
+      const previous = current;
       current = next;
+      await closeQuietly(previous);
     }
     return current;
   } catch (error) {
-    await current.close();
+    await closeQuietly(current);
     throw error;
   }
 }
@@ -139,14 +147,18 @@ async function openRegularFile(
   } catch (error) {
     throw await openError(error, parent, name, false);
   } finally {
-    await parent.close();
+    await closeQuietly(parent);
   }
-  const metadata = await file.stat();
-  if (!metadata.isFile()) {
-    await file.close();
-    throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
+  try {
+    const metadata = await file.stat();
+    if (!metadata.isFile()) {
+      throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
+    }
+    return { file, metadata };
+  } catch (error) {
+    await closeQuietly(file);
+    throw error;
   }
-  return { file, metadata };
 }
 
 /** Regular files below an open directory, without following any symlink; `prefix` is its path. */
@@ -170,7 +182,7 @@ async function scanDirectory(directory: FileHandle, prefix: string): Promise<Wor
       try {
         files.push(...await scanDirectory(child, path));
       } finally {
-        await child.close();
+        await closeQuietly(child);
       }
       continue;
     }
@@ -195,7 +207,7 @@ export async function listWorkspaceStoredFiles(
     const files = await scanDirectory(directory, "");
     return files.sort((left, right) => left.path.localeCompare(right.path));
   } finally {
-    await directory.close();
+    await closeQuietly(directory);
   }
 }
 
@@ -221,7 +233,7 @@ export async function listWorkspaceStoredFilesUnder(
     const files = await scanDirectory(directory, safePath);
     return files.sort((left, right) => left.path.localeCompare(right.path));
   } finally {
-    await directory.close();
+    await closeQuietly(directory);
   }
 }
 
@@ -232,7 +244,7 @@ export async function getWorkspaceStoredFile(
 ): Promise<WorkspaceStoredFile> {
   const safePath = validateWorkspacePath(path);
   const { file, metadata } = await openRegularFile(root, workspaceId, safePath);
-  await file.close();
+  await closeQuietly(file);
   return { byteSize: metadata.size, path: safePath, updatedAt: metadata.mtime };
 }
 
@@ -252,7 +264,7 @@ export async function readWorkspaceFile(
     }
     return content;
   } finally {
-    await file.close();
+    await closeQuietly(file);
   }
 }
 
@@ -267,29 +279,32 @@ export async function writeWorkspaceFile(
   }
   const { directory, name } = splitPath(path);
   const parent = await openDirectory(root, workspaceId, directory, true);
+  // Rename makes readers observe either the old complete file or the new complete file; both
+  // names resolve through the parent's descriptor, so neither can land outside the workspace.
+  // The temporary file is removed whatever fails after it exists: the write (ENOSPC), the close
+  // or the rename.
+  const temporary = `${name}.osinara-${crypto.randomUUID()}.tmp`;
   try {
-    // Rename makes readers observe either the old complete file or the new complete file; both
-    // names resolve through the parent's descriptor, so neither can land outside the workspace.
-    const temporary = `${name}.osinara-${crypto.randomUUID()}.tmp`;
-    const file = await open(at(parent, temporary), CREATE_FLAGS, 0o644);
+    const file = await open(at(parent, temporary), CREATE_FLAGS, 0o644).catch((error: NodeJS.ErrnoException) => {
+      // The directory held by its descriptor was removed meanwhile (by the sandbox).
+      if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
+      throw error;
+    });
     try {
       await file.writeFile(content);
     } finally {
       await file.close();
     }
-    try {
-      await rename(at(parent, temporary), at(parent, name));
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "EISDIR" || code === "ENOTDIR") {
+    await rename(at(parent, temporary), at(parent, name)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "EISDIR" || error.code === "ENOTDIR") {
         throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
       }
+      if (error.code === "ENOENT") throw new AppError("AGENT_WORKSPACE_FILE_NOT_FOUND", "Каталог файла удалён во время записи");
       throw error;
-    } finally {
-      await rm(at(parent, temporary), { force: true });
-    }
+    });
   } finally {
-    await parent.close();
+    await rm(at(parent, temporary), { force: true }).catch(() => undefined);
+    await closeQuietly(parent);
   }
 }
 
@@ -316,13 +331,18 @@ export async function deleteWorkspaceFile(
     if (metadata.isDirectory()) {
       throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
     }
-    // unlink removes the entry itself, never what a symlink swapped in since would point to.
+    // unlink removes the entry itself, never what a symlink swapped in since would point to; a
+    // directory swapped in since the check is refused with the same code as one found by it.
     await unlink(at(parent, name)).catch((error: NodeJS.ErrnoException) => {
-      if (error.code !== "ENOENT") throw error;
+      if (error.code === "ENOENT") return;
+      if (error.code === "EISDIR" || error.code === "EPERM") {
+        throw new AppError("AGENT_WORKSPACE_PATH_INVALID", "Путь должен указывать на обычный файл");
+      }
+      throw error;
     });
     return true;
   } finally {
-    await parent.close();
+    await closeQuietly(parent);
   }
 }
 
