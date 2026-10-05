@@ -30,10 +30,13 @@ import { SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
 const FIREWALL_TIMEOUT_MS = 30_000;
 export const EGRESS_PROXY_PORT = 3128;
 
-// Idempotent: the chains are created once and flushed on every application.
+// Idempotent: the chains are created once and flushed on every application. The policies go to
+// DROP first, so a re-application on a running container is closed while the chains are empty.
 const FIREWALL_SCRIPT = [
   "set -e",
   "for t in iptables ip6tables; do",
+  "  $t -P OUTPUT DROP",
+  "  $t -P INPUT DROP",
   "  $t -N OSINARA-OUT 2>/dev/null || $t -F OSINARA-OUT",
   "  $t -N OSINARA-IN 2>/dev/null || $t -F OSINARA-IN",
   "  $t -C OUTPUT -j OSINARA-OUT 2>/dev/null || $t -I OUTPUT -j OSINARA-OUT",
@@ -106,14 +109,22 @@ const MAX_TRACKED_RUNS = 2_000;
  * container, so the next call starts it again and tries again.
  */
 export function createStartBarrier(apply: (container: Docker.Container) => Promise<void>) {
+  // Least recently used first. A failed run keeps its rejection: the run is over once stopped,
+  // and only a new start (a new generation) applies again; an operation arriving while the stop
+  // is under way must not lay a second set and slip in (Codex review, 5 October 2026). Past the
+  // cap the least recently used run is forgotten; seen again, its rules are laid again, which
+  // the script does closed (DROP policies) on a running container.
   const runs = new Map<string, { generation: string; ready: Promise<void> }>();
   return async (container: Docker.Container, inspection?: Docker.ContainerInspectInfo): Promise<void> => {
     const info = inspection ?? await container.inspect();
     const generation = containerGeneration(info);
     const known = runs.get(info.Id);
-    if (generation !== null && known?.generation === generation) return await known.ready;
+    if (generation !== null && known?.generation === generation) {
+      runs.delete(info.Id);
+      runs.set(info.Id, known);
+      return await known.ready;
+    }
     const ready = apply(container).catch(async (error: unknown) => {
-      if (runs.get(info.Id)?.ready === ready) runs.delete(info.Id);
       await container.stop({ t: 0 }).catch(() => undefined);
       throw error;
     });

@@ -67,6 +67,16 @@ async function reapCrowdedContainer(container: Docker.Container, sessionId: stri
  * The identity of one container run. Restricted `$HOME` is a tmpfs, so a restart empties it: the
  * start time belongs to the identity, and anything remembered about the previous run is void.
  */
+/**
+ * Starts a stopped container; one another operation started meanwhile counts as started (two
+ * operations may find it stopped at once, and the second start answers 304).
+ */
+export async function startContainer(container: Docker.Container): Promise<void> {
+  await container.start().catch((error: unknown) => {
+    if (dockerStatus(error) !== 304) throw error;
+  });
+}
+
 /** One run of a container: its ID and the time it last started. */
 export function containerGeneration(inspection: Docker.ContainerInspectInfo): string | null {
   const startedAt: unknown = inspection.State.StartedAt;
@@ -79,7 +89,7 @@ export async function requireRunningContainer(
   sessionId: string,
   activeOperations: number,
   /** Runs a start of the stopped container; the engine passes its capacity gate. */
-  gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
+  gateStart: (start: () => Promise<void>, container: Docker.Container) => Promise<void> = (start) => start(),
   containerName: string = sandboxContainerName(sessionId),
   /** Awaited for the run it returns, started now or already running, e.g. its network rules. */
   ensureReady: (container: Docker.Container, inspection: Docker.ContainerInspectInfo) => Promise<void> = async () => undefined,
@@ -88,10 +98,7 @@ export async function requireRunningContainer(
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
   if (!inspection.State.Running) {
-    // Two operations may find the container stopped at once; the second start finds it running.
-    await gateStart(() => existing.container.start().catch((error: unknown) => {
-      if (dockerStatus(error) !== 304) throw error;
-    }));
+    await gateStart(() => startContainer(existing.container), existing.container);
     inspection = await existing.container.inspect();
   } else if (activeOperations <= 1) {
     // A restart kills every process of the session: only the caller may be running in it.

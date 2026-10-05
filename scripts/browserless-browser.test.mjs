@@ -34,14 +34,17 @@ describe("Browserless fallback", () => {
   // The key stays in the egress proxy (security review, 5 October 2026): agent-browser connects to
   // the proxy's endpoint with autosolve and the free-plan deadline, and no token.
   it("connects to the proxy's endpoint only, without a key, and refuses a proxy URL with credentials", () => {
-    const endpoint = new URL(cloudEndpoint("http://sandbox-egress-proxy:3128"));
+    const session = "0123456789abcdef0123456789abcdef";
+    const endpoint = new URL(cloudEndpoint("http://sandbox-egress-proxy:3128", session));
     expect(endpoint.protocol).toBe("ws:");
     expect(endpoint.host).toBe("sandbox-egress-proxy:3128");
     expect(endpoint.pathname).toBe("/browserless/chromium/stealth");
-    expect(Object.fromEntries(endpoint.searchParams)).toEqual({ solveCaptchas: "true", timeout: "120000" });
+    // The one-time id lets the proxy refuse agent-browser's own reconnect after a dropped socket.
+    expect(Object.fromEntries(endpoint.searchParams)).toEqual({ session, solveCaptchas: "true", timeout: "120000" });
     for (const proxy of ["http://user:pass@sandbox-egress-proxy:3128", "https://sandbox-egress-proxy:3128", "http://sandbox-egress-proxy:3128/x", undefined]) {
-      expect(() => cloudEndpoint(proxy)).toThrow("AGENT_BROWSERLESS_PROXY_INVALID");
+      expect(() => cloudEndpoint(proxy, session)).toThrow("AGENT_BROWSERLESS_PROXY_INVALID");
     }
+    expect(() => cloudEndpoint("http://sandbox-egress-proxy:3128", "not-an-id")).toThrow("AGENT_BROWSERLESS_SESSION_INVALID");
   });
 
   it("isolates cloud state from local restore, profiles, proxy and credentials", () => {

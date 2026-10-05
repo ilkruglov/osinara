@@ -128,7 +128,7 @@ export async function requireBrowserContainer(input: {
   /** Lays the companion's network rules after any start. */
   afterStart: (container: Docker.Container) => Promise<void>;
   docker: Docker;
-  gateStart: (start: () => Promise<void>) => Promise<void>;
+  gateStart: (start: () => Promise<void>, container?: Docker.Container) => Promise<void>;
   runtime: SandboxDockerRuntime;
   sessionId: string;
   toolsRoot: string;

@@ -108,14 +108,33 @@ describe("createStartBarrier", () => {
     expect(apply).toHaveBeenCalledTimes(2);
   });
 
-  it("stops the container when the rules fail and applies again on the next run", async () => {
+  it("stops the container when the rules fail and applies again only on the next run", async () => {
+    let stopped!: () => void;
     const apply = vi.fn().mockRejectedValueOnce(new Error("AGENT_SANDBOX_RUNNER_FIREWALL_FAILED: x")).mockResolvedValue(undefined);
     const ready = createStartBarrier(apply);
     const container = run("2026-10-05T10:00:00Z");
+    const stopping = new Promise<void>((resolve) => { stopped = resolve; });
+    container.stop.mockReturnValue(stopping);
 
-    await expect(ready(container)).rejects.toThrow("AGENT_SANDBOX_RUNNER_FIREWALL_FAILED");
-    expect(container.stop).toHaveBeenCalled();
-    await expect(ready(container)).resolves.toBeUndefined();
+    const failed = ready(container);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // While the stop is under way the same run stays refused, with no second set of rules.
+    const meanwhile = ready(container);
+    stopped();
+    await expect(failed).rejects.toThrow("AGENT_SANDBOX_RUNNER_FIREWALL_FAILED");
+    await expect(meanwhile).rejects.toThrow("AGENT_SANDBOX_RUNNER_FIREWALL_FAILED");
+    expect(apply).toHaveBeenCalledTimes(1);
+
+    await expect(ready(run("2026-10-05T10:05:00Z"))).resolves.toBeUndefined();
     expect(apply).toHaveBeenCalledTimes(2);
+  });
+
+  it("lays the rules closed: the default policies drop before the chains are refilled", async () => {
+    const helper = { logs: vi.fn(), remove: vi.fn(async () => undefined), start: vi.fn(async () => undefined), wait: vi.fn(async () => ({ StatusCode: 0 })) };
+    const docker = { createContainer: vi.fn(async () => helper) } as unknown as Docker;
+    await applyEgressFirewall(docker, "sandbox-image", containerWith("osinara_sandbox-egress"), "osinara");
+    const script = (docker.createContainer as ReturnType<typeof vi.fn>).mock.calls[0]![0].Cmd.at(-1) as string;
+    expect(script.indexOf("-P OUTPUT DROP")).toBeLessThan(script.indexOf("-F OSINARA-OUT"));
+    expect(script).toContain("-P INPUT DROP");
   });
 });

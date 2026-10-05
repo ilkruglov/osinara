@@ -197,7 +197,11 @@ export function buildBrowserContainerOptions(
     AttachStderr: false,
     AttachStdin: false,
     AttachStdout: false,
-    Cmd: ["sleep", "infinity"],
+    // By absolute path and without the image's `docker-entrypoint.sh`, which Docker also looks up
+    // in the container's PATH: the container starts before its network rules, and the head of
+    // that PATH is the model's to write (Codex review and live smoke, 5 October 2026).
+    Cmd: ["/usr/bin/sleep", "infinity"],
+    Entrypoint: [""],
     Env: browserEnvironment(),
     HostConfig: {
       AutoRemove: false,
@@ -261,7 +265,11 @@ export function buildSandboxContainerOptions(
     AttachStderr: false,
     AttachStdin: false,
     AttachStdout: false,
-    Cmd: ["sleep", "infinity"],
+    // By absolute path and without the image's `docker-entrypoint.sh`, which Docker also looks up
+    // in the container's PATH: the container starts before its network rules, and the head of
+    // that PATH is the model's to write (Codex review and live smoke, 5 October 2026).
+    Cmd: ["/usr/bin/sleep", "infinity"],
+    Entrypoint: [""],
     Env: trusted ? trustedEnvironment(request.mounts, runtime.browserlessApiKey) : isolatedEnvironment(),
     HostConfig: {
       AutoRemove: false,

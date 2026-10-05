@@ -2,28 +2,50 @@
  * The proxy's Browserless endpoint.
  *
  * Constructs covered:
- * - Only the fixed path with captcha solving and a session of at most two minutes is accepted;
- *   without a configured key the endpoint is unavailable.
+ * - Only the fixed path with captcha solving, a session of at most two minutes and a one-time
+ *   session id is accepted; without a configured key the endpoint is unavailable.
  * - The key is added by the proxy and never comes back to the sandbox: a provider answer other
  *   than a switch to WebSocket becomes a bare 502.
- * - One cloud browser per sandbox at a time: a second connection while one is open gets 409.
+ * - One cloud browser per sandbox at a time (409 on a second), each session id once (409 on a
+ *   reconnect); the slot is held for the life of the operation: a refused client that keeps its
+ *   half open does not hold it, and a client gone during the DNS lookup is never sent on.
  */
 import { once } from "node:events";
 import { request } from "node:http";
-import type { AddressInfo } from "node:net";
+import { connect, type AddressInfo, type Socket } from "node:net";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
 
-import { createSandboxEgressProxy } from "./server.js";
-import { connect } from "node:net";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { createSandboxEgressProxy, type ResolvedTarget } from "./server.js";
+
+// No test here reaches the provider; each TLS attempt is counted and goes nowhere.
+const tls = vi.hoisted(() => ({ attempts: 0 }));
+vi.mock("node:tls", () => ({
+  connect: () => {
+    tls.attempts += 1;
+    return Object.assign(new EventEmitter(), { destroy: () => undefined, off: () => undefined, write: () => true });
+  },
+}));
 
 const servers: Array<{ close: () => void }> = [];
 afterEach(() => {
   for (const server of servers.splice(0)) server.close();
 });
 
-async function proxyWith(apiKey?: string): Promise<number> {
-  const server = createSandboxEgressProxy(apiKey === undefined ? {} : { browserlessApiKey: apiKey });
+let sessions = 0;
+const sessionId = () => (sessions += 1).toString(16).padStart(32, "0");
+const stealth = (session = sessionId()) => `/browserless/chromium/stealth?solveCaptchas=true&timeout=120000&session=${session}`;
+
+async function proxyWith(
+  apiKey?: string,
+  resolveTarget?: (hostname: string, port: number) => Promise<ResolvedTarget>,
+): Promise<number> {
+  const server = createSandboxEgressProxy({
+    ...(apiKey === undefined ? {} : { browserlessApiKey: apiKey }),
+    ...(resolveTarget ? { resolveTarget } : {}),
+  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   servers.push(server);
@@ -44,11 +66,31 @@ async function upgrade(port: number, path: string): Promise<{ status: number; bo
   return { body, status: response.statusCode ?? 0 };
 }
 
+/** A raw client: writes the handshake and keeps its own half open unless told otherwise. */
+function rawUpgrade(port: number, path: string): Socket {
+  const socket = connect({ allowHalfOpen: true, host: "127.0.0.1", port });
+  socket.on("error", () => undefined);
+  socket.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  return socket;
+}
+
+async function firstAnswer(socket: Socket, waitMs = 300): Promise<string> {
+  return await Promise.race([
+    once(socket, "data").then(([data]) => (data as Buffer).toString("latin1").split("\r\n")[0]!),
+    new Promise<string>((resolve) => setTimeout(() => resolve("pending"), waitMs)),
+  ]);
+}
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const never = () => new Promise<ResolvedTarget>(() => undefined);
+
 describe("Browserless endpoint", () => {
   it.each([
     "/browserless/chromium/other",
     "/browserless/chromium/stealth?token=mine",
     "/browserless/chromium/stealth?timeout=999999",
+    "/browserless/chromium/stealth?solveCaptchas=true&timeout=120000",
+    "/browserless/chromium/stealth?session=short",
     "/elsewhere",
   ])("refuses %s", async (path) => {
     const port = await proxyWith("secret-key");
@@ -57,47 +99,70 @@ describe("Browserless endpoint", () => {
 
   it("is unavailable without a configured key", async () => {
     const port = await proxyWith();
-    expect((await upgrade(port, "/browserless/chromium/stealth?solveCaptchas=true&timeout=120000")).status).toBe(503);
+    expect((await upgrade(port, stealth())).status).toBe(503);
   });
 
   it("answers a provider that refuses with a bare 502, never its body", async () => {
-    // The provider host does not resolve to a public address in the test sandbox, so the
-    // connection fails before any provider answer; the sandbox still sees only a 502.
-    const port = await proxyWith("secret-key");
-    const answer = await upgrade(port, "/browserless/chromium/stealth?solveCaptchas=true&timeout=120000");
+    const port = await proxyWith("secret-key", async () => { throw new Error("AGENT_SANDBOX_EGRESS_DNS_FAILED"); });
+    const answer = await upgrade(port, stealth());
     expect(answer.status).toBe(502);
     expect(answer.body).not.toContain("secret-key");
   });
 
-  it("keeps one cloud browser per sandbox at a time", async () => {
-    // The provider never answers here, so the first session stays open while the second asks.
-    const server = createSandboxEgressProxy({ browserlessApiKey: "secret-key", resolveTarget: () => new Promise(() => undefined) });
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    servers.push(server);
-    const port = (server.address() as AddressInfo).port;
-    const handshake = "GET /browserless/chromium/stealth?solveCaptchas=true&timeout=120000 HTTP/1.1\r\nHost: x\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGVzdA==\r\nSec-WebSocket-Version: 13\r\n\r\n";
-    const first = connect(port, "127.0.0.1");
-    first.write(handshake);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    const second = connect(port, "127.0.0.1");
-    second.write(handshake);
-    const [answer] = await once(second, "data") as [Buffer];
-    expect(answer.toString("latin1")).toMatch(/^HTTP\/1\.1 409 /u);
+  it("keeps one cloud browser per sandbox at a time and opens a session id once", async () => {
+    // The provider never answers here, so a session stays open while the next one asks.
+    const port = await proxyWith("secret-key", never);
+    const session = sessionId();
+    const first = rawUpgrade(port, stealth(session));
+    await pause(50);
+    const second = rawUpgrade(port, stealth());
+    expect(await firstAnswer(second)).toBe("HTTP/1.1 409 Conflict");
     second.destroy();
 
     first.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const third = connect(port, "127.0.0.1");
-    third.write(handshake);
-    third.on("error", () => undefined);
-    const outcome = await Promise.race([
-      once(third, "data").then(([data]) => (data as Buffer).toString("latin1")),
-      new Promise<string>((resolve) => setTimeout(() => resolve("pending"), 200)),
-    ]);
-    // Admitted: it waits for the provider like the first one did.
-    expect(outcome).toBe("pending");
-    third.destroy();
+    await pause(50);
+    // agent-browser reconnecting on its own after a dropped socket: the same id is refused.
+    const reconnect = rawUpgrade(port, stealth(session));
+    expect(await firstAnswer(reconnect)).toBe("HTTP/1.1 409 Conflict");
+    reconnect.destroy();
+    await pause(50);
+
+    // A new open, a new id: admitted, waiting for the provider like the first.
+    const next = rawUpgrade(port, stealth());
+    expect(await firstAnswer(next)).toBe("pending");
+    next.destroy();
+  });
+
+  it("frees the slot of a refused client that keeps its half open", async () => {
+    const port = await proxyWith();
+    const refused = rawUpgrade(port, "/browserless/chromium/stealth?session=short");
+    expect(await firstAnswer(refused)).toBe("HTTP/1.1 404 Not Found");
+    await pause(50);
+    const next = rawUpgrade(port, stealth());
+    expect(await firstAnswer(next)).toBe("HTTP/1.1 503 Service Unavailable");
+    refused.destroy();
+    next.destroy();
+  });
+
+  it("never asks the provider for a client gone during the DNS lookup", async () => {
+    tls.attempts = 0;
+    let resolved = 0;
+    const port = await proxyWith("secret-key", async (hostname, targetPort) => {
+      await pause(100);
+      resolved += 1;
+      return { address: "127.0.0.1", family: 4, hostname, port: targetPort };
+    });
+    const gone = rawUpgrade(port, stealth());
+    await pause(20);
+    gone.destroy();
+    await pause(200);
+    expect(resolved).toBe(1);
+    expect(tls.attempts).toBe(0);
+
+    // And its slot is free again.
+    const next = rawUpgrade(port, stealth());
+    const answer = await firstAnswer(next, 400);
+    expect(answer).not.toBe("HTTP/1.1 409 Conflict");
+    next.destroy();
   });
 });

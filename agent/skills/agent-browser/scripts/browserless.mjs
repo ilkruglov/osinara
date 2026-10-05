@@ -5,9 +5,11 @@
 // sandbox, and keeps one cloud session per sandbox. There is no local bridge process any more:
 // the runner ends whatever a command leaves running, the bridge included, and the next command of
 // the same cloud session found it gone (Codex review, 5 October 2026). The session's deadline
-// lives in a file in the helper's HOME, so a command after it ends asks for a new `open` instead
-// of quietly starting another billable browser.
+// lives in a file in the helper's HOME with a one-time session id: the proxy opens a cloud browser
+// once per id, so when agent-browser reconnects on its own after a dropped WebSocket it is refused
+// instead of quietly starting another billable browser; only `open` makes a new id.
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
@@ -18,7 +20,7 @@ const LIFETIME_MS = 120_000;
 const COMMANDS = new Set(["open", "read", "snapshot", "screenshot", "scroll", "wait", "get", "tab", "back", "forward", "reload"]);
 
 /** The proxy's Browserless endpoint, from the sandbox's proxy address; no key, fixed parameters. */
-export function cloudEndpoint(proxyUrl) {
+export function cloudEndpoint(proxyUrl, sessionId) {
   let proxy;
   try {
     proxy = new URL(proxyUrl ?? "");
@@ -28,7 +30,8 @@ export function cloudEndpoint(proxyUrl) {
   if (proxy.protocol !== "http:" || proxy.username || proxy.password || proxy.pathname !== "/" || proxy.search) {
     throw new Error("AGENT_BROWSERLESS_PROXY_INVALID");
   }
-  const query = new URLSearchParams({ solveCaptchas: "true", timeout: String(LIFETIME_MS) });
+  if (!/^[0-9a-f]{32}$/u.test(sessionId ?? "")) throw new Error("AGENT_BROWSERLESS_SESSION_INVALID");
+  const query = new URLSearchParams({ session: sessionId, solveCaptchas: "true", timeout: String(LIFETIME_MS) });
   return `ws://${proxy.host}/browserless/chromium/stealth?${query}`;
 }
 
@@ -45,7 +48,7 @@ export function browserEnvironment(source) {
 async function liveSession(now = Date.now()) {
   try {
     const session = JSON.parse(await readFile(SESSION_FILE, "utf8"));
-    return typeof session.expiresAt === "number" && session.expiresAt > now ? session : null;
+    return typeof session.expiresAt === "number" && session.expiresAt > now && typeof session.id === "string" ? session : null;
   } catch { return null; }
 }
 
@@ -92,12 +95,13 @@ export async function main(argv) {
   if (!live && command !== "open") {
     throw new Error("AGENT_BROWSERLESS_SESSION_EXPIRED: Сессия завершена; начните новую через open");
   }
-  const endpoint = cloudEndpoint(process.env.HTTPS_PROXY);
+  const id = live?.id ?? randomBytes(16).toString("hex");
+  const endpoint = cloudEndpoint(process.env.HTTPS_PROXY, id);
   await mkdir(env.HOME, { recursive: true, mode: 0o700 });
   const startedAt = Date.now();
   const code = await runAgentBrowser(["--cdp", endpoint, command, ...args], env);
   // The cloud session starts with the first open that succeeds and ends with the proxy's deadline.
-  if (!live && code === 0) await writeFile(SESSION_FILE, JSON.stringify({ expiresAt: startedAt + LIFETIME_MS }), { mode: 0o600 });
+  if (!live && code === 0) await writeFile(SESSION_FILE, JSON.stringify({ expiresAt: startedAt + LIFETIME_MS, id }), { mode: 0o600 });
   process.exitCode = code;
 }
 
