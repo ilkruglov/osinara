@@ -9,12 +9,17 @@
  * - Required finite enums make the complete model contract machine-visible.
  * - One semantic parser validates every action before approval and execution.
  * - Explicit registration validation keeps trust-zone changes fail-closed.
+ * - Register binds a chat to the family only after Telegram confirms, at execution time after
+ *   HITL, that the verified session owner is the chat's creator or administrator.
  */
+import type { SessionContext } from "eve/context";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
+import { AppError } from "../app-error.js";
 import { requirePrivateTelegramOwner } from "../family-context.js";
 import type { RegisteredGroupType } from "../family-access.js";
+import { telegramGroupAdminVerifier } from "../telegram-group-admin-verification.js";
 import { telegramGroupAdministrationRepository } from "../telegram-group-administration-repository.js";
 import {
   GROUP_TITLE_MAX_LENGTH,
@@ -31,6 +36,7 @@ import {
   ALWAYS_AVAILABLE_SANDBOX_FILE_TOOL_NAMES,
   requiresImageGenerationToolName,
 } from "../tool-policy/group-tool-catalog.js";
+import { resolveTelegramSessionActor } from "../telegram-session-actor.js";
 import {
   requireAction,
   optionalEnum,
@@ -230,10 +236,25 @@ function requireManageTelegramGroupInput(input: unknown) {
   return { action, registration: requireRegistration(payload) } as const;
 }
 
+/**
+ * The Telegram account Telegram is asked about. It comes from the verified session actor (rebuilt
+ * from the HITL approval row and the users table on resume), never from the model's input.
+ */
+function requireOwnerTelegramUserId(ctx: SessionContext): string {
+  const actor = resolveTelegramSessionActor(ctx.session.auth);
+  if (actor?.kind !== "telegram_user") {
+    throw new AppError(
+      "AGENT_TELEGRAM_GROUP_OWNER_IDENTITY_MISSING",
+      "Не удалось определить ваш Telegram-аккаунт для проверки прав в группе. Группа не зарегистрирована",
+    );
+  }
+  return actor.id;
+}
+
 const TOOL_DESCRIPTION = [
   "Управлять Telegram-группами семьи из личного чата владельца: status, register, update_policy, start_new_context, remove.",
   "Выбери один action и передавай только его payload; лишние поля других actions не заполняй, telegramChatId бери из status, не угадывай. Status не требует подтверждения: {\"action\":\"status\"}.",
-  "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для смены прав используй update_policy: он сохраняет ID, название, тип и все данные. Remove не выводит бота из чата. Start_new_context не удаляет timeline, память, файлы и pending tasks: следующая реплика в main-чате и каждой теме начнёт новую canonical generation.",
+  "Повторный register с другим type пересоздаёт trust zone и безвозвратно удаляет её историю, workspace, память и сессии; для смены прав используй update_policy: он сохраняет ID, название, тип и все данные. Register сработает, только если владелец создатель или администратор этой группы в Telegram, а бот уже состоит в ней. Remove не выводит бота из чата. Start_new_context не удаляет timeline, память, файлы и pending tasks: следующая реплика в main-чате и каждой теме начнёт новую canonical generation.",
   "Чтобы включить или выключить одно право, сначала status, затем полный toolAllowlist с одним изменением. Во внешней группе messageMode=owner_only сохраняет общую timeline, но ход запускает только владелец семьи; Telegram admin-права его не заменяют. memoryReview=disabled в update_policy выключает тихую проверку памяти по сообщениям внешней группы (сообщения всё равно пишутся в журнал), enabled включает обратно; без поля не меняется.",
   "Enums: action=register | remove | start_new_context | status | update_policy; type=family_private | external; messageMode=addressed_only | all | owner_only.",
   "Register: {\"action\":\"register\",\"registration\":{\"type\":\"family_private\",\"telegramChatId\":\"-1001234567890\",\"title\":\"Семейный чат\",\"messageMode\":\"addressed_only\"}}; для external добавь в registration \"toolAllowlist\":[\"search_memories\"].",
@@ -359,6 +380,13 @@ export default defineTool({
     }
 
     const { registration } = parsed;
+    // Knowing a chat id the bot sits in is not ownership of that chat: Telegram must confirm the
+    // owner administers it before the chat becomes a trust zone of this family.
+    await telegramGroupAdminVerifier.requireAdministrator({
+      signal: ctx.abortSignal,
+      telegramChatId: registration.telegramChatId,
+      telegramUserId: requireOwnerTelegramUserId(ctx),
+    });
     const result = await telegramGroupAdministrationRepository.registerGroup({
       ...registration,
       familyId: owner.familyId,
