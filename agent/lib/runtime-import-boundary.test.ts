@@ -11,8 +11,10 @@
  *   imports, re-exports and `require()`, with types erased; asset imports (any non-code file,
  *   `?raw` or not) are resolved like Eve's asset plugin does. A missing file fails the bundle; a
  *   dynamic import or require of a computed specifier is refused, since nothing can check it; a
- *   package must be a production dependency, since the image installs without dev ones (Codex
- *   reviews, 5 October 2026).
+ *   package must be a production dependency, since the image installs without dev ones, and the
+ *   exact specifier must resolve in it (a subpath a package does not have fails at start); any
+ *   `createRequire` is refused, since what it loads is invisible to the bundle (Codex reviews,
+ *   5 October 2026).
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
@@ -29,11 +31,13 @@ const projectRoot = resolve(agentRoot, "..");
 // What the runtime stage of the Dockerfile copies next to agent/.
 const IMAGE_PATHS = ["agent", "config", "migrations", "package.json"];
 
+const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
+
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return entry.name === "node_modules" ? [] : sourceFiles(path);
-    return /\.tsx?$/u.test(entry.name) && !/\.test\.tsx?$/u.test(entry.name) && !entry.name.endsWith(".d.ts")
+    return SOURCE_FILE.test(entry.name) && !/\.test\.[cm]?[jt]sx?$/u.test(entry.name) && !/\.d\.[cm]?ts$/u.test(entry.name)
       ? [path]
       : [];
   });
@@ -49,7 +53,8 @@ function assetPlugin(problems: string[], root: string, imagePaths: readonly stri
     name: "eve-authored-assets",
     setup(pluginBuild) {
       pluginBuild.onResolve({ filter: /^\.{1,2}\// }, (args) => {
-        const path = args.path.replace(/\?[a-z]+$/u, "");
+        // A query or fragment (`?raw`, `#x`) is not part of the file name.
+        const path = args.path.split(/[?#]/u, 1)[0]!;
         if (CODE_EXTENSIONS.has(extname(path)) || extname(path) === "") return undefined;
         const absolute = resolve(args.resolveDir, path);
         const where = relative(root, absolute);
@@ -60,6 +65,30 @@ function assetPlugin(problems: string[], root: string, imagePaths: readonly stri
         return { namespace: "eve-asset", path: absolute };
       });
       pluginBuild.onLoad({ filter: /.*/, namespace: "eve-asset" }, () => ({ contents: "export default \"\";", loader: "js" }));
+    },
+  };
+}
+
+/**
+ * Bare specifiers stay external, as in the image, but only after they resolve the way Node will
+ * resolve them there (package exports and subpaths), so `pg/not-real.js` fails here, not at start.
+ */
+function packagePlugin(problems: string[], root: string): Plugin {
+  return {
+    name: "resolve-packages",
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: /^[^./]/ }, async (args) => {
+        if ((args.pluginData as { boundaryInner?: boolean } | undefined)?.boundaryInner) return undefined;
+        if (args.path.startsWith("node:") || BUILTINS.has(args.path)) return { external: true, path: args.path };
+        const resolved = await pluginBuild.resolve(args.path, {
+          importer: args.importer,
+          kind: args.kind,
+          pluginData: { boundaryInner: true },
+          resolveDir: args.resolveDir,
+        });
+        if (resolved.errors.length > 0) problems.push(`${relative(root, args.importer)} imports ${args.path}, which does not resolve`);
+        return { external: true, path: args.path };
+      });
     },
   };
 }
@@ -85,9 +114,8 @@ async function boundaryProblems(
     logLevel: "silent",
     metafile: true,
     outdir: join(root, ".boundary-out"),
-    packages: "external",
     platform: "node",
-    plugins: [assetPlugin(problems, root, imagePaths)],
+    plugins: [assetPlugin(problems, root, imagePaths), packagePlugin(problems, root)],
     write: false,
   }).catch((error: { errors?: Array<{ location?: { file: string; line: number } | null; text: string }>; message?: string }) => {
     // A failure without esbuild messages (a plugin or option error) must not read as a pass.
@@ -122,13 +150,18 @@ async function boundaryProblems(
         problems.push(`${where} imports a computed specifier: ${output.text.slice(entry.ss, entry.se)}`);
       }
     }
-    // esbuild leaves a require it cannot bundle as `__require(…)`; only a lone string is checkable.
-    for (const match of output.text.matchAll(/\b__require\(([^)]{0,80})\)/gu)) {
+    // esbuild leaves a require it cannot bundle as `__require(…)`; only a lone string literal
+    // closed by `)` is checkable, anything else (an expression, a call) is refused.
+    for (const match of output.text.matchAll(/\b__require\(/gu)) {
+      const rest = output.text.slice(match.index + match[0].length, match.index + match[0].length + 200);
       // The helper's own definition mentions `__require()` with no argument.
-      if (match[1]!.trim() !== "" && !/^\s*("[^"\\]*"|'[^'\\]*')\s*$/u.test(match[1]!)) {
-        problems.push(`${where} requires a computed specifier: ${match[1]}`);
+      if (!/^\s*\)/u.test(rest) && !/^\s*("[^"\\\n]*"|'[^'\\\n]*')\s*\)/u.test(rest)) {
+        problems.push(`${where} requires a computed specifier: ${rest.split("\n", 1)[0]!.slice(0, 80)}`);
       }
     }
+    // A require made by createRequire loads whatever its argument names, unseen by the bundle.
+    const createRequireAt = output.text.search(/\bcreateRequire\b/u);
+    if (createRequireAt !== -1) problems.push(`${where} uses createRequire`);
   }
   return problems;
 }
@@ -139,11 +172,14 @@ const productionDependencies = new Set(Object.keys(
 
 describe("agent runtime import boundary", () => {
   it("bundles no file the image does not carry", async () => {
-    // The authored modules Eve loads (agent.ts, sandbox.ts and the convention directories); the
-    // library under agent/lib is checked as far as they reach it, so test helpers stay out.
+    // The authored modules Eve loads (the root files and the slot directories, in any code
+    // extension); the library under agent/lib is checked as far as they reach it, so test helpers
+    // stay out.
     const entries = [
-      ...["agent.ts", "sandbox.ts"].map((file) => join(agentRoot, file)),
-      ...["channels", "hooks", "instructions", "schedules", "skills", "subagents", "tools"]
+      ...["agent", "instructions", "instrumentation", "sandbox"]
+        .flatMap((name) => [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"].map((extension) => join(agentRoot, `${name}${extension}`)))
+        .filter((file) => existsSync(file)),
+      ...["channels", "connections", "extensions", "hooks", "instructions", "sandbox", "schedules", "skills", "subagents", "tools"]
         .flatMap((directory) => existsSync(join(agentRoot, directory)) ? sourceFiles(join(agentRoot, directory)) : []),
     ].map((file) => relative(projectRoot, file));
     expect(entries.length).toBeGreaterThan(20);
@@ -171,12 +207,19 @@ describe("agent runtime import boundary", () => {
         "export const b = (name: string) => import(`${name}`);",
         "export const c = (name: string) => import(\"file:\" + name);",
         "export const d = (name: string) => require(name);",
+        "export const e = (name: string) => require((0, String)(name));",
         "export const harmless = \"use import(name) to load\";",
       ].join("\n"));
       write("scripts/notes.md", "text");
       write("agent/notes.md", "text");
-      write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md\"; export { inside, outside };");
-      write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\";");
+      write("agent/assets.ts", "import outside from \"../scripts/notes.md?raw\"; import inside from \"./notes.md#part\"; export { inside, outside };");
+      write("agent/packages.ts", "import \"pg\"; import \"vitest\"; import \"node:fs\"; import \"fs\"; import \"pg/not-real.js\";");
+      write("agent/create-require.ts", "import { createRequire } from \"node:module\"; export const load = createRequire(import.meta.url)(\"../scripts/side.js\");");
+      for (const name of ["pg", "vitest"]) {
+        mkdirSync(join(root, "node_modules", name), { recursive: true });
+        write(`node_modules/${name}/package.json`, JSON.stringify({ main: "index.js", name }));
+        write(`node_modules/${name}/index.js`, "module.exports = {};");
+      }
       const problems = await boundaryProblems(
         root, readdirSync(join(root, "agent")).filter((file) => file.endsWith(".ts")).map((file) => `agent/${file}`),
         ["agent"], new Set(["pg"]),
@@ -188,13 +231,17 @@ describe("agent runtime import boundary", () => {
         "scripts/star.ts is bundled but not in the image",
       ]);
       const computed = problems.filter((problem) => problem.includes("computed specifier"));
-      expect(computed).toHaveLength(4);
+      expect(computed).toHaveLength(5);
       expect(computed.some((problem) => problem.includes("use import"))).toBe(false);
       expect(problems).toContain("scripts/notes.md (asset) is not in the image");
       expect(problems.some((problem) => problem.includes("agent/notes.md"))).toBe(false);
       expect(problems.filter((problem) => problem.includes("production dependency"))).toEqual([
         "agent/packages.ts imports vitest, which is not a production dependency",
       ]);
+      expect(problems.filter((problem) => problem.includes("does not resolve"))).toEqual([
+        "agent/packages.ts imports pg/not-real.js, which does not resolve",
+      ]);
+      expect(problems.filter((problem) => problem.includes("createRequire"))).toHaveLength(1);
 
       write("agent/missing.ts", "import \"./nowhere.js\";");
       const missing = await boundaryProblems(root, ["agent/missing.ts"], ["agent"], new Set());

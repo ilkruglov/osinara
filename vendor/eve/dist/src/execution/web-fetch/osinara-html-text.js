@@ -1,11 +1,11 @@
 /**
- * Linear HTML scanning for web pages fetched for the model.
+ * Linear HTML conversion for web pages fetched for the model.
  *
  * Exports:
  * - `htmlToText`: visible text of an HTML document, with block ends as line breaks.
+ * - `htmlToMarkdown`: the same pass producing Markdown (headings, lists, links, images, emphasis,
+ *   code, quotes, tables as rows), cut at an output budget with a flag telling whether it was.
  * - `decodeHtmlEntities`: named and numeric entities, leaving invalid ones as written.
- * - `boundHtmlForMarkdown`: the page without scripts, styles, SVG and markup declarations, cut to
- *   text, tag, depth and size budgets, with a flag telling whether anything was cut.
  *
  * Key construct:
  * - The extraction used regular expressions over the raw page; `<[^>]*>` restarts at every
@@ -13,11 +13,11 @@
  *   synchronous CPU that no timeout could interrupt (security review, 5 October 2026). This is
  *   one forward pass: the next `<` and the next `>` are each searched only past the previous
  *   find, so the work is linear in the page whatever its markup.
- * - The Markdown converter of the vendored Eve (turndown) builds a DOM and its output grows
- *   quadratically with the number of blocks: 1 000 paragraphs took 71 ms, 10 000 took 5.4 s
- *   (Codex review, 5 October 2026). The model sees at most 50 KB of Markdown, about 330 such
- *   paragraphs, so the converter gets at most 200 000 characters of text and 15 000 tags; nesting
- *   is cut at 256 levels because deeper markup overflows its recursion.
+ * - Markdown used to come from the vendored turndown, which builds a DOM, recurses over it and
+ *   trims whitespace with regular expressions that restart at every space of a run: three Codex
+ *   reviews (5 October 2026) kept finding pages inside any budget that blocked the event loop for
+ *   9-19 s or overflowed its stack. The Markdown here comes from the same single pass, with no
+ *   tree, no recursion and no regular expression that can backtrack, so no page can do that.
  */
 const SKIPPED_ELEMENTS = new Set(["noscript", "script", "style", "template"]);
 // SVG carries no text for the model and is often the largest part of a page's markup.
@@ -31,39 +31,8 @@ const INLINE_ELEMENTS = new Set([
   "a", "abbr", "b", "bdi", "bdo", "cite", "code", "data", "del", "dfn", "em", "font", "i", "ins",
   "kbd", "mark", "q", "s", "samp", "small", "span", "strong", "sub", "sup", "time", "u", "var",
 ]);
-const VOID_ELEMENTS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
-  "track", "wbr",
-]);
-// Line breaks and list items are blocks too: 15 000 of them convert in 0.16 s on the load stand,
-// and a long Wikipedia article cut there still yields 280 KB of Markdown, past what the model sees.
-export const MARKDOWN_SOURCE_MAX_TAGS = 15_000;
-export const MARKDOWN_SOURCE_MAX_CHARACTERS = 2 * 1024 * 1024;
-export const MARKDOWN_SOURCE_MAX_TEXT_CHARACTERS = 200_000;
-export const MARKDOWN_SOURCE_MAX_DEPTH = 256;
-// Runs of spaces longer than this are shortened: the converter strips trailing whitespace with a
-// regular expression that restarts at every space of a run, so 200 000 spaces inside <pre> took
-// 13 s (Codex review, 5 October 2026); runs of 64 keep any real indentation.
-const MARKDOWN_SOURCE_MAX_SPACE_RUN = 64;
 // `/>` closes an element only in SVG and MathML; `<div/>` or `<script/>` open one, as in a browser.
 const FOREIGN_ELEMENTS = new Set(["math", "svg"]);
-// Elements a browser closes implicitly when a sibling or a block starts: depth must follow the
-// tree the converter builds, or `<li>` lists without closers would count as deep nesting.
-const CLOSED_BY_BLOCK = new Set(["p"]);
-const BLOCK_STARTS = new Set([
-  "address", "article", "aside", "blockquote", "details", "div", "dl", "fieldset", "figcaption",
-  "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "main", "menu",
-  "nav", "ol", "p", "pre", "section", "table", "ul",
-]);
-const CLOSED_BY_SIBLING                                              = {
-  dd: ["dd", "dt"],
-  dt: ["dd", "dt"],
-  li: ["li"],
-  option: ["option"],
-  td: ["td", "th"],
-  th: ["td", "th"],
-  tr: ["td", "th", "tr"],
-};
 const NAMED_ENTITIES                                   = {
   amp: "&",
   apos: "'",
@@ -202,90 +171,231 @@ export function htmlToText(html        )         {
     .trim();
 }
 
-                                       
-                        
-                   
-                  
-                            
- 
-
-/**
- * The page for the Markdown converter: no scripts, styles, SVG, comments or declarations, cut
- * before the first piece over any budget. `truncated` says that something was cut, so the
- * caller can tell the model the page is incomplete.
- */
-function escapeText(text        )         {
-  return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
-}
-
-/**
- * Open elements as the converter's parser will nest them: a closer pops back to its element
- * (a closer of nothing open, `</br>` or `</bogus>`, changes nothing), `/>` closes only void and
- * foreign elements, and the implicit closes browsers apply to `p`, `li`, table cells and the like
- * are applied, so unclosed list items do not count as nesting.
- */
-class OpenElements {
-                   stack           = [];
-
-  get depth()         {
-    return this.stack.length;
-  }
-
-  open(name        , selfClosing         )       {
-    if (VOID_ELEMENTS.has(name) || (selfClosing && FOREIGN_ELEMENTS.has(name))) return;
-    const siblings = CLOSED_BY_SIBLING[name];
-    if (siblings) {
-      while (this.stack.length > 0 && siblings.includes(this.stack.at(-1) )) this.stack.pop();
-    }
-    if (BLOCK_STARTS.has(name) && CLOSED_BY_BLOCK.has(this.stack.at(-1) ?? "")) this.stack.pop();
-    this.stack.push(name);
-  }
-
-  close(name        )       {
-    const index = this.stack.lastIndexOf(name);
-    if (index !== -1) this.stack.length = index;
-  }
-}
-
-export function boundHtmlForMarkdown(
-  html        ,
-  limits                       = {
-    maxCharacters: MARKDOWN_SOURCE_MAX_CHARACTERS,
-    maxDepth: MARKDOWN_SOURCE_MAX_DEPTH,
-    maxTags: MARKDOWN_SOURCE_MAX_TAGS,
-    maxTextCharacters: MARKDOWN_SOURCE_MAX_TEXT_CHARACTERS,
-  },
-)                                       {
-  const parts           = [];
-  let kept = 0;
-  let text = 0;
-  let tags = 0;
-  const elements = new OpenElements();
-  const spaceRun = new RegExp(` {${MARKDOWN_SOURCE_MAX_SPACE_RUN + 1},}`, "gu");
-  const shortRun = " ".repeat(MARKDOWN_SOURCE_MAX_SPACE_RUN);
-  for (const token of tokens(html, MARKDOWN_SKIPPED_ELEMENTS)) {
-    if (token.kind === "skip") continue;
-    if (token.kind === "text") {
-      // CDATA content is text to the reader; as markup it would open elements past the budgets.
-      const piece = (token.cdata ? escapeText(token.text) : token.text).replace(spaceRun, shortRun);
-      const room = Math.min(limits.maxTextCharacters - text, limits.maxCharacters - kept);
-      if (piece.length > room) {
-        parts.push(piece.slice(0, Math.max(0, room)));
-        return { html: parts.join(""), truncated: true };
+/** One attribute's value from a raw start tag, read in a single forward scan. */
+function attribute(raw        , wanted        )                {
+  // Past `<` and the element name.
+  let index = 1;
+  while (index < raw.length && !/[\s/>]/u.test(raw[index] )) index += 1;
+  while (index < raw.length) {
+    while (index < raw.length && /[\s/]/u.test(raw[index] )) index += 1;
+    if (index >= raw.length || raw[index] === ">") return null;
+    const nameStart = index;
+    while (index < raw.length && !/[\s=/>]/u.test(raw[index] )) index += 1;
+    const name = raw.slice(nameStart, index).toLowerCase();
+    while (index < raw.length && /\s/u.test(raw[index] )) index += 1;
+    let value = "";
+    if (raw[index] === "=") {
+      index += 1;
+      while (index < raw.length && /\s/u.test(raw[index] )) index += 1;
+      const quote = raw[index];
+      if (quote === "\"" || quote === "'") {
+        const end = raw.indexOf(quote, index + 1);
+        const stop = end === -1 ? raw.length : end;
+        value = raw.slice(index + 1, stop);
+        index = stop + 1;
+      } else {
+        const valueStart = index;
+        while (index < raw.length && !/[\s>]/u.test(raw[index] )) index += 1;
+        value = raw.slice(valueStart, index);
       }
-      parts.push(piece);
-      kept += piece.length;
-      text += piece.length;
+    }
+    if (name === wanted) return value;
+  }
+  return null;
+}
+
+/**
+ * An attribute URL as a Markdown link target: entities decoded, whitespace and the characters that
+ * end or open a link target percent-encoded, cut to a length; script and inline-data schemes give
+ * nothing. The result only reaches the model, but a `)` in it would still end the link early.
+ */
+function markdownUrl(raw               )         {
+  const url = decodeHtmlEntities(raw ?? "").trim().slice(0, MARKDOWN_MAX_URL);
+  const scheme = url.slice(0, 12).toLowerCase().replace(/[\t\n\r ]/gu, "");
+  if (/^(?:javascript|vbscript|data):/u.test(scheme)) return "";
+  return url.replace(/[\s()<>[\]]/gu, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+}
+
+/** Text as one line: whitespace runs become one space (a single character class, no backtracking). */
+function collapseWhitespace(text        )         {
+  return text.replace(/[ \t\n\r\f]+/gu, " ");
+}
+
+// Shortened attribute values: a link or image keeps what the model needs to follow or name it.
+const MARKDOWN_MAX_URL = 2_000;
+const MARKDOWN_MAX_ALT = 300;
+// Nesting markers are capped: indentation or quote prefixes repeated per line must not grow with
+// thousands of nested lists or quotes.
+const MARKDOWN_MAX_LIST_INDENT = 8;
+const MARKDOWN_MAX_QUOTE_PREFIX = 4;
+const HEADINGS                                   = { h1: 1, h2: 2, h3: 3, h4: 4, h5: 5, h6: 6 };
+const MARKDOWN_BLOCKS = new Set([
+  "address", "article", "aside", "details", "div", "dl", "fieldset", "figcaption", "figure",
+  "footer", "form", "header", "main", "nav", "p", "section", "summary", "table",
+]);
+const STRONG = new Set(["b", "strong"]);
+const EMPHASIS = new Set(["cite", "dfn", "em", "i"]);
+// The model sees at most 50 KB of Markdown; the conversion stops well past that.
+export const MARKDOWN_MAX_OUTPUT_CHARACTERS = 500_000;
+
+/** Output with a count of trailing line breaks, so blocks are separated without re-reading it. */
+class MarkdownWriter {
+                   parts           = [];
+  length = 0;
+          trailingNewlines = 0;
+
+  get empty()          {
+    return this.length === 0;
+  }
+
+  get atLineStart()          {
+    return this.empty || this.trailingNewlines > 0;
+  }
+
+  write(text        )       {
+    if (text === "") return;
+    this.parts.push(text);
+    this.length += text.length;
+    let index = text.length;
+    while (index > 0 && text.charCodeAt(index - 1) === 0x0a) index -= 1;
+    this.trailingNewlines = index === 0 ? this.trailingNewlines + text.length : text.length - index;
+  }
+
+  /** Ends the current line and leaves `count` line breaks (2 for a paragraph break). */
+  breakLines(count        )       {
+    if (this.empty) return;
+    if (this.trailingNewlines < count) this.write("\n".repeat(count - this.trailingNewlines));
+  }
+
+  /** Everything written since `mark`, taken out of the output. */
+  takeSince(mark        )         {
+    const taken = this.parts.splice(mark).join("");
+    this.length -= taken.length;
+    const rest = this.parts.at(-1) ?? "";
+    let index = rest.length;
+    while (index > 0 && rest.charCodeAt(index - 1) === 0x0a) index -= 1;
+    this.trailingNewlines = rest.length - index;
+    return taken;
+  }
+
+  get mark()         {
+    return this.parts.length;
+  }
+
+  result()         {
+    // Line ends lose their trailing spaces one line at a time (native trimEnd, no regular
+    // expression over the whole text), and paragraph breaks are at most one empty line.
+    return this.parts.join("").split("\n").map((line) => line.trimEnd()).join("\n")
+      .replace(/\n{3,}/gu, "\n\n").trim();
+  }
+}
+
+export function htmlToMarkdown(
+  html        ,
+  maxOutputCharacters         = MARKDOWN_MAX_OUTPUT_CHARACTERS,
+)                                           {
+  const out = new MarkdownWriter();
+  const lists                                             = [];
+  let quoteDepth = 0;
+  let preDepth = 0;
+  let link                                        = null;
+  let cellIndex = 0;
+  const linePrefix = () => "> ".repeat(Math.min(quoteDepth, MARKDOWN_MAX_QUOTE_PREFIX));
+  const block = () => {
+    out.breakLines(2);
+  };
+  let truncated = false;
+  for (const token of tokens(html, MARKDOWN_SKIPPED_ELEMENTS)) {
+    if (out.length > maxOutputCharacters) {
+      truncated = true;
+      break;
+    }
+    if (token.kind === "skip") {
+      // A dropped script or comment still separates the words around it.
+      if (!out.atLineStart && preDepth === 0) out.write(" ");
       continue;
     }
-    tags += 1;
-    if (token.closing) elements.close(token.name);
-    else elements.open(token.name, token.selfClosing);
-    if (tags > limits.maxTags || elements.depth > limits.maxDepth || kept + token.raw.length > limits.maxCharacters) {
-      return { html: parts.join(""), truncated: true };
+    if (token.kind === "text") {
+      const decoded = token.cdata ? token.text : decodeHtmlEntities(token.text);
+      if (preDepth > 0) {
+        out.write(decoded);
+        continue;
+      }
+      let text = collapseWhitespace(decoded);
+      if (out.atLineStart) text = text.trimStart();
+      if (text === "") continue;
+      if (out.atLineStart) out.write(linePrefix());
+      out.write(text);
+      continue;
     }
-    parts.push(token.raw);
-    kept += token.raw.length;
+    const { closing, name } = token;
+    const heading = HEADINGS[name];
+    if (heading !== undefined) {
+      block();
+      if (!closing) out.write(`${linePrefix()}${"#".repeat(heading)} `);
+    } else if (MARKDOWN_BLOCKS.has(name)) {
+      block();
+    } else if (name === "blockquote") {
+      quoteDepth = Math.max(0, quoteDepth + (closing ? -1 : 1));
+      block();
+    } else if (name === "ul" || name === "ol") {
+      if (closing) lists.pop();
+      else lists.push({ count: 0, ordered: name === "ol" });
+      if (lists.length === 0) block();
+      else out.breakLines(1);
+    } else if (name === "li" && !closing) {
+      out.breakLines(1);
+      const list = lists.at(-1);
+      const marker = list?.ordered ? `${(list.count += 1)}. ` : "- ";
+      out.write(`${linePrefix()}${"  ".repeat(Math.min(Math.max(0, lists.length - 1), MARKDOWN_MAX_LIST_INDENT))}${marker}`);
+    } else if (name === "br") {
+      out.write("\n");
+    } else if (name === "hr") {
+      block();
+      out.write("---");
+      block();
+    } else if (name === "pre") {
+      if (!closing) {
+        block();
+        out.write("```\n");
+        preDepth += 1;
+      } else if (preDepth > 0) {
+        preDepth -= 1;
+        out.breakLines(1);
+        out.write("```");
+        block();
+      }
+    } else if (name === "code" && preDepth === 0) {
+      out.write("`");
+    } else if (STRONG.has(name) && preDepth === 0) {
+      out.write("**");
+    } else if (EMPHASIS.has(name) && preDepth === 0) {
+      out.write("*");
+    } else if (name === "a") {
+      // Links do not nest: an inner start tag is ignored, so taking a link's text is linear.
+      if (!closing && link === null) {
+        link = { href: markdownUrl(attribute(token.raw, "href")), mark: out.mark };
+      } else if (closing && link !== null) {
+        const text = collapseWhitespace(out.takeSince(link.mark)).trim();
+        if (link.href !== "" && text !== "") out.write(`[${text}](${link.href})`);
+        else out.write(text);
+        link = null;
+      }
+    } else if (name === "img" && !closing) {
+      const src = markdownUrl(attribute(token.raw, "src"));
+      const alt = collapseWhitespace(decodeHtmlEntities(attribute(token.raw, "alt") ?? "")).trim().slice(0, MARKDOWN_MAX_ALT);
+      if (src !== "") out.write(`![${alt}](${src})`);
+      else if (alt !== "") out.write(alt);
+    } else if (name === "tr") {
+      out.breakLines(1);
+      cellIndex = 0;
+    } else if (name === "td" || name === "th") {
+      if (!closing && cellIndex > 0) out.write(" | ");
+      if (!closing) cellIndex += 1;
+    } else if (!INLINE_ELEMENTS.has(name) && !STRONG.has(name) && !EMPHASIS.has(name) && preDepth === 0) {
+      // An unknown element separates words as a browser's block would; inline ones join them.
+      if (!out.atLineStart) out.write(" ");
+    }
   }
-  return { html: parts.join(""), truncated: false };
+  return { markdown: out.result(), truncated };
 }

@@ -1,29 +1,14 @@
-import TurndownService from "#compiled/turndown/index.js";
-import { boundHtmlForMarkdown, htmlToText } from "./osinara-html-text.js";
+import { htmlToMarkdown, htmlToText } from "./osinara-html-text.js";
 function convertHtmlToMarkdown(t) {
   return convertHtmlToMarkdownBounded(t).markdown;
 }
-// Osinara: the converter builds a DOM of every element and its output grows quadratically with
-// the number of blocks; the page reaches it without scripts, styles and SVG and cut to text, tag
-// and depth budgets, and `truncated` tells the tool when the page was cut.
+// Osinara: turndown built a DOM of the page, recursed over it and trimmed whitespace with
+// regular expressions that restart at every space; three Codex reviews (5 October 2026) kept
+// finding pages that blocked the event loop for seconds or overflowed its stack. The Markdown now
+// comes from one linear pass over the page, cut at an output budget; `truncated` tells the tool
+// when it was cut.
 function convertHtmlToMarkdownBounded(t) {
-  let { html: b, truncated: c } = boundHtmlForMarkdown(t);
-  let n = new TurndownService({
-    bulletListMarker: `-`,
-    codeBlockStyle: `fenced`,
-    emDelimiter: `*`,
-    headingStyle: `atx`,
-    hr: `---`,
-  });
-  n.remove([`script`, `style`, `meta`, `link`]);
-  try {
-    return { markdown: n.turndown(b), truncated: c };
-  } catch (e) {
-    // Markup the budgets did not foresee can still overflow the converter's recursion: the page
-    // goes out as plain text, marked incomplete, instead of failing the tool call.
-    if (!(e instanceof RangeError)) throw e;
-    return { markdown: htmlToText(b), truncated: !0 };
-  }
+  return htmlToMarkdown(t);
 }
 // Osinara: one linear pass instead of tag-stripping regular expressions that restart at every
 // `<` (a page of `<` without `>` blocked the event loop; security review, 5 October 2026).

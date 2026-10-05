@@ -6,16 +6,17 @@
  *   script, style, template and noscript content, comments and declarations are dropped; CDATA
  *   keeps its text; custom elements with `-` are not mistaken for skipped ones; a self-closing
  *   skipped element hides nothing; entities decode, invalid numeric ones stay as written.
- * - The Markdown source is cut at text, tag, depth and size budgets and says that it was cut;
- *   a lone `<` cannot hide tags from the tag budget.
- * - Adversarial markup is handled in linear time.
+ * - Markdown: headings, paragraphs, line breaks, rules, nested lists with capped indentation,
+ *   quotes, fenced and inline code, emphasis, links (not nested, no `javascript:`), images (no
+ *   `data:`), table rows; attributes are read with quotes, without them and across line breaks.
+ * - The Markdown is cut at the output budget and says that it was cut.
+ * - Adversarial markup is handled in linear time by both conversions.
  */
 import { describe, expect, it } from "vitest";
 
-import { boundHtmlForMarkdown, decodeHtmlEntities, htmlToText, type MarkdownSourceLimits } from "./html-text.js";
+import { decodeHtmlEntities, htmlToMarkdown, htmlToText } from "./html-text.js";
 
-const WIDE: MarkdownSourceLimits = { maxCharacters: 1_000_000, maxDepth: 1_000, maxTags: 1_000_000, maxTextCharacters: 1_000_000 };
-const WIDE_DEPTH_256: MarkdownSourceLimits = { ...WIDE, maxDepth: 256 };
+const markdown = (html: string) => htmlToMarkdown(html).markdown;
 
 describe("htmlToText", () => {
   it("keeps visible text, breaks lines at block ends and joins inline elements", () => {
@@ -64,54 +65,46 @@ describe("htmlToText", () => {
   ])("handles a megabyte of %s in linear time", (_name, html) => {
     const started = performance.now();
     htmlToText(html);
-    boundHtmlForMarkdown(html);
+    htmlToMarkdown(html);
     // The regex version took over a second for 64 KiB of `<`; a linear pass over a megabyte
     // is tens of milliseconds even on a slow core.
     expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
 
-describe("boundHtmlForMarkdown", () => {
-  it("drops scripts, styles, SVG, comments and declarations and keeps the rest of the markup", () => {
-    expect(boundHtmlForMarkdown("<!DOCTYPE html><h1>T</h1><script>x<p></script><svg><text>s</text></svg><!-- c --><p>B</p>"))
-      .toEqual({ html: "<h1>T</h1><p>B</p>", truncated: false });
+describe("htmlToMarkdown", () => {
+  it("converts headings, paragraphs, emphasis, links and lists", () => {
+    expect(markdown("<h1>Title</h1><p>Some <b>bold</b>, <em>it</em> and <a href=\"https://e.x/a?x=1&amp;y=2\">link</a>.</p><ul><li>one</li><li>two</li></ul>"))
+      .toBe("# Title\n\nSome **bold**, *it* and [link](https://e.x/a?x=1&y=2).\n\n- one\n- two");
+    expect(markdown("<ol><li>a<ul><li>b</li></ul></li><li>c</li></ol>")).toBe("1. a\n  - b\n2. c");
+    expect(markdown("a<br>b<hr>c<div>d</div>e<span>f</span>g")).toBe("a\nb\n\n---\n\nc\n\nd\n\nefg");
   });
 
-  it("cuts at the tag, text, size and depth budgets and says so", () => {
-    expect(boundHtmlForMarkdown("<p>a</p><p>b</p><p>c</p>", { ...WIDE, maxTags: 3 }))
-      .toEqual({ html: "<p>a</p><p>b", truncated: true });
-    expect(boundHtmlForMarkdown("<p>abcdef</p><p>gh</p>", { ...WIDE, maxTextCharacters: 4 }))
-      .toEqual({ html: "<p>abcd", truncated: true });
-    expect(boundHtmlForMarkdown("<p>abcdef</p>", { ...WIDE, maxCharacters: 5 }))
-      .toEqual({ html: "<p>ab", truncated: true });
-    expect(boundHtmlForMarkdown("<div><div><div>deep</div></div></div><br><img>", { ...WIDE, maxDepth: 2 }))
-      .toEqual({ html: "<div><div>", truncated: true });
-    expect(boundHtmlForMarkdown("<div><br><img/><p>x</p></div>", { ...WIDE, maxDepth: 2 }))
-      .toEqual({ html: "<div><br><img/><p>x</p></div>", truncated: false });
+  it("keeps preformatted text, inline code, quotes and table rows", () => {
+    expect(markdown("<pre><code>line1\n  line2</code></pre><p>x <code>y</code></p>")).toBe("```\nline1\n  line2\n```\n\nx `y`");
+    expect(markdown("<blockquote><p>quoted</p></blockquote>after")).toBe("> quoted\n\nafter");
+    expect(markdown("<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>")).toBe("A | B\n1 | 2");
   });
 
-  it("follows nesting as the parser builds it", () => {
-    // A closer of nothing open does not undo nesting; `/>` does not close a div.
-    expect(boundHtmlForMarkdown("<div></bogus>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
-    expect(boundHtmlForMarkdown("<div></br>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
-    expect(boundHtmlForMarkdown("<div/>".repeat(300), WIDE_DEPTH_256).truncated).toBe(true);
-    // Implicitly closed siblings are not nesting.
-    expect(boundHtmlForMarkdown("<ul>" + "<li>item".repeat(1_000) + "</ul>", WIDE_DEPTH_256).truncated).toBe(false);
-    expect(boundHtmlForMarkdown("<p>one".repeat(1_000), WIDE_DEPTH_256).truncated).toBe(false);
-    expect(boundHtmlForMarkdown("<table>" + "<tr><td>a<td>b".repeat(500) + "</table>", WIDE_DEPTH_256).truncated).toBe(false);
-    expect(boundHtmlForMarkdown("<p>a<br/><img src=x/>b</p>".repeat(1_000), WIDE_DEPTH_256).truncated).toBe(false);
+  it("reads attributes in every form and drops script links and inline images", () => {
+    expect(markdown("<img\nsrc=/i.png alt='pic &amp; co'>")).toBe("![pic & co](/i.png)");
+    expect(markdown("<a href=\"javascript:x\">js</a> <img src=\"data:image/png;base64,AA\" alt=\"inline\">")).toBe("js inline");
+    expect(markdown("<a href=\"/r\"><img src=a.png alt=A></a>")).toBe("[![A](a.png)](/r)");
+    expect(markdown("<a href=\" JavaScript:x\">js</a> <a href=\"/a b)(c\">t</a>")).toBe("js [t](/a%20b%29%28c)");
+    // A link inside a link is not nesting: the inner start tag is ignored.
+    expect(markdown("<a href=\"/a\">x <a href=\"/b\">y</a> z</a>")).toBe("[x y](/a) z");
   });
 
-  it("passes CDATA on as escaped text and shortens long runs of spaces", () => {
-    const { html, truncated } = boundHtmlForMarkdown("<![CDATA[" + "<div>".repeat(6_000) + "x]]>", WIDE_DEPTH_256);
-    expect(truncated).toBe(false);
-    expect(html.startsWith("&lt;div&gt;&lt;div&gt;")).toBe(true);
-    expect(boundHtmlForMarkdown(`<pre>${" ".repeat(1_000)}x</pre>`, WIDE).html).toBe(`<pre>${" ".repeat(64)}x</pre>`);
+  it("drops scripts, styles, SVG and comments and keeps CDATA as text", () => {
+    expect(markdown("<h1>T</h1><script>x<p></script><svg><text>s</text></svg><!-- c --><p>B <![CDATA[<i>raw</i>]]></p>"))
+      .toBe("# T\n\nB <i>raw</i>");
   });
 
-  it("counts every tag even after a lone <", () => {
-    const { html, truncated } = boundHtmlForMarkdown("< <br>".repeat(10), { ...WIDE, maxTags: 3 });
-    expect(truncated).toBe(true);
-    expect(html.match(/<br>/gu)).toHaveLength(3);
+  it("caps nesting markers and cuts at the output budget", () => {
+    const nested = markdown("<ul><li>".repeat(50) + "deep" + "</li></ul>".repeat(50));
+    expect(nested.split("\n").at(-1)).toBe(`${"  ".repeat(8)}- deep`);
+    expect(markdown("<blockquote>".repeat(20) + "q")).toBe(`${"> ".repeat(4)}q`);
+    expect(htmlToMarkdown("<p>abcdef</p>".repeat(10), 20)).toEqual({ markdown: "abcdef\n\nabcdef\n\nabcdef", truncated: true });
+    expect(htmlToMarkdown("<p>abc</p>", 20)).toEqual({ markdown: "abc", truncated: false });
   });
 });
