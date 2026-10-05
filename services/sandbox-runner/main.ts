@@ -12,6 +12,7 @@ import {
   resolveSandboxDockerRuntime,
 } from "./docker-sandbox-engine.js";
 import { SANDBOX_IDLE_SWEEP_INTERVAL_MS } from "./docker-sandbox-lifecycle.js";
+import { createHostDiskProbe, createSandboxDiskQuota } from "./sandbox-disk-quota.js";
 import { createSandboxRunnerServer } from "./server.js";
 
 const RUNNER_PORT = 8080;
@@ -19,7 +20,11 @@ const DOCKER_SOCKET_PATH = "/var/run/docker.sock";
 
 const docker = new Docker({ socketPath: DOCKER_SOCKET_PATH });
 const resources = await resolveSandboxDockerRuntime(docker);
-const engine = createDockerSandboxEngine({ docker, ...resources });
+const engine = createDockerSandboxEngine({
+  diskQuota: createSandboxDiskQuota({ now: Date.now, probe: createHostDiskProbe(resources.roots.workspaceRoot) }),
+  docker,
+  ...resources,
+});
 await engine.stopAllSessions();
 await engine.health();
 

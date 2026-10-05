@@ -70,6 +70,12 @@ import {
   type SandboxDockerRuntime,
 } from "./docker-sandbox-options.js";
 import { removeBrowserContainer, requireBrowserContainer } from "./docker-sandbox-browser.js";
+import {
+  isCleanupCommand,
+  SANDBOX_QUOTA_REFUSED_EXIT_CODE,
+  type SandboxDiskQuota,
+  type WorkspaceDirectories,
+} from "./sandbox-disk-quota.js";
 import { executeGoogleWorkspaceContainer } from "./google-workspace-container.js";
 
 export { buildSandboxContainerOptions } from "./docker-sandbox-options.js";
@@ -141,7 +147,28 @@ async function ensureToolDirectories(
   }
 }
 
+/**
+ * The directories one session's writes land in, per workspace: its files, and for the workspace
+ * that owns the tool environment also the tools and the browser state.
+ */
+function sessionWorkspaces(inspection: Docker.ContainerInspectInfo, roots: RuntimeRoots): WorkspaceDirectories[] {
+  const byKey = new Map<string, string[]>();
+  for (const mount of (inspection.HostConfig.Mounts ?? []) as Array<Docker.MountSettings & { VolumeOptions?: { Subpath?: string } }>) {
+    const id = mount.VolumeOptions?.Subpath;
+    if (!id) continue;
+    const directories = byKey.get(id) ?? [];
+    if (mount.Target.startsWith("/workspace/")) directories.push(`${roots.workspaceRoot}/${id}`);
+    else if (mount.Target.startsWith("/tools/")) {
+      directories.push(`${roots.toolsRoot}/${id}`, `${roots.toolsRoot}/${browserStateSubpath(id)}`);
+    }
+    byKey.set(id, directories);
+  }
+  return [...byKey].map(([key, directories]) => ({ directories, key }));
+}
+
 export function createDockerSandboxEngine(input: {
+  /** Workspace budget and host free-space floor; absent in tests that do not exercise it. */
+  diskQuota?: SandboxDiskQuota;
   docker: Docker;
   /** Running-container cap; the configured value unless a test narrows it. */
   limits?: { maxRunningContainers: number };
@@ -309,7 +336,14 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start) => withCapacity(sessionId, start));
+        const refusal = isCleanupCommand(processRequest.command)
+          ? null
+          : await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
+        if (refusal) {
+          console.error(JSON.stringify({ code: refusal.slice(0, refusal.indexOf(":")), sessionId }));
+          return { exitCode: SANDBOX_QUOTA_REFUSED_EXIT_CODE, processId: randomUUID(), stderr: refusal, stdout: "" };
+        }
         const result = await executeSandboxProcess(input.docker, container, processRequest, signal);
         if (processTimedOut(result)) repeatGuard.recordTimeout(sessionId, fingerprint);
         return result;
@@ -390,12 +424,18 @@ export function createDockerSandboxEngine(input: {
     },
     async writeFile(sessionId, path, content) {
       await activity.runActive(sessionId, async () => {
-        const { container, generation } = await requireRunningContainer(
+        const { container, generation, inspection } = await requireRunningContainer(
           input.docker,
           sessionId,
           activity.activeCount(sessionId),
         );
         const resolved = resolvePath(path);
+        // Only the model's files: skill packages in HOME are rewritten every turn, and refusing
+        // them would stop every turn of a workspace past its budget, cleanup included.
+        if (resolved.startsWith("/workspace/")) {
+          const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
+          if (refusal) throw new Error(refusal);
+        }
         // Eve rewrites every dynamic skill package on every turn without diffing it; identical
         // bytes already inside this container run are that same materialization, not a new one.
         if (writeMemo.hasSkillFile(generation, resolved, content)) return;

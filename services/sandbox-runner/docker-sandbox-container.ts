@@ -80,7 +80,7 @@ export async function requireRunningContainer(
   /** Runs a start of the stopped container; the engine passes its capacity gate. */
   gateStart: (start: () => Promise<void>) => Promise<void> = (start) => start(),
   containerName: string = sandboxContainerName(sessionId),
-): Promise<{ container: Docker.Container; generation: string | null }> {
+): Promise<{ container: Docker.Container; generation: string | null; inspection: Docker.ContainerInspectInfo }> {
   const existing = await inspectContainer(docker, sessionId, containerName);
   if (!existing) throw new Error("AGENT_SANDBOX_RUNNER_SESSION_NOT_FOUND: Sandbox is absent");
   let inspection = existing.inspection;
@@ -93,5 +93,5 @@ export async function requireRunningContainer(
       inspection = await existing.container.inspect();
     }
   }
-  return { container: existing.container, generation: containerGeneration(inspection) };
+  return { container: existing.container, generation: containerGeneration(inspection), inspection };
 }
