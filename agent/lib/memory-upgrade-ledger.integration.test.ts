@@ -160,6 +160,7 @@ const POST_V0101_MIGRATIONS = [
   "126_rechunk_memory_embeddings.sql",
   "127_claim_evidence_attach_time_checks.sql",
   "128_telegram_ingress_completed_index.sql",
+  "129_backfill_use_reinforcement.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
