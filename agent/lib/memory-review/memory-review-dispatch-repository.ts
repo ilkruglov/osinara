@@ -11,6 +11,7 @@ import type { TelegramGroupJournalEntry } from "../telegram-group-journal-contex
 import {
   MEMORY_REVIEW_BATCH_SIZE,
   MEMORY_REVIEW_CONTEXT_LIMIT,
+  MEMORY_REVIEW_SLOTS_PER_SUBJECT,
   MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS,
   MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES,
   MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
@@ -221,23 +222,40 @@ async function loadReviewMemoryContext(client: PoolClient, input: {
 
 async function loadReviewSubjectSlots(client: PoolClient, input: {
   authorTelegramUserIds: readonly string[];
+  authorUsernames: readonly string[];
   familyId: string;
   scope: "family" | "group" | "personal";
   scopePartitionKey: string;
 }): Promise<ReviewSubjectSlots[]> {
-  // Every slot of the batch authors and of subject-less records, newest slot first; the records
-  // block above is capped at forty and shows only a few of them.
+  // The slots of the batch authors only, the most recently touched first and at most
+  // MEMORY_REVIEW_SLOTS_PER_SUBJECT per author: the records block is capped at forty and shows
+  // only a few of them. Label-only subjects stay out: the largest group holds 1 553 slots, 748
+  // of them on label subjects, some 50 000 characters (Codex review, 6 October 2026).
+  // A record names its subject by conversation participant (group), by family user (family,
+  // personal) or by a label the review wrote, «Имя (username)» for 2 575 of 3 095 group records
+  // on production; the first two match the batch authors by Telegram id, the label by the
+  // username in its parentheses.
   const result = await client.query<ReviewSubjectSlots>(
-    `SELECT COALESCE(participant.display_name_snapshot, item.subject_label) AS "subjectLabel",
-            array_agg(DISTINCT item.attribute ORDER BY item.attribute) AS attributes
-       FROM memory_items AS item
-       LEFT JOIN conversation_participants AS participant
-         ON participant.id = item.subject_participant_id
-      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
-        AND item.claim_status = 'active' AND item.sensitivity = 'normal' AND item.attribute IS NOT NULL
-        AND (participant.telegram_user_id = ANY($4::text[]) OR item.subject_participant_id IS NULL)
-      GROUP BY 1 ORDER BY 1 NULLS LAST`,
-    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds],
+    `SELECT "subjectLabel", array_agg(attribute ORDER BY touched_at DESC) AS attributes
+       FROM (SELECT COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label) AS "subjectLabel",
+                    item.attribute, max(item.updated_at) AS touched_at,
+                    row_number() OVER (
+                      PARTITION BY COALESCE(participant.telegram_user_id, family_user.telegram_user_id, item.subject_label)
+                      ORDER BY max(item.updated_at) DESC) AS rank
+               FROM memory_items AS item
+               LEFT JOIN conversation_participants AS participant ON participant.id = item.subject_participant_id
+               LEFT JOIN users AS family_user ON family_user.id = item.subject_user_id
+              WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
+                AND item.claim_status = 'active' AND item.sensitivity = 'normal' AND item.attribute IS NOT NULL
+                AND (COALESCE(participant.telegram_user_id, family_user.telegram_user_id) = ANY($4::text[])
+                     OR (item.subject_participant_id IS NULL AND item.subject_user_id IS NULL
+                         AND (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1] = ANY($6::text[])))
+              GROUP BY COALESCE(participant.telegram_user_id, family_user.telegram_user_id, item.subject_label),
+                       COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label), item.attribute) AS slot
+      WHERE rank <= $5
+      GROUP BY "subjectLabel" ORDER BY "subjectLabel"`,
+    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds, MEMORY_REVIEW_SLOTS_PER_SUBJECT,
+      input.authorUsernames],
   );
   return result.rows;
 }
@@ -416,7 +434,11 @@ export const memoryReviewDispatchRepository = {
           scopePartitionKey: row.scope_partition_key,
         };
         const existing = await loadReviewMemoryContext(client, contextInput);
-        const slots = await loadReviewSubjectSlots(client, contextInput);
+        const slots = await loadReviewSubjectSlots(client, {
+          ...contextInput,
+          authorUsernames: [...new Set(sources.rows.flatMap((source) =>
+            source.sender_username === null ? [] : [source.sender_username]))],
+        });
         claims.push({
           batchId: row.id, conversationId: row.conversation_id, entries,
           familyId: row.family_id,

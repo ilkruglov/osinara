@@ -47,6 +47,9 @@ export const MEMORY_REVIEW_LONG_IDLE_MILLISECONDS = 6 * 60 * 60 * 1_000;
 export const MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES = 8;
 // Existing claims shown to the review so it versions slots instead of duplicating.
 export const MEMORY_REVIEW_CONTEXT_LIMIT = 40;
+// Slot names of one batch author shown to the review, most recently touched first: a subject in
+// the largest group has 157 slots, which would be most of the prompt (6 October 2026).
+export const MEMORY_REVIEW_SLOTS_PER_SUBJECT = 40;
 // Already processed messages shown before a background batch so the tail reads in context.
 export const MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT = 20;
 export const MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS = 15 * 60 * 1_000;

@@ -32,10 +32,10 @@ async function insertUserMessage(input: {
   return (await database().query<{ id: string }>(
     `INSERT INTO telegram_group_messages
        (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
-        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text,
+        telegram_user_id, sender_display_name, sender_username, sender_is_bot, message_kind, content_text,
         message_thread_id, sent_at)
      VALUES ($1, $2, $3, $3, 'user', 'telegram:agent-memory-author',
-             'agent-memory-author', 'Анна', false, 'text', $4, NULL, $5::timestamptz)
+             'agent-memory-author', 'Анна', 'agent_memory_author', false, 'text', $4, NULL, $5::timestamptz)
      RETURNING id`,
     [input.conversationId, input.groupId, input.sequence,
       `Сообщение памяти ${input.sequence}`, input.sentAt],
@@ -291,6 +291,14 @@ describeWithDatabase("idle memory review", () => {
       sensitivity: "normal",
       source: "eve:eve-session-ctx:eve-turn-ctx",
     });
+    for (const [label, content] of [["Анна (agent_memory_author)", "Ездит на BRZ"], ["Кто-то другой (nobody_here)", "Ездит на Весте"]] as const) {
+      await memoryRepository.create(fixture.auth, {
+        attribute: "машина", confirmation: "model_high", content, kind: "profile",
+        explicitSource: { conversationId: fixture.conversationId, subject: { kind: "label", label }, timelineEntryId: fixture.timelineEntryId },
+        operationKey: `review-context-${label}`, provenance: { sessionId: "eve-session-ctx", turnId: "eve-turn-ctx" },
+        scope: "family", sensitivity: "normal", source: "eve:eve-session-ctx:eve-turn-ctx",
+      });
+    }
     await memoryReviewRepository.initializeLane({
       conversationId: fixture.conversationId,
       messageThreadId: null,
@@ -311,8 +319,13 @@ describeWithDatabase("idle memory review", () => {
     expect(claims[0]!.prompt).toContain("<existing_memory>");
     expect(claims[0]!.prompt).toContain("Анна работает логистом");
     expect(claims[0]!.prompt).toContain("работа");
-    // The subjects' slot names come first, so a new record reuses a slot instead of coining one.
+    // The subjects' slot names come first, so a new record reuses a slot instead of coining one;
+    // a label subject «Имя (username)» is matched to the batch author by username, a label
+    // that names no author is not shown.
     expect(claims[0]!.prompt).toMatch(/<existing_slots>[^]*: работа[^]*<\/existing_slots>[^]*<existing_memory>/u);
+    const slotsBlock = claims[0]!.prompt.slice(0, claims[0]!.prompt.indexOf("</existing_slots>"));
+    expect(slotsBlock).toContain("Анна (agent_memory_author): машина");
+    expect(slotsBlock).not.toContain("Кто-то другой");
   });
 
   // Production, 3 October 2026: two external groups gave 97 % of all review batches, almost every

@@ -79,13 +79,14 @@ describe("externalRememberInputSchema", () => {
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "x".repeat(65), kind: "profile" }).success).toBe(false);
   });
 
-  it("normalizes the slot name so case and spacing variants are one slot", () => {
-    // The slot lookup compares the attribute exactly; «Семья» and «семья» were two slots.
+  it("normalizes spacing and compatibility forms of the slot name but keeps its case", () => {
+    // The slot lookup compares the attribute exactly. Case stays: «общение с Мией» is a reserved
+    // slot name and «взгляды на Opus 5.5» a production one; lowering would split them.
     const base = { basis: "agent_inferred", content: "Двое детей", kind: "profile", scope: "group", sensitivity: "normal", subject: { kind: "current_author" } };
-    const parsed = externalRememberInputSchema.parse({ ...base, attribute: "  Семья  и   Дети " });
-    expect(parsed.attribute).toBe("семья и дети");
-    expect(externalRememberInputSchema.parse({ ...base, attribute: "Ｓｅｍｙａ" }).attribute).toBe("semya");
-    // Normalization can lengthen the name («ﬁ» → «fi», «İ» → «i̇»); the limit is the stored one.
+    expect(externalRememberInputSchema.parse({ ...base, attribute: "  Семья  и   Дети " }).attribute).toBe("Семья и Дети");
+    expect(externalRememberInputSchema.parse({ ...base, attribute: "Ｓｅｍｙａ" }).attribute).toBe("Semya");
+    expect(externalRememberInputSchema.parse({ ...base, attribute: "общение с Мией" }).attribute).toBe("общение с Мией");
+    // Normalization can lengthen the name («ﬁ» → «fi»); the limit is the stored one.
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "ﬁ".repeat(40) }).success).toBe(false);
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "ﬁ".repeat(32) }).success).toBe(true);
   });

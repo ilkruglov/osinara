@@ -97,11 +97,13 @@ const memoryThreadSchema = z.discriminatedUnion("action", [
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
-    // The slot lookup compares the name exactly, so «Семья» and «семья» were two slots.
-    // Checked after normalization: NFKC and lower case can lengthen the name, and the column
+    // Compatibility normalization and single spaces only. Not case: production slots are named
+    // with proper nouns («взгляды на Opus 5.5», «общение с Мией», the latter a reserved name in
+    // profile-selection.ts), and lowering them would split every such slot in two (Codex review,
+    // 6 October 2026). Checked after the transform: NFKC can lengthen the name, and the column
     // CHECK is on the stored form.
     attribute: z.string().trim().min(1)
-      .transform((value) => value.normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/\s+/gu, " "))
+      .transform((value) => value.normalize("NFKC").replace(/\s+/gu, " "))
       .pipe(z.string().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS))
       .optional().describe(
       "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
