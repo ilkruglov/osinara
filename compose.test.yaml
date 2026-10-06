@@ -45,6 +45,8 @@ services:
       WORKFLOW_POSTGRES_URL: postgresql://osinara_workflow:osinara-workflow-test-only@postgres:5432/osinara_workflow
       WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "10"
       WORKFLOW_STRESS_RESET_ALLOWED: "true"
+      # The queue sends it with every flow request since the route is behind it (6 October 2026).
+      AGENT_INTERNAL_TOKEN: workflow-stress-internal-token-0123456789
 
   memory-embedding:
     profiles: ["memory-quality"]

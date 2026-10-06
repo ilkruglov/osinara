@@ -27,7 +27,11 @@ async function toolNames(path: string): Promise<string[]> {
   for (const [, file] of source.matchAll(/#runtime\/framework-tools\/([a-z-]+)\.js/gu)) {
     if (!["file-state", "todo", "skill", "tasks"].includes(file)) names.add(file.replaceAll("-", "_"));
   }
-  if (source.includes("TASK_TOOL_DEFINITIONS")) for (const task of ["task_cancel", "task_sleep", "task_update"]) names.add(task);
+  if (source.includes("TASK_TOOL_DEFINITIONS")) {
+    // The task tools are named in tasks.js; read them there so a new one is not missed.
+    const tasks = await readFile("vendor/eve/dist/src/runtime/framework-tools/tasks.js", "utf8");
+    for (const [, name] of tasks.matchAll(/TASK_[A-Z_]+_TOOL_NAME = `([a-z_]+)`/gu)) names.add(name);
+  }
   if (source.includes("TODO_TOOL_DEFINITION")) names.add("todo");
   if (source.includes("SKILL_TOOL_DEFINITION")) names.add("load_skill");
   return [...names].sort();
@@ -53,10 +57,13 @@ describe("skill lab tool surface", () => {
     expect(expected).toContain("web_fetch");
     expect(expected).toContain("web_search");
 
+    // Exact file contents, not a pattern: a local `disableTool` shadowing the import with the
+    // real executor passed a regex (Codex review, 6 October 2026).
+    const DISABLED = 'import { disableTool } from "eve/tools";\nexport default disableTool();\n';
     for (const name of present) {
       const source = await readFile(`${LAB_TOOLS}/${name}.ts`, "utf8");
       if (DELIBERATE.has(name)) continue;
-      expect(source, name).toMatch(/import \{ disableTool \} from "eve\/tools";\s*export default disableTool\(\);\s*$/u);
+      expect(source, name).toBe(DISABLED);
     }
   });
 });
