@@ -167,6 +167,24 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
         // steps answer that (most of it was the reranker, removed on 2 October 2026).
         ...context.timings,
       }));
+      const profileBlock = profile == null ? null : formatProfileViewContext(profile);
+      // The reminder sits right after the records: the rule in the mode block alone was ignored.
+      const memoryBlock = retrievalFailed ? MEMORY_UNAVAILABLE_BLOCK : shownMemoryRefs.length === 0
+        ? formatRetrievedMemoryInstructions(context.memories, context.threads)
+        : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`;
+      // Why a record was or was not shown, joined to AGENT_MEMORY_REINFORCED by the session turn:
+      // shown-to-used precision per kind and the cut that kept a record out (6 October 2026).
+      // Opaque refs and numbers only, never record or profile text.
+      console.info(JSON.stringify({
+        applicationSessionId: input.applicationSessionId,
+        candidates: context.trace ?? [],
+        code: "AGENT_MEMORY_RETRIEVAL_TRACE",
+        memoryChars: memoryBlock.length,
+        profileChars: profileBlock?.length ?? 0,
+        profileRefs: profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? [],
+        sessionTurn,
+        threads: context.threads.threads.length,
+      }));
       const hint = dependencies.takeSkillHint === undefined
         ? null
         : await dependencies.takeSkillHint(input.conversationId).catch((error: unknown) => {
@@ -174,11 +192,8 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
           return null;
         });
       return [
-        ...(profile == null ? [] : [formatProfileViewContext(profile)]),
-        // The reminder sits right after the records: the rule in the mode block alone was ignored.
-        retrievalFailed ? MEMORY_UNAVAILABLE_BLOCK : shownMemoryRefs.length === 0
-          ? formatRetrievedMemoryInstructions(context.memories, context.threads)
-          : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`,
+        ...(profileBlock === null ? [] : [profileBlock]),
+        memoryBlock,
         ...(hint === null ? [] : [formatSkillHint(hint)]),
       ];
     } catch (error) {

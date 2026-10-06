@@ -6,6 +6,8 @@
  * - Memory authorization derives from verified access and actor, never from message text.
  * - The same-turn profile view binds to the application session and timeline entry.
  * - Failures degrade to an explicit unavailability notice instead of failing the turn.
+ * - One trace line per turn joins the session turn, every candidate by ref and outcome, the
+ *   profile refs and the size of each block, without any record or profile text.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -148,6 +150,40 @@ describe("createTelegramMemoryContextBuilder", () => {
       applicationSessionId: "app-session-1", authorTelegramUserId: null,
       memoryRefs: ["mem_fresh", "mem_reply"], sessionTurn: 12,
     });
+  });
+
+  it("logs one retrieval trace per turn keyed by session turn, without record text", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const exposures = {
+      authorCardShownRecently: vi.fn().mockResolvedValue(false),
+      recentlyShownMemoryRefs: vi.fn().mockResolvedValue(new Set<string>()),
+      record: vi.fn().mockResolvedValue(undefined),
+      sessionTurn: vi.fn().mockResolvedValue(12),
+    };
+    const trace = [{ kind: "preference", lexical: true, morphology: false, outcome: "shown", ref: "mem_fresh", retention: 1, score: 0.03, semantic: 0.41 }];
+    const retrieve = vi.fn().mockResolvedValue({
+      ...emptyRetrieval,
+      memories: [{ content: "Любит гречку", memoryRef: "mem_fresh" }],
+      trace,
+    });
+    const createProfile = vi.fn().mockResolvedValue({
+      generatedAt: "2026-08-08T10:00:00.000Z", profileViewRef: "pv_1", totalCharacters: 10,
+      subjects: [{ claims: [{ content: "Работает логистом", memoryRef: "mem_card" }], label: "Женя", priority: "current_author", subjectRef: "s1", totalCharacters: 10 }],
+    });
+    const build = createTelegramMemoryContextBuilder({ createProfile, exposures, retrieve });
+
+    const blocks = await build(input());
+
+    const lines = info.mock.calls.map(([line]) => String(line)).filter((line) => line.includes("AGENT_MEMORY_RETRIEVAL_TRACE"));
+    expect(lines).toHaveLength(1);
+    const logged = JSON.parse(lines[0]!);
+    expect(logged).toMatchObject({
+      applicationSessionId: "app-session-1", candidates: trace, profileRefs: ["mem_card"], sessionTurn: 12, threads: 0,
+    });
+    expect(logged.memoryChars + logged.profileChars).toBe(blocks.join("").length);
+    expect(lines[0]).not.toContain("гречку");
+    expect(lines[0]).not.toContain("логистом");
+    info.mockRestore();
   });
 
   it("shows the author card again when the author is the reply subject and records it", async () => {

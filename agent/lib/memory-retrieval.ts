@@ -103,13 +103,35 @@ export function formatRetrievedMemoryInstructions(
   ].join("\n");
 }
 
+/**
+ * One candidate of the automatic block, for the retrieval trace log: an opaque ref, the kind, the
+ * ranking inputs and why it was or was not shown. Never the record text.
+ */
+export interface MemoryRetrievalTraceEntry {
+  kind: string;
+  /** Matched the `simple` full-text search. */
+  lexical: boolean;
+  /** Matched the Russian-morphology full-text search. */
+  morphology: boolean;
+  outcome: "faded" | "over_limit" | "recently_shown" | "shown";
+  ref: string;
+  retention: number;
+  score: number;
+  /** BERTA similarity of the best chunk, null when the record was found by text only. */
+  semantic: number | null;
+}
+
 export interface MemoryTurnContext {
   memories: ModelMemoryContextItem[];
   retrievedClaimIds: string[];
   threads: MemoryThreadContext;
   /** Where the retrieval spent its time: the query embedding, the hybrid search, the thread briefs. */
   timings?: { embedMs: number; searchMs: number; threadsMs: number };
+  /** Every candidate in rank order with its outcome; the turn builder logs it. */
+  trace?: MemoryRetrievalTraceEntry[];
 }
+
+const round = (value: number, digits: number) => Number(value.toFixed(digits));
 
 export function latestUserText(messages: readonly ModelMessage[]): string | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -201,11 +223,27 @@ export async function retrieveMemoryTurnContext(
     MEMORY_TURN_RETRIEVAL_CANDIDATE_LIMIT,
   );
   const exclude = options.excludeMemoryRefs ?? new Set<string>();
-  const admitted = retrieval.results
+  const trace: MemoryRetrievalTraceEntry[] = [];
+  const admitted: typeof retrieval.results = [];
+  for (const result of retrieval.results) {
     // A faded record stays searchable but no longer enters the block on its own.
-    .filter((result) => isRetainedForAutomaticContext(result.retention))
-    .filter((result) => !exclude.has(result.memory.memoryRef))
-    .slice(0, MEMORY_TURN_RETRIEVAL_LIMIT);
+    const outcome = !isRetainedForAutomaticContext(result.retention)
+      ? "faded"
+      : exclude.has(result.memory.memoryRef)
+        ? "recently_shown"
+        : admitted.length >= MEMORY_TURN_RETRIEVAL_LIMIT ? "over_limit" : "shown";
+    if (outcome === "shown") admitted.push(result);
+    trace.push({
+      kind: result.memory.kind,
+      lexical: result.evidence.simpleLexicalRank !== null,
+      morphology: result.evidence.russianMorphologyRank !== null,
+      outcome,
+      ref: result.memory.memoryRef,
+      retention: round(result.retention, 3),
+      score: round(result.score, 5),
+      semantic: result.evidence.semanticSimilarity === null ? null : round(result.evidence.semanticSimilarity, 3),
+    });
+  }
   const memories: ModelMemoryContextItem[] = [
     ...(embedding === null ? [LEXICAL_ONLY_STATUS] : []),
     ...admitted.map(toRetrievedMemory),
@@ -223,5 +261,5 @@ export async function retrieveMemoryTurnContext(
     searchMs: Math.round(searchedAt - embeddedAt),
     threadsMs: Math.round(performance.now() - searchedAt),
   };
-  return { memories, retrievedClaimIds: retrieval.relatedClaimIds, threads, timings };
+  return { memories, retrievedClaimIds: retrieval.relatedClaimIds, threads, timings, trace };
 }

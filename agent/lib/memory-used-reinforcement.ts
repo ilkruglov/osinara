@@ -3,7 +3,9 @@
  *
  * Export:
  * - `reinforceUsedMemories`: accepts only refs shown in this turn, bumps them, logs the rest;
- *   an answer without the directive while records were shown is logged as `AGENT_MEMORY_USED_MISSING`.
+ *   an answer without the directive while records were shown is logged as `AGENT_MEMORY_USED_MISSING`,
+ *   an empty one as `AGENT_MEMORY_USED_NONE`. Each names the application session and its turn, the
+ *   key of `AGENT_MEMORY_RETRIEVAL_TRACE`, so shown-to-used precision can be counted.
  *
  * Bookkeeping after a delivered answer: any failure is logged and never fails the turn.
  */
@@ -38,7 +40,15 @@ export async function reinforceUsedMemories(
     if (input.memoryRefs.length === 0) {
       // An empty directive is a valid "used nothing"; a skipped directive while records were shown
       // is the only production measure of how often the rule is honoured.
-      if (!input.declared && shown.size > 0) console.warn(JSON.stringify({ code: "AGENT_MEMORY_USED_MISSING", shown: shown.size }));
+      if (shown.size === 0) return;
+      const line = JSON.stringify({
+        applicationSessionId: input.applicationSessionId,
+        code: input.declared ? "AGENT_MEMORY_USED_NONE" : "AGENT_MEMORY_USED_MISSING",
+        sessionTurn,
+        shown: shown.size,
+      });
+      if (input.declared) console.info(line);
+      else console.warn(line);
       return;
     }
     const accepted = input.memoryRefs.filter((ref) => shown.has(ref));
@@ -53,9 +63,12 @@ export async function reinforceUsedMemories(
       reason: "model_used",
     });
     console.info(JSON.stringify({
+      applicationSessionId: input.applicationSessionId,
       code: "AGENT_MEMORY_REINFORCED",
       reason: "model_used",
       refs: result.reinforced,
+      sessionTurn,
+      shown: shown.size,
       ...(result.unknown.length === 0 ? {} : { unauthorized: result.unknown }),
     }));
   } catch (error) {

@@ -6,6 +6,8 @@
  * - Explicit search still returns it and records the shown refs for this turn.
  * - The turn limit applies after the retention and exposure filters, so records ranked below an
  *   excluded top still reach the block, and the block never exceeds the limit.
+ * - The trace names every candidate by ref with its kind, scores and why it was or was not
+ *   shown, in rank order, and carries no record text.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -126,5 +128,30 @@ describe("automatic memory block admission", () => {
 
     expect(vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mock.calls.at(-1)?.[4])
       .toEqual({ occurredAfter: "2026-08-01", occurredBefore: "2026-08-31" });
+  });
+
+  it("traces every candidate in rank order with its scores and outcome, without record text", async () => {
+    const { memoryRetrievalRepository } = await import("./memory-retrieval-repository.js");
+    const { retrieveMemoryTurnContext } = await import("./memory-retrieval.js");
+    const fresh = Array.from({ length: MEMORY_TURN_RETRIEVAL_LIMIT + 1 }, (_, index) => `mem_fresh${index}`);
+    vi.mocked(memoryRetrievalRepository.searchWithConflictClosure).mockResolvedValue({
+      conflicts: [],
+      relatedClaimIds: [],
+      results: [scored("mem_seen", 1), scored("mem_faded", 0.1), ...fresh.map((ref) => scored(ref, 1))],
+    });
+
+    const context = await retrieveMemoryTurnContext(auth, "что нового", [], { excludeMemoryRefs: new Set(["mem_seen"]) });
+
+    expect(context.trace?.map((entry) => [entry.ref, entry.outcome])).toEqual([
+      ["mem_seen", "recently_shown"],
+      ["mem_faded", "faded"],
+      ...fresh.slice(0, MEMORY_TURN_RETRIEVAL_LIMIT).map((ref) => [ref, "shown"]),
+      [fresh.at(-1), "over_limit"],
+    ]);
+    expect(context.trace?.[0]).toEqual({
+      kind: "episode", lexical: false, morphology: false, outcome: "recently_shown", ref: "mem_seen",
+      retention: 1, score: 0.02, semantic: 0.9,
+    });
+    expect(JSON.stringify(context.trace)).not.toContain("Запись");
   });
 });
