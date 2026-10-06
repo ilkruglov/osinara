@@ -28,17 +28,19 @@ async function insertUserMessage(input: {
   groupId: string | null;
   sentAt: string;
   sequence: number;
+  /** Another sender than the fixture's author, e.g. a namesake. */
+  sender?: { telegramUserId: string; username: string };
 }) {
   return (await database().query<{ id: string }>(
     `INSERT INTO telegram_group_messages
        (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
         telegram_user_id, sender_display_name, sender_username, sender_is_bot, message_kind, content_text,
         message_thread_id, sent_at)
-     VALUES ($1, $2, $3, $3, 'user', 'telegram:agent-memory-author',
-             'agent-memory-author', 'Анна', 'agent_memory_author', false, 'text', $4, NULL, $5::timestamptz)
+     VALUES ($1, $2, $3, $3, 'user', 'telegram:' || $6, $6, 'Анна', $7, false, 'text', $4, NULL, $5::timestamptz)
      RETURNING id`,
     [input.conversationId, input.groupId, input.sequence,
-      `Сообщение памяти ${input.sequence}`, input.sentAt],
+      `Сообщение памяти ${input.sequence}`, input.sentAt,
+      input.sender?.telegramUserId ?? "agent-memory-author", input.sender?.username ?? "agent_memory_author"],
   )).rows[0]!;
 }
 
@@ -313,6 +315,12 @@ describeWithDatabase("idle memory review", () => {
       conversationId: fixture.conversationId, groupId: fixture.groupId,
       sentAt: "2026-09-03T09:00:00.000Z", sequence: 2,
     });
+    // The namesake writes in the batch too: her slots are her own line, under her username.
+    await insertUserMessage({
+      conversationId: fixture.conversationId, groupId: fixture.groupId,
+      sender: { telegramUserId: "another-anna", username: "another_anna" },
+      sentAt: "2026-09-03T09:01:00.000Z", sequence: 3,
+    });
 
     const claims = await memoryReviewDispatchRepository.claimPending({
       leaseMilliseconds: 60_000,
@@ -329,10 +337,11 @@ describeWithDatabase("idle memory review", () => {
     // that names no author is not shown.
     expect(claims[0]!.prompt).toMatch(/<existing_slots>[^]*: работа[^]*<\/existing_slots>[^]*<existing_memory>/u);
     const slotsBlock = claims[0]!.prompt.slice(0, claims[0]!.prompt.indexOf("</existing_slots>"));
-    // Both spellings are one line; the record about the family user herself is her own key.
+    // Both spellings are one line; the record about the family user herself is her own key; the
+    // namesake is her own line under her username, never merged by the shared first name.
     expect(slotsBlock).toMatch(/\(agent_memory_author\): (вкусы, машина|машина, вкусы)/u);
     expect(slotsBlock).toContain("Анна: работа");
-    expect(slotsBlock).not.toContain("another_anna");
+    expect(slotsBlock).toContain("Анна (another_anna): машина");
     expect(slotsBlock).not.toContain("Кто-то другой");
   });
 
