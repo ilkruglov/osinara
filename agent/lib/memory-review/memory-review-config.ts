@@ -50,6 +50,9 @@ export const MEMORY_REVIEW_CONTEXT_LIMIT = 40;
 // Slot names of one batch author shown to the review, most recently touched first: a subject in
 // the largest group has 157 slots, which would be most of the prompt (6 October 2026).
 export const MEMORY_REVIEW_SLOTS_PER_SUBJECT = 40;
+// And across all subjects of a batch: the largest group's two-day authors come to 24 subjects
+// and 431 slots, 8 000 characters, before this cap; the least recently touched slots go first.
+export const MEMORY_REVIEW_SLOTS_TOTAL = 200;
 // Already processed messages shown before a background batch so the tail reads in context.
 export const MEMORY_REVIEW_PRECEDING_CONTEXT_LIMIT = 20;
 export const MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS = 15 * 60 * 1_000;

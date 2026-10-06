@@ -12,6 +12,7 @@ import {
   MEMORY_REVIEW_BATCH_SIZE,
   MEMORY_REVIEW_CONTEXT_LIMIT,
   MEMORY_REVIEW_SLOTS_PER_SUBJECT,
+  MEMORY_REVIEW_SLOTS_TOTAL,
   MEMORY_REVIEW_EXTERNAL_IDLE_MILLISECONDS,
   MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES,
   MEMORY_REVIEW_EXTERNAL_IDLE_MIN_SOURCES,
@@ -241,7 +242,8 @@ async function loadReviewSubjectSlots(client: PoolClient, input: {
   const result = await client.query<ReviewSubjectSlots>(
     `SELECT min("subjectLabel") AS "subjectLabel", array_agg(attribute ORDER BY touched_at DESC) AS attributes
        FROM (SELECT subject_key, min(label) AS "subjectLabel", attribute, max(updated_at) AS touched_at,
-                    row_number() OVER (PARTITION BY subject_key ORDER BY max(updated_at) DESC) AS rank
+                    row_number() OVER (PARTITION BY subject_key ORDER BY max(updated_at) DESC) AS rank,
+                    row_number() OVER (ORDER BY max(updated_at) DESC) AS overall_rank
                FROM (SELECT COALESCE(participant.telegram_user_id, family_user.telegram_user_id,
                                      '@' || (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1]) AS subject_key,
                             COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label) AS label,
@@ -255,10 +257,10 @@ async function loadReviewSubjectSlots(client: PoolClient, input: {
                              OR (item.subject_participant_id IS NULL AND item.subject_user_id IS NULL
                                  AND (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1] = ANY($6::text[])))) AS record
               GROUP BY subject_key, attribute) AS slot
-      WHERE rank <= $5
+      WHERE rank <= $5 AND overall_rank <= $7
       GROUP BY subject_key ORDER BY 1`,
     [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds, MEMORY_REVIEW_SLOTS_PER_SUBJECT,
-      input.authorUsernames],
+      input.authorUsernames, MEMORY_REVIEW_SLOTS_TOTAL],
   );
   return result.rows;
 }
