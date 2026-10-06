@@ -20,15 +20,19 @@
  *   1 000 families of 100 messages a day make ~200 000. A sweep therefore takes batches until one
  *   comes back short or 20 seconds pass, inside the same minute lock.
  * - Session runs (`workflowEntry`) stay with the application's own session retention.
+ * - The same sweep releases queue jobs whose run is gone, by either deletion (`workflow-orphan-jobs.ts`).
  */
 import pg from "pg";
 
 import { AppError } from "../app-error.js";
+import { releaseOrphanWorkflowJobs } from "./workflow-orphan-jobs.js";
 
 const { Client } = pg;
 const WORKFLOW_TURN_RUN_RETENTION_DAYS = 2;
 const WORKFLOW_TURN_RUN_PRUNE_BATCH = 50;
 const WORKFLOW_TURN_RUN_PRUNE_BUDGET_MILLISECONDS = 20_000;
+/** Where the next orphan queue job sweep continues; per process, a restart starts over. */
+let orphanJobCursor = "0";
 const PRUNABLE_RUN_NAMES = ["workflow//eve//turnWorkflow", "workflow//eve//sessionTimeoutWorkflow"];
 
 interface WorkflowQueryClient {
@@ -135,7 +139,15 @@ export async function pruneConfiguredTerminalWorkflowRuns(): Promise<number> {
   const client = new Client({ connectionString });
   await client.connect();
   try {
-    return await pruneTerminalWorkflowRunsWithin(client);
+    const deleted = await pruneTerminalWorkflowRunsWithin(client);
+    // Session deletion follows in the same sweep: a failed job release must not stop it.
+    try {
+      orphanJobCursor = (await releaseOrphanWorkflowJobs(client, { afterId: orphanJobCursor })).nextAfterId;
+    } catch (error) {
+      orphanJobCursor = "0";
+      console.error(JSON.stringify({ code: "AGENT_WORKFLOW_ORPHAN_JOBS_FAILED", message: error instanceof Error ? error.message : String(error) }));
+    }
+    return deleted;
   } finally {
     await client.end();
   }
