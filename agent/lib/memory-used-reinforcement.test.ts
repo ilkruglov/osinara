@@ -60,7 +60,7 @@ describe("reinforceUsedMemories", () => {
     expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: ["mem_b"] }));
     expect(JSON.parse(String(info.mock.calls[0]![0]))).toMatchObject({
       applicationSessionId: "app-1", code: "AGENT_MEMORY_REINFORCED", refs: ["mem_a"], sessionTurn: 4, shown: 1,
-      timelineEntryId: "entry-9",
+      shownRefs: ["mem_a"], timelineEntryId: "entry-9",
     });
   });
 
@@ -76,7 +76,8 @@ describe("reinforceUsedMemories", () => {
     });
     expect(reinforceByRefs).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_MISSING", sessionTurn: 4, shown: 2, timelineEntryId: null,
+      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_MISSING", sessionTurn: 4, shown: 2,
+      shownRefs: ["mem_a", "mem_b"], timelineEntryId: null,
     }));
   });
 
@@ -104,7 +105,8 @@ describe("reinforceUsedMemories", () => {
     });
     expect(warn).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_NONE", sessionTurn: 4, shown: 1, timelineEntryId: null,
+      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_NONE", sessionTurn: 4, shown: 1,
+      shownRefs: ["mem_a"], timelineEntryId: null,
     }));
   });
 

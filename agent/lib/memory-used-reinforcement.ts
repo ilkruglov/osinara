@@ -4,8 +4,11 @@
  * Export:
  * - `reinforceUsedMemories`: accepts only refs shown in this turn, bumps them, logs the rest;
  *   an answer without the directive while records were shown is logged as `AGENT_MEMORY_USED_MISSING`,
- *   an empty one as `AGENT_MEMORY_USED_NONE`. Each names the application session and its turn, the
- *   key of `AGENT_MEMORY_RETRIEVAL_TRACE`, so shown-to-used precision can be counted.
+ *   an empty one as `AGENT_MEMORY_USED_NONE`. Each lists the refs the ledger says were shown this
+ *   turn, so shown-to-used precision is counted from these lines alone: a turn resumed by a text
+ *   answer to a question carries the answer's timeline entry while its exposures are the first
+ *   message's (Codex review, 6 October 2026). The timeline entry and session turn still join the
+ *   scores of `AGENT_MEMORY_RETRIEVAL_TRACE` where they match.
  *
  * Bookkeeping after a delivered answer: any failure is logged and never fails the turn.
  */
@@ -48,6 +51,7 @@ export async function reinforceUsedMemories(
         code: input.declared ? "AGENT_MEMORY_USED_NONE" : "AGENT_MEMORY_USED_MISSING",
         sessionTurn,
         shown: shown.size,
+        shownRefs: [...shown],
         timelineEntryId: input.timelineEntryId ?? null,
       });
       if (input.declared) console.info(line);
@@ -72,6 +76,7 @@ export async function reinforceUsedMemories(
       refs: result.reinforced,
       sessionTurn,
       shown: shown.size,
+      shownRefs: [...shown],
       timelineEntryId: input.timelineEntryId ?? null,
       ...(result.unknown.length === 0 ? {} : { unauthorized: result.unknown }),
     }));
