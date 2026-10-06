@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { connect } from "node:net";
 import * as Stream from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -97,7 +98,30 @@ export function createQueue(config, pool) {
     const jobPrefix = config.jobPrefix || "workflow_";
     return `${jobPrefix}flows`;
   }
-  const createQueueHandler = localWorld.createQueueHandler;
+  // Osinara: the flow route is on the agent's own listener and reachable from the app network;
+  // the official handler checks header shape but no secret (security audit, 6 October 2026,
+  // N-2). The queue sends the agent's internal token and the handler refuses anything else before
+  // the official one reads a byte. The same token guards the drain route and the approval sweep.
+  const requireInternalToken = () => {
+    const token = process.env.AGENT_INTERNAL_TOKEN;
+    if (!token) throw new Error("AGENT_INTERNAL_TOKEN_MISSING: Не задан внутренний токен для маршрута очереди");
+    return token;
+  };
+  const isInternalTokenAuthorized = (presented) => {
+    if (typeof presented !== "string") return false;
+    const expected = Buffer.from(requireInternalToken());
+    const given = Buffer.from(presented);
+    return expected.length === given.length && timingSafeEqual(expected, given);
+  };
+  const createQueueHandler = (prefix, handle) => {
+    const official = localWorld.createQueueHandler(prefix, handle);
+    return async (request) => {
+      if (!isInternalTokenAuthorized(request.headers.get("x-osinara-internal-token"))) {
+        return new Response(null, { status: 401 });
+      }
+      return official(request);
+    };
+  };
   const getDeploymentId = async () => {
     return "postgres";
   };
@@ -259,6 +283,7 @@ export function createQueue(config, pool) {
     const headers = {
       ...extraHeaders,
       "content-type": "application/json",
+      "x-osinara-internal-token": requireInternalToken(),
       "x-vqs-queue-name": queueName,
       "x-vqs-message-id": messageId,
       "x-vqs-message-attempt": String(attempt),

@@ -5,6 +5,9 @@
  * - The queue calls the agent's own flow route with undici's fetch and a dispatcher whose header
  *   and body timeouts outlast any step, instead of Node's fetch with its fixed 300 s header wait.
  * - The world's start() also starts the stuck-run scan and close() stops it.
+ * - The flow route the queue posts to is opened by the internal token: the queue sends it and
+ *   the handler checks it before anything else, timing-safe (security audit, 6 October 2026,
+ *   N-2: the route checked header shape but no secret, trusting network position alone).
  * - The patched modules stay syntactically valid.
  */
 import { execFile } from "node:child_process";
@@ -49,6 +52,21 @@ describe("workflow queue loopback patch", () => {
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery ??= startStuckRunRecovery({"));
     expect(codeText(index)).toContain(codeText("queuePrefix: getQueueTopicPrefix( \"workflow\", resolveQueueNamespace(config.namespace"));
     expect(codeText(index)).toContain(codeText("stopStuckRunRecovery?."));
+  });
+
+  it("opens the flow route with the internal token only", async () => {
+    const queue = await readFile(QUEUE_PATH, "utf8");
+    // The queue sends the token with every flow request.
+    expect(codeText(queue)).toContain(codeText('"x-osinara-internal-token": requireInternalToken(),'));
+    // The handler refuses before the official one parses anything; a wrong or missing token is 401.
+    expect(codeText(queue)).toContain(codeText("const createQueueHandler = (prefix, handle) => {"));
+    expect(codeText(queue)).toContain(codeText('if (!isInternalTokenAuthorized(request.headers.get("x-osinara-internal-token")))'));
+    expect(codeText(queue)).toContain(codeText("return new Response(null, { status: 401 });"));
+    // The official handler is built once per route, not per request.
+    expect(codeText(queue)).toContain(codeText("const official = localWorld.createQueueHandler(prefix, handle);"));
+    expect(codeText(queue)).toContain(codeText("return official(request);"));
+    expect(codeText(queue)).toContain(codeText("timingSafeEqual"));
+    expect(codeShape(queue)).not.toContain(codeShape("const createQueueHandler = localWorld.createQueueHandler;"));
   });
 
   it("keeps the patched modules syntactically valid", async () => {
