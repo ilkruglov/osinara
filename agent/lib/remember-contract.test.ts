@@ -85,6 +85,9 @@ describe("externalRememberInputSchema", () => {
     const parsed = externalRememberInputSchema.parse({ ...base, attribute: "  Семья  и   Дети " });
     expect(parsed.attribute).toBe("семья и дети");
     expect(externalRememberInputSchema.parse({ ...base, attribute: "Ｓｅｍｙａ" }).attribute).toBe("semya");
+    // Normalization can lengthen the name («ﬁ» → «fi», «İ» → «i̇»); the limit is the stored one.
+    expect(externalRememberInputSchema.safeParse({ ...base, attribute: "ﬁ".repeat(40) }).success).toBe(false);
+    expect(externalRememberInputSchema.safeParse({ ...base, attribute: "ﬁ".repeat(32) }).success).toBe(true);
   });
 
   it("accepts occurredAt only for episodes and only as an ISO date", () => {

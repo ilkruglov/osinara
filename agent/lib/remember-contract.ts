@@ -98,8 +98,11 @@ function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "person
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
     // The slot lookup compares the name exactly, so «Семья» and «семья» were two slots.
-    attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS)
+    // Checked after normalization: NFKC and lower case can lengthen the name, and the column
+    // CHECK is on the stored form.
+    attribute: z.string().trim().min(1)
       .transform((value) => value.normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/\s+/gu, " "))
+      .pipe(z.string().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS))
       .optional().describe(
       "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
     ),
