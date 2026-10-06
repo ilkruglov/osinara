@@ -140,8 +140,13 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
           return null;
         })
         : null;
+      // Both versions of an unresolved conflict are shown too; without them in the ledger a version
+      // the answer relied on was refused as unknown (Codex review, 6 October 2026).
+      const conflictRefs = context.memories.flatMap((memory) =>
+        "type" in memory && memory.type === "unresolved_conflict" ? memory.versions.map((version) => version.memoryRef) : []);
       const shownMemoryRefs = [
         ...context.memories.flatMap((memory) => "memoryRef" in memory && typeof memory.memoryRef === "string" ? [memory.memoryRef] : []),
+        ...conflictRefs,
         ...(profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? []),
       ];
       if (exposures && sessionTurn !== null) {
@@ -172,18 +177,21 @@ export function createTelegramMemoryContextBuilder(dependencies: TelegramMemoryC
       const memoryBlock = retrievalFailed ? MEMORY_UNAVAILABLE_BLOCK : shownMemoryRefs.length === 0
         ? formatRetrievedMemoryInstructions(context.memories, context.threads)
         : `${formatRetrievedMemoryInstructions(context.memories, context.threads)}\n${MEMORY_USED_REMINDER}`;
-      // Why a record was or was not shown, joined to AGENT_MEMORY_REINFORCED by the session turn:
+      // Why a record was or was not shown, joined to AGENT_MEMORY_REINFORCED by the turn's timeline
+      // entry (a failed turn leaves the session turn number to the next one; Codex review):
       // shown-to-used precision per kind and the cut that kept a record out (6 October 2026).
       // Opaque refs and numbers only, never record or profile text.
       console.info(JSON.stringify({
         applicationSessionId: input.applicationSessionId,
         candidates: context.trace ?? [],
         code: "AGENT_MEMORY_RETRIEVAL_TRACE",
+        conflictRefs,
         memoryChars: memoryBlock.length,
         profileChars: profileBlock?.length ?? 0,
         profileRefs: profile?.subjects.flatMap((subject) => subject.claims.map((claim) => claim.memoryRef)) ?? [],
         sessionTurn,
         threads: context.threads.threads.length,
+        timelineEntryId: input.timelineEntryId,
       }));
       const hint = dependencies.takeSkillHint === undefined
         ? null

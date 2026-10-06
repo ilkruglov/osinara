@@ -6,8 +6,9 @@
  * - A repository failure is logged and never thrown into the delivery path.
  * - An answer without the directive while records were shown is logged, so the share of turns
  *   that ignore the directive can be measured in production.
- * - Every outcome with shown records names the application session and its turn, the key of the
- *   retrieval trace, so shown-to-used precision can be counted; "used nothing" is logged too.
+ * - Every outcome with shown records names the application session, its turn and the turn's
+ *   timeline entry (the key a failed turn cannot reuse), as the retrieval trace does, so
+ *   shown-to-used precision can be counted; "used nothing" is logged too.
  */
 import type { SessionContext } from "eve/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,7 +45,7 @@ describe("reinforceUsedMemories", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const reinforceByRefs = vi.fn().mockResolvedValue({ reinforced: ["mem_a"], unknown: [] });
-    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a", "mem_b"] }, {
+    await reinforceUsedMemories({ applicationSessionId: "app-1", ctx, declared: true, memoryRefs: ["mem_a", "mem_b"], timelineEntryId: "entry-9" }, {
       exposures: {
         sessionTurn: vi.fn().mockResolvedValue(4),
         shownMemoryRefsForTurn: vi.fn().mockResolvedValue(new Set(["mem_a"])),
@@ -59,6 +60,7 @@ describe("reinforceUsedMemories", () => {
     expect(warn).toHaveBeenCalledWith(JSON.stringify({ code: "AGENT_MEMORY_REINFORCE_REF_UNKNOWN", refs: ["mem_b"] }));
     expect(JSON.parse(String(info.mock.calls[0]![0]))).toMatchObject({
       applicationSessionId: "app-1", code: "AGENT_MEMORY_REINFORCED", refs: ["mem_a"], sessionTurn: 4, shown: 1,
+      timelineEntryId: "entry-9",
     });
   });
 
@@ -74,7 +76,7 @@ describe("reinforceUsedMemories", () => {
     });
     expect(reinforceByRefs).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_MISSING", sessionTurn: 4, shown: 2,
+      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_MISSING", sessionTurn: 4, shown: 2, timelineEntryId: null,
     }));
   });
 
@@ -102,7 +104,7 @@ describe("reinforceUsedMemories", () => {
     });
     expect(warn).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith(JSON.stringify({
-      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_NONE", sessionTurn: 4, shown: 1,
+      applicationSessionId: "app-1", code: "AGENT_MEMORY_USED_NONE", sessionTurn: 4, shown: 1, timelineEntryId: null,
     }));
   });
 

@@ -178,11 +178,41 @@ describe("createTelegramMemoryContextBuilder", () => {
     expect(lines).toHaveLength(1);
     const logged = JSON.parse(lines[0]!);
     expect(logged).toMatchObject({
-      applicationSessionId: "app-session-1", candidates: trace, profileRefs: ["mem_card"], sessionTurn: 12, threads: 0,
+      applicationSessionId: "app-session-1", candidates: trace, conflictRefs: [], profileRefs: ["mem_card"], sessionTurn: 12,
+      threads: 0, timelineEntryId: "entry-1",
     });
     expect(logged.memoryChars + logged.profileChars).toBe(blocks.join("").length);
     expect(lines[0]).not.toContain("гречку");
     expect(lines[0]).not.toContain("логистом");
+    info.mockRestore();
+  });
+
+  it("traces and records both versions of a shown conflict, without their text", async () => {
+    // Codex review, 6 October 2026: conflict versions reached the block but neither the trace nor
+    // the exposure ledger, so a version the answer relied on was refused as unknown.
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const exposures = {
+      authorCardShownRecently: vi.fn().mockResolvedValue(false),
+      recentlyShownMemoryRefs: vi.fn().mockResolvedValue(new Set<string>()),
+      record: vi.fn().mockResolvedValue(undefined),
+      sessionTurn: vi.fn().mockResolvedValue(3),
+    };
+    const conflict = {
+      conflictRef: "conf_1", instruction: "Не выбирать версию самостоятельно", type: "unresolved_conflict",
+      versions: [
+        { content: "Встреча в четверг", evidenceKind: "explicit", memoryRef: "mem_thu", observedAt: "2026-10-01", sourceLabel: "Женя" },
+        { content: "Встреча в пятницу", evidenceKind: "explicit", memoryRef: "mem_fri", observedAt: "2026-10-02", sourceLabel: "Илья" },
+      ],
+    };
+    const retrieve = vi.fn().mockResolvedValue({ ...emptyRetrieval, memories: [conflict], trace: [] });
+    const build = createTelegramMemoryContextBuilder({ createProfile: vi.fn().mockResolvedValue(null), exposures, retrieve });
+
+    await build(input());
+
+    expect(exposures.record).toHaveBeenCalledWith(expect.objectContaining({ memoryRefs: ["mem_thu", "mem_fri"] }));
+    const line = info.mock.calls.map(([value]) => String(value)).find((value) => value.includes("AGENT_MEMORY_RETRIEVAL_TRACE"))!;
+    expect(JSON.parse(line).conflictRefs).toEqual(["mem_thu", "mem_fri"]);
+    expect(line).not.toContain("четверг");
     info.mockRestore();
   });
 

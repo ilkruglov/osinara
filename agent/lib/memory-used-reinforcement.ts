@@ -27,6 +27,8 @@ export async function reinforceUsedMemories(
     /** The model wrote the directive, possibly empty; absent means it skipped the rule. */
     declared: boolean;
     memoryRefs: readonly string[];
+    /** The turn's timeline entry, the join key of `AGENT_MEMORY_RETRIEVAL_TRACE` a failed turn cannot reuse. */
+    timelineEntryId?: string | null;
   },
   dependencies: ReinforceUsedMemoriesDependencies = {
     exposures: memoryContextExposureRepository,
@@ -46,6 +48,7 @@ export async function reinforceUsedMemories(
         code: input.declared ? "AGENT_MEMORY_USED_NONE" : "AGENT_MEMORY_USED_MISSING",
         sessionTurn,
         shown: shown.size,
+        timelineEntryId: input.timelineEntryId ?? null,
       });
       if (input.declared) console.info(line);
       else console.warn(line);
@@ -69,6 +72,7 @@ export async function reinforceUsedMemories(
       refs: result.reinforced,
       sessionTurn,
       shown: shown.size,
+      timelineEntryId: input.timelineEntryId ?? null,
       ...(result.unknown.length === 0 ? {} : { unauthorized: result.unknown }),
     }));
   } catch (error) {

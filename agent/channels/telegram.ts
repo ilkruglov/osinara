@@ -289,6 +289,9 @@ export default telegramChannel({
           ctx,
           declared: output.memoryUsedDeclared ?? false,
           memoryRefs: output.memoryUsedRefs ?? [],
+          timelineEntryId: typeof currentAttributes?.telegramTimelineEntryId === "string"
+            ? currentAttributes.telegramTimelineEntryId
+            : null,
         });
       }
     },
