@@ -18,6 +18,12 @@ vi.mock("./memory-embedding-client.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./memory-embedding-client.js")>(),
   embedMemoryPassages: vi.fn(async () => [POSITIVE_VECTOR]),
 }));
+// The counts and the one-off answers below are thread title embeddings; the near-duplicate gate
+// embeds through the same client and is covered in memory-near-duplicate.integration.test.ts.
+vi.mock("./memory-near-duplicate.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./memory-near-duplicate.js")>(),
+  embedNearDuplicateCandidate: vi.fn(async () => null),
+}));
 
 import { closeDatabase, database } from "./database.js";
 import { createMainAgentMemoryFixture } from "./memory-agent-write.integration-fixtures.js";

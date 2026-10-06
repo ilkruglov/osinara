@@ -10,9 +10,9 @@ import { insertClaimEvidence } from "./claim-evidence-writer.js";
 import { prepareExplicitClaimEvidence } from "./memory-explicit-claim-evidence.js";
 import { database } from "./database.js";
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
-import { embedMemoryQuery } from "./memory-embedding-client.js";
 import { reinforceExactClaim } from "./memory-exact-reinforcement.js";
 import {
+  embedNearDuplicateCandidate,
   findNearDuplicateClaims,
   isSemanticMemoryKind,
   NearDuplicateRefusal,
@@ -251,21 +251,12 @@ export async function createMemoryClaim(
     reservation = preflight.reservation;
   }
   let titleEmbedding: Awaited<ReturnType<typeof embedMemoryThreadTitle>>;
-  // A slot write, an asserted distinct fact, and every episode skip the neighbour gate.
-  const gateNeighbours = isSemanticMemoryKind(input.kind) && input.attribute === undefined &&
-    input.distinct !== true;
-  let contentEmbedding: number[] | null = null;
-  if (gateNeighbours) {
-    try {
-      contentEmbedding = await embedMemoryQuery(input.content);
-    } catch (error) {
-      // The gate is advisory: an unavailable embedder must not block a memory write.
-      console.warn(JSON.stringify({
-        code: "AGENT_MEMORY_NEAR_DUPLICATE_SKIPPED",
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    }
-  }
+  // An asserted distinct fact, a versioned slot and every episode skip the neighbour gate. Whether
+  // the slot already exists is known only under its lock, so a slotted write is embedded upfront.
+  const contentEmbeddings = isSemanticMemoryKind(input.kind) && input.distinct !== true &&
+    input.slotUpdate === undefined
+    ? await embedNearDuplicateCandidate(auth, input.operationKey, input.content)
+    : null;
   try {
     titleEmbedding = await embedMemoryThreadTitle(input.thread);
   } catch (error) {
@@ -357,10 +348,13 @@ export async function createMemoryClaim(
     });
     const previousClaimIds = !reinforced && input.attribute !== undefined
       ? requireSlotUpdate(slotClaims, input.slotUpdate) : [];
-    if (!reinforced && contentEmbedding) {
+    // A write into an existing slot has read it and versions it there (`requireSlotUpdate`).
+    if (!reinforced && contentEmbeddings && slotClaims.length === 0) {
       const neighbours = await findNearDuplicateClaims(client, auth, {
-        embedding: contentEmbedding,
+        embeddings: contentEmbeddings,
         kind: input.kind,
+        memoryProjectId: threadWrite?.identity.memoryProjectId ?? null,
+        slottedOnly: input.attribute !== undefined,
         scope: input.scope,
         scopePartitionKey,
         subjectLabel: prepared?.subjectLabel ?? null,

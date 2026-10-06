@@ -101,10 +101,14 @@ export const MEMORY_AUTO_CONTEXT_MIN_RETENTION = 0.2;
 // keeps the loop short: shown → used → shown again cannot add a reinforcement per turn.
 export const MEMORY_USE_REINFORCEMENT_INTERVAL_DAYS = 7;
 export const MEMORY_SEMANTIC_KINDS = ["profile", "preference", "fact", "family_shared"] as const;
-// Near-duplicate gate at write time; it only surfaces candidates and the model decides. BERTA value
-// mapped from the E5 0.9 by quantile of nearest-neighbour similarity (content as query against
-// stored passages) over production records; E5 kept distinct facts about one person at 0.87-0.91.
-export const MEMORY_NEAR_DUPLICATE_SIMILARITY = 0.58;
+// Near-duplicate gate at write time; it only surfaces candidates and the model decides. BERTA,
+// passage against passage, best pair of chunks (6 October 2026): 3 012 production pairs of one
+// subject from different slots at 0.55 and above, 317 labelled blind by deepseek-v4-pro
+// (same information or a version of it vs a distinct fact; deepseek-flash agreed on 91 %, kappa
+// 0.79). Share of right refusals weighted to the population: 0.39 at 0.60, 0.69 at 0.68, 0.83 at
+// 0.72, 0.88 at 0.75, 0.96 at 0.80. One bot handoff chain of 26 September is half the pairs above
+// 0.72; without it 0.75 gives 0.75 (24 pairs). A wrong refusal costs one repeat with `distinct`.
+export const MEMORY_NEAR_DUPLICATE_SIMILARITY = 0.75;
 export const MEMORY_NEAR_DUPLICATE_CANDIDATES = 2;
 
 // BERTA (FRIDA distilled, 768 dimensions, 512 tokens) replaced multilingual-e5-small and the mmarco

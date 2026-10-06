@@ -167,10 +167,12 @@ async function embedMemoryTexts(
 export async function embedMemoryPassages(
   texts: readonly string[],
   fetchImplementation: typeof fetch = fetch,
+  signal?: AbortSignal,
 ): Promise<number[][]> {
   return embedMemoryTexts(
     texts.map((text) => `${PASSAGE_PREFIX}${text}`),
     fetchImplementation,
+    signal,
   );
 }
 
