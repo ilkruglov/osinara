@@ -8,7 +8,9 @@
 -- anchors the window too, exactly as at runtime (Codex review).
 WITH RECURSIVE uses AS (
   SELECT event.memory_item_id, event.created_at, event.reason = 'remember_reinforces' AS explicit,
-         row_number() OVER (PARTITION BY event.memory_item_id ORDER BY event.created_at) AS position
+         -- A stable order: two events at one instant count as the explicit one first, then by turn.
+         row_number() OVER (PARTITION BY event.memory_item_id
+                            ORDER BY event.created_at, event.reason = 'remember_reinforces' DESC, event.eve_turn_id) AS position
     FROM memory_reinforcement_events AS event
    WHERE event.reason IN ('model_used', 'remember_reinforces')
 ), walk AS (
@@ -24,9 +26,12 @@ WITH RECURSIVE uses AS (
   SELECT DISTINCT ON (memory_item_id) memory_item_id, reinforcements, counted_at AS last_at
     FROM walk ORDER BY memory_item_id, position DESC
 )
+-- An exact-text reinforcement (memory-exact-reinforcement.ts) bumps the count without a journal
+-- event, so the stored date may be later than the replay's: the date never moves backwards and
+-- the count never drops.
 UPDATE memory_items_all AS item
    SET reinforcement_count = counted.reinforcements,
-       last_reinforced_at = counted.last_at
+       last_reinforced_at = GREATEST(counted.last_at, item.last_reinforced_at)
   FROM counted
  WHERE counted.memory_item_id = item.id
    AND item.reinforcement_count < counted.reinforcements;

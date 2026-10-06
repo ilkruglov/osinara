@@ -65,17 +65,29 @@ describeWithDatabase("129 use reinforcement backfill", () => {
     const mixed = await insert(`Запись ${randomUUID()}`, 1, "2026-09-11T00:00:00Z");
     await uses(mixed, [0, 8]);
     await uses(mixed, [10], "remember_reinforces");
+    // An exact-text reinforcement left a count of 1 dated day 12 with no journal event: the replay
+    // of uses on days 0 and 8 raises the count but the date stays at day 12, never moving back.
+    const exact = await insert(`Запись ${randomUUID()}`, 1, "2026-09-13T00:00:00Z");
+    await uses(exact, [0, 8]);
 
     await database().query(await readFile("migrations/129_backfill_use_reinforcement.sql", "utf8"));
 
     const rows = await database().query<{ id: string; reinforcement_count: number; last_reinforced_at: Date }>(
-      "SELECT id, reinforcement_count, last_reinforced_at FROM memory_items_all WHERE id = ANY($1::uuid[]) ORDER BY reinforcement_count",
-      [[uncounted, explicit, mixed]],
+      "SELECT id, reinforcement_count, last_reinforced_at FROM memory_items_all WHERE id = ANY($1::uuid[])",
+      [[uncounted, explicit, mixed, exact]],
     );
-    expect(rows.rows.map((row) => [row.id, row.reinforcement_count, row.last_reinforced_at.toISOString().slice(0, 10)])).toEqual([
-      [uncounted, 3, "2026-09-21"],
-      [mixed, 3, "2026-09-11"],
-      [explicit, 5, "2026-09-20"],
-    ]);
+    const byId = Object.fromEntries(rows.rows.map((row) => [row.id, [row.reinforcement_count, row.last_reinforced_at.toISOString().slice(0, 10)]]));
+    expect(byId).toEqual({
+      [uncounted]: [3, "2026-09-21"],
+      [mixed]: [3, "2026-09-11"],
+      [exact]: [2, "2026-09-13"],
+      [explicit]: [5, "2026-09-20"],
+    });
+    // Idempotent: a second run changes nothing.
+    await database().query(await readFile("migrations/129_backfill_use_reinforcement.sql", "utf8"));
+    const again = await database().query<{ id: string; reinforcement_count: number }>(
+      "SELECT id, reinforcement_count FROM memory_items_all WHERE id = ANY($1::uuid[])", [[uncounted, explicit, mixed, exact]],
+    );
+    expect(Object.fromEntries(again.rows.map((row) => [row.id, row.reinforcement_count]))).toEqual({ [uncounted]: 3, [mixed]: 3, [exact]: 2, [explicit]: 5 });
   });
 });

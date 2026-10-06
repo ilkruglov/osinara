@@ -291,9 +291,14 @@ describeWithDatabase("idle memory review", () => {
       sensitivity: "normal",
       source: "eve:eve-session-ctx:eve-turn-ctx",
     });
-    for (const [label, content] of [["Анна (agent_memory_author)", "Ездит на BRZ"], ["Кто-то другой (nobody_here)", "Ездит на Весте"]] as const) {
+    // Two spellings of one person's label are one subject; a namesake with another username is
+    // not shown, nor is a label that names no batch author.
+    for (const [label, content] of [
+      ["Анна (agent_memory_author)", "Ездит на BRZ"], ["Anna (agent_memory_author)", "Любит кофе"],
+      ["Анна (another_anna)", "Ездит на Весте"], ["Кто-то другой (nobody_here)", "Ездит на Ладе"],
+    ] as const) {
       await memoryRepository.create(fixture.auth, {
-        attribute: "машина", confirmation: "model_high", content, kind: "profile",
+        attribute: content.includes("кофе") ? "вкусы" : "машина", confirmation: "model_high", content, kind: "profile",
         explicitSource: { conversationId: fixture.conversationId, subject: { kind: "label", label }, timelineEntryId: fixture.timelineEntryId },
         operationKey: `review-context-${label}`, provenance: { sessionId: "eve-session-ctx", turnId: "eve-turn-ctx" },
         scope: "family", sensitivity: "normal", source: "eve:eve-session-ctx:eve-turn-ctx",
@@ -324,7 +329,10 @@ describeWithDatabase("idle memory review", () => {
     // that names no author is not shown.
     expect(claims[0]!.prompt).toMatch(/<existing_slots>[^]*: работа[^]*<\/existing_slots>[^]*<existing_memory>/u);
     const slotsBlock = claims[0]!.prompt.slice(0, claims[0]!.prompt.indexOf("</existing_slots>"));
-    expect(slotsBlock).toContain("Анна (agent_memory_author): машина");
+    // Both spellings are one line; the record about the family user herself is her own key.
+    expect(slotsBlock).toMatch(/\(agent_memory_author\): (вкусы, машина|машина, вкусы)/u);
+    expect(slotsBlock).toContain("Анна: работа");
+    expect(slotsBlock).not.toContain("another_anna");
     expect(slotsBlock).not.toContain("Кто-то другой");
   });
 

@@ -234,26 +234,29 @@ async function loadReviewSubjectSlots(client: PoolClient, input: {
   // A record names its subject by conversation participant (group), by family user (family,
   // personal) or by a label the review wrote, «Имя (username)» for 2 575 of 3 095 group records
   // on production; the first two match the batch authors by Telegram id, the label by the
-  // username in its parentheses.
+  // username in its parentheses. One subject is one key: the Telegram id, or for labels the
+  // username, since one person's labels vary in spelling («Илья Круглов», «Ilya Kruglov»,
+  // «Илья», all «(ilya_kruglov)»); the key keeps two namesakes apart and caps the slots per
+  // person, not per spelling (Codex review, 6 October 2026).
   const result = await client.query<ReviewSubjectSlots>(
-    `SELECT "subjectLabel", array_agg(attribute ORDER BY touched_at DESC) AS attributes
-       FROM (SELECT COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label) AS "subjectLabel",
-                    item.attribute, max(item.updated_at) AS touched_at,
-                    row_number() OVER (
-                      PARTITION BY COALESCE(participant.telegram_user_id, family_user.telegram_user_id, item.subject_label)
-                      ORDER BY max(item.updated_at) DESC) AS rank
-               FROM memory_items AS item
-               LEFT JOIN conversation_participants AS participant ON participant.id = item.subject_participant_id
-               LEFT JOIN users AS family_user ON family_user.id = item.subject_user_id
-              WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
-                AND item.claim_status = 'active' AND item.sensitivity = 'normal' AND item.attribute IS NOT NULL
-                AND (COALESCE(participant.telegram_user_id, family_user.telegram_user_id) = ANY($4::text[])
-                     OR (item.subject_participant_id IS NULL AND item.subject_user_id IS NULL
-                         AND (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1] = ANY($6::text[])))
-              GROUP BY COALESCE(participant.telegram_user_id, family_user.telegram_user_id, item.subject_label),
-                       COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label), item.attribute) AS slot
+    `SELECT min("subjectLabel") AS "subjectLabel", array_agg(attribute ORDER BY touched_at DESC) AS attributes
+       FROM (SELECT subject_key, min(label) AS "subjectLabel", attribute, max(updated_at) AS touched_at,
+                    row_number() OVER (PARTITION BY subject_key ORDER BY max(updated_at) DESC) AS rank
+               FROM (SELECT COALESCE(participant.telegram_user_id, family_user.telegram_user_id,
+                                     '@' || (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1]) AS subject_key,
+                            COALESCE(participant.display_name_snapshot, family_user.display_name, item.subject_label) AS label,
+                            item.attribute, item.updated_at
+                       FROM memory_items AS item
+                       LEFT JOIN conversation_participants AS participant ON participant.id = item.subject_participant_id
+                       LEFT JOIN users AS family_user ON family_user.id = item.subject_user_id
+                      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
+                        AND item.claim_status = 'active' AND item.sensitivity = 'normal' AND item.attribute IS NOT NULL
+                        AND (COALESCE(participant.telegram_user_id, family_user.telegram_user_id) = ANY($4::text[])
+                             OR (item.subject_participant_id IS NULL AND item.subject_user_id IS NULL
+                                 AND (regexp_match(item.subject_label, '\\(([A-Za-z0-9_]+)\\)\\s*$'))[1] = ANY($6::text[])))) AS record
+              GROUP BY subject_key, attribute) AS slot
       WHERE rank <= $5
-      GROUP BY "subjectLabel" ORDER BY "subjectLabel"`,
+      GROUP BY subject_key ORDER BY 1`,
     [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds, MEMORY_REVIEW_SLOTS_PER_SUBJECT,
       input.authorUsernames],
   );
