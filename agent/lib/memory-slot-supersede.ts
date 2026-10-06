@@ -3,7 +3,8 @@
  *
  * Exports:
  * - `lockSlotClaims`: locks the slot and returns its active records with their text.
- * - `requireSlotUpdate`: refuses a write that ignores the slot, quoting its records in the error.
+ * - `requireSlotUpdate`: refuses a write that ignores the slot or names a record no longer in it,
+ *   quoting the slot's records in the error; an add may name part of the slot, a replace all of it.
  * - `supersedeSlotClaims`: retires older active claims of the same subject and attribute slot.
  */
 import type { PoolClient } from "pg";
@@ -89,17 +90,23 @@ export function requireSlotUpdate(
   rows: readonly SlotClaimRow[],
   update: CreateMemoryInput["slotUpdate"],
 ): string[] {
-  const actual = rows.map((row) => row.memory_ref).sort();
-  const expected = update?.previousMemoryRefs.slice().sort();
+  const actual = new Set(rows.map((row) => row.memory_ref));
+  const named = new Set(update?.previousMemoryRefs ?? []);
+  // previousMemoryRefs proves the slot was read as it is now. A replace retires every record of
+  // the slot, so it must name them all; an add retires nothing, so any part it read is proof
+  // enough: on production (3–6 October 2026) 38 of 42 SLOT_CHANGED refusals were additions that
+  // named a subset of a long slot, each costing the model another step for nothing.
+  const stale = [...named].some((ref) => !actual.has(ref));
+  const incomplete = update?.action === "replace" ? named.size !== actual.size : named.size === 0;
   const code = update ? "AGENT_MEMORY_SLOT_CHANGED" : "AGENT_MEMORY_SLOT_REVIEW_REQUIRED";
-  if ((actual.length > 0 && !update) || (update && JSON.stringify(actual) !== JSON.stringify(expected))) {
+  if ((actual.size > 0 && !update) || (update && (stale || incomplete))) {
     throw new ModelFacingError({
       category: "conflict", code, field: "slotUpdate", retryable: false, sideEffectStatus: "not_started",
       reason: update ? "Состав слота изменился после чтения" : "В слоте уже есть активные записи",
-      correction: "Передай slotUpdate с previousMemoryRefs — всеми текущими ссылками слота ниже: add, если новая запись дополняет их; replace с полной новой версией, если заменяет. Текущие записи слота: " + formatSlotRecords(rows),
+      correction: "Передай slotUpdate с previousMemoryRefs из текущих ссылок слота ниже: add, если новая запись дополняет их (достаточно прочитанных); replace с полной новой версией, если заменяет (все ссылки). Текущие записи слота: " + formatSlotRecords(rows),
     });
   }
-  if (update?.action === "add" && actual.length >= MEMORY_LIST_MAX_LIMIT) {
+  if (update?.action === "add" && actual.size >= MEMORY_LIST_MAX_LIMIT) {
     throw new ModelFacingError({
       category: "conflict", code: "AGENT_MEMORY_SLOT_LIMIT_REACHED", field: "slotUpdate",
       retryable: false, sideEffectStatus: "not_started", reason: "Достигнут предел отдельных деталей в одном слоте",

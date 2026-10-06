@@ -31,6 +31,7 @@ import {
   formatMemoryReviewBatchPrompt,
   formatPrecedingContextForReview,
   type ReviewMemoryContextItem,
+  type ReviewSubjectSlots,
 } from "./memory-review-prompt.js";
 import type { MemoryReviewClaim } from "./memory-review-repository.js";
 
@@ -218,6 +219,29 @@ async function loadReviewMemoryContext(client: PoolClient, input: {
   return result.rows;
 }
 
+async function loadReviewSubjectSlots(client: PoolClient, input: {
+  authorTelegramUserIds: readonly string[];
+  familyId: string;
+  scope: "family" | "group" | "personal";
+  scopePartitionKey: string;
+}): Promise<ReviewSubjectSlots[]> {
+  // Every slot of the batch authors and of subject-less records, newest slot first; the records
+  // block above is capped at forty and shows only a few of them.
+  const result = await client.query<ReviewSubjectSlots>(
+    `SELECT COALESCE(participant.display_name_snapshot, item.subject_label) AS "subjectLabel",
+            array_agg(DISTINCT item.attribute ORDER BY item.attribute) AS attributes
+       FROM memory_items AS item
+       LEFT JOIN conversation_participants AS participant
+         ON participant.id = item.subject_participant_id
+      WHERE item.family_id = $1 AND item.scope = $2 AND item.scope_partition_key = $3
+        AND item.claim_status = 'active' AND item.sensitivity = 'normal' AND item.attribute IS NOT NULL
+        AND (participant.telegram_user_id = ANY($4::text[]) OR item.subject_participant_id IS NULL)
+      GROUP BY 1 ORDER BY 1 NULLS LAST`,
+    [input.familyId, input.scope, input.scopePartitionKey, input.authorTelegramUserIds],
+  );
+  return result.rows;
+}
+
 async function precedingContext(client: PoolClient, input: {
   conversationId: string;
   firstSequence: string;
@@ -384,13 +408,15 @@ export const memoryReviewDispatchRepository = {
           firstSequence: sources.rows[0]!.sequence_id,
           messageThreadId: row.message_thread_id,
         });
-        const existing = await loadReviewMemoryContext(client, {
+        const contextInput = {
           authorTelegramUserIds: [...new Set(sources.rows.flatMap((source) =>
             source.telegram_user_id === null ? [] : [source.telegram_user_id]))],
           familyId: row.family_id,
           scope: row.scope,
           scopePartitionKey: row.scope_partition_key,
-        });
+        };
+        const existing = await loadReviewMemoryContext(client, contextInput);
+        const slots = await loadReviewSubjectSlots(client, contextInput);
         claims.push({
           batchId: row.id, conversationId: row.conversation_id, entries,
           familyId: row.family_id,
@@ -402,7 +428,7 @@ export const memoryReviewDispatchRepository = {
           memoryScopes: [row.scope],
           ownerTelegramUserId: row.sponsor_telegram_user_id, ownerUserId: row.sponsor_user_id,
           prompt: [
-            formatExistingMemoryForReview(existing),
+            formatExistingMemoryForReview(existing, slots),
             formatPrecedingContextForReview(preceding),
             formatMemoryReviewBatchPrompt(entries),
           ].filter((block) => block.length > 0).join("\n\n"),

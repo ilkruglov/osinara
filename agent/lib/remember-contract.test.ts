@@ -79,6 +79,14 @@ describe("externalRememberInputSchema", () => {
     expect(externalRememberInputSchema.safeParse({ ...base, attribute: "x".repeat(65), kind: "profile" }).success).toBe(false);
   });
 
+  it("normalizes the slot name so case and spacing variants are one slot", () => {
+    // The slot lookup compares the attribute exactly; «Семья» and «семья» were two slots.
+    const base = { basis: "agent_inferred", content: "Двое детей", kind: "profile", scope: "group", sensitivity: "normal", subject: { kind: "current_author" } };
+    const parsed = externalRememberInputSchema.parse({ ...base, attribute: "  Семья  и   Дети " });
+    expect(parsed.attribute).toBe("семья и дети");
+    expect(externalRememberInputSchema.parse({ ...base, attribute: "Ｓｅｍｙａ" }).attribute).toBe("semya");
+  });
+
   it("accepts occurredAt only for episodes and only as an ISO date", () => {
     const base = {
       basis: "agent_inferred",

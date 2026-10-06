@@ -4,6 +4,8 @@
  * Constructs covered:
  * - A write that ignores an occupied slot is refused with the slot's records quoted, so the retry
  *   needs no list_memories step; a stale previousMemoryRefs set gets the same records.
+ * - An addition names any part of the slot it read, since it retires nothing; a replace names it
+ *   whole, since it retires every record; a ref that is no longer active refuses either.
  * - Long records are cut and a long slot is counted rather than quoted in full.
  * - A bounded multi-value slot must always remain readable and replaceable through the tool.
  */
@@ -32,10 +34,22 @@ describe("slot conflicts", () => {
     expect(contract.correction).toContain(`${ref(0)}: "факт 0"; ${ref(1)}: "факт 1"`);
     expect(contract.correction).not.toContain("list_memories");
   });
-  it("quotes the records when the previous references are stale", () => {
-    const contract = correctionOf(() => requireSlotUpdate(slot, { action: "add", previousMemoryRefs: [ref(0)] }));
+  it("quotes the records when a replace names only part of the slot", () => {
+    const contract = correctionOf(() => requireSlotUpdate(slot, { action: "replace", previousMemoryRefs: [ref(0)] }));
     expect(contract.code).toBe("AGENT_MEMORY_SLOT_CHANGED");
     expect(contract.correction).toContain(`${ref(1)}: "факт 1"`);
+  });
+  it("accepts an addition that names only part of the slot", () => {
+    // 38 of 42 SLOT_CHANGED refusals on production (3–6 October 2026) were additions naming a
+    // subset: nothing is retired by an add, so the subset proves the read as well as the whole.
+    expect(requireSlotUpdate(slot, { action: "add", previousMemoryRefs: [ref(0)] })).toEqual([]);
+  });
+  it("refuses a reference that is no longer in the slot, for add and replace alike", () => {
+    for (const action of ["add", "replace"] as const) {
+      const contract = correctionOf(() => requireSlotUpdate(slot, { action, previousMemoryRefs: [ref(0), ref(7)] }));
+      expect(contract.code).toBe("AGENT_MEMORY_SLOT_CHANGED");
+    }
+    expect(correctionOf(() => requireSlotUpdate(slot, { action: "add", previousMemoryRefs: [] })).code).toBe("AGENT_MEMORY_SLOT_CHANGED");
   });
   it("cuts long records and counts the rest of a long slot", () => {
     const long = [{ id: "x", memory_ref: ref(99), content: "д".repeat(300) }, ...rows.slice(0, 25)];

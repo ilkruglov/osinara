@@ -311,6 +311,8 @@ describeWithDatabase("idle memory review", () => {
     expect(claims[0]!.prompt).toContain("<existing_memory>");
     expect(claims[0]!.prompt).toContain("Анна работает логистом");
     expect(claims[0]!.prompt).toContain("работа");
+    // The subjects' slot names come first, so a new record reuses a slot instead of coining one.
+    expect(claims[0]!.prompt).toMatch(/<existing_slots>[^]*: работа[^]*<\/existing_slots>[^]*<existing_memory>/u);
   });
 
   // Production, 3 October 2026: two external groups gave 97 % of all review batches, almost every

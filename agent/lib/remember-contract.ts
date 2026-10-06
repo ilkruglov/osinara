@@ -97,13 +97,16 @@ const memoryThreadSchema = z.discriminatedUnion("action", [
 function createRememberInputSchema(scope: z.ZodType<"family" | "group" | "personal">) {
   return z.object({
     basis: z.enum(["agent_inferred", "user_requested"]).describe("Почему запись сохраняется: устойчивый вывод или явная просьба"),
-    attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS).optional().describe(
+    // The slot lookup compares the name exactly, so «Семья» and «семья» were two slots.
+    attribute: z.string().trim().min(1).max(MEMORY_ATTRIBUTE_MAX_CHARACTERS)
+      .transform((value) => value.normalize("NFKC").toLocaleLowerCase("ru-RU").replace(/\s+/gu, " "))
+      .optional().describe(
       "Слот записи: работа, город, семья, питомцы, машина и т.п.; для названной сущности вместе с subject.label; для episode только итог обсуждения. Существующий слот требует slotUpdate после чтения всех его текущих записей",
     ),
     slotUpdate: z.object({
       action: z.enum(["add", "replace"]).describe("add сохраняет прежние детали отдельными записями; replace заменяет их полной новой версией"),
       previousMemoryRefs: z.array(z.string().regex(MEMORY_REF_PATTERN)).min(1).max(50)
-        .describe("Все прочитанные активные memoryRef того же субъекта и слота; backend проверяет, что набор не изменился"),
+        .describe("Прочитанные активные memoryRef того же субъекта и слота: для add достаточно прочитанных, для replace все; backend отказывает, если какая-то уже не активна или replace назвал не все"),
     }).strict().optional(),
     content: z.string().min(1).max(MEMORY_CONTENT_MAX_CHARACTERS).describe("Одна самостоятельная устойчивая запись без догадок"),
     distinct: z.boolean().optional().describe("true после AGENT_MEMORY_NEAR_DUPLICATE, если это другой факт, а не версия существующего"),

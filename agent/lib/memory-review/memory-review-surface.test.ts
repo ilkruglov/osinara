@@ -56,6 +56,20 @@ describe("memory review existing memory block", () => {
     expect(block).toContain("работа");
     expect(formatExistingMemoryForReview([])).toBe("");
   });
+
+  it("names the subjects' existing slots so a new record reuses one instead of coining a synonym", () => {
+    // On production (6 October 2026) one subject had 157 slots («соцсети» beside «медиапотребление»,
+    // «инструменты» beside «использование инструментов»); the block shows forty records, not the slots.
+    const block = formatExistingMemoryForReview(
+      [{ attribute: "работа", content: "Serje пишет книгу", kind: "profile", memoryRef: "mem_1", subjectLabel: "Serje" }],
+      [{ attributes: ["работа", "семья", "пиво"], subjectLabel: "Serje" }, { attributes: ["итог обсуждения"], subjectLabel: null }],
+    );
+    expect(block).toContain("<existing_slots>");
+    expect(block).toContain("Serje: работа, семья, пиво");
+    expect(block).toContain("без субъекта: итог обсуждения");
+    expect(block.indexOf("<existing_slots>")).toBeLessThan(block.indexOf("<existing_memory>"));
+    expect(formatExistingMemoryForReview([], [{ attributes: ["работа"], subjectLabel: "Serje" }])).toContain("<existing_slots>");
+  });
 });
 
 describe("memory review instructions", () => {
