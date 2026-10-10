@@ -14,6 +14,7 @@
  */
 import { escapeUntrustedContextJson } from "./untrusted-context-json.js";
 import type { TelegramTimelineActorKind } from "./telegram-inbound-actor.js";
+import { participantLabel } from "./telegram-participant-label.js";
 
 export interface TelegramGroupJournalEntry {
   attachment?: TelegramGroupAttachmentSummary;
@@ -128,7 +129,10 @@ function renderEntry(entry: TelegramGroupJournalEntry, clock: TimelineClock): st
       : entry.actorKind === "telegram_bot"
         ? "telegram:bot"
         : "user";
-  const name = entry.senderDisplayName ?? entry.senderUsername ?? actor;
+  // Mia's own entries keep her name; people and bots carry their username next to it.
+  const name = entry.actorKind === "agent_self"
+    ? entry.senderDisplayName ?? actor
+    : participantLabel(entry.senderDisplayName, entry.senderUsername) ?? actor;
   const reply = entry.replyToSequenceId === null ? "" : ` reply:#${entry.replyToSequenceId}`;
   const attachment = entry.attachment === undefined
     ? ""

@@ -288,6 +288,11 @@ describeWithDatabase("R3 profile projections", () => {
       groupId: fixture.externalAGroupId,
       scopes: ["group"],
     };
+    // A group card names the subject «Имя (username)», so namesakes in one chat stay apart.
+    await database().query(
+      "UPDATE conversation_participants SET username_snapshot = 'anna_k' WHERE id = $1",
+      [fixture.externalAParticipantId],
+    );
     const externalAView = await profileViewRepository.create(externalAAuth, {
       conversationId: fixture.externalAConversationId,
       currentTelegramUserId: "9301",
@@ -297,6 +302,7 @@ describeWithDatabase("R3 profile projections", () => {
       replyTelegramUserId: null,
       retrievalClaimIds: [],
     });
+    expect(externalAView.subjects.map((subject) => subject.label)).toEqual(["Анна (anna_k)"]);
     const externalContents = JSON.stringify(externalAView);
     expect(externalContents).toContain("Факт только из External A");
     expect(externalContents).not.toMatch(/Личный секрет|Семейный профиль|External B/u);

@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `formatTelegramGroupJournalContext`: compact actor/sequence rendering and escaping.
  * - Reply targets outside the recent window remain visible with bounded ancestry.
+ * - A person is labelled «Имя (username)», so namesakes stay apart; Mia's own entries keep her name.
  */
 import { describe, expect, it } from "vitest";
 
@@ -44,6 +45,18 @@ describe("unified Telegram group timeline context", () => {
     expect(context).toContain("#40 [user]");
     expect(context).toContain("#41 [agent:self]");
     expect(context).not.toContain("telegram:101");
+  });
+
+  it("labels people with their username so namesakes stay apart", () => {
+    const context = formatTelegramGroupJournalContext([
+      entry({ senderDisplayName: "Ilya", senderUsername: "Ilya_Demchenko", sequenceId: "50" }),
+      entry({ senderDisplayName: "Ilya Kruglov", senderUsername: "ilya_kruglov", sequenceId: "51" }),
+      entry({ actorKind: "agent_self", senderDisplayName: "Мия", senderUsername: "mimimia_ai_bot", sequenceId: "52" }),
+    ], 12_000);
+
+    expect(context).toContain('#50 [user] "Ilya (Ilya_Demchenko)"');
+    expect(context).toContain('#51 [user] "Ilya Kruglov (ilya_kruglov)"');
+    expect(context).toContain('#52 [agent:self] "Мия" ');
   });
 
   it("renders trusted reply relationships and cannot be closed by participant text", () => {

@@ -217,7 +217,7 @@ describe("member tags", () => {
   it("prints the tag next to the sender's name", () => {
     const context = formatTelegramGroupJournalContext([{ ...entry("1", "привет"), senderTag: "Батя" }], 12_000) ?? "";
 
-    expect(context).toContain('"Анна" tag:"Батя" ');
+    expect(context).toContain('"Анна (anna)" tag:"Батя" ');
   });
 
   it("prints nothing extra without a tag", () => {

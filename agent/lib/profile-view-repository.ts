@@ -25,6 +25,7 @@ import {
   type ProfileViewClaim,
   type ProfileViewSubject,
 } from "./profile-view.js";
+import { participantLabel } from "./telegram-participant-label.js";
 
 export {
   formatProfileViewContext,
@@ -48,6 +49,8 @@ interface SubjectRow {
   subject_user_id: string | null;
   telegram_user_id: string;
   display_label_snapshot: string;
+  /** Group participants only: the card labels them «Имя (username)» to keep namesakes apart. */
+  username_snapshot: string | null;
 }
 
 interface ClaimRow {
@@ -155,7 +158,7 @@ async function loadSubjects(
   const result = await client.query<SubjectRow>(
     `SELECT subject.id, subject.subject_ref, subject.subject_user_id,
             subject.subject_participant_id, subject.display_label_snapshot,
-            subject.last_verified_at,
+            participant.username_snapshot, subject.last_verified_at,
             CASE WHEN subject.subject_user_id IS NOT NULL
                  THEN app_user.telegram_user_id ELSE participant.telegram_user_id END AS telegram_user_id
      FROM profile_subjects AS subject
@@ -294,7 +297,8 @@ export const profileViewRepository = {
           profileEligible: claim.profile_eligible,
           sensitivity: claim.sensitivity,
           sourceAuthorLabel: claim.source_author_label,
-          subjectLabel: subject.display_label_snapshot,
+          subjectLabel: participantLabel(subject.display_label_snapshot, subject.username_snapshot)
+            ?? subject.display_label_snapshot,
           subjectRef: subject.subject_ref,
           updatedAt: claim.updated_at.toISOString(),
         }];

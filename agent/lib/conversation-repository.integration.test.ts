@@ -65,12 +65,15 @@ describeWithDatabase("conversationRepository", () => {
 
     expect(conversation.scope).toBe("group");
     expect(participants).toHaveLength(2);
+    // The username is a display snapshot next to the name, like it, latest observed wins.
     expect(participants.find((item) => item.telegramUserId === "501")).toMatchObject({
       displayNameSnapshot: "Анна Новая",
       linkedUserId: user.rows[0]!.id,
+      usernameSnapshot: "changed_name",
     });
     expect(participants.find((item) => item.telegramUserId === "777")).toMatchObject({
       linkedUserId: null,
+      usernameSnapshot: "same_name",
     });
 
     const firstRef = participants[0]!.participantRef;

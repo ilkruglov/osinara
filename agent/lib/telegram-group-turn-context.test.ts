@@ -104,7 +104,7 @@ describe("Telegram group turn context", () => {
     const result = await prepare({ ...input, timezone: "Europe/Moscow" });
 
     expect(result.durableMessage).toContain("-- 2026-07-30 Europe/Moscow (+03:00) --");
-    expect(result.durableMessage).toContain('#99 [user] "Анна" 15:00 ');
+    expect(result.durableMessage).toContain('#99 [user] "Анна (anna)" 15:00 ');
     expect(result.timelineTimezone).toBe("Europe/Moscow");
   });
 
@@ -116,7 +116,7 @@ describe("Telegram group turn context", () => {
     const result = await prepare(input);
 
     expect(result.durableMessage).toContain("-- 2026-07-30 UTC --");
-    expect(result.durableMessage).toContain('#99 [user] "Анна" 12:00 ');
+    expect(result.durableMessage).toContain('#99 [user] "Анна (anna)" 12:00 ');
     expect(result.timelineTimezone).toBeNull();
   });
 
@@ -238,7 +238,7 @@ describe("Telegram group turn context", () => {
   it("exposes the exact current reply and requests its ancestry for an existing session", async () => {
     const deps = dependencies("100");
     deps.journal.listIncremental.mockResolvedValue({
-      entries: [{ ...entry("8", "Почему используется эта модель?"), senderDisplayName: "Сергей" }],
+      entries: [{ ...entry("8", "Почему используется эта модель?"), senderDisplayName: "Сергей", senderUsername: "sergey_k" }],
       omittedBeforeSequence: null,
     });
     const prepare = createTelegramGroupTurnContextPreparer(deps);
@@ -254,7 +254,7 @@ describe("Telegram group turn context", () => {
     expect(deps.journal.listIncremental).toHaveBeenCalledWith(expect.objectContaining({
       anchorEntryId: "00000000-0000-4000-8000-000000000013",
     }));
-    expect(result.durableMessage).toContain('#8 [user] "Сергей"');
+    expect(result.durableMessage).toContain('#8 [user] "Сергей (sergey_k)"');
     expect(result.durableMessage).toContain('"replyToSequenceId":"8"');
   });
 
