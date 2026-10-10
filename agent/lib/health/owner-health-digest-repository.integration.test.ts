@@ -76,6 +76,7 @@ describeWithDatabase("ownerHealthDigestRepository", () => {
       code: "MODEL_CALL_FAILED", headStatus: "failed", label, waiting: 0,
     });
     expect(report.reviewBatches.failed).toBe(1);
+    expect(report.turnQuality).toMatchObject({ failed: 0, turns: 0, versions: [] });
 
     const digestDate = "2026-09-09";
     await expect(ownerHealthDigestRepository.claim(family.familyId, digestDate, now)).resolves.toBe(true);

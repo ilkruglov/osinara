@@ -131,6 +131,8 @@ export interface TelegramChannelConfig {
     readonly onHitlCallbackQuery?: (ctx: TelegramContext, query: TelegramCallbackQuery, continuationToken: string) => TelegramHitlCallbackResult | Promise<TelegramHitlCallbackResult>;
     /** Runs after webhook verification and parsing, before native dispatch. */
     readonly onVerifiedUpdate?: (context: TelegramVerifiedUpdateContext) => Response | Promise<Response>;
+    /** Osinara: runs after webhook verification for an update Eve does not parse, such as a reaction. */
+    readonly onUnparsedUpdate?: (raw: JsonObject) => Response | Promise<Response>;
     /** Inbound message hook. Defaults to Telegram user auth and dispatch gating. */
     readonly onMessage?: (ctx: TelegramContext, message: TelegramMessage) => TelegramInboundResultOrPromise;
     /** Override the default webhook route path (`/eve/v1/telegram`). */

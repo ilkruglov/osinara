@@ -72,6 +72,8 @@ import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
 import { UUID_PATTERN } from "../lib/tool-input-validation.js";
 import { requireInternalToken } from "../lib/telegram-hitl/approval-timeout-sweep.js";
+import { handleTelegramUnparsedUpdate } from "../lib/turn-quality/telegram-reaction-update.js";
+import { recordTurnDelivery } from "../lib/turn-quality/turn-delivery-record.js";
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -276,6 +278,8 @@ export default telegramChannel({
             telegramMessageIds: sentMessages.map((sent) => sent.messageId),
           });
         }
+        // Reactions and replies to these messages are the turn's satisfaction signal.
+        await recordTurnDelivery(ctx, sentMessages.map((sent) => sent.messageId), deliveredAt);
       }
       if (!isScheduledSession(ctx)) {
         await registerTelegramDeliveredMessageRoutes(
@@ -476,8 +480,10 @@ export default telegramChannel({
     async "turn.completed"(_data, channel, ctx) {
       // Text still held here was the answer: the model never wrote again after its quiet tools.
       const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
-      await telegramProgressNoticeDeferral.flush(noticeKey);
+      const flushed = await telegramProgressNoticeDeferral.flush(noticeKey);
       telegramProgressNoticeDeferral.forget(noticeKey);
+      // Text delivered this way is the answer, so it carries the turn's satisfaction signal too.
+      await recordTurnDelivery(ctx, flushed, new Date());
       const sessionId = applicationSessionId(ctx);
       const awaitingApproval = await sessionRepository.hasPendingOperation(sessionId, ctx.session.id);
       const reviewBatchId = await resolveMemoryReviewBatch(ctx);
@@ -534,6 +540,8 @@ export default telegramChannel({
   onHitlCallbackQuery: authorizeTelegramHitlCallback,
   onMessage: handleTelegramMessage,
   onVerifiedUpdate: handleTelegramDurableIngress,
+  // Reactions are a measurement of Mia's answers, recorded without a turn.
+  onUnparsedUpdate: (raw) => handleTelegramUnparsedUpdate(raw),
   // The application persists authorized files before dispatch. The primary model receives only
   // trusted workspace paths and invokes the dedicated vision model when image analysis is needed.
   uploadPolicy: TELEGRAM_EVE_UPLOAD_POLICY,

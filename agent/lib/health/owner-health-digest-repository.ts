@@ -16,6 +16,7 @@
  *   family owner's own personal schedules and the shared ones are named (`schedule-run-failures.ts`).
  */
 import { database } from "../database.js";
+import { turnEvaluationRepository, type TurnQualitySummary } from "../turn-quality/turn-evaluation-repository.js";
 import { type ScheduleRunFailures, summarizeScheduleRunFailures } from "./schedule-run-failures.js";
 
 export interface OwnerHealthReport {
@@ -29,6 +30,8 @@ export interface OwnerHealthReport {
   reviewBatches: { ambiguous: number; failed: number };
   rotations: { count: number; latestAt: Date | null };
   scheduleFailures: ScheduleRunFailures;
+  /** Every interactive turn of the window, evaluated without a model (turn_evaluations). */
+  turnQuality: TurnQualitySummary;
   windowStart: Date;
 }
 
@@ -147,6 +150,7 @@ export const ownerHealthDigestRepository = {
       }
     }
     const status = (name: string) => Number(batches.rows.find((row) => row.status === name)?.count ?? 0);
+    const turnQuality = await turnEvaluationRepository.summary(familyId, windowStart, now);
     return {
       alertDeliveryFailures: Number(alerts.rows[0]?.count ?? 0),
       ingressFailures: {
@@ -160,6 +164,7 @@ export const ownerHealthDigestRepository = {
       scheduleFailures: summarizeScheduleRunFailures(scheduleRuns.rows.map((row) => ({
         code: row.code, count: Number(row.count), scheduleId: row.schedule_id, title: row.title,
       }))),
+      turnQuality,
       windowStart,
     };
   },

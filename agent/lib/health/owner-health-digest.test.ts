@@ -2,7 +2,8 @@
  * Owner health digest tests.
  *
  * Constructs covered:
- * - The digest names every signal it has and says "no failures" otherwise, always with memory counts.
+ * - The digest names every signal it has and says "no failures" otherwise, always with memory
+ *   counts and the turn quality line, which joins the failures when its thresholds are crossed.
  * - Nothing is sent before the digest hour; one send per family per day through the claim.
  * - A failed delivery releases the claim and does not stop other families.
  */
@@ -24,6 +25,10 @@ const quiet: OwnerHealthReport = {
   reviewBatches: { ambiguous: 0, failed: 0 },
   rotations: { count: 0, latestAt: null },
   scheduleFailures: NO_SCHEDULE_RUN_FAILURES,
+  turnQuality: {
+    delivered: 0, failed: 0, failedToolTurns: 0, followUps: { corrections: 0, repliesToMia: 0 }, forbiddenTool: 0,
+    heavy: 0, loops: 0, reactions: { negative: 0, other: 0, positive: 0 }, repeatAfterError: 0, turns: 0, versions: [],
+  },
   windowStart: new Date("2026-09-08T06:00:00.000Z"),
 };
 
@@ -39,7 +44,7 @@ describe("formatOwnerHealthDigest", () => {
 
   it("reports a quiet day with the memory counts", () => {
     expect(formatOwnerHealthDigest(quiet)).toBe(
-      "Сводка за сутки: сбоев нет.\nПамять: +4 (group episode 3, personal profile 1).",
+      "Сводка за сутки: сбоев нет.\nХоды: за сутки ни одного.\nПамять: +4 (group episode 3, personal profile 1).",
     );
   });
 
@@ -54,6 +59,7 @@ describe("formatOwnerHealthDigest", () => {
       },
       memoryWritten: [],
       reviewBatches: { ambiguous: 1, failed: 2 },
+      turnQuality: { ...quiet.turnQuality, delivered: 7, failed: 3, failedToolTurns: 1, turns: 10 },
       rotations: { count: 1, latestAt: new Date("2026-09-08T18:41:00.000Z") },
       scheduleFailures: {
         count: 1,
@@ -76,6 +82,7 @@ describe("formatOwnerHealthDigest", () => {
       "Пакеты проверки: failed 2, ambiguous 1.",
       "Не доставлено предупреждений владельцу: 1.",
       "Сценарии по расписанию: 1 сбоев: «Утренние новости» ×1 (AGENT_SCHEDULE_DELIVERY_CONFIRMATION_MISSING ×1).",
+      "Ходы: 10, сбоев 3 (30 %), с упавшим инструментом 1, тяжёлых 0; процесс: циклов 0, повторов после ошибки 0, запрещённых инструментов 0; отклик: реакций +0 −0 ~0, ответов Мие 0, поправок 0 из 7 доставленных.",
       "Память: новых записей нет.",
     ].join("\n"));
   });

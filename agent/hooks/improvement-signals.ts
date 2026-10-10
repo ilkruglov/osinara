@@ -2,8 +2,9 @@
  * Improvement backlog signals.
  *
  * Export:
- * - Eve hook that turns a failed or heavy turn into reviewed backlog items for the owner, records
- *   execution telemetry for loaded authored skills and leaves a skill hint when a workflow problem recurs.
+ * - Eve hook that records the evaluation of every interactive turn, turns a failed or heavy turn
+ *   into reviewed backlog items for the owner, records execution telemetry for loaded authored
+ *   skills and leaves a skill hint when a workflow problem recurs.
  *
  * Key construct:
  * - Failures are logged, never thrown: a bookkeeping hook must not fail a Telegram turn.
@@ -15,6 +16,7 @@ import { authoredSkillRepository } from "../lib/authored-skills/authored-skill-r
 import { skillHintRepository } from "../lib/authored-skills/skill-hint-repository.js";
 import { improvementBacklogRepository } from "../lib/improvements/improvement-backlog-repository.js";
 import { createImprovementSignalHandlers } from "../lib/improvements/improvement-signals.js";
+import { turnEvaluationRepository } from "../lib/turn-quality/turn-evaluation-repository.js";
 
 const handlers = createImprovementSignalHandlers({
   // An external group's skills are the ones granted to it, so its outcomes bind to the group's
@@ -32,6 +34,7 @@ const handlers = createImprovementSignalHandlers({
   isAuthoredSkill: (familyId, name) => authoredSkillRepository.isAuthoredSkill(familyId, name),
   record: (input) => improvementBacklogRepository.record(input),
   recordSkillTelemetry: (input) => authoredSkillRepository.recordTelemetry(input),
+  recordTurnEvaluation: (identity, input) => turnEvaluationRepository.recordOutcome(identity, input),
   saveHint: (input) => skillHintRepository.save(input),
 });
 
@@ -45,6 +48,13 @@ function report(stage: string, error: unknown): void {
 
 export default defineHook({
   events: {
+    "turn.started"(event, ctx) {
+      try {
+        handlers.turnStarted(event, ctx);
+      } catch (error) {
+        report("turn.started", error);
+      }
+    },
     async "actions.requested"(event, ctx) {
       try {
         handlers.actionsRequested(event, ctx);

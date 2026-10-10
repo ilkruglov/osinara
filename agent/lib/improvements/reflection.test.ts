@@ -18,6 +18,7 @@ import { createReflectionRateLimiter, parseReflection } from "./reflection.js";
 import type { TurnEvidence } from "./turn-evidence.js";
 
 const evidence: TurnEvidence = {
+  calls: [],
   failedTools: [{ code: "AGENT_IMAGE_PROVIDER_FAILED", message: "упал", toolName: "generate_image" }],
   loadedSkills: [],
   stepCount: 2,
@@ -79,12 +80,51 @@ function dependencies(overrides: Partial<Record<keyof Dependencies, Mock>> = {})
     isAuthoredSkill: vi.fn().mockResolvedValue(false),
     record: vi.fn().mockResolvedValue(recorded(1)),
     recordSkillTelemetry: vi.fn().mockResolvedValue({ usageFound: true }),
+    recordTurnEvaluation: vi.fn().mockResolvedValue(undefined),
     saveHint: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
 describe("createImprovementSignalHandlers", () => {
+  it("evaluates a turn without tool calls once it was started", async () => {
+    const recordTurnEvaluation = vi.fn().mockResolvedValue(undefined);
+    const handlers = createImprovementSignalHandlers(dependencies({ recordTurnEvaluation }));
+    const context = ctx({ familyId: "family-1", telegramChatType: "private" });
+    await handlers.turnCompleted({ data: { turnId: "t0" } }, context);
+    expect(recordTurnEvaluation).not.toHaveBeenCalled();
+    handlers.turnStarted({ data: { turnId: "t0" } }, context);
+    await handlers.turnCompleted({ data: { turnId: "t0" } }, context);
+    expect(recordTurnEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({ chatKind: "private", eveTurnId: "t0" }),
+      expect.objectContaining({ outcome: "completed", stepCount: 0, toolCalls: [] }),
+    );
+  });
+
+  it("evaluates a quiet turn without reflecting on it", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const recordTurnEvaluation = vi.fn().mockResolvedValue(undefined);
+    const generate = vi.fn();
+    const handlers = createImprovementSignalHandlers(dependencies({ generate, recordTurnEvaluation }));
+    const context = ctx({ familyId: "family-1", groupId: "group-1", groupType: "external", telegramChatId: "-100", telegramChatType: "supergroup", telegramTimelineEntryId: "entry-1" });
+
+    handlers.actionsRequested({ data: { actions: [
+      { callId: "c1", input: { q: "a" }, kind: "tool-call", toolName: "list_group_history" },
+      { callId: "c2", input: { q: "a" }, kind: "tool-call", toolName: "list_group_history" },
+    ], turnId: "t1" } }, context);
+    await handlers.turnCompleted({ data: { turnId: "t1" } }, context);
+
+    expect(generate).not.toHaveBeenCalled();
+    expect(recordTurnEvaluation).toHaveBeenCalledWith(
+      { chatKind: "external", eveSessionId: "eve-1", eveTurnId: "t1", familyId: "family-1", telegramChatId: "-100", triggeringEntryId: "entry-1" },
+      expect.objectContaining({
+        failedToolCount: 0, failureCode: null, outcome: "completed", stepCount: 1,
+        metrics: { forbiddenTool: false, repeatAfterError: false, repeatedCallRun: 2 },
+        versions: expect.objectContaining({ softwareVersion: expect.stringMatching(/^\d+\.\d+\.\d+$/u) }),
+      }),
+    );
+  });
+
   it("reflects on a failed tool in an external group and records the item", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const record = vi.fn().mockResolvedValue(recorded(1));

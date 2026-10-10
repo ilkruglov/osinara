@@ -21,23 +21,23 @@ export async function deliverTelegramProgressNotice(input: {
   eveTurnId: string;
   message: string;
   stepIndex: number;
-}): Promise<void> {
+}): Promise<string[]> {
   const claim = await telegramProgressNoticeRepository.claim({
     applicationSessionId: input.applicationSessionId,
     eveSessionId: input.eveSessionId,
     eveTurnId: input.eveTurnId,
     stepIndex: input.stepIndex,
   });
-  if (!claim) return;
+  if (!claim) return [];
 
+  const sentMessageIds: string[] = [];
   try {
-    let firstMessageId: string | null = null;
     for (const chunk of splitTelegramMessageText(input.message)) {
       const sent = await postTelegramPlainMessageChunk(chunk, input.channel);
-      firstMessageId ??= sent.messageId;
+      sentMessageIds.push(sent.messageId);
     }
-    if (firstMessageId !== null) {
-      await telegramProgressNoticeRepository.confirm(claim.noticeId, firstMessageId);
+    if (sentMessageIds[0] !== undefined) {
+      await telegramProgressNoticeRepository.confirm(claim.noticeId, sentMessageIds[0]);
     }
   } catch (error) {
     // The answer this notice announces is still being produced: never fail the turn over a notice.
@@ -48,4 +48,5 @@ export async function deliverTelegramProgressNotice(input: {
       stepIndex: input.stepIndex,
     }));
   }
+  return sentMessageIds;
 }

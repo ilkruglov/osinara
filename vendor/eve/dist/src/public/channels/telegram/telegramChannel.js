@@ -75,7 +75,12 @@ function telegramChannel(e = {}) {
               );
             }
             let u = parseTelegramUpdate(c);
-            if (u === null) return new Response(`ok`);
+            // Osinara: a verified update of a kind Eve does not parse (message_reaction) goes to
+            // the application instead of being dropped.
+            if (u === null)
+              return e.onUnparsedUpdate === void 0
+                ? new Response(`ok`)
+                : e.onUnparsedUpdate(c);
             let d = (l) =>
               l.kind === `message`
                 ? dispatchMessage({

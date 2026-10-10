@@ -18,6 +18,9 @@
  *   spend (the difference to yesterday's digest) is information next to the memory counts.
  * - Failed scheduled scenarios (5 октября 2026, after upstream #307): a failed run sends nothing
  *   to anyone, so the digest is the only place the owner learns a scenario did not arrive.
+ * - Turn quality (10 октября 2026): every interactive turn is evaluated without a model; the line
+ *   is information on a normal day and a failure line when failed turns, loops or corrections
+ *   cross their thresholds, so a bad release is seen the next morning, not found by people.
  */
 import { DEEPSEEK_BALANCE_ALERT_USD } from "../../config.js";
 import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
@@ -29,6 +32,7 @@ import {
   ownerHealthDigestRepository,
 } from "./owner-health-digest-repository.js";
 import { formatScheduleRunFailures } from "./schedule-run-failures.js";
+import { formatTurnQuality } from "./turn-quality-digest.js";
 
 const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
 const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
@@ -81,11 +85,16 @@ export function formatOwnerHealthDigest(report: OwnerHealthReport, extras: Owner
   // Disk space is not a failure of the day but the condition under which the next update passes.
   const storage = extras.storage === null ? null : formatStorageHeadroom(extras.storage);
   if (storage !== null) lines.push(storage);
+  const quality = formatTurnQuality(report.turnQuality);
+  if (quality.warning) lines.push(quality.text);
   const written = report.memoryWritten.reduce((sum, entry) => sum + entry.count, 0);
   const breakdown = report.memoryWritten.map((entry) => `${entry.scope} ${entry.kind} ${entry.count}`).join(", ");
   const memory = written === 0 ? "Память: новых записей нет." : `Память: +${written} (${breakdown}).`;
   const header = lines.length === 0 ? "Сводка за сутки: сбоев нет." : "Сводка за сутки.";
-  const information = balance !== null && !balance.warning ? [balance.text] : [];
+  const information = [
+    ...(balance !== null && !balance.warning ? [balance.text] : []),
+    ...(quality.warning ? [] : [quality.text]),
+  ];
   return [header, ...lines, ...information, memory].join("\n");
 }
 

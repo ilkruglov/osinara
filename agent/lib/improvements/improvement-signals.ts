@@ -2,8 +2,9 @@
  * Eve event handling behind the improvement backlog.
  *
  * Export:
- * - `createImprovementSignalHandlers`: collects turn evidence, decides on the trigger, closes the
- *   loop for loaded authored skills, runs the reflection and records the items for the family.
+ * - `createImprovementSignalHandlers`: collects turn evidence, records the evaluation of every
+ *   interactive turn, decides on the trigger, closes the loop for loaded authored skills, runs the
+ *   reflection and records the items for the family.
  *
  * Key constructs:
  * - Silent memory review, scheduled runs and subagents never reflect; an external group does,
@@ -14,10 +15,11 @@
  * - A `workflow` item recurring the second time in a trusted chat leaves a backlog hint for the
  *   next turn, so the model can offer a skill once. Later recurrences stay silent.
  */
-import type { SessionAuth } from "eve/context";
-
-import { isMemoryReviewSession } from "../memory-review/memory-review-session.js";
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
+import { runtimeVersions } from "../turn-quality/runtime-versions.js";
+import type { TurnEvaluationIdentity, TurnOutcomeInput } from "../turn-quality/turn-evaluation-repository.js";
+import { turnIdentity, type TurnIdentity, type TurnIdentityContext } from "../turn-quality/turn-identity.js";
+import { turnProcessMetrics } from "../turn-quality/turn-process-metrics.js";
 import type { ImprovementItemInput } from "./improvement-backlog-repository.js";
 import { createReflectionRateLimiter, type ReflectionGenerate, reflectOnTurn } from "./reflection.js";
 import {
@@ -27,23 +29,12 @@ import {
   type TurnEvidence,
 } from "./turn-evidence.js";
 
-type ChatKind = "external" | "family" | "private";
-
 /** Recurrence at which a workflow problem is worth one skill offer. */
 const BACKLOG_HINT_RECURRENCE = 2;
 
-interface SignalContext {
-  channel: { kind?: string };
-  session: { auth: SessionAuth; id: string };
-}
+type SignalContext = TurnIdentityContext;
 
-export interface ImprovementIdentity {
-  chatKind: ChatKind;
-  familyId: string;
-  /** Registered Telegram group of a group chat; null in a private chat. */
-  groupId: string | null;
-  userId: string | null;
-}
+export type ImprovementIdentity = Pick<TurnIdentity, "chatKind" | "familyId" | "groupId" | "userId">;
 
 interface ImprovementSignalDependencies {
   /** Application conversation of the chat, when the identity maps to one. */
@@ -51,6 +42,8 @@ interface ImprovementSignalDependencies {
   generate?: ReflectionGenerate;
   isAuthoredSkill(familyId: string, name: string): Promise<boolean>;
   record(input: ImprovementItemInput): Promise<{ item: { recurrenceCount: number }; recurred: boolean }>;
+  /** Every interactive turn, quiet ones included: the evaluation the digest and the evals read. */
+  recordTurnEvaluation(identity: TurnEvaluationIdentity, input: TurnOutcomeInput): Promise<void>;
   recordSkillTelemetry(input: {
     conversationId: string | null;
     familyId: string;
@@ -69,23 +62,6 @@ interface ImprovementSignalDependencies {
     kind: "backlog";
     summary: string;
   }): Promise<void>;
-}
-
-function reflectionIdentity(ctx: SignalContext): ImprovementIdentity | null {
-  if (ctx.channel.kind === "subagent" || isMemoryReviewSession(ctx)) return null;
-  const attributes = ctx.session.auth.current?.attributes;
-  if (ctx.session.auth.current?.authenticator !== "telegram" || !attributes) return null;
-  const familyId = attributes.familyId;
-  if (typeof familyId !== "string") return null;
-  const chatKind = attributes.telegramChatType === "private"
-    ? "private"
-    : attributes.groupType === "family_private" ? "family" : "external";
-  const principalId = ctx.session.auth.current?.principalId;
-  const userId = ctx.session.auth.current?.principalType === "user" && typeof principalId === "string"
-    ? principalId
-    : null;
-  const groupId = typeof attributes.groupId === "string" ? attributes.groupId : null;
-  return { chatKind, familyId, groupId, userId };
 }
 
 /** What went wrong in the turn, in tool and code terms; the heavy-turn case names the step count. */
@@ -153,10 +129,29 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
     }
   }
 
+  async function evaluate(ctx: SignalContext, turnId: string, identity: TurnIdentity, evidence: TurnEvidence): Promise<void> {
+    await dependencies.recordTurnEvaluation({
+      chatKind: identity.chatKind, eveSessionId: ctx.session.id, eveTurnId: turnId, familyId: identity.familyId,
+      telegramChatId: identity.telegramChatId, triggeringEntryId: identity.triggeringEntryId,
+    }, {
+      failedToolCount: evidence.failedTools.length,
+      failureCode: evidence.turnFailure?.code ?? null,
+      finishedAt: new Date(),
+      loadedSkills: [...new Set(evidence.loadedSkills)],
+      metrics: turnProcessMetrics(evidence.calls),
+      outcome: evidence.turnFailure ? "failed" : "completed",
+      stepCount: evidence.stepCount,
+      toolCalls: evidence.calls,
+      versions: runtimeVersions(),
+    });
+  }
+
   async function finish(ctx: SignalContext, turnId: string, evidence: TurnEvidence | null): Promise<void> {
     if (!evidence) return;
-    const identity = reflectionIdentity(ctx);
+    const identity = turnIdentity(ctx);
     if (!identity) return;
+    // The evaluation is the measurement of every turn; a scheduled run has no person behind it.
+    if (!isScheduledSession(ctx)) await evaluate(ctx, turnId, identity, evidence);
     const conversationId = await dependencies.conversationId(identity);
     await closeSkillLoop(ctx, turnId, identity, evidence, conversationId);
     if (!shouldReflectOnTurn(evidence) || isScheduledSession(ctx)) return;
@@ -202,6 +197,9 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
   }
 
   return {
+    turnStarted(event: { data: { turnId: string } }, ctx: SignalContext): void {
+      collector.turnStarted({ sessionId: ctx.session.id, turnId: event.data.turnId });
+    },
     actionsRequested(event: { data: { actions: readonly { callId?: string; input?: unknown; kind: string; toolName?: string }[]; turnId: string } }, ctx: SignalContext): void {
       collector.actionsRequested({ actions: event.data.actions, sessionId: ctx.session.id, turnId: event.data.turnId });
     },

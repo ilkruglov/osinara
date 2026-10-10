@@ -16,6 +16,8 @@
 import { createHash } from "node:crypto";
 
 import { clipText } from "../display-text.js";
+import { canonicalJson } from "../json-hash.js";
+import type { TurnToolCall } from "../turn-quality/turn-process-metrics.js";
 
 const REFLECTION_STEP_THRESHOLD = 8;
 const MAX_TRACKED_TURNS = 200;
@@ -28,6 +30,8 @@ export interface TurnToolFailure {
 }
 
 export interface TurnEvidence {
+  /** Every tool call in order, with the hash of its input and its failure code, for the process metrics. */
+  calls: TurnToolCall[];
   failedTools: TurnToolFailure[];
   /** Names passed to `load_skill` this turn, in order; static and authored skills alike. */
   loadedSkills: string[];
@@ -40,7 +44,12 @@ export interface TurnEvidence {
 export type ImprovementCategory = "memory" | "other" | "prompt" | "skill" | "tool_error" | "workflow";
 
 function emptyEvidence(): TurnEvidence {
-  return { failedTools: [], loadedSkills: [], stepCount: 0, toolNames: [], turnFailure: null };
+  return { calls: [], failedTools: [], loadedSkills: [], stepCount: 0, toolNames: [], turnFailure: null };
+}
+
+/** Short stable hash of a call's input: the identity of a repeat, never stored as text. */
+function inputHash(input: unknown): string {
+  return createHash("sha256").update(canonicalJson(input ?? null)).digest("hex").slice(0, 16);
 }
 
 function clip(text: string): string {
@@ -50,6 +59,7 @@ function clip(text: string): string {
 export function createTurnEvidenceCollector() {
   const turns = new Map<string, TurnEvidence>();
   const callTools = new Map<string, string>();
+  const callRecords = new Map<string, TurnToolCall>();
 
   function key(sessionId: string, turnId: string): string {
     return `${sessionId}:${turnId}`;
@@ -74,6 +84,11 @@ export function createTurnEvidenceCollector() {
   }
 
   return {
+    /** A turn exists from its start, so a turn that never calls a tool is still evaluated. */
+    turnStarted(input: { sessionId: string; turnId: string }): void {
+      evidenceFor(key(input.sessionId, input.turnId));
+    },
+
     actionsRequested(input: {
       actions: readonly { callId?: string; input?: unknown; kind: string; toolName?: string }[];
       sessionId: string;
@@ -89,12 +104,16 @@ export function createTurnEvidenceCollector() {
         }
         if (action.kind !== "tool-call" || typeof action.toolName !== "string") continue;
         evidence.toolNames.push(action.toolName);
+        const call: TurnToolCall = { code: null, inputHash: inputHash(action.input), toolName: action.toolName };
+        evidence.calls.push(call);
         if (typeof action.callId === "string") {
           callTools.set(`${input.sessionId}:${action.callId}`, action.toolName);
+          callRecords.set(`${input.sessionId}:${action.callId}`, call);
           while (callTools.size > MAX_TRACKED_TURNS * 8) {
             const oldest = callTools.keys().next().value;
             if (oldest === undefined) break;
             callTools.delete(oldest);
+            callRecords.delete(oldest);
           }
         }
       }
@@ -113,11 +132,10 @@ export function createTurnEvidenceCollector() {
       const toolName = input.toolName ??
         (typeof input.callId === "string" ? callTools.get(`${input.sessionId}:${input.callId}`) : undefined) ??
         "unknown";
-      evidence.failedTools.push({
-        code: input.error?.code ?? "UNKNOWN",
-        message: clip(input.error?.message ?? ""),
-        toolName,
-      });
+      const code = input.error?.code ?? "UNKNOWN";
+      evidence.failedTools.push({ code, message: clip(input.error?.message ?? ""), toolName });
+      const record = typeof input.callId === "string" ? callRecords.get(`${input.sessionId}:${input.callId}`) : undefined;
+      if (record) record.code = code;
     },
 
     turnFailed(input: { code: string; message: string; sessionId: string; turnId: string }): void {

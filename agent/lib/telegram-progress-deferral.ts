@@ -28,7 +28,8 @@ const QUIET_TOOL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 export interface HeldProgressNotice {
-  readonly send: () => Promise<void>;
+  /** Resolves with the ids of the messages sent, when the sender reports them. */
+  readonly send: () => Promise<readonly string[] | void>;
   readonly stepIndex: number;
 }
 
@@ -78,11 +79,11 @@ export function createProgressNoticeDeferral() {
     },
 
     /** A turn ending with text still held delivers it: it was the answer after all. */
-    async flush(key: string): Promise<void> {
+    async flush(key: string): Promise<readonly string[]> {
       const notice = held.get(key);
-      if (!notice) return;
+      if (!notice) return [];
       held.delete(key);
-      await notice.send();
+      return (await notice.send()) ?? [];
     },
 
     heldCount(): number {
