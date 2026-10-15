@@ -20,7 +20,8 @@ import { handleTelegramDurableIngress } from "../lib/telegram-durable-ingress.js
 import { formatTelegramTurnFailure, isUnrecoverableHistoryFailure } from "../lib/telegram-interface.js";
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
-import { completedTelegramOutput } from "../lib/telegram-progress.js";
+import { completedTelegramOutput, TELEGRAM_SILENT_DIRECTIVE } from "../lib/telegram-progress.js";
+import { observeReplyGate, recordTurnResponseKind } from "../lib/reply-gate/reply-gate.js";
 import { deliverTelegramProgressNotice } from "../lib/telegram-progress-notice.js";
 import { progressNoticeKey, telegramProgressNoticeDeferral } from "../lib/telegram-progress-deferral.js";
 import { refreshTelegramReactionPolicy } from "../lib/telegram-reaction-policy.js";
@@ -101,7 +102,13 @@ export default telegramChannel({
       // Model-authored pre-tool text is a user-visible progress update, not technical tool noise.
       if (isScheduledSession(ctx) && data.finishReason !== "stop") return;
       const output = completedTelegramOutput(data);
-      if (!output) return;
+      if (!output) {
+        // Declining to answer is a decision of the turn too: the silence directive is measured.
+        if (data.finishReason === "stop" && typeof data.message === "string" && data.message.includes(TELEGRAM_SILENT_DIRECTIVE)) {
+          await recordTurnResponseKind(ctx, "silent");
+        }
+        return;
+      }
       const sessionId = applicationSessionId(ctx);
       if (!await sessionRepository.isCurrentEveSession(sessionId, ctx.session.id)) return;
       const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
@@ -133,7 +140,8 @@ export default telegramChannel({
           );
         }
         // A declined reaction stays silent: a text emoji is not a reaction (owner's decision).
-        await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        const reaction = await setTelegramMessageReaction(channel.telegram, telegramMessageId, output.emoji);
+        await recordTurnResponseKind(ctx, reaction === "applied" ? "reaction" : "reaction_failed");
         return;
       }
       const message = output.message;
@@ -280,6 +288,13 @@ export default telegramChannel({
         }
         // Reactions and replies to these messages are the turn's satisfaction signal.
         await recordTurnDelivery(ctx, sentMessages.map((sent) => sent.messageId), deliveredAt);
+        await recordTurnResponseKind(ctx, "text");
+        if (groupId) {
+          // Shadow reply gate: the answer is already in the chat; the verdict only calibrates the gate.
+          await observeReplyGate(ctx, {
+            candidate: durableText, forumTopicId, groupId, ownMessageIds: sentMessages.map((sent) => sent.messageId),
+          });
+        }
       }
       if (!isScheduledSession(ctx)) {
         await registerTelegramDeliveredMessageRoutes(

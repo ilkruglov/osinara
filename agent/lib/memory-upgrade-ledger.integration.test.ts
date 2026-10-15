@@ -164,6 +164,7 @@ const POST_V0101_MIGRATIONS = [
   "130_participant_username_snapshot.sql",
   "131_memory_chat_owner_title.sql",
   "132_turn_evaluations.sql",
+  "133_reply_gate.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
