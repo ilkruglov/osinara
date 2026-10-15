@@ -166,6 +166,7 @@ const POST_V0101_MIGRATIONS = [
   "132_turn_evaluations.sql",
   "133_reply_gate.sql",
   "134_session_handoff.sql",
+  "135_memory_ft86_logist_username.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
