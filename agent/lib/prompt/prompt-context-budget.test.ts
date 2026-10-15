@@ -23,7 +23,8 @@ const CORE_CHARACTER_BUDGET = 12_400;
 // +1 500 on 26 September 2026: the rules for messages that arrive while a turn works.
 // +600 on 5 October 2026: the reply-target rule with the selected quote (`replyQuotedText`), which
 // private chats never had while the quote reached the model in groups only.
-const PRIVATE_CHARACTER_BUDGET = 16_100;
+// +200 on 16 October 2026: the absolute swearing ban moved from the core into the trusted zones.
+const PRIVATE_CHARACTER_BUDGET = 16_300;
 // Raised by 400 on 5 September 2026 for the memory selection criterion and slot guidance, then by
 // 300 on 6 September for the addressing section with the explicit silence directive, then by
 // 300 the same day for the pending-messages rule in that section, then by 200 on 7 September for
@@ -34,20 +35,24 @@ const PRIVATE_CHARACTER_BUDGET = 16_100;
 // Raised by 400 on 13 September 2026 for the same recurrence sentence.
 // Raised by 400 on 22 September 2026 for the same browser_task sentence.
 // Raised by 200 on 5 October 2026: the selected quote is explained outside the snapshot.
-const FAMILY_CHARACTER_BUDGET = 18_200;
+// +200 on 16 October 2026: the absolute swearing ban moved from the core into the trusted zones.
+const FAMILY_CHARACTER_BUDGET = 18_400;
 // Raised by 400 on 6 September 2026 for the addressing section with the explicit silence directive,
 // then by 2 200 on 7 September for the participants section ported from upstream v0.21.2: opinions
 // about behaviour on request, comparisons by a stated criterion, no diagnoses, no template refusal,
 // then by 200 the same day for the rule not to re-answer a closed question, then by 200 on
 // 8 September for the group length ceiling and by 100 for the mandatory used-memory directive.
-const EXTERNAL_CHARACTER_BUDGET = 14_100;
+// +1 000 on 16 October 2026: the character section, where one swear word answers a direct insult.
+const EXTERNAL_CHARACTER_BUDGET = 15_100;
 // Raised by 400 on 5 September 2026 for the memory policy: the used-memory directive and the
 // selection criterion with the discussion-summary slot, then by 400 on 6 September for the
 // addressing section with the explicit silence directive, then by 2 200 on 7 September for the
 // participants section ported from upstream v0.21.2, then by 200 for the closed-question rule,
 // then by 200 on 8 September for the group length ceiling and by 100 for the mandatory directive.
 // Raised by 400 on 10 September 2026 for the same chat-rule sentence.
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_900;
+// +1 100 on 16 October 2026 for the external character section (about a thousand characters after
+// the blind eval and the review: the source of the insult and the humiliation clause spelled out).
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_000;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
@@ -56,7 +61,8 @@ const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 23_900;
 // closed-question rule, then by 200 on 8 September for the group length ceiling and by 100 for
 // the mandatory used-memory directive wording (200 in total: the worst case stacks two blocks),
 // then by 400 on 10 September for the core rule against repeating another person's obscenity.
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_000;
+// +700 on 16 October 2026 for the external character section (the core itself grew by 31).
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_700;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

@@ -25,6 +25,7 @@ import {
   GROUP_MEMORY_DELTA_CONTRACT,
   MEMORY_WRITE_CONTRACT,
   PRIVATE_MEMORY_SOURCE_CONTRACT,
+  PROFANITY_BAN_RULES,
   REPLY_TARGET_RULES,
   SEND_WORKSPACE_FILE_RULES,
   SPOKEN_ASIDE_RULES,
@@ -35,6 +36,7 @@ import {
   type MemoryEditAction,
 } from "./common-fragments.js";
 import {
+  EXTERNAL_CHARACTER_RULES,
   EXTERNAL_PEOPLE_RULES,
   EXTERNAL_TASK_BOUNDARIES,
   externalPurposeSection,
@@ -101,6 +103,7 @@ const PRIVATE_INSTRUCTION_SECTIONS = [
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
   MEMORY_USED_DIRECTIVE_RULE,
+  PROFANITY_BAN_RULES,
   `## Ответ на сообщение
 
 Текущее сообщение пришло в блоке \`<current_telegram_message>\`. ${REPLY_TARGET_RULES}`,
@@ -165,6 +168,7 @@ ${GROUP_ADDRESSING}`,
   MEMORY_EXACT_DUPLICATE_HANDLING,
   MEMORY_DEEPENING_PROTOCOL,
   MEMORY_USED_DIRECTIVE_RULE,
+  PROFANITY_BAN_RULES,
   `## История разговора
 
 ${GROUP_TIMELINE_TRUST}
@@ -262,6 +266,8 @@ function externalInstructions(
     externalPurposeSection(capabilities),
     EXTERNAL_TASK_BOUNDARIES,
     EXTERNAL_PEOPLE_RULES,
+    // A scheduled report answers nobody, so it has no insult to answer.
+    scheduledRun ? null : EXTERNAL_CHARACTER_RULES,
     externalMemorySection(capabilities),
     capabilities.has("remember") ? MEMORY_WRITE_CONTRACT : null,
     capabilities.has("remember") ? GROUP_MEMORY_DELTA_CONTRACT : null,
