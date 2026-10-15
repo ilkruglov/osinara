@@ -6,6 +6,8 @@
  * - `visionModel`: independently selected model, or `null` when image input is unsupported.
  * - `browserWorkerModel`: the primary model at low reasoning effort for the browser worker, whose
  *   steps are one action each and whose latency is what a person waits through.
+ * - `sessionHandoffModel`: the primary model without reasoning for the summary a rotating session
+ *   hands to its successor.
  * - `memoryReviewModel`: the primary model at the configured silent-review effort, or the primary
  *   model itself when none is configured.
  * - `voiceTranscriptionModel`: isolated Groq Whisper route for Telegram voice notes.
@@ -77,6 +79,18 @@ export const browserWorkerModel = createConfiguredLanguageModel({
   maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
   modelId: modelProviderConfig.agent.models.primary.id,
   transport: withReasoningEffort(modelProviderConfig.agent.transport, "low"),
+});
+
+/**
+ * The session handoff summary: a person waits for it once per fifty turns. Measured on a 76-entry
+ * chat (15 октября 2026): without reasoning 3.7 s and the same three sections as with low effort
+ * at 8.4 s, where a thousand reasoning tokens bought nothing visible.
+ */
+export const sessionHandoffModel = createConfiguredLanguageModel({
+  apiKey: agentModelApiKey,
+  maxOutputTokens: modelProviderConfig.agent.models.primary.maxOutputTokens,
+  modelId: modelProviderConfig.agent.models.primary.id,
+  transport: withReasoningEffort(modelProviderConfig.agent.transport, "none"),
 });
 
 /** The shared transport with the configured silent-review effort, or the transport as is. */

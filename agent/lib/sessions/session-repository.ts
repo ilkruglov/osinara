@@ -16,7 +16,7 @@ import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import {
   continuationTokenForGeneration,
-  sessionNeedsRotation,
+  sessionRotationReason,
 } from "./session-policy.js";
 import {
   sessionRouteRepository,
@@ -48,6 +48,8 @@ export interface PrepareSessionInput {
 export interface PreparedSession {
   continuationToken: string;
   generation: number;
+  /** Set when the turn limit retired a canonical predecessor whose thread this session inherits. */
+  handoff: { retiredSessionStartedAt: Date } | null;
   id: string;
   /** True when rotation, task promotion, or trust-zone recreation requires a fresh Eve generation. */
   rotated: boolean;
@@ -76,6 +78,7 @@ interface SessionRow {
   rotation_requested_at: Date | null;
   retired_at: Date | null;
   scope: ConversationSessionScope;
+  started_at: Date;
   task_state: "completed" | "failed" | "pending" | "running" | null;
   telegram_forum_topic_id: string | null;
   thread_id: string;
@@ -321,21 +324,26 @@ export const sessionRepository = {
       }
       assertSameScope(current, input);
 
-      const rotate = !trustZoneRecreated && sessionNeedsRotation({
+      const rotationReason = trustZoneRecreated ? null : sessionRotationReason({
         completedTurns: current.completed_turns,
         lastActivityAt: current.last_activity_at,
         now: input.now,
         pendingOperation: current.pending_operation,
         rotationRequestedAt: current.rotation_requested_at,
       });
-      if (rotate) current = await rotateSession(client, current, input);
+      const predecessor = current;
+      if (rotationReason !== null) current = await rotateSession(client, current, input);
       await upsertSessionRoute(client, input.baseContinuationToken, current.id);
       await client.query("COMMIT");
       return {
         continuationToken: current.continuation_token,
         generation: current.generation,
+        // A requested clean context and a month-old thread carry nothing over.
+        handoff: rotationReason === "turns" && predecessor.kind === "canonical"
+          ? { retiredSessionStartedAt: predecessor.started_at }
+          : null,
         id: current.id,
-        rotated: rotate || trustZoneRecreated,
+        rotated: rotationReason !== null || trustZoneRecreated,
         sandboxSessionId: current.thread_id,
       };
     } catch (error) {

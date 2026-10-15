@@ -155,10 +155,14 @@ export function repositories() {
       prepareTurn: vi.fn().mockResolvedValue({
         continuationToken: "telegram-101::",
         generation: 0,
+        handoff: null,
         id: "session-1",
         rotated: false,
         sandboxSessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       }),
+    },
+    sessionHandoff: {
+      prepare: vi.fn().mockResolvedValue(undefined),
     },
     telegram: {
       claimFirstOwner: vi.fn(),

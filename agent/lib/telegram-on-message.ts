@@ -405,6 +405,19 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+    // The thread of the session the turn limit just retired: summarized now, shown once by the
+    // context preparer below. One turn per fifty waits for it; a miss is a cold start, as before.
+    if (appSession.handoff && inboundTimeline) {
+      await repositories.sessionHandoff.prepare({
+        applicationSessionId: appSession.id,
+        beforeSequence: inboundTimeline.sequenceId,
+        conversationId: group ? null : conversation.id,
+        groupId: group?.groupId ?? null,
+        messageThreadId: forumTopicId,
+        retiredSessionStartedAt: appSession.handoff.retiredSessionStartedAt,
+        timezone,
+      });
+    }
     const senderTag = telegramSenderTag(message);
     const preparedGroupTurnContext = inboundTimeline
       ? await repositories.groupContext.prepare({

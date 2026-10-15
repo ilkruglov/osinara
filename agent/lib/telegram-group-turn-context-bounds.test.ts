@@ -33,6 +33,9 @@ function preparer(entries: TelegramGroupJournalEntry[]) {
       listIncremental: vi.fn(),
       listRecent: vi.fn().mockResolvedValue(entries),
     },
+    handoff: {
+      read: vi.fn().mockResolvedValue(null),
+    },
     sessions: {
       currentGroupTimelineCursor: vi.fn().mockResolvedValue(null),
     },

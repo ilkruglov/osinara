@@ -165,6 +165,7 @@ const POST_V0101_MIGRATIONS = [
   "131_memory_chat_owner_title.sql",
   "132_turn_evaluations.sql",
   "133_reply_gate.sql",
+  "134_session_handoff.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
@@ -315,5 +316,6 @@ describeWithDatabase("v0.10.1 production ledger upgrade to current memory migrat
         client.release();
       }
     }
-  });
+    // Replays every shipped migration file and then the runner: about five seconds on a laptop.
+  }, 60_000);
 });

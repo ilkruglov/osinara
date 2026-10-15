@@ -633,4 +633,58 @@ describe("createTelegramMessageHandler", () => {
     expect(repository.session.prepareTurn).toHaveBeenCalledTimes(1);
   });
 
+  it("summarizes the session the turn limit retired before the new session's context is prepared", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "owner", userId: "user-1" });
+    const retiredSessionStartedAt = new Date("2026-10-10T10:00:00.000Z");
+    repository.session.prepareTurn.mockResolvedValueOnce({
+      continuationToken: "telegram-101:::osinara:1",
+      generation: 1,
+      handoff: { retiredSessionStartedAt },
+      id: "session-2",
+      rotated: true,
+      sandboxSessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    await handler(telegramContext().context, privateMessage("Продолжим"));
+
+    expect(repository.sessionHandoff.prepare).toHaveBeenCalledWith({
+      applicationSessionId: "session-2",
+      beforeSequence: "1",
+      conversationId: "conversation-private-1",
+      groupId: null,
+      messageThreadId: null,
+      retiredSessionStartedAt,
+      timezone: null,
+    });
+    expect(repository.sessionHandoff.prepare.mock.invocationCallOrder[0]!)
+      .toBeLessThan(repository.groupContext.prepare.mock.invocationCallOrder[0]!);
+
+    // The next turn resumes the session: nothing to hand over.
+    await handler(telegramContext().context, privateMessage("И дальше"));
+    expect(repository.sessionHandoff.prepare).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces a carried handoff in the turn's trusted attributes for the hook that marks it shown", async () => {
+    const repository = repositories();
+    repository.telegram.findIdentity.mockResolvedValue({ familyId: "family-1", role: "owner", userId: "user-1" });
+    repository.groupContext.prepare.mockResolvedValueOnce({
+      cursorSequence: "1",
+      currentMessageEnvelope: "<current_telegram_message>test</current_telegram_message>",
+      durableMessage: "<previous_context_summary>\nнить\n</previous_context_summary>\n\n<current_telegram_message>test</current_telegram_message>",
+      handoffBlock: "<previous_context_summary>\nнить\n</previous_context_summary>",
+      omittedBeforeSequence: null,
+      timelineOmission: null,
+      visibleEntryIds: ["00000000-0000-4000-8000-000000000010"],
+      visibleTimelineEntries: [],
+    });
+    const handler = createTelegramMessageHandler(repository);
+
+    const carried = await handler(telegramContext().context, privateMessage("Продолжим"));
+    expect(carried?.auth?.attributes).toMatchObject({ sessionHandoffCarried: "true" });
+    // Nothing is marked at ingress: Eve sends the message after the handler returns.
+    const plain = await handler(telegramContext().context, privateMessage("И дальше"));
+    expect(plain?.auth?.attributes).not.toHaveProperty("sessionHandoffCarried");
+  });
 });

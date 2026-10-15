@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   continuationTokenForGeneration,
   sessionNeedsRotation,
+  sessionRotationReason,
 } from "./session-policy.js";
 
 const NOW = new Date("2026-07-12T12:00:00.000Z");
@@ -62,5 +63,14 @@ describe("session rotation policy", () => {
       pendingOperation: false,
       rotationRequestedAt: NOW,
     })).toBe(true);
+  });
+
+  it("names the reason: a request beats staleness, staleness beats the turn limit", () => {
+    const base = { lastActivityAt: NOW, now: NOW, pendingOperation: false, rotationRequestedAt: null };
+    expect(sessionRotationReason({ ...base, completedTurns: 3 })).toBeNull();
+    expect(sessionRotationReason({ ...base, completedTurns: 50 })).toBe("turns");
+    expect(sessionRotationReason({ ...base, completedTurns: 50, lastActivityAt: new Date("2026-06-01T00:00:00.000Z") })).toBe("inactivity");
+    expect(sessionRotationReason({ ...base, completedTurns: 50, lastActivityAt: new Date("2026-06-01T00:00:00.000Z"), rotationRequestedAt: NOW })).toBe("requested");
+    expect(sessionRotationReason({ ...base, completedTurns: 50, pendingOperation: true, rotationRequestedAt: NOW })).toBeNull();
   });
 });

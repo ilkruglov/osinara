@@ -22,6 +22,7 @@ import { currentTimeRepository } from "./current-time-repository.js";
 import { familyRepository, type FamilyRepository } from "./family-repository.js";
 import { profileProjectionPolicyRepository } from "./profile-projection-policy-repository.js";
 import { proactiveDeliveryRepository } from "./proactive-deliveries/proactive-delivery-repository.js";
+import { prepareSessionHandoff, type SessionHandoffPreparer } from "./sessions/session-handoff.js";
 import { sessionRepository } from "./sessions/session-repository.js";
 import {
   telegramGroupJournalRepository,
@@ -82,6 +83,8 @@ export interface TelegramMessageRepositories {
   >;
   proactiveDeliveries: Pick<typeof proactiveDeliveryRepository, "listPendingContext">;
   session: Pick<typeof sessionRepository, "hasRoute" | "prepareTurn">;
+  /** Summarizes the session the turn limit retired for the one that replaces it. */
+  sessionHandoff: { prepare: SessionHandoffPreparer };
   telegram: TelegramRepository;
   timeline: Pick<typeof conversationTimelineRepository, "recordInbound">;
   turnInterjections: Pick<typeof turnInterjectionRepository, "findDeliveredContentKind" | "findDeliveredContentKinds">;
@@ -105,6 +108,7 @@ export const productionTelegramMessageRepositories = {
   memoryReview: memoryReviewRepository,
   proactiveDeliveries: proactiveDeliveryRepository,
   session: sessionRepository,
+  sessionHandoff: { prepare: (input) => prepareSessionHandoff(input) },
   turnInterjections: turnInterjectionRepository,
   telegram: telegramRepository,
   timeline: conversationTimelineRepository,
