@@ -17,6 +17,8 @@ vi.mock("./image-generation/image-generation-availability.js", () => ({
 }));
 
 import { AppError } from "./app-error.js";
+import { createImagePromptSeries } from "./image-generation/image-prompt-series.js";
+import { ModelFacingError } from "./model-facing-error.js";
 import { createGenerateImageTool } from "./tools/generate_image.js";
 
 const GENERATED_PATH = `generated-images/image-${createHash("sha256")
@@ -83,6 +85,7 @@ function dependencies() {
       markAmbiguous: vi.fn().mockResolvedValue(undefined),
       markFailed: vi.fn().mockResolvedValue(undefined),
     },
+    series: createImagePromptSeries(),
     workspaces: {
       findBinaryWrite: vi.fn().mockResolvedValue(null),
       workspaceId: vi.fn().mockResolvedValue("workspace-1"),
@@ -342,5 +345,65 @@ describe("generate_image", () => {
     );
     expect(deps.client.generate).not.toHaveBeenCalled();
     expect(deps.workspaces.writeBinary).not.toHaveBeenCalled();
+  });
+
+  const ROBOT = "Вертикальный кадр, стиль ретро-плаката 1950-х, пожелтевшая бумага. Сцена: ретро-робот с ламповыми глазами держит катушку магнитной ленты, за спиной три серверные стойки.";
+  const ECHO = "Обложка журнала в стиле барокко. Центр: ретро-робот с ламповыми глазами на шестерне, в руке катушка магнитной ленты, за спиной три серверные стойки.";
+
+  it("refuses a new picture that echoes the series before anything is reserved, and names the repeats", async () => {
+    const deps = dependencies();
+    const tool = createGenerateImageTool(deps as never);
+    await expect(tool.execute({ ...INPUT, prompt: ROBOT }, context())).resolves.toMatchObject({ generated: true });
+    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
+
+    const refusal = await tool.execute({ ...INPUT, prompt: ECHO }, { ...context(), callId: "call-image-2" }).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(ModelFacingError);
+    expect((refusal as ModelFacingError).contract).toMatchObject({
+      category: "input", code: "AGENT_IMAGE_PROMPT_REPEATS_SERIES", field: "prompt", retryable: true, sideEffectStatus: "not_started",
+      reason: expect.stringContaining("ламповыми глазами"),
+      correction: expect.stringContaining("keep"),
+    });
+    // The ledger knows the refusal as a definite failure of that call; the provider was not asked.
+    expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-2", "AGENT_IMAGE_PROMPT_REPEATS_SERIES");
+    expect(deps.client.generate).toHaveBeenCalledTimes(1);
+    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
+  });
+
+  it("replays a stored refusal as the same input correction", async () => {
+    const deps = dependencies();
+    deps.operations.begin.mockResolvedValue({ errorCode: "AGENT_IMAGE_PROMPT_REPEATS_SERIES", state: "failed" });
+    const replayed = await createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ECHO }, context()).catch((error: unknown) => error);
+    expect(replayed).toBeInstanceOf(ModelFacingError);
+    expect((replayed as ModelFacingError).contract).toMatchObject({ category: "input", retryable: true, sideEffectStatus: "not_started" });
+    expect(deps.client.generate).not.toHaveBeenCalled();
+  });
+
+  it("serves a replay of an earlier call without measuring it against its own prompt", async () => {
+    const deps = dependencies();
+    deps.series.remember("wrun-image", ROBOT);
+    deps.operations.begin.mockResolvedValue({ file: FILE, state: "completed" });
+    await expect(createGenerateImageTool(deps as never).execute({ ...INPUT, prompt: ROBOT }, context()))
+      .resolves.toMatchObject({ generated: false, path: FILE.path });
+    expect(deps.operations.markFailed).not.toHaveBeenCalled();
+    expect(deps.series.previous("wrun-image")).toEqual([ROBOT]);
+  });
+
+  it("lets the declared keep through, remembers the picture, and exempts an edit", async () => {
+    const deps = dependencies();
+    const tool = createGenerateImageTool(deps as never);
+    await tool.execute({ ...INPUT, prompt: ROBOT }, context());
+    await expect(tool.execute(
+      { ...INPUT, keep: ["сюжет: ретро-робот с ламповыми глазами, катушка магнитной ленты, три серверные стойки"], prompt: ECHO },
+      { ...context(), callId: "call-image-2" },
+    )).resolves.toMatchObject({ generated: true });
+    expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
+    // The provider never sees the declaration.
+    expect(deps.client.generate.mock.calls[1]![0]).not.toHaveProperty("keep");
+
+    await expect(tool.execute(
+      { ...INPUT, images: [{ path: "photo.png", scope: "group" }], prompt: ECHO },
+      { ...context(), callId: "call-image-3" },
+    )).resolves.toMatchObject({ generated: true });
+    expect(deps.series.previous("wrun-image")).toEqual([ROBOT, ECHO]);
   });
 });
