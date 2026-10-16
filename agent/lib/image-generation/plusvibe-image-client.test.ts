@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
-import { createFallbackImageClient } from "./flux-image-clients.js";
+import { createFallbackImageClient, PROVIDER_JOB_RECORD_TIMEOUT_MS } from "./flux-image-clients.js";
 import { createPlusVibeImageClient, plusVibeAspectRatio } from "./plusvibe-image-client.js";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
@@ -126,6 +126,47 @@ describe("plusvibe image client", () => {
     await expect(client(failed).generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_REJECTED" });
     const quota = vi.fn().mockResolvedValue(json({ message: "insufficient balance", ok: false }, 402));
     await expect(client(quota).generate(request)).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_PROVIDER_UNAVAILABLE" });
+  });
+
+  // 16 October 2026, «Дизраптим»: four edits with avatars of real people ended as `fail` with
+  // `content_policy` within seconds, but the client knew only `failed`/`error`, polled the terminal
+  // job for four minutes each and reported an unknown outcome instead of moving on.
+  it("reads PlusVibe's own fail status as a rejection after one poll and reports the job", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(json({ jobId: "cmvbdeekj0073zx013f2euglr", ok: true, status: "processing" }, 202))
+      .mockResolvedValueOnce(json({
+        errorCode: "media_generation_failed", failMsg: "Не удалось завершить генерацию медиа.", failReason: "content_policy",
+        failure: { advice: "fix_input", charged: false, code: "content_policy", definitive: true }, priceRub: 0, resultUrls: [], status: "fail",
+      }));
+    const onProviderJob = vi.fn().mockResolvedValue(undefined);
+    await expect(client(fetch).generate({ ...request, onProviderJob })).rejects.toMatchObject({ code: "AGENT_IMAGE_GENERATION_REJECTED" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onProviderJob).toHaveBeenCalledWith({ jobId: "cmvbdeekj0073zx013f2euglr", model: "nano-banana-2:white", provider: "plusvibe" });
+    expect(info.mock.calls.map(([line]) => String(line)).join("\n")).toContain('"code":"AGENT_IMAGE_GENERATION_JOB"');
+    const rejection = error.mock.calls.map(([line]) => String(line)).find((line) => line.includes("AGENT_IMAGE_GENERATION_REJECTED"));
+    expect(rejection).toContain("content_policy");
+    expect(rejection).toContain("cmvbdeekj0073zx013f2euglr");
+    // Free provider text may echo the prompt: only reason codes reach the log.
+    expect(rejection).not.toContain("Не удалось завершить");
+    vi.restoreAllMocks();
+  });
+
+  it("collects a running job even when the caller's job record never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "info").mockImplementation(() => undefined);
+      const onProviderJob = vi.fn(() => new Promise<void>(() => {}));
+      const pending = client(success()).generate({ ...request, onProviderJob });
+      await vi.advanceTimersByTimeAsync(PROVIDER_JOB_RECORD_TIMEOUT_MS + 1);
+      await expect(pending).resolves.toMatchObject({ model: "plusvibe/nano-banana-2:white" });
+      expect(warn.mock.calls.map(([line]) => String(line)).join("\n")).toContain("AGENT_IMAGE_GENERATION_JOB_RECORD_TIMEOUT");
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
   });
 
   it.each(["network", "server", "job-id", "poll", "result-url", "download"])(

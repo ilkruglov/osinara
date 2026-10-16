@@ -27,6 +27,7 @@ import {
   scrubProviderText,
   unavailable,
   type FluxImageClient,
+  reportProviderJob,
 } from "./flux-image-clients.js";
 import { assertReferenceCount, prepareUploadReference } from "./image-editing-input.js";
 import type { ImageGenerationRequest } from "./image-generation-client.js";
@@ -52,10 +53,18 @@ export function plusVibeAspectRatio(size: ImageGenerationRequest["size"]): "1:1"
 interface JobStatus {
   errorCode?: unknown;
   failMsg?: unknown;
+  failReason?: unknown;
+  failure?: { code?: unknown } | null;
   priceRub?: unknown;
   resultUrls?: unknown;
   status?: unknown;
 }
+
+// PlusVibe's own terminal failure is `fail` (documented: no charge, `failure.code` names the
+// reason, e.g. content_policy). On 16 October 2026 the client knew only `failed` and `error`,
+// polled four terminal jobs for four minutes each and reported unknown outcomes.
+const FAILED_JOB_STATUSES = new Set(["error", "fail", "failed"]);
+const REASON_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
 
 export function createPlusVibeImageClient(
   options: {
@@ -108,9 +117,11 @@ export function createPlusVibeImageClient(
       if (!response.ok) throw ambiguous(PROVIDER, `status ${response.status}`);
       job = await bounded(() => response.json() as Promise<JobStatus>);
       if (job.status === "success") break;
-      if (job.status === "failed" || job.status === "error") {
-        const detail = scrubProviderText([job.errorCode, job.failMsg].filter((part) => typeof part === "string").join(" "), options.apiKey);
-        throw rejected(PROVIDER, `${model} job failed ${detail}`.trim());
+      if (typeof job.status === "string" && FAILED_JOB_STATUSES.has(job.status)) {
+        // Only identifiers reach the log: `failMsg` is free provider text and may echo the prompt.
+        const reasons = [job.errorCode, job.failReason, job.failure?.code]
+          .filter((part): part is string => typeof part === "string" && REASON_CODE_PATTERN.test(part));
+        throw rejected(PROVIDER, `${model} job ${jobId} ${job.status} ${reasons.join(" ")}`.trim());
       }
       remaining();
     }
@@ -145,6 +156,7 @@ export function createPlusVibeImageClient(
         model = PLUSVIBE_EDITING_MODEL;
       }
       const jobId = await createJob(model, input.prompt, opts);
+      await reportProviderJob(input, { jobId, model, provider: PROVIDER });
       return imageFromBytes(await awaitJob(model, jobId), `${PROVIDER}/${model}`, PROVIDER);
     },
   };

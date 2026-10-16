@@ -12,7 +12,7 @@
  */
 import { AppError, isAppError } from "../app-error.js";
 import { readBoundedBody } from "../bounded-body.js";
-import type { GeneratedImage, ImageGenerationRequest, ImageMediaType } from "./image-generation-client.js";
+import type { GeneratedImage, ImageGenerationRequest, ImageMediaType, ProviderJob } from "./image-generation-client.js";
 import { assertReferenceCount, editingUnavailable, prepareCloudflareReference, prepareUploadReference } from "./image-editing-input.js";
 import { redactSecrets } from "../secret-redaction.js";
 
@@ -35,6 +35,31 @@ export const GENERATION_TIMEOUT_MS = 3 * 60 * 1_000;
 const NEURALDEEP_POLL_INTERVAL_MS = 3_000;
 const NEURALDEEP_POLL_TIMEOUT_MS = 4 * 60 * 1_000;
 const MAX_IMAGE_BYTES = 32 * 1_024 * 1_024;
+export const PROVIDER_JOB_RECORD_TIMEOUT_MS = 5_000;
+
+/**
+ * An accepted job is named before its outcome is known: the log and the caller's ledger get the
+ * provider, model and job id, so a poll that times out can still be reconciled with the provider.
+ * On 16 October 2026 four timed-out PlusVibe jobs could not be checked because nothing kept their ids.
+ */
+export async function reportProviderJob(input: ImageGenerationRequest, job: ProviderJob): Promise<void> {
+  console.info(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_JOB", jobId: job.jobId, model: job.model, provider: job.provider }));
+  if (input.onProviderJob === undefined) return;
+  // The job is already running at the provider: a slow ledger must not delay collecting it. The
+  // caller's hook keeps running on its own; the poll starts after this bounded wait.
+  let timer: NodeJS.Timeout | undefined;
+  const expired = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), PROVIDER_JOB_RECORD_TIMEOUT_MS);
+  });
+  try {
+    const outcome = await Promise.race([input.onProviderJob(job).then(() => "recorded" as const), expired]);
+    if (outcome === "timeout") {
+      console.warn(JSON.stringify({ code: "AGENT_IMAGE_GENERATION_JOB_RECORD_TIMEOUT", jobId: job.jobId, provider: job.provider }));
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** Provider text goes to the log only after the API key and anything key-shaped are removed. */
 export function scrubProviderText(text: unknown, apiKey: string, limit = 200): string {
@@ -314,6 +339,7 @@ export function createNeuralDeepImageClient(
       } else {
         taskId = await createTask("/images/generate", JSON.stringify({ options: { aspect_ratio: aspectRatio }, prompt: input.prompt }), "application/json");
       }
+      await reportProviderJob(input, { jobId: taskId, model: NEURALDEEP_IMAGE_MODEL, provider: "neuraldeep" });
       return imageFromBytes(await awaitResult(taskId), NEURALDEEP_IMAGE_MODEL, "neuraldeep");
     },
   };

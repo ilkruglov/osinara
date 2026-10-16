@@ -26,6 +26,7 @@ import {
   imageGenerationClient,
   type ImageGenerationRequest,
   type ImageMediaType,
+  type ProviderJob,
 } from "../image-generation/image-generation-client.js";
 import {
   imageGenerationOperationRepository,
@@ -70,6 +71,7 @@ interface GenerateImageDependencies {
     complete(operationKey: string, file: WorkspaceFileRecord): Promise<void>;
     markAmbiguous(operationKey: string, errorCode: string): Promise<void>;
     markFailed(operationKey: string, errorCode: string): Promise<void>;
+    recordProviderJob(operationKey: string, job: ProviderJob): Promise<void>;
   };
   workspaces: {
     findBinaryWrite(
@@ -338,6 +340,19 @@ export function createGenerateImageTool(dependencies: GenerateImageDependencies)
         try {
           generatedImage = await dependencies.client.generate({ ...request,
             ...(referenceImages === undefined ? {} : { referenceImages }),
+            // The accepted job is kept next to the operation so an unknown outcome can be checked
+            // against the provider; a ledger hiccup must not fail a job that is already running.
+            onProviderJob: async (job) => {
+              try {
+                await dependencies.operations.recordProviderJob(ctx.callId, job);
+              } catch (error) {
+                console.error(JSON.stringify({
+                  code: "AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED",
+                  error: error instanceof Error ? error.message : String(error),
+                  operationKey: ctx.callId,
+                }));
+              }
+            },
           });
         } catch (error) {
           return await settleProviderFailure(dependencies, ctx.callId, error);

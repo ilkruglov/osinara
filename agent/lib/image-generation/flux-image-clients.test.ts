@@ -87,8 +87,11 @@ describe("flux image clients", () => {
     const fetch = neuralDeepSuccess();
     const client = createNeuralDeepImageClient({ apiKey: "test", fetch, sleep: async () => {} });
     const bytes = await sharp({ create: { width: 1200, height: 600, channels: 3, background: "red" } }).png().toBuffer();
-    const image = await client.generate({ ...request, prompt: "добавь тюльпаны", referenceImages: [{ bytes, mediaType: "image/png" }, { bytes, mediaType: "image/png" }] });
+    const onProviderJob = vi.fn().mockResolvedValue(undefined);
+    const image = await client.generate({ ...request, onProviderJob, prompt: "добавь тюльпаны", referenceImages: [{ bytes, mediaType: "image/png" }, { bytes, mediaType: "image/png" }] });
     expect(image).toMatchObject({ mediaType: "image/png", model: "neuraldeep/qwen-image-2.1" });
+    // The accepted task is reported before polling, so an unknown outcome can be reconciled later.
+    expect(onProviderJob).toHaveBeenCalledWith({ jobId: expect.stringMatching(/^[0-9a-f-]{8,64}$/u), model: "neuraldeep/qwen-image-2.1", provider: "neuraldeep" });
     const [url, init] = fetch.mock.calls[0]!;
     expect(String(url)).toBe("https://api.neuraldeep.ru/v1/images/edit");
     expect(init.headers["content-type"]).toBeUndefined();

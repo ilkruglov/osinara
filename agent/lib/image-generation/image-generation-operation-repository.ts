@@ -8,6 +8,7 @@
 import { AppError } from "../app-error.js";
 import { database } from "../database.js";
 import type { WorkspaceFileRecord } from "../workspaces/workspace-file-record.js";
+import type { ProviderJob } from "./image-generation-client.js";
 
 interface OperationRow {
   error_code: string | null;
@@ -107,6 +108,20 @@ export const imageGenerationOperationRepository = {
 
   async markFailed(operationKey: string, errorCode: string): Promise<void> {
     await settleFailure(operationKey, "failed", errorCode);
+  },
+
+  /**
+   * Names the provider job an operation is waiting on. Only a started operation takes it: a settled
+   * row keeps the job it had, and a late report (the chain moved to another provider after a
+   * settlement) never rewrites history. Nothing to update is not an error.
+   */
+  async recordProviderJob(operationKey: string, job: ProviderJob): Promise<void> {
+    await database().query(
+      `UPDATE image_generation_operations
+          SET provider = $2, provider_model = $3, provider_job_id = $4, updated_at = now()
+        WHERE operation_key = $1 AND status = 'started'`,
+      [operationKey, job.provider, job.model, job.jobId],
+    );
   },
 };
 

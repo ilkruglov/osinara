@@ -84,6 +84,7 @@ function dependencies() {
       complete: vi.fn().mockResolvedValue(undefined),
       markAmbiguous: vi.fn().mockResolvedValue(undefined),
       markFailed: vi.fn().mockResolvedValue(undefined),
+      recordProviderJob: vi.fn().mockResolvedValue(undefined),
     },
     series: createImagePromptSeries(),
     workspaces: {
@@ -110,6 +111,21 @@ describe("generate_image", () => {
     }, context())).rejects.toMatchObject({ code });
     expect(deps.operations.markFailed).toHaveBeenCalledWith("call-image-1", code);
     expect(deps.operations.markAmbiguous).not.toHaveBeenCalled();
+  });
+
+  it("records the provider job in the ledger and still delivers when the record fails", async () => {
+    const deps = dependencies();
+    const job = { jobId: "cmvbdeekj0073zx013f2euglr", model: "nano-banana-2:white", provider: "plusvibe" };
+    deps.operations.recordProviderJob.mockRejectedValueOnce(new Error("ledger down"));
+    deps.client.generate.mockImplementation(async (input: { onProviderJob?: (job: unknown) => Promise<void> }) => {
+      await input.onProviderJob?.(job);
+      return { bytes: Buffer.from("generated"), mediaType: "image/webp", model: "plusvibe/nano-banana-2:white" };
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(createGenerateImageTool(deps as never).execute(INPUT, context())).resolves.toMatchObject({ generated: true });
+    expect(deps.operations.recordProviderJob).toHaveBeenCalledWith("call-image-1", job);
+    expect(error.mock.calls.map(([line]) => String(line)).join("\n")).toContain("AGENT_IMAGE_GENERATION_JOB_RECORD_FAILED");
+    error.mockRestore();
   });
 
   it("returns a completed edit without calling the provider again", async () => {

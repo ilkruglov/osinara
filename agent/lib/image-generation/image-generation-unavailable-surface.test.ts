@@ -172,6 +172,7 @@ describe("unavailable image generation", () => {
         complete: vi.fn(),
         markAmbiguous: vi.fn(),
         markFailed: vi.fn(),
+        recordProviderJob: vi.fn(),
       },
       workspaces: {
         findBinaryWrite: vi.fn(),

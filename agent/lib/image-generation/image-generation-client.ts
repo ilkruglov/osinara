@@ -21,6 +21,17 @@ export interface ImageGenerationRequest {
   quality: ImageQuality;
   size: ImageSize;
   referenceImages?: readonly ImageReference[];
+  /**
+   * Called once a provider has accepted a job, before the outcome is known: the caller keeps the
+   * job next to its own operation so an unknown outcome can be reconciled with the provider later.
+   */
+  onProviderJob?: (job: ProviderJob) => Promise<void>;
+}
+
+export interface ProviderJob {
+  jobId: string;
+  model: string;
+  provider: string;
 }
 
 export interface ImageReference {
