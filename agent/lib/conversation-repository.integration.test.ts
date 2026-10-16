@@ -120,3 +120,45 @@ describeWithDatabase("conversationRepository", () => {
     });
   });
 });
+
+describeWithDatabase("conversationRepository.findParticipantByHandle", () => {
+  beforeEach(async () => {
+    await database().query(
+      `TRUNCATE memory_extraction_batches, claim_evidence, memory_items_all,
+         telegram_group_messages, telegram_groups, family_memberships, users, families CASCADE`,
+    );
+  });
+
+  afterAll(closeDatabase);
+
+  it("resolves a handle inside the conversation only, refuses namesakes and treats LIKE characters as text", async () => {
+    const family = await database().query<{ id: string }>("INSERT INTO families (name) VALUES ('Handles') RETURNING id");
+    const group = await database().query<{ id: string }>(
+      `INSERT INTO telegram_groups (family_id, telegram_chat_id, title, type, message_mode)
+       VALUES ($1, '-100601', 'Группа', 'external', 'addressed_only') RETURNING id`,
+      [family.rows[0]!.id],
+    );
+    const entries = await database().query<{ id: string }>(
+      `INSERT INTO telegram_group_messages
+         (group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
+          telegram_user_id, sender_username, sender_display_name, sender_is_bot,
+          message_kind, content_text, sent_at)
+       VALUES ($1, 1, 1, 'user', 'telegram:601', '601', 'ilya_d', 'Илья', false, 'text', 'раз', now()),
+              ($1, 2, 2, 'user', 'telegram:602', '602', 'ilya_k', 'Илья', false, 'text', 'два', now()),
+              ($1, 3, 3, 'user', 'telegram:603', '603', 'vadim_k', 'Vadim 100%', false, 'text', 'три', now())
+       RETURNING id`,
+      [group.rows[0]!.id],
+    );
+    const conversation = await conversationRepository.getByGroupId(group.rows[0]!.id);
+    await conversationRepository.syncTimelineParticipants(conversation.id, entries.rows.map((row) => row.id));
+
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "Илья" })).resolves.toBeNull();
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { username: "@Ilya_D" })).resolves.toMatchObject({ telegramUserId: "601" });
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "602" })).resolves.toMatchObject({ usernameSnapshot: "ilya_k" });
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { telegramUserId: "999" })).resolves.toBeNull();
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "vad" })).resolves.toMatchObject({ telegramUserId: "603" });
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "Vadim 100%" })).resolves.toMatchObject({ telegramUserId: "603" });
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "%" })).resolves.toBeNull();
+    await expect(conversationRepository.findParticipantByHandle(conversation.id, { displayName: "_" })).resolves.toBeNull();
+  });
+});

@@ -44,9 +44,9 @@ export function externalGroupCapabilityInstructions(
   const effectiveCapabilities = [
     ...SANDBOX_FILE_CAPABILITY_CATALOG,
     ...EXTERNAL_GROUP_CAPABILITY_CATALOG.filter(({ name }) =>
-      allowed.has(name) && !(name === "generate_image" && (
+      allowed.has(name) && !((name === "generate_image" || name === "fetch_telegram_avatars") && (
         options.scheduledRun || !IMAGE_GENERATION_AVAILABLE
-      ))
+      )) && !(name === "fetch_telegram_avatars" && !allowed.has("generate_image"))
     ),
   ];
   const applicationCore = options.includeApplicationCore

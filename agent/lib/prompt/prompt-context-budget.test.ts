@@ -1,7 +1,13 @@
 /** Deterministic authored-context budget guarding model prefill latency. */
 import { readFile } from "node:fs/promises";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The worst case must count every purpose line, the avatars' included: it exists only with a
+// configured image provider.
+vi.mock("../image-generation/image-generation-availability.js", () => ({
+  IMAGE_GENERATION_AVAILABLE: true,
+}));
 
 import { manageMemoryPresentation } from "../tools/manage_memory.js";
 import { EXTERNAL_GROUP_TOOL_NAMES } from "../tool-policy/group-tool-catalog.js";
@@ -51,8 +57,11 @@ const EXTERNAL_CHARACTER_BUDGET = 15_100;
 // then by 200 on 8 September for the group length ceiling and by 100 for the mandatory directive.
 // Raised by 400 on 10 September 2026 for the same chat-rule sentence.
 // +1 100 on 16 October 2026 for the external character section (about a thousand characters after
-// the blind eval and the review: the source of the insult and the humiliation clause spelled out).
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_000;
+// the blind eval and the review: the source of the insult and the humiliation clause spelled out),
+// +100 the same day for the avatar purpose line, +500 once the worst case counts the grant lines
+// of generate_image and fetch_telegram_avatars (they exist only with a configured image provider,
+// which this test never mocked before; measured 25 560 with the scheduled history section).
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_600;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on
@@ -61,8 +70,9 @@ const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_000;
 // closed-question rule, then by 200 on 8 September for the group length ceiling and by 100 for
 // the mandatory used-memory directive wording (200 in total: the worst case stacks two blocks),
 // then by 400 on 10 September for the core rule against repeating another person's obscenity.
-// +700 on 16 October 2026 for the external character section (the core itself grew by 31).
-const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_700;
+// +700 on 16 October 2026 for the external character section (the core itself grew by 31),
+// +200 the same day for the image grant lines now counted in the external worst case (37 801).
+const AUTHORED_TOTAL_CHARACTER_BUDGET = 37_900;
 
 describe("authored prompt context budget", () => {
   it("keeps stable and mode-scoped instructions bounded", async () => {

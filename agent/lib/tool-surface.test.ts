@@ -23,6 +23,7 @@ const EXPECTED_TOOL_MODULES = [
   "browser_session.ts",
   "execute_google_workspace.ts",
   "export_memory.ts",
+  "fetch_telegram_avatars.ts",
   "find_fuel_stations.ts",
   "generate_image.ts",
   "get_current_time.ts",

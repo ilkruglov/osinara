@@ -21,6 +21,7 @@ import browserLook from "../tools/browser_look.js";
 import browserOpen from "../tools/browser_open.js";
 import browserRead from "../tools/browser_read.js";
 import browserSession from "../tools/browser_session.js";
+import fetchTelegramAvatars from "../tools/fetch_telegram_avatars.js";
 import generateImage from "../tools/generate_image.js";
 import getCurrentTime from "../tools/get_current_time.js";
 import getMemorySource from "../tools/get_memory_source.js";
@@ -92,7 +93,11 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
   ...GOOGLE_WORKSPACE_TOOLS,
   ...(LOCAL_WEB_SEARCH_AVAILABLE ? { web_search: webSearch as unknown as AnyToolDefinition } : {}),
   ...(IMAGE_GENERATION_AVAILABLE
-    ? { generate_image: generateImage as unknown as AnyToolDefinition }
+    ? {
+      // Avatars exist for pictures of the people in the chat; without drawing there is no use for them.
+      fetch_telegram_avatars: fetchTelegramAvatars as unknown as AnyToolDefinition,
+      generate_image: generateImage as unknown as AnyToolDefinition,
+    }
     : {}),
   browser_act: browserAct as unknown as AnyToolDefinition,
   browser_confirm: browserConfirm as unknown as AnyToolDefinition,

@@ -27,6 +27,7 @@ import { externalGroupLoadSkillTool } from "../group-skills/group-load-skill-too
 import { MEMORY_LIST_DEFAULT_LIMIT, MEMORY_LIST_MAX_LIMIT, THREAD_HISTORY_PAGE_MAX_ENTRIES } from "../memory-config.js";
 import { THREAD_REF_PATTERN } from "../memory-thread-query-repository.js";
 import { externalRememberInputSchema } from "../remember-contract.js";
+import fetchTelegramAvatars from "../tools/fetch_telegram_avatars.js";
 import generateImage from "../tools/generate_image.js";
 import importTelegramAttachment from "../tools/import_telegram_attachment.js";
 import inspectWorkspaceImage from "../tools/inspect_workspace_image.js";
@@ -182,6 +183,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
 };
 
 const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
+  fetch_telegram_avatars: fetchTelegramAvatars as unknown as AnyToolDefinition,
   generate_image: generateImage as unknown as AnyToolDefinition,
   import_telegram_attachment: importTelegramAttachment as unknown as AnyToolDefinition,
   inspect_workspace_image: inspectWorkspaceImage as unknown as AnyToolDefinition,
@@ -215,6 +217,15 @@ const GRANTED_BY: Readonly<
   send_workspace_image: ["send_workspace_image", "generate_image"],
 };
 
+// A capability that only serves another one is authorized together with it, in one read of the
+// policy: the avatars of a group whose drawing grant was revoked after the descriptor was built
+// must not be fetched.
+const REQUIRES_ALSO: Readonly<
+  Partial<Record<ExternalGroupToolName, readonly ExternalGroupToolName[]>>
+> = {
+  fetch_telegram_avatars: ["generate_image"],
+};
+
 async function withExternalGroupCapability<T>(
   ctx: ToolContext,
   capability: ExternalGroupToolName,
@@ -242,7 +253,12 @@ async function withExternalGroupCapability<T>(
   // Committing this final live check is the operation's authorization linearization point. The DB
   // connection is released before repositories run so concurrent tools cannot exhaust the pool by
   // each holding an outer connection while waiting for an inner repository connection.
-  await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability);
+  const alsoRequired = REQUIRES_ALSO[capability];
+  if (alsoRequired === undefined) {
+    await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability);
+  } else {
+    await authorizeCurrentExternalGroupCapability(identity, GRANTED_BY[capability] ?? capability, { alsoRequired });
+  }
   return await operation();
 }
 
@@ -338,8 +354,9 @@ function buildExternalToolSurface(
     // A scheduled prompt has no current user message that can back a new memory claim.
     if (scheduledRun && capability === "remember") continue;
     if (capability === "web_search" && (scheduledRun || !LOCAL_WEB_SEARCH_AVAILABLE)) continue;
-    // Billable image generation requires a current interactive request, never a background run.
-    if (capability === "generate_image" && !imageGenerationAllowed) continue;
+    // Billable image generation requires a current interactive request, never a background run;
+    // the avatars exist only for it.
+    if ((capability === "generate_image" || capability === "fetch_telegram_avatars") && !imageGenerationAllowed) continue;
     // A granted image sender still needs its live check, which `GRANTED_BY` resolves.
     if (capability.startsWith("manage_memory.")) continue;
     if (capability.startsWith("manage_memory_thread.")) continue;
@@ -450,10 +467,11 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
   const effectiveInput = input.environment === "external"
     ? {
       ...input,
-      capabilities: new Set([...input.capabilities].filter((name) => name !== "generate_image")),
+      capabilities: new Set([...input.capabilities].filter((name) => name !== "generate_image" && name !== "fetch_telegram_avatars")),
     }
     : input;
   const {
+    fetch_telegram_avatars: _fetchTelegramAvatars,
     generate_image: _generateImage,
     manage_behavior_preference: _manageBehaviorPreference,
     manage_skill: _manageSkill,

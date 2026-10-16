@@ -22,6 +22,17 @@ provider reduces them below 512x512), so fine details may change.
 This is generative editing, not exact pixel-preserving retouching.
 If editing is unavailable or fails, do not omit `images` and silently generate a replacement.
 
+## Chat participants in a picture
+
+When the picture should show people from this chat (a cover about chat events, a caricature, a
+scene with them) and `fetch_telegram_avatars` is available here, call it first with up to four participants named as the
+chat shows them, then pass the returned paths as `images` references and name each person by
+image index in the prompt. An avatar is a photo of a real person: draw an illustration or a
+friendly caricature, never a photorealistic likeness, never something demeaning, and never
+present the result as a real photo. A participant listed in `missing` with reason
+`no_photo_or_private` has no visible photo: describe them neutrally without inventing looks;
+`telegram_unavailable` may be retried once later.
+
 ## Prompt workflow
 
 1. Preserve a detailed user prompt without inventing new characters, objects, brands, slogans, or

@@ -34,6 +34,11 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     usage: "создавать изображения и редактировать доступные исходники через Cloudflare, сохраняя результат новым файлом в workspace текущей группы; отправлять результат отдельным вызовом send_workspace_image",
   },
   {
+    name: "fetch_telegram_avatars",
+    requiresImageGeneration: true,
+    usage: "скачивать аватарки участников текущей группы в её workspace как референсы для картинок про них: только иллюстрация или дружеская карикатура",
+  },
+  {
     name: "import_telegram_attachment",
     usage: "принимать и импортировать UTF-8 файлы TXT, Markdown, JSON, CSV, TSV, HTML, XML и YAML из сообщений текущей группы",
   },

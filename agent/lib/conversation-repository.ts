@@ -153,6 +153,46 @@ export const conversationRepository = {
     return projectConversation(row);
   },
 
+  /**
+   * The participant of this conversation the chat shows under a username or a display name: an
+   * exact match first (case-insensitive), else the one participant whose name starts with the
+   * handle; two candidates mean the handle is not a name but a guess.
+   */
+  async findParticipantByHandle(
+    conversationId: string,
+    handle: { displayName?: string; telegramUserId?: string; username?: string },
+  ): Promise<ConversationParticipant | null> {
+    const username = handle.username?.replace(/^@/u, "").trim() || null;
+    const displayName = handle.displayName?.trim() || null;
+    const telegramUserId = handle.telegramUserId?.trim() || null;
+    if (username === null && displayName === null && telegramUserId === null) return null;
+    // A Telegram id is resolved here too: a person who never wrote in this conversation is not
+    // reachable through it, whatever the id (security review, 16 октября 2026).
+    const exact = await database().query<ParticipantRow>(
+      `SELECT id, participant_ref, conversation_id, telegram_user_id, linked_user_id,
+              display_name_snapshot, username_snapshot, first_observed_at, last_observed_at
+       FROM conversation_participants
+       WHERE conversation_id = $1
+         AND (($2::text IS NOT NULL AND lower(username_snapshot) = lower($2))
+           OR ($3::text IS NOT NULL AND lower(display_name_snapshot) = lower($3))
+           OR ($4::text IS NOT NULL AND telegram_user_id = $4))
+       ORDER BY last_observed_at DESC LIMIT 2`,
+      [conversationId, username, displayName, telegramUserId],
+    );
+    // Two exact matches are namesakes: the handle names nobody in particular.
+    if (exact.rows.length === 1) return projectParticipant(exact.rows[0]!);
+    if (exact.rows.length > 1 || displayName === null) return null;
+    const prefix = await database().query<ParticipantRow>(
+      `SELECT id, participant_ref, conversation_id, telegram_user_id, linked_user_id,
+              display_name_snapshot, username_snapshot, first_observed_at, last_observed_at
+       FROM conversation_participants
+       WHERE conversation_id = $1 AND lower(display_name_snapshot) LIKE lower($2) || '%' ESCAPE '\\'
+       ORDER BY last_observed_at DESC LIMIT 2`,
+      [conversationId, displayName.replace(/[%_\\]/gu, "\\$&")],
+    );
+    return prefix.rows.length === 1 ? projectParticipant(prefix.rows[0]!) : null;
+  },
+
   async resolveParticipantRef(
     conversationId: string,
     participantRef: string,

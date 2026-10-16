@@ -47,8 +47,13 @@ export async function authorizeCurrentExternalGroupCapability(
   // A list means "any of these grants authorizes this call": the image sender rides along with the
   // grant to generate images, because drawing into a workspace nobody can see is not a capability.
   capability: ExternalGroupToolName | readonly ExternalGroupToolName[],
+  // Grants that must all be present in the same snapshot as the capability: the avatars are
+  // reachable only while the group may also draw, and two separate reads could each see a
+  // policy the other did not.
+  options: { alsoRequired?: readonly ExternalGroupToolName[] } = {},
 ): Promise<void> {
   const acceptable = typeof capability === "string" ? [capability] : capability;
+  const alsoRequired = options.alsoRequired ?? [];
   const client = await database().connect();
   try {
     await client.query("BEGIN");
@@ -60,7 +65,7 @@ export async function authorizeCurrentExternalGroupCapability(
       [input.groupId, input.familyId],
     );
     const allowed = parseExternalGroupToolAllowlist(result.rows[0]?.tool_allowlist);
-    if (!acceptable.some((name) => allowed?.has(name))) {
+    if (!acceptable.some((name) => allowed?.has(name)) || !alsoRequired.every((name) => allowed?.has(name))) {
       throw new AppError(
         "AGENT_GROUP_TOOL_FORBIDDEN",
         "Этот инструмент не разрешён в текущей внешней группе. Обратитесь к владельцу агента",

@@ -5,6 +5,8 @@
  * - Interactive roots receive image generation only when their runtime/provider policy permits it.
  * - Scheduled turns and subagents never receive the billable tool.
  * - External execution rechecks the live owner-managed capability before provider access.
+ * - Participants' avatars exist only next to a live image grant: no descriptor without it, no
+ *   scheduled or subagent access, and a revoked generate_image denies them at execution too.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -20,19 +22,20 @@ vi.mock("../tool-policy/external-group-live-policy.js", () => ({
   loadCurrentExternalGroupCapabilities,
 }));
 
+import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
 import {
   buildModeToolSurface,
   buildSubagentToolSurface,
 } from "../tool-policy/mode-tool-surface.js";
 
-function externalAuth() {
+function externalAuth(toolAllowlist: readonly string[] = ["generate_image"]) {
   return {
     current: {
       attributes: {
         familyId: "family-1",
         groupId: "group-1",
         groupType: "external",
-        toolAllowlist: ["generate_image"],
+        toolAllowlist,
       },
       authenticator: "telegram",
       principalId: "user-1",
@@ -95,6 +98,40 @@ describe("image generation tool surface", () => {
     await expect(surface.generate_image!.execute({}, context))
       .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
     expect(surface.generate_image!.description).not.toMatch(/[—–«»]/u);
+  });
+
+  it("ties participants' avatars to a live image grant", async () => {
+    const both = new Set<ExternalGroupToolName>(["generate_image", "fetch_telegram_avatars"]);
+    const surface = buildModeToolSurface({ capabilities: both, environment: "external" });
+
+    expect(surface).toHaveProperty("fetch_telegram_avatars");
+    expect(buildModeToolSurface({ environment: "private" })).toHaveProperty("fetch_telegram_avatars");
+    expect(buildSubagentToolSurface({ environment: "private" })).not.toHaveProperty("fetch_telegram_avatars");
+    // Without a picture to draw the avatars have no purpose: no descriptor at all.
+    expect(buildModeToolSurface({ capabilities: new Set(["fetch_telegram_avatars"]), environment: "external" }))
+      .not.toHaveProperty("fetch_telegram_avatars");
+    expect(buildModeToolSurface({ capabilities: both, environment: "external", scheduledRun: true }))
+      .not.toHaveProperty("fetch_telegram_avatars");
+    expect(buildSubagentToolSurface({ capabilities: both, environment: "external" }))
+      .not.toHaveProperty("fetch_telegram_avatars");
+
+    // The owner revoked only generate_image after the descriptor was resolved: the live policy
+    // still grants the avatars, yet the download must not happen. Both grants are demanded from
+    // the same read, so no interleaved change can satisfy them one at a time.
+    authorizeCurrentExternalGroupCapability.mockImplementation(async (_identity: unknown, capability: unknown, options?: { alsoRequired?: readonly string[] }) => {
+      const live = new Set(["fetch_telegram_avatars"]);
+      if (capability !== "fetch_telegram_avatars" || !(options?.alsoRequired ?? []).every((name) => live.has(name))) {
+        throw new Error("AGENT_GROUP_TOOL_FORBIDDEN");
+      }
+    });
+    const context = { session: { auth: externalAuth([...both]) } } as never;
+    await expect(surface.fetch_telegram_avatars!.execute({ participants: [{ telegramUserId: "5" }] }, context))
+      .rejects.toThrowError(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(authorizeCurrentExternalGroupCapability).toHaveBeenCalledTimes(1);
+    expect(authorizeCurrentExternalGroupCapability).toHaveBeenCalledWith(
+      expect.anything(), "fetch_telegram_avatars", { alsoRequired: ["generate_image"] },
+    );
+    expect(surface.fetch_telegram_avatars!.description).not.toMatch(/[—–«»]/u);
   });
 
   it("does not expose workspace scope as model input", () => {

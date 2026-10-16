@@ -16,17 +16,24 @@ const CAPABILITY_PURPOSES: readonly (readonly [ExternalGroupToolName, string])[]
   ["manage_memory.undo", "отменять новую запись"],
   ["list_group_history", "поднимать раннюю переписку группы"],
   ["inspect_workspace_image", "анализировать изображение из чата"],
+  ["fetch_telegram_avatars", "брать аватарки участников как референсы для картинок про них"],
   ["send_workspace_file", "отправлять файл workspace в чат"],
   ["remove_group_file", "удалять файл workspace группы"],
 ];
 
 export function externalPurposeSection(
   capabilities: ReadonlySet<ExternalGroupToolName>,
+  // Whether this turn may draw at all (a provider is configured and the run is interactive).
+  options: { pictures: boolean },
 ): string {
+  // Avatars exist for pictures: without a drawing tool the purpose would promise nothing, and the
+  // tool surface drops the descriptor under exactly these conditions.
+  const pictures = options.pictures && capabilities.has("generate_image");
   const purposes = [
     ALWAYS_AVAILABLE_PURPOSE,
     ...CAPABILITY_PURPOSES
       .filter(([capability]) => capabilities.has(capability))
+      .filter(([capability]) => capability !== "fetch_telegram_avatars" || pictures)
       .map(([, purpose]) => purpose),
   ];
   return `## Назначение

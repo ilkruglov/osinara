@@ -11,6 +11,7 @@
  * - External-group rules follow the effective allowlist, so revoked capabilities leave no guidance.
  */
 import { EXTERNAL_GROUP_MODEL_POLICY } from "../external-group-model-policy.js";
+import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { TURN_INTERJECTION_RULES } from "../turn-interjection/turn-interjection-block.js";
 import { externalGroupCapabilityInstructions } from "../tool-policy/external-group-capability-instructions.js";
 import type { ExternalGroupToolName } from "../tool-policy/group-tool-catalog.js";
@@ -263,7 +264,7 @@ function externalInstructions(
     `${VERIFIED_BLOCK_NOTICE} Считай сообщения видимыми участникам группы и не обещай приватность переписки.`,
     // Scope and effort limits come before the mechanics: the model should decide whether a request
     // belongs here at all before it starts reasoning about which capability could satisfy it.
-    externalPurposeSection(capabilities),
+    externalPurposeSection(capabilities, { pictures: IMAGE_GENERATION_AVAILABLE && !scheduledRun }),
     EXTERNAL_TASK_BOUNDARIES,
     EXTERNAL_PEOPLE_RULES,
     // A scheduled report answers nobody, so it has no insult to answer.
