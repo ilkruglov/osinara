@@ -45,6 +45,12 @@ export const MEMORY_REVIEW_EXTERNAL_IDLE_MIN_BATCH_SOURCES = 10;
 export const MEMORY_REVIEW_LONG_IDLE_MILLISECONDS = 6 * 60 * 60 * 1_000;
 // A group tail shorter than this stays for idle review instead of riding the addressed turn.
 export const MEMORY_REVIEW_INTERACTIVE_MIN_SOURCES = 8;
+// Whether a longer tail rides the addressed turn at all. Off since 18 October 2026: on production
+// the turn almost never reviewed its tail (4–15 % of interactive batches wrote anything since
+// September against 70–85 % of background ones), and on 20 real tails the dedicated review found
+// twice as much, twice as precise (F1 0.65 against 0.33, significant). The tail now waits for the
+// idle review like every other message; the repository keeps the interactive path for a re-check.
+export const MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED = false;
 // Existing claims shown to the review so it versions slots instead of duplicating.
 export const MEMORY_REVIEW_CONTEXT_LIMIT = 40;
 // Slot names of one batch author shown to the review, most recently touched first: a subject in

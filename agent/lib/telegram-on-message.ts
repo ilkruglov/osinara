@@ -56,6 +56,7 @@ import {
   productionTelegramMessageRepositories,
   type TelegramMessageRepositories,
 } from "./telegram-on-message-repositories.js";
+import { MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED } from "./memory-review/memory-review-config.js";
 import { prepareTelegramMemoryReviewTurn } from "./memory-review/telegram-memory-review-turn.js";
 import { telegramInboundActor, telegramSenderTag } from "./telegram-inbound-actor.js";
 import { readTelegramSeriesMarker } from "./telegram-message-series.js";
@@ -452,7 +453,9 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
         "AGENT_CONVERSATION_TURN_CONTEXT_MISSING: Не удалось подготовить историю разговора",
       );
     }
-    const groupTurnContext = group && actor.kind === "telegram_user"
+    // The unreviewed tail of a group rides the addressed turn only while that path is on; otherwise
+    // it waits for the idle review, which reads a tail far better than a turn busy answering.
+    const groupTurnContext = group && actor.kind === "telegram_user" && MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED
       ? await prepareTelegramMemoryReviewTurn({
           applicationSessionId: appSession.id,
           conversationId: conversation.id,
