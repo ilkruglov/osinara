@@ -41,5 +41,10 @@ describe("group review tail on an addressed turn", () => {
 
     expect(repository.session.prepareTurn).toHaveBeenCalled();
     expect(repository.memoryReview.prepareInteractiveTurn).not.toHaveBeenCalled();
+    // The addressed message still reaches the lane, so a group of addressed messages is reviewed.
+    expect(repository.memoryReview.observePassiveMessage).toHaveBeenCalledWith({
+      groupId: "group-1",
+      timelineEntryId: "00000000-0000-4000-8000-000000000010",
+    });
   });
 });

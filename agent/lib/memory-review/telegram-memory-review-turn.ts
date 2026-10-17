@@ -16,14 +16,14 @@ import {
   renderTelegramGroupJournalContext,
   type TelegramGroupJournalEntry,
 } from "../telegram-group-journal-context.js";
-import { MEMORY_REVIEW_BATCH_SIZE } from "./memory-review-config.js";
+import { MEMORY_REVIEW_BATCH_SIZE, MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED } from "./memory-review-config.js";
 import { formatInteractiveMemoryReviewSelection } from "./memory-review-prompt.js";
 import type { memoryReviewRepository } from "./memory-review-repository.js";
 
 interface TelegramMemoryReviewTurnDependencies {
   memoryReview: Pick<
     typeof memoryReviewRepository,
-    "failInteractivePreparation" | "prepareInteractiveTurn"
+    "failInteractivePreparation" | "observePassiveMessage" | "prepareInteractiveTurn"
   >;
   syncParticipants(conversationId: string, entryIds: readonly string[]): Promise<unknown>;
 }
@@ -68,6 +68,20 @@ function chronologicalUniqueEntries(
   });
 }
 
+/** Combined sources keep chronology across repository boundaries; each query stays within 50 IDs. */
+async function syncParticipantsInChunks(
+  repositories: TelegramMemoryReviewTurnDependencies,
+  conversationId: string,
+  entries: readonly TelegramGroupJournalEntry[],
+): Promise<void> {
+  for (let offset = 0; offset < entries.length; offset += MEMORY_REVIEW_BATCH_SIZE) {
+    await repositories.syncParticipants(
+      conversationId,
+      entries.slice(offset, offset + MEMORY_REVIEW_BATCH_SIZE).map(requiredEntryId),
+    );
+  }
+}
+
 export async function prepareTelegramMemoryReviewTurn(input: {
   applicationSessionId: string;
   conversationId: string;
@@ -76,6 +90,22 @@ export async function prepareTelegramMemoryReviewTurn(input: {
   preparedContext: PreparedTelegramGroupTurnContext;
   repositories: TelegramMemoryReviewTurnDependencies;
 }): Promise<PreparedTelegramGroupTurnContext> {
+  if (!MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED) {
+    // The addressed message waits for the idle review like any other message: observing it keeps
+    // the lane alive from the first message of a group (the dispatcher creates lanes only for
+    // personal conversations), and the participants of the visible history still resolve, so a
+    // `remember` with a sourceSequence from that history is not refused before the review runs.
+    await input.repositories.memoryReview.observePassiveMessage({
+      groupId: input.groupId,
+      timelineEntryId: input.currentEntryId,
+    });
+    await syncParticipantsInChunks(
+      input.repositories,
+      input.conversationId,
+      chronologicalUniqueEntries(input.preparedContext.visibleTimelineEntries, input.currentEntryId),
+    );
+    return input.preparedContext;
+  }
   const reviewBatch = await input.repositories.memoryReview.prepareInteractiveTurn({
     applicationSessionId: input.applicationSessionId,
     groupId: input.groupId,
@@ -111,14 +141,8 @@ export async function prepareTelegramMemoryReviewTurn(input: {
           memoryReviewSourceEntryIds: reviewBatch.sourceEntryIds,
         };
 
-    // The current participant was synchronized before review preparation. Remaining combined
-    // sources retain chronology across repository boundaries and each query stays within 50 IDs.
-    for (let offset = 0; offset < combinedEntries.length; offset += MEMORY_REVIEW_BATCH_SIZE) {
-      await input.repositories.syncParticipants(
-        input.conversationId,
-        combinedEntries.slice(offset, offset + MEMORY_REVIEW_BATCH_SIZE).map(requiredEntryId),
-      );
-    }
+    // The current participant was synchronized before review preparation.
+    await syncParticipantsInChunks(input.repositories, input.conversationId, combinedEntries);
     return context;
   } catch (error) {
     if (reviewBatch) {

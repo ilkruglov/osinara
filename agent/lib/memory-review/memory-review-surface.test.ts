@@ -87,7 +87,9 @@ describe("memory review instructions", () => {
   it("allows a record only the details the reviewed messages state", () => {
     // 17 October 2026, 50 production batches judged blind: 42–58 % of records carried details
     // taken from <preceding_context> or inferred (whose car, the goals, the previous schedule).
-    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Источник записи только проверяемые сообщения");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Источник новых сведений только проверяемые сообщения");
+    // A slot replace keeps the verified details of the earlier records; only new facts need a source.
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("при slotUpdate.action=replace прежние детали");
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("пиши короче, а не додумывай");
   });
 

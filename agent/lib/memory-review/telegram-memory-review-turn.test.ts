@@ -11,6 +11,13 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// The interactive path is switched off in production since 18 October 2026 but kept for a
+// re-check; these tests exercise it as it would run when switched on.
+vi.mock("./memory-review-config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./memory-review-config.js")>()),
+  MEMORY_REVIEW_INTERACTIVE_TAIL_ENABLED: true,
+}));
+
 import {
   formatTelegramGroupJournalContext,
   type TelegramGroupJournalEntry,
@@ -71,6 +78,7 @@ function preparedContext(
 function repositories(entries: TelegramGroupJournalEntry[]) {
   return {
     failInteractivePreparation: vi.fn(),
+    observePassiveMessage: vi.fn().mockResolvedValue(null),
     prepareInteractiveTurn: vi.fn().mockResolvedValue({
       batchId: "batch-1",
       entries,
