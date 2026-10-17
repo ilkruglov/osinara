@@ -84,6 +84,13 @@ describe("memory review instructions", () => {
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("от 3 до 10 записей");
   });
 
+  it("allows a record only the details the reviewed messages state", () => {
+    // 17 October 2026, 50 production batches judged blind: 42–58 % of records carried details
+    // taken from <preceding_context> or inferred (whose car, the goals, the previous schedule).
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("Источник записи только проверяемые сообщения");
+    expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("пиши короче, а не додумывай");
+  });
+
   it("describes silent review for any conversation and the personal scope choice", () => {
     expect(MEMORY_REVIEW_INSTRUCTIONS).toContain("тихая проверка памяти разговора");
     expect(MEMORY_REVIEW_INSTRUCTIONS).not.toContain("памяти группы");
