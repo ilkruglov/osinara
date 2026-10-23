@@ -57,6 +57,9 @@ function blockText(block: JsonRecord | null): string[] {
       const summary = richText(block.summary ?? block.header);
       return [...(summary ? [summary] : []), ...blocksText(block.blocks)];
     }
+    // Bot API 10.1 names a quotation block `blockquote`; the long names are kept for the earlier shape.
+    case "blockquote":
+    case "expandable_blockquote":
     case "block_quotation":
     case "expandable_block_quotation":
       return blocksText(block.blocks);

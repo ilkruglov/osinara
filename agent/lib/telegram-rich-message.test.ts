@@ -13,6 +13,15 @@ import { describe, expect, it } from "vitest";
 import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks, withRichMessageText } from "./telegram-rich-message.js";
 
 describe("richMessagePlainText", () => {
+  // 23 October 2026: a channel post in «Дизраптим» carried its sample dialogue as `blockquote`.
+  it("reads a blockquote the way Bot API 10.1 names it", () => {
+    expect(richMessagePlainText({ rich_message: { blocks: [
+      { text: "Пример:", type: "paragraph" },
+      { blocks: [{ text: "- Привет\n- Чем помочь?", type: "paragraph" }], type: "blockquote" },
+      { blocks: [{ text: "скрытое", type: "paragraph" }], type: "expandable_blockquote" },
+    ] } })).toBe("Пример:\n\n- Привет\n- Чем помочь?\n\nскрытое");
+  });
+
   it("unfolds a collapsed details block the way a reader would see it expanded", () => {
     expect(richMessagePlainText({
       rich_message: {
