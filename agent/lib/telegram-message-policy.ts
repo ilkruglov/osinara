@@ -5,6 +5,7 @@
  * - `TelegramInboundMediaKind`: strict none/photo/readable-text/unsupported-media decision.
  * - `classifyTelegramInboundMedia`: fail-closed classifier over raw and Eve-parsed media.
  * - `hasTelegramInboundMedia`: identifies file-bearing updates without downloading their bytes.
+ * - `hasTelegramRawMediaBesidesLifted`: a rich post's media beyond the one lifted file.
  * - `isAgentNameMentioned`: recognizes agent-name stems with any suffix at Unicode word boundaries.
  * - `isMessageAddressedToBot`: preserves private, mention, and reply behavior.
  * - `isTelegramSlashCommand`: identifies command-shaped text reserved for application handlers.
@@ -15,7 +16,7 @@ import type { TelegramMessage } from "eve/channels/telegram";
 
 import { isTelegramImageDocumentCandidate } from "./attachments/telegram-vision-attachment.js";
 import { isReadableTextDocumentCandidate } from "./attachments/attachment-policy.js";
-import { richMessagePlainText, richPhotoIsLifted } from "./telegram-rich-message.js";
+import { richMediaIsLifted, richMessageMedia, richMessagePlainText } from "./telegram-rich-message.js";
 
 interface TelegramDispatchMessage {
   chat: {
@@ -83,8 +84,21 @@ export type TelegramInboundMediaKind =
  */
 function conditionalFieldIsMedia(raw: Record<string, unknown>, field: string): boolean {
   if (!Object.hasOwn(raw, field)) return false;
-  if (field === "rich_message" && (richMessagePlainText(raw) !== null || richPhotoIsLifted(raw))) return false;
+  if (field === "rich_message" && (richMessagePlainText(raw) !== null || richMediaIsLifted(raw))) return false;
   return containsTelegramFileReference(raw[field]);
+}
+
+/**
+ * True when the raw message carries any file besides the one lifted out of its rich blocks: a
+ * voice field, a second file, a poll with a file. The ingress keeps the text of a refused rich
+ * post only when the lifted file was the whole of its media.
+ */
+export function hasTelegramRawMediaBesidesLifted(raw: Record<string, unknown>): boolean {
+  const lifted = richMessageMedia(raw);
+  if (lifted === null) return true;
+  const liftedField = lifted.kind === "photo" ? "photo" : "document";
+  return TELEGRAM_INBOUND_MEDIA_FIELDS.some((field) => field !== liftedField && Object.hasOwn(raw, field)) ||
+    TELEGRAM_CONDITIONAL_MEDIA_FIELDS.some((field) => field !== "rich_message" && conditionalFieldIsMedia(raw, field));
 }
 
 function containsTelegramFileReference(value: unknown): boolean {

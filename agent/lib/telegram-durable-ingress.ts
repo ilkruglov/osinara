@@ -24,6 +24,7 @@ import { sendTelegramFailureNotice } from "./telegram-failure-notice.js";
 import { telegramIngressRepository } from "./telegram-ingress-repository.js";
 import {
   classifyTelegramInboundMedia,
+  hasTelegramRawMediaBesidesLifted,
   isMessageAddressedToBot,
   type TelegramInboundMediaKind,
 } from "./telegram-message-policy.js";
@@ -41,8 +42,7 @@ import {
   type TelegramPendingMessage,
   withPendingMarker,
 } from "./telegram-pending-messages.js";
-import { asRecord as record } from "./json-value.js";
-import { normalizeRichMessage, RICH_TEXT_ONLY_MARKER_KEY, richMessagePlainText, richPhotoIsLifted, withoutRichTextOnlyMarker } from "./telegram-rich-message.js";
+import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks } from "./telegram-rich-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -598,32 +598,29 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     context: TelegramVerifiedUpdateContext,
   ): Promise<Response> {
     const incomingUpdateId = updateId(context.raw);
-    // A rich message is read as text with its one photo lifted, so a channel post forwarded into
-    // a group meets the same media gate as a photo message instead of being refused as a whole.
-    // The mark is the ingress's own decision: a Telegram update that carries it is stripped first,
-    // so nothing outside can make a photo look already refused and skip the media gate.
-    const cleanRaw = withoutRichTextOnlyMarker(context.raw);
-    const update = context.update.kind === "message"
-      ? normalizeRichMessage({ ...context.update, message: { ...context.update.message, raw: withoutRichTextOnlyMarker(context.update.message.raw) } })
-      : context.update;
+    // A rich message is read as text with its one photo or document lifted, so a channel post
+    // forwarded into a group meets the same media gate as a photo or file message instead of
+    // being refused as a whole.
+    const update = normalizeRichMessage(context.update);
     const mediaKind = update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
-    // Only the one photo lifted out of a rich post may be refused while its text goes on: any
-    // other media (a voice, a video, a document next to rich text) keeps the old full refusal,
-    // because a mark that only stops the lifting would leave that media in the stored update.
-    const textFallback = update.kind === "message" && mediaKind === "native_photo" &&
-      richPhotoIsLifted(update.message.raw) && richMessagePlainText(update.message.raw) !== null;
-    let payload = cleanRaw;
+    // Only the one file lifted out of a rich post may be refused while its text goes on: the
+    // lifted file is then the message's only media. Any other media next to rich text (a voice
+    // field, a second file) keeps the full refusal, because the text-only shape below removes
+    // rich blocks alone and would leave that media in the stored update.
+    const textFallback = update.kind === "message" && update.message.attachments.length === 1 &&
+      !hasTelegramRawMediaBesidesLifted(update.message.raw) &&
+      richMediaIsLifted(update.message.raw) && richMessagePlainText(update.message.raw) !== null;
+    let payload: Record<string, unknown> = context.raw;
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
     if (
       update.kind === "message" &&
       mediaKind !== "none" &&
       !await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback)
     ) {
-      // The photo of a rich post stays out, its text still reaches the chat: the stored update
-      // carries the mark, and every later read keeps the photo unlifted.
+      // The file of a rich post stays out, its text still reaches the chat: the stored update
+      // keeps the paragraphs and no file reference, so no later read can lift it.
       if (!textFallback) return new Response("ok");
-      const message = record(cleanRaw.message) ?? {};
-      payload = { ...cleanRaw, message: { ...message, [RICH_TEXT_ONLY_MARKER_KEY]: true } };
+      payload = withoutRichMediaBlocks(context.raw);
     }
     const voice = voiceMetadata(context.raw);
     await dependencies.repository.enqueue({

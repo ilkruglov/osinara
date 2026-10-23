@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyTelegramInboundMedia,
+  hasTelegramRawMediaBesidesLifted,
   hasTelegramInboundMedia,
   isMessageAddressedToBot,
   mentionsAnotherUsername,
@@ -236,6 +237,17 @@ describe("classifyTelegramInboundMedia", () => {
       attachments: [{ fileId: "rich-photo", fileUniqueId: "u", kind: "photo", mediaType: "image/jpeg" }],
       raw: { photo: sizes, rich_message: { blocks: [{ photo: sizes, type: "photo" }] } },
     })).toBe("native_photo");
+  });
+
+  it("classifies a lifted rich document as a text or image document candidate", () => {
+    const document = { file_id: "rich-doc", file_name: "notes.md", mime_type: "text/markdown" };
+    expect(classifyTelegramInboundMedia({
+      attachments: [{ fileId: "rich-doc", fileName: "notes.md", kind: "document", mediaType: "text/markdown" }],
+      raw: { document, rich_message: { blocks: [{ document, type: "document" }] } },
+    })).toBe("text_document_candidate");
+    expect(hasTelegramRawMediaBesidesLifted({ document, rich_message: { blocks: [{ document, type: "document" }] } })).toBe(false);
+    expect(hasTelegramRawMediaBesidesLifted({ document, rich_message: { blocks: [{ document, type: "document" }] }, voice: { file_id: "v" } })).toBe(true);
+    expect(hasTelegramRawMediaBesidesLifted({ rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }] } })).toBe(true);
   });
 
   it("classifies text, one native photo, and unsupported media explicitly", () => {

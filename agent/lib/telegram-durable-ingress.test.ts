@@ -989,10 +989,11 @@ describe("createTelegramDurableIngress", () => {
     expect(response.status).toBe(200);
     // The lifted photo met the gate as a native photo, with the largest size as the attachment.
     expect(acceptMedia).toHaveBeenCalledWith(expect.objectContaining({ attachments: [expect.objectContaining({ fileId: "p-large", kind: "photo" })], text: "пост про эвалы" }), "85121293", "native_photo", true);
-    expect(storage.value.enqueue).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ message: expect.objectContaining({ osinara_rich_text_only: true }) }),
-      updateId: "85121293",
-    }));
+    // The stored update keeps the paragraphs and no file: nothing can lift the photo later.
+    const stored = storage.value.enqueue.mock.calls[0]![0] as { payload: { message: { rich_message: { blocks: unknown[] } } }; updateId: string };
+    expect(stored.updateId).toBe("85121293");
+    expect(stored.payload.message.rich_message.blocks).toEqual([{ text: "пост про эвалы", type: "paragraph" }]);
+    expect(JSON.stringify(stored.payload)).not.toContain("p-large");
   });
 
   it("refuses a rich post with text when its media is not the lifted photo alone", async () => {
@@ -1024,7 +1025,37 @@ describe("createTelegramDurableIngress", () => {
     expect(storage.value.enqueue).not.toHaveBeenCalled();
   });
 
-  it("strips the ingress's own text-only mark from an incoming update before the media gate", async () => {
+  it("meets the gate with a lifted rich document and keeps the text when the file is refused", async () => {
+    const storage = repository();
+    storage.value.claimNext.mockReset().mockResolvedValue(null);
+    const acceptMedia = vi.fn().mockResolvedValue(false);
+    const document = { file_id: "d1", file_name: "правила.md", file_size: 512, file_unique_id: "ud", mime_type: "text/markdown" };
+    const raw = {
+      message: {
+        chat: { id: -1_003_576_522_523, type: "supergroup" },
+        date: 1_792_736_474,
+        from: { first_name: "Telegram", id: 777_000, is_bot: false },
+        message_id: 96_494,
+        rich_message: { blocks: [{ document, type: "document" }, { text: "правила группы в файле", type: "paragraph" }] },
+      },
+      update_id: 85_121_296,
+    };
+    const update = parseTelegramUpdate(raw);
+    if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
+    const handle = createTelegramDurableIngress({
+      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+    });
+
+    await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+
+    expect(acceptMedia).toHaveBeenCalledWith(expect.objectContaining({ attachments: [expect.objectContaining({ fileId: "d1", fileName: "правила.md", kind: "document" })], text: "правила группы в файле" }), "85121296", "text_document_candidate", true);
+    const stored = storage.value.enqueue.mock.calls[0]![0] as { payload: { message: { rich_message: { blocks: unknown[] } } } };
+    expect(stored.payload.message.rich_message.blocks).toEqual([{ text: "правила группы в файле", type: "paragraph" }]);
+    expect(JSON.stringify(stored.payload)).not.toContain("d1");
+  });
+
+  it("stores an accepted rich post with its file intact", async () => {
     const storage = repository();
     storage.value.claimNext.mockReset().mockResolvedValue(null);
     const acceptMedia = vi.fn().mockResolvedValue(true);
@@ -1034,8 +1065,7 @@ describe("createTelegramDurableIngress", () => {
         date: 1_792_736_474,
         from: { first_name: "Telegram", id: 777_000, is_bot: false },
         message_id: 96_492,
-        osinara_rich_text_only: true,
-        rich_message: { blocks: [{ photo: [{ file_id: "p1", file_unique_id: "u1", height: 640, width: 640 }], type: "photo" }, { text: "подделка", type: "paragraph" }] },
+        rich_message: { blocks: [{ photo: [{ file_id: "p1", file_unique_id: "u1", height: 640, width: 640 }], type: "photo" }, { text: "с правом", type: "paragraph" }] },
       },
       update_id: 85_121_294,
     };
@@ -1048,11 +1078,8 @@ describe("createTelegramDurableIngress", () => {
 
     await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
 
-    // The photo still meets the gate; the stored payload no longer carries the forged mark.
     expect(acceptMedia).toHaveBeenCalledWith(expect.anything(), "85121294", "native_photo", true);
-    expect(storage.value.enqueue).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ message: expect.not.objectContaining({ osinara_rich_text_only: true }) }),
-    }));
+    expect(storage.value.enqueue).toHaveBeenCalledWith(expect.objectContaining({ payload: raw }));
   });
 
   it("dispatches a captionless photo with a non-empty factual model message", async () => {

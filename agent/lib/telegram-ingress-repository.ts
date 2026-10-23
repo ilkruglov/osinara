@@ -24,6 +24,7 @@ import {
   type TelegramPrivateBurstPolicy,
 } from "./telegram-ingress-contract.js";
 import { telegramIngressProcessingRepository } from "./telegram-ingress-processing-repository.js";
+import { withoutRichMediaBlocks } from "./telegram-rich-message.js";
 import { telegramIngressSessionCursorRepository } from "./telegram-ingress-session-cursor-repository.js";
 
 const IGNORED_MEDIA_REASON = "external_media";
@@ -222,7 +223,7 @@ export const telegramIngressRepository: TelegramIngressRepository = {
       const existing = await client.query<{ identical: boolean }>(
         `SELECT queue_id = $2
              AND ingress_continuation_key = $3
-             AND payload = $4::jsonb
+             AND (payload = $4::jsonb OR payload = $8::jsonb)
              AND voice_file_id IS NOT DISTINCT FROM $5
              AND voice_file_size IS NOT DISTINCT FROM $6::bigint
              AND voice_mime_type IS NOT DISTINCT FROM $7 AS identical
@@ -236,6 +237,9 @@ export const telegramIngressRepository: TelegramIngressRepository = {
           input.voice?.fileId ?? null,
           input.voice?.fileSize ?? null,
           input.voice?.mimeType ?? null,
+          // Telegram redelivers a rich post whose file was refused with the file still inside;
+          // the stored text-only shape of the same update is the same update, not a conflict.
+          JSON.stringify(withoutRichMediaBlocks(input.payload)),
         ],
       );
       if (existing.rows[0]?.identical !== true) {

@@ -122,6 +122,16 @@ describeWithDatabase("telegramIngressRepository", () => {
     expect(ignored.rowCount).toBe(0);
   });
 
+  it("treats a redelivered rich post with its file as the duplicate of its stored text-only shape", async () => {
+    const blocks = [{ photo: [{ file_id: "p-redelivered", file_unique_id: "u" }], type: "photo" }, { text: "пост", type: "paragraph" }];
+    const withFile = { ...updateInput("1004", "telegram:group:-100-rich-again", "пост"), payload: { message: { chat: { id: -100 }, rich_message: { blocks } }, update_id: 1004 } };
+    const textOnly = { ...withFile, payload: { message: { chat: { id: -100 }, rich_message: { blocks: [{ text: "пост", type: "paragraph" }] } }, update_id: 1004 } };
+
+    await expect(telegramIngressRepository.enqueue(textOnly)).resolves.toBe("inserted");
+    await expect(telegramIngressRepository.enqueue(withFile)).resolves.toBe("duplicate");
+    await expect(telegramIngressRepository.enqueue({ ...withFile, payload: { ...withFile.payload, update_id: 1005 } })).rejects.toMatchObject({ code: "AGENT_TELEGRAM_UPDATE_CONFLICT" });
+  });
+
   it("keeps a rejected update tombstoned after the group becomes family-private", async () => {
     const family = await database().query<{ id: string }>(
       "INSERT INTO families (name) VALUES ('Ingress policy family') RETURNING id",

@@ -10,7 +10,7 @@
 import type { TelegramUpdate } from "eve/channels/telegram";
 import { describe, expect, it } from "vitest";
 
-import { normalizeRichMessage, RICH_TEXT_ONLY_MARKER_KEY, richMessagePlainText, withRichMessageText } from "./telegram-rich-message.js";
+import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks, withRichMessageText } from "./telegram-rich-message.js";
 
 describe("richMessagePlainText", () => {
   it("unfolds a collapsed details block the way a reader would see it expanded", () => {
@@ -121,15 +121,67 @@ describe("normalizeRichMessage", () => {
     ]);
   });
 
-  it("keeps the text only when the ingress marked the photo as refused, and lifts nothing else", () => {
-    const refused = { ...post, message: { ...(post as { message: object }).message, raw: { ...(post as { message: { raw: object } }).message.raw, [RICH_TEXT_ONLY_MARKER_KEY]: true } } } as unknown as TelegramUpdate;
-    const normalized = normalizeRichMessage(refused);
+  it("lifts the single document block into raw.document and one document attachment", () => {
+    const document = { file_id: "doc-1", file_name: "notes.md", file_size: 2_048, file_unique_id: "u-doc", mime_type: "text/markdown" };
+    const filePost = { ...post, message: { ...(post as { message: object }).message, raw: { rich_message: { blocks: [{ document, type: "document" }, { text: "заметки", type: "paragraph" }] } } } } as unknown as TelegramUpdate;
+    const normalized = normalizeRichMessage(filePost);
     if (normalized.kind !== "message") throw new Error("message expected");
-    expect(normalized.message.text).toBe("пост про эвалы");
-    expect(normalized.message.attachments).toEqual([]);
-    expect(normalized.message.raw.photo).toBeUndefined();
-    const two = { ...post, message: { ...(post as { message: object }).message, raw: { rich_message: { blocks: [{ photo: sizes, type: "photo" }, { photo: sizes, type: "photo" }] } } } } as unknown as TelegramUpdate;
-    const twoNormalized = normalizeRichMessage(two);
+    expect(normalized.message.text).toBe("заметки");
+    expect(normalized.message.raw.document).toEqual(document);
+    expect(normalized.message.attachments).toEqual([
+      { fileId: "doc-1", fileName: "notes.md", fileUniqueId: "u-doc", kind: "document", mediaType: "text/markdown", size: 2_048 },
+    ]);
+    expect(richMediaIsLifted(normalized.message.raw)).toBe(true);
+  });
+
+  it("lifts nothing from a post with two files, a video, or a file already in the raw message", () => {
+    const rawOf = (blocks: unknown[], extra: object = {}) => ({ ...post, message: { ...(post as { message: object }).message, raw: { rich_message: { blocks }, ...extra } } }) as unknown as TelegramUpdate;
+    for (const update of [
+      rawOf([{ photo: sizes, type: "photo" }, { photo: sizes, type: "photo" }]),
+      rawOf([{ type: "video", video: { file_id: "v1" } }, { text: "видео", type: "paragraph" }]),
+      rawOf([{ photo: sizes, type: "photo" }], { document: { file_id: "other" } }),
+    ]) {
+      const normalized = normalizeRichMessage(update);
+      expect(normalized.kind === "message" && normalized.message.attachments).toEqual([]);
+      expect(normalized.kind === "message" && normalized.message.raw.photo).toBeUndefined();
+    }
+  });
+
+  it("finds and strips a file nested in a details block (Bot API lets blocks nest)", () => {
+    const document = { file_id: "nested-doc", file_name: "план.txt", mime_type: "text/plain" };
+    const blocks = [
+      { text: "сверху", type: "paragraph" },
+      { blocks: [{ document, type: "document" }, { text: "внутри", type: "paragraph" }], summary: "Подробности", type: "details" },
+    ];
+    const nested = { ...post, message: { ...(post as { message: object }).message, raw: { rich_message: { blocks } } } } as unknown as TelegramUpdate;
+    const normalized = normalizeRichMessage(nested);
+    if (normalized.kind !== "message") throw new Error("message expected");
+    expect(normalized.message.raw.document).toEqual(document);
+    expect(normalized.message.attachments).toEqual([{ fileId: "nested-doc", fileName: "план.txt", kind: "document", mediaType: "text/plain" }]);
+    const stripped = withoutRichMediaBlocks({ message: { rich_message: { blocks } } });
+    expect(JSON.stringify(stripped)).not.toContain("nested-doc");
+    expect(stripped.message.rich_message.blocks).toEqual([
+      { text: "сверху", type: "paragraph" },
+      { blocks: [{ text: "внутри", type: "paragraph" }], summary: "Подробности", type: "details" },
+    ]);
+    const twoLevels = { ...post, message: { ...(post as { message: object }).message, raw: { rich_message: { blocks: [...blocks, { photo: sizes, type: "photo" }] } } } } as unknown as TelegramUpdate;
+    const twoNormalized = normalizeRichMessage(twoLevels);
     expect(twoNormalized.kind === "message" && twoNormalized.message.attachments).toEqual([]);
+  });
+
+  it("keeps the text and the captions of a refused post, and leaves nothing to lift again", () => {
+    const payload = { message: { rich_message: { blocks: [
+      { caption: { text: "подпись к фото" }, photo: sizes, type: "photo" },
+      { text: "пост про эвалы", type: "paragraph" },
+      { type: "video", video: { file_id: "v1" } },
+    ] } }, update_id: 1 };
+    const stripped = withoutRichMediaBlocks(payload);
+    expect(stripped.message.rich_message.blocks).toEqual([{ text: "подпись к фото", type: "paragraph" }, { text: "пост про эвалы", type: "paragraph" }]);
+    expect(JSON.stringify(stripped)).not.toContain("file_id");
+    const normalized = normalizeRichMessage({ ...post, message: { ...(post as { message: object }).message, raw: stripped.message } } as unknown as TelegramUpdate);
+    if (normalized.kind !== "message") throw new Error("message expected");
+    expect(normalized.message.text).toBe("подпись к фото\n\nпост про эвалы");
+    expect(normalized.message.attachments).toEqual([]);
+    expect(richMediaIsLifted(normalized.message.raw)).toBe(false);
   });
 });
