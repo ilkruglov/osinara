@@ -3,6 +3,15 @@ import { parseJsonObject } from "#shared/json.js";
 import { parseTelegramChatType } from "#public/channels/telegram/inbound.js";
 import { telegramRetryAfterSeconds, telegramSendPacer } from "./osinara-telegram-send-pacing.js";
 const TELEGRAM_MESSAGE_TEXT_MAX_LENGTH = 4096;
+// Osinara: Node's fetch waits five minutes for response headers by default, so a stuck Telegram
+// call held the turn that long. Every Bot API attempt gets its own deadline (the retry after a 429
+// a fresh one), a file download a longer one; a caller's own signal is combined, not replaced.
+const TELEGRAM_API_TIMEOUT_MS = 30_000;
+const TELEGRAM_FILE_DOWNLOAD_TIMEOUT_MS = 120_000;
+function telegramRequestSignal(e, t) {
+  let n = AbortSignal.timeout(t);
+  return e ? AbortSignal.any([e, n]) : n;
+}
 function telegramContinuationToken(e) {
   let t = e.messageThreadId === void 0 ? `` : String(e.messageThreadId),
     n = e.conversationId === void 0 ? `` : String(e.conversationId);
@@ -25,7 +34,7 @@ async function callTelegramApi(e) {
   // Osinara: every sending method waits for its slot under Telegram's limits, and a 429 pauses
   // all calls for the time Telegram names before this one is tried once more.
   await telegramSendPacer.acquire(e.method, e.body);
-  let a = await n(u, i),
+  let a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) }),
     s = await parseResponseBody(a);
   if (a.status === 429) {
     let t = telegramRetryAfterSeconds(s);
@@ -34,7 +43,7 @@ async function callTelegramApi(e) {
     if (t !== null && telegramSendPacer.retryAfter(t)) {
       await telegramSendPacer.waitForPause();
       await telegramSendPacer.acquire(e.method, e.body);
-      a = await n(u, i);
+      a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) });
       s = await parseResponseBody(a);
     }
   }
@@ -110,6 +119,7 @@ async function downloadTelegramFile(e) {
     n = await resolveTelegramBotToken(e.credentials?.botToken);
   return t(
     `${e.fileBaseUrl ?? e.apiBaseUrl ?? `https://api.telegram.org`}/file/bot${n}/${e.filePath}`,
+    { signal: telegramRequestSignal(e.signal, TELEGRAM_FILE_DOWNLOAD_TIMEOUT_MS) },
   );
 }
 function splitTelegramMessageText(e) {
@@ -159,6 +169,8 @@ async function parseResponseBody(e) {
   }
 }
 export {
+  TELEGRAM_API_TIMEOUT_MS,
+  TELEGRAM_FILE_DOWNLOAD_TIMEOUT_MS,
   TELEGRAM_MESSAGE_TEXT_MAX_LENGTH,
   answerTelegramCallbackQuery,
   callTelegramApi,
