@@ -49,6 +49,15 @@ export const payloadBlobHash = (value        ) => createHash("sha256").update(va
                      
  
 
+/**
+ * A lone UTF-16 surrogate does not survive UTF-8: it comes back as U+FFFD, and the blob of such a
+ * string would hash like the string with U+FFFD in its place. Such a string stays inline, as is.
+ * With the `u` flag a surrogate pair is one code point, so only unpaired halves match.
+ */
+export function hasLoneSurrogate(value        )          {
+  return /[\uD800-\uDFFF]/u.test(value);
+}
+
 export function splitPayload(bytes            , minChars = PAYLOAD_BLOB_MIN_CHARS)                      {
   const prefix = prefixOf(bytes);
   if (prefix !== ZSTD && prefix !== DEVL) return null;
@@ -65,7 +74,7 @@ export function splitPayload(bytes            , minChars = PAYLOAD_BLOB_MIN_CHAR
   const blobs = new Map                    ();
   for (let i = 0; i < flat.length; i += 1) {
     const value = flat[i];
-    if (typeof value !== "string" || value.length < minChars) continue;
+    if (typeof value !== "string" || value.length < minChars || hasLoneSurrogate(value)) continue;
     const hash = payloadBlobHash(value);
     if (!blobs.has(hash)) blobs.set(hash, new Uint8Array(Buffer.from(value, "utf8")));
     flat[i] = { [PAYLOAD_BLOB_MARKER_KEY]: hash };

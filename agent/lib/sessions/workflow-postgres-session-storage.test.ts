@@ -67,6 +67,23 @@ describe("deletePostgresEveSession", () => {
     expect(statements.at(-1)).toBe("COMMIT");
   });
 
+  // Review of 24 October 2026: a conversation deleted on request must not leave its text in payload
+  // blobs until a later sweep. The blobs the run was the last to refer to go in the same transaction.
+  it("deletes the payload blobs the run was the last to refer to, in the same transaction", async () => {
+    const client = clientWithRows([[], [{ parked: true, status: "failed" }], [{ exists: false }], [{ hash: "h-1" }, { hash: "h-2" }]]);
+
+    await expect(deletePostgresEveSession(runId, client)).resolves.toBeUndefined();
+
+    const statements = client.query.mock.calls.map(([sql]) => String(sql));
+    const blobDelete = client.query.mock.calls.find(([sql]) => String(sql).includes("DELETE FROM workflow.workflow_payload_blobs"));
+    expect(blobDelete).toBeDefined();
+    expect(String(blobDelete![0])).toContain("NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs");
+    expect(blobDelete![1]).toEqual([["h-1", "h-2"]]);
+    expect(statements.indexOf("DELETE FROM workflow.workflow_payload_blob_refs WHERE run_id = $1"))
+      .toBeLessThan(statements.findIndex((sql) => sql.includes("DELETE FROM workflow.workflow_payload_blobs")));
+    expect(statements.at(-1)).toBe("COMMIT");
+  });
+
   it("deletes all public per-run records in one transaction", async () => {
     const client = clientWithRows([[], [{ parked: true, status: "failed" }], [{ exists: false }]]);
 
@@ -76,6 +93,7 @@ describe("deletePostgresEveSession", () => {
       "BEGIN",
       expect.stringContaining("FROM workflow.workflow_runs"),
       expect.stringContaining("FROM workflow.workflow_hooks"),
+      expect.stringContaining("SELECT DISTINCT hash FROM workflow.workflow_payload_blob_refs"),
       "DELETE FROM workflow.workflow_stream_chunks WHERE run_id = $1",
       "DELETE FROM workflow.workflow_waits WHERE run_id = $1",
       "DELETE FROM workflow.workflow_hooks WHERE run_id = $1",

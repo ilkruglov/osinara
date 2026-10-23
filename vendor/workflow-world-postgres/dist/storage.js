@@ -216,7 +216,10 @@ const payloadBlobCache = createPayloadBlobCache();
  * fresh touch, or deleted the row first and the insert recreates it.
  */
 async function storePayloadBlobs(db, runId, blobs) {
-  for (const [hash, bytes] of blobs) {
+  // Rows are locked in hash order by every writer, so two transactions that
+  // share two blobs never wait for each other in a cycle.
+  for (const hash of [...blobs.keys()].sort()) {
+    const bytes = blobs.get(hash);
     payloadBlobCache.set(hash, bytes);
     const touched = await db.execute(
       sql`UPDATE workflow.workflow_payload_blobs SET touched_at = now() WHERE hash = ${hash}`,
@@ -1681,11 +1684,24 @@ export function createEventsStorage(drizzle) {
             )
             .returning();
           if (!stepValue) {
-            // Step not updated - check if it exists and why
-            const [existing] = await getStepForValidation.execute({
-              runId: effectiveRunId,
-              stepId: data.correlationId,
-            });
+            // Step not updated - check if it exists and why. Through the
+            // transaction's own connection: the pool-bound prepared statement
+            // would wait for a free connection while this transaction holds
+            // one, and with the pool exhausted that wait never ends.
+            const [existing] = await tx
+              .select({
+                status: Schema.steps.status,
+                startedAt: Schema.steps.startedAt,
+                retryAfter: Schema.steps.retryAfter,
+              })
+              .from(Schema.steps)
+              .where(
+                and(
+                  eq(Schema.steps.runId, effectiveRunId),
+                  eq(Schema.steps.stepId, data.correlationId),
+                ),
+              )
+              .limit(1);
             if (!existing) {
               throw new WorkflowWorldError(
                 `Step "${data.correlationId}" not found`,

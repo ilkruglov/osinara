@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPayloadBlobCache, escapePayload, isEscapedPayload, isSplitPayload, joinPayload, PAYLOAD_BLOB_MARKER_KEY,
-  payloadBlobHash, payloadBlobHashes, splitPayload, unescapePayload,
+  hasLoneSurrogate, payloadBlobHash, payloadBlobHashes, splitPayload, unescapePayload,
 } from "./payload-blobs.ts";
 
 // About 7.8 KB of poorly compressible text, so sizes mean something.
@@ -50,6 +50,22 @@ describe("payload blobs", () => {
     const joined = joinPayload(split!.stored, (hash) => split!.blobs.get(hash));
     expect(unwrap(joined)).toEqual({ prefix: "devl", json: flat });
     expect(Buffer.from(joined).subarray(0, 4).toString()).toBe("zstd");
+  });
+
+  // Review of 24 October 2026: a lone UTF-16 surrogate becomes U+FFFD in UTF-8, so its blob would hash
+  // like the string with U+FFFD and restore to a different string. Such a string stays inline.
+  it("keeps a string with a lone surrogate inline and lifts a surrogate pair as usual", () => {
+    const lone = big("lone") + "\ud800";
+    const paired = big("paired") + "\u{1F600}";
+    expect(hasLoneSurrogate(lone)).toBe(true);
+    expect(hasLoneSurrogate(paired)).toBe(false);
+    expect(Buffer.from(lone, "utf8").toString("utf8")).not.toBe(lone);
+    const flat = [{ a: 1, b: 2 }, lone, paired];
+    const split = splitPayload(compressed(devalue(flat)));
+    expect(split).not.toBeNull();
+    expect([...split!.blobs.keys()]).toEqual([payloadBlobHash(paired)]);
+    expect(unwrap(split!.stored).json[1]).toBe(lone);
+    expect(unwrap(joinPayload(split!.stored, (hash) => split!.blobs.get(hash)))).toEqual({ prefix: "devl", json: flat });
   });
 
   it("keeps an uncompressed payload uncompressed", () => {
