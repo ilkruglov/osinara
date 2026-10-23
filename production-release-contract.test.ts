@@ -256,9 +256,11 @@ describe("release workflow contract", () => {
     // Images build beside the tests; the release waits for both and for the version check.
     expect(workflow).toContain("needs: [test, version, images]");
     expect(workflow).toContain("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}");
+    // Tests run on every push and PR; the release itself starts only by hand.
     expect(workflow).toContain(
-      "github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+      "github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'",
     );
+    expect(workflow).not.toContain("github.event_name == 'push' ||");
   });
 
   it("publishes fixed GHCR names with immutable action revisions and attestations", () => {
