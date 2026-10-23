@@ -79,8 +79,13 @@ describe("deletePostgresEveSession", () => {
     expect(blobDelete).toBeDefined();
     expect(String(blobDelete![0])).toContain("NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs");
     expect(blobDelete![1]).toEqual([["h-1", "h-2"]]);
-    expect(statements.indexOf("DELETE FROM workflow.workflow_payload_blob_refs WHERE run_id = $1"))
-      .toBeLessThan(statements.findIndex((sql) => sql.includes("DELETE FROM workflow.workflow_payload_blobs")));
+    const refsDelete = statements.indexOf("DELETE FROM workflow.workflow_payload_blob_refs WHERE run_id = $1");
+    const lock = statements.findIndex((sql) => sql.includes("FROM workflow.workflow_payload_blobs WHERE hash = ANY($1) ORDER BY hash FOR UPDATE"));
+    const blobsDelete = statements.findIndex((sql) => sql.includes("DELETE FROM workflow.workflow_payload_blobs"));
+    // The lock waits out a writer that touched a blob; the delete after it sees that writer's reference.
+    expect(refsDelete).toBeLessThan(lock);
+    expect(lock).toBeLessThan(blobsDelete);
+    expect(client.query.mock.calls[lock]![1]).toEqual([["h-1", "h-2"]]);
     expect(statements.at(-1)).toBe("COMMIT");
   });
 

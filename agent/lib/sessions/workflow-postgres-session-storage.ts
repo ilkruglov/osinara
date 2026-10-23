@@ -91,8 +91,10 @@ export async function deletePostgresEveSession(
     // Public schema has no foreign keys, so remove every per-run projection before the run itself.
     // The payload blobs this run was the last to refer to go in the same transaction: a
     // conversation deleted on request leaves no text behind until a sweep. A writer touches a
-    // blob row under its lock before adding a reference, so the delete either waits for that
-    // commit and sees the fresh reference, or wins and the writer recreates the row.
+    // blob row under its lock before adding a reference, so the lock below waits for that commit;
+    // the delete is then a separate statement with a fresh snapshot that sees the new reference
+    // (a single DELETE re-checked after the wait would still run NOT EXISTS on its old snapshot).
+    // A writer that comes later waits on this lock and recreates the row if it is gone.
     const referenced = await client.query(
       "SELECT DISTINCT hash FROM workflow.workflow_payload_blob_refs WHERE run_id = $1",
       [runId],
@@ -110,6 +112,11 @@ export async function deletePostgresEveSession(
     }
     const hashes = referenced.rows.map((row) => String(row.hash));
     if (hashes.length > 0) {
+      // Hash order, as every writer takes its blob locks, so the two never wait in a cycle.
+      await client.query(
+        "SELECT hash FROM workflow.workflow_payload_blobs WHERE hash = ANY($1) ORDER BY hash FOR UPDATE",
+        [hashes],
+      );
       await client.query(
         `DELETE FROM workflow.workflow_payload_blobs AS blob
           WHERE blob.hash = ANY($1)
