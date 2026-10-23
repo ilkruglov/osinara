@@ -149,7 +149,8 @@ export const telegramIngressRepository: TelegramIngressRepository = {
         await client.query("COMMIT");
         return true;
       }
-      await insertIgnoredMedia(client, input.updateId);
+      // A refused photo of a post that still has text leaves no tombstone: the text is queued.
+      if (!input.textFallback) await insertIgnoredMedia(client, input.updateId);
       await client.query("COMMIT");
       return false;
     } catch (error) {

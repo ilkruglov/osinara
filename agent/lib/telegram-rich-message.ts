@@ -4,6 +4,11 @@
  * Exports:
  * - `richMessagePlainText`: flattens `rich_message.blocks` of a raw Telegram message into text.
  * - `withRichMessageText`: fills an inbound update's empty `text` from its rich blocks.
+ * - `richMessagePhoto`: the one photo a rich message carries, in Telegram's `photo` size shape.
+ * - `normalizeRichMessage`: text from blocks plus that photo lifted into `raw.photo` and one Eve
+ *   attachment, so the media gate and the vision path see a channel post like an ordinary photo.
+ * - `RICH_TEXT_ONLY_MARKER_KEY`: the ingress marks a post whose photo the external group may not
+ *   read; the text still reaches the chat, the photo is never lifted again.
  *
  * Key constructs:
  * - Bot API 10.1 (June 2026) delivers rich messages in `message.rich_message`; `message.text` is
@@ -100,4 +105,77 @@ export function withRichMessageText(update: TelegramUpdate): TelegramUpdate {
   if (update.kind !== "message" || update.message.text.trim()) return update;
   const text = richMessagePlainText(update.message.raw);
   return text === null ? update : { ...update, message: { ...update.message, text } };
+}
+
+export const RICH_TEXT_ONLY_MARKER_KEY = "osinara_rich_text_only";
+const RICH_MEDIA_BLOCKS = new Set(["animation", "audio", "document", "photo", "video", "voice_note"]);
+
+/** The photo sizes of a rich message that embeds exactly one photo and no other file. */
+export function richMessagePhoto(raw: JsonRecord): JsonRecord[] | null {
+  const blocks = record(raw.rich_message)?.blocks;
+  if (!Array.isArray(blocks)) return null;
+  const media = blocks.map(record).filter((block) => block !== null && typeof block.type === "string" && RICH_MEDIA_BLOCKS.has(block.type));
+  if (media.length !== 1 || media[0]!.type !== "photo" || !Array.isArray(media[0]!.photo)) return null;
+  const sizes = media[0]!.photo.map(record);
+  if (sizes.length === 0 || sizes.some((size) => size === null || typeof size.file_id !== "string" || size.file_id.length === 0)) return null;
+  return sizes as JsonRecord[];
+}
+
+function largestSize(sizes: readonly JsonRecord[]): JsonRecord {
+  const area = (size: JsonRecord) => (typeof size.width === "number" ? size.width : 0) * (typeof size.height === "number" ? size.height : 0);
+  return sizes.reduce((best, size) => (area(size) > area(best) ? size : best), sizes[0]!);
+}
+
+/**
+ * A channel post forwarded into a discussion group (23 October 2026, «Дизраптим») is one photo
+ * block and paragraphs; Eve parses neither. The photo becomes what an ordinary photo message is,
+ * so the external media gate and the vision path decide about it with their usual rules, and the
+ * text stands on its own whatever that decision is.
+ */
+export function normalizeRichMessage(update: TelegramUpdate): TelegramUpdate {
+  const withText = withRichMessageText(update);
+  if (withText.kind !== "message") return withText;
+  const raw = withText.message.raw;
+  if (raw[RICH_TEXT_ONLY_MARKER_KEY] === true || raw.photo !== undefined || withText.message.attachments.length > 0) return withText;
+  const sizes = richMessagePhoto(raw);
+  if (sizes === null) return withText;
+  const best = largestSize(sizes);
+  return {
+    ...withText,
+    message: {
+      ...withText.message,
+      attachments: [{
+        fileId: best.file_id as string,
+        ...(typeof best.file_unique_id === "string" ? { fileUniqueId: best.file_unique_id } : {}),
+        ...(typeof best.height === "number" ? { height: best.height } : {}),
+        kind: "photo",
+        mediaType: "image/jpeg",
+        ...(typeof best.file_size === "number" ? { size: best.file_size } : {}),
+        ...(typeof best.width === "number" ? { width: best.width } : {}),
+      }],
+      raw: { ...raw, photo: sizes },
+    },
+  };
+}
+
+/** Removes the ingress's own mark from a payload or raw message; only the ingress sets it. */
+export function withoutRichTextOnlyMarker<T extends JsonRecord>(raw: T): T {
+  const message = record(raw.message);
+  if (message !== null && RICH_TEXT_ONLY_MARKER_KEY in message) {
+    const { [RICH_TEXT_ONLY_MARKER_KEY]: _mark, ...rest } = message;
+    return { ...raw, message: rest };
+  }
+  if (RICH_TEXT_ONLY_MARKER_KEY in raw) {
+    const { [RICH_TEXT_ONLY_MARKER_KEY]: _mark, ...rest } = raw;
+    return rest as T;
+  }
+  return raw;
+}
+
+/** True when `raw.photo` is exactly the photo lifted out of the rich blocks. */
+export function richPhotoIsLifted(raw: JsonRecord): boolean {
+  const lifted = richMessagePhoto(raw);
+  if (lifted === null || !Array.isArray(raw.photo)) return false;
+  const ids = (list: readonly unknown[]) => list.map((size) => record(size)?.file_id).filter((id): id is string => typeof id === "string").sort().join("\u0000");
+  return ids(lifted) === ids(raw.photo);
 }

@@ -72,6 +72,16 @@ describe("telegramReplyTargetProjection", () => {
     })).toEqual({ quotedText: "streisand", snapshot: null });
   });
 
+  it("reads the text of a rich target from its blocks when text and caption are empty", () => {
+    const message = productionReply();
+    const target = message.raw.reply_to_message as Record<string, unknown>;
+    const { text: _text, ...textless } = target;
+    const rich = { ...textless, rich_message: { blocks: [{ photo: [{ file_id: "p" }], type: "photo" }, { text: "пост про эвалы", type: "paragraph" }] } };
+
+    const projection = telegramReplyTargetProjection({ ...message, raw: { ...message.raw, reply_to_message: rich } });
+    expect(projection.snapshot?.contentText).toBe("пост про эвалы");
+  });
+
   it("bounds a selected quote", () => {
     const message = productionReply();
 

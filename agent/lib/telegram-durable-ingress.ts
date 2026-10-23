@@ -41,7 +41,8 @@ import {
   type TelegramPendingMessage,
   withPendingMarker,
 } from "./telegram-pending-messages.js";
-import { withRichMessageText } from "./telegram-rich-message.js";
+import { asRecord as record } from "./json-value.js";
+import { normalizeRichMessage, RICH_TEXT_ONLY_MARKER_KEY, richMessagePlainText, withoutRichTextOnlyMarker } from "./telegram-rich-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -71,6 +72,7 @@ interface DurableIngressDependencies {
     message: Pick<TelegramMessage, "chat">,
     updateId: string,
     mediaKind: Exclude<TelegramInboundMediaKind, "none">,
+    textFallback: boolean,
   ): Promise<boolean>;
   authorizeVoice(message: Pick<TelegramMessage, "chat" | "from">): Promise<boolean>;
   botUsername: string;
@@ -320,7 +322,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       accept: (payload) => {
         const candidate = parseTelegramUpdate(payload);
         return candidate !== null &&
-          continuesSeries(update, withRichMessageText(candidate), dependencies.botUsername);
+          continuesSeries(update, normalizeRichMessage(candidate), dependencies.botUsername);
       },
       afterUpdateId: head.updateId,
       leaseMilliseconds: dependencies.leaseMilliseconds,
@@ -335,7 +337,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           "Не удалось подготовить сообщение серии для обработки",
         );
       }
-      return { claim, update: withRichMessageText(parsed) };
+      return { claim, update: normalizeRichMessage(parsed) };
     });
   }
 
@@ -450,7 +452,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         let payload = claim.payload;
         // Rich messages (Bot API 10.1) carry their text in blocks; Eve reads only `text`.
         let update = parseTelegramUpdate(payload);
-        if (update) update = withRichMessageText(update);
+        if (update) update = normalizeRichMessage(update);
         if (!update) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           pending.shift();
@@ -493,7 +495,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
             }
             payload = withTranscript(payload, transcript);
             update = parseTelegramUpdate(payload);
-            if (update) update = withRichMessageText(update);
+            if (update) update = normalizeRichMessage(update);
             if (!update) {
               throw new AppError(
                 "AGENT_TELEGRAM_PAYLOAD_INVALID",
@@ -596,21 +598,33 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     context: TelegramVerifiedUpdateContext,
   ): Promise<Response> {
     const incomingUpdateId = updateId(context.raw);
-    const mediaKind = context.update.kind === "message"
-      ? classifyTelegramInboundMedia(context.update.message)
-      : "none";
+    // A rich message is read as text with its one photo lifted, so a channel post forwarded into
+    // a group meets the same media gate as a photo message instead of being refused as a whole.
+    // The mark is the ingress's own decision: a Telegram update that carries it is stripped first,
+    // so nothing outside can make a photo look already refused and skip the media gate.
+    const cleanRaw = withoutRichTextOnlyMarker(context.raw);
+    const update = context.update.kind === "message"
+      ? normalizeRichMessage({ ...context.update, message: { ...context.update.message, raw: withoutRichTextOnlyMarker(context.update.message.raw) } })
+      : context.update;
+    const mediaKind = update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
+    const textFallback = update.kind === "message" && richMessagePlainText(update.message.raw) !== null;
+    let payload = cleanRaw;
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
     if (
-      context.update.kind === "message" &&
+      update.kind === "message" &&
       mediaKind !== "none" &&
-      !await dependencies.acceptMedia(context.update.message, incomingUpdateId, mediaKind)
+      !await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback)
     ) {
-      return new Response("ok");
+      // The photo of a rich post stays out, its text still reaches the chat: the stored update
+      // carries the mark, and every later read keeps the photo unlifted.
+      if (!textFallback) return new Response("ok");
+      const message = record(cleanRaw.message) ?? {};
+      payload = { ...cleanRaw, message: { ...message, [RICH_TEXT_ONLY_MARKER_KEY]: true } };
     }
     const voice = voiceMetadata(context.raw);
     await dependencies.repository.enqueue({
-      continuationKey: queueKey(context.update),
-      payload: context.raw,
+      continuationKey: queueKey(update),
+      payload,
       updateId: incomingUpdateId,
       ...(voice ? { voice } : {}),
     });
@@ -629,11 +643,12 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
 const authorizeTelegramVoice = createTelegramVoiceAuthorizer(telegramRepository);
 
 export const handleTelegramDurableIngress = createTelegramDurableIngress({
-  acceptMedia(message, incomingUpdateId, mediaKind) {
+  acceptMedia(message, incomingUpdateId, mediaKind, textFallback) {
     return telegramIngressRepository.acceptMedia({
       chatId: message.chat.id,
       chatType: message.chat.type,
       mediaKind,
+      textFallback,
       updateId: incomingUpdateId,
     });
   },

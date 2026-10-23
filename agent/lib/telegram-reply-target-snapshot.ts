@@ -11,6 +11,7 @@ import type { TelegramMessage } from "eve/channels/telegram";
 
 import { clipText } from "./display-text.js";
 import { asRecord as record, nonEmptyText } from "./json-value.js";
+import { richMessagePlainText } from "./telegram-rich-message.js";
 
 export interface TelegramReplyTargetSnapshot {
   contentText: string;
@@ -96,9 +97,10 @@ function verifiedRawTarget(message: TelegramReplyMessage): JsonRecord | null {
 }
 
 function targetSnapshot(rawTarget: JsonRecord): TelegramReplyTargetSnapshot | null {
+  // A rich target (a channel post with blocks) has no `text`; its blocks are what the reader saw.
   const contentText = [nonEmptyText(rawTarget.text), nonEmptyText(rawTarget.caption)]
     .filter((part): part is string => part !== null)
-    .join("\n");
+    .join("\n") || richMessagePlainText(rawTarget) || "";
   if (!contentText) return null;
 
   return { contentText, ...senderProjection(rawTarget) };
