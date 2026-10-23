@@ -245,9 +245,16 @@ describe("release workflow contract", () => {
     expect(workflow).toContain("pull_request:");
     expect(workflow).toContain("develop");
     expect(workflow).toContain("main");
+    // The test image comes from the layer cache under the name compose.test.yaml gives its services,
+    // so `up` runs the exact suite without a second build.
+    expect(workflow).toContain("tags: osinara-test-suite:local");
+    expect(workflow).toContain("target: test");
     expect(workflow).toContain(
-      "docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests",
+      "docker compose -f compose.test.yaml up --abort-on-container-exit --exit-code-from tests",
     );
+    expect(readProjectFile("compose.test.yaml")).toContain("image: osinara-test-suite:local");
+    // Images build beside the tests; the release waits for both and for the version check.
+    expect(workflow).toContain("needs: [test, version, images]");
     expect(workflow).toContain("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}");
     expect(workflow).toContain(
       "github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
