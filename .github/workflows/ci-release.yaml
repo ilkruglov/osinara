@@ -44,7 +44,10 @@ jobs:
 
   version:
     name: Validate the release version
-    if: github.repository == 'ilkruglov/osinara' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    # A release is started by hand (`gh workflow run`) after the last push of the batch: a push to
+    # main alone only runs the tests, so a merge without a version bump is not a red release run and
+    # a push during a release cannot start a second one from an earlier commit (23 October 2026).
+    if: github.repository == 'ilkruglov/osinara' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
