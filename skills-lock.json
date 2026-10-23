@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "polka": {
+      "source": "artkruglov/polka",
+      "sourceType": "github",
+      "skillPath": "skills/polka/SKILL.md",
+      "computedHash": "a19190a7449ee58c7fc35c970ea35f981c66f4ec9fd0dd63574e7da3e233446d"
+    },
+    "polka-organize": {
+      "source": "artkruglov/polka",
+      "sourceType": "github",
+      "skillPath": "skills/polka-organize/SKILL.md",
+      "computedHash": "09a9df4cd099d8060311155eb44b07d2b98ce95458923216e7d9b5a2d882a849"
+    }
+  }
+}
