@@ -42,7 +42,7 @@ import {
   withPendingMarker,
 } from "./telegram-pending-messages.js";
 import { asRecord as record } from "./json-value.js";
-import { normalizeRichMessage, RICH_TEXT_ONLY_MARKER_KEY, richMessagePlainText, withoutRichTextOnlyMarker } from "./telegram-rich-message.js";
+import { normalizeRichMessage, RICH_TEXT_ONLY_MARKER_KEY, richMessagePlainText, richPhotoIsLifted, withoutRichTextOnlyMarker } from "./telegram-rich-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -607,7 +607,11 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       ? normalizeRichMessage({ ...context.update, message: { ...context.update.message, raw: withoutRichTextOnlyMarker(context.update.message.raw) } })
       : context.update;
     const mediaKind = update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
-    const textFallback = update.kind === "message" && richMessagePlainText(update.message.raw) !== null;
+    // Only the one photo lifted out of a rich post may be refused while its text goes on: any
+    // other media (a voice, a video, a document next to rich text) keeps the old full refusal,
+    // because a mark that only stops the lifting would leave that media in the stored update.
+    const textFallback = update.kind === "message" && mediaKind === "native_photo" &&
+      richPhotoIsLifted(update.message.raw) && richMessagePlainText(update.message.raw) !== null;
     let payload = cleanRaw;
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
     if (

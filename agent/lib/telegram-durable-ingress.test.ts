@@ -995,6 +995,35 @@ describe("createTelegramDurableIngress", () => {
     }));
   });
 
+  it("refuses a rich post with text when its media is not the lifted photo alone", async () => {
+    const storage = repository();
+    storage.value.claimNext.mockReset().mockResolvedValue(null);
+    const acceptMedia = vi.fn().mockResolvedValue(false);
+    const raw = {
+      message: {
+        chat: { id: -1_003_576_522_523, type: "supergroup" },
+        date: 1_792_736_474,
+        from: { first_name: "Telegram", id: 777_000, is_bot: false },
+        message_id: 96_493,
+        rich_message: { blocks: [{ type: "video", video: { file_id: "v1" } }, { text: "пост с видео", type: "paragraph" }] },
+        voice: { duration: 3, file_id: "voice-1", mime_type: "audio/ogg" },
+      },
+      update_id: 85_121_295,
+    };
+    const update = parseTelegramUpdate(raw);
+    if (!update || update.kind !== "message") throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID");
+    const handle = createTelegramDurableIngress({
+      acceptMedia, authorizeVoice: vi.fn(), botUsername: "osinara_bot", handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000, repository: storage.value, transcribeVoice: vi.fn(),
+    });
+
+    const response = await handle({ dispatch: vi.fn(), raw, update, waitUntil: vi.fn() } as unknown as TelegramVerifiedUpdateContext);
+
+    expect(response.status).toBe(200);
+    expect(acceptMedia).toHaveBeenCalledWith(expect.anything(), "85121295", "unsupported_media", false);
+    expect(storage.value.enqueue).not.toHaveBeenCalled();
+  });
+
   it("strips the ingress's own text-only mark from an incoming update before the media gate", async () => {
     const storage = repository();
     storage.value.claimNext.mockReset().mockResolvedValue(null);
