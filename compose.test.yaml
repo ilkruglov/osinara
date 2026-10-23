@@ -16,6 +16,7 @@ services:
       - /var/lib/postgresql/data
 
   tests:
+    image: osinara-test-suite:local
     build:
       context: .
       target: test
@@ -32,6 +33,7 @@ services:
 
   workflow-stress:
     profiles: ["stress"]
+    image: osinara-test-suite:local
     build:
       context: .
       target: test
@@ -78,6 +80,7 @@ services:
 
   memory-evals:
     profiles: ["memory-quality"]
+    image: osinara-test-suite:local
     build:
       context: .
       target: test
