@@ -91,7 +91,7 @@ describe("createLavkaClient", () => {
 
   it("refuses to order a cart that drifted since the preview and submits an unchanged one once", async () => {
     const { calls, client } = tab({
-      "/api/v1/orders/submit": { data: { orderId: "o-1" } },
+      "/api/v1/providers/orders/v2/submit": { data: { orderId: "o-1" } },
       "/api/v1/providers/cart/v1/retrieve": { data: cart(9, [{ id: "a", price: 100, quantity: 3 }], 300) },
       "/api/v1/providers/payments/v1/status": { data: { redirectUrl: "", status: "hold" } },
       "/api/v1/providers/v2/service-info?position[location][0]=37.6&position[location][1]=55.7&fallbackCurrencySign=%E2%82%BD&depotType=regular": { data: { depotId: "d-1" } },
@@ -101,13 +101,13 @@ describe("createLavkaClient", () => {
     await expect(client.placeOrder(point, { ...confirmed, cartVersion: 9, total: 250 })).rejects.toMatchObject({ code: "AGENT_LAVKA_CART_CHANGED" });
     await expect(client.placeOrder({ ...point, flat: "6" }, { ...confirmed, cartVersion: 9, total: 300 })).rejects.toMatchObject({ code: "AGENT_LAVKA_ADDRESS_CHANGED" });
     await expect(client.placeOrder(point, { ...confirmed, cartVersion: 9, paymentMethodId: "card-2", total: 300 })).rejects.toMatchObject({ code: "AGENT_LAVKA_PAYMENT_CHANGED" });
-    expect(calls.filter((c) => c.url === "/api/v1/orders/submit")).toHaveLength(0);
+    expect(calls.filter((c) => c.url === "/api/v1/providers/orders/v2/submit")).toHaveLength(0);
 
     const placed = await client.placeOrder(point, { ...confirmed, cartVersion: 9, total: 300 });
     expect(placed).toEqual({ orderId: "o-1", paymentStatus: "hold", redirectUrl: "" });
-    const submit = calls.find((c) => c.url === "/api/v1/orders/submit")!.body as { cartVersion: number; paymentMethodId: string; position: { depotId: string; flat: string } };
+    const submit = calls.find((c) => c.url === "/api/v1/providers/orders/v2/submit")!.body as { cartVersion: number; paymentMethodId: string; position: { depotId: string; flat: string } };
     expect(submit).toMatchObject({ cartVersion: 9, paymentMethodId: "card-1", position: { depotId: "d-1", flat: "5" } });
-    expect(calls.filter((c) => c.url === "/api/v1/orders/submit")).toHaveLength(1);
+    expect(calls.filter((c) => c.url === "/api/v1/providers/orders/v2/submit")).toHaveLength(1);
   });
 
   const SERVICE = "/api/v1/providers/v2/service-info?position[location][0]=37.6&position[location][1]=55.7&fallbackCurrencySign=%E2%82%BD&depotType=regular";
@@ -125,18 +125,18 @@ describe("createLavkaClient", () => {
   it("keeps the order number when the payment poll fails and calls an unreadable submit ambiguous", async () => {
     const confirmed = { addressKey: lavkaAddressKey(point), cartVersion: 9, paymentMethodId: "card-1", total: 300 };
     const base = { "/api/v1/providers/cart/v1/retrieve": { data: cart(9, [{ id: "a", price: 100, quantity: 3 }], 300) }, [SERVICE]: { data: { depotId: "d-1" } } };
-    const pollDown = tab({ ...base, "/api/v1/orders/submit": { data: { orderId: "o-7" } }, "/api/v1/providers/payments/v1/status": { data: null, error: "<html>502</html>", status: 502 } });
+    const pollDown = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: { orderId: "o-7" } }, "/api/v1/providers/payments/v1/status": { data: null, error: "<html>502</html>", status: 502 } });
     await expect(pollDown.client.placeOrder(point, confirmed)).resolves.toEqual({ orderId: "o-7", paymentStatus: "unknown", redirectUrl: "" });
-    const lost = tab({ ...base, "/api/v1/orders/submit": { data: null, error: "<html>504</html>", status: 504 } });
+    const lost = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: null, error: "<html>504</html>", status: 504 } });
     await expect(lost.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
     // The page's deadline or a failed fetch: the submit may have reached Lavka.
     for (const error of ["timeout", "network:TypeError"]) {
-      const unsettled = tab({ ...base, "/api/v1/orders/submit": { data: null, error, status: 0 } });
+      const unsettled = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: null, error, status: 0 } });
       await expect(unsettled.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
     }
-    const empty = tab({ ...base, "/api/v1/orders/submit": { data: { orderId: "" } } });
+    const empty = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: { orderId: "" } } });
     await expect(empty.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
-    const refused = tab({ ...base, "/api/v1/orders/submit": { data: null, error: JSON.stringify({ data: { message: "Корзина пуста" } }), status: 400 } });
+    const refused = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: null, error: JSON.stringify({ data: { message: "Корзина пуста" } }), status: 400 } });
     await expect(refused.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_REJECTED" });
   });
 
@@ -145,6 +145,12 @@ describe("createLavkaClient", () => {
     restarted.driver.url.mockRejectedValueOnce(new ModelFacingError({ category: "operation", code: "AGENT_BROWSER_RESTARTED", correction: "", reason: "", retryable: false, sideEffectStatus: "unknown" }));
     await expect(restarted.client.trackedOrders()).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
     expect(restarted.driver.eval).not.toHaveBeenCalled();
+  });
+
+  it("cancels an order the way the site's order page does", async () => {
+    const { calls, client } = tab({ "/api/v1/providers/orders/v1/cancel": { data: {} } });
+    await expect(client.cancelOrder("o-9")).resolves.toEqual({ cancelled: true, orderId: "o-9" });
+    expect(calls).toEqual([{ body: { orderId: "o-9" }, url: "/api/v1/providers/orders/v1/cancel" }]);
   });
 
   it("names a tab that moved to another site during the call", async () => {

@@ -173,7 +173,8 @@ export function createLavkaClient(deps: Deps) {
       if (!result.items.some((i) => i.id === id)) throw new AppError("AGENT_LAVKA_ITEM_DROPPED", "Лавка не положила товар в корзину: в этом магазине его нет. Выберите другой");
       return result;
     },
-    cancelOrder: async (orderId: string) => { await ok<unknown>({ body: {}, endpoint: "orderCancel", orderId, project: "raw" }); return { cancelled: true, orderId }; },
+    // As the site's order page does: orders.cancel({ orderId }).
+    cancelOrder: async (orderId: string) => { await ok<unknown>({ body: { orderId }, endpoint: "orderCancel", project: "raw" }); return { cancelled: true, orderId }; },
     cart,
     async checkoutPreview(point: LavkaDeliveryPoint): Promise<LavkaCart & { addressKey: string; paymentChoice: LavkaPaymentMethod | null; paymentMethodId: string | null }> {
       const current = await cart(point);

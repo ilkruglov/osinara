@@ -26,8 +26,6 @@ export interface LavkaPageRequest {
   body?: unknown;
   city?: string;
   endpoint: LavkaEndpoint;
-  /** Fills `{orderId}` in a per-order path. */
-  orderId?: string;
   /** Query string for GET endpoints, already encoded. */
   query?: string;
   project: LavkaProjection;
@@ -68,7 +66,7 @@ const projections = {
 
 export function lavkaPageScript(request: LavkaPageRequest, searchLimit: number): string {
   const spec = LAVKA_ENDPOINTS[request.endpoint];
-  const path = request.orderId === undefined ? spec.path : spec.path.replace("{orderId}", encodeURIComponent(request.orderId));
+  const path = spec.path;
   const url = spec.method === "GET" && request.query ? `${path}?${request.query}` : path;
   // Everything the model or the person typed reaches the page only as JSON literals.
   const literal = JSON.stringify({ body: request.body ?? null, city: request.city ?? "213", method: spec.method, project: request.project, url });

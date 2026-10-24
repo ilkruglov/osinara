@@ -94,8 +94,10 @@ describe("lavkaPageScript", () => {
     expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, { body: "<html>captcha</html>", status: 200 }).result).toEqual({ authorized: true, data: null, error: null, status: 200 });
   });
 
-  it("fills a per-order path and encodes the query of a GET", () => {
-    expect(lavkaPageScript({ body: {}, endpoint: "orderCancel", orderId: "o/1", project: "raw" }, 12)).toContain("\"url\":\"/api/v1/orders/o%2F1/cancel\"");
+  it("sends submit and cancel through the site's providers and encodes the query of a GET", () => {
+    // The order id travels in the body, as the site's orders.cancel({ orderId }) sends it.
+    expect(lavkaPageScript({ body: { orderId: "o/1" }, endpoint: "orderCancel", project: "raw" }, 12)).toContain("\"url\":\"/api/v1/providers/orders/v1/cancel\"");
+    expect(lavkaPageScript({ body: {}, endpoint: "orderSubmit", project: "submit" }, 12)).toContain("\"url\":\"/api/v1/providers/orders/v2/submit\"");
     expect(lavkaPageScript({ endpoint: "serviceInfo", project: "serviceInfo", query: "a=1" }, 12)).toContain("\"url\":\"/api/v1/providers/v2/service-info?a=1\"");
   });
 });

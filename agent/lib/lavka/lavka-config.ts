@@ -14,8 +14,11 @@ export const LAVKA_ENDPOINTS = {
   cartUpdate: { method: "POST", path: "/api/v1/providers/cart/v1/update" },
   geoGeocode: { method: "POST", path: "/api/v1/providers/geo/v1/geocode" },
   geoSuggest: { method: "POST", path: "/api/v1/providers/geo/v1/suggest" },
-  orderCancel: { method: "POST", path: "/api/v1/orders/{orderId}/cancel" },
-  orderSubmit: { method: "POST", path: "/api/v1/orders/submit" },
+  // The site places and cancels orders through its providers (site config ordersViaProviders):
+  // provider table `orders` in main.*.js, read 25 October 2026. The earlier /api/v1/orders/submit
+  // and /api/v1/orders/{orderId}/cancel are not what the site sends.
+  orderCancel: { method: "POST", path: "/api/v1/providers/orders/v1/cancel" },
+  orderSubmit: { method: "POST", path: "/api/v1/providers/orders/v2/submit" },
   paymentMethods: { method: "POST", path: "/api/v1/providers/payments/v1/methods" },
   paymentStatus: { method: "POST", path: "/api/v1/providers/payments/v1/status" },
   product: { method: "POST", path: "/api/v1/providers/v1/product" },
