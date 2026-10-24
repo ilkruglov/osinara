@@ -1,10 +1,16 @@
 /**
- * Unauthenticated public GitHub release and deployment-manifest client.
+ * GitHub release and deployment-manifest client.
  *
  * Exports:
  * - `GitHubSoftwareReleaseClient`: latest accepted release lookup contract.
  * - `createGitHubSoftwareReleaseClient`: bounded, no-retry GitHub client factory.
  * - `githubSoftwareReleaseClient`: production client for ilkruglov/osinara.
+ *
+ * Key construct:
+ * - Reads anonymously, or with an optional read-only token (`OSINARA_GITHUB_TOKEN`) so a private
+ *   repository works too; the manifest comes through the API asset endpoint, which serves both,
+ *   while the browser download URL serves only a public repository. Fetch drops the Authorization
+ *   header on the cross-origin redirect to the asset storage.
  */
 import { z } from "zod";
 
@@ -29,6 +35,7 @@ const releaseSchema = z.object({
     browser_download_url: z.url(),
     name: z.string(),
     state: z.string(),
+    url: z.url(),
   })),
   draft: z.boolean(),
   html_url: z.url(),
@@ -68,7 +75,12 @@ export interface GitHubSoftwareReleaseClient {
 interface GitHubSoftwareReleaseClientDependencies {
   fetch: typeof fetch;
   timeoutMs: number;
+  /** Read-only token for a private repository; anonymous when absent. */
+  token?: string | undefined;
 }
+
+const ASSET_API_URL = /^https:\/\/api\.github\.com\/repos\/ilkruglov\/osinara\/releases\/assets\/\d+$/u;
+const TOKEN_FORMAT = /^[A-Za-z0-9_]{20,255}$/u;
 
 async function responseJson(
   response: Response,
@@ -107,11 +119,17 @@ export function createGitHubSoftwareReleaseClient(
     );
   }
 
-  async function request(url: string, maxBytes: number, code: string, message: string, allowMissing = false) {
-    // Every endpoint is called exactly once with its own bounded signal and no authorization header.
+  const token = dependencies.token?.trim() || undefined;
+  if (token !== undefined && !TOKEN_FORMAT.test(token)) {
+    throw new AppError("AGENT_SOFTWARE_UPDATE_TOKEN_INVALID", "OSINARA_GITHUB_TOKEN имеет неожиданный формат");
+  }
+
+  async function request(url: string, maxBytes: number, code: string, message: string, allowMissing = false, accept = "application/vnd.github+json") {
+    // Every endpoint is called exactly once with its own bounded signal.
     const response = await dependencies.fetch(url, {
       headers: {
-        accept: "application/vnd.github+json",
+        accept,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         "user-agent": "osinara-software-update-checker",
         "x-github-api-version": GITHUB_API_VERSION,
       },
@@ -165,16 +183,21 @@ export function createGitHubSoftwareReleaseClient(
           "Релиз должен содержать один готовый манифест osinara-deployment.json",
         );
       }
-      const assetUrl = requireRepositoryUrl(
+      requireRepositoryUrl(
         assets[0]!.browser_download_url,
         `/ilkruglov/osinara/releases/download/${release.tag_name}/${MANIFEST_ASSET_NAME}`,
         "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID",
       );
+      if (!ASSET_API_URL.test(assets[0]!.url)) {
+        throw new AppError("AGENT_SOFTWARE_MANIFEST_ASSET_INVALID", "GitHub вернул ссылку на манифест из неожиданного источника");
+      }
       const manifestJson = await request(
-        assetUrl,
+        assets[0]!.url,
         SOFTWARE_UPDATE_MANIFEST_MAX_BYTES,
         "AGENT_SOFTWARE_MANIFEST_INVALID",
         "Манифест обновления имеет некорректный формат",
+        false,
+        "application/octet-stream",
       );
       const parsedManifest = manifestSchema.safeParse(manifestJson);
       if (!parsedManifest.success || parsedManifest.data.version !== version) {
@@ -195,4 +218,5 @@ export function createGitHubSoftwareReleaseClient(
 export const githubSoftwareReleaseClient = createGitHubSoftwareReleaseClient({
   fetch,
   timeoutMs: SOFTWARE_UPDATE_HTTP_TIMEOUT_MS,
+  token: process.env.OSINARA_GITHUB_TOKEN,
 });

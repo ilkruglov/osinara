@@ -5,6 +5,7 @@
 readonly GITHUB_REPOSITORY="ilkruglov/osinara"
 readonly GITHUB_API="https://api.github.com/repos/${GITHUB_REPOSITORY}"
 readonly GITHUB_RELEASES="https://github.com/${GITHUB_REPOSITORY}/releases/download"
+readonly GITHUB_ASSET_URL_PATTERN="^https://api\\.github\\.com/repos/${GITHUB_REPOSITORY}/releases/assets/[0-9]+$"
 readonly APP_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-app@sha256:"
 readonly EDGE_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-edge@sha256:"
 readonly EGRESS_IMAGE_PREFIX="ghcr.io/ilkruglov/osinara-sandbox-egress-proxy@sha256:"
@@ -16,12 +17,48 @@ readonly TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9@sha256
 readonly RETAINED_LOCAL_RELEASE_IMAGE_COUNT=2
 readonly RELEASE_DIRECTORY_NAME_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
-curl_github() {
+# An optional read-only token (OSINARA_GITHUB_TOKEN in the server .env) lets the controller read a
+# private repository. It goes to curl from a 0600 header file, never on a command line, and curl
+# does not forward a custom Authorization header to the host a release asset redirects to. It is
+# prepared once per run in the main shell, so a malformed token stops the deploy.
+GITHUB_AUTH_HEADER=""
+
+prepare_github_auth() {
+  local token
+  GITHUB_AUTH_HEADER=""
+  token="$(sed -n 's/^OSINARA_GITHUB_TOKEN=//p' "$SERVER_ENV" | tail -n 1)"
+  token="${token%$'\r'}"
+  # The server .env quotes its values (KEY='value', host-executor.ts); unquote without eval.
+  if [[ "$token" =~ ^\'(.*)\'$ || "$token" =~ ^\"(.*)\"$ ]]; then token="${BASH_REMATCH[1]}"; fi
+  [[ -n "$token" ]] || return 0
+  [[ "$token" =~ ^[A-Za-z0-9_]{20,255}$ ]] ||
+    fail "DEPLOY_GITHUB_TOKEN_INVALID" "OSINARA_GITHUB_TOKEN has an unexpected format"
+  GITHUB_AUTH_HEADER="${WORK_DIR}/github-auth.header"
+  install -m 0600 /dev/null "$GITHUB_AUTH_HEADER"
+  printf 'Authorization: Bearer %s\n' "$token" > "$GITHUB_AUTH_HEADER"
+}
+
+curl_github_raw() {
+  local auth=()
+  [[ -z "$GITHUB_AUTH_HEADER" ]] || auth=(--header "@${GITHUB_AUTH_HEADER}")
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-    --connect-timeout 10 --max-time 60 \
-    --header 'Accept: application/vnd.github+json' \
+    --connect-timeout 10 --max-time 120 \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
-    --header 'User-Agent: osinara-production-deploy/1' "$@"
+    --header 'User-Agent: osinara-production-deploy/1' "${auth[@]}" "$@"
+}
+
+curl_github() {
+  curl_github_raw --header 'Accept: application/vnd.github+json' "$@"
+}
+
+# Release assets go through the API by asset id: the browser download URL works only for a public
+# repository, the API one for both.
+download_release_asset() {
+  local release_json="$1" name="$2" output="$3" url
+  url="$(jq -er --arg name "$name" '[.assets[] | select(.name == $name)][0].url' "$release_json")"
+  [[ "$url" =~ $GITHUB_ASSET_URL_PATTERN ]] ||
+    fail "DEPLOY_RELEASE_METADATA_INVALID" "Release asset ${name} has an unexpected API URL"
+  curl_github_raw --header 'Accept: application/octet-stream' --output "$output" "$url"
 }
 
 require_image_ref() {
@@ -214,6 +251,7 @@ download_and_validate_release() {
   local compose="${WORK_DIR}/compose.production.yaml"
   local archive="${WORK_DIR}/osinara-installation.tar.gz"
 
+  prepare_github_auth
   curl_github --output "$release_json" "${GITHUB_API}/releases/tags/${tag}"
   jq -e --arg tag "$tag" --arg base "${GITHUB_RELEASES}/${tag}" '
     .tag_name == $tag and .immutable == true and .draft == false and .prerelease == false and
@@ -225,9 +263,9 @@ download_and_validate_release() {
       .browser_download_url == ($base + "/osinara-installation.tar.gz"))] | length == 1)
   ' "$release_json" >/dev/null ||
     fail "DEPLOY_RELEASE_METADATA_INVALID" "Public release metadata is invalid"
-  curl_github --output "$manifest" "${GITHUB_RELEASES}/${tag}/osinara-deployment.json"
-  curl_github --output "$compose" "${GITHUB_RELEASES}/${tag}/compose.production.yaml"
-  curl_github --output "$archive" "${GITHUB_RELEASES}/${tag}/osinara-installation.tar.gz"
+  download_release_asset "$release_json" "osinara-deployment.json" "$manifest"
+  download_release_asset "$release_json" "compose.production.yaml" "$compose"
+  download_release_asset "$release_json" "osinara-installation.tar.gz" "$archive"
   validate_manifest "$manifest" "$version"
   verify_compose_hash "$compose"
   stage_controller_scripts "$archive" "$manifest"

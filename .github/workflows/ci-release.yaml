@@ -242,36 +242,54 @@ jobs:
           done
 
       - name: Attest app image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.APP_IMAGE }}
           subject-digest: ${{ steps.digests.outputs.app }}
           push-to-registry: true
       - name: Attest sandbox runtime image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.RUNTIME_IMAGE }}
           subject-digest: ${{ steps.digests.outputs.sandbox-runtime }}
           push-to-registry: true
       - name: Attest sandbox runner image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.RUNNER_IMAGE }}
           subject-digest: ${{ steps.digests.outputs.sandbox-runner }}
           push-to-registry: true
       - name: Attest sandbox egress proxy image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.EGRESS_IMAGE }}
           subject-digest: ${{ steps.digests.outputs.sandbox-egress-proxy }}
           push-to-registry: true
       - name: Attest edge image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.EDGE_IMAGE }}
           subject-digest: ${{ steps.digests.outputs.edge }}
           push-to-registry: true
       - name: Attest memory embedding image
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-name: ${{ env.MEMORY_EMBEDDING_IMAGE }}
@@ -359,21 +377,33 @@ jobs:
           PATH="$EMPTY_PATH" ./osinara-linux-x64 --help | grep --fixed-strings "osinara install"
 
       - name: Attest standalone installer CLI
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-path: osinara-linux-x64
 
       - name: Attest installation bundle
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-path: osinara-installation.tar.gz
 
       - name: Attest installer bootstrap
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-path: install.sh
 
       - name: Attest installer checksum
+        # Attestations exist only for public repositories on this GitHub plan; a private
+        # repository skips them (the deploy controller never verified them).
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763
         with:
           subject-path: osinara-linux-x64.sha256

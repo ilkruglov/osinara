@@ -5,6 +5,8 @@
  * - Stable latest-release, Compose-byte hash, and deployment-manifest validation.
  * - Mutable, draft, prerelease, malformed, missing-asset, and wrong-image rejection.
  * - One bounded request per endpoint with no hidden retry.
+ * - Anonymous by default; an optional token goes as a Bearer header to both requests, and the
+ *   manifest comes through this repository's API asset endpoint (which also serves a private one).
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -36,6 +38,7 @@ function githubRelease(overrides: Record<string, unknown> = {}) {
         "https://github.com/ilkruglov/osinara/releases/download/v0.2.0/osinara-deployment.json",
       name: "osinara-deployment.json",
       state: "uploaded",
+      url: "https://api.github.com/repos/ilkruglov/osinara/releases/assets/42",
     }],
     draft: false,
     html_url: "https://github.com/ilkruglov/osinara/releases/tag/v0.2.0",
@@ -73,11 +76,32 @@ describe("GitHub software release client", () => {
     // Public metadata and assets must never receive an accidental credential header.
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/ilkruglov/osinara/releases/latest");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.github.com/repos/ilkruglov/osinara/releases/assets/42");
+    expect(new Headers((fetchMock.mock.calls[1]![1] as RequestInit).headers).get("accept")).toBe("application/octet-stream");
     for (const call of fetchMock.mock.calls) {
       const headers = new Headers((call[1] as RequestInit | undefined)?.headers);
       expect(headers.has("authorization")).toBe(false);
       expect((call[1] as RequestInit | undefined)?.signal).toBeInstanceOf(AbortSignal);
     }
+  });
+
+  it("sends an optional token to both requests and refuses an asset URL outside this repository", async () => {
+    const token = "github_pat_0123456789abcdefghijABCDEFGHIJ";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(githubRelease()))
+      .mockResolvedValueOnce(jsonResponse(deploymentManifest()));
+    await createGitHubSoftwareReleaseClient({ fetch: fetchMock, timeoutMs: 1_000, token }).latestNewerThan("0.1.0");
+    for (const call of fetchMock.mock.calls) {
+      expect(new Headers((call[1] as RequestInit).headers).get("authorization")).toBe(`Bearer ${token}`);
+    }
+    const foreign = vi.fn().mockResolvedValueOnce(jsonResponse(githubRelease({
+      assets: [{ ...githubRelease().assets[0], url: "https://evil.example/releases/assets/42" }],
+    })));
+    await expect(createGitHubSoftwareReleaseClient({ fetch: foreign, timeoutMs: 1_000 }).latestNewerThan("0.1.0"))
+      .rejects.toMatchObject({ code: "AGENT_SOFTWARE_MANIFEST_ASSET_INVALID" });
+    expect(foreign).toHaveBeenCalledTimes(1);
+    expect(() => createGitHubSoftwareReleaseClient({ fetch: vi.fn(), timeoutMs: 1_000, token: "bad token" }))
+      .toThrow(expect.objectContaining({ code: "AGENT_SOFTWARE_UPDATE_TOKEN_INVALID" }));
   });
 
   // The Codex subscription gateway image was retired in 1.8.11; a manifest naming it is foreign.
