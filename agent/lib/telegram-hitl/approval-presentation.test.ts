@@ -151,6 +151,7 @@ describe("Telegram approval presentation", () => {
       findLavkaDeliveryPoint: vi.fn(async () => null),
       findSchedule: vi.fn(),
     });
+    vi.stubEnv("INVITATION_SIGNING_SECRET", "yandex-taxi-test-signing-secret-0123456789");
     const point = (shortText: string, lon: number) => {
       const fields = { city: "Москва", fullText: `Москва, ${shortText}`, lat: 55.7, lon, shortText, uri: "" };
       return { ...fields, key: yandexTaxiPointKey(fields) };

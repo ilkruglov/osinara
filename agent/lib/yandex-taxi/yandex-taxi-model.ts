@@ -11,13 +11,18 @@
  *
  * Key constructs:
  * - The confirmation window shows a point's text while the order carries its coordinates. Every
- *   point the tool returns carries `key`, a hash over both; a point whose text was edited or whose
- *   coordinates were swapped no longer matches and is refused before anything is sent.
+ *   point the tool returns carries `key`, an HMAC over both with a server-side key: a point whose
+ *   text was edited or whose coordinates were swapped no longer matches and is refused before
+ *   anything is sent, and a point made up elsewhere (a prompt injection pairing a familiar address
+ *   with other coordinates) cannot carry a valid key. A plain hash could be computed by anyone
+ *   (security review, 24 October 2026).
  * - A price with more than one number in it ("от 300 до 400") has no exact value and cannot be
  *   confirmed as one.
  */
+import { createHmac } from "node:crypto";
+
 import { AppError } from "../app-error.js";
-import { sha256Json } from "../json-hash.js";
+import { requireInvitationSigningSecret } from "../invitation-code.js";
 import { YANDEX_TAXI_FINISHED_STATUSES, YANDEX_TAXI_PRICE_RISE_PERCENT } from "./yandex-taxi-config.js";
 
 export interface YandexTaxiPoint {
@@ -32,8 +37,17 @@ export interface YandexTaxiPoint {
 
 export type YandexTaxiPointFields = Omit<YandexTaxiPoint, "key">;
 
+/**
+ * The installation's signing secret (required in production), narrowed to this one purpose: the
+ * derived key signs route points only, so a key never doubles as an invitation signature.
+ */
+function pointSigningKey(): Buffer {
+  return createHmac("sha256", requireInvitationSigningSecret()).update("osinara/yandex-taxi-point/v1", "utf8").digest();
+}
+
 export function yandexTaxiPointKey(point: YandexTaxiPointFields): string {
-  return sha256Json(["yandex-taxi-point", point.shortText, point.fullText, point.lon.toFixed(6), point.lat.toFixed(6), point.uri, point.city]).slice(0, 16);
+  const fields = JSON.stringify([point.shortText, point.fullText, point.lon.toFixed(6), point.lat.toFixed(6), point.uri, point.city]);
+  return createHmac("sha256", pointSigningKey()).update(fields, "utf8").digest("hex").slice(0, 16);
 }
 
 export function withYandexTaxiPointKey(point: YandexTaxiPointFields): YandexTaxiPoint {

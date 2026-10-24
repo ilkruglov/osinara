@@ -10,6 +10,9 @@
 import { vi } from "vitest";
 
 import { withYandexTaxiPointKey } from "./yandex-taxi-model.js";
+
+// Route point keys are signed with the installation secret; tests sign with a fixed one.
+process.env.INVITATION_SIGNING_SECRET ??= "yandex-taxi-test-signing-secret-0123456789";
 import type { YandexTaxiPageResult } from "./yandex-taxi-page-script.js";
 
 type Reply = Partial<YandexTaxiPageResult> | Error | ((body: Record<string, unknown>) => Partial<YandexTaxiPageResult> | Error);

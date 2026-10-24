@@ -4,11 +4,14 @@
  * Constructs covered:
  * - The order window shows from and to (full addresses with the city, the porch), the tariff, the price with its
  *   currency, whether it is fixed, the pickup estimate and the payment method, all from the input.
- * - A point whose text no longer matches its key is never shown.
+ * - A point whose text no longer matches its key is never shown, nor one whose key was computed
+ *   without the installation's secret (a forged pairing of a familiar address and other coordinates).
  * - The cancellation window names the terms and shows the site's words only for a paid one.
  * - Any other input is refused rather than shown generically.
  */
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+
+import { describe, expect, it, vi } from "vitest";
 
 import { yandexTaxiApprovalPrompt } from "./yandex-taxi-approval.js";
 import { withYandexTaxiPointKey } from "./yandex-taxi-model.js";
@@ -45,6 +48,19 @@ describe("yandexTaxiApprovalPrompt", () => {
     const tver = withYandexTaxiPointKey({ city: "Тверь", fullText: "Тверская улица, 1", lat: 56.86, lon: 35.9, shortText: "Тверская 1", uri: "" });
     const prompt = yandexTaxiApprovalPrompt({ ...order, from: tver, porch: undefined });
     expect(prompt).toContain("Откуда: Тверь, Тверская улица, 1\n");
+  });
+
+  it("never shows a point made up outside the tool, even with a hash over its own fields", () => {
+    const fields = { city: "Москва", fullText: "Россия, Москва, Корабельная улица, 11к1", lat: 55.9, lon: 37.9, shortText: "Корабельная 11к1", uri: "" };
+    const forgedKey = createHash("sha256").update(JSON.stringify(["yandex-taxi-point", fields.shortText, fields.fullText, fields.lon.toFixed(6), fields.lat.toFixed(6), fields.uri, fields.city])).digest("hex").slice(0, 16);
+    expect(() => yandexTaxiApprovalPrompt({ ...order, from: { ...fields, key: forgedKey } })).toThrow(expect.objectContaining({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID" }));
+    const signed = withYandexTaxiPointKey(fields);
+    vi.stubEnv("INVITATION_SIGNING_SECRET", "another-installation-secret-0123456789abcdef");
+    try {
+      expect(() => yandexTaxiApprovalPrompt({ ...order, from: signed })).toThrow(expect.objectContaining({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID" }));
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("never shows a point whose text was changed after the lookup", () => {
