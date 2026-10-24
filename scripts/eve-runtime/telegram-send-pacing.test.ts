@@ -7,10 +7,19 @@
  *   other chats are not held back by them; the limits come from the environment.
  * - A 429 with `retry_after` pauses every call for that long; a pause over a minute is refused,
  *   and a pause extended meanwhile is waited out in full. Waiters go in arrival order.
+ * - `reportTelegramDeliveryFailure`: a failed send to a chat reaches the application's observer with
+ *   its start; a delivered send, a call without a chat and a read do not; an observer failure is
+ *   logged with ids only and never thrown; an observer that never settles holds the answer only
+ *   until the deadline.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createTelegramSendPacer, telegramRetryAfterSeconds, telegramSendPacerSettings } from "./telegram-send-pacing.js";
+import {
+  createTelegramSendPacer,
+  reportTelegramDeliveryFailure,
+  telegramRetryAfterSeconds,
+  telegramSendPacerSettings,
+} from "./telegram-send-pacing.js";
 
 function fakeClock() {
   let at = 1_000_000;
@@ -110,5 +119,83 @@ describe("telegram send pacer", () => {
     await Promise.all([first, second]);
     expect(order).toEqual(["second-chat", "first-chat-again"]);
     expect(clock.sleeps).toEqual([1_000, 1_000]);
+  });
+});
+
+describe("reportTelegramDeliveryFailure", () => {
+  const OBSERVER_KEY = Symbol.for("osinara.telegramDeliveryFailureObserver");
+  const holder = globalThis as { [key: symbol]: unknown };
+  const blocked = { description: "Forbidden: bot was blocked by the user", error_code: 403, ok: false };
+
+  afterEach(() => {
+    delete holder[OBSERVER_KEY];
+    vi.restoreAllMocks();
+  });
+
+  it("hands the failed answer of a send to a chat to the observer with the attempt's start", async () => {
+    const observer = vi.fn(async () => undefined);
+    holder[OBSERVER_KEY] = observer;
+
+    await reportTelegramDeliveryFailure("sendMessage", { chat_id: 42, text: "секрет" },
+      { body: blocked, ok: false, status: 403 }, 1_760_000_000_123);
+
+    expect(observer).toHaveBeenCalledExactlyOnceWith({
+      body: blocked, chatId: "42", method: "sendMessage", startedAt: 1_760_000_000_123, status: 403,
+    });
+  });
+
+  it("stays silent for a delivered send, a call without a chat, a read and a missing observer", async () => {
+    const observer = vi.fn(async () => undefined);
+    holder[OBSERVER_KEY] = observer;
+    const failed = { body: { description: "Bad Request: chat not found", ok: false }, ok: false, status: 400 };
+
+    await reportTelegramDeliveryFailure("sendMessage", { chat_id: 42 }, { body: { ok: true }, ok: true, status: 200 }, 1);
+    await reportTelegramDeliveryFailure("sendMessage", {}, failed, 1);
+    await reportTelegramDeliveryFailure("getChat", { chat_id: 42 }, failed, 1);
+    expect(observer).not.toHaveBeenCalled();
+
+    delete holder[OBSERVER_KEY];
+    await expect(reportTelegramDeliveryFailure("sendMessage", { chat_id: 42 }, failed, 1)).resolves.toBeUndefined();
+  });
+
+  it("returns after the deadline when the observer never settles, and logs the timeout", async () => {
+    holder[OBSERVER_KEY] = () => new Promise(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const started = Date.now();
+    await reportTelegramDeliveryFailure("sendMessage", { chat_id: 42 }, { body: blocked, ok: false, status: 403 }, 1, 20);
+
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(JSON.parse(String(error.mock.calls[0]?.[0]))).toEqual({
+      chatId: "42", code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_REPORT_TIMEOUT", method: "sendMessage", timeoutMs: 20,
+    });
+  });
+
+  it("still logs the failure of an observer that gives up after the deadline", async () => {
+    let fail: (error: Error) => void = () => undefined;
+    holder[OBSERVER_KEY] = () => new Promise((_resolve, reject) => {
+      fail = reject;
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await reportTelegramDeliveryFailure("sendMessage", { chat_id: 42 }, { body: blocked, ok: false, status: 403 }, 1, 5);
+    fail(new Error("database down"));
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(2));
+
+    expect(JSON.parse(String(error.mock.calls[1]?.[0]))).toMatchObject({ code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_FAILED" });
+  });
+
+  it("logs an observer failure with ids only and never throws", async () => {
+    holder[OBSERVER_KEY] = async () => {
+      throw new Error("database down");
+    };
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(reportTelegramDeliveryFailure("sendChatAction", { chat_id: -100 },
+      { body: { description: "Forbidden: user is deactivated", ok: false }, ok: false, status: 403 }, 1)).resolves.toBeUndefined();
+
+    expect(JSON.parse(String(error.mock.calls[0]?.[0]))).toEqual({
+      chatId: "-100", code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_FAILED", errorName: "Error", method: "sendChatAction",
+    });
   });
 });

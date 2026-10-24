@@ -4,6 +4,9 @@
  * Exports:
  * - `createAgentScheduleDispatcher`: injectable deterministic lease-to-Eve handoff processor.
  * - `dispatchDueAgentSchedules`: production dispatcher used by the Eve minute schedule.
+ *
+ * A run whose chat Telegram already calls unreachable (blocked bot, bot removed from the group) fails with
+ * `AGENT_TELEGRAM_RECIPIENT_UNREACHABLE` before a session or a model call: its answer could not be delivered.
  */
 import { telegramContinuationToken } from "eve/channels/telegram";
 import type { ScheduleToFn } from "eve/schedules";
@@ -14,6 +17,8 @@ import { type ClaimedAgentSchedule, agentScheduleDispatchRepository } from "./ag
 import { scheduledGroupHistorySnapshotRepository } from "./scheduled-group-history-snapshot-repository.js";
 import { numericMessageThreadId } from "./agent-schedule-validation.js";
 import { sessionRepository, type PreparedSession } from "../sessions/session-repository.js";
+import { TELEGRAM_RECIPIENT_UNREACHABLE_CODE, type TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
+import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
 
 interface AgentScheduleDispatcherRepository {
   claimDue(options: { leaseMilliseconds: number; limit: number; now: Date }): Promise<ClaimedAgentSchedule[]>;
@@ -28,6 +33,8 @@ interface AgentScheduleDispatcherDependencies {
   prepareSession(job: ClaimedAgentSchedule, baseContinuationToken: string, now: Date): Promise<PreparedSession>;
   repository: AgentScheduleDispatcherRepository;
   to: ScheduleToFn;
+  /** The reason the run's chat cannot receive its answer; absent in tests that do not need it. */
+  unreachableRecipient?(job: ClaimedAgentSchedule): Promise<TelegramRecipientUnreachableReason | null>;
 }
 
 function memoryScopes(job: ClaimedAgentSchedule): Array<"family" | "group" | "personal"> {
@@ -106,6 +113,10 @@ function scheduledAuth(job: ClaimedAgentSchedule, prepared: PreparedSession) {
 }
 
 async function dispatchOne(dependencies: AgentScheduleDispatcherDependencies, job: ClaimedAgentSchedule, now: Date): Promise<void> {
+  if (await dependencies.unreachableRecipient?.(job) != null) {
+    await dependencies.repository.failClaim(job, TELEGRAM_RECIPIENT_UNREACHABLE_CODE);
+    return;
+  }
   if (job.scope === "group" && job.historyWindowDays !== null) {
     try {
       await dependencies.prepareHistory(job);
@@ -223,5 +234,6 @@ export function dispatchDueAgentSchedules(to: ScheduleToFn): Promise<number> {
       }),
     repository: agentScheduleDispatchRepository,
     to,
+    unreachableRecipient: (job) => unreachableTelegramRecipient(job.telegramChatId, "agent_schedule"),
   })();
 }

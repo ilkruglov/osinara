@@ -11,6 +11,8 @@
  * - Scheduled final delivery bound to its owner-approved Telegram chat and forum topic.
  * - Verified group replies anchored to the triggering member message.
  * - Successfully delivered final group output persisted as one logical timeline entry.
+ * - `my_chat_member` marks or clears an unreachable chat before the ACK; every failed send of the
+ *   process reports to the reachability observer installed here.
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -73,8 +75,12 @@ import { isTelegramChannelSession } from "../lib/telegram-session-actor.js";
 import { reinforceUsedMemories } from "../lib/memory-used-reinforcement.js";
 import { UUID_PATTERN } from "../lib/tool-input-validation.js";
 import { requireInternalToken } from "../lib/telegram-hitl/approval-timeout-sweep.js";
-import { handleTelegramUnparsedUpdate } from "../lib/turn-quality/telegram-reaction-update.js";
 import { recordTurnDelivery } from "../lib/turn-quality/turn-delivery-record.js";
+import { installTelegramDeliveryFailureObserver } from "../lib/telegram-reachability/delivery-failure-observer.js";
+import { routeTelegramUnparsedUpdate } from "../lib/telegram-unparsed-update.js";
+
+// Registration only: Eve's Bot API client calls it after a failed send, so discovery and build stay offline.
+installTelegramDeliveryFailureObserver();
 
 export default telegramChannel({
   botUsername: process.env.TELEGRAM_BOT_USERNAME as string,
@@ -555,8 +561,9 @@ export default telegramChannel({
   onHitlCallbackQuery: authorizeTelegramHitlCallback,
   onMessage: handleTelegramMessage,
   onVerifiedUpdate: handleTelegramDurableIngress,
-  // Reactions are a measurement of Mia's answers, recorded without a turn.
-  onUnparsedUpdate: (raw) => handleTelegramUnparsedUpdate(raw),
+  // Reactions are a measurement of Mia's answers, recorded without a turn; `my_chat_member` marks
+  // or clears an unreachable chat before Telegram gets 200.
+  onUnparsedUpdate: (raw) => routeTelegramUnparsedUpdate(raw),
   // The application persists authorized files before dispatch. The primary model receives only
   // trusted workspace paths and invokes the dedicated vision model when image analysis is needed.
   uploadPolicy: TELEGRAM_EVE_UPLOAD_POLICY,

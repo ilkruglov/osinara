@@ -6,6 +6,8 @@
  * - `telegramSendPacerSettings`: the three limits from the environment, bounded by Telegram's.
  * - `telegramSendPacer`: the process-wide pacer every Bot API call goes through.
  * - `telegramRetryAfterSeconds`: the wait a 429 answer asks for, when it names one.
+ * - `reportTelegramDeliveryFailure`: the final failed answer of a send to a chat, handed to the
+ *   application's reachability observer.
  *
  * Key construct:
  * - Telegram allows a bot about thirty messages a second in all, one a second to one private
@@ -19,6 +21,15 @@
  *   an answer of up to five parts is one, and a whole second between parts was a visible
  *   delay for one family. The three limits are environment settings; an installation serving
  *   a thousand families sets the gap to the full second.
+ * - Eve's `callTelegramApi` reports the final answer of every failed call here (24 October 2026). A
+ *   send to a chat goes on to the observer the application registers on `globalThis` under
+ *   `osinara.telegramDeliveryFailureObserver` (`agent/lib/telegram-reachability/`): every Bot API
+ *   call passes Eve's client, so a blocked bot or a removed group is noticed whichever path wrote.
+ *   The report carries `startedAt`, the moment the answered attempt was handed to fetch: a proof of
+ *   reachability received after it makes that answer stale. The observer is awaited up to 500 ms,
+ *   so the next send of the same caller normally sees its mark while a stalled database cannot hold
+ *   the answer; its failure is logged and never replaces Telegram's answer. Reads and bot settings
+ *   never mark a chat.
  */
 const PACED_METHODS = new Set([
   "copyMessage",
@@ -39,6 +50,11 @@ const PACED_METHODS = new Set([
   "sendVideo",
   "sendVoice",
 ]);
+// Calls whose failure can say the chat itself is gone; reads and bot settings never mark a chat.
+const OBSERVED_METHODS = new Set([...PACED_METHODS, "sendChatAction"]);
+const DELIVERY_FAILURE_OBSERVER_KEY = Symbol.for("osinara.telegramDeliveryFailureObserver");
+// The longest a failed answer waits for the observer before it goes back to the caller.
+const DELIVERY_FAILURE_REPORT_TIMEOUT_MS = 500;
 const GLOBAL_WINDOW_MS = 1_000;
 const GROUP_WINDOW_MS = 60_000;
 const RETRY_AFTER_MAX_SECONDS = 60;
@@ -202,6 +218,49 @@ export function telegramRetryAfterSeconds(body: unknown): number | null {
   if (typeof parameters !== "object" || parameters === null) return null;
   const seconds = (parameters as { retry_after?: unknown }).retry_after;
   return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/**
+ * Hands a failed answer of a send to a chat to the application's observer; never throws. The observer
+ * receives `{ body, chatId, method, startedAt, status }` (`TelegramDeliveryFailure` in
+ * `agent/lib/telegram-reachability/delivery-failure-observer.ts`); `startedAt` is the epoch millisecond
+ * the answered attempt was handed to fetch, after its wait for a slot. The answer is held at most
+ * `timeoutMs` (500 ms): a stalled database must not delay a reply Telegram already gave, so a slower
+ * observer finishes in the background and its failure is still logged. The types stay inline so the
+ * vendored copy carries no whitespace-only lines.
+ */
+export async function reportTelegramDeliveryFailure(
+  method: string,
+  requestBody: unknown,
+  answer: { readonly body: unknown; readonly ok: boolean; readonly status: number },
+  startedAt: number,
+  timeoutMs: number = DELIVERY_FAILURE_REPORT_TIMEOUT_MS,
+): Promise<void> {
+  if (answer.ok || !OBSERVED_METHODS.has(method)) return;
+  const chat = chatKey(requestBody);
+  const observer = (globalThis as { [key: symbol]: unknown })[DELIVERY_FAILURE_OBSERVER_KEY];
+  if (!chat || typeof observer !== "function") return;
+  const report = { body: answer.body, chatId: chat.id, method, startedAt, status: answer.status };
+  const settled = Promise.resolve()
+    .then(() => (observer as (failure: unknown) => unknown)(report))
+    .then(() => "settled", (error: unknown) => {
+      console.error(JSON.stringify({
+        chatId: chat.id,
+        code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_FAILED",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        method,
+      }));
+      return "settled";
+    });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), timeoutMs);
+  });
+  const outcome = await Promise.race([settled, timedOut]);
+  clearTimeout(timer);
+  if (outcome === "timeout") {
+    console.error(JSON.stringify({ chatId: chat.id, code: "AGENT_TELEGRAM_DELIVERY_OBSERVER_REPORT_TIMEOUT", method, timeoutMs }));
+  }
 }
 
 export const telegramSendPacer: TelegramSendPacer = createTelegramSendPacer(telegramSendPacerSettings());

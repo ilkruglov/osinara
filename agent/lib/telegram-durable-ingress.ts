@@ -5,6 +5,7 @@
  * - `createTelegramDurableIngress`: verified Eve hook that persists before ACK and drains FIFO.
  * - `handleTelegramDurableIngress`: production hook with PostgreSQL and Groq dependencies.
  * - Application software-update callbacks complete before native Eve dispatch begins.
+ * - A verified message clears the unreachable mark of its chat: whoever writes can be written to.
  */
 import type {
   TelegramDrainContext,
@@ -46,6 +47,7 @@ import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutR
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
+import { noteInboundTelegramMessage } from "./telegram-reachability/reachability-guard.js";
 import { handleSoftwareUpdateCallback } from "./software-updates/callback.js";
 
 const telegramUpdateIdSchema = z.union([z.number().int().nonnegative().safe(), z.string().regex(/^\d+$/)]);
@@ -89,6 +91,11 @@ interface DurableIngressDependencies {
     query: Extract<TelegramUpdate, { kind: "callback_query" }>["callbackQuery"],
   ): Promise<boolean>;
   leaseMilliseconds: number;
+  /**
+   * Records a message as proof that its chat reaches the bot and clears its unreachable mark
+   * (migration 138). Never throws: a failed write must not refuse the update.
+   */
+  noteInboundMessage?(input: { chatId: string; message: Record<string, unknown>; updateId: string }): Promise<void>;
   /**
    * Tells the person in a private chat that a message of theirs was not processed. Failure texts are
    * written for people; without this they only reached the log.
@@ -612,11 +619,15 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       richMediaIsLifted(update.message.raw) && richMessagePlainText(update.message.raw) !== null;
     let payload: Record<string, unknown> = context.raw;
     // External media is acknowledged before durable storage, download, transcription, or Eve dispatch.
-    if (
-      update.kind === "message" &&
-      mediaKind !== "none" &&
-      !await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback)
-    ) {
+    const mediaRefused = update.kind === "message" && mediaKind !== "none" &&
+      !await dependencies.acceptMedia(update.message, incomingUpdateId, mediaKind, textFallback);
+    // Even a refused file proves the chat still reaches the bot; a button press is not recorded.
+    if (update.kind === "message") {
+      await dependencies.noteInboundMessage?.({
+        chatId: update.message.chat.id, message: update.message.raw, updateId: incomingUpdateId,
+      });
+    }
+    if (mediaRefused) {
       // The file of a rich post stays out, its text still reaches the chat: the stored update
       // keeps the paragraphs and no file reference, so no later read can lift it.
       if (!textFallback) return new Response("ok");
@@ -661,6 +672,7 @@ export const handleTelegramDurableIngress = createTelegramDurableIngress({
   handleSoftwareUpdateCallback,
   leaseMilliseconds: TELEGRAM_INGRESS_LEASE_MS,
   maxConcurrentDrains: telegramIngressMaxConcurrentDrains(),
+  noteInboundMessage: noteInboundTelegramMessage,
   notifyFailure: sendTelegramFailureNotice,
   repository: telegramIngressRepository,
   transcribeVoice: transcribeTelegramVoice,

@@ -110,6 +110,8 @@ export interface InstallationExecutionInput {
   reasoningSelection: ReasoningSelectionMarker;
   telegramBotToken: string;
   telegramBotUsername: string;
+  /** Optional `TELEGRAM_WEBHOOK_IP_ADDRESS`: the only way the webhook IP is fixed; null leaves DNS to Telegram. */
+  telegramWebhookIpAddress?: string | null;
 }
 
 export interface InstallationExecutionResult {
@@ -131,6 +133,8 @@ export interface InstallerDependencies {
   resolveReleaseAssets: () => Promise<ReleaseAssets | null>;
   validateModel: ValidateModel;
   validateGroq: ValidateGroq;
+  /** Validated `TELEGRAM_WEBHOOK_IP_ADDRESS` of the installer's environment; absent or null fixes no IP. */
+  telegramWebhookIpAddress?: string | null;
 }
 
 export interface OwnerBootstrapOutput {

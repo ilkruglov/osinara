@@ -36,6 +36,7 @@ export interface HostInstallationOperations {
   readonly commit: () => Promise<void>;
   readonly configureWebhook: (input: {
     hostname: string;
+    ipAddress: string | null;
     secretToken: string;
     token: string;
   }) => Promise<void>;
@@ -91,6 +92,8 @@ function buildEnvironment(input: InstallationExecutionInput): Buffer {
     ],
   ];
   if (input.groqApiKey !== null) values.push(["GROQ_API_KEY", input.groqApiKey]);
+  // The agent re-registers the update list with the same fixed IP (`webhook-subscription.ts`).
+  if (input.telegramWebhookIpAddress) values.push(["TELEGRAM_WEBHOOK_IP_ADDRESS", input.telegramWebhookIpAddress]);
   return Buffer.from(
     `${values.map(([name, value]) => `${name}=${requireEnvironmentValue(value, name)}`).join("\n")}\n`,
     "utf8",
@@ -158,6 +161,7 @@ export function createHostInstallationExecutor(
         const bootstrap = await operations.createOwnerBootstrap();
         await operations.configureWebhook({
           hostname: input.hostname,
+          ipAddress: input.telegramWebhookIpAddress ?? null,
           secretToken: input.internalSecrets.telegramWebhookSecretToken,
           token: input.telegramBotToken,
         });

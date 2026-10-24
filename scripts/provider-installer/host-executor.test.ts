@@ -118,6 +118,8 @@ describe("createHostInstallationExecutor", () => {
       "APP_DATABASE_URL='postgresql://osinara_app:app_database_secret_abcdefghijklmnopqrstuvwxyz@postgres:5432/osinara'\n",
     );
     expect(environment).toContain("AGENT_INTERNAL_TOKEN='internal_token_abcdefghijklmnopqrstuvwxyz'\n");
+    expect(environment).not.toContain("TELEGRAM_WEBHOOK_IP_ADDRESS");
+    expect(ops.configureWebhook).toHaveBeenCalledWith(expect.objectContaining({ hostname: "8-8-8-8.sslip.io", ipAddress: null }));
     expect(environment).not.toContain("CLI_PROXY_API_KEY");
     expect(environment).not.toContain("MODEL_UPSTREAM_API_KEY");
     expect(JSON.parse(staged!.modelConfigBytes.toString("utf8"))).toMatchObject({
@@ -125,6 +127,15 @@ describe("createHostInstallationExecutor", () => {
       schemaVersion: 4,
       voice: { enabled: false },
     });
+  });
+
+  it("keeps an explicit webhook IP for the agent and passes it to the webhook registration", async () => {
+    const ops = operations([]);
+    await createHostInstallationExecutor(ops)({ ...input(), telegramWebhookIpAddress: "8.8.8.8" });
+
+    expect(vi.mocked(ops.stage).mock.calls[0]?.[0]?.environmentBytes.toString("utf8"))
+      .toContain("TELEGRAM_WEBHOOK_IP_ADDRESS='8.8.8.8'\n");
+    expect(ops.configureWebhook).toHaveBeenCalledWith(expect.objectContaining({ ipAddress: "8.8.8.8" }));
   });
 
   it("removes attempt-created state when preflight fails before migration", async () => {

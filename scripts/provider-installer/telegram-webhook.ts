@@ -5,10 +5,13 @@
  * - `ConfigureTelegramWebhookOptions`: explicit credentials, target, fetch, and timeout inputs.
  * - `configureTelegramWebhook`: sets and verifies the exact Osinara webhook without dropping updates.
  */
+import { isIP } from "node:net";
+
+import { TELEGRAM_ALLOWED_UPDATES } from "../../agent/lib/telegram-webhook/allowed-updates.js";
+import { telegramWebhookUrl } from "../../agent/lib/telegram-webhook/webhook-target.js";
 import { InstallerError } from "./errors.js";
 
 const TELEGRAM_API_ORIGIN = "https://api.telegram.org";
-const TELEGRAM_WEBHOOK_PATH = "/eve/v1/telegram";
 const MAX_TIMEOUT_MS = 120_000;
 const BOT_TOKEN_PATTERN = /^[0-9]+:[A-Za-z0-9_-]+$/u;
 const HOSTNAME_PATTERN = /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
@@ -17,6 +20,12 @@ const SECRET_PATTERN = /^[A-Za-z0-9_-]{1,256}$/u;
 export interface ConfigureTelegramWebhookOptions {
   readonly fetch: typeof globalThis.fetch;
   readonly hostname: string;
+  /**
+   * `TELEGRAM_WEBHOOK_IP_ADDRESS`: the only way an installation fixes the IP Telegram delivers to.
+   * Null leaves the field out, so Telegram resolves the host through DNS; the running agent sends the
+   * same setting when it re-registers the update list (`agent/lib/telegram-webhook/`).
+   */
+  readonly ipAddress?: string | null;
   readonly secretToken: string;
   readonly timeoutMs: number;
   readonly token: string;
@@ -65,6 +74,7 @@ export async function configureTelegramWebhook(
     || !Number.isInteger(options.timeoutMs)
     || options.timeoutMs < 1
     || options.timeoutMs > MAX_TIMEOUT_MS
+    || (options.ipAddress != null && isIP(options.ipAddress) === 0)
   ) {
     throw new InstallerError(
       "OSINARA_INSTALL_TELEGRAM_WEBHOOK_INPUT_INVALID",
@@ -72,9 +82,12 @@ export async function configureTelegramWebhook(
     );
   }
 
-  const targetUrl = `https://${options.hostname}${TELEGRAM_WEBHOOK_PATH}`;
+  // The running agent expects exactly this URL from `PUBLIC_BASE_URL` (`https://<hostname>`).
+  const targetUrl = telegramWebhookUrl(`https://${options.hostname}`);
   const registered = await telegramJson(options, "setWebhook", {
-    allowed_updates: ["message", "callback_query", "message_reaction"],
+    // The running agent compares the same list every ten minutes (`webhook-subscription.ts`).
+    allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
+    ...(options.ipAddress == null ? {} : { ip_address: options.ipAddress }),
     secret_token: options.secretToken,
     url: targetUrl,
   });

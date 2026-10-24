@@ -1,7 +1,11 @@
 import { isObject } from "#shared/guards.js";
 import { parseJsonObject } from "#shared/json.js";
 import { parseTelegramChatType } from "#public/channels/telegram/inbound.js";
-import { telegramRetryAfterSeconds, telegramSendPacer } from "./osinara-telegram-send-pacing.js";
+import {
+  reportTelegramDeliveryFailure,
+  telegramRetryAfterSeconds,
+  telegramSendPacer,
+} from "./osinara-telegram-send-pacing.js";
 const TELEGRAM_MESSAGE_TEXT_MAX_LENGTH = 4096;
 // Osinara: Node's fetch waits five minutes for response headers by default, so a stuck Telegram
 // call held the turn that long. Every Bot API attempt gets its own deadline (the retry after a 429
@@ -34,7 +38,8 @@ async function callTelegramApi(e) {
   // Osinara: every sending method waits for its slot under Telegram's limits, and a 429 pauses
   // all calls for the time Telegram names before this one is tried once more.
   await telegramSendPacer.acquire(e.method, e.body);
-  let a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) }),
+  let startedAt = Date.now(),
+    a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) }),
     s = await parseResponseBody(a);
   if (a.status === 429) {
     let t = telegramRetryAfterSeconds(s);
@@ -43,10 +48,15 @@ async function callTelegramApi(e) {
     if (t !== null && telegramSendPacer.retryAfter(t)) {
       await telegramSendPacer.waitForPause();
       await telegramSendPacer.acquire(e.method, e.body);
+      startedAt = Date.now();
       a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) });
       s = await parseResponseBody(a);
     }
   }
+  // Osinara: the final answer of a failed send to a chat goes to the application's reachability
+  // observer (a blocked bot, a removed group), with the start of the answered attempt; the
+  // answer waits for the observer at most 500 ms and is never replaced by it.
+  await reportTelegramDeliveryFailure(e.method, e.body, { body: s, ok: a.ok, status: a.status }, startedAt);
   return { body: s, ok: a.ok, status: a.status };
 }
 async function sendTelegramMessage(e) {

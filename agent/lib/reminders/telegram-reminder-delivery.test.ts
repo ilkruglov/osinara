@@ -4,11 +4,18 @@
  * Constructs covered:
  * - Deterministic delayed text and forum-topic targeting.
  * - Provider rejection and timeout errors propagate to the durable dispatcher.
+ * - A chat Telegram calls gone fails with the stable unreachable code and reason, without the
+ *   reminder text in the log; a chat already marked is skipped without a request.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ClaimedReminder } from "./reminder-dispatch-repository.js";
-import { deliverTelegramReminder } from "./telegram-reminder-delivery.js";
+import { deliverReachableTelegramReminder, deliverTelegramReminder } from "./telegram-reminder-delivery.js";
+
+const reachability = vi.hoisted(() => ({ unreachableReason: vi.fn() }));
+vi.mock("../telegram-reachability/reachability-repository.js", () => ({
+  telegramReachabilityRepository: reachability,
+}));
 
 const delayedJob: ClaimedReminder = {
   familyId: "00000000-0000-4000-8000-000000000010",
@@ -75,5 +82,38 @@ describe("deliverTelegramReminder", () => {
     );
 
     await expect(deliverTelegramReminder(delayedJob)).rejects.toBeDefined();
+  });
+
+  it("names a bot removed from the group with the stable unreachable code, without the reminder text in the log", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "telegram-bot-secret");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      description: "Forbidden: bot was kicked from the supergroup chat", error_code: 403, ok: false,
+    }), { status: 403 })));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(deliverTelegramReminder(delayedJob)).rejects.toMatchObject({
+      chatId: "-1001", code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "kicked",
+    });
+    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toMatchObject({ code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE" });
+    expect(JSON.stringify(errors.mock.calls)).not.toContain("Собрать документы");
+    errors.mockRestore();
+  });
+
+  it("skips a chat already marked unreachable without calling Telegram", async () => {
+    vi.stubEnv("TELEGRAM_BOT_TOKEN", "telegram-bot-secret");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    reachability.unreachableReason.mockResolvedValueOnce("kicked");
+
+    await expect(deliverReachableTelegramReminder(delayedJob)).rejects.toMatchObject({
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "kicked",
+    });
+    expect(reachability.unreachableReason).toHaveBeenCalledWith("-1001");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
+      chatId: "-1001", code: "AGENT_TELEGRAM_PROACTIVE_DELIVERY_SKIPPED", kind: "reminder", reason: "kicked",
+    });
+    warn.mockRestore();
   });
 });

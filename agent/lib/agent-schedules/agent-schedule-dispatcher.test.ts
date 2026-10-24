@@ -4,6 +4,7 @@
  * Constructs covered:
  * - `createAgentScheduleDispatcher`: hands an isolated target to Eve's native channel source.
  * - A failed claimed job, including failed session cleanup, cannot block the remaining batch.
+ * - A run whose chat is marked unreachable fails with the stable code before a session or a model call.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -35,6 +36,28 @@ const job: ClaimedAgentSchedule = {
 };
 
 describe("agent schedule dispatcher", () => {
+  it("fails a run whose chat is unreachable before preparing a session or calling Eve", async () => {
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue([job]),
+      failClaim: vi.fn(),
+      markDispatchStarted: vi.fn(),
+      markRunning: vi.fn(),
+    };
+    const prepareSession = vi.fn();
+    const to = vi.fn();
+    const unreachableRecipient = vi.fn().mockResolvedValue("blocked");
+
+    await createAgentScheduleDispatcher({
+      discardSession: vi.fn(), prepareHistory: vi.fn(), prepareSession, repository, to, unreachableRecipient,
+    })(new Date("2026-07-17T06:00:00.000Z"));
+
+    expect(unreachableRecipient).toHaveBeenCalledWith(job);
+    expect(repository.failClaim).toHaveBeenCalledWith(job, "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE");
+    expect(prepareSession).not.toHaveBeenCalled();
+    expect(repository.markDispatchStarted).not.toHaveBeenCalled();
+    expect(to).not.toHaveBeenCalled();
+  });
+
   it("starts a scheduled Telegram session with isolated run auth", async () => {
     const repository = {
       claimDue: vi.fn().mockResolvedValue([job]),

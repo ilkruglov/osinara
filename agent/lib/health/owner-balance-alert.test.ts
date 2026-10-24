@@ -5,10 +5,15 @@
  * - Nothing is sent while the balance is healthy or unknown.
  * - A low or blocked balance is sent once per family per UTC day through the claim.
  * - A definite Telegram refusal releases the claim; any other failure abandons it with a code.
+ * - An owner chat Telegram calls unreachable is skipped before the claim, logged at most once an hour
+ *   and never as a failure; a chat marked during the send releases the claim silently.
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { MemoryReviewOwnerAlertTransportError } from "../memory-review/memory-review-owner-alert-transport.js";
+import {
+  MemoryReviewOwnerAlertTransportError,
+  TelegramRecipientUnreachableError,
+} from "../memory-review/memory-review-owner-alert-transport.js";
 import { createOwnerBalanceAlertDispatcher } from "./owner-balance-alert.js";
 
 function dependencies(overrides: Partial<Parameters<typeof createOwnerBalanceAlertDispatcher>[0]> = {}) {
@@ -55,6 +60,38 @@ describe("owner balance alert", () => {
     await createOwnerBalanceAlertDispatcher(unclear)(new Date("2026-09-26T03:00:00.000Z"));
     expect(unclear.abandon).toHaveBeenCalledWith("family-1", "2026-09-26", "AGENT_OWNER_BALANCE_ALERT_AMBIGUOUS");
     expect(unclear.release).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("skips an unreachable owner before the claim and logs that at most once an hour, never as a failure", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const unreachable = vi.fn().mockResolvedValue("blocked");
+    const deps = { ...dependencies(), quietUntil: new Map<string, number>(), unreachable };
+
+    await createOwnerBalanceAlertDispatcher(deps)(new Date("2026-09-26T03:00:00.000Z"));
+    await createOwnerBalanceAlertDispatcher(deps)(new Date("2026-09-26T03:10:00.000Z"));
+    expect(unreachable).toHaveBeenCalledWith("101");
+    expect(deps.claim).not.toHaveBeenCalled();
+    expect(deps.deliver).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
+      code: "AGENT_OWNER_BALANCE_ALERT_DEFERRED", familyId: "family-1", reason: "blocked",
+    });
+
+    await createOwnerBalanceAlertDispatcher(deps)(new Date("2026-09-26T04:01:00.000Z"));
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(error).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("releases the claim without a failure line when the chat is marked during the send", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deps = dependencies({ deliver: vi.fn().mockRejectedValue(new TelegramRecipientUnreachableError("101", "blocked")) });
+    await createOwnerBalanceAlertDispatcher(deps)(new Date("2026-09-26T03:00:00.000Z"));
+    expect(deps.release).toHaveBeenCalledExactlyOnceWith("family-1", "2026-09-26");
+    expect(deps.abandon).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 });

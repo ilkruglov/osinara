@@ -4,6 +4,10 @@
  * Exports:
  * - `createSoftwareUpdateChecker`: dependency-injected latest-release proposal workflow.
  * - `runSoftwareUpdateCheck`: production six-hour schedule operation.
+ *
+ * A proposal is started by the bot, so an owner chat Telegram already calls unreachable (bot blocked,
+ * account deleted) gets no proposal row at all: a created row is deduplicated by version, so a skipped
+ * one would never be offered again. The next check after the owner writes again proposes it as usual.
  */
 import { createHash, randomBytes } from "node:crypto";
 
@@ -14,6 +18,8 @@ import {
 } from "./github-release-client.js";
 import { deliverSoftwareUpdateProposal } from "./proposal-delivery.js";
 import { softwareUpdateRepository } from "./repository.js";
+import type { TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
+import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
 import type {
   DeliverSoftwareUpdateProposalInput,
   SoftwareUpdateRepository,
@@ -25,12 +31,15 @@ interface SoftwareUpdateCheckerDependencies {
   deliverProposal(input: DeliverSoftwareUpdateProposalInput): Promise<void>;
   releaseClient: GitHubSoftwareReleaseClient;
   repository: Pick<SoftwareUpdateRepository, "findCurrentOwner" | "prepareProposal">;
+  /** The reason the owner chat must be skipped; absent in tests that do not need it. */
+  unreachableOwner?(chatId: string): Promise<TelegramRecipientUnreachableReason | null>;
 }
 
 export type SoftwareUpdateCheckResult =
   | "duplicate"
   | "no_owner"
   | "no_update"
+  | "owner_unreachable"
   | "proposed";
 
 export function createSoftwareUpdateChecker(dependencies: SoftwareUpdateCheckerDependencies) {
@@ -39,6 +48,8 @@ export function createSoftwareUpdateChecker(dependencies: SoftwareUpdateCheckerD
     if (!release) return "no_update";
     const owner = await dependencies.repository.findCurrentOwner();
     if (!owner) return "no_owner";
+    // Checked before the durable row: a skipped proposal must stay offerable at the next check.
+    if (await dependencies.unreachableOwner?.(owner.telegramUserId) != null) return "owner_unreachable";
 
     // Only the hash crosses the durable boundary; the random token exists until initial delivery.
     const callbackToken = dependencies.createCallbackToken();
@@ -64,4 +75,5 @@ export const runSoftwareUpdateCheck = createSoftwareUpdateChecker({
   deliverProposal: deliverSoftwareUpdateProposal,
   releaseClient: githubSoftwareReleaseClient,
   repository: softwareUpdateRepository,
+  unreachableOwner: (chatId) => unreachableTelegramRecipient(chatId, "software_update"),
 });

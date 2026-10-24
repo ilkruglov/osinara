@@ -14,4 +14,9 @@ export interface TelegramSendPacer {
 export declare function createTelegramSendPacer(options?: TelegramSendPacerOptions): TelegramSendPacer;
 export declare function telegramSendPacerSettings(env?: Readonly<Record<string, string | undefined>>): Required<Pick<TelegramSendPacerOptions, "globalPerSecond" | "groupPerMinute" | "privateGapMs">>;
 export declare function telegramRetryAfterSeconds(body: unknown): number | null;
+export declare function reportTelegramDeliveryFailure(method: string, requestBody: unknown, answer: {
+    readonly body: unknown;
+    readonly ok: boolean;
+    readonly status: number;
+}, startedAt: number, timeoutMs?: number): Promise<void>;
 export declare const telegramSendPacer: TelegramSendPacer;

@@ -6,6 +6,8 @@
  *   counts and the turn quality line, which joins the failures when its thresholds are crossed.
  * - Nothing is sent before the digest hour; one send per family per day through the claim.
  * - A failed delivery releases the claim and does not stop other families.
+ * - Telegram's webhook view: piled-up updates, a fresh delivery error, a missing webhook or a failed
+ *   check are failures, read once per pass; an unreachable owner chat keeps the day's claim.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +17,8 @@ import {
   formatOwnerHealthDigest,
 } from "./owner-health-digest.js";
 import type { OwnerHealthReport } from "./owner-health-digest-repository.js";
+import type { TelegramWebhookHealth } from "./telegram-webhook-health.js";
+import { TelegramRecipientUnreachableError } from "../memory-review/memory-review-owner-alert-transport.js";
 import { NO_SCHEDULE_RUN_FAILURES } from "./schedule-run-failures.js";
 
 const quiet: OwnerHealthReport = {
@@ -33,6 +37,35 @@ const quiet: OwnerHealthReport = {
 };
 
 describe("formatOwnerHealthDigest", () => {
+  const webhook = (pendingUpdateCount: number, lastErrorAt: string | null, lastErrorMessage: string | null = null) => ({
+    lastErrorAt: lastErrorAt === null ? null : new Date(lastErrorAt),
+    lastErrorMessage,
+    pendingUpdateCount,
+    status: "read" as const,
+    url: "https://bot.example.com/eve/v1/telegram",
+  });
+  const withWebhook = (health: TelegramWebhookHealth) =>
+    formatOwnerHealthDigest(quiet, { balance: null, previousBalanceUsd: null, storage: null, webhook: health });
+
+  it("names a webhook that piles up updates or failed within the day, and stays quiet about a healthy one", () => {
+    expect(withWebhook(webhook(3, "2026-09-07T05:00:00.000Z", "old"))).toContain("сбоев нет");
+
+    const piled = withWebhook(webhook(153, null));
+    expect(piled).not.toContain("сбоев нет");
+    expect(piled).toContain("Вебхук Telegram: ожидающих апдейтов 153.");
+
+    const failing = withWebhook(webhook(4, "2026-09-09T02:00:00.000Z", `Wrong response from the webhook: 502 Bad Gateway${"!".repeat(300)}`));
+    expect(failing).not.toContain("сбоев нет");
+    expect(failing).toContain("Вебхук Telegram: ожидающих апдейтов 4, последняя ошибка доставки 9 сентября в 05:00: Wrong response from the webhook: 502 Bad Gateway");
+    const line = failing.split("\n").find((item) => item.startsWith("Вебхук"))!;
+    expect(line.length).toBeLessThan(300);
+  });
+
+  it("reports a webhook that could not be checked, or is not set, as a failure", () => {
+    expect(withWebhook({ status: "unreadable" })).toContain("Вебхук Telegram: не удалось проверить вебхук.");
+    expect(withWebhook({ ...webhook(0, null), url: "" })).toContain("Вебхук Telegram не установлен");
+  });
+
   it("puts a spent balance among the failures and a healthy one next to the memory counts", () => {
     const warning = formatOwnerHealthDigest(quiet, { balance: { available: false, totalUsd: -0.04 }, previousBalanceUsd: null, storage: null });
     expect(warning.split("\n")[0]).toBe("Сводка за сутки.");
@@ -153,6 +186,31 @@ describe("createOwnerHealthDigestDispatcher", () => {
     expect(deps.balance).toHaveBeenCalledTimes(1);
     expect(deps.storage).toHaveBeenCalledTimes(1);
     expect(deps.previousBalance).toHaveBeenCalledWith("family-1", "2026-09-26");
+  });
+
+  it("reads the webhook once per pass and puts it into the digest", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const webhook = vi.fn().mockResolvedValue({ status: "unreadable" });
+    const deps = dependencies({ webhook });
+    await expect(createOwnerHealthDigestDispatcher(deps)(new Date("2026-09-09T06:10:00.000Z"))).resolves.toBe(2);
+    expect(webhook).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(deps.deliver).mock.calls[0]?.[0]?.text)).toContain("не удалось проверить вебхук");
+  });
+
+  it("keeps the day's claim for an owner chat Telegram calls unreachable", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deps = dependencies({
+      deliver: vi.fn().mockRejectedValueOnce(new TelegramRecipientUnreachableError("101", "blocked")).mockResolvedValueOnce(undefined),
+    });
+
+    await expect(createOwnerHealthDigestDispatcher(deps)(new Date("2026-09-09T06:10:00.000Z"))).resolves.toBe(1);
+
+    expect(deps.release).not.toHaveBeenCalled();
+    expect(deps.complete).toHaveBeenCalledExactlyOnceWith("family-2", "2026-09-09", expect.any(Date), expect.any(Number), null);
+    expect(JSON.parse(String(error.mock.calls[0]?.[0]))).toMatchObject({
+      code: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", familyId: "family-1",
+    });
   });
 
   it("releases the claim when Telegram fails and goes on to the next family", async () => {

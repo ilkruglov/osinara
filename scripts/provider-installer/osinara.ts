@@ -27,6 +27,8 @@ import { createProductionOperationalCommands } from "./production-operational-co
 import { createProviderAdapters } from "./provider-adapters.ts";
 import { createReleaseAssetsResolver } from "./release-assets.ts";
 import { createTerminalPrompts } from "./terminal-prompts.ts";
+import { isAppError } from "../../agent/lib/app-error.js";
+import { telegramWebhookIpAddress } from "../../agent/lib/telegram-webhook/webhook-target.js";
 
 const PROVIDER_CATALOG_TIMEOUT_MS = 10_000;
 const PROVIDER_SMOKE_TIMEOUT_MS = 30_000;
@@ -37,6 +39,16 @@ declare const OSINARA_INSTALL_RELEASE_VERSION: string;
 const install: CliOperation = async (args) => {
   if (args.length !== 0) {
     throw new InstallerError("OSINARA_CLI_ARGUMENT_INVALID", "Команда install не принимает аргументы");
+  }
+  // Optional and explicit: our installers never fix the webhook IP unless this setting asks for it.
+  let webhookIpAddress: string | null;
+  try {
+    webhookIpAddress = telegramWebhookIpAddress(process.env.TELEGRAM_WEBHOOK_IP_ADDRESS);
+  } catch (error) {
+    throw new InstallerError(
+      "OSINARA_INSTALL_TELEGRAM_WEBHOOK_INPUT_INVALID",
+      isAppError(error) ? error.message : "TELEGRAM_WEBHOOK_IP_ADDRESS задан некорректно",
+    );
   }
   const prompts = createTerminalPrompts();
   const providerAdapters = createProviderAdapters({
@@ -56,6 +68,7 @@ const install: CliOperation = async (args) => {
       now: () => new Date(),
       prompts,
       publicIpv4Sources: createPublicIpv4Sources(),
+      telegramWebhookIpAddress: webhookIpAddress,
       resolveIpv4: (hostname) => resolve4(hostname),
       resolveReleaseAssets: createReleaseAssetsResolver({
         archiveSha256: OSINARA_INSTALL_ARCHIVE_SHA256,

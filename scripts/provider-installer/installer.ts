@@ -258,6 +258,7 @@ export async function runInteractiveInstaller(
       reasoningSelection,
       telegramBotToken,
       telegramBotUsername: telegramBot.username,
+      telegramWebhookIpAddress: dependencies.telegramWebhookIpAddress ?? null,
     }),
   );
   const ownerBootstrap = buildOwnerBootstrapOutput({

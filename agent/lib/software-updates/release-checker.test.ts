@@ -5,6 +5,7 @@
  * - No owner means no durable proposal and no Telegram delivery.
  * - A unique target version creates and delivers exactly one proposal.
  * - Existing target versions suppress all repeated prompts.
+ * - An owner chat marked unreachable creates no proposal row, so the next check can still propose.
  */
 import { createHash } from "node:crypto";
 
@@ -91,5 +92,20 @@ describe("software update checker", () => {
     await expect(check()).resolves.toBe("duplicate");
 
     expect(values.deliverProposal).not.toHaveBeenCalled();
+  });
+
+  it("creates no proposal for an unreachable owner chat, and proposes once the owner is back", async () => {
+    const values = dependencies();
+    const unreachableOwner = vi.fn().mockResolvedValueOnce("blocked").mockResolvedValueOnce(null);
+    const check = createSoftwareUpdateChecker({ ...values, unreachableOwner });
+
+    await expect(check()).resolves.toBe("owner_unreachable");
+    expect(unreachableOwner).toHaveBeenCalledWith("101");
+    expect(values.repository.prepareProposal).not.toHaveBeenCalled();
+    expect(values.deliverProposal).not.toHaveBeenCalled();
+
+    await expect(check()).resolves.toBe("proposed");
+    expect(values.repository.prepareProposal).toHaveBeenCalledTimes(1);
+    expect(values.deliverProposal).toHaveBeenCalledTimes(1);
   });
 });
