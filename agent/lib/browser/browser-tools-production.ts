@@ -8,23 +8,19 @@
  */
 import type { SessionContext } from "eve/context";
 
-import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
 import { AppError } from "../app-error.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
-import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { sandboxSessionId } from "../sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { inspectWorkspaceImage } from "../workspaces/workspace-image-inspection.js";
-import { createSandboxBrowserDriver } from "./browser-driver.js";
 import { createBrowserTools } from "./browser-tools.js";
 import { loadFormProfile, requireFormProfileAccess, saveFormProfileField } from "./form-profile-repository.js";
 import { lookRepository } from "./look-repository.js";
-
-const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
+import { productionBrowserDriver } from "./production-browser-driver.js";
 
 export const browserTools = createBrowserTools({
   approvalEvidence: (ctx, input) => requireToolApprovalEvidence(ctx, "browser_confirm", input),
-  driver: (ctx, sandbox) => createSandboxBrowserDriver({ runner, sandboxSessionId: sandbox, signal: ctx.abortSignal }),
+  driver: (ctx, sandbox) => productionBrowserDriver({ sandboxSessionId: sandbox, signal: ctx.abortSignal }),
   loadProfile: loadFormProfile,
   log: (event) => console.info(JSON.stringify(event)),
   looks: lookRepository,

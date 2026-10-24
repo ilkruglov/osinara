@@ -90,7 +90,8 @@ export function wrapModelFacingTool(
       try {
         output = await definition.execute(input, ctx);
       } catch (error) {
-        if (turn !== null && fingerprint !== null) toolRepeatGuard.recordFailure(turn, fingerprint);
+        // A restarted browser is a new browser: the same call may succeed once more.
+        if (turn !== null && fingerprint !== null) toolRepeatGuard.recordFailure(turn, fingerprint, { freeRetry: error instanceof ModelFacingError && error.code === "AGENT_BROWSER_RESTARTED" });
         throw normalizeModelFacingError(error, { toolName });
       }
       if (turn !== null && fingerprint !== null) toolRepeatGuard.recordSuccess(turn, fingerprint);

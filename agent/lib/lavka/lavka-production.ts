@@ -7,18 +7,14 @@
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
 
-import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
-import { createSandboxBrowserDriver } from "../browser/browser-driver.js";
-import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
+import { productionBrowserDriver } from "../browser/production-browser-driver.js";
 import { sandboxSessionId } from "../sessions/session-context.js";
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { createLavkaClient, lavkaAddressKey, type LavkaClient } from "./lavka-client.js";
 import { lavkaDeliveryPointRepository } from "./lavka-delivery-point-repository.js";
 
-const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
-
 export function lavkaClientFor(ctx: ToolContext): LavkaClient {
-  return createLavkaClient({ driver: createSandboxBrowserDriver({ runner, sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
+  return createLavkaClient({ driver: productionBrowserDriver({ sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
 }
 
 /** The requester's delivery point for the confirmation window: its label and fingerprint; null when none is chosen. */

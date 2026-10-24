@@ -38,7 +38,8 @@ import type { WorkspaceAuthorization } from "../workspaces/workspace-repository.
 import { requireWorkspaceAuthorization } from "../workspaces/workspace-context.js";
 import { type FormProfile, type ProfileField, resolveFieldValue, upsertProfileField } from "./form-profile.js";
 import type { FormProfileOwner } from "./form-profile-repository.js";
-import type { BrowserDriver } from "./browser-driver.js";
+import { browserRestartedError, isBrowserRestarted, type BrowserDriver } from "./browser-driver.js";
+import { browserGeneration, isLookStale, recordLookGeneration } from "./browser-restarts.js";
 import { isMemoryReviewSession } from "../memory-review/memory-review-session.js";
 import { type ActAction, type EnteredField, gateDecision, isSearchField } from "./gate.js";
 import type { BrowserLook, PendingClick, VisionView } from "./look-repository.js";
@@ -167,18 +168,27 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     const owner = { familyId: auth.familyId, groupId: auth.groupId, userId: auth.userId };
     await deps.requireAccess(owner);
     const sandbox = deps.sandboxSessionId(ctx);
+    // The production driver forgets the sandbox's saved look itself when it restarts the browser.
     return { auth, ctx, driver: deps.driver(ctx, sandbox), owner, sandbox, scope: scopeOf(auth) };
+  }
+
+  /** The saved look, unless a browser restart closed its page since it was taken. */
+  async function storedLook(b: Bound): Promise<BrowserLook | null> {
+    return isLookStale(b.sandbox) ? null : await deps.looks.get(b.sandbox, b.auth.familyId);
   }
 
   let counter = 0;
   async function look(b: Bound, question?: string) {
     const epoch = `${deps.now().toString(36)}-${(counter += 1).toString(36)}`;
+    const generation = browserGeneration(b.sandbox);
     const view = parsePageView(await b.driver.eval(markScript(epoch)));
     const relativePath = `shots/look-${epoch}.png`;
     let screenshotPath: string | null = relativePath;
     try {
       await b.driver.screenshot(`/workspace/${b.scope}/${relativePath}`);
     } catch (error) {
+      // The page under the marks is gone with a restarted browser; reporting it would be a false look.
+      if (isBrowserRestarted(error)) throw error;
       screenshotPath = null;
       deps.log({ code: "AGENT_BROWSER_SCREENSHOT_FAILED", reason: error instanceof Error ? error.message.slice(0, 800) : String(error) });
     }
@@ -193,13 +203,18 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     }
     // A cancelled turn keeps no look: the next turn starts from what it sees, not from this one.
     b.ctx.abortSignal.throwIfAborted();
+    // Another tool restarted the browser while this look waited for vision: its page is closed.
+    if (browserGeneration(b.sandbox) !== generation) throw browserRestartedError("look");
     const saved = await deps.looks.saveLook({ familyId: b.auth.familyId, sandboxSessionId: b.sandbox, screenshotPath, userId: b.owner.userId, view, viewHash: viewHash(view), vision });
+    recordLookGeneration(b.sandbox, generation);
+    // A restart while the row was being written: the row stays, but every reader ignores it.
+    if (browserGeneration(b.sandbox) !== generation) throw browserRestartedError("look");
     deps.log({ code: "AGENT_BROWSER_LOOK", elements: view.elements.length, epoch, host: hostOf(view.url), steps: saved.steps, vision: vision !== null });
     return present(saved, view);
   }
 
   async function currentLook(b: Bound, epoch: string): Promise<{ look: BrowserLook; view: PageView }> {
-    const look = await deps.looks.get(b.sandbox, b.auth.familyId);
+    const look = await storedLook(b);
     if (!look) throw stale("Страница ещё не просмотрена");
     if (look.userId !== b.owner.userId) throw forbidden("Этот просмотр сделал другой участник: посмотрите страницу сами через browser_look");
     if (look.epoch !== epoch) throw stale(`Номера эпохи ${epoch} устарели, текущая ${look.epoch}`);
@@ -413,7 +428,7 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
       return await serialized(sandboxKey(ctx), async () => {
         const b = await bind(ctx);
         // The page may show what another member typed: only the one whose look it is reads it.
-        const current = await deps.looks.get(b.sandbox, b.auth.familyId);
+        const current = await storedLook(b);
         if (current !== null && current.userId !== b.owner.userId) throw forbidden("Страницу открыл другой участник: посмотрите её сами через browser_look");
         const text = (await b.driver.eval(readTextScript())).replace(/\s+/gu, " ").trim();
         return { text: text.slice(0, READ_MAX_CHARACTERS), truncated: text.length > READ_MAX_CHARACTERS, url: await b.driver.url() };
@@ -436,7 +451,7 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     async execute(input, ctx) {
       return await serialized(sandboxKey(ctx), async () => {
         const b = await bind(ctx);
-        const last = await deps.looks.get(b.sandbox, b.auth.familyId);
+        const last = await storedLook(b);
         if (input.action === "status") {
           return last === null ? { status: "idle" } : { entered: last.entered.map((e) => e.label), epoch: last.epoch, pending: last.pending?.element.text ?? null, status: "active", steps: last.steps, url: last.url };
         }

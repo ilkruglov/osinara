@@ -71,5 +71,14 @@ describeWithDatabase("lookRepository", () => {
     expect(await repo.get(sandbox, other.rows[0]!.id)).toBeNull();
     await repo.reset(sandbox, familyId);
     expect(await repo.get(sandbox, familyId)).toBeNull();
+
+    // A restarted browser closes the page: the sandbox's look goes, another sandbox's stays.
+    await save("e6", "https://dikidi.net/ru/2");
+    const elsewhere = `${sandbox}-other`;
+    await repo.saveLook({ familyId, sandboxSessionId: elsewhere, screenshotPath: null, userId, view: view("e7", "https://dikidi.net/ru/3"), viewHash: viewHash(view("e7", "https://dikidi.net/ru/3")), vision: null });
+    await repo.resetSandbox(sandbox);
+    expect(await repo.get(sandbox, familyId)).toBeNull();
+    expect(await repo.get(elsewhere, familyId)).toMatchObject({ epoch: "e7" });
+    await repo.resetSandbox(elsewhere);
   });
 });

@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { ModelFacingError } from "../model-facing-error.js";
 import { createYandexTaxiClient } from "./yandex-taxi-client.js";
 import { yandexTaxiPointKey, yandexTaxiPriceValue } from "./yandex-taxi-model.js";
 import { fakeTaxiTab, fromPoint, launchOk, PATHS, pricedRoute, toPoint } from "./yandex-taxi.test-fixtures.js";
@@ -35,6 +36,13 @@ describe("createYandexTaxiClient", () => {
     redirected.driver.open.mockImplementation(async () => {});
     await expect(client(redirected).auth()).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_TAB_UNAVAILABLE" });
     expect(redirected.driver.eval).not.toHaveBeenCalled();
+  });
+
+  it("reports a browser restarted while checking the tab, not a tab elsewhere", async () => {
+    const tab = fakeTaxiTab({ [PATHS.launch]: launchOk() });
+    tab.driver.url.mockRejectedValueOnce(new ModelFacingError({ category: "operation", code: "AGENT_BROWSER_RESTARTED", correction: "", reason: "", retryable: false, sideEffectStatus: "unknown" }));
+    await expect(client(tab).auth()).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(tab.driver.eval).not.toHaveBeenCalled();
   });
 
   it("reports the login state and lists only orders that are still going on", async () => {

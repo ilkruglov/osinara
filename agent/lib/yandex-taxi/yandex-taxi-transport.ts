@@ -18,7 +18,7 @@
  *   text, addresses or names.
  */
 import { AppError } from "../app-error.js";
-import type { BrowserDriver } from "../browser/browser-driver.js";
+import { isBrowserRestarted, type BrowserDriver } from "../browser/browser-driver.js";
 import { YANDEX_TAXI_HOST, YANDEX_TAXI_ORIGIN, YANDEX_TAXI_WORK_PATH, type YandexTaxiEndpoint } from "./yandex-taxi-config.js";
 import type { YandexTaxiLaunchOrder } from "./yandex-taxi-model.js";
 import { yandexTaxiPageScript, type YandexTaxiPageRequest, type YandexTaxiPageResult } from "./yandex-taxi-page-script.js";
@@ -86,7 +86,14 @@ export function yandexTaxiSiteRefusal(endpoint: YandexTaxiEndpoint, result: Yand
 
 export function createYandexTaxiTransport(driver: YandexTaxiDriver) {
   async function location(): Promise<{ host: string; path: string }> {
-    try { const url = new URL(await driver.url()); return { host: url.hostname, path: url.pathname }; } catch { return { host: "", path: "" }; }
+    try {
+      const url = new URL(await driver.url());
+      return { host: url.hostname, path: url.pathname };
+    } catch (error) {
+      // A restarted browser is the error the person and the repeat guard need, not "another page".
+      if (isBrowserRestarted(error)) throw error;
+      return { host: "", path: "" };
+    }
   }
 
   const atWorkPage = (at: { host: string; path: string }) => at.host === YANDEX_TAXI_HOST && at.path === YANDEX_TAXI_WORK_PATH;

@@ -7,14 +7,15 @@
  * - Big answers are projected in the page: a search keeps a dozen trimmed products, a cart keeps
  *   ids, versions, items and totals.
  * - 401/403 come back as `authorized: false`, a non-JSON body as `data: null`.
+ * - A request that fails comes back as `status: 0`, one that never settles too, by the deadline.
  */
 import { describe, expect, it, vi } from "vitest";
 
 import type { LavkaPageRequest } from "./lavka-page-script.js";
 import { lavkaPageScript } from "./lavka-page-script.js";
 
-function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; status: number }, searchLimit = 12, hostname = "lavka.yandex.ru") {
-  const fetch = vi.fn(async () => ({
+function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; status: number } | "hang" | "fail", searchLimit = 12, hostname = "lavka.yandex.ru") {
+  const fetch = vi.fn(async () => response === "hang" ? await new Promise<never>(() => {}) : response === "fail" ? Promise.reject(new TypeError("Failed to fetch")) : ({
     ok: response.status >= 200 && response.status < 300,
     status: response.status,
     text: async () => typeof response.body === "string" ? response.body : JSON.stringify(response.body),
@@ -26,6 +27,18 @@ function runInFakeTab(request: LavkaPageRequest, response: { body: unknown; stat
 }
 
 describe("lavkaPageScript", () => {
+  it("reports a failed request and one that never settles as status 0 instead of a rejected eval", async () => {
+    expect(await runInFakeTab({ endpoint: "cart", project: "cart" }, "fail").result).toEqual({ authorized: true, data: null, error: "network:TypeError", status: 0 });
+    vi.useFakeTimers();
+    try {
+      const pending = runInFakeTab({ body: {}, endpoint: "orderSubmit", project: "submit" }, "hang").result;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await pending).toEqual({ authorized: true, data: null, error: "timeout", status: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Review 28 September 2026: a parallel browser_open can move the tab between the URL check and the eval.
   it("sends nothing from a tab that is no longer on Lavka", async () => {
     const { fetch, result } = runInFakeTab({ body: { flat: "5" }, endpoint: "orderSubmit", project: "submit" }, { body: {}, status: 200 }, 12, "evil.example");

@@ -7,14 +7,10 @@
  */
 import type { ToolContext } from "eve/tools";
 
-import { SANDBOX_RUNNER_BASE_URL } from "../../config.js";
-import { createSandboxBrowserDriver } from "../browser/browser-driver.js";
-import { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
+import { productionBrowserDriver } from "../browser/production-browser-driver.js";
 import { sandboxSessionId } from "../sessions/session-context.js";
 import { createYandexTaxiClient, type YandexTaxiClient } from "./yandex-taxi-client.js";
 
-const runner = new SandboxRunnerClient(SANDBOX_RUNNER_BASE_URL);
-
 export function yandexTaxiClientFor(ctx: ToolContext): YandexTaxiClient {
-  return createYandexTaxiClient({ driver: createSandboxBrowserDriver({ runner, sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
+  return createYandexTaxiClient({ driver: productionBrowserDriver({ sandboxSessionId: sandboxSessionId(ctx), signal: ctx.abortSignal }) });
 }

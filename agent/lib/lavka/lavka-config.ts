@@ -36,4 +36,11 @@ export const LAVKA_PRICE_TOLERANCE_RUB = 0.01;
 export const LAVKA_PAYMENT_POLL_ATTEMPTS = 6;
 /** Response bytes the page hands back; projections keep real answers far below this. */
 export const LAVKA_PAGE_RESULT_MAX_BYTES = 200_000;
+/**
+ * The page's request may take this long, and the whole call settles by the deadline, well before the
+ * CLI bound of 40 s in browser-driver.ts: a page call that never settles must not leave the person's
+ * browser waiting (the same bound as the Yandex Go calls, 24 October 2026).
+ */
+export const LAVKA_FETCH_TIMEOUT_MS = 25_000;
+export const LAVKA_PAGE_DEADLINE_MS = 30_000;
 export const LAVKA_ITEM_MAX_QUANTITY = 50;

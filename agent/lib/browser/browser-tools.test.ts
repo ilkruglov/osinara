@@ -13,6 +13,8 @@ import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../app-error.js";
+import { ModelFacingError } from "../model-facing-error.js";
+import { noteBrowserRestart } from "./browser-restarts.js";
 import type { BrowserDriver } from "./browser-driver.js";
 import { type BrowserToolDependencies, createBrowserTools } from "./browser-tools.js";
 import type { BrowserLook, PendingClick } from "./look-repository.js";
@@ -43,7 +45,7 @@ const PAGE = { elements: [
   { n: 4, role: "frame", text: "yclients.ru", value: null, state: [] },
 ], stateHash: 222, textHash: 111, title: "Запись", url: "https://x.yclients.com/book?o=1" };
 
-function harness(options: { vision?: string | null; actOk?: boolean; urlAfter?: string;  emptyLooks?: number; revoked?: boolean; actReason?: string; profile?: Record<string, { domains: string[]; value: string }> } = {}) {
+function harness(options: { vision?: string | null; actOk?: boolean; urlAfter?: string;  emptyLooks?: number; revoked?: boolean; actReason?: string; profile?: Record<string, { domains: string[]; value: string }>; screenshotRestarts?: boolean; restartDuringVision?: boolean; restartDuringSave?: boolean; sandbox?: string } = {}) {
   const calls: string[][] = [];
   let looks: BrowserLook | null = null;
   let url = PAGE.url;
@@ -65,7 +67,10 @@ function harness(options: { vision?: string | null; actOk?: boolean; urlAfter?: 
     },
     open: async (u) => { calls.push(["open", u]); url = u; },
     press: async (k) => { calls.push(["press", k]); },
-    screenshot: async (p) => { await new Promise((resolve) => setTimeout(resolve, 5)); calls.push(["screenshot", p]); },
+    screenshot: async (p) => {
+      await new Promise((resolve) => setTimeout(resolve, 5)); calls.push(["screenshot", p]);
+      if (options.screenshotRestarts) throw new ModelFacingError({ category: "operation", code: "AGENT_BROWSER_RESTARTED", correction: "", reason: "", retryable: false, sideEffectStatus: "unknown" });
+    },
     scroll: async (d) => { calls.push(["scroll", d]); },
     settle: async () => { calls.push(["settle"]); },
     url: async () => url,
@@ -87,6 +92,7 @@ function harness(options: { vision?: string | null; actOk?: boolean; urlAfter?: 
       get: async () => looks,
       reset: async () => { looks = null; },
       saveLook: async (input) => {
+        if (options.restartDuringSave) noteBrowserRestart(input.sandboxSessionId);
         looks = { elements: input.view.elements, entered: looks?.userId === input.userId ? looks.entered : [], epoch: input.view.epoch, familyId: input.familyId, pending: null, sandboxSessionId: input.sandboxSessionId, screenshotPath: input.screenshotPath, stateHash: input.view.stateHash, steps: (looks?.steps ?? -1) + 1, textHash: input.view.textHash, title: input.view.title, updatedAt: new Date(), url: input.view.url, userId: input.userId, view: input.vision, viewHash: input.viewHash };
         return looks!;
       },
@@ -94,14 +100,46 @@ function harness(options: { vision?: string | null; actOk?: boolean; urlAfter?: 
     },
     now: () => 1_700_000_000_000,
     requireAccess: async () => { if (options.revoked) throw new AppError("AGENT_WORKSPACE_ACCESS_REVOKED", "Доступ был отозван"); },
-    sandboxSessionId: () => "sbx-1",
+    sandboxSessionId: () => options.sandbox ?? "sbx-1",
     saveProfileField: async (_a, _o, input) => { saved.push(input); return { domains: [...input.domains], value: input.value }; },
-    vision: async () => options.vision === undefined ? '{"screen":"выбор услуг","selected":["Мужская стрижка"],"blockers":[],"note":""}' : options.vision,
+    vision: async () => {
+      if (options.restartDuringVision) noteBrowserRestart(options.sandbox ?? "sbx-1");
+      return visionAnswer();
+    },
   };
+  function visionAnswer() { return options.vision === undefined ? '{"screen":"выбор услуг","selected":["Мужская стрижка"],"blockers":[],"note":""}' : options.vision; }
   return { approvalEvidence, calls, deps, saved, tools: createBrowserTools(deps), looks: () => looks, setState: (hash: number) => { stateNow = hash; }, setText: (hash: number) => { textNow = hash; } };
 }
 
 describe("browser tools", () => {
+  it("never serves a look older than the last restart: a save that raced it, a reset that failed", async () => {
+    // The restart lands while the row is written: the call reports it and the row is never read.
+    const racedSave = harness({ restartDuringSave: true, sandbox: "sbx-save" });
+    await expect(racedSave.tools.browser_open.execute({ url: "https://x.yclients.com/book?o=1" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(racedSave.looks()).not.toBeNull();
+    await expect(racedSave.tools.browser_act.execute({ action: { kind: "click", n: 2 }, epoch: racedSave.looks()!.epoch }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_STALE" });
+    // A good look, then a restart whose cleanup never ran: the old epoch no longer works.
+    const unreset = harness({ sandbox: "sbx-unreset" });
+    const out = await unreset.tools.browser_open.execute({ url: "https://x.yclients.com/book?o=1" }, context()) as { epoch: string };
+    noteBrowserRestart("sbx-unreset");
+    await expect(unreset.tools.browser_act.execute({ action: { kind: "click", n: 2 }, epoch: out.epoch }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_STALE" });
+    // A fresh look after the restart is served again.
+    const fresh = await unreset.tools.browser_look.execute({}, context()) as { epoch: string };
+    await expect(unreset.tools.browser_act.execute({ action: { kind: "click", n: 2 }, epoch: fresh.epoch }, context())).resolves.toBeDefined();
+  });
+
+  it("reports a browser restarted during a look instead of saving a look of the closed page", async () => {
+    const restarted = harness({ screenshotRestarts: true });
+    await expect(restarted.tools.browser_open.execute({ url: "https://x.yclients.com/book?o=1" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    await expect(restarted.tools.browser_look.execute({}, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(restarted.looks()).toBeNull();
+    expect(restarted.calls.some((call) => call[0] === "clear")).toBe(false);
+    // Another tool restarted the browser while the look waited for vision.
+    const raced = harness({ restartDuringVision: true, sandbox: "sbx-vision" });
+    await expect(raced.tools.browser_open.execute({ url: "https://x.yclients.com/book?o=1" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(raced.looks()).toBeNull();
+  });
+
   it("opens only http(s) outside blocked hosts and returns a numbered look with the vision view", async () => {
     const { calls, tools } = harness();
     await expect(tools.browser_open.execute({ url: "https://t.me/+7999" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_FORBIDDEN" });

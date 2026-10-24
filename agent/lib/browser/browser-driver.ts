@@ -4,6 +4,7 @@
  * Exports:
  * - `BrowserDriver`: open, eval, screenshot, text, key press, scroll, back, settle, url.
  * - `createSandboxBrowserDriver`: production driver over the sandbox runner.
+ * - `isBrowserRestarted`, `browserRestartedError`: the error of a browser the driver had to restart.
  *
  * Key constructs:
  * - Every call is one bounded `agent-browser` process in the session's browser companion container
@@ -15,10 +16,19 @@
  *   settles (analytics, long polling) cannot hold a step.
  * - A command that ran out of time is `AGENT_BROWSER_TIMEOUT`, whether the CLI bound (exit 124) or
  *   the runner reported it; `open` tolerates it because the page is usually there anyway.
+ * - A command that ran past the CLI or runner bound may mean the daemon itself hangs: a page that
+ *   never finishes loading (taxi.yandex.ru sent the tab to yandex.ru, then dzen.ru) left every later
+ *   command of the session waiting until the container was replaced (live run, 24 October 2026).
+ *   The driver then asks the daemon for the URL with a short bound; if that times out too, it kills
+ *   the daemon and Chrome in the companion. The next command starts a fresh daemon that restores the
+ *   saved logins (cookies, localStorage), and the command reports `AGENT_BROWSER_RESTARTED`: the open
+ *   page is gone, unlike a slow page. agent-browser's own timeout (exit 1) proves the daemon answers
+ *   and never leads to a restart.
  */
 import { randomUUID } from "node:crypto";
 
 import { ModelFacingError } from "../model-facing-error.js";
+import { noteBrowserRestart } from "./browser-restarts.js";
 import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { shellQuote } from "../sandbox-runner/sandbox-runner-contract.js";
 
@@ -41,9 +51,42 @@ const SETTLE_MS = 400;
 const DIAGNOSTIC_MAX_CHARACTERS = 400;
 /** `timeout(1)` exit status; the runner's marker is in `services/sandbox-runner/docker-sandbox-process.ts`. */
 const TIMEOUT_EXIT_CODE = 124;
+/** `timeout(1)` after KILL: the probe's own signal, or an uncooperative CLI at the kill-after boundary. */
+const KILLED_EXIT_CODE = 137;
 const RUNNER_TIMED_OUT = /AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT|time(d )?out/iu;
+const RUNNER_BOUND = /AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT/u;
+/** Long enough for a responsive daemon, short enough not to double a hung command's wait. */
+const PROBE_TIMEOUT_SECONDS = 10;
+const RECOVERY_RUNNER_TIMEOUT_MS = 20_000;
+/**
+ * Kills the companion's daemon (and any CLI waiting on it) and its Chrome; the daemon's socket and
+ * pid file go too, so the next command starts a fresh one. The bracketed patterns and the `?` glob
+ * keep this command's own text from matching itself: pkill -f also sees the shell running it.
+ */
+const BROWSER_RESET_COMMAND = [
+  "pkill -KILL -f '[a]gent-browser'",
+  "pkill -KILL -f '[c]hrome'",
+  "rm -f \"$HOME\"/.agent?browser/*.sock \"$HOME\"/.agent?browser/*.pid",
+  "exit 0",
+].join("; ");
+
+export const isBrowserRestarted = (error: unknown): boolean =>
+  error instanceof ModelFacingError && error.code === "AGENT_BROWSER_RESTARTED";
+
+export function browserRestartedError(name: string): ModelFacingError {
+  return new ModelFacingError({
+    category: "operation",
+    code: "AGENT_BROWSER_RESTARTED",
+    correction: "Откройте нужную страницу заново (browser_open) и посмотрите на неё; действие на странице вслепую не повторяйте.",
+    reason: `Браузер завис на команде ${name} и перезапущен: входы в сайты сохранены, открытая страница закрылась`,
+    retryable: false,
+    sideEffectStatus: "unknown",
+  });
+}
 
 export function createSandboxBrowserDriver(input: {
+  /** After a restart: forget what was known about the closed page (the saved look). */
+  onRestart?: () => Promise<void>;
   runner: Pick<SandboxRunnerClient, "run" | "writeFile">;
   sandboxSessionId: string;
   signal?: AbortSignal;
@@ -53,19 +96,40 @@ export function createSandboxBrowserDriver(input: {
     return `timeout --signal=TERM --kill-after=${CLI_KILL_AFTER_SECONDS}s ${CLI_TIMEOUT_SECONDS}s agent-browser ${[subcommand, ...rest.map(shellQuote)].join(" ")}`;
   };
 
+  // The browser companion of the session, never the container of the model's Bash: there the
+  // logged-in browser could be driven past the confirmation gate (security review, 5 October 2026).
+  const run = (command: string, timeoutMs: number) => input.runner.run(input.sandboxSessionId, { command, target: "browser", timeoutMs }, input.signal);
+  const ranPastBound = (result: { exitCode: number; stderr: string; stdout: string }) =>
+    result.exitCode === TIMEOUT_EXIT_CODE || result.exitCode === KILLED_EXIT_CODE || RUNNER_BOUND.test(`${result.stderr}\n${result.stdout}`);
+
+  /** After a command ran past its bound: true when the daemon was hung and has been killed. */
+  async function restartIfHung(name: string): Promise<boolean> {
+    try {
+      const probe = await run(`timeout --signal=KILL ${PROBE_TIMEOUT_SECONDS}s agent-browser get url`, RECOVERY_RUNNER_TIMEOUT_MS);
+      if (!ranPastBound(probe)) return false;
+      const reset = await run(BROWSER_RESET_COMMAND, RECOVERY_RUNNER_TIMEOUT_MS);
+      console.error(JSON.stringify({ code: "AGENT_BROWSER_DAEMON_RESET", command: name, exitCode: reset.exitCode }));
+      if (reset.exitCode !== 0) return false;
+      noteBrowserRestart(input.sandboxSessionId);
+      // Readers already ignore looks older than this restart; a failed cleanup is only logged.
+      await input.onRestart?.().catch(() => {
+        console.error(JSON.stringify({ code: "AGENT_BROWSER_LOOK_RESET_FAILED" }));
+      });
+      return true;
+    } catch {
+      // The original timeout is what the caller needs to hear; a failed recovery must not hide it.
+      return false;
+    }
+  }
+
   async function exec(command: string, name: string): Promise<string> {
-    // The browser companion of the session, never the container of the model's Bash: there the
-    // logged-in browser could be driven past the confirmation gate (security review, 5 October 2026).
-    const result = await input.runner.run(
-      input.sandboxSessionId,
-      { command, target: "browser", timeoutMs: COMMAND_TIMEOUT_MS },
-      input.signal,
-    );
+    const result = await run(command, COMMAND_TIMEOUT_MS);
     if (result.exitCode === 0) return result.stdout;
     // Query strings carry tokens and booking ids; the model needs the error, not the URL.
     const detail = `${result.stderr}\n${result.stdout}`.replace(/\?[^\s'"]*/gu, "").replace(/\s+/gu, " ").trim()
       .slice(0, DIAGNOSTIC_MAX_CHARACTERS);
     const timedOut = result.exitCode === TIMEOUT_EXIT_CODE || RUNNER_TIMED_OUT.test(detail);
+    if (ranPastBound(result) && await restartIfHung(name)) throw browserRestartedError(name);
     throw new ModelFacingError({
       category: "operation",
       code: timedOut ? "AGENT_BROWSER_TIMEOUT" : "AGENT_BROWSER_FAILED",
@@ -128,7 +192,10 @@ export function createSandboxBrowserDriver(input: {
     },
     scroll: async (direction) => { await ab("scroll", direction); },
     settle: async () => {
-      try { await ab("wait", "--load", "domcontentloaded"); } catch { /* bounded by the CLI timeout */ }
+      try { await ab("wait", "--load", "domcontentloaded"); } catch (error) {
+        // Bounded by the CLI timeout; a restarted browser lost the page, which the caller must hear.
+        if (isBrowserRestarted(error)) throw error;
+      }
       await ab("wait", String(SETTLE_MS));
     },
     url: async () => (await ab("get", "url")).trim(),

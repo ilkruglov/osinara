@@ -14,6 +14,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { ModelFacingError } from "../model-facing-error.js";
 import { createLavkaClient, lavkaAddressKey, type LavkaDeliveryPoint } from "./lavka-client.js";
 
 const point: LavkaDeliveryPoint = { city: "Москва", comment: "", country: "Россия", doorcode: "", entrance: "1", flat: "5", floor: "2", house: "11к1", label: "Корабельная 11к1", lat: 55.7, lon: 37.6, placeId: "", street: "Корабельная" };
@@ -128,10 +129,22 @@ describe("createLavkaClient", () => {
     await expect(pollDown.client.placeOrder(point, confirmed)).resolves.toEqual({ orderId: "o-7", paymentStatus: "unknown", redirectUrl: "" });
     const lost = tab({ ...base, "/api/v1/orders/submit": { data: null, error: "<html>504</html>", status: 504 } });
     await expect(lost.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
+    // The page's deadline or a failed fetch: the submit may have reached Lavka.
+    for (const error of ["timeout", "network:TypeError"]) {
+      const unsettled = tab({ ...base, "/api/v1/orders/submit": { data: null, error, status: 0 } });
+      await expect(unsettled.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
+    }
     const empty = tab({ ...base, "/api/v1/orders/submit": { data: { orderId: "" } } });
     await expect(empty.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
     const refused = tab({ ...base, "/api/v1/orders/submit": { data: null, error: JSON.stringify({ data: { message: "Корзина пуста" } }), status: 400 } });
     await expect(refused.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_REJECTED" });
+  });
+
+  it("reports a browser restarted while checking the tab", async () => {
+    const restarted = tab({});
+    restarted.driver.url.mockRejectedValueOnce(new ModelFacingError({ category: "operation", code: "AGENT_BROWSER_RESTARTED", correction: "", reason: "", retryable: false, sideEffectStatus: "unknown" }));
+    await expect(restarted.client.trackedOrders()).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(restarted.driver.eval).not.toHaveBeenCalled();
   });
 
   it("names a tab that moved to another site during the call", async () => {

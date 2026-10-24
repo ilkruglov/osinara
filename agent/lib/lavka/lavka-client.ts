@@ -21,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 
 import { AppError } from "../app-error.js";
-import type { BrowserDriver } from "../browser/browser-driver.js";
+import { isBrowserRestarted, type BrowserDriver } from "../browser/browser-driver.js";
 import {
   LAVKA_CART_CONFLICT_RETRIES,
   LAVKA_HOST,
@@ -77,7 +77,11 @@ export function createLavkaClient(deps: Deps) {
 
   async function ensureTab(): Promise<void> {
     let host = "";
-    try { host = new URL(await deps.driver.url()).hostname; } catch { host = ""; }
+    try { host = new URL(await deps.driver.url()).hostname; } catch (error) {
+      // A restarted browser is reported as such (the repeat guard lets the call run once more).
+      if (isBrowserRestarted(error)) throw error;
+      host = "";
+    }
     if (host === LAVKA_HOST) return;
     await deps.driver.open(`${LAVKA_ORIGIN}/`);
     await deps.driver.settle();
@@ -121,6 +125,8 @@ export function createLavkaClient(deps: Deps) {
       if (reason && status < 500) throw new AppError("AGENT_LAVKA_REJECTED", `Лавка отклонила запрос (${request.endpoint}): ${reason}`);
       throw unavailable(`status_${status}`);
     }
+    // The page's own code for a request that failed or ran out (timeout, network:<name>), not site text.
+    if (status === 0) throw unavailable(`unsettled_${(error ?? "").slice(0, 60)}`);
     if (data === null) throw unavailable(`status_${status}_no_data`);
     return data;
   }

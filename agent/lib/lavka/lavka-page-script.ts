@@ -12,9 +12,13 @@
  * - The page projects big answers (a search is hundreds of kilobytes) down to the fields the tool
  *   shows, so the CLI transport stays small. Projections are plain JS in template strings and are
  *   executed by tests in Node against a fake `fetch`.
+ * - The request has its own deadline and the call settles within `LAVKA_PAGE_DEADLINE_MS`, aborting
+ *   the request then; a request that failed or ran out comes back as `status: 0` with `error`
+ *   `network:<name>` or `timeout`, never as a rejected eval. The client treats both as an unclear
+ *   outcome, so an order submit that may have reached Lavka is never reported as refused.
  */
 import type { LavkaEndpoint } from "./lavka-config.js";
-import { LAVKA_ENDPOINTS, LAVKA_HOST, LAVKA_PAGE_RESULT_MAX_BYTES } from "./lavka-config.js";
+import { LAVKA_ENDPOINTS, LAVKA_FETCH_TIMEOUT_MS, LAVKA_HOST, LAVKA_PAGE_DEADLINE_MS, LAVKA_PAGE_RESULT_MAX_BYTES } from "./lavka-config.js";
 
 export type LavkaProjection = "addresses" | "cart" | "geocode" | "orders" | "payment" | "paymentMethods" | "product" | "raw" | "search" | "serviceInfo" | "submit" | "suggest";
 
@@ -80,11 +84,20 @@ const csrf = (html.match(/"csrfToken"\\s*:\\s*"([^"]+)"/) || [])[1] || "";
 const headers = { accept: "application/json", "x-requested-with": "XMLHttpRequest", "x-lavka-web-locale": "ru-RU", "x-lavka-web-city": req.city, "x-captcha-service": "lavka", "x-captcha-language": "ru" };
 if (csrf) headers["x-csrf-token"] = csrf;
 if (req.method !== "GET") headers["content-type"] = "application/json";
-const response = await fetch(req.url, { method: req.method, credentials: "include", headers, body: req.method === "GET" ? undefined : JSON.stringify(req.body) });
-const text = await response.text();
-let data = null;
-try { data = JSON.parse(text); } catch (error) { data = null; }
-const out = { authorized: response.status !== 401 && response.status !== 403, status: response.status, data: response.ok && data !== null ? projections[req.project](data) : null, error: response.ok ? null : text.slice(0, 500) };
-return JSON.stringify(out).slice(0, ${LAVKA_PAGE_RESULT_MAX_BYTES});
+// Aborted at the call's deadline: no request of this call outlives the eval that reported it.
+const whole = new AbortController();
+const main = async () => { try {
+  const response = await fetch(req.url, { method: req.method, credentials: "include", headers, body: req.method === "GET" ? undefined : JSON.stringify(req.body), signal: AbortSignal.any([AbortSignal.timeout(${LAVKA_FETCH_TIMEOUT_MS}), whole.signal]) });
+  const text = await response.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch (error) { data = null; }
+  const out = { authorized: response.status !== 401 && response.status !== 403, status: response.status, data: response.ok && data !== null ? projections[req.project](data) : null, error: response.ok ? null : text.slice(0, 500) };
+  return JSON.stringify(out).slice(0, ${LAVKA_PAGE_RESULT_MAX_BYTES});
+} catch (e) {
+  return JSON.stringify({ authorized: true, status: 0, data: null, error: "network:" + String(e && e.name || "Error").slice(0, 40) });
+} };
+let timer;
+const deadline = new Promise((resolve) => { timer = setTimeout(() => { whole.abort(); resolve(JSON.stringify({ authorized: true, status: 0, data: null, error: "timeout" })); }, ${LAVKA_PAGE_DEADLINE_MS}); });
+try { return await Promise.race([main(), deadline]); } finally { clearTimeout(timer); }
 })()`;
 }

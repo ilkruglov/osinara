@@ -6,6 +6,10 @@
  * - `eval` returns the value the page produced, unquoted.
  * - A failed command becomes a model-facing error without the query string; a slow `open` and a
  *   never-settling page do not fail the step, whether the CLI bound or the runner reports the time.
+ * - A command past the CLI or runner bound asks the daemon for the URL with a short bound: an answer
+ *   means a slow page (open tolerates it), no answer means a hung daemon, which is killed with its
+ *   Chrome and reported as `AGENT_BROWSER_RESTARTED` (open and settle pass that on). agent-browser's
+ *   own timeout never restarts anything.
  * - Every command runs in the browser companion (runner target `browser`).
  * - A screenshot is taken inside the companion and its bytes are written to the workspace through
  *   the session's own container: the companion has no workspace, so a link planted in the shots
@@ -15,6 +19,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SandboxRunnerClient } from "../sandbox-runner/runner-client.js";
 import { createSandboxBrowserDriver } from "./browser-driver.js";
+import { browserGeneration } from "./browser-restarts.js";
 
 type Runner = Pick<SandboxRunnerClient, "run" | "writeFile"> & {
   run: ReturnType<typeof vi.fn>;
@@ -67,14 +72,60 @@ describe("createSandboxBrowserDriver", () => {
   // passport.yandex.ru, 26 September 2026: the first load ran past the CLI bound, the runner
   // reported its own marker and the old `timed out` match missed it; the whole turn went into
   // diagnosing a page that was already open.
-  it("treats the CLI bound and the runner timeout as a slow open, not a failure", async () => {
-    const byExit = vi.fn(async (_sessionId: string, _request: { command: string }) => ({ exitCode: 124, stderr: "", stdout: "" }));
+  it("treats the CLI bound and the runner timeout as a slow open while the daemon still answers", async () => {
+    // The open ran past the bound; the short probe of the daemon answers.
+    const byExit = vi.fn(async (_sessionId: string, request: { command: string }) =>
+      request.command.includes("get url") ? { exitCode: 0, stderr: "", stdout: "https://x.ru/\n" } : { exitCode: 124, stderr: "", stdout: "" });
     await expect(createSandboxBrowserDriver({ runner: { run: byExit } as unknown as Runner, sandboxSessionId: "s" }).open("https://x.ru/")).resolves.toBeUndefined();
     expect(byExit.mock.calls[0]![1].command).toMatch(/^timeout --signal=TERM --kill-after=3s 40s agent-browser open /u);
-    const byRunner = runner({ open: { fail: "AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT: Command exceeded 50000 ms" } });
+    expect(byExit.mock.calls[1]![1].command).toBe("timeout --signal=KILL 10s agent-browser get url");
+    expect(byExit.mock.calls.some((call) => call[1].command.includes("pkill"))).toBe(false);
+    const byRunner = runner({ "get url": "https://x.ru/\n", open: { fail: "AGENT_SANDBOX_RUNNER_PROCESS_TIMED_OUT: Command exceeded 50000 ms" } });
     await expect(createSandboxBrowserDriver({ runner: byRunner, sandboxSessionId: "s" }).open("https://x.ru/")).resolves.toBeUndefined();
     // Any other command still reports the timeout, under its own code.
-    await expect(createSandboxBrowserDriver({ runner: { run: byExit } as unknown as Runner, sandboxSessionId: "s" }).url()).rejects.toMatchObject({ code: "AGENT_BROWSER_TIMEOUT" });
+    await expect(createSandboxBrowserDriver({ runner: { run: byExit } as unknown as Runner, sandboxSessionId: "s" }).eval("1")).rejects.toMatchObject({ code: "AGENT_BROWSER_TIMEOUT" });
+  });
+
+  it("kills a daemon that does not answer the probe either and reports the restart, also from open and settle", async () => {
+    const hung = () => {
+      const run = vi.fn(async (_sessionId: string, request: { command: string }) =>
+        request.command.includes("pkill") ? { exitCode: 0, stderr: "", stdout: "" } : { exitCode: 124, stderr: "", stdout: "" });
+      return { driver: createSandboxBrowserDriver({ runner: { run } as unknown as Runner, sandboxSessionId: "s" }), run };
+    };
+    const opened = hung();
+    await expect(opened.driver.open("https://x.ru/")).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    const reset = opened.run.mock.calls.find((call) => call[1].command.includes("pkill"))![1] as { command: string; target: string };
+    expect(reset.target).toBe("browser");
+    // pkill -f also sees the shell running the command: its own text must not match the patterns.
+    expect(reset.command).not.toMatch(/agent-browser|chrome/u);
+    expect(reset.command).toContain("pkill -KILL -f '[a]gent-browser'");
+    expect(reset.command).toContain("pkill -KILL -f '[c]hrome'");
+    await expect(hung().driver.settle()).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+  });
+
+  it("tells whoever owns the page about a restart and counts it for the sandbox", async () => {
+    const run = vi.fn(async (_sessionId: string, request: { command: string }) =>
+      request.command.includes("pkill") ? { exitCode: 0, stderr: "", stdout: "" } : { exitCode: 124, stderr: "", stdout: "" });
+    const onRestart = vi.fn(async () => undefined);
+    const before = browserGeneration("sbx-counted");
+    await expect(createSandboxBrowserDriver({ onRestart, runner: { run } as unknown as Runner, sandboxSessionId: "sbx-counted" }).eval("1")).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(onRestart).toHaveBeenCalledTimes(1);
+    expect(browserGeneration("sbx-counted")).toBe(before + 1);
+  });
+
+  it("reads the probe's KILL exit (137) as a hung daemon, as GNU timeout reports it", async () => {
+    const run = vi.fn(async (_sessionId: string, request: { command: string }) =>
+      request.command.includes("pkill") ? { exitCode: 0, stderr: "", stdout: "" }
+        : request.command.startsWith("timeout --signal=KILL") ? { exitCode: 137, stderr: "", stdout: "" }
+        : { exitCode: 124, stderr: "", stdout: "" });
+    await expect(createSandboxBrowserDriver({ runner: { run } as unknown as Runner, sandboxSessionId: "s" }).url()).rejects.toMatchObject({ code: "AGENT_BROWSER_RESTARTED" });
+    expect(run.mock.calls.some((call) => call[1].command.includes("pkill"))).toBe(true);
+  });
+
+  it("never restarts after agent-browser's own timeout: the daemon answered", async () => {
+    const r = runner({ "get url": { fail: "✗ Operation timed out" } });
+    await expect(createSandboxBrowserDriver({ runner: r, sandboxSessionId: "s" }).url()).rejects.toMatchObject({ code: "AGENT_BROWSER_TIMEOUT" });
+    expect(r.run).toHaveBeenCalledTimes(1);
   });
 
   it("takes the screenshot in the companion and writes its bytes through the session container", async () => {

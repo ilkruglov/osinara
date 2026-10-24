@@ -143,6 +143,11 @@ export function createLookRepository() {
     async reset(sandboxSessionId: string, familyId: string): Promise<void> {
       await database().query("DELETE FROM browser_looks WHERE sandbox_session_id = $1 AND family_id = $2", [sandboxSessionId, familyId]);
     },
+
+    /** After a browser restart: the page every look of this sandbox describes is closed. */
+    async resetSandbox(sandboxSessionId: string): Promise<void> {
+      await database().query("DELETE FROM browser_looks WHERE sandbox_session_id = $1", [sandboxSessionId]);
+    },
   };
 }
 

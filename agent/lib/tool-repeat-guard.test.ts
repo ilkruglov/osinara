@@ -29,6 +29,16 @@ describe("toolCallFingerprint", () => {
 });
 
 describe("createToolRepeatGuard", () => {
+  it("lets a call that failed on a restarted browser run once more, then blocks it as usual", () => {
+    const guard = createToolRepeatGuard();
+    guard.recordFailure("s:t1", "open", { freeRetry: true });
+    expect(guard.refuses("s:t1", "open")).toBe(false);
+    guard.recordFailure("s:t1", "open", { freeRetry: true });
+    expect(guard.refuses("s:t1", "open")).toBe(true);
+    guard.forget("s:t1");
+    expect(guard.refuses("s:t1", "open")).toBe(false);
+  });
+
   it("refuses a failed fingerprint within its turn until it succeeds", () => {
     const guard = createToolRepeatGuard();
     guard.recordFailure("s:t1", "f");
