@@ -23,6 +23,7 @@ import { clipText, flattenDisplayText } from "../display-text.js";
 import type { BrowserConfirmApprovalSubject } from "../browser/browser-tools-production.js";
 import { loadBrowserConfirmApproval } from "../browser/browser-tools-production.js";
 import { loadLavkaDeliveryPoint } from "../lavka/lavka-production.js";
+import { yandexTaxiApprovalPrompt } from "../yandex-taxi/yandex-taxi-approval.js";
 import type { GmailMessageApprovalSubject } from "../google-workspace/gmail-message-approval.js";
 import { loadGmailMessageApproval } from "../google-workspace/gmail-message-approval.js";
 import { requireGmailMessageInput } from "../google-workspace/gmail-message-contract.js";
@@ -320,6 +321,9 @@ export function createTelegramApprovalPresenter(
           ],
         }),
       };
+    }
+    if (request.display === "confirmation" && request.action.toolName === "yandex_taxi") {
+      return { ...localized, prompt: yandexTaxiApprovalPrompt(request.action.input) };
     }
     if (
       request.display === "confirmation" &&

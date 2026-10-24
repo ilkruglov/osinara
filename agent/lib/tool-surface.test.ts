@@ -66,6 +66,7 @@ const EXPECTED_TOOL_MODULES = [
   "start_new_context.ts",
   "web_search.ts",
   "yandex_lavka.ts",
+  "yandex_taxi.ts",
 ] as const;
 
 const EXPECTED_DISCOVERED_TOOL_FILES = ["capabilities.ts"] as const;

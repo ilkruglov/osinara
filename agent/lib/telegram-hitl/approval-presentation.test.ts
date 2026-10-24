@@ -9,9 +9,11 @@
  * - Google Workspace mutation approvals expose the complete exact argv.
  * - Long schedule values remain complete for multipart Telegram delivery.
  * - A browser_confirm click shows the site, the button, the page and which fields were entered.
+ * - A Yandex Go order window is built from the order input.
  */
 import { describe, expect, it, vi } from "vitest";
 
+import { yandexTaxiPointKey } from "../yandex-taxi/yandex-taxi-model.js";
 import { createTelegramApprovalPresenter } from "./approval-presentation.js";
 
 const SCHEDULE_ID = "5042f71c-4a61-429e-8519-b1e7d0f18fe9";
@@ -140,6 +142,37 @@ describe("Telegram approval presentation", () => {
     expect(shown.prompt).toContain("Корабельная 11к1, кв. 5");
     expect(shown.prompt).toContain("300 ₽");
     await expect(present(request("fedcba9876543210"), context())).rejects.toMatchObject({ code: "AGENT_LAVKA_ADDRESS_CHANGED" });
+  });
+
+  it("builds the Yandex Go order window from the order input", async () => {
+    const present = createTelegramApprovalPresenter({
+      findBrowserConfirm: vi.fn(),
+      findGmailMessage: vi.fn(),
+      findLavkaDeliveryPoint: vi.fn(async () => null),
+      findSchedule: vi.fn(),
+    });
+    const point = (shortText: string, lon: number) => {
+      const fields = { city: "Москва", fullText: `Москва, ${shortText}`, lat: 55.7, lon, shortText, uri: "" };
+      return { ...fields, key: yandexTaxiPointKey(fields) };
+    };
+    const shown = await present({
+      action: {
+        callId: "call-taxi",
+        input: {
+          action: "order", currency: "₽", fixedPrice: true, from: point("Корабельная 11к1", 37.6),
+          payment: { id: "card-1", label: "карта MIR ••1234", type: "card" }, price: 350, tariff: "econom", tariffName: "Эконом", to: point("Тверская 1", 37.61), waitingMinutes: 4,
+        },
+        kind: "tool-call",
+        toolName: "yandex_taxi",
+      },
+      display: "confirmation",
+      options: [],
+      prompt: "Approve tool call",
+      requestId: "request-taxi",
+    }, context());
+    expect(shown.prompt).toContain("заказать такси Яндекс Go за 350 ₽");
+    expect(shown.prompt).toContain("Откуда: Москва, Корабельная 11к1");
+    expect(shown.prompt).toContain("Оплата: карта MIR ••1234");
   });
 
   it("keeps untrusted Gmail headers inside their labelled lines", async () => {

@@ -170,6 +170,7 @@ const POST_V0101_MIGRATIONS = [
   "136_image_generation_provider_job.sql",
   "137_disruptim_rich_post_backfill.sql",
   "138_telegram_chat_reachability.sql",
+  "139_yandex_taxi_operations.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [
