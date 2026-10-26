@@ -7,7 +7,8 @@
  * - order and cancel ask for a confirmation, everything else does not, also after dynamic emission.
  * - Each action accepts only its own fields and requires the ones it needs; an order needs the
  *   payment exactly as estimate gave it.
- * - An order runs once under `session:callId` after the approval check, with the confirmed input.
+ * - An order runs once under `session:callId` after the approval check, with the confirmed input,
+ *   and is then watched; watch follows a ride ordered elsewhere from its current status, unwatch stops.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,12 +19,16 @@ const mocks = vi.hoisted(() => ({
   placeOrder: vi.fn(),
   requireMember: vi.fn(),
   requireToolApprovalEvidence: vi.fn(),
+  startWatch: vi.fn(),
+  status: vi.fn(),
+  stopWatch: vi.fn(),
   rows: new Map<string, { requestHash: string; result: unknown; status: "completed" | "started" }>(),
 }));
 
 vi.mock("./yandex-taxi-production.js", () => ({
-  yandexTaxiClientFor: () => ({ auth: mocks.auth, estimate: mocks.estimate, placeOrder: mocks.placeOrder }),
+  yandexTaxiClientFor: () => ({ auth: mocks.auth, estimate: mocks.estimate, placeOrder: mocks.placeOrder, status: mocks.status }),
 }));
+vi.mock("../order-watch/order-watch-start.js", () => ({ startOrderWatch: mocks.startWatch, stopOrderWatches: mocks.stopWatch }));
 vi.mock("../require-tool-approval-evidence.js", () => ({ requireToolApprovalEvidence: mocks.requireToolApprovalEvidence }));
 vi.mock("./yandex-taxi-operation.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./yandex-taxi-operation.js")>(),
@@ -81,6 +86,9 @@ describe("yandex_taxi", () => {
     mocks.requireToolApprovalEvidence.mockReset();
     mocks.auth.mockReset().mockResolvedValue({ state: "ready" });
     mocks.requireMember.mockReset().mockResolvedValue(undefined);
+    mocks.startWatch.mockReset().mockResolvedValue(true);
+    mocks.stopWatch.mockReset().mockResolvedValue(1);
+    mocks.status.mockReset();
   });
 
   it("exists only in a private chat and keeps its confirmation after dynamic emission", () => {
@@ -89,19 +97,23 @@ describe("yandex_taxi", () => {
     expect(buildModeToolSurface({ environment: "family" })).not.toHaveProperty("yandex_taxi");
     expect(buildModeToolSurface({ capabilities: new Set(), environment: "external" })).not.toHaveProperty("yandex_taxi");
     expect(privateSurface.yandex_taxi!.approval).toBeTypeOf("function");
-    expect(privateSurface.yandex_taxi!.description.length).toBeLessThan(1_100);
+    // 1 100 until 26 October 2026; the watch sentence added about 160.
+    expect(privateSurface.yandex_taxi!.description.length).toBeLessThan(1_250);
   });
 
   it("asks to confirm an order and a cancellation only", () => {
     expect(approval(orderInput)).toBe("user-approval");
     expect(approval({ action: "cancel", cancelState: "free", orderId: "o-1" })).toBe("user-approval");
-    for (const action of ["auth", "places", "suggest", "estimate", "status"]) expect(approval({ action })).toBe("not-applicable");
+    for (const action of ["auth", "places", "suggest", "estimate", "status", "watch", "unwatch"]) expect(approval({ action })).toBe("not-applicable");
   });
 
   it("accepts only each action's own fields and requires the ones it needs", () => {
     expect(yandexTaxiInput.safeParse(orderInput).success).toBe(true);
     expect(yandexTaxiInput.safeParse({ action: "estimate", from: fromPoint, to: toPoint }).success).toBe(true);
     expect(yandexTaxiInput.safeParse({ action: "suggest", query: "Тверская 1", type: "to" }).success).toBe(true);
+    expect(yandexTaxiInput.safeParse({ action: "suggest", near: { lat: 55.7539, lon: 37.6208 }, type: "from" }).success).toBe(true);
+    expect(yandexTaxiInput.safeParse({ action: "suggest", type: "from" }).success).toBe(false);
+    expect(yandexTaxiInput.safeParse({ action: "suggest", near: { lat: 55.7539, lon: 37.6208 }, pick: 1, type: "from" }).success).toBe(false);
     expect(yandexTaxiInput.safeParse({ action: "estimate", from: fromPoint, price: 1, to: toPoint }).success).toBe(false);
     expect(yandexTaxiInput.safeParse({ action: "estimate", from: fromPoint }).success).toBe(false);
     expect(yandexTaxiInput.safeParse({ ...orderInput, price: undefined }).success).toBe(false);
@@ -140,9 +152,11 @@ describe("yandex_taxi", () => {
   });
 
   it("orders once under the call id after the approval check, with the confirmed input", async () => {
-    mocks.placeOrder.mockResolvedValue({ orderId: "o-1", status: "search" });
-    await expect(yandexTaxi.execute(orderInput, context("private"))).resolves.toEqual({ orderId: "o-1", status: "search" });
-    await expect(yandexTaxi.execute(orderInput, context("private"))).resolves.toEqual({ orderId: "o-1", status: "search" });
+    mocks.placeOrder.mockResolvedValue({ note: "Заказ принят.", orderId: "o-1", status: "search" });
+    const placed = { note: "Заказ принят. Статус пришлю сама: машину, подачу и конец поездки.", orderId: "o-1", status: "search", watching: true };
+    await expect(yandexTaxi.execute(orderInput, context("private"))).resolves.toEqual(placed);
+    await expect(yandexTaxi.execute(orderInput, context("private"))).resolves.toEqual(placed);
+    expect(mocks.startWatch).toHaveBeenCalledWith(expect.anything(), { familyId: "family-1", initialState: null, orderId: "o-1", service: "yandex_taxi", userId: "user-1" });
     expect(mocks.placeOrder).toHaveBeenCalledTimes(1);
     expect(mocks.requireToolApprovalEvidence).toHaveBeenCalledWith(expect.anything(), "yandex_taxi", orderInput);
     expect(mocks.placeOrder).toHaveBeenCalledWith(expect.objectContaining({ payment: { id: "card-1", label: "карта MIR ••1234", type: "card" }, price: 350, tariff: "econom" }));
@@ -151,5 +165,20 @@ describe("yandex_taxi", () => {
     mocks.requireToolApprovalEvidence.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "AGENT_TOOL_APPROVAL_EVIDENCE_INVALID" }));
     await expect(yandexTaxi.execute(orderInput, context("private", "call-2"))).rejects.toThrow();
     expect(mocks.placeOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("watches a ride ordered elsewhere from where it is now, refuses a finished one, and stops on request", async () => {
+    mocks.status.mockResolvedValueOnce({ activeOrders: [], order: { car: "Белый Kia Rio", driver: "Иван", finalCost: null, minutesLeft: 4, orderId: "o-9", plates: "А123ВС777", status: "driving", statusText: "машина едет к вам" } });
+    await expect(yandexTaxi.execute({ action: "watch" }, context("private"))).resolves.toEqual({ orderId: "o-9", status: "машина едет к вам", watching: true });
+    expect(mocks.startWatch).toHaveBeenCalledWith(expect.anything(), {
+      familyId: "family-1", initialState: { car: "Белый Kia Rio", plates: "А123ВС777", status: "driving" }, orderId: "o-9", service: "yandex_taxi", userId: "user-1",
+    });
+    mocks.status.mockResolvedValueOnce({ activeOrders: [], order: { car: null, driver: null, finalCost: "540 ₽", minutesLeft: null, orderId: "o-8", plates: null, status: "complete", statusText: "поездка завершена" } });
+    await expect(yandexTaxi.execute({ action: "watch", orderId: "o-8" }, context("private"))).resolves.toMatchObject({ watching: false });
+    mocks.status.mockResolvedValueOnce({ activeOrders: [], order: null });
+    await expect(yandexTaxi.execute({ action: "watch" }, context("private"))).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_ORDER_NOT_FOUND" });
+    expect(mocks.startWatch).toHaveBeenCalledTimes(1);
+    await expect(yandexTaxi.execute({ action: "unwatch" }, context("private"))).resolves.toEqual({ stopped: 1 });
+    expect(mocks.stopWatch).toHaveBeenCalledWith({ orderId: undefined, service: "yandex_taxi", userId: "user-1" });
   });
 });

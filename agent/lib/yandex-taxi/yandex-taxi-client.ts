@@ -10,7 +10,8 @@
  * - Every point the client returns carries its `key`; estimate and order refuse a point that does
  *   not match it (`requireYandexTaxiPoint`).
  * - suggest finalizes one candidate (the best one, or `pick`) into a point; the others are listed by
- *   title so the person can choose, and the opaque suggest log never reaches the model.
+ *   title so the person can choose, and the opaque suggest log never reaches the model. Without a
+ *   query it names the address at `near`, as the site's own pin drop does (a shared location).
  * - Not a published API: a missing required field is `AGENT_YANDEX_TAXI_RESPONSE_INVALID`.
  */
 import { randomUUID } from "node:crypto";
@@ -52,7 +53,22 @@ export function createYandexTaxiClient(deps: { driver: YandexTaxiDriver; sleep?:
       return { places: places.map((place) => ({ name: place.name, point: withYandexTaxiPointKey(place.point) })) };
     },
 
-    async suggest(input: { near?: { lat: number; lon: number } | undefined; pick: number; query: string; type: "a" | "b" }) {
+    async suggest(input: { near?: { lat: number; lon: number } | undefined; pick: number; query?: string | undefined; type: "a" | "b" }) {
+      if (input.query === undefined) {
+        if (!input.near) throw new AppError("AGENT_YANDEX_TAXI_ADDRESS_NOT_FOUND", "Нужен адрес текстом или геолокация");
+        const session = await transport.session();
+        const at = yandexTaxiCoordinates(input.near);
+        const pinned = await transport.ok<Finalized>({
+          body: { action: "pin_drop", position: at, state: { accuracy: 0, fields: [], location: at, selected_class: "" }, sticky: false, type: input.type },
+          endpoint: "finalSuggest", project: "finalize", userId: session.userId,
+        });
+        return {
+          ...(pinned.available ? {} : { unavailable: pinned.unavailableReason || "Яндекс Go не возит из этой точки" }),
+          entrance: pinned.entrance || null,
+          others: [],
+          point: withYandexTaxiPointKey(pinned.point),
+        };
+      }
       const session = await transport.session();
       const location = input.near ? { location: yandexTaxiCoordinates(input.near) } : {};
       const results = await transport.ok<Array<{ log: unknown; position: [number, number] | null; subtitle: string; title: string }>>({

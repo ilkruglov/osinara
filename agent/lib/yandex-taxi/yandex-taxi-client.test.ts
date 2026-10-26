@@ -92,6 +92,19 @@ describe("createYandexTaxiClient", () => {
     await expect(client(none).suggest({ pick: 0, query: "нигде", type: "a" })).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_ADDRESS_NOT_FOUND" });
   });
 
+  // A location shared in the chat: the site's own pin drop (finalsuggest, action pin_drop) names the
+  // address at the pin; live run 26 October 2026 answered Red Square with «Красная площадь, 5».
+  it("names the address at shared coordinates like the site's pin drop, without a text search", async () => {
+    const pinned = { available: true, entrance: "", point: { city: "Москва", fullText: "Москва, Красная площадь, 5", lat: 55.7538, lon: 37.623, shortText: "Красная площадь, 5", uri: "u5" }, unavailableReason: "", zone: "moscow" };
+    const tab = fakeTaxiTab({ [PATHS.finalize]: { data: pinned }, [PATHS.launch]: launchOk() });
+    const found = await client(tab).suggest({ near: { lat: 55.7539, lon: 37.6208 }, pick: 0, type: "a" });
+    expect(found.point).toMatchObject({ key: yandexTaxiPointKey(pinned.point), shortText: "Красная площадь, 5" });
+    expect(found.others).toEqual([]);
+    expect(tab.to(PATHS.suggest)).toEqual([]);
+    expect(tab.to(PATHS.finalize)[0]!.body).toEqual({ action: "pin_drop", position: [37.6208, 55.7539], state: { accuracy: 0, fields: [], location: [37.6208, 55.7539], selected_class: "" }, sticky: false, type: "a" });
+    await expect(client(tab).suggest({ pick: 0, type: "a" })).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_ADDRESS_NOT_FOUND" });
+  });
+
   it("refuses an edited point before calling anything", async () => {
     const tab = fakeTaxiTab(pricedRoute());
     await expect(client(tab).estimate({ from: { ...fromPoint, shortText: "Красная площадь" }, to: toPoint })).rejects.toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID" });

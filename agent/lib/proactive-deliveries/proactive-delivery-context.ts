@@ -7,7 +7,8 @@
  */
 import { escapeUntrustedContextJson } from "../untrusted-context-json.js";
 
-export type ProactiveDeliverySourceKind = "agent_schedule" | "reminder";
+/** `order_watch`: a message about a watched taxi ride or Lavka order (migration 140). */
+export type ProactiveDeliverySourceKind = "agent_schedule" | "order_watch" | "reminder";
 
 export interface ProactiveDeliveryRecord {
   content: string;

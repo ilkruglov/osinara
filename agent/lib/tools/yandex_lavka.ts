@@ -3,7 +3,7 @@
  *
  * Exports:
  * - `yandex_lavka`: search, product, cart, add, set, clear, addresses, use_address, set_address,
- *   preview, order, orders, cancel.
+ *   preview, order, orders, cancel, watch, unwatch.
  * - `yandexLavkaInput`: the same input schema for checks outside Eve.
  *
  * Key constructs:
@@ -15,11 +15,15 @@
  * - `add`, `order` and `cancel` run under `runLavkaOperation`: a step Eve replays after a crash
  *   returns the stored result or an ambiguity code instead of adding or ordering twice.
  * - The delivery point is chosen once (`use_address` or `set_address`) and kept per person.
+ * - A placed order is watched (`order-watch`): the person is told how it moves on between turns.
+ *   `watch` follows an order placed in the app from its current status; `unwatch` stops.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { startOrderWatch, stopOrderWatches } from "../order-watch/order-watch-start.js";
+import { decideLavkaWatch } from "../order-watch/order-watch-status.js";
 import { LAVKA_ITEM_MAX_QUANTITY } from "../lavka/lavka-config.js";
 import { lavkaDeliveryPointRepository } from "../lavka/lavka-delivery-point-repository.js";
 import { lavkaOperationRepository, runLavkaOperation, type LavkaOperationAction } from "../lavka/lavka-operation.js";
@@ -33,7 +37,7 @@ const quantity = z.number().int().min(0).max(LAVKA_ITEM_MAX_QUANTITY);
 const text = (max: number) => z.string().trim().max(max).optional();
 
 const yandexLavkaInput = z.object({
-  action: z.enum(["search", "product", "cart", "add", "set", "clear", "addresses", "use_address", "set_address", "preview", "order", "orders", "cancel"]),
+  action: z.enum(["search", "product", "cart", "add", "set", "clear", "addresses", "use_address", "set_address", "preview", "order", "orders", "cancel", "watch", "unwatch"]),
   address: text(300),
   addressId: text(120),
   /** The address fingerprint from preview; the order refuses a different current address. */
@@ -57,7 +61,7 @@ const yandexLavkaInput = z.object({
 }).strict().superRefine((value, ctx) => {
   const fields: Record<string, string[]> = {
     add: ["productId", "quantity", "price"], addresses: [], cancel: ["orderId"], cart: [], clear: [], order: ["cartVersion", "total", "addressKey", "paymentMethodId"], orders: [], preview: [],
-    product: ["slug"], search: ["query"], set: ["productId", "quantity", "price"], set_address: ["address", "flat", "entrance", "floor", "doorcode", "comment"], use_address: ["addressId"],
+    product: ["slug"], search: ["query"], set: ["productId", "quantity", "price"], set_address: ["address", "flat", "entrance", "floor", "doorcode", "comment"], unwatch: ["orderId"], use_address: ["addressId"], watch: ["orderId"],
   };
   const required: Record<string, string[]> = { add: ["productId", "price"], cancel: ["orderId"], order: ["cartVersion", "total", "addressKey", "paymentMethodId"], product: ["slug"], search: ["query"], set: ["productId", "quantity"], set_address: ["address"], use_address: ["addressId"] };
   for (const key of Object.keys(value)) {
@@ -80,7 +84,7 @@ export default defineTool({
   description: [
     "Яндекс Лавка из аккаунта человека в его браузере: search ищет товары (query), product показывает описание (slug из search), cart показывает корзину, add кладёт productId с его price из выдачи search (quantity по умолчанию 1, прибавляется к текущему), set ставит точное количество (0 убирает; для нового товара тоже нужен price), clear очищает.",
     "Адрес доставки нужен до поиска и заказа: addresses показывает сохранённые адреса, use_address выбирает один по addressId, set_address задаёт по тексту (address, при необходимости flat, entrance, floor, doorcode, comment).",
-    "preview показывает состав, сумму, доставку, срок и карту без списания. order (cartVersion, total, addressKey и paymentMethodId ровно из preview) отправляет заказ и списывает деньги с карты аккаунта после подтверждения человека кнопкой; если сумма, корзина, адрес или карта изменились, заказ не уходит. orders показывает текущие заказы, cancel отменяет заказ (orderId) после подтверждения.",
+    "preview показывает состав, сумму, доставку, срок и карту без списания. order (cartVersion, total, addressKey и paymentMethodId ровно из preview) отправляет заказ и списывает деньги с карты аккаунта после подтверждения человека кнопкой; если сумма, корзина, адрес или карта изменились, заказ не уходит. orders показывает текущие заказы, cancel отменяет заказ (orderId) после подтверждения. После order статус человеку приходит сам; watch (orderId или текущий) следит за заказом из приложения, unwatch перестаёт.",
     "Если Лавка не узнаёт вход, человеку нужно войти в Яндекс через browser_open https://passport.yandex.ru/auth и код из СМС. Цены и наличие меняются: перед order всегда свежий preview.",
   ].join(" "),
   inputSchema: yandexLavkaInput,
@@ -135,15 +139,29 @@ export default defineTool({
         return { ...preview, address: point!.label, note: "Для order передайте cartVersion, total, addressKey и paymentMethodId ровно из этого ответа" };
       }
       case "order": {
-        return await once("order", async () => {
+        const ordered = await once("order", async () => {
           await requireToolApprovalEvidence(ctx, "yandex_lavka", input);
           const placed = await client.placeOrder(requirePoint(), { addressKey: input.addressKey!, cartVersion: input.cartVersion!, paymentMethodId: input.paymentMethodId!, total: input.total! });
           const note = placed.paymentStatus === "wait_user_action" ? "Банк просит подтвердить оплату (3-D Secure): откройте redirectUrl"
             : placed.paymentStatus === "unknown" ? "Заказ создан, статус оплаты не получен: проверьте orders" : "Заказ отправлен";
           return { ...placed, note };
         });
+        // A replayed step reaches the same watch: one active watch per order and person.
+        const watching = "orderId" in ordered &&
+          await startOrderWatch(ctx, { familyId: auth.familyId, initialState: null, orderId: ordered.orderId, service: "yandex_lavka", userId });
+        return { ...ordered, note: watching ? `${ordered.note}. Статус пришлю сама: сборку, курьера и доставку.` : ordered.note, watching };
       }
       case "orders": return { orders: await client.trackedOrders() };
+      case "watch": {
+        const current = await client.trackedOrders();
+        const order = input.orderId ? current.find((tracked) => tracked.orderId === input.orderId) : current[0];
+        if (!order) throw new AppError("AGENT_LAVKA_ORDER_NOT_FOUND", "Такого заказа нет среди текущих заказов Лавки: посмотрите orders");
+        // What the person can already see is the starting point: only what changes next is told.
+        const initialState = decideLavkaWatch(null, { status: order.status, subtitle: order.subtitle, title: order.title }, { sinceStartMs: 0 }).state;
+        const watching = await startOrderWatch(ctx, { familyId: auth.familyId, initialState, orderId: order.orderId, service: "yandex_lavka", userId });
+        return { orderId: order.orderId, status: order.title || order.status, watching };
+      }
+      case "unwatch": return { stopped: await stopOrderWatches({ orderId: input.orderId, service: "yandex_lavka", userId }) };
       case "cancel": {
         return await once("cancel", async () => {
           await requireToolApprovalEvidence(ctx, "yandex_lavka", input);

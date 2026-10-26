@@ -243,7 +243,7 @@ export function createLavkaClient(deps: Deps) {
     },
     search: (query: string, point: LavkaDeliveryPoint | null) => ok<LavkaProduct[]>({ body: { ...baseBody(point), productsLimit: LAVKA_SEARCH_LIMIT, source: "manual_input", subcategoriesLimit: 0, text: query, useRetail: true }, endpoint: "search", project: "search" }),
     setItem: (point: LavkaDeliveryPoint | null, id: string, quantity: number, price: number | null) => mutate(point, () => [{ id, price, quantity }]),
-    trackedOrders: () => ok<Array<{ eta: string; orderId: string; status: string; title: string }>>({ endpoint: "trackedOrders", project: "orders" }),
+    trackedOrders: () => ok<Array<{ eta: string; orderId: string; status: string; subtitle: string; title: string }>>({ endpoint: "trackedOrders", project: "orders" }),
   };
 
   async function paymentMethods(point: LavkaDeliveryPoint | null): Promise<{ defaultId: string; methods: LavkaPaymentMethod[] }> {

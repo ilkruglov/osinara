@@ -18,6 +18,7 @@ import { clipText } from "./display-text.js";
 
 import { classifyTelegramInboundMedia } from "./telegram-message-policy.js";
 import { normalizeRichMessage } from "./telegram-rich-message.js";
+import { withLocationText } from "./telegram-location-message.js";
 
 export const TELEGRAM_PENDING_MESSAGES_MAX = 10;
 const TELEGRAM_PENDING_MARKER_KEY = "osinara_pending";
@@ -44,7 +45,7 @@ export function pendingMessagesFromPayloads(
   for (const row of rows) {
     const parsed = parseTelegramUpdate(row.payload);
     if (!parsed || parsed.kind !== "message") continue;
-    const update = normalizeRichMessage(parsed);
+    const update = withLocationText(normalizeRichMessage(parsed));
     if (update.kind !== "message") continue;
     const message: TelegramMessage = update.message;
     const text = message.text.trim();

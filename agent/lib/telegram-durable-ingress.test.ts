@@ -1207,4 +1207,53 @@ describe("createTelegramDurableIngress", () => {
     });
     expect((raw.message as Record<string, unknown>).text).toBeUndefined();
   });
+
+  // 26 October 2026: a location sent for a taxi reached the model as an empty message.
+  it("dispatches a private location with its coordinates as the model message", async () => {
+    const storage = repository();
+    const raw = {
+      message: {
+        chat: { id: 101, type: "private" },
+        date: 1_700_000_000,
+        from: { first_name: "Анна", id: 101, is_bot: false },
+        location: { horizontal_accuracy: 12, latitude: 55.7539, longitude: 37.6208 },
+        message_id: 79,
+      },
+      update_id: 1003,
+    };
+    Object.assign(storage.claim, { payload: raw, updateId: "1003", voice: null });
+    const update = parseTelegramUpdate(raw);
+    if (!update || update.kind !== "message") {
+      throw new Error("AGENT_TEST_TELEGRAM_UPDATE_INVALID: Не создано тестовое сообщение");
+    }
+    const dispatch = vi.fn().mockResolvedValue(null);
+    let backgroundTask: Promise<unknown> | undefined;
+    const handle = createTelegramDurableIngress({
+      acceptMedia: vi.fn().mockResolvedValue(true),
+      authorizeVoice: vi.fn(),
+      botUsername: "osinara_bot",
+      handleSoftwareUpdateCallback: vi.fn().mockResolvedValue(false),
+      leaseMilliseconds: 60_000,
+      repository: storage.value,
+      transcribeVoice: vi.fn(),
+    });
+
+    await handle({
+      dispatch,
+      raw,
+      update,
+      waitUntil(task) {
+        backgroundTask = task;
+      },
+    } as TelegramVerifiedUpdateContext);
+    if (!backgroundTask) {
+      throw new Error("AGENT_TEST_BACKGROUND_TASK_MISSING: Durable ingress did not schedule a drain");
+    }
+    await backgroundTask;
+
+    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
+      kind: "message",
+      message: { text: "Геолокация: 55.753900, 37.620800, точность 12 м" },
+    });
+  });
 });

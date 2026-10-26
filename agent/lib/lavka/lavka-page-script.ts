@@ -60,7 +60,7 @@ const projections = {
   serviceInfo: (raw) => ({ depotId: str(pick(raw || {}, "depotId"), 120) }),
   submit: (raw) => { const d = raw && raw.data && typeof raw.data === "object" ? raw.data : raw || {}; return { orderId: str(pick(d, "orderId", "order_id", "id"), 120) }; },
   payment: (raw) => { const d = raw && typeof raw === "object" ? raw : {}; const p = d.payload && typeof d.payload === "object" ? d.payload : {}; return { status: str(pick(d, "status"), 60), redirectUrl: str(pick(p, "redirectUrl"), 1000) }; },
-  orders: (raw) => { const list = raw && Array.isArray(raw.orders) ? raw.orders : Array.isArray(raw) ? raw : []; return list.filter((o) => o && typeof o === "object").slice(0, 10).map((o) => ({ orderId: str(pick(o, "orderId", "order_id", "id", "shortOrderId"), 120), status: str(pick(o, "status", "state"), 60), eta: str(pick(o, "eta", "etaMinutes"), 40), title: str(pick(o, "title", "statusTitle"), 200) })); },
+  orders: (raw) => { const list = raw && Array.isArray(raw.orders) ? raw.orders : Array.isArray(raw) ? raw : []; return list.filter((o) => o && typeof o === "object").slice(0, 10).map((o) => { const info = o.trackingInfo && typeof o.trackingInfo === "object" ? o.trackingInfo : {}; return { orderId: str(pick(o, "orderId", "order_id", "id", "shortOrderId"), 120), status: str(pick(o, "status", "state"), 60), eta: str(pick(o, "eta", "etaMinutes"), 40), title: str(pick(info, "title") ?? pick(o, "title", "statusTitle"), 200), subtitle: str(pick(info, "subtitle"), 200) }; }); },
 };
 `;
 

@@ -26,6 +26,7 @@ import {
 
 export type TelegramProactiveDeliveryKind =
   | "agent_schedule"
+  | "order_watch"
   | "owner_notice"
   | "reminder"
   | "software_update";

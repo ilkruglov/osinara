@@ -44,6 +44,7 @@ import {
   withPendingMarker,
 } from "./telegram-pending-messages.js";
 import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks } from "./telegram-rich-message.js";
+import { withLocationText } from "./telegram-location-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
 import type { TelegramPrivateBurstPolicy } from "./telegram-ingress-contract.js";
 import { telegramRepository } from "./telegram-repository.js";
@@ -329,7 +330,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
       accept: (payload) => {
         const candidate = parseTelegramUpdate(payload);
         return candidate !== null &&
-          continuesSeries(update, normalizeRichMessage(candidate), dependencies.botUsername);
+          continuesSeries(update, withLocationText(normalizeRichMessage(candidate)), dependencies.botUsername);
       },
       afterUpdateId: head.updateId,
       leaseMilliseconds: dependencies.leaseMilliseconds,
@@ -344,7 +345,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           "Не удалось подготовить сообщение серии для обработки",
         );
       }
-      return { claim, update: normalizeRichMessage(parsed) };
+      return { claim, update: withLocationText(normalizeRichMessage(parsed)) };
     });
   }
 
@@ -457,9 +458,10 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
 
       try {
         let payload = claim.payload;
-        // Rich messages (Bot API 10.1) carry their text in blocks; Eve reads only `text`.
+        // Rich messages (Bot API 10.1) carry their text in blocks, a shared location its
+        // coordinates in `raw.location`; Eve reads only `text`.
         let update = parseTelegramUpdate(payload);
-        if (update) update = normalizeRichMessage(update);
+        if (update) update = withLocationText(normalizeRichMessage(update));
         if (!update) {
           await dependencies.repository.complete(claim.updateId, claim.leaseToken);
           pending.shift();

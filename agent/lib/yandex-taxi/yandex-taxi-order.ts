@@ -194,7 +194,7 @@ async function submitOrder(
     const moved = price !== request.price ? ` Цена при заказе ${money(price, quote.currency, request.fixedPrice)} (подтверждали ${money(request.price, request.currency, request.fixedPrice)}).` : "";
     return {
       currency: quote.currency,
-      note: `Заказ принят.${moved} Как найдётся машина, статус покажет её, номер и время подачи (status)`,
+      note: `Заказ принят.${moved}`,
       orderId,
       price,
       status: status || null,

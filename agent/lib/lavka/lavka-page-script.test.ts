@@ -46,6 +46,19 @@ describe("lavkaPageScript", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  // The site maps a tracked order to { id, status, trackingInfo: { title, subtitle } } (main bundle,
+  // module 61908, read 26 October 2026); the status a person reads lives in trackingInfo.
+  it("reads a tracked order's status title where the site keeps it", async () => {
+    const { result } = runInFakeTab({ endpoint: "trackedOrders", project: "orders" }, { body: [
+      { id: "o-1", status: "delivering", trackingInfo: { subtitle: "Будет через 7 минут", title: "Курьер в пути" } },
+      { orderId: "o-2", status: "created", title: "Заказ принят" },
+    ], status: 200 });
+    expect((await result).data).toEqual([
+      { eta: "", orderId: "o-1", status: "delivering", subtitle: "Будет через 7 минут", title: "Курьер в пути" },
+      { eta: "", orderId: "o-2", status: "created", subtitle: "", title: "Заказ принят" },
+    ]);
+  });
+
   it("posts to the site's path with the page's CSRF token and the session cookies", async () => {
     const { fetch, result } = runInFakeTab({ body: { text: "молоко 'х'" }, endpoint: "search", project: "search" }, { body: { cacheProducts: [] }, status: 200 });
     expect(await result).toEqual({ authorized: true, data: [], error: null, status: 200 });

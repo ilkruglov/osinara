@@ -2,7 +2,7 @@
  * Yandex Go taxi in the person's private chat: login state, addresses, prices, the order and its status.
  *
  * Exports:
- * - `yandex_taxi`: auth, places, suggest, estimate, order, status, cancel.
+ * - `yandex_taxi`: auth, places, suggest, estimate, order, status, cancel, watch, unwatch.
  *
  * Key constructs:
  * - Everything runs in the person's own logged-in taxi.yandex.ru tab in their sandbox, so each family
@@ -11,10 +11,15 @@
  *   re-prices the ride (or re-reads the cancellation terms) and refuses any drift from what was shown.
  * - `order` and `cancel` run under `runYandexTaxiOperation` keyed by `session:callId`: a step Eve
  *   replays after a crash returns the stored result or an ambiguity code, never a second car.
+ * - A placed order is watched (`order-watch`): the person is told about the car, its arrival and the
+ *   end of the ride between turns. `watch` follows a ride ordered elsewhere from its current status,
+ *   so nothing already said is said again; `unwatch` stops.
  */
 import { defineTool } from "eve/tools";
 
 import { AppError } from "../app-error.js";
+import { startOrderWatch, stopOrderWatches } from "../order-watch/order-watch-start.js";
+import { decideTaxiWatch } from "../order-watch/order-watch-status.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import { YANDEX_TAXI_APPROVAL_ACTIONS, yandexTaxiInput } from "../yandex-taxi/yandex-taxi-input.js";
@@ -24,6 +29,7 @@ import {
   yandexTaxiOperationRepository,
   type YandexTaxiOperationAction,
 } from "../yandex-taxi/yandex-taxi-operation.js";
+import { YANDEX_TAXI_FINISHED_STATUSES } from "../yandex-taxi/yandex-taxi-config.js";
 import { yandexTaxiClientFor } from "../yandex-taxi/yandex-taxi-production.js";
 
 export default defineTool({
@@ -32,9 +38,10 @@ export default defineTool({
     return typeof action === "string" && YANDEX_TAXI_APPROVAL_ACTIONS.has(action) ? "user-approval" : "not-applicable";
   },
   description: [
-    "Такси Яндекс Go из аккаунта человека в его браузере. auth: есть ли вход и активный заказ. places: сохранённые адреса. suggest: адрес по тексту (query, type from|to, near рядом, pick из others). point из ответа передавай дальше без изменений.",
+    "Такси Яндекс Go из аккаунта человека в его браузере. auth: есть ли вход и активный заказ. places: сохранённые адреса. suggest: адрес по тексту (query, type from|to, near рядом, pick из others) или по геолокации (только near из «Геолокация: широта, долгота» и type). point из ответа передавай дальше без изменений.",
     "Сначала estimate (from, to, payment по желанию): тарифы, цены, подача, оплата. Покажи человеку тариф, цену и оплату; order только после его явного согласия, с from, to, payment, currency и tariff, tariffName, price, fixedPrice, waitingMinutes выбранного тарифа ровно из estimate (porch, comment по желанию); человек подтверждает кнопкой; заказ уйдёт, если цена при заказе не выше на 5 %. PRICE_CHANGED: новый estimate и новое согласие.",
     "При неясном исходе заказа никогда не заказывай повторно, смотри status. status (orderId или активный): машина, номер, водитель, через сколько, по просьбе. cancel: orderId, cancelState и cancelMessage из status, с подтверждением.",
+    "После order статус человеку приходит сам. watch (orderId или активный): следить за заказом из приложения, unwatch: перестать.",
     "Нет входа: browser_open https://passport.yandex.ru/auth и код из СМС.",
   ].join(" "),
   inputSchema: yandexTaxiInput,
@@ -59,19 +66,34 @@ export default defineTool({
     switch (input.action) {
       case "auth": return await client.auth();
       case "places": return await client.places();
-      case "suggest": return await client.suggest({ near: input.near, pick: input.pick ?? 0, query: input.query!, type: input.type === "from" ? "a" : "b" });
+      case "suggest": return await client.suggest({ near: input.near, pick: input.pick ?? 0, query: input.query || undefined, type: input.type === "from" ? "a" : "b" });
       case "estimate": {
         // The offer is re-issued on every pricing, so order prices the ride again; the model never needs it.
         const { offer: _offer, ...estimate } = await client.estimate({ from: input.from!, payment: input.payment, to: input.to! });
         return { ...estimate, note: "Для order: from, to, payment, currency отсюда и tariff, tariffName, price, fixedPrice, waitingMinutes выбранного тарифа" };
       }
-      case "order": return await once("order", () => client.placeOrder({
-        comment: input.comment, currency: input.currency!, fixedPrice: input.fixedPrice!, from: input.from!,
-        payment: { id: input.payment!.id, label: input.payment!.label!, type: input.payment!.type }, porch: input.porch, price: input.price!,
-        tariff: input.tariff!, tariffName: input.tariffName!, to: input.to!,
-      }));
+      case "order": {
+        const placed = await once("order", () => client.placeOrder({
+          comment: input.comment, currency: input.currency!, fixedPrice: input.fixedPrice!, from: input.from!,
+          payment: { id: input.payment!.id, label: input.payment!.label!, type: input.payment!.type }, porch: input.porch, price: input.price!,
+          tariff: input.tariff!, tariffName: input.tariffName!, to: input.to!,
+        }));
+        // A replayed step reaches the same watch: one active watch per order and person.
+        const watching = await startOrderWatch(ctx, { familyId, initialState: null, orderId: placed.orderId, service: "yandex_taxi", userId });
+        return { ...placed, note: watching ? `${placed.note} Статус пришлю сама: машину, подачу и конец поездки.` : placed.note, watching };
+      }
       case "status": return await client.status(input.orderId);
       case "cancel": return await once("cancel", () => client.cancel({ cancelMessage: input.cancelMessage, cancelState: input.cancelState!, orderId: input.orderId! }));
+      case "watch": {
+        const { order } = await client.status(input.orderId);
+        if (!order) throw new AppError("AGENT_YANDEX_TAXI_ORDER_NOT_FOUND", "Активного заказа нет: следить не за чем");
+        if (YANDEX_TAXI_FINISHED_STATUSES.has(order.status)) return { orderId: order.orderId, status: order.statusText, watching: false };
+        // What the person can already see is the starting point: only what changes next is told.
+        const initialState = decideTaxiWatch(null, { car: order.car, driver: order.driver, finalCost: order.finalCost, minutesLeft: order.minutesLeft, plates: order.plates, status: order.status }).state;
+        const watching = await startOrderWatch(ctx, { familyId, initialState, orderId: order.orderId, service: "yandex_taxi", userId });
+        return { orderId: order.orderId, status: order.statusText, watching };
+      }
+      case "unwatch": return { stopped: await stopOrderWatches({ orderId: input.orderId, service: "yandex_taxi", userId }) };
     }
   },
 });
