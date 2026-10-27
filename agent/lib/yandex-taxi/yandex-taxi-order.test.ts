@@ -45,8 +45,9 @@ describe("placeYandexTaxiOrder", () => {
       class: ["econom"], comment: "Позвоните", dont_sms: false, driverclientchat_enabled: true, id: "user-1", location: [37.6, 55.7], offer: "offer-1", parks: [],
       payment: { payment_method_id: "card-1", type: "card" }, requirements: { coupon: "" },
       route: [
-        { city: "Москва", fullname: fromPoint.fullText, geopoint: [37.6, 55.7], porchnumber: "2", short_text: "Корабельная 11к1", type: "a", uri: fromPoint.uri },
-        { city: "Химки", fullname: toPoint.fullText, geopoint: [37.41, 55.98], porchnumber: "", short_text: "Шереметьево, терминал B", type: "b", uri: toPoint.uri },
+        // The site's own route point (module 3103, read 27 October 2026): no type, no uri.
+        { city: "Москва", country: "", eta: 0, fullname: fromPoint.fullText, geopoint: [37.6, 55.7], porchnumber: "2", short_text: "Корабельная 11к1" },
+        { city: "Химки", country: "", eta: 0, fullname: toPoint.fullText, geopoint: [37.41, 55.98], porchnumber: "", short_text: "Шереметьево, терминал B" },
       ],
     });
     expect(tab.to(PATHS.commit).map((call) => call.body)).toEqual([{ id: "user-1", orderid: "o-1" }]);

@@ -105,8 +105,12 @@ async function orderAmbiguous(transport: YandexTaxiTransport, stage: "commit" | 
   return new AppError("AGENT_YANDEX_TAXI_ORDER_AMBIGUOUS", message);
 }
 
-const routePoint = (point: YandexTaxiPoint, type: "a" | "b", porch = "") => ({
-  city: point.city, fullname: point.fullText, geopoint: yandexTaxiCoordinates(point), porchnumber: porch, short_text: point.shortText, type, uri: point.uri,
+/**
+ * A route point exactly as the site sends it to orderdraft (module 3103, read 27 October 2026). The
+ * first live order (27 October 2026) also carried `type` and `uri` and got 400 Bad Request.
+ */
+const routePoint = (point: YandexTaxiPoint, porch = "") => ({
+  city: point.city, country: "", eta: 0, fullname: point.fullText, geopoint: yandexTaxiCoordinates(point), porchnumber: porch, short_text: point.shortText,
 });
 
 const money = (price: number | null, currency: string, fixed: boolean) => price === null ? "без точной цены" : `${fixed ? "" : "≈ "}${price} ${currency}`;
@@ -155,7 +159,7 @@ async function submitOrder(
   const draftBody = {
     class: [request.tariff], ...(request.comment ? { comment: request.comment } : {}), dont_sms: false, driverclientchat_enabled: true, id: session.userId,
     location: yandexTaxiCoordinates(from), offer: quote.offer, parks: [], payment: orderDraftPayment(quote.payment), requirements: { coupon: "" },
-    route: [routePoint(from, "a", request.porch ?? ""), routePoint(to, "b")],
+    route: [routePoint(from, request.porch ?? ""), routePoint(to)],
   };
   let draft: YandexTaxiPageResult;
   try {
