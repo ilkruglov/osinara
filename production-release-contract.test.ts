@@ -307,6 +307,8 @@ describe("release workflow contract", () => {
     expect(workflow).toMatch(/gh release create "\$TAG"[\s\S]*?--notes-file "\$RELEASE_NOTES_FILE"/);
     expect(workflow).toContain('--target "$GITHUB_SHA"');
     expect(workflow).toContain("gh release upload");
+    // v1.8.52 (26 October 2026): the upload right after create did not find the new draft yet.
+    expect(workflow).toMatch(/gh release create[\s\S]*?gh release view "\$TAG"[\s\S]*?RELEASE_DRAFT_NOT_VISIBLE[\s\S]*?gh release upload/u);
     expect(workflow).toContain("--clobber");
     expect(workflow).toContain("gh release edit");
     expect(workflow).toContain("--draft=false");

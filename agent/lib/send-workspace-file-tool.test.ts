@@ -6,6 +6,7 @@
  * - The exact Telegram media message receives a reply continuation route.
  * - Projection failures after confirmed delivery never invite a duplicate send.
  * - Delivery-journal failures after Telegram confirmation preserve completed side-effect semantics.
+ * - A delivered caption is named in the result, so the final message does not describe the picture again.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,6 +114,19 @@ describe("send_workspace_file group projection", () => {
       messageIds: ["446"],
       messageThreadId: 42,
     });
+  });
+
+  // 3 November 2026, «Дизраптим»: in three of five turns with a picture the caption said «Готово: …»
+  // and the final message said it again.
+  it("tells the model the caption is already in the chat, and says nothing without a caption", async () => {
+    const captioned = await sendWorkspaceImage.execute({ caption: "Готово: волосы убрала", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    expect(captioned.caption_already_sent).toMatch(/^Подпись уже в чате вместе с картинкой\..*<telegram-silent>/u);
+    const bare = await sendWorkspaceImage.execute({ path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    expect(bare).not.toHaveProperty("caption_already_sent");
+    const blank = await sendWorkspaceImage.execute({ caption: "  ", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    expect(blank).not.toHaveProperty("caption_already_sent");
+    const document = await sendWorkspaceFile.execute({ caption: "Отчёт за октябрь", path: "screens/facade.png", scope: "family" }, context()) as Record<string, unknown>;
+    expect(document.caption_already_sent).toMatch(/^Подпись уже в чате вместе с файлом\./u);
   });
 
   it("repairs timeline and route projection when a confirmed delivery step replays", async () => {

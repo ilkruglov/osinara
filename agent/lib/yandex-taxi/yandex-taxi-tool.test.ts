@@ -9,9 +9,13 @@
  *   payment exactly as estimate gave it.
  * - An order runs once under `session:callId` after the approval check, with the confirmed input,
  *   and is then watched; watch follows a ride ordered elsewhere from its current status, unwatch stops.
+ * - An edited point is answered with "take it again from places or suggest", never with the generic
+ *   "fix the arguments"; the second one in a turn stops estimate and order for the rest of the turn.
  */
 import type { ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AppError } from "../app-error.js";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -52,7 +56,7 @@ import yandexTaxi from "../tools/yandex_taxi.js";
 import { yandexTaxiInput } from "./yandex-taxi-input.js";
 import { fromPoint, toPoint } from "./yandex-taxi.test-fixtures.js";
 
-function context(kind: "external" | "family" | "private", callId = "call-1"): ToolContext {
+function context(kind: "external" | "family" | "private", callId = "call-1", turnId = "turn-1"): ToolContext {
   const caller = {
     attributes: {
       familyId: "family-1",
@@ -69,7 +73,7 @@ function context(kind: "external" | "family" | "private", callId = "call-1"): To
     principalId: "user-1",
     principalType: "user" as const,
   };
-  return { callId, session: { auth: { current: caller, initiator: caller }, id: "session-1", turn: { id: "turn-1", sequence: 1 } } } as unknown as ToolContext;
+  return { callId, session: { auth: { current: caller, initiator: caller }, id: "session-1", turn: { id: turnId, sequence: 1 } } } as unknown as ToolContext;
 }
 
 const orderInput = {
@@ -165,6 +169,23 @@ describe("yandex_taxi", () => {
     mocks.requireToolApprovalEvidence.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "AGENT_TOOL_APPROVAL_EVIDENCE_INVALID" }));
     await expect(yandexTaxi.execute(orderInput, context("private", "call-2"))).rejects.toThrow();
     expect(mocks.placeOrder).toHaveBeenCalledTimes(1);
+  });
+
+  // 27 October 2026: after Yandex refused the draft, the model "fixed" the point five times in one
+  // turn, because the generic correction for an input error says to fix the arguments and retry.
+  it("asks for a fresh point instead of a fixed one, and stops the second time in a turn", async () => {
+    const failure = async (run: () => unknown) => { try { await run(); } catch (error) { return error; } return null; };
+    const edited = () => new AppError("AGENT_YANDEX_TAXI_POINT_REF_INVALID", "Точка откуда изменена после places или suggest. Передайте объект point ровно из их ответа");
+    mocks.estimate.mockRejectedValue(edited());
+    const first = await failure(() => yandexTaxi.execute({ action: "estimate", from: fromPoint, to: toPoint }, context("private", "call-1", "turn-9")));
+    expect(first).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID", contract: { retryable: true, sideEffectStatus: "not_started" } });
+    expect((first as { contract: { correction: string } }).contract.correction).toMatch(/не правь.*places.*suggest/su);
+    const second = await failure(() => yandexTaxi.execute({ action: "estimate", from: fromPoint, to: toPoint }, context("private", "call-2", "turn-9")));
+    expect(second).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_REPEATED", contract: { retryable: false } });
+    expect((second as { contract: { correction: string } }).contract.correction).toMatch(/в этом ходе.*человеку/su);
+    // A new turn starts over.
+    const next = await failure(() => yandexTaxi.execute({ action: "estimate", from: fromPoint, to: toPoint }, context("private", "call-3", "turn-10")));
+    expect(next).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID" });
   });
 
   it("watches a ride ordered elsewhere from where it is now, refuses a finished one, and stops on request", async () => {

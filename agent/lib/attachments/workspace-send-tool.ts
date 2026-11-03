@@ -9,6 +9,9 @@
  *   file tool sends documents, so one file can no longer arrive twice in two shapes.
  * - Identical bytes already delivered to this chat in this turn report the first message instead
  *   of sending again.
+ * - A delivered caption is named in the result: the model writes its final message right after it,
+ *   and without the note it described the picture a second time (3 of 5 turns with a picture in
+ *   «Дизраптим», 1–3 November 2026), as it once repeated text sent before a tool call.
  */
 import { basename } from "node:path";
 
@@ -28,6 +31,10 @@ import {
   registerTelegramMessageRoutes,
 } from "../sessions/session-context.js";
 import { turnKey } from "../model-facing-tool.js";
+import { TELEGRAM_SILENT_DIRECTIVE } from "../telegram-progress.js";
+
+const captionSentNote = (what: "картинкой" | "файлом") =>
+  `Подпись уже в чате вместе с ${what}. В следующем сообщении пиши только то, чего в подписи нет, без «Готово» и без пересказа; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
 
 export function createWorkspaceSendTool(options: {
   description: string;
@@ -161,6 +168,9 @@ export function createWorkspaceSendTool(options: {
       }
       return {
         alreadySent: false,
+        ...(input.caption?.trim()
+          ? { caption_already_sent: captionSentNote(options.presentation === "photo" ? "картинкой" : "файлом") }
+          : {}),
         delivered: true,
         path: reservation.file.path,
         persistenceCompleted,

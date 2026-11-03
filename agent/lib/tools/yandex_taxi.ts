@@ -14,6 +14,8 @@
  * - A placed order is watched (`order-watch`): the person is told about the car, its arrival and the
  *   end of the ride between turns. `watch` follows a ride ordered elsewhere from its current status,
  *   so nothing already said is said again; `unwatch` stops.
+ * - A point edited after places or suggest gets its own correction, and the second one in a turn
+ *   stops the loop (`yandex-taxi-point-guard.ts`).
  */
 import { defineTool } from "eve/tools";
 
@@ -21,6 +23,7 @@ import { AppError } from "../app-error.js";
 import { startOrderWatch, stopOrderWatches } from "../order-watch/order-watch-start.js";
 import { decideTaxiWatch } from "../order-watch/order-watch-status.js";
 import { requireMemoryAuthorization } from "../memory-context.js";
+import { turnKey } from "../model-facing-tool.js";
 import { requireToolApprovalEvidence } from "../require-tool-approval-evidence.js";
 import { YANDEX_TAXI_APPROVAL_ACTIONS, yandexTaxiInput } from "../yandex-taxi/yandex-taxi-input.js";
 import {
@@ -30,6 +33,7 @@ import {
   type YandexTaxiOperationAction,
 } from "../yandex-taxi/yandex-taxi-operation.js";
 import { YANDEX_TAXI_FINISHED_STATUSES } from "../yandex-taxi/yandex-taxi-config.js";
+import { yandexTaxiPointGuard } from "../yandex-taxi/yandex-taxi-point-guard.js";
 import { yandexTaxiClientFor } from "../yandex-taxi/yandex-taxi-production.js";
 
 export default defineTool({
@@ -63,6 +67,12 @@ export default defineTool({
       });
       return done.result;
     };
+    try {
+      return await run();
+    } catch (error) {
+      throw yandexTaxiPointGuard.explain(turnKey(ctx), error);
+    }
+    async function run() {
     switch (input.action) {
       case "auth": return await client.auth();
       case "places": return await client.places();
@@ -94,6 +104,7 @@ export default defineTool({
         return { orderId: order.orderId, status: order.statusText, watching };
       }
       case "unwatch": return { stopped: await stopOrderWatches({ orderId: input.orderId, service: "yandex_taxi", userId }) };
+    }
     }
   },
 });

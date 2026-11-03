@@ -440,6 +440,18 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" \
               --title "Мия ${TAG}" --notes-file "$RELEASE_NOTES_FILE"
           fi
+          # A draft just created is not always visible to the next call: v1.8.52 failed here with
+          # "release not found". Wait up to a minute for it before uploading.
+          for attempt in $(seq 1 12); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft >/dev/null 2>&1; then
+              break
+            fi
+            if [[ "$attempt" == 12 ]]; then
+              printf '%s\n' "RELEASE_DRAFT_NOT_VISIBLE: draft ${TAG} did not appear within a minute" >&2
+              exit 1
+            fi
+            sleep 5
+          done
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             osinara-deployment.json compose.production.yaml install.sh osinara-installation.tar.gz \
             osinara-linux-x64 osinara-linux-x64.sha256
