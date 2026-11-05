@@ -10,7 +10,10 @@ const TELEGRAM_MESSAGE_TEXT_MAX_LENGTH = 4096;
 // Osinara: Node's fetch waits five minutes for response headers by default, so a stuck Telegram
 // call held the turn that long. Every Bot API attempt gets its own deadline (the retry after a 429
 // a fresh one), a file download a longer one; a caller's own signal is combined, not replaced.
+// getFile waits a minute: on 5 November 2026 Telegram held it past 30 seconds for two photos in a
+// row while every send answered at once, and the photo was never seen.
 const TELEGRAM_API_TIMEOUT_MS = 30_000;
+const TELEGRAM_GET_FILE_TIMEOUT_MS = 60_000;
 const TELEGRAM_FILE_DOWNLOAD_TIMEOUT_MS = 120_000;
 function telegramRequestSignal(e, t) {
   let n = AbortSignal.timeout(t);
@@ -38,8 +41,9 @@ async function callTelegramApi(e) {
   // Osinara: every sending method waits for its slot under Telegram's limits, and a 429 pauses
   // all calls for the time Telegram names before this one is tried once more.
   await telegramSendPacer.acquire(e.method, e.body);
-  let startedAt = Date.now(),
-    a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) }),
+  let deadline = e.timeoutMs ?? TELEGRAM_API_TIMEOUT_MS,
+    startedAt = Date.now(),
+    a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, deadline) }),
     s = await parseResponseBody(a);
   if (a.status === 429) {
     let t = telegramRetryAfterSeconds(s);
@@ -49,7 +53,7 @@ async function callTelegramApi(e) {
       await telegramSendPacer.waitForPause();
       await telegramSendPacer.acquire(e.method, e.body);
       startedAt = Date.now();
-      a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, TELEGRAM_API_TIMEOUT_MS) });
+      a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, deadline) });
       s = await parseResponseBody(a);
     }
   }
@@ -116,6 +120,7 @@ async function getTelegramFile(t) {
     botToken: t.credentials?.botToken,
     fetch: t.fetch,
     method: `getFile`,
+    timeoutMs: TELEGRAM_GET_FILE_TIMEOUT_MS,
   });
   if (!n.ok) throw Error(`Telegram getFile failed with HTTP ${n.status}.`);
   let r = isObject(n.body) ? n.body : {},

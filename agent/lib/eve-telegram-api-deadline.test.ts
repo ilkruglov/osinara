@@ -5,11 +5,14 @@
  * - Every Bot API attempt gets its own 30-second deadline; the retry after a 429 gets a fresh one.
  * - A caller's fetch receives the deadline as `init.signal`, so a wrapper can combine it.
  * - A file download gets the longer download deadline.
+ * - getFile gets one minute; every other method keeps 30 seconds.
  *
  * Node's fetch waits five minutes for response headers by default, so before this a stuck Telegram
- * call held the turn that long (skill review of 24 October 2026).
+ * call held the turn that long (skill review of 24 October 2026). On 5 November 2026 Telegram held
+ * getFile past 30 seconds for two photos in a row in «Дизраптим» (another bot measured 65 % of its
+ * uncached downloads timing out that day), so getFile alone waits longer.
  */
-import { callTelegramApi, downloadTelegramFile } from "eve/channels/telegram";
+import { callTelegramApi, downloadTelegramFile, getTelegramFile } from "eve/channels/telegram";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -35,6 +38,19 @@ describe("Eve Telegram API deadlines", () => {
     expect(signals[0]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).not.toBe(signals[0]);
+  });
+
+  it("gives getFile a one-minute deadline and leaves every other method at 30 seconds", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const fetch = vi.fn(async (url: string | URL | Request) => (String(url).endsWith("/getFile")
+      ? Response.json({ ok: true, result: { file_id: "f", file_path: "photos/a.jpg" } })
+      : Response.json({ ok: true, result: true })));
+
+    const file = await getTelegramFile({ credentials: { botToken: "1:test" }, fetch, fileId: "f" });
+    await callTelegramApi({ botToken: "1:test", fetch, method: "getMe" });
+
+    expect(file.filePath).toBe("photos/a.jpg");
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([60_000, 30_000]);
   });
 
   it("gives a file download the longer deadline", async () => {
