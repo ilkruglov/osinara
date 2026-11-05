@@ -193,7 +193,8 @@ export function mentionsAnotherUsername(text: string, botUsername: string): bool
   );
 }
 
-function isAgentNameMentioned(text: string): boolean {
+/** Mia's own name in any case form, or "mia"; prompt evals pick addressed turns by the same rule. */
+export function isAgentNameMentioned(text: string): boolean {
   return AGENT_NAME_PATTERN.test(text);
 }
 

@@ -15,6 +15,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 
+import { isAddressedToMia } from "./turn-filters.js";
+
 interface TurnInput { actual: string | null; at: string; message: string; turn: string }
 
 const [source, target, ...flags] = process.argv.slice(2);
@@ -37,7 +39,7 @@ for await (const line of lines) {
   if (event.type === "message.received") {
     const message = String(event.data?.message ?? "");
     if (!message.includes("<current_telegram_message>")) continue;
-    if (addressedOnly && !/[Мм]и[яию]\b/u.test(message.match(/<current_telegram_message>([\s\S]*?)<\/current_telegram_message>/)?.[1] ?? "")) continue;
+    if (addressedOnly && !isAddressedToMia(message)) continue;
     turns.set(current, { actual: null, at: at!, completed: false, message, turn: current });
   }
   if (event.type === "message.completed") {
