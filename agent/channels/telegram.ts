@@ -23,7 +23,7 @@ import { formatTelegramTurnFailure, isUnrecoverableHistoryFailure } from "../lib
 import { TELEGRAM_EVE_UPLOAD_POLICY } from "../lib/telegram-message-policy.js";
 import { handleTelegramMessage } from "../lib/telegram-on-message.js";
 import { completedTelegramOutput, TELEGRAM_SILENT_DIRECTIVE } from "../lib/telegram-progress.js";
-import { observeReplyGate, recordTurnResponseKind } from "../lib/reply-gate/reply-gate.js";
+import { observeTurnExchange, recordTurnResponseKind } from "../lib/turn-quality/turn-exchange.js";
 import { deliverTelegramProgressNotice } from "../lib/telegram-progress-notice.js";
 import { progressNoticeKey, telegramProgressNoticeDeferral } from "../lib/telegram-progress-deferral.js";
 import { refreshTelegramReactionPolicy } from "../lib/telegram-reaction-policy.js";
@@ -296,10 +296,8 @@ export default telegramChannel({
         await recordTurnDelivery(ctx, sentMessages.map((sent) => sent.messageId), deliveredAt);
         await recordTurnResponseKind(ctx, "text");
         if (groupId) {
-          // Shadow reply gate: the answer is already in the chat; the verdict only calibrates the gate.
-          await observeReplyGate(ctx, {
-            candidate: durableText, forumTopicId, groupId, ownMessageIds: sentMessages.map((sent) => sent.messageId),
-          });
+          // Who Mia keeps answering and how deep the reply chain goes: counted from the journal, no model.
+          await observeTurnExchange(ctx, { forumTopicId, groupId, ownMessageIds: sentMessages.map((sent) => sent.messageId) });
         }
       }
       if (!isScheduledSession(ctx)) {
