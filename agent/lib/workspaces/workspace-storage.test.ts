@@ -8,6 +8,8 @@
  * - A sandbox that swaps a file or a parent directory for a symlink while the agent reads,
  *   writes, lists or deletes cannot make the agent reach outside the workspace (security
  *   review, 5 October 2026: the checked path was used after the check).
+ * - A file whose name takes the whole Linux limit (255 bytes) is written: the write's temporary
+ *   name does not grow with it (Codex review, 6 November 2026).
  */
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
@@ -90,6 +92,18 @@ describe("workspace storage", () => {
     await expect(deleteWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt")).resolves.toBe(false);
     await expect(readWorkspaceFile(root, WORKSPACE_ID, "output/deep/report.txt"))
       .rejects.toThrowError(/AGENT_WORKSPACE_FILE_NOT_FOUND/);
+  });
+
+  it("writes a file whose name takes the whole 255-byte limit", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osinara-storage-"));
+    roots.push(root);
+    await mkdir(workspaceDirectory(root, WORKSPACE_ID), { recursive: true });
+    const name = `${"я".repeat(125)}.txt`;
+    expect(Buffer.byteLength(name)).toBe(254);
+
+    await writeWorkspaceFile(root, WORKSPACE_ID, `inbox/${name}`, Buffer.from("v1"));
+
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, `inbox/${name}`)).resolves.toEqual(Buffer.from("v1"));
   });
 
   it("rejects a symlinked directory and a path through a regular file", async () => {

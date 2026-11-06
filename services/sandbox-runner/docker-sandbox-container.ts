@@ -8,7 +8,9 @@
  *
  * Key construct:
  * - The pids cgroup counts threads, so a single Chromium (about 200 tasks) can exhaust the limit
- *   and every later operation fails inside the container. Crowded containers are restarted.
+ *   and every later operation fails inside the container. Crowded containers are restarted, inside
+ *   the capacity gate every start passes: down for its restart, the container's slot looked free,
+ *   and another session's start took it (Codex review, 6 November 2026).
  * - One container run has an identity: a restart empties restricted `$HOME`, which is a tmpfs, so
  *   callers must be able to tell that everything they wrote into the previous run is gone.
  */
@@ -48,12 +50,25 @@ async function countContainerTasks(container: Docker.Container): Promise<number>
   }, 0);
 }
 
+/**
+ * Runs a start (or a restart) of a container in the engine's capacity gate: a start takes room, a
+ * restart keeps the slot it has but must not let another start count it free meanwhile.
+ */
+export type ContainerStartGate = (
+  work: () => Promise<void>,
+  /** The container being resumed or restarted; absent for a container started the first time. */
+  container?: Docker.Container,
+  kind?: "restart" | "start",
+) => Promise<void>;
+
 /** True when the container was restarted, so everything known about its previous run is stale. */
-async function reapCrowdedContainer(container: Docker.Container, sessionId: string): Promise<boolean> {
+async function reapCrowdedContainer(container: Docker.Container, sessionId: string, gate: ContainerStartGate): Promise<boolean> {
   const tasks = await countContainerTasks(container);
   if (tasks < SANDBOX_PIDS_REAP_THRESHOLD) return false;
   // Workspace and tools are named volumes; the process tree is disposable compute.
-  await container.restart({ t: 0 });
+  await gate(async () => {
+    await container.restart({ t: 0 });
+  }, container, "restart");
   console.error(JSON.stringify({
     code: "AGENT_SANDBOX_RUNNER_PROCESSES_REAPED",
     sessionId,
@@ -88,8 +103,8 @@ export async function requireRunningContainer(
   docker: Docker,
   sessionId: string,
   activeOperations: number,
-  /** Runs a start of the stopped container; the engine passes its capacity gate. */
-  gateStart: (start: () => Promise<void>, container: Docker.Container) => Promise<void> = (start) => start(),
+  /** Runs a start or a restart of the container; the engine passes its capacity gate. */
+  gateStart: ContainerStartGate = (work) => work(),
   containerName: string = sandboxContainerName(sessionId),
   /** Awaited for the run it returns, started now or already running, e.g. its network rules. */
   ensureReady: (container: Docker.Container, inspection: Docker.ContainerInspectInfo) => Promise<void> = async () => undefined,
@@ -102,7 +117,7 @@ export async function requireRunningContainer(
     inspection = await existing.container.inspect();
   } else if (activeOperations <= 1) {
     // A restart kills every process of the session: only the caller may be running in it.
-    if (await reapCrowdedContainer(existing.container, sessionId)) {
+    if (await reapCrowdedContainer(existing.container, sessionId, gateStart)) {
       inspection = await existing.container.inspect();
     }
   }

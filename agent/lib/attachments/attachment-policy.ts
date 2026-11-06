@@ -12,7 +12,12 @@ import { fileTypeFromBuffer } from "file-type";
 
 import { AppError } from "../app-error.js";
 
-const ATTACHMENT_FILENAME_MAX_CHARACTERS = 180;
+// Linux allows 255 bytes per name, and a workspace write first creates a temporary name of 49 bytes
+// (`workspace-storage.ts`); 200 bytes leave room for both. Characters were counted before, and 180
+// Cyrillic ones are 360 bytes (Codex review, 6 November 2026).
+const ATTACHMENT_FILENAME_MAX_BYTES = 200;
+// A longer «extension» is part of the name, not a type: keeping it would leave no room for the stem.
+const ATTACHMENT_EXTENSION_MAX_BYTES = 16;
 const OCTET_STREAM_MEDIA_TYPE = "application/octet-stream";
 
 const TEXT_EXTENSION_MEDIA_TYPES: Readonly<Record<string, string>> = {
@@ -101,12 +106,30 @@ function sanitizeAttachmentFileName(fileName: string): string {
   if (!normalized || normalized === "." || normalized === "..") {
     throw new AppError("AGENT_ATTACHMENT_FILENAME_INVALID", "Telegram передал некорректное имя файла");
   }
-  if (normalized.length <= ATTACHMENT_FILENAME_MAX_CHARACTERS) return normalized;
+  if (utf8Bytes(normalized) <= ATTACHMENT_FILENAME_MAX_BYTES) return normalized;
 
   // Preserve the extension because both validation and later document tooling depend on it.
-  const extension = extname(normalized);
-  const stemLength = ATTACHMENT_FILENAME_MAX_CHARACTERS - extension.length;
-  return `${normalized.slice(0, stemLength)}${extension}`;
+  const found = extname(normalized);
+  const extension = utf8Bytes(found) <= ATTACHMENT_EXTENSION_MAX_BYTES ? found : "";
+  const stem = normalized.slice(0, normalized.length - extension.length);
+  return `${clipUtf8(stem, ATTACHMENT_FILENAME_MAX_BYTES - utf8Bytes(extension)).trimEnd()}${extension}`;
+}
+
+function utf8Bytes(text: string): number {
+  return Buffer.byteLength(text, "utf8");
+}
+
+/** The longest prefix of whole characters within `maxBytes` of UTF-8. */
+function clipUtf8(text: string, maxBytes: number): string {
+  let bytes = 0;
+  let end = 0;
+  for (const character of text) {
+    const size = utf8Bytes(character);
+    if (bytes + size > maxBytes) break;
+    bytes += size;
+    end += character.length;
+  }
+  return text.slice(0, end);
 }
 
 export async function validateAttachmentContent(input: {

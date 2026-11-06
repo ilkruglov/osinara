@@ -251,6 +251,30 @@ export async function getWorkspaceStoredFile(
   return { byteSize: metadata.size, path: safePath, updatedAt: metadata.mtime };
 }
 
+function fileTooLarge(): AppError {
+  return new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл превышает допустимый размер 50 МБ");
+}
+
+const READ_CHUNK_BYTES = 1024 * 1024;
+
+/**
+ * The file's bytes, read no further than one byte past `limit`. The sandbox may grow the file after
+ * its stat, and `readFile` buffers whatever it has grown to before any check (Codex review,
+ * 6 November 2026).
+ */
+async function readAtMost(file: FileHandle, limit: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const chunk = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, limit + 1 - total));
+    const { bytesRead } = await file.read(chunk, 0, chunk.byteLength, null);
+    if (bytesRead === 0) return Buffer.concat(chunks, total);
+    chunks.push(chunk.subarray(0, bytesRead));
+    total += bytesRead;
+    if (total > limit) throw fileTooLarge();
+  }
+}
+
 export async function readWorkspaceFile(
   root: string,
   workspaceId: string,
@@ -258,14 +282,8 @@ export async function readWorkspaceFile(
 ): Promise<Buffer> {
   const { file, metadata } = await openRegularFile(root, workspaceId, path);
   try {
-    if (metadata.size > WORKSPACE_MAX_FILE_BYTES) {
-      throw new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл превышает допустимый размер 50 МБ");
-    }
-    const content = await file.readFile();
-    if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) {
-      throw new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл превышает допустимый размер 50 МБ");
-    }
-    return content;
+    if (metadata.size > WORKSPACE_MAX_FILE_BYTES) throw fileTooLarge();
+    return await readAtMost(file, WORKSPACE_MAX_FILE_BYTES);
   } finally {
     await closeQuietly(file);
   }
@@ -277,16 +295,15 @@ export async function writeWorkspaceFile(
   path: string,
   content: Uint8Array,
 ): Promise<void> {
-  if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) {
-    throw new AppError("AGENT_WORKSPACE_FILE_TOO_LARGE", "Файл превышает допустимый размер 50 МБ");
-  }
+  if (content.byteLength > WORKSPACE_MAX_FILE_BYTES) throw fileTooLarge();
   const { directory, name } = splitPath(path);
   const parent = await openDirectory(root, workspaceId, directory, true);
   // Rename makes readers observe either the old complete file or the new complete file; both
   // names resolve through the parent's descriptor, so neither can land outside the workspace.
   // The temporary file is removed whatever fails after it exists: the write (ENOSPC), the close
-  // or the rename.
-  const temporary = `${name}.osinara-${crypto.randomUUID()}.tmp`;
+  // or the rename. Its name does not carry the target's: a name near Linux's 255 bytes plus the
+  // suffix failed with ENAMETOOLONG (Codex review, 6 November 2026).
+  const temporary = `.osinara-${crypto.randomUUID()}.tmp`;
   try {
     const file = await open(at(parent, temporary), CREATE_FLAGS, 0o644).catch((error: NodeJS.ErrnoException) => {
       // The directory held by its descriptor was removed meanwhile (by the sandbox).

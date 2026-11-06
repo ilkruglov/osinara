@@ -5,6 +5,9 @@
  * - An HTTP request body reaches the destination whole, though the count of it starts before
  *   the destination is resolved.
  * - A CONNECT tunnel is closed once its bytes cross the day's budget, not only counted at the end.
+ * - A plain HTTP request spends the budget with its request line and headers too, so data carried
+ *   in URLs and headers stops at the budget (Codex review, 6 November 2026: 81 920 bytes left
+ *   through a budget of 1 000 in bodiless GETs).
  * - An upgrade request whose target the URL parser rejects is refused, and the proxy keeps serving.
  */
 import { once } from "node:events";
@@ -57,6 +60,35 @@ describe("sandbox egress proxy accounting", () => {
 
     expect(response.statusCode).toBe(200);
     expect(echoed).toBe(sent);
+  });
+
+  it("counts the request line and headers of plain HTTP against the budget", async () => {
+    let delivered = 0;
+    const destination = createHttpServer((incoming, outgoing) => {
+      delivered += (incoming.url ?? "").length + incoming.rawHeaders.join("").length;
+      outgoing.end("ok");
+    });
+    const proxy = await proxyTo(await listen(destination), 20_000);
+
+    const statuses: number[] = [];
+    for (let index = 0; index < 10; index += 1) {
+      const req = request({
+        headers: { "x-data": "h".repeat(2_000) },
+        host: "127.0.0.1",
+        path: `http://example.com/leak?d=${"u".repeat(6_000)}`,
+        port: proxy,
+      });
+      req.end();
+      const [response] = await once(req, "response") as [import("node:http").IncomingMessage];
+      response.resume();
+      await once(response, "end");
+      statuses.push(response.statusCode ?? 0);
+    }
+
+    // About 8 KB a request: the third would cross 20 000 bytes and is refused before it leaves.
+    expect(delivered).toBeLessThan(30_000);
+    expect(statuses.slice(0, 2)).toEqual([200, 200]);
+    expect(statuses.at(-1)).toBe(429);
   });
 
   it("closes a CONNECT tunnel that crosses the day's budget and refuses the next one", async () => {

@@ -11,6 +11,9 @@
  *   reads and changes rows but cannot create, alter, drop or truncate tables.
  * - The grants are applied after every migration run, so a table a migration adds is covered in
  *   the same release; the migration ledger stays out of reach.
+ * - All of it is one transaction. The grant on all tables includes the ledger until the revoke that
+ *   follows it, and as separate statements a running agent of the previous release could write the
+ *   ledger in between, or for good if the migration died there (Codex review, 6 November 2026).
  */
 import { escapeIdentifier, escapeLiteral } from "pg";
 
@@ -62,6 +65,17 @@ export function requireAppDatabaseConfig(adminUrl: string, appUrl: string): AppD
 }
 
 export async function provisionAppDatabaseRole(client: QueryClient, config: AppDatabaseConfig): Promise<void> {
+  await client.query("BEGIN");
+  try {
+    await provisionInTransaction(client, config);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+async function provisionInTransaction(client: QueryClient, config: AppDatabaseConfig): Promise<void> {
   const role = escapeIdentifier(APP_DATABASE_ROLE);
   const flags = `LOGIN PASSWORD ${escapeLiteral(config.password)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`;
   const existing = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [APP_DATABASE_ROLE]);

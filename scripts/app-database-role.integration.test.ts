@@ -5,6 +5,9 @@
  * - `provisionAppDatabaseRole` creates the role and, run again, updates its password.
  * - The role reads and changes rows of application tables, and cannot create, alter, drop or
  *   truncate them, nor touch the migration ledger.
+ * - Provisioning is one transaction: while it runs (or after it dies), the role never holds the
+ *   grant on all tables without the ledger's revoke (Codex review, 6 November 2026: a connection
+ *   of the running agent could write the ledger in that window and make a release skip a migration).
  */
 import { randomBytes } from "node:crypto";
 
@@ -51,6 +54,40 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       }
     } finally {
       await app.end();
+    }
+  });
+
+  it("never shows the role the ledger between the grant on all tables and its revoke", async () => {
+    const adminUrl = process.env.DATABASE_URL as string;
+    const appUrl = new URL(adminUrl);
+    appUrl.username = APP_DATABASE_ROLE;
+    appUrl.password = randomBytes(24).toString("base64url");
+    const admin = new pg.Client({ connectionString: adminUrl });
+    await admin.connect();
+    // The running agent of the previous release, connected with the password it knows.
+    let app: pg.Client | null = null;
+    try {
+      await provisionAppDatabaseRole(admin, requireAppDatabaseConfig(adminUrl, appUrl.href));
+      app = new pg.Client({ connectionString: appUrl.href });
+      await app.connect();
+      const running = app;
+      let seenInWindow: unknown = "not reached";
+      const paused = {
+        async query(text: string, values?: readonly unknown[]) {
+          if (text.startsWith("REVOKE ALL ON schema_migrations")) {
+            seenInWindow = await running.query("SELECT count(*) FROM schema_migrations").then(() => "readable", (error: { code?: string }) => error.code);
+          }
+          return admin.query(text, values as unknown[]);
+        },
+      };
+      const next = new URL(appUrl.href);
+      next.password = randomBytes(24).toString("base64url");
+      await provisionAppDatabaseRole(paused, requireAppDatabaseConfig(adminUrl, next.href));
+
+      expect(seenInWindow).toBe("42501");
+    } finally {
+      await app?.end();
+      await admin.end();
     }
   });
 });

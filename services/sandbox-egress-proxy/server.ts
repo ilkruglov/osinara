@@ -125,6 +125,17 @@ function meterChunks(meter: EgressMeter, direction: "down" | "up", streams: read
   };
 }
 
+/**
+ * Bytes of a request or response head as it crosses the wire: the start line and every header.
+ * A body was all the budget saw, so a sandbox could carry any amount in URLs and headers of
+ * bodiless requests (Codex review, 6 November 2026).
+ */
+function headBytes(startLine: string, rawHeaders: readonly string[]): number {
+  let bytes = Buffer.byteLength(startLine, "latin1") + 4;
+  for (const part of rawHeaders) bytes += Buffer.byteLength(part, "latin1") + 2;
+  return bytes;
+}
+
 /** The sandbox's address on the egress network (the Duplex of CONNECT and upgrade is a socket). */
 function clientAddress(socket: Duplex | Socket): string {
   return ((socket as Socket).remoteAddress ?? "unknown").replace(/^::ffff:/u, "");
@@ -149,6 +160,11 @@ export function createSandboxEgressProxy(options: {
     outgoing.once("close", () => {
       if (logged) meter.close(logged);
     });
+    if (!meter.add("up", headBytes(`${incoming.method} ${incoming.url} HTTP/${incoming.httpVersion}`, incoming.rawHeaders))) {
+      outgoing.writeHead(429);
+      outgoing.end("AGENT_SANDBOX_EGRESS_DAILY_LIMIT: Daily egress volume reached\n");
+      return;
+    }
     void (async () => {
       const targetUrl = new URL(incoming.url ?? "");
       if (targetUrl.protocol !== "http:" || targetUrl.username || targetUrl.password) {
@@ -166,6 +182,12 @@ export function createSandboxEgressProxy(options: {
         port: target.port,
         timeout: CONNECT_TIMEOUT_MS,
       }, (upstreamResponse) => {
+        const statusLine = `HTTP/${upstreamResponse.httpVersion} ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}`;
+        if (!meter.add("down", headBytes(statusLine, upstreamResponse.rawHeaders))) {
+          upstream.destroy();
+          outgoing.destroy();
+          return;
+        }
         outgoing.writeHead(
           upstreamResponse.statusCode ?? 502,
           filteredHeaders(upstreamResponse.headers),

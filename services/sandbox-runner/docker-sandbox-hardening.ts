@@ -9,6 +9,7 @@
  *   the run wait for them; a failure stops the container.
  * - `killStrayProcesses`: after a command, every process left in the container except its own
  *   placeholder and the reader's daemons.
+ * - `STRAY_SWEEP_PYTHON`: the sweep's Python definitions, run against a fake /proc in tests.
  *
  * Key constructs:
  * - Every trusted sandbox of every family sits on the one `sandbox-egress` bridge, so a model's
@@ -16,6 +17,11 @@
  *   the internet was policed, by the proxy (security review, 5 October 2026). The rules live in
  *   the namespace, so they need no host change and hold whatever the host's bridge settings are;
  *   a restart creates a new namespace, so they are applied after every start.
+ * - The proxy port is open only inside the egress network's subnet, and the network's gateway is
+ *   closed: an internal Docker network still reaches the host's own listeners through it (checked
+ *   on local Docker, 7 November 2026), so a host service on the proxy port was reachable (Codex
+ *   review, 6 November 2026). The proxy's own address is not pinned: a deploy recreates the proxy
+ *   and may give it another. Other sandboxes in the subnet refuse new connections themselves.
  * - A command could leave processes running after it (`nohup`, `setsid`, `&`): a miner or a
  *   reverse shell lived until the container's idle stop, hours later. Eve's background commands
  *   are ordinary runner calls too, so nothing legitimate outlives a command except the container's
@@ -30,9 +36,32 @@ import { SANDBOX_SYSTEM_PATH } from "./docker-sandbox-process.js";
 const FIREWALL_TIMEOUT_MS = 30_000;
 export const EGRESS_PROXY_PORT = 3128;
 
+interface EgressSubnet {
+  gateway: string | null;
+  subnet: string;
+}
+
+const IPV4 = String.raw`(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}`;
+const IPV4_PATTERN = new RegExp(`^${IPV4}$`, "u");
+const IPV4_SUBNET_PATTERN = new RegExp(String.raw`^${IPV4}/(?:3[0-2]|[12]?\d)$`, "u");
+
+function firewallFailed(reason: string): Error {
+  return new Error(`AGENT_SANDBOX_RUNNER_FIREWALL_FAILED: ${reason}`);
+}
+
+/** The IPv4 subnet and gateway of the sandbox's egress network, checked before they reach a shell. */
+async function egressSubnet(docker: Docker, networkId: string): Promise<EgressSubnet> {
+  const network = await docker.getNetwork(networkId).inspect() as { IPAM?: { Config?: Array<{ Gateway?: string; Subnet?: string }> } };
+  const config = (network.IPAM?.Config ?? []).find((entry) => typeof entry.Subnet === "string" && entry.Subnet.includes("."));
+  if (!config?.Subnet || !IPV4_SUBNET_PATTERN.test(config.Subnet)) throw firewallFailed("The egress network has no IPv4 subnet");
+  const gateway = config.Gateway ?? "";
+  if (gateway !== "" && !IPV4_PATTERN.test(gateway)) throw firewallFailed("The egress network's gateway is not an IPv4 address");
+  return { gateway: gateway === "" ? null : gateway, subnet: config.Subnet };
+}
+
 // Idempotent: the chains are created once and flushed on every application. The policies go to
 // DROP first, so a re-application on a running container is closed while the chains are empty.
-const FIREWALL_SCRIPT = [
+const firewallScript = (network: EgressSubnet) => [
   "set -e",
   "for t in iptables ip6tables; do",
   "  $t -P OUTPUT DROP",
@@ -47,7 +76,8 @@ const FIREWALL_SCRIPT = [
   "  $t -A OSINARA-IN -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
   "  $t -A OSINARA-IN -j DROP",
   "done",
-  `iptables -A OSINARA-OUT -p tcp --dport ${EGRESS_PROXY_PORT} -m conntrack --ctstate NEW -j ACCEPT`,
+  ...(network.gateway === null ? [] : [`iptables -A OSINARA-OUT -d ${network.gateway} -j REJECT`]),
+  `iptables -A OSINARA-OUT -p tcp -d ${network.subnet} --dport ${EGRESS_PROXY_PORT} -m conntrack --ctstate NEW -j ACCEPT`,
   "iptables -A OSINARA-OUT -j REJECT",
   "ip6tables -A OSINARA-OUT -j REJECT",
 ].join("\n");
@@ -61,8 +91,11 @@ export async function applyEgressFirewall(
   const inspection = await container.inspect();
   // A restricted sandbox has no network at all.
   if (inspection.HostConfig.NetworkMode === "none") return;
+  const networkId = Object.values(inspection.NetworkSettings?.Networks ?? {})[0]?.NetworkID;
+  if (!networkId) throw firewallFailed("The sandbox is on no network");
+  const network = await egressSubnet(docker, networkId);
   const helper = await docker.createContainer({
-    Cmd: ["sh", "-c", FIREWALL_SCRIPT],
+    Cmd: ["sh", "-c", firewallScript(network)],
     HostConfig: {
       AutoRemove: false,
       CapAdd: ["NET_ADMIN", "NET_RAW"],
@@ -151,30 +184,44 @@ const KEPT_EXECUTABLES = [
   "/usr/local/bin/lightpanda",
 ];
 
-const KILL_SCRIPT = `
+/**
+ * The sweep in Python, as definitions: `sweep(proc, kill, me)` kills every process under `proc`
+ * except pid 1, `me` and the kept executables, and returns the count. A process can make its
+ * executable unreadable (`prctl(PR_SET_DUMPABLE, 0)`), and the sweep used to pass over what it could
+ * not read, so such a process outlived the command (Codex review, 6 November 2026). None of the
+ * kept executables does that, so unreadable means a stray; only a process already gone (its entry
+ * or its executable vanished: an exit, a zombie) is passed over.
+ */
+export const STRAY_SWEEP_PYTHON = `
 import os, signal
-keep = set(${JSON.stringify(KEPT_EXECUTABLES)})
-# This script and the timeout that bounds it are not strays.
-me = {os.getpid(), os.getppid()}
-killed = 0
-for name in os.listdir("/proc"):
-    if not name.isdigit():
-        continue
-    pid = int(name)
-    if pid == 1 or pid in me:
-        continue
-    try:
-        exe = os.readlink("/proc/%d/exe" % pid)
-    except OSError:
-        continue
-    if exe in keep:
-        continue
-    try:
-        os.kill(pid, signal.SIGKILL)
-        killed += 1
-    except OSError:
-        pass
-print(killed)
+KEEP = set(${JSON.stringify(KEPT_EXECUTABLES)})
+def sweep(proc, kill, me):
+    killed = 0
+    for name in os.listdir(proc):
+        if not name.isdigit():
+            continue
+        pid = int(name)
+        if pid == 1 or pid in me:
+            continue
+        try:
+            exe = os.readlink(os.path.join(proc, name, "exe"))
+        except FileNotFoundError:
+            continue
+        except OSError:
+            exe = None
+        if exe in KEEP:
+            continue
+        try:
+            kill(pid, signal.SIGKILL)
+            killed += 1
+        except OSError:
+            pass
+    return killed
+`;
+
+// This script and the timeout that bounds it are not strays.
+const KILL_SCRIPT = `${STRAY_SWEEP_PYTHON}
+print(sweep("/proc", os.kill, {os.getpid(), os.getppid()}))
 `;
 
 /**

@@ -5,6 +5,9 @@
  * - A running container whose leftover daemons' threads reach half the pid budget is restarted
  *   before the requested operation runs, so the operation never meets EAGAIN inside the container.
  * - A container below the threshold is left alone.
+ * - The restart passes the capacity gate that every start passes: while the container is down
+ *   for its restart, another session's start cannot take its slot (Codex review, 6 November 2026:
+ *   with a cap of one, two containers ran).
  */
 import { PassThrough } from "node:stream";
 
@@ -12,6 +15,7 @@ import type Docker from "dockerode";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDockerSandboxEngine } from "./docker-sandbox-engine.js";
+import { sandboxContainerName } from "./docker-sandbox-lifecycle.js";
 import { SANDBOX_PIDS_REAP_THRESHOLD } from "./docker-sandbox-options.js";
 
 const SANDBOX_SESSION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -60,7 +64,71 @@ function dockerWithThreads(threads: number) {
   return { container, engine };
 }
 
+const OTHER_SESSION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
 describe("sandbox process reaping", () => {
+  it("restarts inside the capacity gate, so another session's start waits for it", async () => {
+    let finishRestart!: () => void;
+    const finished = () => {
+      const output = new PassThrough();
+      output.end();
+      return output;
+    };
+    const exec = vi.fn(async () => ({ inspect: vi.fn(async () => ({ ExitCode: 0, Running: false })), start: vi.fn(async () => finished()) }));
+    const crowded = {
+      exec,
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: true } })),
+      restart: vi.fn(() => new Promise<void>((resolve) => { finishRestart = resolve; })),
+      top: vi.fn(async () => ({ Processes: [["1", String(SANDBOX_PIDS_REAP_THRESHOLD)]] })),
+    };
+    let otherRunning = false;
+    const stopped = {
+      exec,
+      inspect: vi.fn(async () => ({ Config: { Labels: {} }, State: { Running: otherRunning } })),
+      start: vi.fn(async () => { otherRunning = true; }),
+    };
+    const docker = {
+      getContainer: vi.fn((name: string) => (name === sandboxContainerName(OTHER_SESSION_ID) ? stopped : crowded)),
+      listContainers: vi.fn(async () => []),
+      modem: {
+        demuxStream: vi.fn((stream: PassThrough, stdout: PassThrough, stderr: PassThrough) => {
+          stream.on("end", () => {
+            stdout.end();
+            stderr.end();
+          });
+          stream.resume();
+        }),
+      },
+    } as unknown as Docker;
+    const engine = createDockerSandboxEngine({
+      docker,
+      limits: { maxRunningContainers: 1 },
+      roots: { toolsRoot: "/tools", workspaceRoot: "/workspaces" },
+      runtime: {
+        egressNetwork: "osinara_sandbox-egress",
+        image: "osinara-sandbox-runtime:local",
+        project: "osinara",
+        toolsVolume: "osinara_tool-environments",
+        workspaceVolume: "osinara_workspace-data",
+      },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const reaped = engine.runProcess(SANDBOX_SESSION_ID, { command: "true" });
+    await vi.waitFor(() => expect(crowded.restart).toHaveBeenCalled());
+    const other = engine.runProcess(OTHER_SESSION_ID, { command: "true" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The crowded container is down for its restart: no start may count the room meanwhile.
+    expect(docker.listContainers).not.toHaveBeenCalled();
+    expect(stopped.start).not.toHaveBeenCalled();
+    finishRestart();
+    await reaped;
+    await other;
+    expect(stopped.start).toHaveBeenCalledOnce();
+    vi.restoreAllMocks();
+  });
+
   it("restarts a container crowded by leftover daemons before running the command", async () => {
     const { container, engine } = dockerWithThreads(SANDBOX_PIDS_REAP_THRESHOLD);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

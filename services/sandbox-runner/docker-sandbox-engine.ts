@@ -35,6 +35,7 @@ import {
   dockerStatus,
   inspectContainer,
   requireRunningContainer,
+  type ContainerStartGate,
   startContainer,
 } from "./docker-sandbox-container.js";
 import { createStartBarrier } from "./docker-sandbox-hardening.js";
@@ -192,8 +193,13 @@ export function createDockerSandboxEngine(input: {
   // room check and the start are one step, so two sessions cannot both take the last slot
   // (Codex review, 5 October 2026).
   let capacityGate: Promise<unknown> = Promise.resolve();
+  const inCapacityGate = async (work: () => Promise<void>): Promise<void> => {
+    const turn = capacityGate.then(work);
+    capacityGate = turn.catch(() => undefined);
+    return await turn;
+  };
   const withCapacity = async (sessionId: string, start: () => Promise<void>, resuming?: Docker.Container): Promise<void> => {
-    const turn = capacityGate.then(async () => {
+    return await inCapacityGate(async () => {
       // Another operation of the session may have resumed it while this one queued: a running
       // container takes no new room (Codex review, 5 October 2026).
       if (resuming && (await resuming.inspect()).State.Running) return;
@@ -213,9 +219,11 @@ export function createDockerSandboxEngine(input: {
       }
       return await start();
     });
-    capacityGate = turn.catch(() => undefined);
-    return await turn;
   };
+  // A restart of a crowded container keeps its slot, but while it is down no other start may
+  // count the room (Codex review, 6 November 2026).
+  const gateFor = (sessionId: string): ContainerStartGate => (work, container, kind = "start") =>
+    kind === "restart" ? inCapacityGate(work) : withCapacity(sessionId, work, container);
 
   // Skill package writes skip the disk budget only within these bounds: the path alone does not
   // prove the framework wrote it, and a model writing there may not grow without limit.
@@ -326,7 +334,7 @@ export function createDockerSandboxEngine(input: {
             activeOperations: activity.activeCount(sessionId),
             afterStart,
             docker: input.docker,
-            gateStart: (start, container) => withCapacity(sessionId, start, container),
+            gateStart: gateFor(sessionId),
             runtime: input.runtime,
             sessionId,
             toolsRoot: input.roots.toolsRoot,
@@ -355,7 +363,7 @@ export function createDockerSandboxEngine(input: {
             stdout: "",
           };
         }
-        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start, container) => withCapacity(sessionId, start, container), undefined, afterStart);
+        const { container, inspection } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
         const refusal = await input.diskQuota?.refusal(sessionWorkspaces(inspection, input.roots));
         let allowed = processRequest;
         if (refusal) {
@@ -390,7 +398,7 @@ export function createDockerSandboxEngine(input: {
     },
     async readFile(sessionId, path) {
       return await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start, container) => withCapacity(sessionId, start, container), undefined, afterStart);
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
         // Through the stdout of a process in the container: the archive API reads neither the
         // read-only root nor a tmpfs HOME, and nothing is staged where the model could swap it.
         return await readContainerFile(input.docker, container, resolvePath(path), WORKSPACE_MAX_FILE_BYTES);
@@ -402,7 +410,7 @@ export function createDockerSandboxEngine(input: {
           input.docker,
           sessionId,
           activity.activeCount(sessionId),
-          (start, container) => withCapacity(sessionId, start, container),
+          gateFor(sessionId),
           undefined,
           afterStart,
         );
@@ -425,7 +433,7 @@ export function createDockerSandboxEngine(input: {
     },
     async removePath(sessionId, request: SandboxRunnerRemovePathRequest) {
       await activity.runActive(sessionId, async () => {
-        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), (start, container) => withCapacity(sessionId, start, container), undefined, afterStart);
+        const { container } = await requireRunningContainer(input.docker, sessionId, activity.activeCount(sessionId), gateFor(sessionId), undefined, afterStart);
         const args = ["rm"];
         if (request.force) args.push("-f");
         if (request.recursive) args.push("-r");

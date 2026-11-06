@@ -2,7 +2,10 @@
  * Telegram attachment validation tests.
  *
  * Constructs covered:
- * - `validateAttachmentContent`: safe names and content-derived MIME for arbitrary documents.
+ * - `validateAttachmentContent`: safe names and content-derived MIME for arbitrary documents; a long
+ *   name is cut by UTF-8 bytes, keeping a real extension, so it fits a Linux file name with room
+ *   for the write's temporary name (Codex review, 6 November 2026: 180 Cyrillic characters were
+ *   360 bytes, and an «extension» of 250 characters made the cut name longer).
  * - Native Telegram photos remain restricted to actual image bytes.
  * - UTF-8 structured text remains recognizable without trusting arbitrary binary declarations.
  */
@@ -42,6 +45,20 @@ describe("validateAttachmentContent", () => {
       kind: "document",
     });
     expect(result.fileName).toBe("name.png");
+  });
+
+  it.each([
+    ["a long Cyrillic name", `${"Протокол заседания ".repeat(12)}.pdf`, ".pdf"],
+    ["a name whose extension is most of it", `x.${"a".repeat(250)}`, null],
+    ["a name of four-byte characters", `${"😀".repeat(100)}.txt`, ".txt"],
+  ])("cuts %s to 200 UTF-8 bytes without breaking a character", async (_label, fileName, extension) => {
+    const result = await validateAttachmentContent({ bytes: Buffer.from("x"), fileName, kind: "document" });
+
+    expect(Buffer.byteLength(result.fileName, "utf8")).toBeLessThanOrEqual(200);
+    expect(result.fileName).not.toContain("\uFFFD");
+    expect(Buffer.from(result.fileName, "utf8").toString("utf8")).toBe(result.fileName);
+    if (extension !== null) expect(result.fileName.endsWith(extension)).toBe(true);
+    expect(fileName.startsWith(result.fileName.slice(0, 10))).toBe(true);
   });
 
   it("accepts a renamed document while retaining its detected content type", async () => {

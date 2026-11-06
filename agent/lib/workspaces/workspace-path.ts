@@ -7,6 +7,8 @@
 import { AppError } from "../app-error.js";
 
 const WORKSPACE_PATH_MAX_CHARACTERS = 512;
+// Linux's limit for one name; a longer segment would fail in the kernel with ENAMETOOLONG.
+const WORKSPACE_SEGMENT_MAX_BYTES = 255;
 
 export function validateWorkspacePath(path: string): string {
   const segments = path.split("/");
@@ -15,7 +17,8 @@ export function validateWorkspacePath(path: string): string {
     path.startsWith("/") ||
     path.includes("\\") ||
     path.includes("\0") ||
-    segments.some((segment) => segment === "" || segment === "." || segment === "..");
+    segments.some((segment) => segment === "" || segment === "." || segment === ".." ||
+      Buffer.byteLength(segment, "utf8") > WORKSPACE_SEGMENT_MAX_BYTES);
   if (invalid) {
     throw new AppError(
       "AGENT_WORKSPACE_PATH_INVALID",

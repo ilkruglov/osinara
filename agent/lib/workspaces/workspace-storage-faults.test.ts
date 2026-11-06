@@ -7,23 +7,31 @@
  * - A write that fails after the temporary file exists (ENOSPC) leaves no temporary file.
  * - A delete whose target became a directory after the check, and a nested write whose directory
  *   was removed on the way, fail with the workspace codes.
+ * - A file the sandbox grows after the size check is refused without reading it whole: the read
+ *   stops one byte past the limit (Codex review, 6 November 2026: `readFile` buffered whatever the
+ *   file had grown to, up to a gigabyte, before the size check).
  */
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { WORKSPACE_MAX_FILE_BYTES } from "../../config.js";
+
 interface Faults {
   closeDirectoryFails: boolean;
+  /** The size the file's stat reports: the sandbox grows the file right after it. */
+  statReportsSize: number | null;
   mkdirCode: string | null;
   statFails: boolean;
   unlinkCode: string | null;
   writeFails: boolean;
 }
-const faults: Faults = { closeDirectoryFails: false, mkdirCode: null, statFails: false, unlinkCode: null, writeFails: false };
+const faults: Faults = { closeDirectoryFails: false, mkdirCode: null, statFails: false, statReportsSize: null, unlinkCode: null, writeFails: false };
 let opened = 0;
 let closed = 0;
+let bytesRead = 0;
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -42,8 +50,22 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       const stat = handle.stat.bind(handle);
       handle.stat = (async (...statArgs: Parameters<typeof stat>) => {
         if (faults.statFails && !isDirectory) throw Object.assign(new Error("EIO"), { code: "EIO" });
-        return await stat(...statArgs);
+        const metadata = await stat(...statArgs);
+        if (faults.statReportsSize !== null && !isDirectory) Object.defineProperty(metadata, "size", { value: faults.statReportsSize });
+        return metadata;
       }) as typeof handle.stat;
+      const readWhole = handle.readFile.bind(handle);
+      handle.readFile = (async (...readArgs: Parameters<typeof readWhole>) => {
+        const content = await readWhole(...readArgs);
+        bytesRead += typeof content === "string" ? Buffer.byteLength(content) : content.byteLength;
+        return content;
+      }) as typeof handle.readFile;
+      const readPart = handle.read.bind(handle) as (...partArgs: unknown[]) => Promise<{ bytesRead: number }>;
+      handle.read = (async (...partArgs: unknown[]) => {
+        const result = await readPart(...partArgs);
+        bytesRead += result.bytesRead;
+        return result;
+      }) as typeof handle.read;
       const write = handle.writeFile.bind(handle);
       handle.writeFile = (async (...writeArgs: Parameters<typeof write>) => {
         if (faults.writeFails) throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
@@ -80,9 +102,10 @@ async function workspace(): Promise<{ directory: string; root: string }> {
 }
 
 afterEach(async () => {
-  Object.assign(faults, { closeDirectoryFails: false, mkdirCode: null, statFails: false, unlinkCode: null, writeFails: false });
+  Object.assign(faults, { closeDirectoryFails: false, mkdirCode: null, statFails: false, statReportsSize: null, unlinkCode: null, writeFails: false });
   opened = 0;
   closed = 0;
+  bytesRead = 0;
   await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
@@ -92,6 +115,24 @@ describe("workspace storage under failures", () => {
     faults.statFails = true;
     await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow("EIO");
     expect(closed).toBe(opened);
+  });
+
+  it("refuses a file grown past the limit after its size check without reading it whole", async () => {
+    const { directory, root } = await workspace();
+    // Sparse: 200 MiB on disk costs nothing, read whole it is a 200 MiB buffer.
+    await truncate(join(directory, "docs", "file.txt"), 200 * 1024 * 1024);
+    faults.statReportsSize = 6;
+
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).rejects.toThrow("AGENT_WORKSPACE_FILE_TOO_LARGE");
+    expect(bytesRead).toBe(WORKSPACE_MAX_FILE_BYTES + 1);
+    expect(closed).toBe(opened);
+  });
+
+  it("reads a file of exactly the limit", async () => {
+    const { directory, root } = await workspace();
+    await truncate(join(directory, "docs", "file.txt"), WORKSPACE_MAX_FILE_BYTES);
+
+    await expect(readWorkspaceFile(root, WORKSPACE_ID, "docs/file.txt")).resolves.toHaveLength(WORKSPACE_MAX_FILE_BYTES);
   });
 
   it("closes every handle on the walk when closing a parent directory fails", async () => {
