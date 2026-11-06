@@ -55,6 +55,12 @@ async function callTelegramApi(e) {
       startedAt = Date.now();
       a = await n(u, { ...i, signal: telegramRequestSignal(e.signal, deadline) });
       s = await parseResponseBody(a);
+      // Osinara: a second 429 is not tried again, but its pause still holds every other call
+      // (Codex review, 6 November 2026: its retry_after was dropped).
+      if (a.status === 429) {
+        let again = telegramRetryAfterSeconds(s);
+        again !== null && telegramSendPacer.retryAfter(again);
+      }
     }
   }
   // Osinara: the final answer of a failed send to a chat goes to the application's reachability

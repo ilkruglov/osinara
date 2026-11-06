@@ -5,8 +5,11 @@
  * - Methods that send nothing pass at once; sending methods wait for the global window.
  * - One private chat gets a quarter-second gap by default, one group twenty a minute, while
  *   other chats are not held back by them; the limits come from the environment.
- * - A 429 with `retry_after` pauses every call for that long; a pause over a minute is refused,
- *   and a pause extended meanwhile is waited out in full. Waiters go in arrival order.
+ * - A 429 with `retry_after` pauses every call for that long, a call that sends nothing too; a pause
+ *   over a minute is refused, and a pause extended meanwhile is waited out in full. Waiters go in
+ *   arrival order.
+ * - A chat waiting for its own window holds only that chat: one group at its twenty a minute kept
+ *   every other chat waiting up to a minute behind it (Codex review, 6 November 2026).
  * - `reportTelegramDeliveryFailure`: a failed send to a chat reaches the application's observer with
  *   its start; a delivered send, a call without a chat and a read do not; an observer failure is
  *   logged with ids only and never thrown; an observer that never settles holds the answer only
@@ -117,16 +120,54 @@ describe("telegram send pacer", () => {
     expect(clock.sleeps).toEqual([3_000, 5_000]);
   });
 
+  it("does not hold other chats while one group waits for its minute window", async () => {
+    let at = 1_000_000;
+    const asleep: Array<() => void> = [];
+    const pacer = createTelegramSendPacer({
+      globalPerSecond: 100,
+      groupPerMinute: 1,
+      now: () => at,
+      sleep: (ms) => new Promise<void>((resolve) => asleep.push(() => {
+        at += ms;
+        resolve();
+      })),
+    });
+    await pacer.acquire("sendMessage", { chat_id: "-100500" });
+    const held = pacer.acquire("sendMessage", { chat_id: "-100500" });
+    const order: string[] = [];
+    const other = pacer.acquire("sendMessage", { chat_id: 42 }).then(() => order.push("private"));
+    const otherGroup = pacer.acquire("sendMessage", { chat_id: "-100777" }).then(() => order.push("other group"));
+    await Promise.all([other, otherGroup]);
+
+    expect(order).toEqual(["private", "other group"]);
+    expect(asleep).toHaveLength(1);
+    asleep.shift()!();
+    await held;
+  });
+
+  it("makes a call that sends nothing wait out a 429 pause", async () => {
+    const clock = fakeClock();
+    const pacer = createTelegramSendPacer({ ...clock });
+    pacer.retryAfter(4);
+
+    await pacer.acquire("sendChatAction", { action: "typing", chat_id: 42 });
+    await pacer.acquire("answerCallbackQuery", { callback_query_id: "1" });
+
+    expect(clock.sleeps).toEqual([4_000]);
+  });
+
   it("serves waiters in arrival order so a stream to one chat cannot starve another", async () => {
     const clock = fakeClock();
     const pacer = createTelegramSendPacer({ ...clock, globalPerSecond: 1 });
     const order: string[] = [];
+    const start = clock.now();
     await pacer.acquire("sendMessage", { chat_id: 1 });
     const first = pacer.acquire("sendMessage", { chat_id: 2 }).then(() => order.push("second-chat"));
     const second = pacer.acquire("sendMessage", { chat_id: 1 }).then(() => order.push("first-chat-again"));
     await Promise.all([first, second]);
     expect(order).toEqual(["second-chat", "first-chat-again"]);
-    expect(clock.sleeps).toEqual([1_000, 1_000]);
+    // One global slot a second: three sends take two more seconds, however the waits overlap.
+    expect(clock.now() - start).toBe(2_000);
   });
 });
 

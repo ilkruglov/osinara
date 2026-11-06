@@ -4,8 +4,20 @@
  * Constructs covered:
  * - `deliverWorkspaceFile`: explicit photo/document multipart uploads to the current chat/topic.
  * - Transport and unparseable success responses remain ambiguous after delivery begins.
+ * - A 429 pauses every call and the upload is tried once more after it (Codex review,
+ *   6 November 2026: multipart uploads ignored Telegram's pause).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const pacer = vi.hoisted(() => ({
+  acquire: vi.fn(async () => undefined),
+  retryAfter: vi.fn(() => true),
+  waitForPause: vi.fn(async () => undefined),
+}));
+vi.mock("eve/channels/telegram", async (importOriginal) => ({
+  ...await importOriginal<typeof import("eve/channels/telegram")>(),
+  telegramSendPacer: pacer,
+}));
 
 import { deliverWorkspaceFile } from "./telegram-workspace-file-delivery.js";
 
@@ -17,6 +29,22 @@ afterEach(() => {
 });
 
 describe("deliverWorkspaceFile", () => {
+  it("uploads a file once more after Telegram's pause", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test-token";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error_code: 429, ok: false, parameters: { retry_after: 2 } }), { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: { message_id: 77 } }), { status: 200 }));
+
+    const result = await deliverWorkspaceFile({
+      bytes: Buffer.from("file bytes"), chatId: "101", fileName: "notes.txt", mediaType: "text/plain", presentation: "document",
+    }, fetchMock);
+
+    expect(result).toEqual({ telegramMessageId: "77" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(pacer.retryAfter).toHaveBeenCalledWith(2);
+    expect(pacer.waitForPause).toHaveBeenCalled();
+  });
+
   it.each([
     ["photo", "sendPhoto", "photo"],
     ["document", "sendDocument", "document"],

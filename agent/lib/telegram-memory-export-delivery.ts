@@ -4,9 +4,10 @@
  * Export:
  * - `deliverMemoryExportFiles`: atomically sends JSON and Markdown as one media group.
  */
-import { resolveTelegramBotToken, telegramSendPacer } from "eve/channels/telegram";
+import { resolveTelegramBotToken } from "eve/channels/telegram";
 
 import { AppError } from "./app-error.js";
+import { postTelegramMultipart } from "./telegram-multipart-send.js";
 
 const TELEGRAM_EXPORT_TIMEOUT_MILLISECONDS = 30_000;
 
@@ -35,17 +36,17 @@ export async function deliverMemoryExportFiles(
     new Blob([input.markdown], { type: "text/markdown;charset=utf-8" }),
     "osinara-memory.md",
   );
-  await telegramSendPacer.acquire("sendMediaGroup", { chat_id: input.chatId });
   let response: Response;
   try {
-    response = await fetchImplementation(
-      `https://api.telegram.org/bot${token}/sendMediaGroup`,
-      {
-        body: form,
-        method: "POST",
-        signal: AbortSignal.timeout(TELEGRAM_EXPORT_TIMEOUT_MILLISECONDS),
-      },
-    );
+    // The same Telegram limits as every message of the channel, 429 included.
+    response = await postTelegramMultipart({
+      chatId: input.chatId,
+      fetch: fetchImplementation,
+      form,
+      method: "sendMediaGroup",
+      timeoutMs: TELEGRAM_EXPORT_TIMEOUT_MILLISECONDS,
+      token,
+    });
   } catch (error) {
     console.error(JSON.stringify({
       code: "AGENT_MEMORY_EXPORT_DELIVERY_AMBIGUOUS",

@@ -107,7 +107,10 @@ export function telegramSendPacerSettings(
  
 
                                     
-                                                                                                         
+     
+                                                                                            
+                                                                                                   
+     
                                                         
      
                                                                                               
@@ -137,10 +140,13 @@ export function createTelegramSendPacer(options                           = {}) 
   const groupSends = new Map                  ();
   const privateLastSend = new Map                ();
   let pauseUntil = 0;
-  // Callers take slots in arrival order: one waiter at a time computes its wait and sleeps,
-  // the next one starts after it, so a steady stream to one chat cannot starve another call
-  // (Codex review, 5 October 2026).
-  let queue                = Promise.resolve();
+  // Callers take global slots in arrival order: one waiter at a time computes its wait and
+  // sleeps, the next one starts after it, so a steady stream to one chat cannot starve another
+  // call (Codex review, 5 October 2026). A chat's own window is waited out first in that chat's
+  // own queue: one queue for everything let a group at its twenty a minute hold every other chat
+  // for up to a minute (Codex review, 6 November 2026).
+  let globalQueue                   = Promise.resolve();
+  const chatQueues = new Map                                                  ();
   let acquires = 0;
 
   /** Drops chats that have been quiet for their whole window, so the maps stay bounded. */
@@ -158,30 +164,48 @@ export function createTelegramSendPacer(options                           = {}) 
     while (sends.length > 0 && sends[0]  <= at - windowMs) sends.shift();
   }
 
-  function waitNeeded(at        , chat                                       )         {
+  function globalWait(at        )         {
     let wait = Math.max(0, pauseUntil - at);
     pruneSends(globalSends, GLOBAL_WINDOW_MS, at);
     if (globalSends.length >= globalPerSecond) wait = Math.max(wait, globalSends[0]  + GLOBAL_WINDOW_MS - at);
-    if (chat?.group) {
-      const sends = groupSends.get(chat.id) ?? [];
-      pruneSends(sends, GROUP_WINDOW_MS, at);
-      if (sends.length >= groupPerMinute) wait = Math.max(wait, sends[0]  + GROUP_WINDOW_MS - at);
-    } else if (chat) {
-      const last = privateLastSend.get(chat.id);
-      if (last !== undefined) wait = Math.max(wait, last + privateGapMs - at);
-    }
     return wait;
   }
 
-  async function takeSlot(chat                                       )                {
-    // Only this waiter takes slots while it holds the queue, so the wait converges.
-    for (;;) {
-      const wait = waitNeeded(now(), chat);
-      if (wait <= 0) break;
-      await sleep(wait);
+  function chatWait(at        , chat                                )         {
+    if (chat.group) {
+      const sends = groupSends.get(chat.id) ?? [];
+      pruneSends(sends, GROUP_WINDOW_MS, at);
+      return sends.length >= groupPerMinute ? sends[0]  + GROUP_WINDOW_MS - at : 0;
     }
-    const at = now();
-    globalSends.push(at);
+    const last = privateLastSend.get(chat.id);
+    return last === undefined ? 0 : last + privateGapMs - at;
+  }
+
+  async function waitOut(wait                        )                {
+    for (;;) {
+      const ms = wait(now());
+      if (ms <= 0) return;
+      await sleep(ms);
+    }
+  }
+
+  /** The global slot, in arrival order among the calls whose chat is ready. */
+  function takeGlobalSlot()                  {
+    // Only this waiter takes global slots while it holds the queue, so the wait converges.
+    const turn = globalQueue.then(async () => {
+      await waitOut(globalWait);
+      const at = now();
+      globalSends.push(at);
+      return at;
+    });
+    globalQueue = turn.catch(() => undefined);
+    return turn;
+  }
+
+  async function takeSlot(chat                                       )                {
+    // Only this waiter of the chat takes the chat's slots while it holds the chat's queue.
+    if (chat) await waitOut((at) => chatWait(at, chat));
+    const at = await takeGlobalSlot();
     if (chat?.group) {
       const sends = groupSends.get(chat.id) ?? [];
       sends.push(at);
@@ -195,9 +219,19 @@ export function createTelegramSendPacer(options                           = {}) 
 
   return {
     acquire(method, body) {
-      if (!PACED_METHODS.has(method)) return Promise.resolve();
-      const turn = queue.then(() => takeSlot(chatKey(body)));
-      queue = turn.catch(() => undefined);
+      // A 429 pauses every call (Codex review, 6 November 2026: typing, file reads and button
+      // answers went on during the pause), but only a sending call takes a slot.
+      if (!PACED_METHODS.has(method)) return this.waitForPause();
+      const chat = chatKey(body);
+      const key = chat?.id ?? "";
+      const entry = chatQueues.get(key) ?? { tail: Promise.resolve(), waiting: 0 };
+      entry.waiting += 1;
+      chatQueues.set(key, entry);
+      const turn = entry.tail.then(() => takeSlot(chat));
+      entry.tail = turn.catch(() => undefined).then(() => {
+        entry.waiting -= 1;
+        if (entry.waiting === 0 && chatQueues.get(key) === entry) chatQueues.delete(key);
+      });
       return turn;
     },
     retryAfter(seconds) {

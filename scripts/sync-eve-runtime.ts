@@ -24,6 +24,7 @@ export const EVE_RUNTIME_MODULES = [
   ["agent/lib/html-markdown.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-markdown.js"],
   ["agent/lib/html-text.ts", "vendor/eve/dist/src/execution/web-fetch/osinara-html-text.js"],
   ["scripts/eve-runtime/ndjson-stream.ts", "vendor/eve/dist/src/execution/osinara-ndjson-stream.js"],
+  ["scripts/eve-runtime/started-run-hook.ts", "vendor/eve/dist/src/execution/osinara-started-run-hook.js"],
   ["scripts/eve-runtime/telegram-send-pacing.ts", "vendor/eve/dist/src/public/channels/telegram/osinara-telegram-send-pacing.js"],
   ["scripts/eve-runtime/event-log-cache.ts", "vendor/workflow-world-postgres/dist/osinara-event-log-cache.js"],
   ["scripts/eve-runtime/paged-stream.ts", "vendor/workflow-world-postgres/dist/osinara-paged-stream.js"],

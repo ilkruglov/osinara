@@ -6,13 +6,15 @@
  * - A caller's fetch receives the deadline as `init.signal`, so a wrapper can combine it.
  * - A file download gets the longer download deadline.
  * - getFile gets one minute; every other method keeps 30 seconds.
+ * - A second 429 (on the retry) pauses every other call for the time it names too, and goes back to
+ *   the caller (Codex review, 6 November 2026: its retry_after was dropped).
  *
  * Node's fetch waits five minutes for response headers by default, so before this a stuck Telegram
  * call held the turn that long (skill review of 24 October 2026). On 5 November 2026 Telegram held
  * getFile past 30 seconds for two photos in a row in «Дизраптим» (another bot measured 65 % of its
  * uncached downloads timing out that day), so getFile alone waits longer.
  */
-import { callTelegramApi, downloadTelegramFile, getTelegramFile } from "eve/channels/telegram";
+import { callTelegramApi, downloadTelegramFile, getTelegramFile, telegramSendPacer } from "eve/channels/telegram";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -38,6 +40,20 @@ describe("Eve Telegram API deadlines", () => {
     expect(signals[0]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).not.toBe(signals[0]);
+  });
+
+  it("hands the pause of a second 429 to the pacer and returns that 429", async () => {
+    const retryAfter = vi.spyOn(telegramSendPacer, "retryAfter").mockReturnValue(true);
+    vi.spyOn(telegramSendPacer, "waitForPause").mockResolvedValue(undefined);
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ error_code: 429, ok: false, parameters: { retry_after: 1 } }, { status: 429 }))
+      .mockResolvedValueOnce(Response.json({ error_code: 429, ok: false, parameters: { retry_after: 7 } }, { status: 429 }));
+
+    const response = await callTelegramApi({ body: { chat_id: 42, text: "x" }, botToken: "1:test", fetch, method: "sendMessage" });
+
+    expect(response.status).toBe(429);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(retryAfter.mock.calls).toEqual([[1], [7]]);
   });
 
   it("gives getFile a one-minute deadline and leaves every other method at 30 seconds", async () => {

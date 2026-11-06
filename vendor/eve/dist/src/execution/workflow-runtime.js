@@ -26,6 +26,7 @@ import { SpanKind, trace } from "#compiled/@opentelemetry/api/index.js";
 import { buildRunContext } from "#execution/runtime-context.js";
 import { parseNdjsonStream } from "#execution/ndjson-stream.js";
 import { buildInvocationAttributes } from "#internal/invocation/metadata.js";
+import { waitForStartedRunHook } from "./osinara-started-run-hook.js";
 const WORKFLOW_ENTRY_NAME = `workflowEntry`,
   TURN_WORKFLOW_NAME = `turnWorkflow`,
   SESSION_TIMEOUT_WORKFLOW_NAME = `sessionTimeoutWorkflow`,
@@ -104,8 +105,19 @@ function createWorkflowRuntime(e) {
           e
         );
       }
+      // Osinara: the run holds the message from its start; while it is alive its hook is waited
+      // for past Eve's 30 seconds, and a hook that never comes fails with an error of its own, not
+      // HookNotFoundError, which the Telegram ingress reads as «not delivered» (Codex review,
+      // 6 November 2026; scripts/eve-runtime/started-run-hook.ts).
+      let waitStarted = (attempt) =>
+        waitForStartedRunHook({
+          attempt,
+          isHookMissing: (error) => HookNotFoundError.is(error),
+          runId: p.runId,
+          runStatus: () => getRun(p.runId).status,
+        });
       if (i.continuationToken) {
-        let e = await waitForCommandHookOwner(i.continuationToken);
+        let e = await waitStarted(() => waitForCommandHookOwner(i.continuationToken));
         if (e.runId !== p.runId)
           throw new RuntimeSessionOwnershipConflictError({
             continuationToken: i.continuationToken,
@@ -113,7 +125,7 @@ function createWorkflowRuntime(e) {
             sessionId: p.runId,
           });
       }
-      await waitForOwnedCommandHook(sessionCommandHookToken(p.runId), p.runId);
+      await waitStarted(() => waitForOwnedCommandHook(sessionCommandHookToken(p.runId), p.runId));
       let m,
         getEvents = () => ((m ??= createLiveEventStream(p.runId)), m);
       return {
