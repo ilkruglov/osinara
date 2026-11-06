@@ -16,7 +16,9 @@
  * - Live card: the first look sends the card, reserved in the kept state before it goes, so a crash
  *   never sends a second one; steps the card shows stay quiet, the loud ones are still told; the card
  *   is edited only when what it shows changed; a card that failed to go leaves the watch telling
- *   everything in text, and is not tried again.
+ *   everything in text, and is not tried again. A step is quiet only when the card now shows it: a
+ *   failed edit or widgets switched off leave the text on; a Lavka order the site does not show yet
+ *   gets no card.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -249,6 +251,46 @@ describe("order watch live card", () => {
     await arrived.dispatch(NOW);
     expect(arrived.card.update).toHaveBeenCalledOnce();
     expect(arrived.send).toHaveBeenCalledWith(expect.anything(), "Такси на месте: Белый Kia Rio, А123ВС777.");
+  });
+
+  // Codex review of 1.8.55: a step stays quiet only when the card now shows it.
+  it("tells a step in text when the card could not be edited to show it", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const key = JSON.stringify({ c: null, d: null, k: "taxi", m: null, p: null, s: "search" });
+    const searching = withCard([watch({ lastState: { car: null, plates: null, status: "search", card: { key, messageId: "555" } } })], async () => driving);
+    searching.card.update.mockRejectedValueOnce(new Error("beta down"));
+
+    await searching.dispatch(NOW);
+
+    expect(searching.send).toHaveBeenCalledWith(expect.anything(), "Такси едет: Белый Kia Rio, А123ВС777, будет через 5 мин.");
+  });
+
+  it("tells every step in text once widgets are off, even with a card already in the chat", async () => {
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue([watch({ lastState: { car: null, plates: null, status: "search", card: { key: "old", messageId: "555" } } })]),
+      finish: vi.fn().mockResolvedValue(undefined), purgeFinished: vi.fn().mockResolvedValue(0), release: vi.fn().mockResolvedValue(undefined),
+      reschedule: vi.fn().mockResolvedValue(undefined), saveState: vi.fn().mockResolvedValue(undefined),
+    };
+    const send = vi.fn().mockResolvedValue({ messageId: "900", text: "" });
+    const dispatch = createOrderWatchDispatcher({
+      isMember: vi.fn().mockResolvedValue(true), observe: vi.fn(async () => driving), record: vi.fn().mockResolvedValue(undefined), repository, send,
+    });
+
+    await dispatch(NOW);
+
+    expect(send).toHaveBeenCalledWith(expect.anything(), "Такси едет: Белый Kia Rio, А123ВС777, будет через 5 мин.");
+  });
+
+  it("sends no card for a Lavka order the site does not show yet", async () => {
+    // A minute after the order: inside the window in which the site may not list it yet.
+    const lavka = watch({ createdAt: new Date(NOW.getTime() - 60_000), lastState: null, service: "yandex_lavka" });
+    const waiting = withCard([lavka], async () => ({ lavka: null, service: "yandex_lavka" }));
+
+    await waiting.dispatch(NOW);
+
+    // «Заказ закрыт» on a card for an order that has not appeared yet would be false.
+    expect(waiting.card.send).not.toHaveBeenCalled();
+    expect(waiting.send).not.toHaveBeenCalled();
   });
 
   it("tells everything in text when the card did not go, and does not try it again", async () => {

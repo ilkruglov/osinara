@@ -3,8 +3,8 @@
  *
  * Exports:
  * - `TELEGRAM_WIDGET_API_BASE_URL`: the beta endpoint that knows `sendWidget` (Bot API 10.4 beta).
- * - `sendTelegramWidget`: one widget to a chat or topic; the message id, or Telegram's refusal for
- *   the caller to classify (an unreachable chat, a rejected widget).
+ * - `sendTelegramWidget`: one widget to a chat or topic; the message id, or Telegram's answer for
+ *   the caller to classify: a refusal (an unreachable chat, a rejected widget) or an ambiguous one.
  * - `editTelegramWidgetData`: the widget's per-message state (`chat_data`, up to 1024 bytes); the
  *   card redraws itself, silently. A state Telegram already has is not an error.
  *
@@ -23,9 +23,13 @@ import { requireTelegramWidgetSize } from "./telegram-widget-limits.js";
 
 export const TELEGRAM_WIDGET_API_BASE_URL = "https://api.telegram.org/beta";
 
+/**
+ * `ambiguous`: Telegram answered neither with the message nor with a refusal (a server error, a
+ * success without the message id), so the card may be in the chat; a caller must not send it again.
+ */
 export type TelegramWidgetSendResult =
   | { messageId: string; ok: true }
-  | { body: unknown; ok: false; status: number };
+  | { ambiguous: boolean; body: unknown; ok: false; status: number };
 
 export async function sendTelegramWidget(input: {
   botToken?: string;
@@ -53,11 +57,11 @@ export async function sendTelegramWidget(input: {
     ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
     method: "sendWidget",
   });
-  if (!response.ok) return { body: response.body, ok: false, status: response.status };
+  if (!response.ok) return { ambiguous: response.status >= 500, body: response.body, ok: false, status: response.status };
   const result = (response.body as { result?: { message_id?: unknown } } | null)?.result;
   const messageId = result?.message_id;
   if (typeof messageId !== "number" && typeof messageId !== "string") {
-    return { body: response.body, ok: false, status: response.status };
+    return { ambiguous: true, body: response.body, ok: false, status: response.status };
   }
   return { messageId: String(messageId), ok: true };
 }

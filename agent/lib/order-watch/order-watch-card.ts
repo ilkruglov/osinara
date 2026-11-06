@@ -11,17 +11,23 @@
  *   1024 bytes, silent). The card knows every stage of the order and draws the one in its state, so
  *   one message follows the whole order instead of a message per step.
  * - The state holds only what the site returned for the person's own order (status, car, plates,
- *   minutes, cost, the shop's own lines), clipped so no field can overflow the 1024 bytes; no address,
- *   no model text. The time of the look goes in as seconds and is shown in the viewer's own clock.
+ *   driver, minutes, cost, the shop's own lines), clipped by characters and then fitted to 1024 UTF-8
+ *   bytes of JSON, control characters dropped; no address, no model text. The time of the look goes
+ *   in as seconds and is shown in the viewer's own clock.
  * - The first state is written into the HTML, so the card shows the order before any edit; text from
  *   the site enters the page only through `textContent`, and `<` is escaped inside the script.
  */
 import type { OrderObservation } from "./order-watch-dispatcher.js";
 
+// Control and format characters carry nothing to read and grow six-fold in JSON (`\u0001`).
 const clip = (value: string | null | undefined, max: number): string | null => {
-  const flat = (value ?? "").replace(/\s+/gu, " ").trim();
-  return flat ? flat.slice(0, max) : null;
+  const flat = (value ?? "").replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/gu, " ").trim();
+  return flat ? Array.from(flat).slice(0, max).join("") : null;
 };
+
+// Telegram's limit for `chat_data`, in UTF-8 bytes of the JSON; the time of the look is added last.
+const CHAT_DATA_MAX_BYTES = 1_024;
+const TIME_FIELD_BYTES = 20;
 
 function orderCardFields(observation: OrderObservation): Record<string, unknown> {
   if (observation.service === "yandex_taxi") {
@@ -39,11 +45,24 @@ function orderCardFields(observation: OrderObservation): Record<string, unknown>
 
 /** What the card shows, without the time of the look: the card is edited only when this changes. */
 export function orderCardKey(observation: OrderObservation): string {
-  return JSON.stringify(orderCardFields(observation));
+  return JSON.stringify(fittedFields(observation));
+}
+
+/** The fields within the byte limit: the shop's long lines are shortened first, the subtitle before the title. */
+function fittedFields(observation: OrderObservation): Record<string, unknown> {
+  const fields = orderCardFields(observation);
+  const fits = () => Buffer.byteLength(JSON.stringify(fields)) + TIME_FIELD_BYTES <= CHAT_DATA_MAX_BYTES;
+  for (const name of ["su", "ti", "s"] as const) {
+    while (!fits() && typeof fields[name] === "string" && (fields[name] as string).length > 0) {
+      const characters = Array.from(fields[name] as string);
+      fields[name] = characters.slice(0, Math.floor(characters.length / 2)).join("") || null;
+    }
+  }
+  return fields;
 }
 
 export function orderCardData(observation: OrderObservation, at: Date): string {
-  return JSON.stringify({ ...orderCardFields(observation), t: Math.floor(at.getTime() / 1_000) });
+  return JSON.stringify({ ...fittedFields(observation), t: Math.floor(at.getTime() / 1_000) });
 }
 
 const STYLE = `<style>
@@ -83,7 +102,7 @@ function draw(raw){
   s.textContent=end||(stage===undefined?(d.ti||"Статус: "+d.s):K.lb[stage]);
   s.className="s"+(end?" bad":stage===last?" ok":"");
   var x=[];
-  if(d.k==="taxi"){if(d.c)x.push(d.c);if(d.p)x.push(d.p);if(d.m!==null&&d.m!==undefined&&stage===1)x.push("через "+d.m+" мин");if(d.f)x.push(d.f);}
+  if(d.k==="taxi"){if(d.c)x.push(d.c);if(d.p)x.push(d.p);if(d.d)x.push(d.d);if(d.m!==null&&d.m!==undefined&&stage===1)x.push("через "+d.m+" мин");if(d.f)x.push(d.f);}
   else{if(d.ti&&stage!==undefined)x.push(d.ti);if(d.su)x.push(d.su);}
   el("x").textContent=x.join(" · ");
   var st=el("st");st.textContent="";

@@ -15,13 +15,16 @@
  *   comes back too, so a planted address is visible in the turn.
  * - The caption is required: older clients and previews show only it, and the group journal keeps it
  *   as Mia's message. The result names it as already sent, or the model retells the card in text.
- * - Telegram's refusal is a definite failure; a request that threw may have delivered the card, so
- *   the row stays started and a retry reports ambiguity instead of sending a second card.
+ * - Telegram's refusal is a definite failure; a request that threw, a server error or a success
+ *   without the message id may have delivered the card, so the row stays started and a retry
+ *   reports ambiguity instead of sending a second card. A replayed step whose card went out writes
+ *   the chat journal and routes again: the process may have died between the two.
  */
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 
 import { AppError } from "../app-error.js";
+import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { ModelFacingError } from "../model-facing-error.js";
 import { turnKey } from "../model-facing-tool.js";
 import { applicationSessionId, registerTelegramMessageRoutes } from "../sessions/session-context.js";
@@ -35,6 +38,9 @@ import { sendTelegramWidget } from "./telegram-widget-send.js";
 
 const CAPTION_SENT_NOTE =
   `Подпись уже в чате вместе с виджетом. В следующем сообщении пиши только то, чего нет ни в карточке, ни в подписи, без «Готово» и без пересказа карточки; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
+// A scheduled run is completed only by its final text (`channels/telegram.ts`): no silence there.
+const SCHEDULED_CAPTION_SENT_NOTE =
+  "Подпись уже в чате вместе с виджетом. Итоговое сообщение расписания обязательно: напиши коротко то, чего нет ни в карточке, ни в подписи, без «Готово» и без пересказа карточки.";
 
 function refused(code: string, reason: string, correction: string): ModelFacingError {
   return new ModelFacingError({ category: "input", code, correction, reason, retryable: true, sideEffectStatus: "not_started" });
@@ -69,12 +75,55 @@ export const sendWidgetTool = defineTool({
     const reservation = await workspaceFileDeliveryRepository.begin(auth, {
       ...target, operationKey: ctx.callId, path: input.path, presentation: "widget", scope: input.scope, turnId: turnKey(ctx),
     });
-    if (reservation.status === "duplicate" || reservation.status === "completed") {
+
+    /** The card as the group's message: in the journal and bound for replies. Never throws. */
+    const project = async (messageId: string): Promise<boolean> => {
+      if (auth.groupId === null) return true;
+      const sessionId = applicationSessionId(ctx);
+      try {
+        await telegramGroupJournalRepository.recordAgentResponse({
+          applicationSessionId: sessionId,
+          contentText: `[виджет] ${input.caption}`,
+          deliveredAt: new Date(),
+          groupId: auth.groupId,
+          messageThreadId: forumTopicId ?? null,
+          replyToEntryId: typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId === "string"
+            ? ctx.session.auth.current.attributes.telegramTimelineEntryId
+            : null,
+          telegramMessageIds: [messageId],
+        });
+        await registerTelegramMessageRoutes({
+          applicationSessionId: sessionId, chatId: target.chatId, messageIds: [messageId],
+          ...(target.messageThreadId === undefined ? {} : { messageThreadId: target.messageThreadId }),
+        });
+        return true;
+      } catch (error) {
+        console.error(JSON.stringify({ code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED", error: error instanceof Error ? error.message : String(error), telegramMessageId: messageId }));
+        return false;
+      }
+    };
+
+    if (reservation.status === "duplicate") {
       return {
-        alreadySent: reservation.status === "duplicate",
+        alreadySent: true,
         delivered: true,
         path: reservation.file.path,
-        replayed: reservation.status === "completed",
+        replayed: false,
+        retryable: false,
+        scope: reservation.file.scope,
+        sideEffectStatus: "completed" as const,
+        telegramMessageId: reservation.telegramMessageId,
+      };
+    }
+    // A replayed step whose card went out: the process may have died before the journal, so the
+    // projection is written again (the journal takes the same message once), as for a file.
+    if (reservation.status === "completed") {
+      return {
+        alreadySent: false,
+        delivered: true,
+        path: reservation.file.path,
+        projectionCompleted: await project(reservation.telegramMessageId),
+        replayed: true,
         retryable: false,
         scope: reservation.file.scope,
         sideEffectStatus: "completed" as const,
@@ -105,6 +154,12 @@ export const sendWidgetTool = defineTool({
       throw error;
     }
 
+    const unknownOutcome = (detail: string): AppError => {
+      // The request may have reached Telegram: the row stays started, so a retry reports ambiguity.
+      console.error(JSON.stringify({ code: "AGENT_TELEGRAM_WIDGET_SEND_UNKNOWN", error: detail.slice(0, 200) }));
+      return new AppError("AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
+        "Отправка виджета начата, но её результат не подтверждён. Проверьте чат перед новым запросом");
+    };
     let sent: Awaited<ReturnType<typeof sendTelegramWidget>>;
     try {
       sent = await sendTelegramWidget({
@@ -112,11 +167,9 @@ export const sendWidgetTool = defineTool({
         messageThreadId: target.messageThreadId === undefined ? null : String(target.messageThreadId),
       });
     } catch (error) {
-      // The request may have reached Telegram: the row stays started, so a retry reports ambiguity.
-      console.error(JSON.stringify({ code: "AGENT_TELEGRAM_WIDGET_SEND_UNKNOWN", error: error instanceof Error ? error.message.slice(0, 200) : String(error) }));
-      throw new AppError("AGENT_WORKSPACE_FILE_DELIVERY_AMBIGUOUS",
-        "Отправка виджета начата, но её результат не подтверждён. Проверьте чат перед новым запросом");
+      throw unknownOutcome(error instanceof Error ? error.message : String(error));
     }
+    if (!sent.ok && sent.ambiguous) throw unknownOutcome(`HTTP ${sent.status} ${telegramDescription(sent.body)}`);
     if (!sent.ok) {
       await workspaceFileDeliveryRepository.fail(ctx.callId, "AGENT_TELEGRAM_WIDGET_REJECTED");
       throw new ModelFacingError({
@@ -131,37 +184,14 @@ export const sendWidgetTool = defineTool({
     } catch (error) {
       console.error(JSON.stringify({ code: "AGENT_WORKSPACE_FILE_COMPLETION_FAILED", error: error instanceof Error ? error.message : String(error), telegramMessageId: sent.messageId }));
     }
-    let projectionCompleted = true;
-    if (auth.groupId !== null) {
-      const sessionId = applicationSessionId(ctx);
-      try {
-        await telegramGroupJournalRepository.recordAgentResponse({
-          applicationSessionId: sessionId,
-          contentText: `[виджет] ${input.caption}`,
-          deliveredAt: new Date(),
-          groupId: auth.groupId,
-          messageThreadId: forumTopicId ?? null,
-          replyToEntryId: typeof ctx.session.auth.current?.attributes.telegramTimelineEntryId === "string"
-            ? ctx.session.auth.current.attributes.telegramTimelineEntryId
-            : null,
-          telegramMessageIds: [sent.messageId],
-        });
-        await registerTelegramMessageRoutes({
-          applicationSessionId: sessionId, chatId: target.chatId, messageIds: [sent.messageId],
-          ...(target.messageThreadId === undefined ? {} : { messageThreadId: target.messageThreadId }),
-        });
-      } catch (error) {
-        projectionCompleted = false;
-        console.error(JSON.stringify({ code: "AGENT_WORKSPACE_FILE_PROJECTION_FAILED", error: error instanceof Error ? error.message : String(error), telegramMessageId: sent.messageId }));
-      }
-    }
+    const projectionCompleted = await project(sent.messageId);
     console.info(JSON.stringify({
       bytes: size.bytes, code: "AGENT_TELEGRAM_WIDGET_SENT", compressedBytes: size.compressedBytes,
       links: lint.links.length, telegramMessageId: sent.messageId, warnings: lint.warnings.length,
     }));
     return {
       alreadySent: false,
-      caption_already_sent: CAPTION_SENT_NOTE,
+      caption_already_sent: isScheduledSession(ctx) ? SCHEDULED_CAPTION_SENT_NOTE : CAPTION_SENT_NOTE,
       delivered: true,
       links: lint.links,
       path: reservation.file.path,

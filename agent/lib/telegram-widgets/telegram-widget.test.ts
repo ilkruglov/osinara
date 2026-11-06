@@ -52,10 +52,22 @@ describe("sendTelegramWidget", () => {
   it("returns Telegram's refusal for the caller to classify, and checks the size before any request", async () => {
     const fetch = vi.fn(async () => Response.json({ description: "Forbidden: bot was blocked by the user", error_code: 403, ok: false }, { status: 403 }));
     await expect(sendTelegramWidget({ botToken: "1:test", chatId: "1", fetch, html }))
-      .resolves.toEqual({ body: { description: "Forbidden: bot was blocked by the user", error_code: 403, ok: false }, ok: false, status: 403 });
+      .resolves.toEqual({ ambiguous: false, body: { description: "Forbidden: bot was blocked by the user", error_code: 403, ok: false }, ok: false, status: 403 });
     await expect(sendTelegramWidget({ botToken: "1:test", chatId: "1", fetch, html: `<p>${"я".repeat(40_000)}</p>` }))
       .rejects.toThrow(/AGENT_TELEGRAM_WIDGET_TOO_LARGE/u);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("sendTelegramWidget outcome", () => {
+  // Codex review of 1.8.55: an answer that neither refuses nor names the message may have sent it.
+  it.each([
+    ["a success without a message id", 200, { ok: true, result: {} }],
+    ["a server error", 502, { description: "Bad Gateway", error_code: 502, ok: false }],
+  ])("calls %s ambiguous, never a refusal", async (_name, status, body) => {
+    const fetch = vi.fn(async () => Response.json(body, { status }));
+    await expect(sendTelegramWidget({ botToken: "1:test", chatId: "1", fetch, html }))
+      .resolves.toMatchObject({ ambiguous: true, ok: false, status });
   });
 });
 

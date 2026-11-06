@@ -188,6 +188,23 @@ describe("yandex_taxi", () => {
     expect(next).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID" });
   });
 
+  // Codex review of 1.8.54: `order` builds its confirmation window from the points before execute,
+  // so an edited point there never met the guard and reached the model without its correction.
+  it("denies an order with an edited point before its confirmation, with the same correction and stop", async () => {
+    const policy = buildModeToolSurface({ environment: "private" }).yandex_taxi!.approval as unknown as (ctx: unknown) => Promise<unknown>;
+    const edited = { ...orderInput, from: { ...fromPoint, fullText: "Россия, Москва, другая улица, 1" } };
+    const ask = (turnId: string) => policy({ ...context("private", "call-1", turnId), toolInput: edited });
+
+    // The denial reason is the error text: its stable code, then the correction contract as JSON.
+    const contract = (denial: unknown) => JSON.parse((denial as { reason: string }).reason.replace(/^[A-Z_]+:\s*/u, ""));
+    const first = await ask("turn-21") as { type: string };
+    expect(first.type).toBe("denied");
+    expect(contract(first)).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_INVALID", retryable: true });
+    expect(contract(first).correction).toMatch(/не правь.*places.*suggest/su);
+    expect(contract(await ask("turn-21"))).toMatchObject({ code: "AGENT_YANDEX_TAXI_POINT_REF_REPEATED" });
+    expect(await policy({ ...context("private", "call-2", "turn-22"), toolInput: orderInput })).toBe("user-approval");
+  });
+
   it("watches a ride ordered elsewhere from where it is now, refuses a finished one, and stops on request", async () => {
     mocks.status.mockResolvedValueOnce({ activeOrders: [], order: { car: "Белый Kia Rio", driver: "Иван", finalCost: null, minutesLeft: 4, orderId: "o-9", plates: "А123ВС777", status: "driving", statusText: "машина едет к вам" } });
     await expect(yandexTaxi.execute({ action: "watch" }, context("private"))).resolves.toEqual({ orderId: "o-9", status: "машина едет к вам", watching: true });

@@ -31,10 +31,14 @@ import {
   registerTelegramMessageRoutes,
 } from "../sessions/session-context.js";
 import { turnKey } from "../model-facing-tool.js";
+import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { TELEGRAM_SILENT_DIRECTIVE } from "../telegram-progress.js";
 
-const captionSentNote = (what: "картинкой" | "файлом") =>
-  `Подпись уже в чате вместе с ${what}. В следующем сообщении пиши только то, чего в подписи нет, без «Готово» и без пересказа; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
+// A scheduled run is completed only by its final text (`channels/telegram.ts`), so there the
+// model is never told it may stay silent (Codex review of 1.8.54).
+const captionSentNote = (what: "картинкой" | "файлом", scheduled: boolean) => scheduled
+  ? `Подпись уже в чате вместе с ${what}. Итоговое сообщение расписания обязательно: напиши коротко то, чего в подписи нет, без «Готово» и без пересказа.`
+  : `Подпись уже в чате вместе с ${what}. В следующем сообщении пиши только то, чего в подписи нет, без «Готово» и без пересказа; если добавить нечего, ответь ровно ${TELEGRAM_SILENT_DIRECTIVE}, сервер его не отправит.`;
 
 export function createWorkspaceSendTool(options: {
   description: string;
@@ -169,7 +173,7 @@ export function createWorkspaceSendTool(options: {
       return {
         alreadySent: false,
         ...(input.caption?.trim()
-          ? { caption_already_sent: captionSentNote(options.presentation === "photo" ? "картинкой" : "файлом") }
+          ? { caption_already_sent: captionSentNote(options.presentation === "photo" ? "картинкой" : "файлом", isScheduledSession(ctx)) }
           : {}),
         delivered: true,
         path: reservation.file.path,

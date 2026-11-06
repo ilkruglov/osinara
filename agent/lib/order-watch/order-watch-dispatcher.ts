@@ -147,29 +147,40 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
    * The live card after this look: sent on the first look (reserved in the kept state first, so a
    * crash never sends a second card), edited when what it shows changed. A card that did not go
    * stays reserved without a message and is never tried again: the watch then tells in text.
+   * `showsThisLook` says whether the card in the chat now shows this look; only then is the step
+   * quiet (Codex review of 1.8.55: a failed edit left «searching» on screen and the text unsent).
    */
-  async function showCard(watch: ClaimedOrderWatch, observation: OrderObservation, now: Date): Promise<OrderWatchState["card"]> {
+  async function showCard(
+    watch: ClaimedOrderWatch,
+    observation: OrderObservation,
+    now: Date,
+  ): Promise<{ card: OrderWatchState["card"]; showsThisLook: boolean }> {
     const shown = watch.lastState?.card;
-    if (!dependencies.card) return shown;
+    // Widgets switched off: an old card stays as it is, and everything is told in text again.
+    if (!dependencies.card) return { card: shown, showsThisLook: false };
     const key = orderCardKey(observation);
     if (shown === undefined) {
+      // A Lavka order the site does not show yet has nothing to draw: «closed» would be false.
+      if (observation.service === "yandex_lavka" && observation.lavka === null) return { card: undefined, showsThisLook: false };
       const reserved = { key, messageId: null };
       await repository.saveState(watch, { ...notTold(watch), card: reserved });
       try {
-        return { key, messageId: await dependencies.card.send(watch, orderCardHtml(watch.service, orderCardData(observation, now))) };
+        const messageId = await dependencies.card.send(watch, orderCardHtml(watch.service, orderCardData(observation, now)));
+        return { card: { key, messageId }, showsThisLook: true };
       } catch (error) {
         log("AGENT_ORDER_WATCH_CARD_FAILED", watch, { error: errorCode(error) });
-        return reserved;
+        return { card: reserved, showsThisLook: false };
       }
     }
-    if (shown.messageId === null || shown.key === key) return shown;
+    if (shown.messageId === null) return { card: shown, showsThisLook: false };
+    if (shown.key === key) return { card: shown, showsThisLook: true };
     try {
       await dependencies.card.update(watch, shown.messageId, orderCardData(observation, now));
-      return { key, messageId: shown.messageId };
+      return { card: { key, messageId: shown.messageId }, showsThisLook: true };
     } catch (error) {
-      // The card keeps its old picture; the next look tries the edit again.
+      // The card keeps its old picture, so this step is told in text; the next look edits again.
       log("AGENT_ORDER_WATCH_CARD_UPDATE_FAILED", watch, { error: errorCode(error) });
-      return shown;
+      return { card: shown, showsThisLook: false };
     }
   }
 
@@ -218,10 +229,10 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
       return;
     }
     const decision = decide(watch, observation, now);
-    const card = await showCard(watch, observation, now);
+    const { card, showsThisLook } = await showCard(watch, observation, now);
     const keep = (state: OrderWatchState): OrderWatchState => (card === undefined ? state : { ...state, card });
-    // A step the live card already shows stays quiet; a car on the spot or the end is still told.
-    const quiet = Boolean(card?.messageId) && !decision.loud;
+    // A step the live card now shows stays quiet; a car on the spot or the end is still told.
+    const quiet = showsThisLook && !decision.loud;
     if (decision.message !== null && !quiet) {
       await repository.saveState(watch, keep(decision.state));
       const told = await tell(watch, decision.message);

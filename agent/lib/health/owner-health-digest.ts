@@ -35,7 +35,10 @@
 import { DEEPSEEK_BALANCE_ALERT_USD } from "../../config.js";
 import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
 import { formatStorageHeadroom, readStorageHeadroom, type StorageHeadroom } from "./storage-headroom.js";
+import { TELEGRAM_MESSAGE_TEXT_MAX_LENGTH } from "eve/channels/telegram";
+
 import {
+  MemoryReviewOwnerAlertTransportError,
   memoryReviewOwnerAlertTransport,
   TelegramRecipientUnreachableError,
 } from "../memory-review/memory-review-owner-alert-transport.js";
@@ -175,7 +178,26 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
       if (error instanceof TelegramRecipientUnreachableError) throw error;
       const reason = error instanceof Error ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160) : String(error);
       console.error(JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }));
-      await dependencies.deliver({ chatId, text: `${text}\nКарточка сводки не отправилась (${reason}), поэтому текстом.` });
+      // Only Telegram's own refusal proves the card is not in the chat; a timeout may have delivered it.
+      const refused = error instanceof MemoryReviewOwnerAlertTransportError;
+      const note = refused
+        ? `Карточка сводки не отправилась (${reason}), поэтому текстом.`
+        : `Карточка сводки могла не дойти (${reason}), поэтому на всякий случай текстом.`;
+      const joined = `${text}\n${note}`;
+      if (joined.length <= TELEGRAM_MESSAGE_TEXT_MAX_LENGTH) {
+        await dependencies.deliver({ chatId, text: joined });
+        return;
+      }
+      // The digest itself fits one message; the note goes apart rather than making it undeliverable.
+      await dependencies.deliver({ chatId, text });
+      try {
+        await dependencies.deliver({ chatId, text: note });
+      } catch (noteError) {
+        console.error(JSON.stringify({
+          code: "AGENT_OWNER_HEALTH_DIGEST_NOTE_FAILED",
+          error: noteError instanceof Error ? noteError.name : "UnknownError",
+        }));
+      }
     }
   }
 

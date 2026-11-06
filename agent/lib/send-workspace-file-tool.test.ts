@@ -129,6 +129,18 @@ describe("send_workspace_file group projection", () => {
     expect(document.caption_already_sent).toMatch(/^Подпись уже в чате вместе с файлом\./u);
   });
 
+  // Codex review of 1.8.54: a scheduled run is finished only by its final text, so silence there
+  // turned a delivered picture into a failed run.
+  it("never advises silence in a scheduled run", async () => {
+    const scheduled = context();
+    (scheduled.session.auth.current!.attributes as Record<string, unknown>).scheduledRunId = "run-1";
+
+    const result = await sendWorkspaceImage.execute({ caption: "Сводка дня", path: "screens/facade.png", scope: "family" }, scheduled) as Record<string, unknown>;
+
+    expect(String(result.caption_already_sent)).not.toContain("<telegram-silent>");
+    expect(String(result.caption_already_sent)).toMatch(/итог/iu);
+  });
+
   it("repairs timeline and route projection when a confirmed delivery step replays", async () => {
     mocks.begin.mockResolvedValue({
       bytes: Buffer.from("image"),

@@ -119,11 +119,21 @@ describe("memory review owner alert transport", () => {
 
     const rejected = createMemoryReviewOwnerAlertTransport({
       botToken: "telegram-bot-secret",
-      fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ description: "Bad Gateway", error_code: 502, ok: false }), { status: 502 })),
+      fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ description: "Bad Request: INPUT_MEDIA_WIDGET_HTML_INVALID", error_code: 400, ok: false }), { status: 400 })),
       timeoutMilliseconds: 15_000,
     });
     await expect(rejected.deliverWidget({ caption: "x", chatId: "101", html: "<div>ok</div>" }))
-      .rejects.toMatchObject({ code: "AGENT_OWNER_WIDGET_REJECTED", message: expect.stringContaining("HTTP 502") });
+      .rejects.toMatchObject({ code: "AGENT_OWNER_WIDGET_REJECTED", message: expect.stringContaining("HTTP 400") });
+
+    // A server error may have delivered the card: it is not reported as a refusal (Codex review of 1.8.55).
+    const unknown = createMemoryReviewOwnerAlertTransport({
+      botToken: "telegram-bot-secret",
+      fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ description: "Bad Gateway", error_code: 502, ok: false }), { status: 502 })),
+      timeoutMilliseconds: 15_000,
+    });
+    const failure = await unknown.deliverWidget({ caption: "x", chatId: "101", html: "<div>ok</div>" }).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: "AGENT_OWNER_WIDGET_AMBIGUOUS", message: expect.stringContaining("HTTP 502") });
+    expect(failure).not.toBeInstanceOf(MemoryReviewOwnerAlertTransportError);
   });
 });
 

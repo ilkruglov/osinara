@@ -33,13 +33,27 @@ import {
   type YandexTaxiOperationAction,
 } from "../yandex-taxi/yandex-taxi-operation.js";
 import { YANDEX_TAXI_FINISHED_STATUSES } from "../yandex-taxi/yandex-taxi-config.js";
+import { requireYandexTaxiPoint, type YandexTaxiPoint } from "../yandex-taxi/yandex-taxi-model.js";
 import { yandexTaxiPointGuard } from "../yandex-taxi/yandex-taxi-point-guard.js";
 import { yandexTaxiClientFor } from "../yandex-taxi/yandex-taxi-production.js";
 
 export default defineTool({
-  approval: ({ toolInput }) => {
-    const action = (toolInput as { action?: unknown } | null)?.action;
-    return typeof action === "string" && YANDEX_TAXI_APPROVAL_ACTIONS.has(action) ? "user-approval" : "not-applicable";
+  approval: (ctx) => {
+    const input = ctx.toolInput as { action?: unknown; from?: YandexTaxiPoint; to?: YandexTaxiPoint } | null;
+    const action = input?.action;
+    if (typeof action !== "string" || !YANDEX_TAXI_APPROVAL_ACTIONS.has(action)) return "not-applicable";
+    // The confirmation window is built from the points, so an edited one is answered here, before
+    // it: with the same correction and the same stop in a turn as in execute (Codex review of
+    // 1.8.54). The model-facing wrapper turns the error into a denial the model can act on.
+    if (action === "order") {
+      try {
+        if (input?.from) requireYandexTaxiPoint(input.from, "from");
+        if (input?.to) requireYandexTaxiPoint(input.to, "to");
+      } catch (error) {
+        throw yandexTaxiPointGuard.explain(turnKey(ctx), error);
+      }
+    }
+    return "user-approval";
   },
   description: [
     "Такси Яндекс Go из аккаунта человека в его браузере. auth: есть ли вход и активный заказ. places: сохранённые адреса. suggest: адрес по тексту (query, type from|to, near рядом, pick из others) или по геолокации (только near из «Геолокация: широта, долгота» и type). point из ответа передавай дальше без изменений.",

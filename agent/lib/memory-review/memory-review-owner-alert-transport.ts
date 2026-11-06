@@ -103,6 +103,10 @@ export function createMemoryReviewOwnerAlertTransport(
       if (!sent.ok) {
         const reason = classifyTelegramRecipientFailure(sent.status, sent.body);
         if (reason !== null) throw new TelegramRecipientUnreachableError(input.chatId, reason);
+        // Not a refusal: the card may be in the chat, which the caller tells apart.
+        if (sent.ambiguous) {
+          throw new AppError("AGENT_OWNER_WIDGET_AMBIGUOUS", `Telegram не подтвердил карточку: HTTP ${sent.status}`);
+        }
         throw new MemoryReviewOwnerAlertTransportError(
           "failed",
           "AGENT_OWNER_WIDGET_REJECTED",

@@ -11,6 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { MemoryReviewOwnerAlertTransportError } from "../memory-review/memory-review-owner-alert-transport.js";
 import {
   createOwnerHealthDigestDispatcher,
   digestDateFor,
@@ -239,17 +240,58 @@ describe("createOwnerHealthDigestDispatcher", () => {
     expect(deps.complete).toHaveBeenCalledWith("family-1", "2026-11-06", now, formatOwnerHealthDigest(quiet).length, null);
   });
 
-  it("sends the text with the card's failure when Telegram did not take the card", async () => {
+  it("sends the text with the card's failure when Telegram refused the card", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const deliverWidget = vi.fn().mockRejectedValue(new Error("AGENT_OWNER_WIDGET_REJECTED: Telegram не принял карточку: HTTP 502"));
+    const deliverWidget = vi.fn().mockRejectedValue(new MemoryReviewOwnerAlertTransportError(
+      "failed", "AGENT_OWNER_WIDGET_REJECTED", "Telegram не принял карточку: HTTP 400",
+    ));
     const deps = dependencies({ deliverWidget });
     await expect(createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"))).resolves.toBe(2);
     expect(deps.deliver).toHaveBeenCalledWith({
       chatId: "101",
-      text: `${formatOwnerHealthDigest(quiet)}\nКарточка сводки не отправилась (Telegram не принял карточку: HTTP 502), поэтому текстом.`,
+      text: `${formatOwnerHealthDigest(quiet)}\nКарточка сводки не отправилась (Telegram не принял карточку: HTTP 400), поэтому текстом.`,
     });
     expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED"));
+  });
+
+  // Codex review of 1.8.55: a card that timed out may have arrived; the text must not say it did not.
+  it("says the card may not have arrived when its outcome is unknown", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deliverWidget = vi.fn().mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+    const deps = dependencies({ deliverWidget });
+    await createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"));
+    const text = String((deps.deliver as ReturnType<typeof vi.fn>).mock.calls[0]![0].text);
+    expect(text).toMatch(/Карточка сводки могла не дойти/u);
+    expect(text).not.toMatch(/не отправилась/u);
+  });
+
+  it("keeps a long digest within one Telegram message by sending the card's failure apart", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const long: OwnerHealthReport = {
+      ...quiet,
+      lanes: {
+        blocked: Array.from({ length: 18 }, (_, index) => ({
+          code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED", headStatus: "failed", label: `Группа ${index} ${"с очень длинным названием ".repeat(4)}${index < 18 ? "и хвостом " : ""}`, waiting: 40 + index,
+        })),
+        lagging: [],
+      },
+    };
+    const text = formatOwnerHealthDigest(long);
+    // Fits one message alone, not with the note (Codex's case: 4 050 characters became 4 175).
+    expect(text.length).toBeGreaterThan(3_950);
+    expect(text.length).toBeLessThanOrEqual(4_096);
+    const deliverWidget = vi.fn().mockRejectedValue(new MemoryReviewOwnerAlertTransportError(
+      "failed", "AGENT_OWNER_WIDGET_REJECTED", `Telegram не принял карточку: ${"очень длинная причина ".repeat(10)}`,
+    ));
+    const deps = dependencies({ deliverWidget, report: vi.fn().mockResolvedValue(long) });
+    await createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"));
+    const sent = (deps.deliver as ReturnType<typeof vi.fn>).mock.calls
+      .filter((call) => call[0].chatId === "101").map((call) => String(call[0].text));
+    for (const message of sent) expect(message.length).toBeLessThanOrEqual(4_096);
+    expect(sent).toEqual([text, expect.stringMatching(/^Карточка сводки не отправилась/u)]);
   });
 
   it("keeps the claim and sends no text when the card says the owner chat is gone", async () => {
