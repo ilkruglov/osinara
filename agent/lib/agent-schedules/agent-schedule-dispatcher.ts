@@ -19,6 +19,7 @@ import { numericMessageThreadId } from "./agent-schedule-validation.js";
 import { sessionRepository, type PreparedSession } from "../sessions/session-repository.js";
 import { TELEGRAM_RECIPIENT_UNREACHABLE_CODE, type TelegramRecipientUnreachableReason } from "../telegram-reachability/recipient-failure.js";
 import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
+import { isTurnStartPaused } from "../deploy/turn-start-pause.js";
 
 interface AgentScheduleDispatcherRepository {
   claimDue(options: { leaseMilliseconds: number; limit: number; now: Date }): Promise<ClaimedAgentSchedule[]>;
@@ -35,6 +36,8 @@ interface AgentScheduleDispatcherDependencies {
   to: ScheduleToFn;
   /** The reason the run's chat cannot receive its answer; absent in tests that do not need it. */
   unreachableRecipient?(job: ClaimedAgentSchedule): Promise<TelegramRecipientUnreachableReason | null>;
+  /** A deploy is waiting for the running turns: no new run starts until it is over. */
+  turnStartsPaused?(): Promise<boolean>;
 }
 
 function memoryScopes(job: ClaimedAgentSchedule): Array<"family" | "group" | "personal"> {
@@ -185,6 +188,8 @@ async function dispatchOne(dependencies: AgentScheduleDispatcherDependencies, jo
 
 export function createAgentScheduleDispatcher(dependencies: AgentScheduleDispatcherDependencies) {
   return async function dispatchAgentSchedules(now = new Date()): Promise<number> {
+    // A due run waits out a deploy's wait for running turns and goes on the next minute.
+    if (await dependencies.turnStartsPaused?.()) return 0;
     const jobs = await dependencies.repository.claimDue({
       leaseMilliseconds: AGENT_SCHEDULE_DISPATCH_LEASE_MILLISECONDS,
       limit: AGENT_SCHEDULE_DISPATCH_BATCH_SIZE,
@@ -234,6 +239,7 @@ export function dispatchDueAgentSchedules(to: ScheduleToFn): Promise<number> {
       }),
     repository: agentScheduleDispatchRepository,
     to,
+    turnStartsPaused: () => isTurnStartPaused(),
     unreachableRecipient: (job) => unreachableTelegramRecipient(job.telegramChatId, "agent_schedule"),
   })();
 }

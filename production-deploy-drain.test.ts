@@ -4,9 +4,11 @@
  * Constructs covered:
  * - The active-run query counts a step in flight, a fresh pause between steps and a message the
  *   session is about to take, and ignores parked sessions, approval waits, finished and stuck runs.
- * - The drain stops the Telegram ingress worker first, marks the services as stopped for the
- *   failure path, returns once nothing is active, and gives up at its ceiling.
- * - A missing Workflow database does not stop the deploy.
+ * - The drain stops the Telegram ingress worker first, pauses new turns (the webhook and the minute
+ *   schedules could still start one), marks the services as stopped for the failure path, returns
+ *   once nothing is active, and gives up at its ceiling.
+ * - A drain that cannot read the running turns, or cannot pause new ones, cancels the deploy and
+ *   lifts the pause (owner's decision, 7 November 2026); stopping the release lifts it too.
  * - Every poll is bounded by the remaining drain budget, on the host (docker exec) and in
  *   PostgreSQL (statement and lock timeouts).
  */
@@ -25,7 +27,7 @@ const describeWithDatabase = process.env.RUN_DATABASE_INTEGRATION_TESTS === "tru
   ? describe
   : describe.skip;
 
-function controller(body: string, env: Record<string, string> = {}): { stderr: string; stdout: string } {
+function controller(body: string, env: Record<string, string> = {}, options: { allowFailure?: boolean } = {}): { status: number; stderr: string; stdout: string } {
   const script = `
     set -euo pipefail
     source "${scripts}common.sh"
@@ -39,18 +41,21 @@ function controller(body: string, env: Record<string, string> = {}): { stderr: s
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
     });
-    return { stderr: "", stdout };
+    return { status: 0, stderr: "", stdout };
   } catch (error) {
-    const failed = error as { stderr?: string; stdout?: string };
+    const failed = error as { status?: number; stderr?: string; stdout?: string };
+    if (options.allowFailure) return { status: failed.status ?? 1, stderr: failed.stderr ?? "", stdout: failed.stdout ?? "" };
     throw new Error(`controller failed: ${failed.stderr ?? ""}${failed.stdout ?? ""}`);
   }
 }
 
-function runDrain(counts: string[], timeoutSeconds: number) {
+function runDrain(counts: string[], timeoutSeconds: number, options: { pauseFails?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "drain-"));
   writeFileSync(join(dir, "counts"), `${counts.join("\n")}\n`);
   const result = controller(`
     compose_current() { printf '%s\\n' "$*" >> "${dir}/compose"; }
+    pause_new_turns() { printf 'pause\\n' >> "${dir}/compose"; ${options.pauseFails ? "return 1" : "return 0"}; }
+    resume_new_turns() { printf 'resume\\n' >> "${dir}/compose"; }
     count_active_workflow_runs() {
       printf '%s\n' "$1" >> "${dir}/budgets"
       local next; next="$(head -n 1 "${dir}/counts")"; sed -i 1d "${dir}/counts"
@@ -58,8 +63,8 @@ function runDrain(counts: string[], timeoutSeconds: number) {
       printf '%s\\n' "\${next:-0}"
     }
     sleep() { :; }
-    drain_current_turns ${timeoutSeconds} 2> "${dir}/log"
-    echo "stopped=$CURRENT_SERVICES_STOPPED"
+    drain_current_turns ${timeoutSeconds} 2> "${dir}/log" && status=0 || status=$?
+    echo "stopped=$CURRENT_SERVICES_STOPPED status=$status"
   `);
   const read = (name: string) => {
     try {
@@ -77,20 +82,65 @@ function runDrain(counts: string[], timeoutSeconds: number) {
   };
 }
 
+const LOG_ONLY_STDERR = { allowFailure: true };
+
 describe("deploy turn drain", () => {
-  it("stops ingress first and returns once no run is active", () => {
+  it("stops ingress, pauses new turns and returns once no run is active", () => {
     const run = runDrain(["2", "1", "0", "5"], 300);
-    expect(run.compose.trim()).toBe("stop telegram-ingress-worker");
-    expect(run.stdout).toContain("stopped=1");
+    expect(run.compose.trim().split("\n")).toEqual(["stop telegram-ingress-worker", "pause"]);
+    expect(run.stdout).toContain("stopped=1 status=0");
     expect(run.log).toContain("DEPLOY_TURNS_DRAINED");
     expect(run.remaining.trim()).toBe("5");
+  });
+
+  // Owner's decision, 7 November 2026: a deploy that cannot tell whether turns run is cancelled.
+  it("cancels the deploy and lifts the pause when the running turns cannot be read", () => {
+    const run = runDrain(["error"], 300);
+    expect(run.log).toContain("DEPLOY_TURN_DRAIN_UNAVAILABLE");
+    expect(run.stdout).toContain("stopped=1 status=1");
+    expect(run.compose.trim().split("\n")).toEqual(["stop telegram-ingress-worker", "pause", "resume"]);
+  });
+
+  it("cancels the deploy when new turns cannot be paused", () => {
+    const run = runDrain(["0"], 300, { pauseFails: true });
+    expect(run.log).toContain("DEPLOY_TURN_PAUSE_FAILED");
+    expect(run.stdout).toContain("status=1");
+    expect(run.budgets).toEqual([""]);
+  });
+
+  it("pauses and lifts new turns with bounded SQL that skips a release without the pause table", () => {
+    const dir = mkdtempSync(join(tmpdir(), "drain-pause-"));
+    controller(`
+      CURRENT_ENV=/srv/release.env CURRENT_COMPOSE=/srv/compose.yaml
+      timeout() { printf '%s\n' "$*" >> "${dir}/argv"; cat >> "${dir}/stdin"; }
+      pause_new_turns
+      resume_new_turns
+    `);
+    const argv = readFileSync(join(dir, "argv"), "utf8");
+    const stdin = readFileSync(join(dir, "stdin"), "utf8");
+    expect(argv).toMatch(/^--kill-after=5 20 docker compose --project-name osinara-production /u);
+    expect(argv).toContain("--dbname osinara");
+    expect(stdin).toContain("to_regclass('public.deploy_turn_pause')");
+    expect(stdin).toContain("now() + interval '15 minutes'");
+    expect(stdin).toContain("DELETE FROM deploy_turn_pause");
+  });
+
+  it("lifts the pause once the release has stopped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "drain-stop-"));
+    const run = controller(`
+      compose_current() { if [[ "$1" == "config" ]]; then printf 'agent\npostgres\ntelegram-ingress-worker\n'; else printf '%s\n' "$*" >> "${dir}/compose"; fi; }
+      resume_new_turns() { printf 'resume\n' >> "${dir}/compose"; }
+      stop_current_services
+    `, {}, LOG_ONLY_STDERR);
+    expect(run.status).toBe(0);
+    expect(readFileSync(join(dir, "compose"), "utf8").trim().split("\n")).toEqual(["stop agent telegram-ingress-worker", "resume"]);
   });
 
   it("gives up at its ceiling and lets the deploy continue", () => {
     const run = runDrain(["3", "3", "3"], 0);
     expect(run.log).toContain("DEPLOY_TURN_DRAIN_TIMEOUT");
     expect(run.log).toContain("3");
-    expect(run.stdout).toContain("stopped=1");
+    expect(run.stdout).toContain("stopped=1 status=0");
   });
 
   it("bounds every poll by what is left of the drain budget", () => {
@@ -117,11 +167,7 @@ describe("deploy turn drain", () => {
     expect(stdin).toContain("FROM workflow.workflow_runs AS run");
   });
 
-  it("continues without a readable Workflow database", () => {
-    const run = runDrain(["error"], 300);
-    expect(run.log).toContain("DEPLOY_TURN_DRAIN_UNAVAILABLE");
-    expect(run.stdout).toContain("stopped=1");
-  });
+
 });
 
 describeWithDatabase("active workflow run query", () => {

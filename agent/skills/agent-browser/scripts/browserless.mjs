@@ -85,7 +85,9 @@ export async function main(argv) {
     console.log("Browserless session closed");
     return;
   }
-  if (!COMMANDS.has(command) || args.some((arg) => /^--(?:session|profile|state|restore|provider|cdp|config)(?:=|$)/u.test(arg) || arg === "-p")) {
+  // `--fn`/`-f` runs script in the page (agent-browser `wait --fn`): a form could be filled or sent
+  // past browser_act's confirmation, so no argument may carry script (Codex review, 6 November 2026).
+  if (!COMMANDS.has(command) || args.some((arg) => /^--(?:session|profile|state|restore|provider|cdp|config|fn)(?:=|$)/u.test(arg) || arg === "-p" || arg === "-f")) {
     throw new Error("AGENT_BROWSERLESS_COMMAND_FORBIDDEN: Облачный браузер только читает: open, read, snapshot, screenshot, scroll, get. Действия на странице делает browser_act");
   }
   if (process.env.BROWSERLESS_AVAILABLE !== "true") {

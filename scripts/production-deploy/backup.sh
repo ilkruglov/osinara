@@ -200,10 +200,12 @@ create_postgres_backup() {
 
 # 2 October 2026: the 1.8.10 deploy stopped the agent while a Ft86 turn reported its end to the
 # session; the session waited 15 minutes for it, the next addressed message lost its turn and the
-# owner got AGENT_MEMORY_REVIEW_BLOCKED. Ingress stops first, so no new Telegram turn begins
-# (updates keep landing in PostgreSQL and run after the deploy), then running turns get up to
-# five minutes, the deadline of one model call plus a margin. Background schedules of the agent
-# may still start a turn meanwhile; the ceiling keeps the deploy moving.
+# owner got AGENT_MEMORY_REVIEW_BLOCKED. Ingress stops first and new turns are paused (updates keep
+# landing in PostgreSQL and run after the deploy; the webhook path and the minute schedules check
+# the pause), then running turns get up to five minutes, the deadline of one model call plus a
+# margin; the ceiling keeps the deploy moving. A drain that cannot pause new turns or cannot read
+# the running ones cancels the deploy (owner's decision, 7 November 2026): stopping blind is what
+# cut the Ft86 turn.
 readonly TURN_DRAIN_TIMEOUT_SECONDS=300
 readonly TURN_DRAIN_POLL_SECONDS=3
 readonly TURN_DRAIN_QUERY_SECONDS=20
@@ -215,14 +217,19 @@ drain_current_turns() {
   # From here on a failure must bring the current release back, ingress included.
   CURRENT_SERVICES_STOPPED=1
   compose_current stop telegram-ingress-worker
+  if ! pause_new_turns; then
+    log_event "DEPLOY_TURN_PAUSE_FAILED" "Could not pause new turns; the deploy is cancelled"
+    return 1
+  fi
   local remaining budget
   while true; do
     remaining=$((timeout - (SECONDS - started)))
     budget=$((remaining < TURN_DRAIN_QUERY_SECONDS ? remaining : TURN_DRAIN_QUERY_SECONDS))
     ((budget >= 1)) || budget=1
     if ! active="$(count_active_workflow_runs "$budget")"; then
-      log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read Workflow runs; stopping without waiting"
-      return 0
+      log_event "DEPLOY_TURN_DRAIN_UNAVAILABLE" "Could not read Workflow runs; the deploy is cancelled"
+      resume_new_turns || log_event "DEPLOY_TURN_PAUSE_RESUME_FAILED" "New turns stay paused until the pause expires"
+      return 1
     fi
     if [[ "$active" == "0" ]]; then
       log_event "DEPLOY_TURNS_DRAINED" "No running turns after $((SECONDS - started)) s"
@@ -243,6 +250,8 @@ stop_current_services() {
   local -a service_names
   mapfile -t service_names <<< "$services"
   compose_current stop "${service_names[@]}"
+  # Nothing of the current release runs any more; the next one must start unpaused.
+  resume_new_turns || log_event "DEPLOY_TURN_PAUSE_RESUME_FAILED" "New turns stay paused until the pause expires"
 }
 
 backup_volume() {
@@ -284,5 +293,6 @@ restart_current_release() {
   compose_current up --detach --remove-orphans --no-build --wait --wait-timeout 600 || return 1
   wait_for_health || return 1
   CURRENT_SERVICES_STOPPED=0
+  resume_new_turns || log_event "DEPLOY_TURN_PAUSE_RESUME_FAILED" "New turns stay paused until the pause expires"
   return 0
 }

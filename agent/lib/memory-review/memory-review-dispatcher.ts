@@ -20,10 +20,13 @@ import {
 } from "./memory-review-repository.js";
 import { memoryReviewDispatchRepository } from "./memory-review-dispatch-repository.js";
 import { memoryReviewSessionRepository } from "./memory-review-session-repository.js";
+import { isTurnStartPaused } from "../deploy/turn-start-pause.js";
 
 export type ClaimedMemoryReviewBatch = MemoryReviewClaim;
 
 interface MemoryReviewDispatcherDependencies {
+  /** A deploy is waiting for the running turns: no review starts until it is over. */
+  turnStartsPaused?(): Promise<boolean>;
   claimPending(input: {
     leaseMilliseconds: number;
     limit: number;
@@ -135,6 +138,8 @@ async function dispatchOne(
 
 export function createMemoryReviewDispatcher(dependencies: MemoryReviewDispatcherDependencies) {
   return async function dispatchMemoryReviews(now = new Date()): Promise<number> {
+    // A ready batch waits out a deploy's wait for running turns and goes on the next minute.
+    if (await dependencies.turnStartsPaused?.()) return 0;
     const batches = await dependencies.claimPending({
       leaseMilliseconds: MEMORY_REVIEW_DISPATCH_LEASE_MILLISECONDS,
       limit: MEMORY_REVIEW_DISPATCH_BATCH_SIZE,
@@ -175,5 +180,6 @@ export function dispatchPendingMemoryReviews(to: ScheduleToFn): Promise<number> 
       batch.sourceEntryIds,
     ),
     to,
+    turnStartsPaused: () => isTurnStartPaused(),
   })();
 }

@@ -67,6 +67,15 @@ function dependencies(overrides: Record<string, unknown> = {}) {
 }
 
 describe("memory review dispatcher", () => {
+  it("claims nothing while a deploy pauses new turns", async () => {
+    const fixture = dependencies({ turnStartsPaused: vi.fn().mockResolvedValue(true) });
+
+    await expect(createMemoryReviewDispatcher(fixture.dependencies as never)(new Date("2026-08-12T10:00:00.000Z"))).resolves.toBe(0);
+
+    expect(fixture.dependencies.claimPending).not.toHaveBeenCalled();
+    expect(fixture.send).not.toHaveBeenCalled();
+  });
+
   it("starts exactly one internal task turn for one 50-message batch", async () => {
     const fixture = dependencies();
 

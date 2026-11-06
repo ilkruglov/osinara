@@ -43,6 +43,41 @@ count_active_workflow_runs() {
     --username osinara --dbname osinara_workflow --no-align --tuples-only --quiet
 }
 
+# New turns wait while a deploy drains the running ones: the webhook path and the minute schedules
+# of the agent would otherwise start a turn the stop then cuts (Codex review, 6 November 2026).
+# The pause lives in the application database and is checked where a turn is claimed
+# (`agent/lib/deploy/turn-start-pause.ts`). It ends by itself after 15 minutes, so a controller that
+# dies mid-deploy cannot hold the agent; a release without the table (older than migration 143)
+# is left alone. Each call is bounded like a drain poll.
+readonly TURN_PAUSE_QUERY_SECONDS=20
+
+turn_pause_sql() {
+  local statement="$1"
+  printf "SET statement_timeout = '%ss';\nSET lock_timeout = '2s';\n" "$TURN_PAUSE_QUERY_SECONDS"
+  cat <<SQL
+DO \$\$
+BEGIN
+  IF to_regclass('public.deploy_turn_pause') IS NOT NULL THEN
+    ${statement}
+  END IF;
+END
+\$\$;
+SQL
+}
+
+pause_new_turns() {
+  turn_pause_sql "INSERT INTO deploy_turn_pause (singleton, paused_until) VALUES (true, now() + interval '15 minutes')
+      ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until, requested_at = now();" |
+    compose_current_within "$TURN_PAUSE_QUERY_SECONDS" exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
+      --username osinara --dbname osinara --no-align --tuples-only --quiet
+}
+
+resume_new_turns() {
+  turn_pause_sql "DELETE FROM deploy_turn_pause;" |
+    compose_current_within "$TURN_PAUSE_QUERY_SECONDS" exec -T postgres psql -X --no-psqlrc --set ON_ERROR_STOP=1 \
+      --username osinara --dbname osinara --no-align --tuples-only --quiet
+}
+
 reconcile_stale_deployments() {
   local stale
   stale="$(psql_current --field-separator=$'\t' <<'SQL'

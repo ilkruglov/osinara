@@ -174,6 +174,7 @@ const POST_V0101_MIGRATIONS = [
   "140_order_watches.sql",
   "141_workspace_widget_deliveries.sql",
   "142_whisper_session_kind.sql",
+  "143_deploy_turn_pause.sql",
   "144_whisper_placeholders.sql",
 ] as const;
 

@@ -10,6 +10,7 @@ import { requireAllowedMemoryContent } from "../memory-content-policy.js";
 import { requireMemoryAuthorization, requireWritableScope } from "../memory-context.js";
 import { memoryRepository } from "../memory-repository.js";
 import { NearDuplicateRefusal, nearDuplicateRefusalResult } from "../memory-near-duplicate.js";
+import { SlotConflictRefusal } from "../memory-slot-supersede.js";
 import { logMemoryWriteEvent } from "../memory-observability.js";
 import { resolveMemoryTurnSource } from "../memory-turn-source.js";
 import { toModelMemory } from "../model-memory.js";
@@ -90,6 +91,21 @@ export default defineTool({
         ...(input.thread === undefined ? {} : { thread: input.thread }),
       });
     } catch (error) {
+      if (error instanceof SlotConflictRefusal) {
+        logMemoryWriteEvent({
+          code: "AGENT_MEMORY_WRITE_DEFERRED",
+          errorCode: error.code,
+          scope,
+          sourceKind: source?.isCurrent === true ? "current" : requestedSourceKind,
+          threadAction: input.thread?.action ?? "none",
+        });
+        return {
+          code: error.code,
+          instruction: error.contract.correction,
+          reason: error.contract.reason,
+          saved: false as const,
+        };
+      }
       if (error instanceof NearDuplicateRefusal) {
         logMemoryWriteEvent({
           code: "AGENT_MEMORY_WRITE_DEFERRED",

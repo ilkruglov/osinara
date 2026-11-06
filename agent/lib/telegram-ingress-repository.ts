@@ -26,6 +26,7 @@ import {
 import { telegramIngressProcessingRepository } from "./telegram-ingress-processing-repository.js";
 import { withoutRichMediaBlocks } from "./telegram-rich-message.js";
 import { telegramIngressSessionCursorRepository } from "./telegram-ingress-session-cursor-repository.js";
+import { TURN_START_PAUSED_SQL } from "./deploy/turn-start-pause.js";
 
 const IGNORED_MEDIA_REASON = "external_media";
 
@@ -270,6 +271,8 @@ export const telegramIngressRepository: TelegramIngressRepository = {
          FROM telegram_ingress_updates item
          WHERE (item.status = 'pending'
              OR (item.status = 'processing' AND item.lease_expires_at <= now()))
+           -- A deploy waiting for the running turns: updates stay queued until it is over.
+           AND NOT ${TURN_START_PAUSED_SQL}
            AND NOT EXISTS (
              SELECT 1
              FROM telegram_ingress_updates earlier

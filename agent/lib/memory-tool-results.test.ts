@@ -57,6 +57,7 @@ vi.mock("./session-auth.js", () => ({
   }),
 }));
 import { NearDuplicateRefusal } from "./memory-near-duplicate.js";
+import { SlotConflictRefusal } from "./memory-slot-supersede.js";
 import listMemoriesTool from "./tools/list_memories.js";
 import remember from "./tools/remember.js";
 import searchMemories from "./tools/search_memories.js";
@@ -330,6 +331,37 @@ describe("model-facing memory tool results", () => {
     expect(logMemoryWriteEvent).toHaveBeenCalledWith(expect.objectContaining({
       code: "AGENT_MEMORY_WRITE_SUCCEEDED",
       sourceKind: "delta",
+    }));
+  });
+
+  // Codex review, 6 November 2026: the slot's records were quoted in a thrown error, and Eve logs
+  // every thrown tool error whole, so personal memory reached the log.
+  it("answers a slot conflict with the slot's records and logs no content", async () => {
+    const refusal = new SlotConflictRefusal({
+      category: "conflict", code: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED", correction: "Текущие записи слота: Гоша, кубинский амазон",
+      field: "slotUpdate", reason: "В слоте уже есть активные записи", retryable: false, sideEffectStatus: "not_started",
+    });
+    expect(refusal.message).toBe("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
+    createMemory.mockRejectedValue(refusal);
+
+    const result = await executeNonStreamingTool(remember, {
+      attribute: "питомцы",
+      basis: "agent_inferred",
+      content: "Семейный попугай Гоша живёт дома",
+      kind: "fact",
+      scope: "personal",
+      sensitivity: "normal",
+      subject: { kind: "current_author" },
+    }, context);
+
+    expect(result).toMatchObject({
+      code: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
+      instruction: "Текущие записи слота: Гоша, кубинский амазон",
+      reason: "В слоте уже есть активные записи",
+      saved: false,
+    });
+    expect(logMemoryWriteEvent).toHaveBeenCalledWith(expect.objectContaining({
+      code: "AGENT_MEMORY_WRITE_DEFERRED", errorCode: "AGENT_MEMORY_SLOT_REVIEW_REQUIRED",
     }));
   });
 

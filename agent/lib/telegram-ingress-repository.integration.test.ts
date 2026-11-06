@@ -87,6 +87,25 @@ describeWithDatabase("telegramIngressRepository", () => {
     await expect(claimStalledIngress(30 * 60 * 1000)).resolves.toEqual([]);
   });
 
+  // Codex review, 6 November 2026: the deploy stopped the poller, yet the webhook's own drain
+  // claimed a new message after the deploy saw no running turn, and the stop cut that turn.
+  it("claims nothing while a deploy pauses new turns, and again once the pause is over", async () => {
+    await telegramIngressRepository.enqueue(updateInput("1201", "telegram:private:121", "привет"));
+    await database().query(
+      `INSERT INTO deploy_turn_pause (paused_until) VALUES (now() + interval '15 minutes')
+       ON CONFLICT (singleton) DO UPDATE SET paused_until = EXCLUDED.paused_until`,
+    );
+    try {
+      await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST)).resolves.toBeNull();
+      // A pause the controller left behind expires on its own.
+      await database().query("UPDATE deploy_turn_pause SET paused_until = now() - interval '1 second'");
+      await expect(telegramIngressRepository.claimNext(LEASE_MILLISECONDS, NO_PRIVATE_BURST))
+        .resolves.toMatchObject({ updateId: "1201" });
+    } finally {
+      await database().query("DELETE FROM deploy_turn_pause");
+    }
+  });
+
   it("deduplicates an identical update and rejects a conflicting replay", async () => {
     const update = updateInput("1001", "telegram:private:101", "первое сообщение");
 

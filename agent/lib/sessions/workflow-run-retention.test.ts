@@ -40,6 +40,9 @@ describe("pruneTerminalWorkflowRuns", () => {
     expect(firstRun[firstRun.length - 1]).toBe("COMMIT");
     // Blobs nobody refers to any more go after the runs, once per sweep.
     expect(texts.at(-1)).toContain("DELETE FROM workflow.workflow_payload_blobs");
+    // Never waiting for a row a writer holds: the writer locks its blobs in hash order and may wait
+    // for this sweep, so the sweep must not wait for it (Codex review, 6 November 2026: deadlock).
+    expect(texts.at(-1)).toMatch(/ORDER BY[\s\S]*hash[\s\S]*FOR UPDATE SKIP LOCKED/u);
   });
 
   it("skips a run that is no longer finished under the lock", async () => {

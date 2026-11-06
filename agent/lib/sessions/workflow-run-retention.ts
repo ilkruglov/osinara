@@ -99,12 +99,19 @@ export async function pruneTerminalWorkflowRuns(
   }
   // Payload blobs no run refers to any more, on every pass: a session deleted on request leaves its
   // blobs only until here even when no turn run was old enough to prune. A writer touches the blob
-  // row under its lock before adding its reference, so this delete either waits for that commit and
-  // then sees the fresh touch, or wins and the writer recreates the row; the hour is slack, not the
-  // guarantee.
+  // row under its lock, adds its reference and its event in one transaction; this sweep takes only
+  // rows nobody holds (`SKIP LOCKED`, in hash order), so it never waits for a writer while the
+  // writer may wait for it (Codex review, 6 November 2026: two blobs locked in opposite orders were
+  // a deadlock). A row it took is either deleted, and a waiting writer recreates it, or skipped
+  // until the next pass; the hour is slack, not the guarantee.
   const blobs = await client.query(
     `DELETE FROM workflow.workflow_payload_blobs AS blob
-      WHERE blob.touched_at < now() - interval '1 hour'
+      WHERE blob.hash IN (
+        SELECT candidate.hash FROM workflow.workflow_payload_blobs AS candidate
+         WHERE candidate.touched_at < now() - interval '1 hour'
+           AND NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs AS ref WHERE ref.hash = candidate.hash)
+         ORDER BY candidate.hash
+         FOR UPDATE SKIP LOCKED)
         AND NOT EXISTS (SELECT 1 FROM workflow.workflow_payload_blob_refs AS ref WHERE ref.hash = blob.hash)`,
   );
   if ((blobs.rowCount ?? 0) > 0) {

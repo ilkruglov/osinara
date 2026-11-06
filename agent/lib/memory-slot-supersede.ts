@@ -3,6 +3,7 @@
  *
  * Exports:
  * - `lockSlotClaims`: locks the slot and returns its active records with their text.
+ * - `SlotConflictRefusal`: that refusal, with the slot's records kept out of its message.
  * - `requireSlotUpdate`: refuses a write that ignores the slot or names a record no longer in it,
  *   quoting the slot's records in the error; an add may name part of the slot, a replace all of it.
  * - `supersedeSlotClaims`: retires older active claims of the same subject and attribute slot.
@@ -11,7 +12,7 @@ import type { PoolClient } from "pg";
 import { MEMORY_LIST_MAX_LIMIT, MEMORY_SEMANTIC_KINDS } from "./memory-config.js";
 
 import type { MemoryAuthorization, MemoryScope } from "./memory-context.js";
-import { ModelFacingError } from "./model-facing-error.js";
+import { ModelFacingError, type ModelFacingErrorContract } from "./model-facing-error.js";
 import type { CreateMemoryInput, MemoryKind } from "./memory-record.js";
 
 export interface SlotSupersedeInput {
@@ -86,6 +87,24 @@ function formatSlotRecords(rows: readonly SlotClaimRow[]): string {
       : "");
 }
 
+/**
+ * The slot conflict: the write stops so the model reads what the slot holds. The records quoted in
+ * the correction are memory content, and Eve logs every thrown tool error whole (message and
+ * properties), so the message carries the code alone and `remember` turns the stop into its answer,
+ * as with a near-duplicate (Codex review, 6 November 2026).
+ */
+export class SlotConflictRefusal extends Error {
+  readonly code: string;
+  readonly contract: Readonly<ModelFacingErrorContract>;
+
+  constructor(contract: ModelFacingErrorContract) {
+    super(contract.code);
+    this.name = "SlotConflictRefusal";
+    this.code = contract.code;
+    this.contract = Object.freeze({ ...contract });
+  }
+}
+
 export function requireSlotUpdate(
   rows: readonly SlotClaimRow[],
   update: CreateMemoryInput["slotUpdate"],
@@ -100,7 +119,7 @@ export function requireSlotUpdate(
   const incomplete = update?.action === "replace" ? named.size !== actual.size : named.size === 0;
   const code = update ? "AGENT_MEMORY_SLOT_CHANGED" : "AGENT_MEMORY_SLOT_REVIEW_REQUIRED";
   if ((actual.size > 0 && !update) || (update && (stale || incomplete))) {
-    throw new ModelFacingError({
+    throw new SlotConflictRefusal({
       category: "conflict", code, field: "slotUpdate", retryable: false, sideEffectStatus: "not_started",
       reason: update ? "Состав слота изменился после чтения" : "В слоте уже есть активные записи",
       correction: "Передай slotUpdate с previousMemoryRefs из текущих ссылок слота ниже: add, если новая запись дополняет их (достаточно прочитанных); replace с полной новой версией, если заменяет (все ссылки). Текущие записи слота: " + formatSlotRecords(rows),

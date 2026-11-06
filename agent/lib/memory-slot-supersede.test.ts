@@ -10,13 +10,18 @@
  * - A bounded multi-value slot must always remain readable and replaceable through the tool.
  */
 import { describe, expect, it } from "vitest";
-import { requireSlotUpdate } from "./memory-slot-supersede.js";
+import { requireSlotUpdate, SlotConflictRefusal } from "./memory-slot-supersede.js";
 import { ModelFacingError } from "./model-facing-error.js";
 
 function correctionOf(write: () => unknown): { code: string; correction: string } {
   try {
     write();
   } catch (error) {
+    if (error instanceof SlotConflictRefusal) {
+      // The records are memory content: the message, which Eve would log, carries the code alone.
+      expect(error.message).toBe(error.contract.code);
+      return error.contract;
+    }
     if (error instanceof ModelFacingError) return error.contract;
     throw error;
   }
@@ -29,6 +34,7 @@ const rows = Array.from({ length: 50 }, (_, i) => ({ id: String(i), memory_ref: 
 describe("slot conflicts", () => {
   const slot = rows.slice(0, 2);
   it("quotes the slot's records when the write ignores the slot", () => {
+    expect(() => requireSlotUpdate(slot, undefined)).toThrow(SlotConflictRefusal);
     const contract = correctionOf(() => requireSlotUpdate(slot, undefined));
     expect(contract.code).toBe("AGENT_MEMORY_SLOT_REVIEW_REQUIRED");
     expect(contract.correction).toContain(`${ref(0)}: "факт 0"; ${ref(1)}: "факт 1"`);

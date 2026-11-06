@@ -21,9 +21,12 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       longStart: { last: "step_started", minutesAgo: 15, status: "running" },
       parked: { last: "hook_created", minutesAgo: 600, status: "running" },
       // A session resting on its hook ends its last turn on step_completed; the hook row says so.
-      resting: { last: "step_completed", minutesAgo: 90, status: "running", hook: true },
+      resting: { last: "step_completed", minutesAgo: 90, status: "running", hook: true, workflow: "workflow//eve//workflowEntry" },
       // The same last event without a hook is a run whose next job was lost (Codex review).
       abandoned: { last: "step_completed", minutesAgo: 90, status: "running" },
+      // A turn holds its inbox hook from its first step on, so a hook proves nothing for a turn: one
+      // whose continuation was lost after a step is stuck all the same (Codex review, 6 November 2026).
+      turnWithInbox: { last: "step_completed", minutesAgo: 90, status: "running", hook: true },
       recent: { last: "step_completed", minutesAgo: 5, status: "running" },
       finished: { last: "step_retrying", minutesAgo: 30, status: "completed" },
     } as const;
@@ -31,8 +34,8 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       for (const [name, run] of Object.entries(runs)) {
         const runId = `${prefix}-${name}`;
         await pool.query(
-          "INSERT INTO workflow.workflow_runs (id, deployment_id, status, name) VALUES ($1, 'postgres', $2, 'workflow//eve//turnWorkflow')",
-          [runId, run.status],
+          "INSERT INTO workflow.workflow_runs (id, deployment_id, status, name) VALUES ($1, 'postgres', $2, $3)",
+          [runId, run.status, "workflow" in run ? run.workflow : "workflow//eve//turnWorkflow"],
         );
         await pool.query(
           `INSERT INTO workflow.workflow_events (id, type, run_id, created_at)
@@ -49,7 +52,7 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       }
 
       const found = (await findStuckRuns(pool, LIMITS)).filter((run) => run.runId.startsWith(prefix));
-      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort()).toEqual(["abandoned", "lostRetry", "lostStart"]);
+      expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort()).toEqual(["abandoned", "lostRetry", "lostStart", "turnWithInbox"]);
       expect(found.every((run) => run.workflowName === "workflow//eve//turnWorkflow")).toBe(true);
     } finally {
       await pool.query("DELETE FROM workflow.workflow_hooks WHERE run_id LIKE $1", [`${prefix}-%`]);
@@ -75,17 +78,19 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
       sleeping: { last: "wait_created", minutesAgo: 1, status: "running" },
       // An active session waits on a hook created turns ago, so its last event is the completed
       // turn step: production, 4 October 2026, nine such runs replayed on every start.
-      restingOnHook: { last: "step_completed", minutesAgo: 30, status: "running", hook: true },
+      restingOnHook: { last: "step_completed", minutesAgo: 30, status: "running", hook: true, workflow: "workflow//eve//workflowEntry" },
       // The same without a hook has nothing to wake it: interrupted, however old.
       abandoned: { last: "step_completed", minutesAgo: 30, status: "running" },
+      // A turn's own inbox hook does not make it a resting session.
+      turnWithInbox: { last: "step_completed", minutesAgo: 30, status: "running", hook: true },
       finished: { last: "step_completed", minutesAgo: 1, status: "completed" },
     } as const;
     try {
       for (const [name, run] of Object.entries(runs)) {
         const runId = `${prefix}-${name}`;
         await pool.query(
-          "INSERT INTO workflow.workflow_runs (id, deployment_id, status, name) VALUES ($1, 'postgres', $2, 'workflow//eve//turnWorkflow')",
-          [runId, run.status],
+          "INSERT INTO workflow.workflow_runs (id, deployment_id, status, name) VALUES ($1, 'postgres', $2, $3)",
+          [runId, run.status, "workflow" in run ? run.workflow : "workflow//eve//turnWorkflow"],
         );
         await pool.query(
           `INSERT INTO workflow.workflow_events (id, type, run_id, created_at)
@@ -103,7 +108,7 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
 
       const found = (await findInFlightRuns(pool, 3)).filter((run) => run.runId.startsWith(prefix));
       expect(found.map((run) => run.runId.slice(prefix.length + 1)).sort())
-        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying"]);
+        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying", "turnWithInbox"]);
       const enqueued: string[] = [];
       await requeueInFlightRuns({
         enqueue: async (queueName, message) => { enqueued.push(`${queueName}|${message.runId}`); },
@@ -111,7 +116,7 @@ describe.skipIf(process.env.RUN_DATABASE_INTEGRATION_TESTS !== "true" || !proces
         queuePrefix: "test//",
       });
       expect(enqueued.filter((entry) => entry.includes(prefix)).sort())
-        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying"].map((name) => `test//workflow//eve//turnWorkflow|${prefix}-${name}`));
+        .toEqual(["abandoned", "betweenSteps", "created", "hookArrived", "justStarted", "retrying", "turnWithInbox"].map((name) => `test//workflow//eve//turnWorkflow|${prefix}-${name}`));
     } finally {
       await pool.query("DELETE FROM workflow.workflow_hooks WHERE run_id LIKE $1", [`${prefix}-%`]);
       await pool.query("DELETE FROM workflow.workflow_events WHERE run_id LIKE $1", [`${prefix}-%`]);

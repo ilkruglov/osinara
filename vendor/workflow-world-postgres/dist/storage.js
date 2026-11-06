@@ -314,6 +314,14 @@ async function restoreEventData(db, eventData) {
   return out;
 }
 async function insertEventRow(db, values) {
+  // Osinara: the payload blobs, their references and the event commit together. A caller on the
+  // bare pool (the generic event path, run_completed, hook_conflict, run_started) used to write
+  // them as separate autocommits, and a session deletion between the blob's touch and the new
+  // reference removed a blob this event then pointed at (Codex review, 6 November 2026). A
+  // transaction object has `rollback`; the pool client does not.
+  if (typeof db.rollback !== "function") {
+    return await db.transaction((tx) => insertEventRow(tx, values));
+  }
   values = { ...values, eventData: await dedupeEventData(db, values.runId, values.eventData) };
   const runId = values.runId;
   const allocates = typeof values.eventId !== "string";
