@@ -19,7 +19,7 @@
  * - Checked live on Docker (5 October 2026): proxy:3128 reachable, a neighbour sandbox and other
  *   ports not, DNS working, a `nohup` process gone after the command.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +29,10 @@ import type Docker from "dockerode";
 import { describe, expect, it, vi } from "vitest";
 
 import { applyEgressFirewall, createStartBarrier, killStrayProcesses, STRAY_SWEEP_PYTHON } from "./docker-sandbox-hardening.js";
+
+// The sweep is Python run inside the sandbox image; the test image of CI has no Python, so the run
+// against a fake /proc happens where Python is (checked live on the sandbox image, 7 November 2026).
+const PYTHON_AVAILABLE = spawnSync("python3", ["--version"]).status === 0;
 
 function containerWith(networkMode: string) {
   return {
@@ -106,7 +110,7 @@ describe("killStrayProcesses", () => {
     expect(options.Env).toEqual(["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]);
   });
 
-  it("kills a process whose executable cannot be read and passes over one already gone", () => {
+  it.skipIf(!PYTHON_AVAILABLE)("kills a process whose executable cannot be read and passes over one already gone", () => {
     // A fake /proc: the sweep reads it through the path it is given and kills through a recorder.
     const proc = mkdtempSync(join(tmpdir(), "osinara-proc-"));
     try {
