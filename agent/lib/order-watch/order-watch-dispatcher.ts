@@ -35,6 +35,7 @@ import {
   ORDER_WATCH_MAX_FAILURES,
   type OrderWatchService,
 } from "./order-watch-config.js";
+import { orderCardData, orderCardHtml, orderCardKey } from "./order-watch-card.js";
 import type { ClaimedOrderWatch, OrderWatchRepository } from "./order-watch-repository.js";
 import {
   decideLavkaWatch,
@@ -58,6 +59,13 @@ export class OrderWatchDeliveryRefusedError extends Error {
 }
 
 interface OrderWatchDispatcherDependencies {
+  /** The live card (a Telegram widget); absent when widgets are switched off. */
+  card?: {
+    /** Sends the card and returns its message id; throws when it did not go or its fate is unknown. */
+    send(watch: ClaimedOrderWatch, html: string): Promise<string>;
+    /** Writes the card's state; throws when Telegram did not take it. */
+    update(watch: ClaimedOrderWatch, messageId: string, data: string): Promise<void>;
+  };
   isMember(watch: ClaimedOrderWatch): Promise<boolean>;
   /** `busy`: the person's browser is in use by a turn; nothing was looked at. */
   observe(watch: ClaimedOrderWatch): Promise<OrderObservation | "busy">;
@@ -135,6 +143,36 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
       : { errorCode: code, reason: ending, state: null });
   }
 
+  /**
+   * The live card after this look: sent on the first look (reserved in the kept state first, so a
+   * crash never sends a second card), edited when what it shows changed. A card that did not go
+   * stays reserved without a message and is never tried again: the watch then tells in text.
+   */
+  async function showCard(watch: ClaimedOrderWatch, observation: OrderObservation, now: Date): Promise<OrderWatchState["card"]> {
+    const shown = watch.lastState?.card;
+    if (!dependencies.card) return shown;
+    const key = orderCardKey(observation);
+    if (shown === undefined) {
+      const reserved = { key, messageId: null };
+      await repository.saveState(watch, { ...notTold(watch), card: reserved });
+      try {
+        return { key, messageId: await dependencies.card.send(watch, orderCardHtml(watch.service, orderCardData(observation, now))) };
+      } catch (error) {
+        log("AGENT_ORDER_WATCH_CARD_FAILED", watch, { error: errorCode(error) });
+        return reserved;
+      }
+    }
+    if (shown.messageId === null || shown.key === key) return shown;
+    try {
+      await dependencies.card.update(watch, shown.messageId, orderCardData(observation, now));
+      return { key, messageId: shown.messageId };
+    } catch (error) {
+      // The card keeps its old picture; the next look tries the edit again.
+      log("AGENT_ORDER_WATCH_CARD_UPDATE_FAILED", watch, { error: errorCode(error) });
+      return shown;
+    }
+  }
+
   async function check(watch: ClaimedOrderWatch, now: Date): Promise<void> {
     const service = SERVICE_NAME[watch.service];
     const kept = watch.lastState;
@@ -180,24 +218,28 @@ export function createOrderWatchDispatcher(dependencies: OrderWatchDispatcherDep
       return;
     }
     const decision = decide(watch, observation, now);
-    if (decision.message !== null) {
-      await repository.saveState(watch, decision.state);
+    const card = await showCard(watch, observation, now);
+    const keep = (state: OrderWatchState): OrderWatchState => (card === undefined ? state : { ...state, card });
+    // A step the live card already shows stays quiet; a car on the spot or the end is still told.
+    const quiet = Boolean(card?.messageId) && !decision.loud;
+    if (decision.message !== null && !quiet) {
+      await repository.saveState(watch, keep(decision.state));
       const told = await tell(watch, decision.message);
       if (told === "unreachable") {
-        await repository.finish(watch, { errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "unreachable", state: decision.state });
+        await repository.finish(watch, { errorCode: "AGENT_TELEGRAM_RECIPIENT_UNREACHABLE", reason: "unreachable", state: keep(decision.state) });
         return;
       }
       if (told === "refused") {
         // Kept as not told: the next tick sees the same change and tells it again.
-        await repository.reschedule(watch, { errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED", nextCheckAt: nextCheck(watch, now), state: notTold(watch) });
+        await repository.reschedule(watch, { errorCode: "AGENT_ORDER_WATCH_DELIVERY_FAILED", nextCheckAt: nextCheck(watch, now), state: keep(notTold(watch)) });
         return;
       }
     }
     if (decision.finished) {
-      await repository.finish(watch, { errorCode: null, reason: "order_ended", state: decision.state });
+      await repository.finish(watch, { errorCode: null, reason: "order_ended", state: keep(decision.state) });
       return;
     }
-    await repository.reschedule(watch, { errorCode: null, nextCheckAt: nextCheck(watch, now), state: decision.state });
+    await repository.reschedule(watch, { errorCode: null, nextCheckAt: nextCheck(watch, now), state: keep(decision.state) });
   }
 
   return async function dispatchOrderWatches(now = new Date()): Promise<number> {

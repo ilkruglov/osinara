@@ -14,6 +14,8 @@
  *   the model's numbers described a page that is no longer shown.
  * - A message goes only to a chat not already known to be gone, and lands in the person's
  *   notification history, so the next turn knows what Mia said on her own.
+ * - With widgets switched on, the order also gets a live card (`order-watch-card.ts`): a Telegram
+ *   widget whose state is edited silently as the order moves.
  */
 import { randomUUID } from "node:crypto";
 
@@ -31,6 +33,8 @@ import { proactiveDeliveryRepository, type ProactiveDeliveryReceipt } from "../p
 import { withRequestTimeout } from "../request-signal.js";
 import { unreachableTelegramRecipient } from "../telegram-reachability/reachability-guard.js";
 import { classifyTelegramRecipientFailure } from "../telegram-reachability/recipient-failure.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
+import { editTelegramWidgetData, sendTelegramWidget } from "../telegram-widgets/telegram-widget-send.js";
 import { createYandexTaxiClient } from "../yandex-taxi/yandex-taxi-client.js";
 import { ORDER_WATCH_BROWSER_HOLD_MS, ORDER_WATCH_LOOK_DEADLINE_MS } from "./order-watch-config.js";
 import { createOrderWatchDispatcher, OrderWatchDeliveryRefusedError, type OrderObservation } from "./order-watch-dispatcher.js";
@@ -99,7 +103,24 @@ export async function sendOrderWatchMessage(watch: ClaimedOrderWatch, text: stri
   return { messageId, text };
 }
 
+const orderCard = {
+  async send(watch: ClaimedOrderWatch, html: string): Promise<string> {
+    const sent = await sendTelegramWidget({
+      caption: watch.service === "yandex_taxi" ? "Такси: статус заказа" : "Лавка: статус заказа",
+      chatId: watch.telegramChatId,
+      html,
+    });
+    if (!sent.ok) throw new AppError("AGENT_ORDER_WATCH_CARD_REFUSED", `Telegram не принял карточку заказа: HTTP ${sent.status}`);
+    return sent.messageId;
+  },
+  async update(watch: ClaimedOrderWatch, messageId: string, data: string): Promise<void> {
+    const edited = await editTelegramWidgetData({ chatData: data, chatId: watch.telegramChatId, messageId });
+    if (!edited.ok) throw new AppError("AGENT_ORDER_WATCH_CARD_UPDATE_REFUSED", `Telegram не обновил карточку заказа: HTTP ${edited.status}`);
+  },
+};
+
 export const dispatchDueOrderWatches = createOrderWatchDispatcher({
+  ...(TELEGRAM_WIDGETS_ENABLED ? { card: orderCard } : {}),
   isMember: (watch) => orderWatchRepository.isMember(watch),
   observe: observeOrder,
   record: (watch, receipt, deliveredAt) => proactiveDeliveryRepository.record({

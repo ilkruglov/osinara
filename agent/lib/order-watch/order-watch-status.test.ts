@@ -92,4 +92,21 @@ describe("decideLavkaWatch", () => {
     expect(decideLavkaWatch({ seen: true, status: "closed" }, { status: "closed", subtitle: "", title: "" }, fresh)).toMatchObject({ finished: true, message: null });
     expect(decideLavkaWatch({ seen: true, status: "closed" }, null, fresh)).toMatchObject({ finished: true, message: null });
   });
+
+  it("marks with sound only what the person must not miss once a live card shows the rest", () => {
+    const loud = (decision: { loud: boolean; message: string | null }) => decision.message !== null && decision.loud;
+    expect(loud(decideTaxiWatch({ status: "search" }, taxi("driving", { car: "Kia", plates: "А1" })))).toBe(false);
+    expect(loud(decideTaxiWatch({ status: "driving", plates: "А1" }, taxi("driving", { car: "Lada", plates: "В2" })))).toBe(true);
+    expect(loud(decideTaxiWatch({ status: "driving" }, taxi("waiting")))).toBe(true);
+    expect(loud(decideTaxiWatch({ status: "waiting" }, taxi("transporting")))).toBe(false);
+    expect(loud(decideTaxiWatch({ status: "search" }, taxi("preexpired")))).toBe(true);
+    expect(loud(decideTaxiWatch({ status: "transporting" }, taxi("complete")))).toBe(true);
+    expect(loud(decideTaxiWatch({ status: "search" }, taxi("cancelled")))).toBe(true);
+    const fresh = { sinceStartMs: 60_000 };
+    expect(loud(decideLavkaWatch({ seen: true, status: "created" }, { status: "assembling", subtitle: "", title: "" }, fresh))).toBe(false);
+    expect(loud(decideLavkaWatch({ seen: true, status: "delivering" }, { status: "delivery_arrived", subtitle: "", title: "" }, fresh))).toBe(true);
+    expect(loud(decideLavkaWatch({ seen: true, status: "delivery_arrived" }, { status: "closed", subtitle: "", title: "" }, fresh))).toBe(true);
+    expect(loud(decideLavkaWatch({ seen: true, status: "delivering" }, null, fresh))).toBe(true);
+  });
 });
+

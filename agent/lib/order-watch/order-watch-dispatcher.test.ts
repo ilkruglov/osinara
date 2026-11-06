@@ -13,6 +13,10 @@
  * - A watch past its deadline ends without looking at the order; one of a person who left the
  *   family ends without a word; a busy browser leaves the watch for the next tick.
  * - A lease another tick took writes nothing more; a failing tick start is logged by its code.
+ * - Live card: the first look sends the card, reserved in the kept state before it goes, so a crash
+ *   never sends a second one; steps the card shows stay quiet, the loud ones are still told; the card
+ *   is edited only when what it shows changed; a card that failed to go leaves the watch telling
+ *   everything in text, and is not tried again.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -193,3 +197,72 @@ describe("order watch dispatcher", () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining("AGENT_ORDER_WATCH_TICK_FAILED"));
   });
 });
+
+describe("order watch live card", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function withCard(claimed: ClaimedOrderWatch[], observe: (watch: ClaimedOrderWatch) => Promise<OrderObservation | "busy">, cardSend = vi.fn().mockResolvedValue("555")) {
+    const repository = {
+      claimDue: vi.fn().mockResolvedValue(claimed),
+      finish: vi.fn().mockResolvedValue(undefined),
+      purgeFinished: vi.fn().mockResolvedValue(0),
+      release: vi.fn().mockResolvedValue(undefined),
+      reschedule: vi.fn().mockResolvedValue(undefined),
+      saveState: vi.fn().mockResolvedValue(undefined),
+    };
+    const send = vi.fn().mockResolvedValue({ messageId: "900", text: "" });
+    const card = { send: cardSend, update: vi.fn().mockResolvedValue(undefined) };
+    const dispatch = createOrderWatchDispatcher({
+      card, isMember: vi.fn().mockResolvedValue(true), observe: vi.fn(observe), record: vi.fn().mockResolvedValue(undefined), repository, send,
+    });
+    return { card, dispatch, repository, send };
+  }
+
+  it("sends the card on the first look, reserved before it goes, and keeps a step the card shows quiet", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { card, dispatch, repository, send } = withCard([watch()], async () => driving);
+    await dispatch(NOW);
+    expect(card.send).toHaveBeenCalledWith(expect.objectContaining({ id: "watch-1" }), expect.stringContaining("Такси"));
+    const reservation = repository.saveState.mock.calls[0]![1];
+    expect(reservation.card).toEqual({ key: expect.any(String), messageId: null });
+    expect(repository.saveState.mock.invocationCallOrder[0]).toBeLessThan(card.send.mock.invocationCallOrder[0]!);
+    expect(send).not.toHaveBeenCalled();
+    expect(repository.reschedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      state: { ...drivingState, card: { key: reservation.card.key, messageId: "555" } },
+    }));
+  });
+
+  it("still tells a loud step, and edits the card only when what it shows changed", async () => {
+    const key = (minutes: number) => JSON.stringify({ c: "Белый Kia Rio", d: null, k: "taxi", m: minutes, p: "А123ВС777", s: "driving" });
+    const shown = { ...drivingState, card: { key: key(5), messageId: "555" } };
+    const same = withCard([watch({ lastState: shown })], async () => driving);
+    await same.dispatch(NOW);
+    expect(same.card.update).not.toHaveBeenCalled();
+    expect(same.card.send).not.toHaveBeenCalled();
+
+    const closer = withCard([watch({ lastState: shown })], async () => ({ service: "yandex_taxi", taxi: { ...driving.taxi, minutesLeft: 2 } }));
+    await closer.dispatch(NOW);
+    expect(closer.card.update).toHaveBeenCalledWith(expect.anything(), "555", expect.stringContaining("\"m\":2"));
+    expect(closer.send).not.toHaveBeenCalled();
+
+    const arrived = withCard([watch({ lastState: shown })], async () => ({ service: "yandex_taxi", taxi: { ...driving.taxi, status: "waiting" } }));
+    await arrived.dispatch(NOW);
+    expect(arrived.card.update).toHaveBeenCalledOnce();
+    expect(arrived.send).toHaveBeenCalledWith(expect.anything(), "Такси на месте: Белый Kia Rio, А123ВС777.");
+  });
+
+  it("tells everything in text when the card did not go, and does not try it again", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failed = withCard([watch()], async () => driving, vi.fn().mockRejectedValue(new Error("beta down")));
+    await failed.dispatch(NOW);
+    expect(failed.send).toHaveBeenCalledWith(expect.anything(), "Такси едет: Белый Kia Rio, А123ВС777, будет через 5 мин.");
+    const kept = failed.repository.reschedule.mock.calls[0]![1].state;
+    expect(kept.card.messageId).toBeNull();
+
+    const later = withCard([watch({ lastState: { ...drivingState, card: kept.card } })], async () => ({ service: "yandex_taxi", taxi: { ...driving.taxi, status: "transporting" } }));
+    await later.dispatch(NOW);
+    expect(later.card.send).not.toHaveBeenCalled();
+    expect(later.send).toHaveBeenCalledWith(expect.anything(), "Поездка началась.");
+  });
+});
+
