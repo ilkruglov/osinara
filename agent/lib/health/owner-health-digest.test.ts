@@ -227,4 +227,39 @@ describe("createOwnerHealthDigestDispatcher", () => {
     expect(deps.complete).toHaveBeenCalledWith("family-2", "2026-09-09", expect.any(Date), expect.any(Number), null);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_OWNER_HEALTH_DIGEST_FAILED"));
   });
+
+  it("sends the card instead of the text when widgets are on, with the verdict as caption", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const deliverWidget = vi.fn().mockResolvedValue(undefined);
+    const deps = dependencies({ deliverWidget });
+    const now = new Date("2026-11-06T06:10:00.000Z");
+    await expect(createOwnerHealthDigestDispatcher(deps)(now)).resolves.toBe(2);
+    expect(deliverWidget).toHaveBeenCalledWith({ caption: "Сводка за сутки: сбоев нет.", chatId: "101", html: expect.stringContaining("Сводка Мии") });
+    expect(deps.deliver).not.toHaveBeenCalled();
+    expect(deps.complete).toHaveBeenCalledWith("family-1", "2026-11-06", now, formatOwnerHealthDigest(quiet).length, null);
+  });
+
+  it("sends the text with the card's failure when Telegram did not take the card", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deliverWidget = vi.fn().mockRejectedValue(new Error("AGENT_OWNER_WIDGET_REJECTED: Telegram не принял карточку: HTTP 502"));
+    const deps = dependencies({ deliverWidget });
+    await expect(createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"))).resolves.toBe(2);
+    expect(deps.deliver).toHaveBeenCalledWith({
+      chatId: "101",
+      text: `${formatOwnerHealthDigest(quiet)}\nКарточка сводки не отправилась (Telegram не принял карточку: HTTP 502), поэтому текстом.`,
+    });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED"));
+  });
+
+  it("keeps the claim and sends no text when the card says the owner chat is gone", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deliverWidget = vi.fn().mockRejectedValueOnce(new TelegramRecipientUnreachableError("101", "blocked")).mockResolvedValueOnce(undefined);
+    const deps = dependencies({ deliverWidget });
+    await expect(createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"))).resolves.toBe(1);
+    expect(deps.deliver).not.toHaveBeenCalled();
+    expect(deps.release).not.toHaveBeenCalled();
+  });
 });
+

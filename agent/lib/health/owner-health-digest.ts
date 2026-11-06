@@ -2,6 +2,7 @@
  * Daily health digest for the family owner.
  *
  * Exports:
+ * - `ownerHealthDigestSections`: the digest's lines grouped (header, failures, information, memory).
  * - `formatOwnerHealthDigest`: one plain-text Telegram message from the report.
  * - `createOwnerHealthDigestDispatcher` / `dispatchOwnerHealthDigests`: send once per day per owner.
  *
@@ -27,6 +28,9 @@
  * - An owner chat Telegram calls unreachable (bot blocked, account deleted) keeps today's claim
  *   instead of releasing it: the next ten-minute tick would only skip again. `claim` takes back an
  *   unsent claim after an hour, so the digest is tried hourly and arrives once the owner writes again.
+ * - With widgets on (6 ноября 2026) the digest goes as a card (`owner-health-digest-widget.ts`) built
+ *   from the same sections. A card Telegram did not take sends the text digest instead, with a line
+ *   saying the card failed and why: the digest must arrive, and the failure is reported, not hidden.
  */
 import { DEEPSEEK_BALANCE_ALERT_USD } from "../../config.js";
 import { type DeepSeekBalance, formatDeepSeekBalance, readConfiguredDeepSeekBalance } from "./deepseek-balance.js";
@@ -43,6 +47,8 @@ import {
 } from "./owner-health-digest-repository.js";
 import { formatScheduleRunFailures } from "./schedule-run-failures.js";
 import { formatTurnQuality } from "./turn-quality-digest.js";
+import { ownerHealthDigestWidget } from "./owner-health-digest-widget.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
 
 const OWNER_HEALTH_DIGEST_HOUR_UTC = 6;
 const OWNER_HEALTH_DIGEST_WINDOW_MILLISECONDS = 24 * 60 * 60 * 1_000;
@@ -65,7 +71,24 @@ export interface OwnerHealthExtras {
 
 const NO_EXTRAS: OwnerHealthExtras = { balance: null, previousBalanceUsd: null, storage: null };
 
+export interface OwnerHealthDigestSections {
+  /** What went wrong, in the order the text digest lists it. */
+  failures: string[];
+  header: string;
+  /** What is information on a normal day: the balance with its spend, the turn quality line. */
+  information: string[];
+  memory: string;
+}
+
 export function formatOwnerHealthDigest(report: OwnerHealthReport, extras: OwnerHealthExtras = NO_EXTRAS): string {
+  return digestText(ownerHealthDigestSections(report, extras));
+}
+
+function digestText(sections: OwnerHealthDigestSections): string {
+  return [sections.header, ...sections.failures, ...sections.information, sections.memory].join("\n");
+}
+
+export function ownerHealthDigestSections(report: OwnerHealthReport, extras: OwnerHealthExtras = NO_EXTRAS): OwnerHealthDigestSections {
   const lines: string[] = [];
   // A spent balance means the bot is not answering: a failure, not information.
   const change = extras.balance !== null && extras.previousBalanceUsd !== null ? extras.balance.totalUsd - extras.previousBalanceUsd : null;
@@ -111,7 +134,7 @@ export function formatOwnerHealthDigest(report: OwnerHealthReport, extras: Owner
     ...(balance !== null && !balance.warning ? [balance.text] : []),
     ...(quality.warning ? [] : [quality.text]),
   ];
-  return [header, ...lines, ...information, memory].join("\n");
+  return { failures: lines, header, information, memory };
 }
 
 interface OwnerHealthDigestDependencies {
@@ -120,6 +143,8 @@ interface OwnerHealthDigestDependencies {
   claim(familyId: string, digestDate: string, now: Date): Promise<boolean>;
   complete(familyId: string, digestDate: string, now: Date, textLength: number, balanceUsd: number | null): Promise<void>;
   deliver(input: { chatId: string; text: string }): Promise<void>;
+  /** The digest as a widget card; absent when widgets are switched off. */
+  deliverWidget?(input: { caption: string; chatId: string; html: string }): Promise<void>;
   previousBalance(familyId: string, digestDate: string): Promise<number | null>;
   recipients(): Promise<OwnerHealthRecipient[]>;
   release(familyId: string, digestDate: string): Promise<void>;
@@ -136,6 +161,24 @@ export function digestDateFor(now: Date): string | null {
 }
 
 export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDigestDependencies) {
+  /** The card when widgets are on; the text otherwise, or with the reason when the card failed. */
+  async function deliverDigest(chatId: string, sections: OwnerHealthDigestSections, text: string, now: Date): Promise<void> {
+    if (!dependencies.deliverWidget) {
+      await dependencies.deliver({ chatId, text });
+      return;
+    }
+    try {
+      const widget = ownerHealthDigestWidget(sections, now);
+      await dependencies.deliverWidget({ caption: widget.caption, chatId, html: widget.html });
+    } catch (error) {
+      // A chat that is gone does not take the text either: the claim logic below handles it.
+      if (error instanceof TelegramRecipientUnreachableError) throw error;
+      const reason = error instanceof Error ? error.message.replace(/^[A-Z][A-Z0-9_]+:\s*/u, "").slice(0, 160) : String(error);
+      console.error(JSON.stringify({ code: "AGENT_OWNER_HEALTH_DIGEST_WIDGET_FAILED", error: reason }));
+      await dependencies.deliver({ chatId, text: `${text}\nКарточка сводки не отправилась (${reason}), поэтому текстом.` });
+    }
+  }
+
   return async function dispatchOwnerHealthDigests(now = new Date()): Promise<number> {
     const digestDate = digestDateFor(now);
     if (digestDate === null) return 0;
@@ -153,8 +196,9 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
         shared ??= Promise.all([dependencies.balance(), dependencies.storage(), dependencies.webhook?.() ?? null]);
         const [balance, storage, webhook] = await shared;
         const previousBalanceUsd = balance === null ? null : await dependencies.previousBalance(recipient.familyId, digestDate);
-        const text = formatOwnerHealthDigest(report, { balance, previousBalanceUsd, storage, webhook });
-        await dependencies.deliver({ chatId: recipient.ownerTelegramUserId, text });
+        const sections = ownerHealthDigestSections(report, { balance, previousBalanceUsd, storage, webhook });
+        const text = digestText(sections);
+        await deliverDigest(recipient.ownerTelegramUserId, sections, text, now);
         await dependencies.complete(recipient.familyId, digestDate, now, text.length, balance?.totalUsd ?? null);
         console.info(JSON.stringify({
           code: "AGENT_OWNER_HEALTH_DIGEST_SENT",
@@ -187,6 +231,7 @@ export function dispatchOwnerHealthDigests(now = new Date()): Promise<number> {
     claim: (familyId, digestDate, at) => ownerHealthDigestRepository.claim(familyId, digestDate, at),
     complete: (familyId, digestDate, at, length, balanceUsd) => ownerHealthDigestRepository.complete(familyId, digestDate, at, length, balanceUsd),
     deliver: (input) => memoryReviewOwnerAlertTransport.deliver(input),
+    ...(TELEGRAM_WIDGETS_ENABLED ? { deliverWidget: (input: { caption: string; chatId: string; html: string }) => memoryReviewOwnerAlertTransport.deliverWidget(input) } : {}),
     previousBalance: (familyId, digestDate) => ownerHealthDigestRepository.previousBalance(familyId, digestDate),
     recipients: () => ownerHealthDigestRepository.recipients(),
     release: (familyId, digestDate) => ownerHealthDigestRepository.release(familyId, digestDate),

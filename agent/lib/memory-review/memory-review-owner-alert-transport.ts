@@ -14,6 +14,7 @@
  * dispatcher treats it as a refusal: nothing was delivered.
  */
 import { callTelegramApi } from "eve/channels/telegram";
+import { sendTelegramWidget } from "../telegram-widgets/telegram-widget-send.js";
 
 import { TELEGRAM_API_REQUEST_TIMEOUT_MS } from "../../config.js";
 import { withRequestTimeout } from "../request-signal.js";
@@ -61,6 +62,8 @@ interface MemoryReviewOwnerAlertTransportDependencies {
 
 export interface MemoryReviewOwnerAlertTransport {
   deliver(input: { chatId: string; text: string }): Promise<void>;
+  /** A widget card (Bot API 10.4 beta) under the same reachability and refusal rules. */
+  deliverWidget(input: { caption: string; chatId: string; html: string }): Promise<void>;
 }
 
 export function createMemoryReviewOwnerAlertTransport(
@@ -77,20 +80,38 @@ export function createMemoryReviewOwnerAlertTransport(
   );
 
   const boundedFetch = withRequestTimeout(dependencies.fetch, dependencies.timeoutMilliseconds);
+  async function requireReachable(chatId: string): Promise<void> {
+    let known: TelegramRecipientUnreachableReason | null;
+    try {
+      known = await dependencies.unreachableRecipient?.(chatId) ?? null;
+    } catch {
+      // Nothing reached Telegram, so this is a definite failure: a dispatcher may try again.
+      throw new MemoryReviewOwnerAlertTransportError(
+        "failed",
+        "AGENT_TELEGRAM_REACHABILITY_UNAVAILABLE",
+        "Не удалось проверить, доступен ли чат; сообщение не отправлено",
+      );
+    }
+    if (known !== null) throw new TelegramRecipientUnreachableError(chatId, known);
+  }
   return {
-    async deliver(input): Promise<void> {
-      let known: TelegramRecipientUnreachableReason | null;
-      try {
-        known = await dependencies.unreachableRecipient?.(input.chatId) ?? null;
-      } catch {
-        // Nothing reached Telegram, so this is a definite failure: a dispatcher may try again.
+    async deliverWidget(input): Promise<void> {
+      await requireReachable(input.chatId);
+      const sent = await sendTelegramWidget({
+        botToken: dependencies.botToken, caption: input.caption, chatId: input.chatId, fetch: boundedFetch, html: input.html,
+      });
+      if (!sent.ok) {
+        const reason = classifyTelegramRecipientFailure(sent.status, sent.body);
+        if (reason !== null) throw new TelegramRecipientUnreachableError(input.chatId, reason);
         throw new MemoryReviewOwnerAlertTransportError(
           "failed",
-          "AGENT_TELEGRAM_REACHABILITY_UNAVAILABLE",
-          "Не удалось проверить, доступен ли чат; сообщение не отправлено",
+          "AGENT_OWNER_WIDGET_REJECTED",
+          `Telegram не принял карточку: HTTP ${sent.status}`,
         );
       }
-      if (known !== null) throw new TelegramRecipientUnreachableError(input.chatId, known);
+    },
+    async deliver(input): Promise<void> {
+      await requireReachable(input.chatId);
       const response = await callTelegramApi({
         body: { chat_id: input.chatId, text: input.text },
         botToken: dependencies.botToken,
@@ -127,4 +148,5 @@ function productionTransport(): MemoryReviewOwnerAlertTransport {
 // Runtime secrets stay lazy so Eve discovery and build remain deterministic.
 export const memoryReviewOwnerAlertTransport: MemoryReviewOwnerAlertTransport = {
   deliver: (input) => productionTransport().deliver(input),
+  deliverWidget: (input) => productionTransport().deliverWidget(input),
 };

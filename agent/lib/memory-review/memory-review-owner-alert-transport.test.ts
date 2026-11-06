@@ -100,4 +100,30 @@ describe("memory review owner alert transport", () => {
       .rejects.toMatchObject({ code: "AGENT_TELEGRAM_REACHABILITY_UNAVAILABLE", delivery: "failed" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("sends a widget card through the beta Bot API, with the same refusal rules as a message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, result: { message_id: 6200 } }), { status: 200 }));
+    const transport = createMemoryReviewOwnerAlertTransport({ botToken: "telegram-bot-secret", fetch: fetchMock, timeoutMilliseconds: 15_000 });
+    await transport.deliverWidget({ caption: "Сводка за сутки: сбоев нет.", chatId: "101", html: "<div>ok</div>" });
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("https://api.telegram.org/beta/bottelegram-bot-secret/sendWidget");
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body))).toMatchObject({
+      allow_queries: false, caption: "Сводка за сутки: сбоев нет.", chat_id: "101", html: "<div>ok</div>",
+    });
+
+    const blocked = createMemoryReviewOwnerAlertTransport({
+      botToken: "telegram-bot-secret",
+      fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ description: "Forbidden: bot was blocked by the user", error_code: 403, ok: false }), { status: 403 })),
+      timeoutMilliseconds: 15_000,
+    });
+    await expect(blocked.deliverWidget({ caption: "x", chatId: "101", html: "<div>ok</div>" })).rejects.toBeInstanceOf(TelegramRecipientUnreachableError);
+
+    const rejected = createMemoryReviewOwnerAlertTransport({
+      botToken: "telegram-bot-secret",
+      fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify({ description: "Bad Gateway", error_code: 502, ok: false }), { status: 502 })),
+      timeoutMilliseconds: 15_000,
+    });
+    await expect(rejected.deliverWidget({ caption: "x", chatId: "101", html: "<div>ok</div>" }))
+      .rejects.toMatchObject({ code: "AGENT_OWNER_WIDGET_REJECTED", message: expect.stringContaining("HTTP 502") });
+  });
 });
+
