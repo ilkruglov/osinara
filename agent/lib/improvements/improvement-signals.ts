@@ -28,6 +28,7 @@ import {
   shouldReflectOnTurn,
   type TurnEvidence,
 } from "./turn-evidence.js";
+import { isTelegramWhisperSession } from "../whisper/telegram-whisper.js";
 
 /** Recurrence at which a workflow problem is worth one skill offer. */
 const BACKLOG_HINT_RECURRENCE = 2;
@@ -152,6 +153,9 @@ export function createImprovementSignalHandlers(dependencies: ImprovementSignalD
     if (!identity) return;
     // The evaluation is the measurement of every turn; a scheduled run has no person behind it.
     if (!isScheduledSession(ctx)) await evaluate(ctx, turnId, identity, evidence);
+    // A whisper is measured, never reflected on: its tool errors may name what it was about, and the
+    // owner reads the backlog and the skill notes of the whole family.
+    if (isTelegramWhisperSession(ctx.session.auth)) return;
     const conversationId = await dependencies.conversationId(identity);
     await closeSkillLoop(ctx, turnId, identity, evidence, conversationId);
     if (!shouldReflectOnTurn(evidence) || isScheduledSession(ctx)) return;

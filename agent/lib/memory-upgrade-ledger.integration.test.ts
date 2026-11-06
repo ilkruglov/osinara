@@ -173,6 +173,8 @@ const POST_V0101_MIGRATIONS = [
   "139_yandex_taxi_operations.sql",
   "140_order_watches.sql",
   "141_workspace_widget_deliveries.sql",
+  "142_whisper_session_kind.sql",
+  "144_whisper_placeholders.sql",
 ] as const;
 
 const EXPECTED_R0_R7_TABLES = [

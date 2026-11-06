@@ -32,7 +32,8 @@ import { sessionTaskCleanupRepository } from "./session-task-cleanup-repository.
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
 
 export type ConversationSessionScope = "family" | "group" | "personal";
-export type ConversationSessionKind = "canonical" | "proactive" | "scheduled" | "task";
+/** `whisper`: one `/whisper` turn of one person in a group, ended with its turn (migration 142). */
+export type ConversationSessionKind = "canonical" | "proactive" | "scheduled" | "task" | "whisper";
 
 export interface PrepareSessionInput {
   baseContinuationToken: string;
@@ -176,6 +177,8 @@ async function canonicalReplacementSeed(
        FROM conversation_sessions
       WHERE group_id = $1
         AND telegram_forum_topic_id IS NOT DISTINCT FROM $2
+        -- A whisper rides on the group's thread; it never stands for the group's own session.
+        AND kind <> 'whisper'
       ORDER BY (kind = 'task' AND retired_at IS NULL) DESC, generation DESC, started_at DESC
       LIMIT 1
       FOR UPDATE`,
@@ -183,6 +186,41 @@ async function canonicalReplacementSeed(
   );
   const row = result.rows[0];
   return row ? { threadId: row.thread_id } : null;
+}
+
+/**
+ * Thread and generation of a new whisper session. The thread is the group topic's current one (the
+ * group workspace), else the one this person's earlier whispers used. The generation must be new
+ * on that thread and for this whisper route alike: earlier whispers may sit on another thread, and
+ * the continuation token is the route plus the generation.
+ */
+async function whisperPlacement(
+  client: PoolClient,
+  input: PrepareSessionInput,
+): Promise<{ generation: number; threadId: string | undefined }> {
+  const result = await client.query<{
+    group_thread: string | null;
+    previous_generation: number | null;
+    previous_thread: string | null;
+  }>(
+    `SELECT
+       (SELECT thread_id FROM conversation_sessions
+         WHERE group_id = $1 AND telegram_forum_topic_id IS NOT DISTINCT FROM $2
+           AND kind = 'canonical' AND retired_at IS NULL
+         LIMIT 1) AS group_thread,
+       (SELECT thread_id FROM conversation_sessions
+         WHERE conversation_key = $3 ORDER BY generation DESC LIMIT 1) AS previous_thread,
+       (SELECT max(generation) FROM conversation_sessions WHERE conversation_key = $3) AS previous_generation`,
+    [input.groupId, input.telegramForumTopicId, input.baseContinuationToken],
+  );
+  const row = result.rows[0];
+  const threadId = row?.group_thread ?? row?.previous_thread ?? undefined;
+  const generation = Math.max(
+    threadId === undefined ? 0 : await nextThreadGeneration(client, threadId),
+    row?.previous_generation === null || row?.previous_generation === undefined ? 0 : row.previous_generation + 1,
+    await initialGeneration(client, input.baseContinuationToken),
+  );
+  return { generation, threadId };
 }
 
 async function nextThreadGeneration(client: PoolClient, threadId: string): Promise<number> {
@@ -298,11 +336,16 @@ export const sessionRepository = {
             "Запрошенное действие уже завершено или больше не ожидает ответа",
           );
         }
-        const replacement = await canonicalReplacementSeed(client, input);
-        const generation = replacement
-          ? await nextThreadGeneration(client, replacement.threadId)
-          : await initialGeneration(client, input.baseContinuationToken);
-        current = await createInitialSession(client, input, generation, replacement?.threadId);
+        const replacement = input.kind === "whisper" ? null : await canonicalReplacementSeed(client, input);
+        if (input.kind === "whisper") {
+          const placement = await whisperPlacement(client, input);
+          current = await createInitialSession(client, input, placement.generation, placement.threadId);
+        } else {
+          const generation = replacement
+            ? await nextThreadGeneration(client, replacement.threadId)
+            : await initialGeneration(client, input.baseContinuationToken);
+          current = await createInitialSession(client, input, generation, replacement?.threadId);
+        }
         if (replacement) {
           await client.query(
             `INSERT INTO audit_events (family_id, event_type, subject_id, metadata)
@@ -312,15 +355,20 @@ export const sessionRepository = {
           );
         }
         // A non-zero ledger entry exists only after the previous Telegram trust zone was retired.
-        trustZoneRecreated = generation > 0;
+        trustZoneRecreated = current.generation > 0;
       }
       if (current.retired_at !== null) {
         trustZoneRecreated = true;
-        current = await createInitialSession(
-          client,
-          input,
-          await nextThreadGeneration(client, current.thread_id),
-        );
+        if (input.kind === "whisper") {
+          const placement = await whisperPlacement(client, input);
+          current = await createInitialSession(client, input, placement.generation, placement.threadId);
+        } else {
+          current = await createInitialSession(
+            client,
+            input,
+            await nextThreadGeneration(client, current.thread_id),
+          );
+        }
       }
       assertSameScope(current, input);
 

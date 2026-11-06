@@ -2,7 +2,8 @@
  * Turn-bound memory source selection tests.
  *
  * Constructs covered:
- * - `bindMemoryTurnSources`: accepts only an exact durable HITL resume and ignores scheduled runs.
+ * - `bindMemoryTurnSources`: accepts only an exact durable HITL resume and ignores scheduled runs
+ *   and whispers.
  * - `resolveMemoryTurnSource`: current source default and visible group-delta sequence selection.
  * - Ordinary personal turns reject historical source selection; a personal silent review may select one.
  * - A selected source must remain bound to the same verified caller and memory partition.
@@ -102,6 +103,36 @@ describe("turn-bound memory source selection", () => {
     } as never;
 
     await expect(bindMemoryTurnSources(scheduled)).resolves.toBeUndefined();
+    expect(verifyBoundResume).not.toHaveBeenCalled();
+    expect(bind).not.toHaveBeenCalled();
+  });
+
+  it("binds no source for a whisper, which has no message in the chat to cite", async () => {
+    verifyBoundResume.mockClear();
+    const whisper = {
+      session: {
+        auth: {
+          current: {
+            attributes: {
+              applicationSessionId: "whisper-session-1",
+              telegramActorId: "101",
+              telegramActorKind: "telegram_user",
+              telegramConversationId: "conversation-1",
+              telegramUserId: "101",
+              telegramWhisper: "true",
+            },
+            authenticator: "telegram",
+            principalId: "user-1",
+            principalType: "user",
+          },
+          initiator: null,
+        },
+        id: "whisper-eve-session-1",
+        turn: { id: "whisper-eve-turn-1", sequence: 0 },
+      },
+    } as never;
+
+    await expect(bindMemoryTurnSources(whisper)).resolves.toBeUndefined();
     expect(verifyBoundResume).not.toHaveBeenCalled();
     expect(bind).not.toHaveBeenCalled();
   });

@@ -100,6 +100,40 @@ describe("dynamic capability resolver", () => {
     expect(Object.keys(surface ?? {})).not.toContain("export_memory");
   });
 
+  it("narrows a whisper in a family group to reading tools and refusals", async () => {
+    const surface = await resolve({
+      groupType: "family_private",
+      memoryScopes: ["family"],
+      telegramChatType: "supergroup",
+      telegramWhisper: "true",
+    });
+    const names = Object.keys(surface ?? {});
+
+    expect(names).toEqual(expect.arrayContaining(["list_group_history", "search_memories", "bash", "write_file", "agent"]));
+    for (const absent of ["remember", "manage_memory", "send_workspace_image", "send_widget", "generate_image", "manage_reminder"]) {
+      expect(names).not.toContain(absent);
+    }
+  });
+
+  it("narrows a whisper in an external group to its granted reading tools", async () => {
+    loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember", "search_memories"]));
+
+    const surface = await resolve({
+      familyId: "family-1",
+      groupId: "group-1",
+      groupType: "external",
+      memoryScopes: ["group"],
+      telegramChatType: "supergroup",
+      telegramWhisper: "true",
+      toolAllowlist: ["remember", "search_memories"],
+    });
+    const names = Object.keys(surface ?? {});
+
+    expect(names).toContain("search_memories");
+    expect(names).not.toContain("remember");
+    expect(names).not.toContain("manage_behavior_preference");
+  });
+
   it("emits only granted capabilities and framework denials for an external group", async () => {
     loadCurrentExternalGroupCapabilities.mockResolvedValue(new Set(["remember"]));
 

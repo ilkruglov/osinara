@@ -6,6 +6,8 @@
  * - An unresolvable environment produces an explicit fail-closed block, not a stale one.
  * - A failed external capability lookup degrades to an empty allowlist, matching execution policy.
  * - Scheduled-history instructions require the same successful application-core policy lookup.
+ * - A whisper adds its rules, drops reactions, describes only reading capabilities and skips the
+ *   chat's instructions, whose read is bound to a journal entry a whisper does not have.
  */
 import type { SessionAuth, SessionAuthContext } from "eve/context";
 import type { ModelMessage } from "ai";
@@ -216,6 +218,59 @@ describe("mode block resolution", () => {
     expect(markdown).not.toContain("## Реакция вместо сообщения");
     expect(markdown).not.toContain("`remember`");
     expect(markdown).not.toContain("`load_skill`");
+  });
+});
+
+describe("whisper mode block", () => {
+  const familyWhisperAuth = auth({
+    groupType: "family_private",
+    memoryScopes: ["family"],
+    telegramActorId: "101",
+    telegramActorKind: "telegram_user",
+    telegramChatId: "-1001",
+    telegramChatType: "supergroup",
+    telegramUserId: "101",
+    telegramWhisper: "true",
+  });
+
+  it("adds the whisper rules and leaves reactions out", async () => {
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn(),
+      loadReactionPolicy: vi.fn().mockResolvedValue({ allowsAll: true, emoji: [] }),
+    });
+
+    const markdown = await resolve(context(familyWhisperAuth));
+
+    expect(markdown).toContain("# Шёпот");
+    expect(markdown).not.toContain("<telegram-reaction>EMOJI</telegram-reaction>");
+  });
+
+  it("describes only the reading capabilities of an external group", async () => {
+    const resolve = createModeBlockResolver({
+      loadCapabilities: vi.fn().mockResolvedValue(new Set(["remember", "search_memories"])),
+      loadReactionPolicy: reactionPolicy,
+    });
+    const whisperAuth = auth({
+      ...externalAuth.current!.attributes,
+      telegramWhisper: "true",
+      toolAllowlist: ["remember", "search_memories"],
+    });
+
+    const markdown = await resolve(context(whisperAuth));
+
+    expect(markdown).toContain("# Шёпот");
+    expect(markdown).not.toContain("`remember`");
+  });
+
+  it("reads no chat instructions in a whisper and logs nothing", async () => {
+    const authorize = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const resolve = createPreferenceBlockResolver({ authorize, get: vi.fn() });
+
+    expect(await resolve(context(familyWhisperAuth))).toBeNull();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
 

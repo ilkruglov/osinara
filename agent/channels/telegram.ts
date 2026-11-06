@@ -13,6 +13,8 @@
  * - Successfully delivered final group output persisted as one logical timeline entry.
  * - `my_chat_member` marks or clears an unreachable chat before the ACK; every failed send of the
  *   process reports to the reachability observer installed here.
+ * - A whisper turn is answered, told of its failure and refused confirmations only in the
+ *   placeholder its author sees (`lib/whisper/telegram-whisper-delivery.ts`).
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -78,6 +80,12 @@ import { requireInternalToken } from "../lib/telegram-hitl/approval-timeout-swee
 import { recordTurnDelivery } from "../lib/turn-quality/turn-delivery-record.js";
 import { installTelegramDeliveryFailureObserver } from "../lib/telegram-reachability/delivery-failure-observer.js";
 import { routeTelegramUnparsedUpdate } from "../lib/telegram-unparsed-update.js";
+import { isTelegramWhisperSession } from "../lib/whisper/telegram-whisper.js";
+import {
+  deliverTelegramWhisperCompletion,
+  finishTelegramWhisperTurn,
+  reportTelegramWhisperFailure,
+} from "../lib/whisper/telegram-whisper-delivery.js";
 
 // Registration only: Eve's Bot API client calls it after a failed send, so discovery and build stay offline.
 installTelegramDeliveryFailureObserver();
@@ -93,6 +101,13 @@ export default telegramChannel({
   turnPolicy: "queue",
   events: {
     async "input.requested"(data, channel, ctx) {
+      // A whisper has nowhere private to put buttons or a question: the chat would see them.
+      if (isTelegramWhisperSession(ctx.session.auth)) {
+        throw new AppError(
+          "AGENT_TELEGRAM_WHISPER_INPUT_FORBIDDEN",
+          "В шёпоте нельзя подтверждать действия и отвечать на вопросы. Напишите Мии в группе или в личном чате",
+        );
+      }
       // The confirmation prompt is this step's visible reply; text the model wrote next to the
       // gated call would otherwise follow the prompt and repeat what the resumed turn says.
       telegramProgressNoticeDeferral.discard(progressNoticeKey(ctx.session.id, ctx.session.turn.id));
@@ -105,6 +120,12 @@ export default telegramChannel({
       return await handleTelegramInputRequested(data, channel, ctx);
     },
     async "message.completed"(data, channel, ctx) {
+      // A whisper is answered in the placeholder only its author sees; nothing reaches the chat,
+      // its journal, its routes or the memory reinforcement.
+      if (isTelegramWhisperSession(ctx.session.auth)) {
+        await deliverTelegramWhisperCompletion(data, ctx.session.auth);
+        return;
+      }
       // Model-authored pre-tool text is a user-visible progress update, not technical tool noise.
       if (isScheduledSession(ctx) && data.finishReason !== "stop") return;
       const output = completedTelegramOutput(data);
@@ -407,6 +428,11 @@ export default telegramChannel({
           );
         }
       }
+      // A whisper's author alone sees its placeholder, so the failure is told there, as in a private chat.
+      if (notifyFailure && isTelegramWhisperSession(ctx.session.auth)) {
+        await reportTelegramWhisperFailure(ctx.session.auth, formatTelegramTurnFailure(data));
+        notifyFailure = false;
+      }
       // Terminal diagnostics are private-only even when the failed turn belonged to a shared chat.
       notifyFailure = notifyFailure && shouldNotifyTelegramFailure(channel);
       // A final send that started may already be visible; never append a second failure message.
@@ -497,6 +523,8 @@ export default telegramChannel({
       }
     },
     async "turn.completed"(_data, channel, ctx) {
+      // A whisper turn that showed nothing says so in its placeholder instead of leaving «Думаю…».
+      if (isTelegramWhisperSession(ctx.session.auth)) await finishTelegramWhisperTurn(ctx.session.auth);
       // Text still held here was the answer: the model never wrote again after its quiet tools.
       const noticeKey = progressNoticeKey(ctx.session.id, ctx.session.turn.id);
       const flushed = await telegramProgressNoticeDeferral.flush(noticeKey);

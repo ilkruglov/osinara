@@ -5,6 +5,7 @@
  * - `TelegramMemoryContextInput`: verified facts of one accepted turn the builder may use.
  * - `createTelegramMemoryContextBuilder`: injectable builder returning context blocks.
  * - `buildTelegramMemoryContext`: production builder.
+ * - `buildTelegramWhisperMemoryContext`: the same for a whisper, which leaves the skill hint alone.
  *
  * Key constructs:
  * - Eve turns every delivery context string into a user message placed right before the current
@@ -219,4 +220,11 @@ export const buildTelegramMemoryContext = createTelegramMemoryContextBuilder({
   exposures: memoryContextExposureRepository,
   retrieve: retrieveMemoryTurnContext,
   takeSkillHint: (conversationId) => skillHintRepository.take(conversationId),
+});
+
+/** A whisper reads memory like its group, but the group's pending skill hint stays for the group. */
+export const buildTelegramWhisperMemoryContext = createTelegramMemoryContextBuilder({
+  createProfile: profileViewRepository.create,
+  exposures: memoryContextExposureRepository,
+  retrieve: retrieveMemoryTurnContext,
 });

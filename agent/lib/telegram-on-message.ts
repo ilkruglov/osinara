@@ -11,6 +11,8 @@
  * - One server-clock snapshot anchors all time-sensitive work and model context in an accepted turn.
  * - Registered groups project the verified dynamic skill policy into turn auth.
  * - Production side-effect adapters are assembled in `telegram-on-message-repositories.ts`.
+ * - An ephemeral `/whisper` takes its own path (`whisper/telegram-whisper-turn.ts`) before the
+ *   group journal: nothing ephemeral is ever journaled.
  */
 import type {
   TelegramContext,
@@ -63,6 +65,8 @@ import { formatPendingMessagesContext, readTelegramPendingMarker } from "./teleg
 import { readTelegramUpdateMarker } from "./telegram-update-marker.js";
 import { createTurnInterjectionMarker } from "./turn-interjection/turn-interjection-block.js";
 import { logTurnTiming } from "./turn-timing.js";
+import { prepareTelegramWhisperTurn } from "./whisper/telegram-whisper-turn.js";
+import { isTelegramEphemeralMessage, readTelegramWhisperMarker } from "./whisper/telegram-whisper.js";
 
 export function createTelegramMessageHandler(repositories: TelegramMessageRepositories) {
   return async function handleMessage(
@@ -76,6 +80,14 @@ export function createTelegramMessageHandler(repositories: TelegramMessageReposi
     const botUsername = ctx.telegram.botUsername;
     if (!botUsername) {
       throw new Error("AGENT_TELEGRAM_CONFIG_MISSING: Не задано имя Telegram-бота");
+    }
+    // An ephemeral message (`message_id` 0) is seen by its author and the bot only: it never enters
+    // the group journal. A whisper the ingress accepted has its own turn; nothing else proceeds.
+    if (isTelegramEphemeralMessage(message.raw)) {
+      const whisperMarker = readTelegramWhisperMarker(message.raw);
+      return whisperMarker === null ? null : await prepareTelegramWhisperTurn({
+        actor, botUsername, dependencies: repositories, marker: whisperMarker, message,
+      });
     }
     const dispatchText = [message.text, message.caption].filter(Boolean).join("\n");
     const routingText = Object.hasOwn(message.raw, "voice") ? message.caption : dispatchText;

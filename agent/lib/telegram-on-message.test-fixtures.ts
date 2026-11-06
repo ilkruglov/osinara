@@ -184,5 +184,9 @@ export function repositories() {
       fail: vi.fn(),
       takePending: vi.fn().mockResolvedValue(null),
     },
+    whisper: {
+      close: vi.fn().mockResolvedValue(undefined),
+      memoryContext: vi.fn().mockResolvedValue([]),
+    },
   };
 }

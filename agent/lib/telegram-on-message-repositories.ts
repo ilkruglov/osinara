@@ -47,8 +47,10 @@ import type {
   WorkspaceScope,
 } from "./workspaces/workspace-repository.js";
 import { memoryReviewRepository } from "./memory-review/memory-review-repository.js";
-import { buildTelegramMemoryContext } from "./telegram-turn-memory-context.js";
+import { buildTelegramMemoryContext, buildTelegramWhisperMemoryContext } from "./telegram-turn-memory-context.js";
 import { turnInterjectionRepository } from "./turn-interjection/turn-interjection-repository.js";
+import { telegramWhisperGate } from "./whisper/telegram-whisper-gate.js";
+import type { TelegramWhisperTurnDependencies } from "./whisper/telegram-whisper-turn.js";
 
 export interface TelegramMessageRepositories {
   attachmentReferences: Pick<TelegramGroupAttachmentRepository, "captureReplyTarget" | "record">;
@@ -76,7 +78,7 @@ export interface TelegramMessageRepositories {
   family: Pick<FamilyRepository, "claimInvitation">;
   groupContext: { prepare: TelegramGroupTurnContextPreparer };
   hitl: Pick<TelegramHitlApprovalRepository, "authorizeReply">;
-  journal: Pick<TelegramGroupJournalRepository, "findSeriesSequences" | "record">;
+  journal: Pick<TelegramGroupJournalRepository, "findSeriesSequences" | "listRecent" | "record">;
   memoryReview: Pick<
     typeof memoryReviewRepository,
     "failInteractivePreparation" | "observePassiveMessage" | "prepareInteractiveTurn"
@@ -88,6 +90,8 @@ export interface TelegramMessageRepositories {
   telegram: TelegramRepository;
   timeline: Pick<typeof conversationTimelineRepository, "recordInbound">;
   turnInterjections: Pick<typeof turnInterjectionRepository, "findDeliveredContentKind" | "findDeliveredContentKinds">;
+  /** Removes a whisper's placeholder and reads memory for it without the group's skill hint. */
+  whisper: TelegramWhisperTurnDependencies["whisper"];
 }
 
 // Production wiring stays separate from authorization flow so tests can replace every side effect.
@@ -113,4 +117,8 @@ export const productionTelegramMessageRepositories = {
   telegram: telegramRepository,
   timeline: conversationTimelineRepository,
   threadNotices: productionMemoryThreadNotices,
+  whisper: {
+    close: (chatId, marker) => telegramWhisperGate.close(chatId, marker),
+    memoryContext: buildTelegramWhisperMemoryContext,
+  },
 } satisfies TelegramMessageRepositories;

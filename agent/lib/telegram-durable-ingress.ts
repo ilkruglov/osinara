@@ -6,6 +6,7 @@
  * - `handleTelegramDurableIngress`: production hook with PostgreSQL and Groq dependencies.
  * - Application software-update callbacks complete before native Eve dispatch begins.
  * - A verified message clears the unreachable mark of its chat: whoever writes can be written to.
+ * - An ephemeral message never enters a chat's queue: a whisper gets its own lane, the rest is dropped.
  */
 import type {
   TelegramDrainContext,
@@ -43,6 +44,9 @@ import {
   type TelegramPendingMessage,
   withPendingMarker,
 } from "./telegram-pending-messages.js";
+import { telegramWhisperGate, type TelegramWhisperGate } from "./whisper/telegram-whisper-gate.js";
+import { acceptTelegramEphemeralMessage } from "./whisper/telegram-whisper-ingress.js";
+import { isTelegramEphemeralMessage, readTelegramWhisperMarker } from "./whisper/telegram-whisper.js";
 import { normalizeRichMessage, richMediaIsLifted, richMessagePlainText, withoutRichMediaBlocks } from "./telegram-rich-message.js";
 import { withLocationText } from "./telegram-location-message.js";
 import { withTelegramUpdateMarker } from "./telegram-update-marker.js";
@@ -108,6 +112,11 @@ interface DurableIngressDependencies {
     fileSize?: number;
     mimeType?: string;
   }): Promise<string>;
+  /**
+   * Authorizes an ephemeral `/whisper` and answers it with a placeholder at once (Telegram allows
+   * the reply within 15 seconds only). Without it every ephemeral message is dropped.
+   */
+  whisper?: TelegramWhisperGate;
 }
 
 interface TelegramDurableIngressHandler {
@@ -173,10 +182,11 @@ async function waitForSessionBoundary(
     hasPendingApprovals?: () => Promise<boolean>;
     updateId: string;
   },
-): Promise<number> {
+): Promise<{ nextEventIndex: number; sessionFailed: boolean }> {
   const stream = await session.getEventStream({ startIndex });
   const reader = stream.getReader();
   let reachedBoundary = false;
+  let sessionFailed = false;
   let nextEventIndex = startIndex;
   try {
     while (true) {
@@ -189,6 +199,7 @@ async function waitForSessionBoundary(
         event.value.type === "session.failed"
       ) {
         reachedBoundary = true;
+        sessionFailed = event.value.type === "session.failed";
         break;
       }
       if (
@@ -217,7 +228,7 @@ async function waitForSessionBoundary(
       "Eve завершил поток без подтверждения состояния сессии Telegram",
     );
   }
-  return nextEventIndex;
+  return { nextEventIndex, sessionFailed };
 }
 
 function shouldTranscribeVoice(message: TelegramMessage, botUsername: string): boolean {
@@ -304,7 +315,9 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
   async function notifyFailure(failed: TelegramIngressClaim, failure: { code: string; message: string }): Promise<void> {
     if (!dependencies.notifyFailure || failure.code === "AGENT_TELEGRAM_LEASE_LOST") return;
     const update = parseTelegramUpdate(failed.payload);
-    if (update?.kind !== "message" || update.message.chat.type !== "private") return;
+    // A private chat and a whisper's placeholder are seen by the author alone; a group never is.
+    if (update?.kind !== "message" ||
+      (update.message.chat.type !== "private" && readTelegramWhisperMarker(update.message.raw) === null)) return;
     try {
       await dependencies.notifyFailure(update, failure);
     } catch (error) {
@@ -437,7 +450,7 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
         }
         // The durable cursor excludes every event from earlier turns of a reused Eve session.
         const streamCursor = await dependencies.repository.sessionEventStreamCursor(session.id);
-        const nextEventIndex = await waitForSessionBoundary(session, streamCursor, {
+        const { nextEventIndex, sessionFailed } = await waitForSessionBoundary(session, streamCursor, {
           ...(update.kind === "callback_query"
             ? {
               hasPendingApprovals: () =>
@@ -454,6 +467,14 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
           session.id,
           nextEventIndex,
         );
+        // A session that failed outright may end before any turn told the author; in a group that
+        // stays silent, but a whisper's placeholder is the author's alone and would keep «Думаю…».
+        if (sessionFailed && update.kind === "message" && readTelegramWhisperMarker(update.message.raw)) {
+          await notifyFailure(leased, {
+            code: "AGENT_TELEGRAM_SESSION_FAILED",
+            message: "Не получилось ответить: разговор прервался из-за сбоя. Спросите ещё раз",
+          });
+        }
       }
 
       try {
@@ -611,6 +632,22 @@ export function createTelegramDurableIngress(dependencies: DurableIngressDepende
     // forwarded into a group meets the same media gate as a photo or file message instead of
     // being refused as a whole.
     const update = normalizeRichMessage(context.update);
+    // An ephemeral message (`message_id` 0) never reaches the chat's queue or journal: a whisper
+    // goes to its own lane with the placeholder already sent, anything else is dropped.
+    if (update.kind === "message" && isTelegramEphemeralMessage(update.message.raw)) {
+      await dependencies.noteInboundMessage?.({
+        chatId: update.message.chat.id, message: update.message.raw, updateId: incomingUpdateId,
+      });
+      const accepted = await acceptTelegramEphemeralMessage({
+        enqueue: (input) => dependencies.repository.enqueue(input),
+        gate: dependencies.whisper,
+        message: update.message,
+        raw: context.raw,
+        updateId: incomingUpdateId,
+      });
+      if (accepted === "queued") scheduleDrain(context);
+      return new Response("ok");
+    }
     const mediaKind = update.kind === "message" ? classifyTelegramInboundMedia(update.message) : "none";
     // Only the one file lifted out of a rich post may be refused while its text goes on: the
     // lifted file is then the message's only media. Any other media next to rich text (a voice
@@ -678,4 +715,5 @@ export const handleTelegramDurableIngress = createTelegramDurableIngress({
   notifyFailure: sendTelegramFailureNotice,
   repository: telegramIngressRepository,
   transcribeVoice: transcribeTelegramVoice,
+  whisper: telegramWhisperGate,
 });

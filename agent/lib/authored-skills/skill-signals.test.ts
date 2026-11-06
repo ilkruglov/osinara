@@ -5,7 +5,8 @@
  * - `load_skill` of a named skill in a trusted chat records a usage row; an external group records
  *   it against its own conversation; a member's private chat and a subagent do not.
  * - Four or more non-bookkeeping tool calls in one trusted turn save a hint with unique names.
- * - Bookkeeping tools, review sessions, scheduled runs and subagents never produce a hint.
+ * - Bookkeeping tools, review sessions, scheduled runs, whispers and subagents never produce a hint:
+ *   a whisper's hint would surface in its group's next turn.
  */
 import type { SessionAuth } from "eve/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,6 +62,18 @@ describe("skill signals", () => {
       conversationId: "conversation-1", eveSessionId: "eve-1", eveTurnId: "turn_3",
       familyId: "family-1", skillName: "birthday-card",
     });
+  });
+
+  // Codex review, 6 November 2026: the group's conversation showed a skill a whisper had loaded.
+  it("records nothing for a whisper", async () => {
+    const handlers = createSkillSignalHandlers(dependencies);
+
+    await handlers.actionsRequested({ data: { actions: [
+      { callId: "c1", input: { skill: "birthday-card" }, kind: "load-skill" },
+      call("web_search"),
+    ], turnId: "turn_3" } }, context({ ...FAMILY, telegramWhisper: "true" }));
+
+    expect(dependencies.recordUsage).not.toHaveBeenCalled();
   });
 
   it("ignores loads in a member's private chat and in a subagent", async () => {
@@ -122,7 +135,7 @@ describe("skill signals", () => {
     });
   });
 
-  it("counts nothing for scheduled runs, review sessions and other sessions' turns", async () => {
+  it("counts nothing for scheduled runs, review sessions, whispers and other sessions' turns", async () => {
     const handlers = createSkillSignalHandlers(dependencies);
     const heavy = { data: { actions: [call("a_b"), call("c_d"), call("e_f"), call("g_h")], turnId: "turn_1" } };
 
@@ -130,6 +143,8 @@ describe("skill signals", () => {
     await handlers.turnCompleted({ data: { turnId: "turn_1" } }, context({ ...OWNER, scheduledRunId: "run-1" }));
     await handlers.actionsRequested(heavy, context({ ...FAMILY, memoryReviewMode: "background" }));
     await handlers.turnCompleted({ data: { turnId: "turn_1" } }, context({ ...FAMILY, memoryReviewMode: "background" }));
+    await handlers.actionsRequested(heavy, context({ ...FAMILY, telegramWhisper: "true" }));
+    await handlers.turnCompleted({ data: { turnId: "turn_1" } }, context({ ...FAMILY, telegramWhisper: "true" }));
     await handlers.actionsRequested(heavy, context(OWNER, { sessionId: "eve-A" }));
     await handlers.turnCompleted({ data: { turnId: "turn_1" } }, context(OWNER, { sessionId: "eve-B" }));
 

@@ -40,6 +40,9 @@ import {
 import { scheduledGroupHistoryAccess } from "../agent-schedules/scheduled-group-history-context.js";
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { modeInstructions } from "./mode-instructions.js";
+import { isTelegramWhisperSession } from "../whisper/telegram-whisper.js";
+import { WHISPER_RULES } from "../whisper/whisper-prompt.js";
+import { WHISPER_TOOL_NAMES } from "../whisper/whisper-tool-surface.js";
 
 export interface TurnBlockContext {
   readonly channel?: { readonly kind?: string };
@@ -133,6 +136,13 @@ export function createModeBlockResolver(dependencies: {
   loadReactionPolicy: ReactionPolicyLoader;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string> {
+    const block = await resolveGroupBlock(ctx);
+    // A whisper keeps its group's rules and adds who sees the answer and what it cannot do.
+    return isTelegramWhisperSession(ctx.session.auth) ? `${block}\n\n${WHISPER_RULES}` : block;
+  };
+
+  async function resolveGroupBlock(ctx: TurnBlockContext): Promise<string> {
+    const whisper = isTelegramWhisperSession(ctx.session.auth);
     let environment: ReturnType<typeof resolveConversationEnvironment>;
     try {
       environment = resolveConversationEnvironment(ctx.session.auth);
@@ -141,9 +151,10 @@ export function createModeBlockResolver(dependencies: {
       return MODE_UNAVAILABLE_BLOCK;
     }
     const scheduledRun = isScheduledSession(ctx);
-    // A scheduled run has no inbound message to react to, and a channel-authored turn keeps its
-    // text-only surface, so neither one requests a reaction policy.
-    const reactionsPossible = !scheduledRun && !isTelegramChannelSession(ctx.session.auth);
+    // A scheduled run has no inbound message to react to, a channel-authored turn keeps its
+    // text-only surface, and an ephemeral whisper cannot be reacted to, so none of them requests
+    // a reaction policy.
+    const reactionsPossible = !scheduledRun && !whisper && !isTelegramChannelSession(ctx.session.auth);
     let reactionPolicy: TelegramReactionPolicy | null = null;
     const telegramChatId = reactionsPossible ? verifiedTelegramChatId(ctx.session.auth) : null;
     if (telegramChatId !== null) {
@@ -177,7 +188,10 @@ export function createModeBlockResolver(dependencies: {
     );
     return modeInstructions({
       authoredSkills: effective.authoredSkills,
-      capabilities: effective.capabilities,
+      // A whisper is described with the reading capabilities its tool surface keeps.
+      capabilities: whisper
+        ? new Set([...effective.capabilities].filter((name) => WHISPER_TOOL_NAMES.includes(name as never)))
+        : effective.capabilities,
       environment: "external",
       includeApplicationCore: effective.includeApplicationCore,
       reactionPolicy,
@@ -185,7 +199,7 @@ export function createModeBlockResolver(dependencies: {
         scheduledGroupHistoryAccess(ctx.session.auth) !== null,
       scheduledRun,
     });
-  };
+  }
 }
 
 export function createPreferenceBlockResolver(dependencies: {
@@ -193,6 +207,9 @@ export function createPreferenceBlockResolver(dependencies: {
   get: (auth: BehaviorPreferenceReadAuthorization) => Promise<ChatOperationalPrompt>;
 }) {
   return async function resolve(ctx: TurnBlockContext): Promise<string | null> {
+    // Reading the chat's instructions is bound to the journal entry of the current message, and a
+    // whisper has none; it goes without them rather than failing the read every turn.
+    if (isTelegramWhisperSession(ctx.session.auth)) return null;
     try {
       const authorization = dependencies.authorize(ctx);
       return buildBehaviorPreferenceInstructions(await dependencies.get(authorization));

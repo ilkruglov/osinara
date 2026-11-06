@@ -18,6 +18,7 @@ import type { SessionAuth } from "eve/context";
 
 import { isScheduledSession } from "../agent-schedules/scheduled-session.js";
 import { isMemoryReviewSession } from "../memory-review/memory-review-session.js";
+import { isTelegramWhisperSession } from "../whisper/telegram-whisper.js";
 import { SKILL_HINT_IGNORED_TOOLS, SKILL_HINT_MIN_STEPS } from "./skill-hint-repository.js";
 
 export type TrustedChatKind = "family" | "private";
@@ -107,6 +108,8 @@ export function createSkillSignalHandlers(dependencies: SkillSignalDependencies)
 
   return {
     async actionsRequested(event: { data: { actions: readonly SkillSignalAction[]; turnId: string } }, ctx: SkillSignalContext): Promise<void> {
+      // A whisper leaves no trace in its group's conversation: no usage, no repeat hint.
+      if (isTelegramWhisperSession(ctx.session.auth)) return;
       const identity = trustedIdentity(ctx);
       const external = identity ? null : externalIdentity(ctx);
       if (!identity && !external) return;

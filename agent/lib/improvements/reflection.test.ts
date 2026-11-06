@@ -260,4 +260,25 @@ describe("createImprovementSignalHandlers", () => {
     await handlers.turnCompleted({ data: { turnId: "t3" } }, trusted);
     expect(deps.saveHint).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a whisper out of the shared backlog and hints, measuring it only", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const generate = vi.fn().mockResolvedValue(JSON.stringify({ items: [
+      { category: "workflow", errorCode: null, priority: "low", summary: "Поиск по истории группы занимает шесть шагов", toolName: null },
+    ] }));
+    const deps = dependencies({ generate, record: vi.fn().mockResolvedValue(recorded(2)) });
+    const handlers = createImprovementSignalHandlers(deps);
+    const whisper = ctx({ familyId: "family-1", groupId: "group-1", groupType: "family_private", telegramChatType: "supergroup", telegramWhisper: "true" });
+
+    handlers.actionsRequested({ data: { actions: [{ callId: "c1", kind: "tool-call", toolName: "web_search" }], turnId: "t1" } }, whisper);
+    handlers.actionResult({ data: { error: { code: "X", message: "" }, result: { callId: "c1", kind: "tool-result", toolName: "web_search" }, status: "failed", turnId: "t1" } }, whisper);
+    await handlers.turnCompleted({ data: { turnId: "t1" } }, whisper);
+
+    // Its tool errors may name what the whisper was about; the owner reads the backlog.
+    expect(deps.generate).not.toHaveBeenCalled();
+    expect(deps.record).not.toHaveBeenCalled();
+    expect(deps.recordSkillTelemetry).not.toHaveBeenCalled();
+    expect(deps.saveHint).not.toHaveBeenCalled();
+    expect(deps.recordTurnEvaluation).toHaveBeenCalledOnce();
+  });
 });

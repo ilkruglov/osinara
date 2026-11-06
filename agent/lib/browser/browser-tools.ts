@@ -41,6 +41,7 @@ import type { FormProfileOwner } from "./form-profile-repository.js";
 import { browserRestartedError, isBrowserRestarted, type BrowserDriver } from "./browser-driver.js";
 import { browserGeneration, isLookStale, recordLookGeneration } from "./browser-restarts.js";
 import { isMemoryReviewSession } from "../memory-review/memory-review-session.js";
+import { isTelegramWhisperSession } from "../whisper/telegram-whisper.js";
 import { type ActAction, type EnteredField, gateDecision, isSearchField } from "./gate.js";
 import type { BrowserLook, PendingClick, VisionView } from "./look-repository.js";
 import { type PageView, parsePageView, renderElements, viewHash } from "./page-view.js";
@@ -165,6 +166,7 @@ export function createBrowserTools(deps: BrowserToolDependencies) {
     if (auth.userId === null || auth.role === "external") throw forbidden("Браузер доступен только участникам семьи");
     if (auth.telegramChatType !== "private" && auth.groupType !== "family_private") throw forbidden("Браузер доступен только в личном чате и семейной группе");
     if (isMemoryReviewSession(ctx)) throw forbidden("Браузер недоступен в тихой проверке памяти");
+    if (isTelegramWhisperSession(ctx.session.auth)) throw forbidden("Браузер недоступен в шёпоте: там можно только читать");
     const owner = { familyId: auth.familyId, groupId: auth.groupId, userId: auth.userId };
     await deps.requireAccess(owner);
     const sandbox = deps.sandboxSessionId(ctx);

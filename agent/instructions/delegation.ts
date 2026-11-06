@@ -3,13 +3,14 @@
  *
  * Export:
  * - Trusted interactive root conversations receive orchestration rules.
- * - External, scheduled, memory-review, and child turns receive no delegation guidance.
+ * - External, scheduled, memory-review, whisper and child turns receive no delegation guidance.
  */
 import { defineDynamic, defineInstructions } from "eve/instructions";
 
 import { ORCHESTRATOR_DELEGATION_RULES } from "../lib/prompt/delegation-fragments.js";
 import { isScheduledSession } from "../lib/agent-schedules/scheduled-session.js";
 import { isMemoryReviewSession } from "../lib/memory-review/memory-review-session.js";
+import { isTelegramWhisperSession } from "../lib/whisper/telegram-whisper.js";
 
 export default defineDynamic({
   events: {
@@ -19,7 +20,8 @@ export default defineDynamic({
         externalGroup ||
         ctx.channel.kind === "subagent" ||
         isScheduledSession(ctx) ||
-        isMemoryReviewSession(ctx)
+        isMemoryReviewSession(ctx) ||
+        isTelegramWhisperSession(ctx.session.auth)
       ) {
         return null;
       }

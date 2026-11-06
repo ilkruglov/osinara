@@ -182,6 +182,9 @@ describe("browser tools", () => {
     await expect(tools.browser_look.execute({}, context("external"))).rejects.toMatchObject({ code: "AGENT_BROWSER_FORBIDDEN" });
     const review = context(); (review.session.auth.current as { attributes: Record<string, unknown> }).attributes.memoryReviewMode = "background";
     await expect(tools.browser_look.execute({}, review)).rejects.toMatchObject({ code: "AGENT_BROWSER_FORBIDDEN" });
+    // A whisper reads only; its delegated worker inherits the whisper's auth and is refused too.
+    const whisper = context("family"); (whisper.session.auth.current as { attributes: Record<string, unknown> }).attributes.telegramWhisper = "true";
+    await expect(tools.browser_look.execute({}, whisper)).rejects.toMatchObject({ code: "AGENT_BROWSER_FORBIDDEN" });
     await tools.browser_look.execute({}, context());
     await expect(tools.browser_act.execute({ action: { kind: "click", n: 2 }, epoch: "old" }, context())).rejects.toMatchObject({ code: "AGENT_BROWSER_STALE" });
     const { epoch } = await tools.browser_look.execute({}, context()) as { epoch: string };
