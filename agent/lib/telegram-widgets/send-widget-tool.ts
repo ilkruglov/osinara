@@ -1,8 +1,9 @@
 /**
  * Mia's own Telegram widgets: a self-contained HTML card from the workspace, sent into the chat.
  *
- * Export:
+ * Exports:
  * - `sendWidgetTool`: the Eve `send_widget` tool.
+ * - `EXTERNAL_SEND_WIDGET_PRESENTATION`: its description and group-only schema in an external group.
  *
  * Key constructs:
  * - The card is a workspace file, never an argument: Mia writes and rewrites it with the file
@@ -175,3 +176,18 @@ export const sendWidgetTool = defineTool({
     };
   },
 });
+
+/** In an external group: the group workspace only, and no links in the card. */
+export const EXTERNAL_SEND_WIDGET_PRESENTATION = {
+  description: [
+    "Отправить в текущий чат или тему внешней группы виджет Telegram: карточку из HTML-файла group workspace.",
+    "Виджет ожидается для сводок с числами, таблиц и сравнений; разговор, шутка и короткий ответ остаются текстом.",
+    "Перед первым виджетом загрузи навык telegram-widgets. Карточка без ссылок: здесь любой адрес в ней считается ошибкой.",
+    "Вход: path относительно group scope, например widgets/top.html, и caption, то есть итог карточки одной строкой. Результат delivered=true подтверждает отправку.",
+  ].join(" "),
+  inputSchema: z.object({
+    caption: z.string().trim().min(1).max(1_024).describe("Короткий итог карточки одной строкой"),
+    path: z.string().min(1).max(512).describe("Относительный путь к .html внутри group workspace"),
+    scope: z.literal("group").describe("Workspace текущей внешней группы"),
+  }).strict(),
+};

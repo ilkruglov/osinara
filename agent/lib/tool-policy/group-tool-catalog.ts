@@ -8,6 +8,7 @@
  * - `FRAMEWORK_TOOLS_DENIED_IN_EXTERNAL_GROUPS`: Eve built-ins overridden fail-closed externally.
  * - `ExternalGroupToolName`: validated persisted allowlist value.
  * - `requiresImageGenerationToolName`: marks capabilities that need a configured image provider.
+ * - `requiresTelegramWidgetsToolName`: marks capabilities that exist only with widgets switched on.
  * - `parseExternalGroupToolAllowlist`: validates the complete persisted policy atomically.
  */
 interface ExternalGroupCapability<Name extends string = string> {
@@ -15,6 +16,8 @@ interface ExternalGroupCapability<Name extends string = string> {
   // Set when the capability only exists under one model provider, so the owner-facing grant surface
   // can drop it while persisted validation still recognizes a grant made under a previous provider.
   readonly requiresImageGeneration?: true;
+  // Set when the capability exists only while Telegram widgets (Bot API beta) are switched on.
+  readonly requiresTelegramWidgets?: true;
   readonly usage: string;
 }
 
@@ -92,6 +95,11 @@ export const EXTERNAL_GROUP_CAPABILITY_CATALOG = [
     usage: "отправить файл из workspace документом в текущий Telegram-чат или тему",
   },
   {
+    name: "send_widget",
+    requiresTelegramWidgets: true,
+    usage: "отправлять виджет Telegram из HTML-файла группы, без ссылок",
+  },
+  {
     // generate_image implies this one: an image that can never be shown is not a capability.
     name: "send_workspace_image",
     usage: "показать картинку из workspace фотографией в текущем Telegram-чате или теме",
@@ -121,6 +129,16 @@ const IMAGE_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set(
 
 export function requiresImageGenerationToolName(value: string): boolean {
   return IMAGE_GENERATION_TOOL_NAMES.has(value);
+}
+
+const TELEGRAM_WIDGET_TOOL_NAMES: ReadonlySet<string> = new Set(
+  (EXTERNAL_GROUP_CAPABILITY_CATALOG as readonly ExternalGroupCapability[])
+    .filter(({ requiresTelegramWidgets }) => requiresTelegramWidgets === true)
+    .map(({ name }) => name),
+);
+
+export function requiresTelegramWidgetsToolName(value: string): boolean {
+  return TELEGRAM_WIDGET_TOOL_NAMES.has(value);
 }
 
 // Same-name wrappers preserve Eve's native contracts while adding live authorization and exact

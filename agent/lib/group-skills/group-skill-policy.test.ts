@@ -93,6 +93,8 @@ describe("group skill policy", () => {
     expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true })).toHaveProperty("telegram-widgets");
     expect(resolveTrustedSessionSkills(auth("private"), { subagent: true })).not.toHaveProperty("telegram-widgets");
     await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]))).resolves.not.toHaveProperty("telegram-widgets");
+    await expect(resolveExternalTurnSkills(auth("external", ["send_widget"]))).resolves.toHaveProperty("telegram-widgets");
+    await expect(resolveExternalTurnSkills(auth("external", ["send_widget"]), { scheduledRun: true })).resolves.not.toHaveProperty("telegram-widgets");
   });
 
   it("ties external imagegen instructions to the generate_image capability", async () => {

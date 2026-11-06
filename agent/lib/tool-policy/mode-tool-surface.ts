@@ -50,6 +50,9 @@ import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
 import sendWorkspaceImage from "../tools/send_workspace_image.js";
+import sendWidget from "../tools/send_widget.js";
+import { EXTERNAL_SEND_WIDGET_PRESENTATION } from "../telegram-widgets/send-widget-tool.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
 import { removeGroupFileTool } from "../workspaces/remove-group-file-tool.js";
 import webSearch, { LOCAL_WEB_SEARCH_AVAILABLE } from "../tools/web_search.js";
 import { controlledWebFetchTool } from "./controlled-web-fetch.js";
@@ -180,6 +183,7 @@ const EXTERNAL_DIRECT_TOOL_PRESENTATION: Readonly<
       "Показать фотографией картинку из group workspace в текущем Telegram-чате или теме внешней группы, в том числе только что нарисованную generate_image. path всегда относительный внутри group scope, например generated-images/image.png; не передавай /workspace/group. JPEG, PNG или WebP до 10 МБ, иначе отправляй документом через send_workspace_file. Результат delivered=true подтверждает отправку; alreadySent=true значит, что эти байты уже ушли на этом ходе.",
     inputSchema: externalWorkspaceSendInputSchema("generated-images/image.png"),
   },
+  send_widget: EXTERNAL_SEND_WIDGET_PRESENTATION,
 };
 
 const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefinition>> = {
@@ -198,6 +202,7 @@ const EXTERNAL_DIRECT_TOOLS: Readonly<Record<DirectExternalToolName, AnyToolDefi
   search_memory_threads: searchMemoryThreads as unknown as AnyToolDefinition,
   send_workspace_file: sendWorkspaceFile as unknown as AnyToolDefinition,
   send_workspace_image: sendWorkspaceImage as unknown as AnyToolDefinition,
+  send_widget: sendWidget as unknown as AnyToolDefinition,
   web_fetch: controlledWebFetchTool as unknown as AnyToolDefinition,
   web_search: webSearch as unknown as AnyToolDefinition,
 };
@@ -357,6 +362,8 @@ function buildExternalToolSurface(
     // Billable image generation requires a current interactive request, never a background run;
     // the avatars exist only for it.
     if ((capability === "generate_image" || capability === "fetch_telegram_avatars") && !imageGenerationAllowed) continue;
+    // A card is a reply to people in the chat, never a scheduled post; the switch removes it everywhere.
+    if (capability === "send_widget" && (scheduledRun || !TELEGRAM_WIDGETS_ENABLED)) continue;
     // A granted image sender still needs its live check, which `GRANTED_BY` resolves.
     if (capability.startsWith("manage_memory.")) continue;
     if (capability.startsWith("manage_memory_thread.")) continue;

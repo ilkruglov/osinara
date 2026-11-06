@@ -5,6 +5,7 @@
  * - `createExternalGroupLoadSkillTool`: injectable Eve-branded wrapper for authorization tests.
  * - `externalGroupLoadSkillTool`: production `defineTool` wrapper over Eve's native skill loader.
  * - Knowledge skills (`auto-analyst`, `car-diagnostics`, `policy-finance-analyst`) open with the live `web_search` grant.
+ * - The widget skill (`telegram-widgets`) opens with the live `send_widget` grant and the switch on.
  * - An authored skill opens only with a live grant to this group and every step tool in the live
  *   allowlist; a capability revoked after the grant closes the skill on the next call.
  */
@@ -21,6 +22,8 @@ import {
 import { IMAGE_GENERATION_AVAILABLE } from "../image-generation/image-generation-availability.js";
 import { isImageGenerationSkillName } from "../image-generation/image-generation-skill.js";
 import { KNOWLEDGE_SKILL_CAPABILITY, isKnowledgeSkillName } from "./knowledge-skills.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
+import { TELEGRAM_WIDGET_SKILL_NAME } from "../telegram-widgets/telegram-widget-skill.js";
 import {
   authorizeCurrentExternalGroupCapability,
   loadCurrentExternalGroupCapabilities,
@@ -34,6 +37,8 @@ interface ExternalGroupLoadSkillDependencies {
   authorizeAuthoredSkill(ctx: ToolContext, skill: string): Promise<void>;
   authorizeImageGeneration(ctx: ToolContext): Promise<void>;
   authorizeKnowledgeSkills(ctx: ToolContext): Promise<void>;
+  /** Throws unless the group holds the live `send_widget` grant; absent means the skill is refused. */
+  authorizeTelegramWidgets?(ctx: ToolContext): Promise<void>;
   executeNative(input: unknown, ctx: ToolContext): Promise<unknown>;
 }
 
@@ -66,6 +71,11 @@ export function createExternalGroupLoadSkillTool(
         await dependencies.authorizeImageGeneration(ctx);
         return await dependencies.executeNative(input, ctx);
       }
+      if (skill === TELEGRAM_WIDGET_SKILL_NAME) {
+        if (!TELEGRAM_WIDGETS_ENABLED || !dependencies.authorizeTelegramWidgets) throw forbidden();
+        await dependencies.authorizeTelegramWidgets(ctx);
+        return await dependencies.executeNative(input, ctx);
+      }
       // Anything else can only be an authored skill the owner granted to this very group.
       if (!AUTHORED_SKILL_NAME_PATTERN.test(skill) || isReservedSkillName(skill)) throw forbidden();
       await dependencies.authorizeAuthoredSkill(ctx, skill);
@@ -93,6 +103,11 @@ export const externalGroupLoadSkillTool = createExternalGroupLoadSkillTool({
     const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
     if (!identity) throw forbidden();
     await authorizeCurrentExternalGroupCapability(identity, KNOWLEDGE_SKILL_CAPABILITY);
+  },
+  authorizeTelegramWidgets: async (ctx) => {
+    const identity = resolveExternalGroupPolicyIdentity(ctx.session.auth);
+    if (!identity) throw forbidden();
+    await authorizeCurrentExternalGroupCapability(identity, "send_widget");
   },
   executeNative: (input, ctx) => nativeLoadSkill.execute(input, ctx),
 });

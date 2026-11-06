@@ -6,6 +6,7 @@
  * - The capability-coupled `imagegen` skill additionally requires its active model provider.
  * - Analyst knowledge skills open only with the live `web_search` grant.
  * - A granted authored skill opens after the live grant check; reserved names never reach it.
+ * - The widget skill opens only with the live `send_widget` grant.
  */
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
@@ -14,6 +15,10 @@ import { describe, expect, it, vi } from "vitest";
 // its own suite because the provider gate resolves once at module load.
 vi.mock("../image-generation/image-generation-availability.js", () => ({
   IMAGE_GENERATION_AVAILABLE: true,
+}));
+
+vi.mock("../telegram-widgets/telegram-widget-availability.js", () => ({
+  TELEGRAM_WIDGETS_ENABLED: true,
 }));
 
 import { createExternalGroupLoadSkillTool } from "./group-load-skill-tool.js";
@@ -154,4 +159,18 @@ describe("external group load_skill", () => {
     );
     expect(executeNative).not.toHaveBeenCalled();
   });
+
+  it("opens the widget skill only with the live send_widget grant", async () => {
+    const executeNative = vi.fn().mockResolvedValue({ loaded: true });
+    const authorizeAuthoredSkill = vi.fn();
+    const authorizeTelegramWidgets = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("AGENT_GROUP_TOOL_FORBIDDEN"));
+    const tool = createExternalGroupLoadSkillTool({
+      authorizeAuthoredSkill, authorizeImageGeneration: vi.fn(), authorizeKnowledgeSkills: vi.fn(), authorizeTelegramWidgets, executeNative,
+    });
+    await expect(tool.execute({ skill: "telegram-widgets" }, context())).resolves.toEqual({ loaded: true });
+    await expect(tool.execute({ skill: "telegram-widgets" }, context())).rejects.toThrow(/AGENT_GROUP_TOOL_FORBIDDEN/u);
+    expect(authorizeAuthoredSkill).not.toHaveBeenCalled();
+    expect(executeNative).toHaveBeenCalledOnce();
+  });
 });
+

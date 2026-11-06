@@ -159,7 +159,7 @@ describe("authored skill contract", () => {
     const builtIn = readdirSync(new URL("../../skills/", import.meta.url), { withFileTypes: true })
       .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
     expect(builtIn).toContain("car-diagnostics");
-    for (const name of [...builtIn, "imagegen"]) expect(isReservedSkillName(name)).toBe(true);
+    for (const name of [...builtIn, "imagegen", "telegram-widgets"]) expect(isReservedSkillName(name)).toBe(true);
   });
 
   it("checks group skills against the tools the grants actually surface", () => {

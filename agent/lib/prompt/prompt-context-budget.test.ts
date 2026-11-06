@@ -61,7 +61,8 @@ const EXTERNAL_CHARACTER_BUDGET = 15_100;
 // +100 the same day for the avatar purpose line, +500 once the worst case counts the grant lines
 // of generate_image and fetch_telegram_avatars (they exist only with a configured image provider,
 // which this test never mocked before; measured 25 560 with the scheduled history section).
-const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_600;
+// +100 on 6 November 2026 for the send_widget grant line (Telegram widgets; measured 25 663).
+const EXTERNAL_WORST_CASE_CHARACTER_BUDGET = 25_700;
 // Raised by 300 on 5 September 2026 for the two analyst skill lines in the external grant block,
 // then by 600 the same day for the memory policy (used-memory directive, selection criterion),
 // then by 300 for the owner's rule on mild, self-invented swearing in the core, then by 300 on

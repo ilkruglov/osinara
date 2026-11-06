@@ -19,6 +19,9 @@ const authorizeCurrentExternalGroupCapability = vi.hoisted(() => vi.fn());
 vi.mock("../google-workspace/google-workspace-availability.js", () => ({
   GOOGLE_WORKSPACE_AVAILABLE: true,
 }));
+vi.mock("../telegram-widgets/telegram-widget-availability.js", () => ({
+  TELEGRAM_WIDGETS_ENABLED: true,
+}));
 vi.mock("./external-group-live-policy.js", () => ({
   loadCurrentExternalGroupCapabilities,
   authorizeCurrentExternalGroupCapability,
@@ -158,6 +161,15 @@ describe("external group tool surface", () => {
         environment: "external",
       }),
     ).toContain("remove_group_file");
+  });
+
+  it("surfaces the widget sender only with its grant, in an interactive turn, with a group-only schema", () => {
+    expect(names({ capabilities: new Set(), environment: "external" })).not.toContain("send_widget");
+    expect(names({ capabilities: new Set(["send_widget"]), environment: "external" })).toContain("send_widget");
+    expect(names({ capabilities: new Set(["send_widget"]), environment: "external", scheduledRun: true })).not.toContain("send_widget");
+    const tool = buildModeToolSurface({ capabilities: new Set(["send_widget"]), environment: "external" }).send_widget!;
+    expect(String(tool.description)).toMatch(/без ссылок/u);
+    expect(JSON.stringify(z.toJSONSchema(tool.inputSchema as z.ZodType))).toMatch(/"const":"group"/u);
   });
 
   it("surfaces Telegram text attachment import only when explicitly allowed", () => {

@@ -51,7 +51,7 @@ export const EVE_BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
 // skills come from their catalog so a new analyst is reserved without touching this list.
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
   "agent-browser", "authored", "behavior-preferences", "docx", "imagegen", "pdf",
-  "skill-authoring", "xlsx", ...KNOWLEDGE_SKILL_NAMES,
+  "skill-authoring", "telegram-widgets", "xlsx", ...KNOWLEDGE_SKILL_NAMES,
 ]);
 const RESERVED_PREFIXES = ["authored-", "gws-"] as const;
 

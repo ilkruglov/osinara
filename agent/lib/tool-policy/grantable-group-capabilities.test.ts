@@ -22,6 +22,7 @@ import {
 import {
   EXTERNAL_GROUP_TOOL_NAMES,
   requiresImageGenerationToolName,
+  requiresTelegramWidgetsToolName,
   parseExternalGroupToolAllowlist,
 } from "./group-tool-catalog.js";
 
@@ -32,10 +33,12 @@ describe("grantable external group capabilities without a Codex subscription", (
     expect(isGrantableExternalGroupToolName("search_memories")).toBe(true);
   });
 
-  it("keeps every other catalog capability grantable", () => {
+  it("keeps every other catalog capability grantable, and widgets only with their switch on", () => {
+    // TELEGRAM_WIDGETS_ENABLED is not set in the test environment.
     expect([...GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES]).toEqual(
-      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !requiresImageGenerationToolName(name)),
+      EXTERNAL_GROUP_TOOL_NAMES.filter((name) => !requiresImageGenerationToolName(name) && !requiresTelegramWidgetsToolName(name)),
     );
+    expect(isGrantableExternalGroupToolName("send_widget")).toBe(false);
     expect(GRANTABLE_EXTERNAL_GROUP_TOOL_NAMES.length).toBeGreaterThan(0);
   });
 

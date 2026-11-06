@@ -95,6 +95,8 @@ export function createExternalTurnSkillResolver(dependencies: ExternalTurnSkillD
     // Analyst skills ride on the research grant; the load_skill wrapper re-checks it live. Eve's
     // public load_skill executor knows only dynamic packages, so they must reach the sandbox here.
     if (tools.allowed.has(KNOWLEDGE_SKILL_CAPABILITY)) Object.assign(skills, knowledgeSkills());
+    // The widget skill rides on the send_widget grant; the load_skill wrapper re-checks it live.
+    if (TELEGRAM_WIDGETS_ENABLED && tools.allowed.has("send_widget")) skills[TELEGRAM_WIDGET_SKILL_NAME] = TELEGRAM_WIDGET_SKILL_DEFINITION;
     const identity = resolveExternalGroupPolicyIdentity(auth);
     if (!identity) return skills;
     let packages: readonly AuthoredSkillPackage[];
