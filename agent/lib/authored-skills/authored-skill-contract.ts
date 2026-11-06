@@ -83,8 +83,11 @@ function sectionBody(markdown: string, heading: string): string | null {
   return next === -1 ? rest : rest.slice(0, next);
 }
 
-/** Application core every interactive external turn gets without a grant (`buildModeToolSurface`). */
-const EXTERNAL_GROUP_CORE_TOOL_NAMES = ["manage_behavior_preference", "read_profile_view"] as const;
+/**
+ * What every interactive external turn gets without a grant: the application core
+ * (`buildModeToolSurface`) and `load_skill`, whose wrapper checks the skill's own grant when it runs.
+ */
+const EXTERNAL_GROUP_CORE_TOOL_NAMES = ["load_skill", "manage_behavior_preference", "read_profile_view"] as const;
 
 export interface ExternalGroupSurfaceOptions {
   /** `IMAGE_GENERATION_AVAILABLE`: a stored drawing grant surfaces nothing without a provider. */

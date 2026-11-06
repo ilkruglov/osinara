@@ -7,6 +7,7 @@ import { releaseDeadWorkerLocks, requeueInFlightRuns, startStuckRunRecovery } fr
 import { Pool } from "pg";
 import { createClient } from "./drizzle/index.js";
 import { traceWorkflowPool } from "./osinara-workflow-pool-trace.js";
+import { workflowPostgresSettings } from "./osinara-workflow-settings.js";
 import { createQueue } from "./queue.js";
 import {
   createEventsStorage,
@@ -23,12 +24,9 @@ function createStorage(drizzle) {
     steps: createStepsStorage(drizzle),
   };
 }
+// Osinara: whole numbers in bounds or a failed start (scripts/eve-runtime/workflow-settings.ts).
 function getDefaultMaxPoolSize() {
-  const parsed = parseInt(
-    process.env.WORKFLOW_POSTGRES_MAX_POOL_SIZE || "",
-    10,
-  );
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  return workflowPostgresSettings().maxPoolSize;
 }
 function getDefaultConnectionString() {
   return (
@@ -41,9 +39,7 @@ export function createWorld(
   config = {
     connectionString: getDefaultConnectionString(),
     jobPrefix: process.env.WORKFLOW_POSTGRES_JOB_PREFIX,
-    queueConcurrency:
-      parseInt(process.env.WORKFLOW_POSTGRES_WORKER_CONCURRENCY || "50", 10) ||
-      50,
+    queueConcurrency: workflowPostgresSettings().queueConcurrency,
     applicationManagedShutdown:
       process.env.WORKFLOW_POSTGRES_APPLICATION_MANAGED_SHUTDOWN === "1",
   },

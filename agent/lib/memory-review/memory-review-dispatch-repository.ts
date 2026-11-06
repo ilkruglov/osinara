@@ -343,6 +343,16 @@ export const memoryReviewDispatchRepository = {
     const client = await database().connect();
     try {
       await client.query("BEGIN");
+      // One claim pass at a time: two passes counting the in-flight cap at once each took what
+      // looked free and doubled it (Codex review, 6 November 2026). A pass that finds another one
+      // under way leaves this tick to it.
+      const pass = await client.query<{ acquired: boolean }>(
+        "SELECT pg_try_advisory_xact_lock(hashtext('osinara.memory_review_claim')) AS acquired",
+      );
+      if (pass.rows[0]?.acquired !== true) {
+        await client.query("COMMIT");
+        return [];
+      }
       await terminalizeStaleMemoryReviewBatches(client, input.now);
       await materializeReadyBatches(client, input.now, laneLimit);
       await materializeIdleBatches(client, input.now, laneLimit);
@@ -360,13 +370,22 @@ export const memoryReviewDispatchRepository = {
          `WITH candidates AS (
            SELECT batch.id FROM memory_review_batches AS batch
             JOIN memory_review_lanes AS candidate_lane ON candidate_lane.id = batch.lane_id
+            JOIN application_conversations AS candidate_conversation
+              ON candidate_conversation.id = batch.conversation_id
+            LEFT JOIN telegram_groups AS candidate_group
+              ON candidate_group.id = candidate_conversation.telegram_group_id
             WHERE batch.batch_kind = 'background' AND (batch.status = 'pending' OR
               (batch.status = 'leased' AND batch.lease_expires_at <= $1))
               AND batch.predecessor_sequence = candidate_lane.processed_through_sequence
+              -- The owner switched review off: the batch waits until it is on again.
+              AND COALESCE(candidate_group.memory_review_enabled, true)
             ORDER BY batch.created_at, batch.id FOR UPDATE OF batch SKIP LOCKED
+            -- Leased and dispatching batches are on their way to running: they take the cap too.
             LIMIT LEAST($2::int, GREATEST(0, $4::int - (
-              SELECT count(*)::int FROM memory_review_batches AS running
-               WHERE running.batch_kind = 'background' AND running.status = 'running')))
+              SELECT count(*)::int FROM memory_review_batches AS in_flight
+               WHERE in_flight.batch_kind = 'background'
+                 AND (in_flight.status IN ('dispatching', 'running')
+                   OR (in_flight.status = 'leased' AND in_flight.lease_expires_at > $1)))))
          ), sponsors AS (
            -- A personal conversation is reviewed as its owner; a group as the family owner.
            SELECT conversation.id AS conversation_id, membership.user_id, membership.role
@@ -484,9 +503,14 @@ export const memoryReviewDispatchRepository = {
     applicationSessionId: string,
   ): Promise<boolean> {
     const result = await database().query(
-      `UPDATE memory_review_batches
+      `UPDATE memory_review_batches AS batch
           SET status = 'dispatching', application_session_id = $3, updated_at = now()
-        WHERE id = $1 AND status = 'leased' AND lease_token = $2`,
+        WHERE batch.id = $1 AND batch.status = 'leased' AND batch.lease_token = $2
+          -- Switched off after the lease: nothing starts (Codex review, 6 November 2026).
+          AND COALESCE((SELECT telegram_group.memory_review_enabled
+                          FROM application_conversations AS conversation
+                          JOIN telegram_groups AS telegram_group ON telegram_group.id = conversation.telegram_group_id
+                         WHERE conversation.id = batch.conversation_id), true)`,
       [batch.batchId, batch.leaseToken, applicationSessionId],
     );
     return result.rowCount === 1;

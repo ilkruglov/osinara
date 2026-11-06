@@ -35,4 +35,13 @@ describe("json hashes", () => {
   it("matches the legacy canonical form byte for byte", () => {
     expect(canonicalJson(sample)).toBe(JSON.stringify(legacyCanonical(sample)));
   });
+
+  // Codex review, 6 November 2026: a JavaScript object puts integer-like keys first in numeric
+  // order, so the legacy form wrote {"2":…,"10":…,"a":…}; sorting the names as text broke the
+  // stored hash of every experiment protocol with such keys.
+  it("keeps integer-like keys first in numeric order, as the legacy form did", () => {
+    const keyed = { b: 1, "10": { "2": "x", a: "y" }, a: 2, "2": [{ "1": 0, "01": 1 }] };
+    expect(canonicalJson(keyed)).toBe(JSON.stringify(legacyCanonical(keyed)));
+    expect(canonicalJson(keyed)).toBe('{"2":[{"1":0,"01":1}],"10":{"2":"x","a":"y"},"a":2,"b":1}');
+  });
 });

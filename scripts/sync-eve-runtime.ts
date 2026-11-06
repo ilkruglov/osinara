@@ -32,6 +32,7 @@ export const EVE_RUNTIME_MODULES = [
   ["scripts/eve-runtime/stream-listener.ts", "vendor/workflow-world-postgres/dist/osinara-stream-listener.js"],
   ["scripts/eve-runtime/stuck-run-recovery.ts", "vendor/workflow-world-postgres/dist/osinara-stuck-run-recovery.js"],
   ["scripts/eve-runtime/workflow-pool-trace.ts", "vendor/workflow-world-postgres/dist/osinara-workflow-pool-trace.js"],
+  ["scripts/eve-runtime/workflow-settings.ts", "vendor/workflow-world-postgres/dist/osinara-workflow-settings.js"],
 ] as const;
 
 export function projectPath(relative: string): string {

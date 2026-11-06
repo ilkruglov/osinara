@@ -173,6 +173,9 @@ describe("authored skill contract", () => {
     expect(externalGroupMissingTools(steps(["manage_memory"]), new Set(["remember"]), on)).toEqual(["manage_memory"]);
     // The application core is on every interactive external surface without a grant.
     expect(externalGroupMissingTools(steps(["read_profile_view", "manage_behavior_preference"]), new Set(), on)).toEqual([]);
+    // `load_skill` is on every interactive external surface; a skill loading `imagegen` was refused
+    // for it (Codex review, 6 November 2026).
+    expect(externalGroupMissingTools(steps(["load_skill", "generate_image"]), new Set(["generate_image"]), on)).toEqual([]);
     // A stored drawing grant surfaces nothing while no image provider is configured.
     expect(externalGroupMissingTools(steps(["generate_image", "send_workspace_image"]), new Set(["generate_image"]), off)).toEqual(["generate_image", "send_workspace_image"]);
   });

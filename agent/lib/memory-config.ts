@@ -31,6 +31,8 @@ export const MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 40;
 // family): the previous distance over every chunk took 253 ms, the index walk 46 ms, with the
 // same forty records; two hundred chunks leave room for records of several chunks each.
 export const MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES = 200;
+// The widest window of nearest chunks a search reads when long records crowd the first one.
+export const MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING = 3_200;
 
 export const CONVERSATION_TIMELINE_SELECTION_MAX_ENTRIES = 50;
 

@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../app-error.js";
 import { runLavkaOperation, type LavkaOperationRepository } from "./lavka-operation.js";
+import { lavkaNothingSent } from "./lavka-nothing-sent.js";
 
 function ledger(): LavkaOperationRepository & { rows: Map<string, { requestHash: string; result: unknown; status: "completed" | "started" }> } {
   const rows = new Map<string, { requestHash: string; result: unknown; status: "completed" | "started" }>();
@@ -70,5 +71,15 @@ describe("runLavkaOperation", () => {
     expect(repo.rows.size).toBe(0);
     await expect(runLavkaOperation(repo, call, async () => { throw new AppError("AGENT_LAVKA_UNAVAILABLE", "x"); })).rejects.toMatchObject({ code: "AGENT_LAVKA_UNAVAILABLE" });
     expect(repo.rows.get("u1:s1:call-1")).toMatchObject({ status: "started" });
+  });
+
+  // Codex review, 6 November 2026: a timeout while the order re-read the cart kept the key, and
+  // every retry of the confirmed call answered «may have reached Lavka» though nothing was sent.
+  it("frees the key after any failure marked as raised before the side effect", async () => {
+    const repo = ledger();
+    await expect(runLavkaOperation(repo, call, async () => { throw lavkaNothingSent(new AppError("AGENT_LAVKA_UNAVAILABLE", "x")); }))
+      .rejects.toMatchObject({ code: "AGENT_LAVKA_UNAVAILABLE" });
+    expect(repo.rows.size).toBe(0);
+    await expect(runLavkaOperation(repo, call, async () => ({ orderId: "o-2" }))).resolves.toEqual({ replayed: false, result: { orderId: "o-2" } });
   });
 });

@@ -103,6 +103,17 @@ export async function sendOrderWatchMessage(watch: ClaimedOrderWatch, text: stri
   return { messageId, text };
 }
 
+/**
+ * The failure of a card send by what Telegram's answer proves: a refusal, or an unknown outcome
+ * (a server error, a success without the message), which diagnostics called a refusal too (Codex
+ * review, 6 November 2026).
+ */
+export function orderCardSendFailure(sent: { ambiguous: boolean; status: number }): AppError {
+  return sent.ambiguous
+    ? new AppError("AGENT_ORDER_WATCH_CARD_AMBIGUOUS", `Telegram не подтвердил карточку заказа: HTTP ${sent.status}`)
+    : new AppError("AGENT_ORDER_WATCH_CARD_REFUSED", `Telegram не принял карточку заказа: HTTP ${sent.status}`);
+}
+
 const orderCard = {
   async send(watch: ClaimedOrderWatch, html: string): Promise<string> {
     const sent = await sendTelegramWidget({
@@ -110,7 +121,7 @@ const orderCard = {
       chatId: watch.telegramChatId,
       html,
     });
-    if (!sent.ok) throw new AppError("AGENT_ORDER_WATCH_CARD_REFUSED", `Telegram не принял карточку заказа: HTTP ${sent.status}`);
+    if (!sent.ok) throw orderCardSendFailure(sent);
     return sent.messageId;
   },
   async update(watch: ClaimedOrderWatch, messageId: string, data: string): Promise<void> {

@@ -265,10 +265,6 @@ export const memoryReviewRepository = {
         await client.query("COMMIT");
         return null;
       }
-      if (!await groupReviewEnabled(client, input.groupId)) {
-        await client.query("COMMIT");
-        return null;
-      }
       await lockApplicationConversation(client, source.conversation_id);
       const lane = await laneForUpdate(
         client,
@@ -276,6 +272,12 @@ export const memoryReviewRepository = {
         source.message_thread_id,
         "0",
       );
+      // The lane exists while review is off as well: a topic first seen then had none, and once
+      // review was on again its history was never reviewed (Codex review, 6 November 2026).
+      if (!await groupReviewEnabled(client, input.groupId)) {
+        await client.query("COMMIT");
+        return null;
+      }
       if (await laneBlocked(client, lane)) {
         await client.query("COMMIT");
         return null;

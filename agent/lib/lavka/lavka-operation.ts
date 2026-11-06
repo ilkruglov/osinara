@@ -12,12 +12,14 @@
  * Key constructs:
  * - Eve re-runs an interrupted step with the same call id; without this a replayed `add` added the
  *   quantity twice and a replayed `order` could submit a second order (review, 28 September 2026).
- * - A thrown error the site explained before any write (validation, lost session, moved tab) frees
- *   the key; any other failure keeps it `started`, which a replay reports as ambiguous.
+ * - A thrown error the site explained before any write (validation, lost session, moved tab), or
+ *   one marked as raised before the side effect was sent (`lavka-nothing-sent.ts`), frees the key;
+ *   any other failure keeps it `started`, which a replay reports as ambiguous.
  */
 import { AppError, isAppError } from "../app-error.js";
 import { database } from "../database.js";
 import { sha256Json } from "../json-hash.js";
+import { isLavkaNothingSent } from "./lavka-nothing-sent.js";
 
 export type LavkaOperationAction = "add" | "cancel" | "order";
 
@@ -70,7 +72,7 @@ export async function runLavkaOperation<T>(
   try {
     result = await run();
   } catch (error) {
-    if (isAppError(error) && LAVKA_DEFINITIVE_FAILURES.has(error.code)) {
+    if ((isAppError(error) && LAVKA_DEFINITIVE_FAILURES.has(error.code)) || isLavkaNothingSent(error)) {
       await repository.release({ key: input.key, userId: input.userId });
     }
     throw error;

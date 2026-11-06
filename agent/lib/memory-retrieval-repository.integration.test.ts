@@ -6,6 +6,9 @@
  * - Personal and family authorization is applied before ranking.
  * - Unresolved conflict closure loads both authorized versions even when one has no retrieval score.
  * - Conflict closure withholds base results when authorization changes between repository queries.
+ * - Long records with many near chunks do not shrink the semantic page: the nearest-chunk window
+ *   widens until it holds enough records (Codex review, 6 November 2026: 200 chunks of long
+ *   records gave 7 of 12).
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,6 +70,31 @@ describeWithDatabase("memoryRetrievalRepository", () => {
   });
 
   afterAll(async () => closeDatabase());
+
+  it("fills a semantic page with long records whose many chunks crowd the nearest window", async () => {
+    for (let record = 0; record < 12; record += 1) {
+      const memory = await database().query<{ id: string }>(
+        `INSERT INTO memory_items
+           (family_id, owner_user_id, author_user_id, author_telegram_user_id, scope, kind,
+            content, source, confirmation, sensitivity, operation_key, embedding_status)
+         VALUES ($1, $2, $2, 'search-owner', 'personal', 'fact', $3, 'test:long', 'model_high', 'normal', $4, 'indexed')
+         RETURNING id`,
+        [auth.familyId, auth.userId, `Длинная запись номер ${record}`, `long-${record}`],
+      );
+      // Thirty chunks a record, each a little off the query: 200 nearest chunks hold under seven records.
+      await database().query(
+        `INSERT INTO memory_embedding_chunks
+           (memory_item_id, chunk_index, content, start_offset, end_offset, embedding, embedding_model)
+         SELECT $1, chunk_index, 'кусок ' || chunk_index, 0, 5, $2::vector, $3
+           FROM generate_series(0, 29) AS chunk_index`,
+        [memory.rows[0]!.id, `[${vector(1, 0.01 * (record + 1)).join(",")}]`, MEMORY_EMBEDDING_MODEL_VERSION],
+      );
+    }
+
+    const results = await memoryRetrievalRepository.search(auth, "нечто без совпадения по словам", vector(1, 0), 12);
+
+    expect(results).toHaveLength(12);
+  });
 
   it("keeps authorized lexical results and date filtering without a vector", async () => {
     for (const owner of [auth.userId!, otherUserId]) {

@@ -11,6 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AppError } from "../app-error.js";
 import { MemoryReviewOwnerAlertTransportError } from "../memory-review/memory-review-owner-alert-transport.js";
 import {
   createOwnerHealthDigestDispatcher,
@@ -292,6 +293,48 @@ describe("createOwnerHealthDigestDispatcher", () => {
       .filter((call) => call[0].chatId === "101").map((call) => String(call[0].text));
     for (const message of sent) expect(message.length).toBeLessThanOrEqual(4_096);
     expect(sent).toEqual([text, expect.stringMatching(/^Карточка сводки не отправилась/u)]);
+  });
+
+  // Codex review, 6 November 2026: with many stuck lanes the digest itself passed 4 096 characters,
+  // Telegram refused it, and the claim went back every ten minutes.
+  it("sends a digest longer than one Telegram message in parts cut at line ends", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const huge: OwnerHealthReport = {
+      ...quiet,
+      lanes: {
+        blocked: Array.from({ length: 40 }, (_, index) => ({
+          code: "AGENT_MEMORY_REVIEW_PASS_SKIPPED", headStatus: "failed", label: `Группа ${index} ${"с очень длинным названием ".repeat(4)}`, waiting: 40 + index,
+        })),
+        lagging: [],
+      },
+    };
+    const text = formatOwnerHealthDigest(huge);
+    expect(text.length).toBeGreaterThan(4_096);
+    const deps = dependencies({ report: vi.fn().mockResolvedValue(huge) });
+
+    await createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"));
+
+    const sent = (deps.deliver as ReturnType<typeof vi.fn>).mock.calls
+      .filter((call) => call[0].chatId === "101").map((call) => String(call[0].text));
+    expect(sent.length).toBeGreaterThan(1);
+    for (const message of sent) expect(message.length).toBeLessThanOrEqual(4_096);
+    expect(sent.join("\n")).toBe(text);
+    expect(deps.release).not.toHaveBeenCalled();
+  });
+
+  // Codex review, 6 November 2026: a card with an unknown outcome and a refused text released the
+  // claim, and every next pass sent the card again.
+  it("records the day when the card may have arrived even if the text after it fails", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const deliverWidget = vi.fn().mockRejectedValue(new AppError("AGENT_OWNER_WIDGET_AMBIGUOUS", "Telegram не подтвердил карточку: HTTP 502"));
+    const deps = dependencies({ deliver: vi.fn().mockRejectedValue(new Error("Telegram 400")), deliverWidget });
+
+    await createOwnerHealthDigestDispatcher(deps)(new Date("2026-11-06T06:10:00.000Z"));
+
+    expect(deps.release).not.toHaveBeenCalled();
+    expect(deps.complete).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS"));
   });
 
   it("keeps the claim and sends no text when the card says the owner chat is gone", async () => {

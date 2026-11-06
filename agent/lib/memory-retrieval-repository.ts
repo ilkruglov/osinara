@@ -15,6 +15,7 @@ import {
   MEMORY_RETRIEVAL_MIN_RUSSIAN_MORPHOLOGY_RANK,
   MEMORY_RETRIEVAL_MIN_SEMANTIC_SIMILARITY,
   MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES,
+  MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING,
   MEMORY_RETRIEVAL_WEAK_MIN_SEMANTIC_SIMILARITY,
   MEMORY_RETRIEVAL_MIN_SIMPLE_LEXICAL_RANK,
   MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
@@ -169,6 +170,18 @@ export interface MemoryRetrievalWindow {
   occurredBefore?: string;
 }
 
+interface SemanticWindowRow {
+  window_chunks: number;
+  window_passing: number;
+  window_records: number;
+}
+
+/** The nearest-chunk window was full and every record in it passed, short of the branch's take. */
+function semanticWindowStarved(row: SemanticWindowRow | undefined, chunkLimit: number): boolean {
+  return row !== undefined && row.window_chunks >= chunkLimit &&
+    row.window_passing === row.window_records && row.window_records < MEMORY_RETRIEVAL_CANDIDATE_LIMIT;
+}
+
 export const memoryRetrievalRepository = {
   async search(
     auth: MemoryAuthorization,
@@ -187,8 +200,11 @@ export const memoryRetrievalRepository = {
       throw new AppError("AGENT_MEMORY_LIMIT_INVALID", "Некорректный лимит поиска памяти");
     }
 
-    // NOT MATERIALIZED keeps authorization in every inlined branch while allowing physical indexes.
-    const result = await database().query<RetrievalRow>(
+    // Long records have many chunks, so a fixed window of nearest chunks can hold fewer records
+    // than a page (Codex review, 6 November 2026: 200 chunks gave 7 records of 12). The window
+    // widens while it was full, every record in it passed the similarity floor (a farther record
+    // cannot pass if a nearer one failed) and it held fewer records than the branch takes.
+    const run = (chunkLimit: number) => database().query<RetrievalRow & SemanticWindowRow>(
       `WITH authorized AS NOT MATERIALIZED (
           SELECT item.*, ref.memory_ref
           FROM memory_items AS item
@@ -295,7 +311,10 @@ export const memoryRetrievalRepository = {
                  COALESCE(1.0 / ($12::double precision + semantic.ordinal), 0))
                   * ($14::double precision + (1 - $14::double precision) * retention.value)
                 + CASE WHEN authorized.confirmation = 'user_confirmed' THEN $13::double precision ELSE 0 END)
-                 AS fused_score
+                 AS fused_score,
+              (SELECT count(*)::int FROM nearest_chunks) AS window_chunks,
+              (SELECT count(*)::int FROM semantic_distances) AS window_records,
+              (SELECT count(*)::int FROM semantic_distances WHERE 1 - distance >= $11) AS window_passing
        FROM candidates
        JOIN authorized USING (id)
        LEFT JOIN simple_lexical USING (id)
@@ -341,9 +360,15 @@ export const memoryRetrievalRepository = {
         MEMORY_DISCUSSION_SUMMARY_ATTRIBUTE,
         window.occurredAfter ?? null,
         window.occurredBefore ?? null,
-        MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES,
+        chunkLimit,
       ],
     );
+    let chunkLimit = MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CANDIDATES;
+    let result = await run(chunkLimit);
+    while (chunkLimit < MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING && semanticWindowStarved(result.rows[0], chunkLimit)) {
+      chunkLimit = Math.min(chunkLimit * 4, MEMORY_RETRIEVAL_SEMANTIC_CHUNK_CEILING);
+      result = await run(chunkLimit);
+    }
     // Duplicate collapse is read-only and happens after global rank, preserving its representative.
     return collapseExactDuplicateRetrievalResults(result.rows.map(rowToScoredResult), limit);
   },

@@ -93,6 +93,19 @@ jobs:
             printf '%s\n' "RELEASE_VERSION_ALREADY_EXISTS: tag ${TAG} exists without a resumable draft; bump package.json" >&2
             exit 1
           fi
+          # A re-run of an old failed run must not publish its older version as the latest one: the
+          # update checker reads /releases/latest (Codex review, 6 November 2026).
+          LATEST_ERROR="$(mktemp)"
+          if ! LATEST="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>"$LATEST_ERROR")"; then
+            grep -q "HTTP 404" "$LATEST_ERROR" || { cat "$LATEST_ERROR" >&2; exit 1; }
+            LATEST=""
+          fi
+          LATEST="${LATEST#v}"
+          if [[ -n "$LATEST" ]] && { [[ "$LATEST" == "${VERSION}" ]] ||
+            [[ "$(printf '%s\n%s\n' "$LATEST" "${VERSION}" | sort -V | tail -n 1)" != "${VERSION}" ]]; }; then
+            printf '%s\n' "RELEASE_VERSION_NOT_NEWER: v${VERSION} is not newer than the latest release v${LATEST}" >&2
+            exit 1
+          fi
           RELEASE_NOTES_FILE="docs/releases/v${VERSION}.txt"
           if [[ ! -s "$RELEASE_NOTES_FILE" ]]; then
             printf '%s\n' "RELEASE_NOTES_MISSING: ${RELEASE_NOTES_FILE} must contain the detailed changelog" >&2
@@ -475,6 +488,18 @@ jobs:
             ([.assets[].name] | sort) == ["compose.production.yaml", "install.sh", "osinara-deployment.json", "osinara-installation.tar.gz", "osinara-linux-x64", "osinara-linux-x64.sha256"]
           ' <<<"$ASSETS_JSON" >/dev/null
 
+          # Checked again right before the release becomes the latest: another may have come out meanwhile.
+          LATEST_ERROR="$(mktemp)"
+          if ! LATEST="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>"$LATEST_ERROR")"; then
+            grep -q "HTTP 404" "$LATEST_ERROR" || { cat "$LATEST_ERROR" >&2; exit 1; }
+            LATEST=""
+          fi
+          LATEST="${LATEST#v}"
+          if [[ -n "$LATEST" ]] && { [[ "$LATEST" == "${RELEASE_VERSION}" ]] ||
+            [[ "$(printf '%s\n%s\n' "$LATEST" "${RELEASE_VERSION}" | sort -V | tail -n 1)" != "${RELEASE_VERSION}" ]]; }; then
+            printf '%s\n' "RELEASE_VERSION_NOT_NEWER: v${RELEASE_VERSION} is not newer than the latest release v${LATEST}" >&2
+            exit 1
+          fi
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
             --jq 'select(.immutable == true and .draft == false and .prerelease == false) | .id' \

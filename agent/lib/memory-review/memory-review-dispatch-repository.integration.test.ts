@@ -4,6 +4,10 @@
  * Constructs covered:
  * - Bounded pre-handoff recovery, owner alerts, stale markers, and exact Eve-root ownership.
  * - A lane locked by a running turn is skipped, not waited for, and picked up on a later tick.
+ * - Codex review, 6 November 2026: a group whose owner switched review off keeps its pending batch
+ *   unclaimed and refuses a dispatch already leased; the in-flight cap counts leased and
+ *   dispatching batches, and one claim pass runs at a time; a topic first seen while review was off
+ *   is reviewed once it is on again.
  */
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,16 +26,29 @@ async function insertUserMessage(input: {
   conversationId: string;
   groupId: string;
   sequence: number;
+  /** A forum topic: its own review lane. */
+  thread?: number;
 }) {
   return (await database().query<{ id: string }>(
     `INSERT INTO telegram_group_messages
        (conversation_id, group_id, telegram_message_id, sequence_id, actor_kind, actor_id,
-        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at)
+        telegram_user_id, sender_display_name, sender_is_bot, message_kind, content_text, sent_at,
+        message_thread_id)
      VALUES ($1, $2, $3, $3, 'user', 'telegram:agent-memory-author',
-             'agent-memory-author', 'Анна', false, 'text', $4, now()) RETURNING id`,
-    [input.conversationId, input.groupId, input.sequence, `Сообщение памяти ${input.sequence}`],
+             'agent-memory-author', 'Анна', false, 'text', $4, now(), $5) RETURNING id`,
+    [input.conversationId, input.groupId, input.sequence, `Сообщение памяти ${input.sequence}`, input.thread ?? null],
   )).rows[0]!;
 }
+
+async function observe(fixture: { conversationId: string; groupId: string }, from: number, to: number, thread?: number) {
+  for (let sequence = from; sequence <= to; sequence += 1) {
+    const source = await insertUserMessage({ conversationId: fixture.conversationId, groupId: fixture.groupId, sequence, thread });
+    await memoryReviewRepository.observePassiveMessage({ groupId: fixture.groupId, timelineEntryId: source.id });
+  }
+}
+
+const setReview = (groupId: string, enabled: boolean) =>
+  database().query("UPDATE telegram_groups SET memory_review_enabled = $2 WHERE id = $1", [groupId, enabled]);
 
 async function claimBackgroundBatch() {
   const fixture = await createMainAgentMemoryFixture();
@@ -85,6 +102,63 @@ describeWithDatabase("memory review dispatch repository", () => {
     const later = await memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() });
     expect(later).toHaveLength(1);
     expect(later[0]!.sourceCount).toBe(16);
+  });
+
+  it("leaves the pending batch of a group whose review is off and refuses its leased dispatch", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51);
+    await setReview(fixture.groupId, false);
+
+    await expect(memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() })).resolves.toEqual([]);
+
+    await setReview(fixture.groupId, true);
+    const [claim] = await memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() });
+    expect(claim?.sourceCount).toBe(50);
+    // Switched off between the lease and the dispatch.
+    await setReview(fixture.groupId, false);
+    const prepared = await memoryReviewSessionRepository.prepare(claim!, new Date());
+    await expect(memoryReviewDispatchRepository.markDispatchStarted(claim!, prepared.id)).resolves.toBe(false);
+  });
+
+  it("counts leased and dispatching batches against the in-flight cap", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51, 7);
+    await observe(fixture, 52, 101, 9);
+
+    const first = await memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, maxInFlight: 1, now: new Date() });
+    expect(first).toHaveLength(1);
+    // The first batch is only leased, not running yet: the cap of one is taken all the same.
+    await expect(memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, maxInFlight: 1, now: new Date() }))
+      .resolves.toEqual([]);
+  });
+
+  it("runs one claim pass at a time", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await observe(fixture, 2, 51);
+    const holder = await database().connect();
+    try {
+      await holder.query("BEGIN");
+      await holder.query("SELECT pg_advisory_xact_lock(hashtext('osinara.memory_review_claim'))");
+      await expect(memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() })).resolves.toEqual([]);
+    } finally {
+      await holder.query("ROLLBACK");
+      holder.release();
+    }
+    await expect(memoryReviewDispatchRepository.claimPending({ leaseMilliseconds: 60_000, limit: 5, now: new Date() })).resolves.toHaveLength(1);
+  });
+
+  it("reviews a quiet topic first seen while review was off once it is on again", async () => {
+    const fixture = await createMainAgentMemoryFixture();
+    await setReview(fixture.groupId, false);
+    await observe(fixture, 2, 16, 11);
+    await setReview(fixture.groupId, true);
+
+    // Seven hours later, without a new message: the lane is due by its idle rule.
+    const [claim] = await memoryReviewDispatchRepository.claimPending({
+      leaseMilliseconds: 60_000, limit: 5, now: new Date(Date.now() + 7 * 60 * 60 * 1000),
+    });
+    expect(claim?.sourceCount).toBe(15);
+    expect(claim?.messageThreadId).toBe("11");
   });
 
   it("retires a prepared background session when its Eve handoff is ambiguous", async () => {

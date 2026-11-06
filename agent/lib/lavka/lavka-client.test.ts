@@ -11,11 +11,15 @@
  * - Once the submit returned an order number, a failing payment poll keeps it; an unreadable
  *   submit answer is ambiguous, a refusal the site explained is not.
  * - A tab moved to another site mid-call is a named refusal, not an outage.
+ * - Codex review, 6 November 2026: a failure while the order re-reads the cart, the card or the
+ *   depot is marked as raised before anything was sent, so the ledger frees the call; a
+ *   cancellation the site did not answer is ambiguous, not «try later».
  */
 import { describe, expect, it, vi } from "vitest";
 
 import { ModelFacingError } from "../model-facing-error.js";
 import { createLavkaClient, lavkaAddressKey, type LavkaDeliveryPoint } from "./lavka-client.js";
+import { isLavkaNothingSent } from "./lavka-nothing-sent.js";
 
 const point: LavkaDeliveryPoint = { city: "Москва", comment: "", country: "Россия", doorcode: "", entrance: "1", flat: "5", floor: "2", house: "11к1", label: "Корабельная 11к1", lat: 55.7, lon: 37.6, placeId: "", street: "Корабельная" };
 
@@ -138,6 +142,33 @@ describe("createLavkaClient", () => {
     await expect(empty.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
     const refused = tab({ ...base, "/api/v1/providers/orders/v2/submit": { data: null, error: JSON.stringify({ data: { message: "Корзина пуста" } }), status: 400 } });
     await expect(refused.client.placeOrder(point, confirmed)).rejects.toMatchObject({ code: "AGENT_LAVKA_REJECTED" });
+  });
+
+  it("marks a failure before the submit as nothing sent, and the submit's own failure not", async () => {
+    const confirmed = { addressKey: lavkaAddressKey(point), cartVersion: 9, paymentMethodId: "card-1", total: 300 };
+    const retrieve = { data: cart(9, [{ id: "a", price: 100, quantity: 3 }], 300) };
+    const failures = [
+      tab({ "/api/v1/providers/cart/v1/retrieve": { data: null, error: "timeout", status: 0 } }),
+      tab({ "/api/v1/providers/cart/v1/retrieve": retrieve, [SERVICE]: { data: null, error: "<html>502</html>", status: 502 } }),
+    ];
+    for (const failure of failures) {
+      const error = await failure.client.placeOrder(point, confirmed).catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ code: "AGENT_LAVKA_UNAVAILABLE" });
+      expect(isLavkaNothingSent(error)).toBe(true);
+    }
+    const submitLost = tab({ "/api/v1/providers/cart/v1/retrieve": retrieve, [SERVICE]: { data: { depotId: "d-1" } }, "/api/v1/providers/orders/v2/submit": { data: null, error: "timeout", status: 0 } });
+    const lost = await submitLost.client.placeOrder(point, confirmed).catch((caught: unknown) => caught);
+    expect(lost).toMatchObject({ code: "AGENT_LAVKA_ORDER_AMBIGUOUS" });
+    expect(isLavkaNothingSent(lost)).toBe(false);
+  });
+
+  it("calls a cancellation the site did not answer ambiguous and keeps an explained refusal", async () => {
+    for (const reply of [{ data: null, error: "timeout", status: 0 }, { data: null, error: "<html>504</html>", status: 504 }]) {
+      const { client } = tab({ "/api/v1/providers/orders/v1/cancel": reply });
+      await expect(client.cancelOrder("o-9")).rejects.toMatchObject({ code: "AGENT_LAVKA_CANCEL_AMBIGUOUS" });
+    }
+    const refused = tab({ "/api/v1/providers/orders/v1/cancel": { data: null, error: JSON.stringify({ data: { message: "Заказ уже у курьера" } }), status: 400 } });
+    await expect(refused.client.cancelOrder("o-9")).rejects.toMatchObject({ code: "AGENT_LAVKA_REJECTED" });
   });
 
   it("reports a browser restarted while checking the tab", async () => {

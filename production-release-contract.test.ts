@@ -318,6 +318,22 @@ describe("release workflow contract", () => {
     expect(workflow).not.toContain("ssh");
   });
 
+  // Codex review, 6 November 2026: a re-run of an old failed release run published its older
+  // version as the latest release, and the update checker reads /releases/latest.
+  it("never publishes a version that is not newer than the latest release", () => {
+    const workflow = readProjectFile(".github/workflows/ci-release.yaml");
+    const versionJob = workflow.slice(workflow.indexOf("  version:"), workflow.indexOf("  images:"));
+    const publish = workflow.slice(workflow.indexOf("Create or resume draft and upload exact assets"));
+
+    for (const step of [versionJob, publish]) {
+      expect(step).toContain('gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name');
+      expect(step).toContain("RELEASE_VERSION_NOT_NEWER");
+      expect(step).toContain("sort -V");
+    }
+    // The publish re-checks right before it marks the release latest: another may have come out meanwhile.
+    expect(publish.indexOf("RELEASE_VERSION_NOT_NEWER")).toBeLessThan(publish.indexOf("--draft=false --latest"));
+  });
+
   it("publishes and verifies the standalone installer CLI with its SHA-256 sidecar", () => {
     const workflow = readProjectFile(".github/workflows/ci-release.yaml");
     const dockerfile = readProjectFile("Dockerfile");

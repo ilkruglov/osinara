@@ -163,11 +163,49 @@ export function digestDateFor(now: Date): string | null {
   return now.toISOString().slice(0, 10);
 }
 
+/**
+ * The digest in messages Telegram takes, cut at line ends: with many stuck lanes the text passed
+ * 4 096 characters, Telegram refused it and the claim went back every pass (Codex review,
+ * 6 November 2026). A single line longer than a message is cut where it reaches the limit.
+ */
+export function digestParts(text: string, limit = TELEGRAM_MESSAGE_TEXT_MAX_LENGTH): string[] {
+  const parts: string[] = [];
+  let current = "";
+  for (const line of text.split("\n")) {
+    const candidate = current === "" ? line : `${current}\n${line}`;
+    if (candidate.length <= limit) {
+      current = candidate;
+      continue;
+    }
+    if (current !== "") parts.push(current);
+    let rest = line;
+    while (rest.length > limit) {
+      parts.push(rest.slice(0, limit));
+      rest = rest.slice(limit);
+    }
+    current = rest;
+  }
+  if (current !== "" || parts.length === 0) parts.push(current);
+  return parts;
+}
+
+/** A card whose outcome is unknown, with the failure of the text sent after it. */
+class DigestAfterAmbiguousCardError extends Error {
+  constructor(readonly cause: unknown) {
+    super("AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS: the card may have arrived, the text after it failed");
+    this.name = "DigestAfterAmbiguousCardError";
+  }
+}
+
 export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDigestDependencies) {
+  async function deliverText(chatId: string, text: string): Promise<void> {
+    for (const part of digestParts(text)) await dependencies.deliver({ chatId, text: part });
+  }
+
   /** The card when widgets are on; the text otherwise, or with the reason when the card failed. */
   async function deliverDigest(chatId: string, sections: OwnerHealthDigestSections, text: string, now: Date): Promise<void> {
     if (!dependencies.deliverWidget) {
-      await dependencies.deliver({ chatId, text });
+      await deliverText(chatId, text);
       return;
     }
     try {
@@ -184,12 +222,18 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
         ? `Карточка сводки не отправилась (${reason}), поэтому текстом.`
         : `Карточка сводки могла не дойти (${reason}), поэтому на всякий случай текстом.`;
       const joined = `${text}\n${note}`;
-      if (joined.length <= TELEGRAM_MESSAGE_TEXT_MAX_LENGTH) {
-        await dependencies.deliver({ chatId, text: joined });
-        return;
+      try {
+        if (joined.length <= TELEGRAM_MESSAGE_TEXT_MAX_LENGTH) {
+          await dependencies.deliver({ chatId, text: joined });
+          return;
+        }
+        // The note goes apart rather than making the digest longer than its messages.
+        await deliverText(chatId, text);
+      } catch (textError) {
+        // The card may be in the chat: retrying would send it again every pass.
+        if (!refused && !(textError instanceof TelegramRecipientUnreachableError)) throw new DigestAfterAmbiguousCardError(textError);
+        throw textError;
       }
-      // The digest itself fits one message; the note goes apart rather than making it undeliverable.
-      await dependencies.deliver({ chatId, text });
       try {
         await dependencies.deliver({ chatId, text: note });
       } catch (noteError) {
@@ -220,7 +264,17 @@ export function createOwnerHealthDigestDispatcher(dependencies: OwnerHealthDiges
         const previousBalanceUsd = balance === null ? null : await dependencies.previousBalance(recipient.familyId, digestDate);
         const sections = ownerHealthDigestSections(report, { balance, previousBalanceUsd, storage, webhook });
         const text = digestText(sections);
-        await deliverDigest(recipient.ownerTelegramUserId, sections, text, now);
+        try {
+          await deliverDigest(recipient.ownerTelegramUserId, sections, text, now);
+        } catch (error) {
+          if (!(error instanceof DigestAfterAmbiguousCardError)) throw error;
+          // The day counts as sent: the card may have arrived, and a retry would repeat it.
+          console.error(JSON.stringify({
+            code: "AGENT_OWNER_HEALTH_DIGEST_AMBIGUOUS",
+            error: error.cause instanceof Error ? error.cause.name : "UnknownError",
+            familyId: recipient.familyId,
+          }));
+        }
         await dependencies.complete(recipient.familyId, digestDate, now, text.length, balance?.totalUsd ?? null);
         console.info(JSON.stringify({
           code: "AGENT_OWNER_HEALTH_DIGEST_SENT",
