@@ -27,7 +27,7 @@ interface BinaryReader {
 interface DeliveryRow {
   content_sha256: string;
   file_path: string;
-  presentation: "document" | "photo";
+  presentation: "document" | "photo" | "widget";
   requested_by: string | null;
   status: "completed" | "failed" | "started";
   telegram_chat_id: string;
@@ -41,7 +41,7 @@ interface DeliveryInput {
   messageThreadId?: number;
   operationKey: string;
   path: string;
-  presentation: "document" | "photo";
+  presentation: "document" | "photo" | "widget";
   scope: WorkspaceScope;
   turnId: string | null;
 }
@@ -63,7 +63,7 @@ function assertReplayMatches(
   input: {
     chatId: string;
     messageThreadId?: number;
-    presentation: "document" | "photo";
+    presentation: "document" | "photo" | "widget";
   },
 ): void {
   const matches = row.workspace_id === binary.workspaceId &&

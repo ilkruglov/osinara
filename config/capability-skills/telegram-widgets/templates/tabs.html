@@ -1,0 +1,36 @@
+<style>
+.w{font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:10px 12px}
+.tb{display:flex;gap:6px;margin-bottom:8px}
+.tb button{flex:1;border:0;border-radius:8px;padding:6px;font:inherit;background:var(--tg-theme-secondary-bg-color,#f1f1f1);color:inherit}
+.tb button.on{background:var(--tg-theme-button-color,#2a7ae2);color:var(--tg-theme-button-text-color,#fff)}
+.r{display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--tg-theme-section-separator-color,#ddd)}
+.m{color:var(--tg-theme-hint-color,#888)}
+</style>
+<div class="w">
+<div class="tb"><button class="on" data-k="day">День</button><button data-k="week">Неделя</button></div>
+<div id="out"></div>
+</div>
+<script>
+var data = {
+  day: [["Ккал", "1 840"], ["Белок", "96 г"], ["Вода", "1,5 л"]],
+  week: [["Ккал в среднем", "1 910"], ["Белок в среднем", "88 г"], ["Дней в норме", "5 из 7"]]
+};
+var out = document.getElementById("out");
+function show(key) {
+  out.textContent = "";
+  data[key].forEach(function (row) {
+    var r = document.createElement("div"); r.className = "r";
+    var a = document.createElement("span"); a.textContent = row[0];
+    var b = document.createElement("b"); b.textContent = row[1];
+    r.appendChild(a); r.appendChild(b); out.appendChild(r);
+  });
+  document.querySelectorAll(".tb button").forEach(function (button) {
+    button.classList.toggle("on", button.dataset.k === key);
+  });
+}
+document.querySelectorAll(".tb button").forEach(function (button) {
+  button.addEventListener("click", function () { show(button.dataset.k); });
+});
+show("day");
+if (window.TelegramWidget) TelegramWidget.ready();
+</script>

@@ -24,6 +24,8 @@ import {
   resolveExternalGroupPolicyIdentity,
   resolveExternalGroupToolPolicy,
 } from "../tool-policy/external-group-policy.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
+import { TELEGRAM_WIDGET_SKILL_DEFINITION, TELEGRAM_WIDGET_SKILL_NAME } from "../telegram-widgets/telegram-widget-skill.js";
 import { TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS } from "./trusted-google-workspace-skills.js";
 import { knowledgeSkills } from "./knowledge-skill-packages.js";
 import { KNOWLEDGE_SKILL_CAPABILITY } from "./knowledge-skills.js";
@@ -53,6 +55,10 @@ export function resolveTrustedSessionSkills(
   if (environment === "external") return {};
   return {
     ...imageGenerationSkill(options, true),
+    // Comes and goes with the send_widget descriptor: same switch, never for a subagent.
+    ...(TELEGRAM_WIDGETS_ENABLED && options.subagent !== true
+      ? { [TELEGRAM_WIDGET_SKILL_NAME]: TELEGRAM_WIDGET_SKILL_DEFINITION }
+      : {}),
     // Nineteen packages are uploaded into the sandbox per session; skip them when nobody can
     // connect a Google account anyway.
     ...(GOOGLE_WORKSPACE_AVAILABLE ? TRUSTED_GOOGLE_WORKSPACE_SKILL_DEFINITIONS : {}),

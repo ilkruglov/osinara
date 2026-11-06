@@ -476,6 +476,8 @@ export function buildSubagentToolSurface(input: ModeToolSurfaceInput): ToolMap {
     manage_behavior_preference: _manageBehaviorPreference,
     manage_skill: _manageSkill,
     remember: _remember,
+    // A child works on a fresh context and reports to the root; cards in the chat are the root's.
+    send_widget: _sendWidget,
     ...surface
   } = buildModeToolSurface(effectiveInput);
   // A child never loads external skills: imagegen rides on the removed grant and authored skills

@@ -39,6 +39,8 @@ const PACED_METHODS = new Set([
   "editMessageMedia",
   "editMessageReplyMarkup",
   "editMessageText",
+  // Telegram widget messages (Bot API 10.4 beta) and the bot's edits of their state.
+  "editMessageWidgetData",
   "forwardMessage",
   "sendAnimation",
   "sendAudio",
@@ -49,6 +51,7 @@ const PACED_METHODS = new Set([
   "sendSticker",
   "sendVideo",
   "sendVoice",
+  "sendWidget",
 ]);
 // Calls whose failure can say the chat itself is gone; reads and bot settings never mark a chat.
 const OBSERVED_METHODS = new Set([...PACED_METHODS, "sendChatAction"]);

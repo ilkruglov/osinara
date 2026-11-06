@@ -49,6 +49,14 @@ describe("telegram send pacer", () => {
     expect(clock.sleeps).toEqual([1_000]);
   });
 
+  it("paces widget messages and their state edits like any other send", async () => {
+    const clock = fakeClock();
+    const pacer = createTelegramSendPacer({ ...clock });
+    await pacer.acquire("sendWidget", { chat_id: 42 });
+    await pacer.acquire("editMessageWidgetData", { chat_id: 42, message_id: 7 });
+    expect(clock.sleeps).toEqual([250]);
+  });
+
   it("spaces messages to one private chat by the gap without holding others", async () => {
     const clock = fakeClock();
     const pacer = createTelegramSendPacer({ ...clock });

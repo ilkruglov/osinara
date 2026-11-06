@@ -58,6 +58,8 @@ import searchMemories from "../tools/search_memories.js";
 import searchMemoryThreads from "../tools/search_memory_threads.js";
 import sendWorkspaceFile from "../tools/send_workspace_file.js";
 import sendWorkspaceImage from "../tools/send_workspace_image.js";
+import sendWidget from "../tools/send_widget.js";
+import { TELEGRAM_WIDGETS_ENABLED } from "../telegram-widgets/telegram-widget-availability.js";
 import startNewContext from "../tools/start_new_context.js";
 import webSearch, { LOCAL_WEB_SEARCH_AVAILABLE } from "../tools/web_search.js";
 import { GOOGLE_WORKSPACE_AVAILABLE } from "../google-workspace/google-workspace-availability.js";
@@ -100,6 +102,7 @@ export const TRUSTED_MODE_TOOLS: ToolMap = {
       generate_image: generateImage as unknown as AnyToolDefinition,
     }
     : {}),
+  ...(TELEGRAM_WIDGETS_ENABLED ? { send_widget: sendWidget as unknown as AnyToolDefinition } : {}),
   browser_act: browserAct as unknown as AnyToolDefinition,
   browser_confirm: browserConfirm as unknown as AnyToolDefinition,
   browser_look: browserLook as unknown as AnyToolDefinition,

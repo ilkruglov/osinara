@@ -10,6 +10,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../image-generation/image-generation-availability.js", () => ({
   IMAGE_GENERATION_AVAILABLE: true,
 }));
+vi.mock("../telegram-widgets/telegram-widget-availability.js", () => ({
+  TELEGRAM_WIDGETS_ENABLED: true,
+}));
 vi.mock("../google-workspace/google-workspace-availability.js", () => ({
   GOOGLE_WORKSPACE_AVAILABLE: true,
 }));
@@ -82,6 +85,14 @@ describe("group skill policy", () => {
     expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true }))
       .toHaveProperty("imagegen");
     for (const name of TRUSTED_GOOGLE_WORKSPACE_SKILL_NAMES) expect(skills).toHaveProperty(name);
+  });
+
+  it("gives trusted chats and their scheduled runs the widget skill, a subagent and an external group not", async () => {
+    expect(resolveTrustedSessionSkills(auth("private"))).toHaveProperty("telegram-widgets");
+    expect(resolveTrustedSessionSkills(auth("family"))).toHaveProperty("telegram-widgets");
+    expect(resolveTrustedSessionSkills(auth("private"), { scheduledRun: true })).toHaveProperty("telegram-widgets");
+    expect(resolveTrustedSessionSkills(auth("private"), { subagent: true })).not.toHaveProperty("telegram-widgets");
+    await expect(resolveExternalTurnSkills(auth("external", ["generate_image"]))).resolves.not.toHaveProperty("telegram-widgets");
   });
 
   it("ties external imagegen instructions to the generate_image capability", async () => {
