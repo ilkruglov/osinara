@@ -1,36 +1,57 @@
 <style>
-.w{font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:10px 12px}
-.tb{display:flex;gap:6px;margin-bottom:8px}
-.tb button{flex:1;border:0;border-radius:8px;padding:6px;font:inherit;background:var(--tg-theme-secondary-bg-color,#f1f1f1);color:inherit}
-.tb button.on{background:var(--tg-theme-button-color,#2a7ae2);color:var(--tg-theme-button-text-color,#fff)}
-.r{display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--tg-theme-section-separator-color,#ddd)}
-.m{color:var(--tg-theme-hint-color,#888)}
+.w{--a:var(--tg-theme-button-color,#2a7ae2);--a2:#6fa8ee;--ok:#2e9b57;--wr:#c27c0e;--er:#d64541;--sb:var(--tg-theme-secondary-bg-color,#f2f3f5);--ln:var(--tg-theme-section-separator-color,#e3e4e8);--hn:var(--tg-theme-hint-color,#8a8f98);font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:0 0 10px}
+.t-food{--a:#3d8b57;--a2:#a3c96b}.t-money{--a:#0e7c83;--a2:#58b8a8}.t-sky{--a:#3b6ea5;--a2:#8fb6e0}
+.t-road{--a:#b8690d;--a2:#f0b648}.t-health{--a:#b93a55;--a2:#ef8c9d}.t-calm{--a:#4f5a73;--a2:#93a0b8}
+.hero{border-radius:14px;padding:12px 14px;color:#fff;background:linear-gradient(135deg,var(--a),var(--a2))}
+.hero .k{display:flex;justify-content:space-between;font-size:12px;opacity:.9;white-space:nowrap}
+.hero .big{font-size:32px;font-weight:700;line-height:1.15;margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hero .s{font-size:13px;opacity:.92}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pill{font-size:12px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.2);white-space:nowrap}
+.in{padding:8px 14px 0}
+.h2{font-size:12px;font-weight:600;color:var(--hn);margin:8px 0 2px;white-space:nowrap}
+.row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--ln);white-space:nowrap}
+.row .m{flex:none;color:var(--hn);font-size:12px;font-variant-numeric:tabular-nums}
+.row .x{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.row .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--sb);overflow:hidden;margin:2px 0 6px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--a)}
+.bar i.wr{background:var(--wr)}.bar i.er{background:var(--er)}
+.tag{flex:none;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;color:#fff;background:var(--ok)}
+.tag.wr{background:var(--wr)}.tag.er{background:var(--er)}
+.ft{color:var(--hn);font-size:11px;margin-top:8px}
+.tb{display:flex;gap:6px;margin:8px 0 2px}
+.tb button{flex:1;border:0;border-radius:10px;padding:6px;font:inherit;font-weight:600;white-space:nowrap;background:var(--sb);color:inherit}
+.tb button.on{background:var(--a);color:#fff}
 </style>
-<div class="w">
+<div class="w t-food">
+<div class="hero"><div class="k"><span>Питание</span><span id="when"></span></div><div class="big" id="big"></div><div class="s" id="sub"></div></div>
+<div class="in">
 <div class="tb"><button class="on" data-k="day">День</button><button data-k="week">Неделя</button></div>
-<div id="out"></div>
-</div>
+<div id="rows"></div>
+<div class="ft">Дневник питания</div>
+</div></div>
 <script>
 var data = {
-  day: [["Ккал", "1 840"], ["Белок", "96 г"], ["Вода", "1,5 л"]],
-  week: [["Ккал в среднем", "1 910"], ["Белок в среднем", "88 г"], ["Дней в норме", "5 из 7"]]
+  day: { when: "6 ноября", big: "1 840 ккал", sub: "из 2 000", rows: [["Белок", "96 г"], ["Жиры", "62 г"], ["Углеводы", "231 г"], ["Вода", "1,8 л"]] },
+  week: { when: "31 окт — 6 ноя", big: "1 910 ккал", sub: "в среднем за день", rows: [["Дней в норме", "5 из 7"], ["Белок в среднем", "88 г"], ["Вода в среднем", "1,6 л"]] }
 };
-var out = document.getElementById("out");
 function show(key) {
-  out.textContent = "";
-  data[key].forEach(function (row) {
-    var r = document.createElement("div"); r.className = "r";
-    var a = document.createElement("span"); a.textContent = row[0];
-    var b = document.createElement("b"); b.textContent = row[1];
-    r.appendChild(a); r.appendChild(b); out.appendChild(r);
+  var d = data[key];
+  document.getElementById("when").textContent = d.when;
+  document.getElementById("big").textContent = d.big;
+  document.getElementById("sub").textContent = d.sub;
+  var box = document.getElementById("rows");
+  box.textContent = "";
+  d.rows.forEach(function (row) {
+    var r = document.createElement("div"); r.className = "row";
+    var x = document.createElement("span"); x.className = "x"; x.textContent = row[0];
+    var v = document.createElement("span"); v.className = "v"; v.textContent = row[1];
+    r.appendChild(x); r.appendChild(v); box.appendChild(r);
   });
-  document.querySelectorAll(".tb button").forEach(function (button) {
-    button.classList.toggle("on", button.dataset.k === key);
-  });
+  document.querySelectorAll(".tb button").forEach(function (b) { b.classList.toggle("on", b.dataset.k === key); });
 }
-document.querySelectorAll(".tb button").forEach(function (button) {
-  button.addEventListener("click", function () { show(button.dataset.k); });
-});
+document.querySelectorAll(".tb button").forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.k); }); });
 show("day");
 if (window.TelegramWidget) TelegramWidget.ready();
 </script>

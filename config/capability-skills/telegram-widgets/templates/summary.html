@@ -1,27 +1,40 @@
 <style>
-.w{font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:10px 12px}
-.h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.t{font-weight:600;font-size:16px}.d{color:var(--tg-theme-hint-color,#888);font-size:12px}
-.k{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.c{flex:1;min-width:64px;background:var(--tg-theme-secondary-bg-color,#f1f1f1);border-radius:8px;padding:6px 8px}
-.c b{display:block;font-size:17px}.c small{color:var(--tg-theme-hint-color,#888)}
-.ok{color:#2e9b57}.hi{color:#d64541}
-table{width:100%;border-collapse:collapse}td{padding:4px 0;border-top:1px solid var(--tg-theme-section-separator-color,#ddd)}
-td.n{text-align:right;white-space:nowrap}
+.w{--a:var(--tg-theme-button-color,#2a7ae2);--a2:#6fa8ee;--ok:#2e9b57;--wr:#c27c0e;--er:#d64541;--sb:var(--tg-theme-secondary-bg-color,#f2f3f5);--ln:var(--tg-theme-section-separator-color,#e3e4e8);--hn:var(--tg-theme-hint-color,#8a8f98);font:14px/1.4 system-ui,sans-serif;color:var(--tg-theme-text-color,#111);padding:0 0 10px}
+.t-food{--a:#3d8b57;--a2:#a3c96b}.t-money{--a:#0e7c83;--a2:#58b8a8}.t-sky{--a:#3b6ea5;--a2:#8fb6e0}
+.t-road{--a:#b8690d;--a2:#f0b648}.t-health{--a:#b93a55;--a2:#ef8c9d}.t-calm{--a:#4f5a73;--a2:#93a0b8}
+.hero{border-radius:14px;padding:12px 14px;color:#fff;background:linear-gradient(135deg,var(--a),var(--a2))}
+.hero .k{display:flex;justify-content:space-between;font-size:12px;opacity:.9;white-space:nowrap}
+.hero .big{font-size:32px;font-weight:700;line-height:1.15;margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hero .s{font-size:13px;opacity:.92}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pill{font-size:12px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.2);white-space:nowrap}
+.in{padding:8px 14px 0}
+.h2{font-size:12px;font-weight:600;color:var(--hn);margin:8px 0 2px;white-space:nowrap}
+.row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--ln);white-space:nowrap}
+.row .m{flex:none;color:var(--hn);font-size:12px;font-variant-numeric:tabular-nums}
+.row .x{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.row .v{flex:none;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--sb);overflow:hidden;margin:2px 0 6px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--a)}
+.bar i.wr{background:var(--wr)}.bar i.er{background:var(--er)}
+.tag{flex:none;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;color:#fff;background:var(--ok)}
+.tag.wr{background:var(--wr)}.tag.er{background:var(--er)}
+.ft{color:var(--hn);font-size:11px;margin-top:8px}
 </style>
-<div class="w">
-<div class="h"><span class="t">Итог дня</span><span class="d">6 ноября</span></div>
-<div class="k">
-<div class="c"><b class="ok">1 840</b><small>ккал из 2 000</small></div>
-<div class="c"><b>96 г</b><small>белок</small></div>
-<div class="c"><b>62 г</b><small>жиры</small></div>
-<div class="c"><b class="hi">231 г</b><small>углеводы</small></div>
-</div>
-<table>
-<tr><td>09:30 Сырники, кофе</td><td class="n">420</td></tr>
-<tr><td>13:30 Салат с курицей</td><td class="n">510</td></tr>
-<tr><td>19:00 Гречка, котлета</td><td class="n">680</td></tr>
-<tr><td>21:00 Йогурт</td><td class="n">230</td></tr>
-</table>
-</div>
+<div class="w t-food">
+<div class="hero"><div class="k"><span>Итог дня</span><span>6 ноября</span></div>
+<div class="big">1 840 ккал</div><div class="s">из 2 000 · осталось 160</div>
+<div class="pills"><span class="pill">белок 96 г</span><span class="pill">жиры 62 г</span><span class="pill">углеводы 231 г</span></div></div>
+<div class="in">
+<div class="h2">Приёмы пищи</div>
+<div class="row"><span class="m">09:30</span><span class="x">Сырники со сметаной, кофе</span><span class="v">420</span></div>
+<div class="row"><span class="m">13:30</span><span class="x">Салат с курицей и печёным перцем</span><span class="v">510</span></div>
+<div class="row"><span class="m">19:00</span><span class="x">Гречка, котлета</span><span class="v">680</span></div>
+<div class="row"><span class="m">21:00</span><span class="x">Греческий йогурт</span><span class="v">230</span></div>
+<div class="h2">Норма</div>
+<div class="row"><span class="x">Белок</span><span class="m">96 / 110 г</span><span class="tag wr">мало</span></div><div class="bar"><i class="wr" style="width:87%"></i></div>
+<div class="row"><span class="x">Углеводы</span><span class="m">231 / 200 г</span><span class="tag er">много</span></div><div class="bar"><i class="er" style="width:100%"></i></div>
+<div class="row"><span class="x">Вода</span><span class="m">1,8 / 2 л</span><span class="tag">норма</span></div><div class="bar"><i style="width:90%"></i></div>
+<div class="ft">Дневник питания</div>
+</div></div>
 <script>if (window.TelegramWidget) TelegramWidget.ready();</script>
