@@ -1,0 +1,15 @@
+# Форматируется только код TS/JS. Остальное — руками или своими инструментами.
+# Собираются из scripts/eve-runtime/*.ts и agent/lib/html-*.ts командой `npm run sync:eve-runtime`.
+vendor/**/osinara-*.js
+# Сторонние зависимости, собранные в Eve в минифицированные бандлы, — не наш код.
+vendor/eve/dist/src/compiled/
+.eve/
+.output/
+.runtime/
+.tmp/
+**/*.md
+**/*.json
+**/*.yaml
+**/*.yml
+**/*.html
+**/*.css

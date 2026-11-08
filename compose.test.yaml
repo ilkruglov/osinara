@@ -20,7 +20,7 @@ services:
     build:
       context: .
       target: test
-    command: ["sh", "-c", "npm run migrate && npm run typecheck && npm run lint && npm run build:skill-lab && npm test && npm run build"]
+    command: ["sh", "-c", "npm run migrate && npm run typecheck && npm run lint && npm run format:check && npm run build:skill-lab && npm test && npm run build"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -20,6 +20,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc",
     "lint": "oxlint --type-aware agent scripts services *.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "migrate": "node --experimental-strip-types scripts/migrate-workflow.ts && node --experimental-strip-types scripts/migrate.ts",
     "migrate:runtime": "node .runtime/scripts/migrate-workflow.js && node .runtime/scripts/migrate.js",
     "memory:reindex": "node --import tsx scripts/reindex-memory.ts",
@@ -57,6 +59,7 @@
     "oxlint": "^1.85.0",
     "oxlint-tsgolint": "^7.0.2003",
     "postject": "1.0.0-alpha.6",
+    "prettier": "^3.9.10",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   },
